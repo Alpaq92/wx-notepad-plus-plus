@@ -7,6 +7,11 @@
 *.sln.docstates
 
 #-- Build results
+
+#-- CMake (wx-notepad-plus-plus CMake port)
+/build/
+CMakeUserPresets.json
+
 [Dd]ebug/
 [Rr]elease/
 x64/
