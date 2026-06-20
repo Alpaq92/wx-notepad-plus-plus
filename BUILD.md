@@ -1,5 +1,39 @@
 # Building Notepad++
 
+## CMake
+
+This fork can also be built with [CMake](https://cmake.org/) (Ninja, Visual Studio,
+or NMake generators). The CMake build produces the same three components as the
+Visual Studio solution — `libscintilla.lib`, `liblexilla.lib` and `notepad++.exe`
+(with Boost regex PCRE support) — and mirrors the compiler/linker settings of
+`notepadPlus.vcxproj`, `Scintilla.vcxproj` and `Lexilla.vcxproj`.
+
+**Pre-requisites:**
+
+- Microsoft Visual Studio 2022 (or the Build Tools) with the C++ x64/Win32 toolset and a Windows 10/11 SDK
+- CMake 3.20+ and a generator such as Ninja (both ship with VS 2022 under
+  `…\Common7\IDE\CommonExtensions\Microsoft\CMake`)
+
+**Build (from a *Developer Command Prompt for VS* / after `vcvars64.bat`):**
+
+```bat
+cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -S . -B build
+cmake --build build
+```
+
+The resulting `notepad++.exe` (plus `langs.model.xml` and `stylers.model.xml`) is
+written to `build\bin\`. For a 32-bit build use `vcvars32.bat`; to generate a
+Visual Studio solution instead of Ninja use
+`-G "Visual Studio 17 2022" -A x64`.
+
+Notes:
+
+- Notepad++ is a Win32 application, so the build only works on Windows (the
+  top-level `CMakeLists.txt` enforces this).
+- All targets link the static CRT (`/MT`), matching the official build.
+- Unlike the `.vcxproj`, the CMake build does **not** treat warnings as errors
+  (`/WX`), so it stays buildable across compiler-toolset versions.
+
 ## Microsoft Visual Studio
 
 **Pre-requisites:**
