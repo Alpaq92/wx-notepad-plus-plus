@@ -50,3 +50,11 @@ string(REGEX REPLACE "[/-]EHsc" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 add_subdirectory(scintilla)
 add_subdirectory(lexilla)
 add_subdirectory(PowerEditor)
+
+# Experimental wxWidgets Phase-0 de-risking spike (docs/WXWIDGETS_MIGRATION_PLAN.md).
+# OFF by default so the normal Notepad++ build is byte-identical and never fetches
+# wxWidgets. Enable explicitly:  cmake -B build-spike -DNPP_BUILD_WX_SPIKE=ON
+option(NPP_BUILD_WX_SPIKE "Build the experimental wxWidgets Phase-0 spike" OFF)
+if(NPP_BUILD_WX_SPIKE)
+    add_subdirectory(spike)
+endif()
