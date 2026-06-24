@@ -856,6 +856,7 @@ private:
         m_aui.SetManagedWindow(this);
         m_aui.AddPane(m_tabs, wxAuiPaneInfo().CenterPane().PaneBorder(false));
         m_aui.Update();
+        buildDocMap();   // Document Map (minimap) pane - hidden until toggled from the View menu / toolbar
     }
 
     // wxStyledTextCtrl fires wxEVT_STC_* (not Win32 WM_NOTIFY), so the N++ editor behaviours and the
@@ -908,6 +909,7 @@ private:
     {
         updateBraceMatch(m_stc);
         if (g_smartActive && g_smartSci == m_stc && sci(SCI_GETSELECTIONEMPTY)) clearSmart(m_stc);
+        updateDocMapViewport();   // keep the minimap's viewport band in sync with scrolling/caret
         forwardScn(SCN_UPDATEUI, e);
         e.Skip();
     }
@@ -932,6 +934,74 @@ private:
         if (p == wxDefaultPosition) p = ::wxGetMousePosition();   // keyboard (Shift+F10): use the pointer
         if (g_editorContextMenu) g_editorContextMenu(p.x, p.y);
     }
+
+    // ---- Document Map (minimap) -------------------------------------------------------------------
+    // A second wxStyledTextCtrl that SHARES the active document (no copy, live), shrunk to minimap scale
+    // in a right-docked pane. The visible viewport is shown with the minimap's OWN selection (selection
+    // is per-view, so it doesn't bleed into the main editor); click/drag scrolls the main editor.
+    void buildDocMap()
+    {
+        m_docMap = new wxStyledTextCtrl(this, wxID_ANY);
+        for (int i = 0; i < 5; ++i) m_docMap->SetMarginWidth(i, 0);   // no line-number / fold / symbol margins
+        m_docMap->SetZoom(-8);                                        // shrink to minimap scale
+        m_docMap->SetCaretStyle(wxSTC_CARETSTYLE_INVISIBLE);
+        m_docMap->SetCaretLineVisible(false);
+        m_docMap->SetUseHorizontalScrollBar(false);
+        m_docMap->SetUseVerticalScrollBar(false);
+        m_docMap->SetSelEOLFilled(true);                             // viewport band spans the full line width
+        m_docMap->SetExtraAscent(-1); m_docMap->SetExtraDescent(-1); // tighten line spacing
+        applyDocMapTheme();
+        m_docMap->Bind(wxEVT_LEFT_DOWN, &NppShellFrame::onDocMapClick, this);
+        m_docMap->Bind(wxEVT_MOTION,    &NppShellFrame::onDocMapDrag,  this);
+        m_aui.AddPane(m_docMap, wxAuiPaneInfo().Name("docmap").Caption("Document Map")
+                          .Right().BestSize(150, 400).MinSize(70, 80).CloseButton(true).Hide());
+        m_aui.Update();
+    }
+    void applyDocMapTheme()
+    {
+        if (!m_docMap) return;
+        const bool d = m_dark;
+        m_docMap->StyleSetBackground(wxSTC_STYLE_DEFAULT, d ? wxColour(30, 30, 30)    : wxColour(255, 255, 255));
+        m_docMap->StyleSetForeground(wxSTC_STYLE_DEFAULT, d ? wxColour(150, 150, 150) : wxColour(96, 96, 96));
+        m_docMap->StyleClearAll();
+        m_docMap->SetSelBackground(true, d ? wxColour(95, 115, 150) : wxColour(180, 200, 230));   // viewport box
+        m_docMap->SetSelAlpha(90);
+        m_docMap->SetBackgroundColour(d ? wxColour(30, 30, 30) : wxColour(255, 255, 255));
+    }
+    void updateDocMapViewport()
+    {
+        if (!m_docMap || !m_stc) return;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_docMap);
+        if (!pi.IsOk() || !pi.IsShown()) return;
+        const int firstVis = m_stc->GetFirstVisibleLine();
+        const int firstDoc = m_stc->DocLineFromVisible(firstVis);
+        const int lastDoc  = m_stc->DocLineFromVisible(firstVis + m_stc->LinesOnScreen());
+        m_docMap->SetSelection(m_docMap->PositionFromLine(firstDoc), m_docMap->PositionFromLine(lastDoc + 1));
+        const int mapFirst = m_docMap->GetFirstVisibleLine();
+        const int mapLines = m_docMap->LinesOnScreen();
+        if (firstDoc < mapFirst || lastDoc > mapFirst + mapLines)   // keep the viewport visible on long docs
+            m_docMap->SetFirstVisibleLine(firstDoc > mapLines / 2 ? firstDoc - mapLines / 2 : 0);
+    }
+    void toggleDocMap()
+    {
+        if (!m_docMap) return;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_docMap);
+        if (!pi.IsOk()) return;
+        const bool show = !pi.IsShown();
+        pi.Show(show);
+        m_aui.Update();
+        if (show && activePage()) { m_docMap->SetDocPointer(reinterpret_cast<void*>(activePage()->doc)); applyDocMapTheme(); updateDocMapViewport(); }
+    }
+    void scrollMainToDocMapY(int y)
+    {
+        if (!m_docMap || !m_stc) return;
+        const int line = m_docMap->LineFromPosition(m_docMap->PositionFromPoint(wxPoint(2, y)));
+        const int half = m_stc->LinesOnScreen() / 2;
+        m_stc->SetFirstVisibleLine(line > half ? line - half : 0);
+        updateDocMapViewport();
+    }
+    void onDocMapClick(wxMouseEvent& e) { scrollMainToDocMapY(e.GetY()); }
+    void onDocMapDrag(wxMouseEvent& e)  { if (e.Dragging() && e.LeftIsDown()) scrollMainToDocMapY(e.GetY()); else e.Skip(); }
 
     // Notepad++'s caption buttons (new / document-list / close), overlaid at the right of the tab strip.
     void buildTabCaptionButtons()
@@ -1101,6 +1171,7 @@ private:
         sci(SCI_SETMODEVENTMASK, SC_MODEVENTMASKALL);
         m_path = p->path;
         setLexerForFile(p->path);                                           // re-apply lexer/styling for this doc (N++ defineDocType)
+        if (m_docMap) { m_docMap->SetDocPointer(reinterpret_cast<void*>(p->doc)); updateDocMapViewport(); }   // minimap follows the active doc
         refreshTab(p);
         updateStatus();
         m_stc->SetFocus();
@@ -2350,7 +2421,7 @@ private:
             case wxID_ABOUT: case IDM_ABOUT: showAbout(); break;
 
             case IDM_FILE_PRINT: notImpl("Print"); break;
-            case IDM_VIEW_DOC_MAP: notImpl("Document Map panel"); break;
+            case IDM_VIEW_DOC_MAP: toggleDocMap(); break;
             case IDM_VIEW_FUNC_LIST: notImpl("Function List panel"); break;
             case IDM_VIEW_DOCLIST: notImpl("Document List panel"); break;
             case IDM_VIEW_FILEBROWSER: notImpl("Folder as Workspace panel"); break;
@@ -2458,6 +2529,7 @@ private:
     FindReplaceDialog* m_findDlg = nullptr;   // modeless Find/Replace dialog
     wxFileHistory      m_fileHistory;         // Recent Files (MRU), persisted in wxConfig
     wxStyledTextCtrl* m_stc = nullptr;   // the cross-platform editor view; its native HWND on Windows == m_sci
+    wxStyledTextCtrl* m_docMap = nullptr;   // Document Map (minimap): a second view sharing the active document
 #ifdef __WXMSW__
     HWND        m_sci  = nullptr;
     NppData     m_npp{};
