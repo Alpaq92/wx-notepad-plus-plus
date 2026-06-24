@@ -1551,6 +1551,12 @@ private:
         T(IDM_MACRO_RUNMULTIMACRODLG, "playback-multiple", "Run a Macro Multiple Times");
         T(IDM_MACRO_SAVECURRENTMACRO, "save-macro", "Save Current Recorded Macro");
         tb->Realize();
+        // Macro idle state (nothing recording, no macro stored) - matches Notepad++: only "Start Recording"
+        // is enabled; Stop / Playback / Run-Multiple / Save stay greyed until a macro is being/been recorded.
+        tb->EnableTool(IDM_MACRO_STOPRECORDINGMACRO, false);
+        tb->EnableTool(IDM_MACRO_PLAYBACKRECORDEDMACRO, false);
+        tb->EnableTool(IDM_MACRO_RUNMULTIMACRODLG, false);
+        tb->EnableTool(IDM_MACRO_SAVECURRENTMACRO, false);
 #ifdef __WXMSW__
         ::SendMessageW(static_cast<HWND>(tb->GetHandle()), TB_SETINDENT, 4, 0);  // small left margin before the first button
 #endif
@@ -1698,6 +1704,20 @@ private:
         const wxScopedCharBuffer u = c.ToUTF8();
         sci(SCI_CLEARALL);
         sci(SCI_ADDTEXT, u.length(), reinterpret_cast<sptr_t>(u.data()));
+        // Detect the file's line-ending style and match Scintilla's EOL mode to it (like Notepad++), so the
+        // status bar reports the real format (Unix/Windows/Mac) instead of the Windows default. Mode only -
+        // the content's actual bytes are preserved (no SCI_CONVERTEOLS) until the user explicitly converts.
+        {
+            int crlf = 0, lf = 0, cr = 0;
+            const char* d = u.data(); const size_t n = u.length();
+            for (size_t i = 0; i < n; ++i)
+            {
+                if (d[i] == '\r') { if (i + 1 < n && d[i + 1] == '\n') { ++crlf; ++i; } else ++cr; }
+                else if (d[i] == '\n') ++lf;
+            }
+            if (crlf || lf || cr)   // leave the default mode for a file with no line breaks at all
+                sci(SCI_SETEOLMODE, (crlf >= lf && crlf >= cr) ? SC_EOL_CRLF : (lf >= cr ? SC_EOL_LF : SC_EOL_CR));
+        }
         sci(SCI_EMPTYUNDOBUFFER); sci(SCI_GOTOPOS, 0); sci(SCI_SETSAVEPOINT);
         if (auto* p = activePage()) p->path = path;
         m_path = path; setDocTitle(wxFileNameFromPath(path));

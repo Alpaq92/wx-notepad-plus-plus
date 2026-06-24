@@ -5,6 +5,16 @@
 **Status:** Final — for funding decision
 **Scope:** 1:1 visual/behavioral migration of Notepad++ (~182K LOC native Win32 C++) to wxWidgets, preserving the HWND-based plugin ABI
 
+> **⚠️ Update (2026-06-24) — direction chosen and under active implementation.** This document captured
+> the research/evaluation phase. The committed approach is a **cross-platform rewrite**: a wxWidgets UI +
+> `wxStyledTextCtrl` for the editor (reusing only the portable **Scintilla + Lexilla**), with Notepad++'s
+> features reimplemented in portable C++ — **not** booting or linking the Win32 Notepad++ backend (which
+> would be Windows-only forever). A working experimental editor lives in [`spike/`](../spike/): tabbed
+> editor with per-tab Scintilla documents, syntax highlighting, find/replace, dark mode, a **Win32 plugin
+> host** (real `LoadLibrary` loader, broad `NPPM_*` coverage, an `NPPM_DMM*` docking-panel shim, and a
+> subclass that bridges plugin `SCI_*` messages into wxSTC), and the cross-platform `wxStyledTextCtrl`
+> swap validated by a Linux/GTK CI workflow. See the repository README for build instructions.
+
 > **What changed since the draft (read this first).** This revision corrects four verified factual errors in the prior draft, fills the single largest scoping gap, and hardens the risk/effort sections:
 > 1. **DPI model corrected.** The app is **System-DPI-aware with an *unaware* fallback** (manifest: `dpiAware=true`, `dpiAwareness="system, unaware"`), **not** per-monitor. wxWidgets 3.2/3.3 default to **per-monitor-v2** awareness, so adopting wx *changes* the DPI model rather than merely "reconciling an owner." This is now treated as a behavioral-change risk (§9, §13 R5).
 > 2. **Internal message coupling added as a first-class cost.** The app's *own* UI is HWND-message-driven: **~1,215 `SendMessage`/`PostMessage` call sites across 74 files** (verified). Converting any leaf control to a wx object breaks internal callers, not just plugins. "Leaf-first is low-risk" is therefore only *partly* true; the effort ceiling is widened accordingly (§5.6, §11, §14).
