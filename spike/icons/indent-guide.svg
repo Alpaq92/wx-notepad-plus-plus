@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" color="#343a40" role="img" aria-label="Show Indent Guide">
+  <title>Show Indent Guide</title>
+  <path d="M4 6h16" />
+  <path d="M10 10h10" />
+  <path d="M10 14h10" />
+  <path d="M4 18h16" />
+  <path d="M8 7.5v9" stroke-dasharray="2 2.5" />
+</svg>

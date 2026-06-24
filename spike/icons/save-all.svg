@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" color="#343a40" role="img" aria-label="Save All">
+  <title>Save All</title>
+  <path d="M15 4h-9a2 2 0 0 0 -2 2v9" stroke="#1971c2" />
+  <path d="M10 7h7l3 3v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2" stroke="#1971c2" />
+  <path d="M11 7v3h5v-3" stroke="#1971c2" />
+</svg>

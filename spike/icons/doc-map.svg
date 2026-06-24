@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" color="#343a40" role="img" aria-label="Document Map">
+  <title>Document Map</title>
+  <rect x="4" y="4" width="16" height="16" rx="2" />
+  <path d="M15 4v16" />
+  <path d="M7 8h5" />
+  <path d="M7 11h5" />
+  <path d="M7 14h3" />
+  <rect x="16.5" y="8" width="2.5" height="4.5" rx="0.5" />
+</svg>
