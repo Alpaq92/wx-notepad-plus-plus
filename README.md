@@ -16,8 +16,10 @@
 > - Active work lives on the **`wx-migration`** branch; Linux build status is validated by the
 >   `spike-linux` GitHub Actions workflow.
 >
-> Not affiliated with or endorsed by the Notepad++ project. Provided under the same [GPL license](LICENSE)
-> as upstream. The original project README follows.
+> Not affiliated with or endorsed by the Notepad++ project. Provided under the same **GPL v3** license
+> ([`LICENSE`](LICENSE)) as upstream — see [`LICENSING.md`](LICENSING.md) for how the Notepad++ (GPL) and
+> Scintilla/Lexilla (permissive) licenses interact and what relicensing would require. The original
+> project README follows.
 >
 > ---
 
