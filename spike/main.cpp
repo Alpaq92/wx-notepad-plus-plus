@@ -21,6 +21,7 @@
 #include <wx/aui/auibook.h>
 #include <wx/aui/aui.h>          // wxAuiManager - dock host for plugin panels (NPPM_DMM*)
 #include <wx/stc/stc.h>          // wxStyledTextCtrl - cross-platform editor (Phase 3 port target)
+#include <wx/treectrl.h>         // wxTreeCtrl - Function List symbol tree
 #include <wx/spinctrl.h>
 #include <wx/file.h>
 #include <wx/filename.h>
@@ -56,6 +57,7 @@ using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/
 #include <cctype>
 #include <map>
 #include <vector>
+#include <regex>               // std::regex - Function List symbol parsing (per-language rules)
 #include <set>
 #include <algorithm>
 #include <cstdlib>
@@ -79,7 +81,7 @@ static const UINT WM_SPIKE_PLUGINTEST = WM_APP + 2;
 static const int  MARK_BOOKMARK = 2;      // a free Scintilla marker number for bookmarks
 static const int  MARK_INDIC    = 9;      // indicator number for "Mark All" highlights (Find dialog)
 static const int  SMART_INDIC   = 10;     // indicator number for smart-highlight (double-click a word)
-enum { myID_TIMER = 60000, myID_DARKMODE, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE };   // fixed ids, above the IDM_* range
+enum { myID_TIMER = 60000, myID_DARKMODE, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER };   // fixed ids, above the IDM_* range
 static const int myID_DOCLIST_ITEM = 61000;   // base id for the document-list dropdown entries
 
 // The one persistent editor view (set by the frame), used to release a tab's Document when its
@@ -331,6 +333,65 @@ static void smartHighlight(wxStyledTextCtrl* sci)
         start = me; ++count;
     }
     if (count > 0) { g_smartActive = true; g_smartSci = sci; }
+}
+
+// ---- Function List symbol parsing -----------------------------------------------------------------
+// Notepad++'s Function List is regex-driven (PowerEditor/installer/functionList/*.xml). The two Qt
+// N++-likes (NotepadNext, notepadqq) have NO equivalent feature, so these rules are distilled from
+// N++'s XML and simplified to portable std::regex (ECMAScript) - N++'s patterns use PCRE/Boost
+// recursion + \K which std::regex/wxRegEx can't run. Each rule = {kind 0=function/1=class, regex,
+// name capture-group}. Patterns anchor on (?:^|\n) (start-of-line) and the name's position gives the line.
+struct FLRule { int kind; std::regex re; int grp; };
+
+class FLItemData : public wxTreeItemData { public: int line; explicit FLItemData(int l) : line(l) {} };
+
+static const std::vector<FLRule>* flRules(const std::string& lang)
+{
+    static std::map<std::string, std::vector<FLRule>> tbl;
+    static bool built = false;
+    if (!built)
+    {
+        built = true;
+        auto add = [&](const char* l, int kind, const char* pat, int grp) {
+            try { tbl[l].push_back({ kind, std::regex(pat, std::regex::ECMAScript | std::regex::optimize), grp }); } catch (...) {}
+        };
+        // C / C++ (class/struct, then free functions & methods)
+        add("cpp", 1, R"((?:^|\n)[ \t]*(?:template[ \t]*<[^>]*>[ \t\n]*)?(?:class|struct)[ \t]+(?:[A-Za-z_]\w*[ \t]+)*([A-Za-z_]\w*)\b(?:[ \t]+final)?[ \t\n]*(?::[^{]*)?\{)", 1);
+        add("cpp", 0, R"((?:^|\n)[ \t]*(?:(?:inline|static|virtual|explicit|friend|constexpr)[ \t]+)*[A-Za-z_][\w:<>,\*& \t]*?[\*& \t](?!(?:if|while|for|switch|catch|return|sizeof|do|else)\b)(~?[A-Za-z_]\w*)[ \t]*\([^;{}]*\)[ \t\n]*(?:const|noexcept|override|final|[ \t\n])*\{)", 1);
+        // Python
+        add("python", 1, R"((?:^|\n)[ \t]*class[ \t]+([A-Za-z_]\w*)[ \t]*[\(:])", 1);
+        add("python", 0, R"((?:^|\n)[ \t]*(?:async[ \t]+)?def[ \t]+([A-Za-z_]\w*)[ \t]*\()", 1);
+        // JavaScript / TypeScript
+        add("js", 1, R"((?:^|\n)[ \t]*(?:export[ \t]+)?(?:default[ \t]+)?(?:abstract[ \t]+)?class[ \t]+([A-Za-z_$][\w$]*))", 1);
+        add("js", 0, R"((?:^|\n)[ \t]*(?:export[ \t]+)?(?:default[ \t]+)?(?:async[ \t]+)?function\*?[ \t]+([A-Za-z_$][\w$]*)[ \t]*\()", 1);
+        add("js", 0, R"((?:^|\n)[ \t]*(?:export[ \t]+)?(?:const|let|var)[ \t]+([A-Za-z_$][\w$]*)[ \t]*=[ \t]*(?:async[ \t]+)?\([^)]*\)[ \t]*=>)", 1);
+        // Java
+        add("java", 1, R"((?:^|\n)[ \t]*(?:(?:public|private|protected|abstract|final|static|sealed)[ \t]+)*(?:class|interface|enum)[ \t]+([A-Za-z_]\w*))", 1);
+        add("java", 0, R"((?:^|\n)[ \t]*(?:(?:public|private|protected|static|final|abstract|synchronized|native|default)[ \t]+)+(?:<[^>]+>[ \t]*)?[A-Za-z_][\w<>\[\], \t.]*?[ \t]([A-Za-z_]\w*)[ \t]*\([^;{=]*\)[ \t\n]*(?:throws[^{]*)?\{)", 1);
+        // C#
+        add("cs", 1, R"((?:^|\n)[ \t]*(?:(?:public|private|protected|internal|static|sealed|abstract|partial)[ \t]+)*(?:class|struct|interface|enum|record)[ \t]+([A-Za-z_]\w*))", 1);
+        add("cs", 0, R"((?:^|\n)[ \t]*(?:(?:public|private|protected|internal|static|virtual|override|sealed|abstract|extern|async|new)[ \t]+)+(?!return|if|else|while|for|switch|using)[A-Za-z_][\w<>\[\], \t.]*?[ \t]([A-Za-z_]\w*)[ \t]*(?:<[^>]+>)?[ \t]*\([^;{]*\)[ \t\n]*(?:where[^{]*)?\{)", 1);
+    }
+    auto it = tbl.find(lang);
+    return it == tbl.end() ? nullptr : &it->second;
+}
+
+// Comment + string spans to mask out, so keywords inside comments/strings aren't parsed as symbols.
+static const std::regex* flCommentRe(const std::string& lang)
+{
+    static std::map<std::string, std::regex> tbl;
+    static bool built = false;
+    if (!built)
+    {
+        built = true;
+        try {
+            const char* cfam = R"(/\*[\s\S]*?\*/|//[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')";
+            tbl["cpp"] = std::regex(cfam); tbl["js"] = std::regex(cfam); tbl["java"] = std::regex(cfam); tbl["cs"] = std::regex(cfam);
+            tbl["python"] = std::regex(R"(#[^\n]*|'''[\s\S]*?'''|"""[\s\S]*?"""|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
+        } catch (...) {}
+    }
+    auto it = tbl.find(lang);
+    return it == tbl.end() ? nullptr : &it->second;
 }
 
 // NOTE: SCN_* notifications used to arrive here as Win32 WM_NOTIFY via a subclass on the page panel.
@@ -857,6 +918,7 @@ private:
         m_aui.AddPane(m_tabs, wxAuiPaneInfo().CenterPane().PaneBorder(false));
         m_aui.Update();
         buildDocMap();   // Document Map (minimap) pane - hidden until toggled from the View menu / toolbar
+        buildFuncList(); // Function List (symbol tree) pane - hidden until toggled
     }
 
     // wxStyledTextCtrl fires wxEVT_STC_* (not Win32 WM_NOTIFY), so the N++ editor behaviours and the
@@ -926,7 +988,7 @@ private:
         e.Skip();
     }
     void onStcZoom(wxStyledTextEvent& e)      { if (g_onZoom) g_onZoom(static_cast<int>(sci(SCI_GETZOOM))); e.Skip(); }
-    void onStcModified(wxStyledTextEvent& e)  { forwardScn(SCN_MODIFIED, e); e.Skip(); }
+    void onStcModified(wxStyledTextEvent& e)  { forwardScn(SCN_MODIFIED, e); if (m_flTimer) m_flTimer->StartOnce(600); e.Skip(); }   // debounce Function List re-parse
     void onStcUriDropped(wxStyledTextEvent& e){ if (g_openDropped && !e.GetString().empty()) g_openDropped(e.GetString()); e.Skip(); }
     void onStcContextMenu(wxContextMenuEvent& e)
     {
@@ -1002,6 +1064,123 @@ private:
     }
     void onDocMapClick(wxMouseEvent& e) { scrollMainToDocMapY(e.GetY()); }
     void onDocMapDrag(wxMouseEvent& e)  { if (e.Dragging() && e.LeftIsDown()) scrollMainToDocMapY(e.GetY()); else e.Skip(); }
+
+    // ---- Function List (per-file symbol tree) -----------------------------------------------------
+    void buildFuncList()
+    {
+        m_funcList = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                    wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxBORDER_NONE);
+        m_funcList->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrame::onFuncListActivate, this);
+        m_funcList->Bind(wxEVT_TREE_SEL_CHANGED,     &NppShellFrame::onFuncListActivate, this);   // single-click jumps too (like N++)
+        m_flTimer = new wxTimer(this, myID_FLTIMER);
+        Bind(wxEVT_TIMER, [this](wxTimerEvent&) { parseFuncList(); }, myID_FLTIMER);
+        m_aui.AddPane(m_funcList, wxAuiPaneInfo().Name("funclist").Caption("Function List")
+                          .Right().BestSize(210, 400).MinSize(110, 80).CloseButton(true).Hide());
+        m_aui.Update();
+    }
+    std::string flLangKey()
+    {
+        wxString ext; if (auto* p = activePage()) ext = p->path.AfterLast('.').Lower();
+        if (ext=="cpp"||ext=="cc"||ext=="cxx"||ext=="c"||ext=="h"||ext=="hpp"||ext=="hxx"||ext=="ino") return "cpp";
+        if (ext=="py"||ext=="pyw") return "python";
+        if (ext=="js"||ext=="jsx"||ext=="mjs"||ext=="ts"||ext=="tsx") return "js";
+        if (ext=="java") return "java";
+        if (ext=="cs") return "cs";
+        return "";
+    }
+    void parseFuncList()
+    {
+        if (!m_funcList) return;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_funcList);
+        if (!pi.IsOk() || !pi.IsShown()) return;
+        m_funcList->Freeze();
+        m_funcList->DeleteAllItems();
+        const wxTreeItemId root = m_funcList->AddRoot("");
+        const std::string lang = flLangKey();
+        const auto* rules = flRules(lang);
+        if (rules)
+        {
+            const wxCharBuffer cb = m_stc->GetTextRaw();          // UTF-8 bytes - offsets line up with Scintilla
+            const std::string text(cb.data(), cb.length());
+            std::vector<std::pair<size_t, size_t>> zones;          // comment/string spans to skip
+            if (const std::regex* cre = flCommentRe(lang))
+                for (std::sregex_iterator it(text.begin(), text.end(), *cre), e; it != e; ++it)
+                    zones.push_back({ (size_t)it->position(0), (size_t)(it->position(0) + it->length(0)) });
+            auto inZone = [&](size_t p) { for (auto& z : zones) if (p >= z.first && p < z.second) return true; return false; };
+            struct Sym { wxString name; int kind; size_t pos, end, rangeEnd; };
+            std::vector<Sym> syms;
+            for (const auto& r : *rules)
+                for (std::sregex_iterator it(text.begin(), text.end(), r.re), e; it != e; ++it)
+                {
+                    const auto& m = *it;
+                    if (m.position(r.grp) < 0) continue;
+                    const size_t np = (size_t)m.position(r.grp);
+                    if (inZone(np)) continue;
+                    syms.push_back({ wxString::FromUTF8(m.str(r.grp).c_str()), r.kind, np, (size_t)(m.position(0) + m.length(0)), 0 });
+                }
+            for (auto& s : syms)                                   // compute each class's range (for nesting methods)
+            {
+                if (s.kind != 1) { s.rangeEnd = s.end; continue; }
+                if (lang == "python")
+                {
+                    size_t ls = text.rfind('\n', s.pos); ls = (ls == std::string::npos) ? 0 : ls + 1;
+                    size_t ind = 0; while (ls + ind < text.size() && (text[ls + ind] == ' ' || text[ls + ind] == '\t')) ind++;
+                    size_t i = s.pos; s.rangeEnd = text.size();
+                    while ((i = text.find('\n', i)) != std::string::npos)
+                    {
+                        size_t l = i + 1, k = 0; while (l + k < text.size() && (text[l + k] == ' ' || text[l + k] == '\t')) k++;
+                        if (l + k < text.size() && text[l + k] != '\n' && text[l + k] != '\r' && k <= ind) { s.rangeEnd = l; break; }
+                        i = l;
+                    }
+                }
+                else
+                {
+                    int depth = 1; s.rangeEnd = text.size();
+                    for (size_t i = s.end; i < text.size(); ++i)
+                    {
+                        if (inZone(i)) continue;
+                        if (text[i] == '{') depth++;
+                        else if (text[i] == '}' && --depth == 0) { s.rangeEnd = i; break; }
+                    }
+                }
+            }
+            std::sort(syms.begin(), syms.end(), [](const Sym& a, const Sym& b) { return a.pos < b.pos; });
+            struct Open { size_t rangeEnd; wxTreeItemId item; };
+            std::vector<Open> stack;
+            for (auto& s : syms)
+            {
+                while (!stack.empty() && s.pos >= stack.back().rangeEnd) stack.pop_back();
+                const wxTreeItemId parent = stack.empty() ? root : stack.back().item;
+                const int line = (int)sci(SCI_LINEFROMPOSITION, (uptr_t)s.pos);
+                const wxTreeItemId item = m_funcList->AppendItem(parent, s.name, -1, -1, new FLItemData(line));
+                if (s.kind == 1) { m_funcList->SetItemBold(item, true); stack.push_back({ s.rangeEnd, item }); }
+            }
+            m_funcList->ExpandAll();
+        }
+        m_funcList->Thaw();
+    }
+    void onFuncListActivate(wxTreeEvent& e)
+    {
+        if (!m_funcList) return;
+        if (auto* d = dynamic_cast<FLItemData*>(m_funcList->GetItemData(e.GetItem())))
+        {
+            sci(SCI_ENSUREVISIBLE, d->line);
+            sci(SCI_GOTOLINE, d->line);
+            const int half = (int)sci(SCI_LINESONSCREEN) / 2;
+            sci(SCI_SETFIRSTVISIBLELINE, d->line > half ? d->line - half : 0);
+            m_stc->SetFocus();
+        }
+        e.Skip();
+    }
+    void toggleFuncList()
+    {
+        if (!m_funcList) return;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_funcList);
+        if (!pi.IsOk()) return;
+        pi.Show(!pi.IsShown());
+        m_aui.Update();
+        if (pi.IsShown()) parseFuncList();
+    }
 
     // Notepad++'s caption buttons (new / document-list / close), overlaid at the right of the tab strip.
     void buildTabCaptionButtons()
@@ -1172,6 +1351,7 @@ private:
         m_path = p->path;
         setLexerForFile(p->path);                                           // re-apply lexer/styling for this doc (N++ defineDocType)
         if (m_docMap) { m_docMap->SetDocPointer(reinterpret_cast<void*>(p->doc)); updateDocMapViewport(); }   // minimap follows the active doc
+        parseFuncList();                                                    // re-parse symbols for the newly active doc
         refreshTab(p);
         updateStatus();
         m_stc->SetFocus();
@@ -2422,7 +2602,7 @@ private:
 
             case IDM_FILE_PRINT: notImpl("Print"); break;
             case IDM_VIEW_DOC_MAP: toggleDocMap(); break;
-            case IDM_VIEW_FUNC_LIST: notImpl("Function List panel"); break;
+            case IDM_VIEW_FUNC_LIST: toggleFuncList(); break;
             case IDM_VIEW_DOCLIST: notImpl("Document List panel"); break;
             case IDM_VIEW_FILEBROWSER: notImpl("Folder as Workspace panel"); break;
             case IDM_VIEW_MONITORING: notImpl("File monitoring"); break;
@@ -2530,6 +2710,8 @@ private:
     wxFileHistory      m_fileHistory;         // Recent Files (MRU), persisted in wxConfig
     wxStyledTextCtrl* m_stc = nullptr;   // the cross-platform editor view; its native HWND on Windows == m_sci
     wxStyledTextCtrl* m_docMap = nullptr;   // Document Map (minimap): a second view sharing the active document
+    wxTreeCtrl* m_funcList = nullptr;       // Function List: per-file symbol tree (regex-parsed)
+    wxTimer*    m_flTimer  = nullptr;        // debounce re-parse of the Function List after edits
 #ifdef __WXMSW__
     HWND        m_sci  = nullptr;
     NppData     m_npp{};
