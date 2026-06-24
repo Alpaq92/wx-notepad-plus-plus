@@ -1,3 +1,26 @@
+> ## ⚠️ Experimental wxWidgets fork (cross-platform)
+>
+> **This is an experimental, unofficial fork of Notepad++** exploring a **cross-platform
+> (Windows / Linux / macOS) rewrite** of the editor on top of **[wxWidgets](https://www.wxwidgets.org/)**.
+>
+> Upstream Notepad++ is Windows-only — its UI, plugin ABI, docking and dialogs are welded to the Win32
+> API. This fork reuses only the genuinely portable parts — **Scintilla + Lexilla** — through wxWidgets'
+> `wxStyledTextCtrl`, and reimplements the Notepad++ UI in portable C++/wx. The **Windows** build keeps
+> binary compatibility with existing **Win32 Notepad++ plugins** (a subclass bridges plugin `SCI_*`
+> messages into wxSTC, the `NPPM_*` API and `NPPM_DMM*` docking panels are served from the frame); on
+> **Linux/macOS** plugins must be rebuilt, and Windows-only plugins are unsupported.
+>
+> - **Experimental editor:** [`spike/`](spike/) — `cmake -S spike -B build-spike` (standalone, Linux/macOS)
+>   or `-DNPP_BUILD_WX_SPIKE=ON` against the top-level CMake (Windows).
+> - **Design notes:** [`docs/WXWIDGETS_MIGRATION_PLAN.md`](docs/WXWIDGETS_MIGRATION_PLAN.md).
+> - Active work lives on the **`wx-migration`** branch; Linux build status is validated by the
+>   `spike-linux` GitHub Actions workflow.
+>
+> Not affiliated with or endorsed by the Notepad++ project. Provided under the same [GPL license](LICENSE)
+> as upstream. The original project README follows.
+>
+> ---
+
 What is Notepad++ ?
 ===================
 

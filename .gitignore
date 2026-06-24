@@ -8,9 +8,23 @@
 
 #-- Build results
 
-#-- CMake (wx-notepad-plus-plus CMake port)
-/build/
+#-- CMake / wxWidgets (wx-notepad-plus-plus CMake port)
+# Out-of-source build dirs (build/, build-spike/, ...) hold ALL CMake output and the
+# wxWidgets sources/libs fetched via FetchContent (build*/_deps/, ~tens of thousands
+# of files) -- never commit or count these.
+/build*/
+/out/
 CMakeUserPresets.json
+CMakeSettings.json
+# In-source CMake artifacts, in case anyone configures inside the source tree:
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+compile_commands.json
+_deps/
+# Header generated at configure time (normally lives under build*/; here for safety):
+PowerEditor/src/NppLibsVersion.h
 
 [Dd]ebug/
 [Rr]elease/
