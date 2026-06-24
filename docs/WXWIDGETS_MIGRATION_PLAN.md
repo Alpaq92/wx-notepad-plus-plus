@@ -9,7 +9,9 @@
 > the research/evaluation phase. The committed approach is a **cross-platform rewrite**: a wxWidgets UI +
 > `wxStyledTextCtrl` for the editor (reusing only the portable **Scintilla + Lexilla**), with Notepad++'s
 > features reimplemented in portable C++ — **not** booting or linking the Win32 Notepad++ backend (which
-> would be Windows-only forever). A working experimental editor lives in [`spike/`](../spike/): tabbed
+> would be Windows-only forever). The repo has since been restructured (the original Notepad++ app source
+> removed; the editor moved to `src/`, deps to `third_party/`, assets to `resources/`). A working
+> experimental editor lives in [`src/`](../src/): tabbed
 > editor with per-tab Scintilla documents, syntax highlighting, find/replace, dark mode, a **Win32 plugin
 > host** (real `LoadLibrary` loader, broad `NPPM_*` coverage, an `NPPM_DMM*` docking-panel shim, and a
 > subclass that bridges plugin `SCI_*` messages into wxSTC), and the cross-platform `wxStyledTextCtrl`

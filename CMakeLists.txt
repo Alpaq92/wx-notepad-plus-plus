@@ -1,60 +1,95 @@
-# CMake build for Notepad++ (wx-notepad-plus-plus)
+# wxNotepad++ - experimental cross-platform (Windows / Linux / macOS) Notepad++-faithful editor.
 #
-# This is a CMake port of the original MSBuild (Visual Studio) build.
-# It produces the same three components the .sln does:
-#   * scintilla  -> libscintilla.lib  (static, with Boost.Regex PCRE support)
-#   * lexilla    -> liblexilla.lib    (static)
-#   * notepad++  -> notepad++.exe     (Win32 GUI application)
+# wxWidgets UI + wxStyledTextCtrl editor (which bundles Scintilla); our portable Lexilla supplies the
+# language lexers. On Windows it keeps Win32 plugin-ABI compatibility (real plugin loader, NPPM_*,
+# docking); on Linux/macOS the Win32-only subsystems are #ifdef __WXMSW__'d out (plugins need rebuild).
 #
-# Settings (defines, include dirs, libs, runtime, language standard) mirror
-# PowerEditor/visual.net/notepadPlus.{vcxproj,Cpp.props}, scintilla/win32/
-# Scintilla.vcxproj and lexilla/src/Lexilla.vcxproj.
-#
-# Tested generator: Ninja + MSVC (x64). Configure from a VS developer shell:
-#   cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -S . -B build
+#   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 #   cmake --build build
+#   ./build/bin/wxnpp            (wxnpp.exe on Windows)
 
 cmake_minimum_required(VERSION 3.20)
+project(wxNotepadPlusPlus LANGUAGES CXX)
 
-# Select the MSVC runtime library statically (/MT, /MTd) for every target,
-# matching <RuntimeLibrary>MultiThreaded[Debug]</RuntimeLibrary> in the projects.
-# Requires CMP0091=NEW, which is the default at this cmake_minimum_required.
-cmake_policy(SET CMP0091 NEW)
+include(FetchContent)
 
-project(notepad-plus-plus
-        VERSION 1.0
-        DESCRIPTION "Notepad++ (CMake port)"
-        LANGUAGES CXX RC)
-
-if(NOT WIN32)
-    message(FATAL_ERROR "Notepad++ is a Win32 application and only builds on Windows.")
-endif()
-if(NOT MSVC)
-    message(WARNING "This CMake port targets MSVC; other compilers are untested.")
+if(MSVC)
+    string(APPEND CMAKE_CXX_FLAGS " /EHsc")          # wxWidgets requires /EHsc
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")   # /MT - match wx's static CRT (CMP0091 NEW @ cmake 3.20)
 endif()
 
-# Default to a Release build for single-config generators (Ninja, NMake).
-get_property(_is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
-if(NOT _is_multi_config AND NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
-    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release RelWithDebInfo MinSizeRel)
+# ---- wxWidgets (fetched + built from source; provides wxStyledTextCtrl + its bundled Scintilla) ----
+set(wxBUILD_SHARED            OFF CACHE BOOL "" FORCE)
+if(WIN32)
+    set(wxBUILD_USE_STATIC_RUNTIME ON CACHE BOOL "" FORCE)   # /MT, self-contained exe on Windows
+endif()
+set(wxBUILD_SAMPLES          OFF CACHE BOOL "" FORCE)
+set(wxBUILD_TESTS            OFF CACHE BOOL "" FORCE)
+set(wxBUILD_DEMOS            OFF CACHE BOOL "" FORCE)
+
+message(STATUS "[wxnpp] Fetching wxWidgets 3.3.1 (one-time; builds from source)...")
+FetchContent_Declare(wxwidgets
+    URL https://github.com/wxWidgets/wxWidgets/releases/download/v3.3.1/wxWidgets-3.3.1.tar.bz2
+)
+FetchContent_MakeAvailable(wxwidgets)
+
+# ---- Lexilla (portable C++ syntax-highlighting lexers; CreateLexer) --------------------------------
+file(GLOB LEXILLA_SRC CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/third_party/lexilla/src/Lexilla.cxx"
+    "${CMAKE_SOURCE_DIR}/third_party/lexilla/lexlib/*.cxx"
+    "${CMAKE_SOURCE_DIR}/third_party/lexilla/lexers/*.cxx")
+add_library(lexilla STATIC ${LEXILLA_SRC})
+target_include_directories(lexilla
+    PUBLIC  "${CMAKE_SOURCE_DIR}/third_party/lexilla/include"
+    PRIVATE "${CMAKE_SOURCE_DIR}/third_party/lexilla/lexlib"
+            "${CMAKE_SOURCE_DIR}/third_party/scintilla/include")
+set_target_properties(lexilla PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+if(MSVC)
+    target_compile_options(lexilla PRIVATE /EHsc /utf-8)
 endif()
 
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+# ---- the wxNotepad++ executable --------------------------------------------------------------------
+# WIN32 = GUI-subsystem app on Windows; a plain executable elsewhere (GTK on Linux, Cocoa on macOS).
+if(WIN32)
+    add_executable(wxnpp WIN32 src/main.cpp)
+else()
+    add_executable(wxnpp src/main.cpp)
+endif()
+set_target_properties(wxnpp PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
-# CMake injects /EHsc into CMAKE_CXX_FLAGS by default. The Notepad++ application
-# is compiled with /EHa (ExceptionHandling=Async) for its SEH crash handler, so
-# strip the default here and let each target pick its own model below.
-string(REGEX REPLACE "[/-]EHsc" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+target_include_directories(wxnpp PRIVATE
+    "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"     # Scintilla.h, ILexer.h (SCI_* + SCNotification)
+    "${CMAKE_SOURCE_DIR}/third_party/lexilla/include"       # Lexilla.h (CreateLexer), SciLexer.h (SCE_*)
+    "${CMAKE_SOURCE_DIR}/third_party/notepad-plus-plus"     # PluginInterface.h, Notepad_plus_msgs.h, Docking.h, menuCmdID.h
+    "${CMAKE_SOURCE_DIR}/src")                              # app_icon_svg.h, npp_menu.h
 
-add_subdirectory(scintilla)
-add_subdirectory(lexilla)
-add_subdirectory(PowerEditor)
+target_link_libraries(wxnpp PRIVATE
+    wx::core wx::aui wx::base wx::xml wx::stc
+    lexilla)
 
-# Experimental wxWidgets Phase-0 de-risking spike (docs/WXWIDGETS_MIGRATION_PLAN.md).
-# OFF by default so the normal Notepad++ build is byte-identical and never fetches
-# wxWidgets. Enable explicitly:  cmake -B build-spike -DNPP_BUILD_WX_SPIKE=ON
-option(NPP_BUILD_WX_SPIKE "Build the experimental wxWidgets Phase-0 spike" OFF)
-if(NPP_BUILD_WX_SPIKE)
-    add_subdirectory(spike)
+# Windows-only chrome + plugin host (all behind #ifdef __WXMSW__ in src/main.cpp).
+if(WIN32)
+    target_link_libraries(wxnpp PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme)
+endif()
+if(MSVC)
+    target_compile_options(wxnpp PRIVATE /utf-8)
+endif()
+
+# ---- deploy runtime resources (toolbar icons, themes, default styler) next to the exe --------------
+add_custom_command(TARGET wxnpp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/icons"  "$<TARGET_FILE_DIR:wxnpp>/icons"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/themes" "$<TARGET_FILE_DIR:wxnpp>/themes"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/resources/stylers.model.xml" "$<TARGET_FILE_DIR:wxnpp>/stylers.model.xml"
+    VERBATIM)
+
+# ---- Windows-only test plugin (exercises the Win32 plugin loader) ----------------------------------
+if(WIN32)
+    add_subdirectory(src/plugins/test_plugin)
+    add_dependencies(wxnpp npp_test_plugin)
 endif()
