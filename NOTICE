@@ -24,9 +24,9 @@ clean reimplementations (e.g. DjvuNet relative to DjVuLibre): the reference
 implementation informs and validates behavior, it is not a code dependency.
 
 Notepad++ is a trademark of its respective owner. This project is not affiliated
-with, endorsed by, or sponsored by Notepad++ or its authors. (Known gap: the UI
-still displays the Notepad++ name/logo; rebranding is a tracked task — see
-docs/FUTURE_PLANS.md.)
+with, endorsed by, or sponsored by Notepad++ or its authors. The UI uses the
+wxNotepad++ name throughout; the app icon is the project's own SVG (whose green
+plate + monogram echo the upstream styling).
 
 ------------------------------------------------------------------------------
 Licensing direction (GPL now, permissive later)

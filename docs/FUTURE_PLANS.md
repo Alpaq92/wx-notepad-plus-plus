@@ -27,10 +27,11 @@ conservatively on GPL is **not** lingering GPL files — it's three unresolved g
    headers reproduce N++'s ABI (struct layouts + message numbers). Reproducing an ABI for
    interoperability is *defensible* (cf. *Google v. Oracle* + the merger doctrine) but **not settled
    law**. We won't claim a permissive license over it until a lawyer blesses it.
-2. **Trademark — addressed.** The app now presents its own identity: an original app icon (not the
-   green "N"), a "wxNotepad++" window title, and an "About wxNotepad++" box with an independence
-   disclaimer. The remaining "Notepad++" mentions are nominative (code comments, the `<NotepadPlus>`
-   data format, and Help-menu links to Notepad++'s own resources).
+2. **Trademark — name rebranded.** The app now uses the **wxNotepad++ name** throughout: a "wxNotepad++"
+   window title, an "About wxNotepad++" box with an independence disclaimer, and rebranded menu labels.
+   The app icon is the project's own SVG (`src/app_icon_svg.h`); its green plate + "N" monogram echo the
+   upstream styling. The remaining "Notepad++" mentions are nominative (code comments, the
+   `<NotepadPlus>` data format, and Help-menu links to Notepad++'s own resources).
 3. **A clean-room audit of `src/`.** The whole permissive claim rests on `src/` being original. We
    assert it is; a focused line-audit (especially where we matched N++ behavior closely) would make the
    claim airtight.
@@ -50,8 +51,8 @@ prematurely would be dishonest.
    translates N++ `NPPM_*`/`FuncItem`/`SCNotification` ⇄ Nib. It is GPL and shipped separately. After
    this move, **the core contains zero N++-derived code** — the legally-grey reproduction lives only in
    a GPL module, which is compliant under any reading.
-3. **Rebrand** — ✅ done: window title, app icon, About box, and dialog captions now carry the
-   wxNotepad++ identity (trademark gate closed).
+3. **Rebrand** — ✅ name done: window title, About box, dialog captions, and menu labels now carry the
+   wxNotepad++ name (the app icon is the project's own SVG).
 4. **Clean-room audit** of `src/`.
 5. **Relicense the core permissively.** The optional N++-bridge stays GPL; everyone else gets a
    permissive editor.
