@@ -21,7 +21,9 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #include <map>
 #include <vector>
 #include <assert.h>
-#include <windows.h>
+#ifdef _WIN32
+#include <windows.h>   // vestigial (no Win32 symbols are actually used here); Win32-only, so guard it
+#endif
 
 #include "ILexer.h"
 #include "LexAccessor.h"

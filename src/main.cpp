@@ -986,7 +986,6 @@ private:
         m_stc->Bind(wxEVT_STC_MARGINCLICK,      &NppShellFrame::onStcMarginClick, this);
         m_stc->Bind(wxEVT_STC_ZOOM,             &NppShellFrame::onStcZoom,        this);
         m_stc->Bind(wxEVT_STC_MODIFIED,         &NppShellFrame::onStcModified,    this);
-        m_stc->Bind(wxEVT_STC_URIDROPPED,       &NppShellFrame::onStcUriDropped,  this);
         m_stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { forwardScn(SCN_SAVEPOINTREACHED, e); e.Skip(); });
         m_stc->Bind(wxEVT_STC_SAVEPOINTLEFT,    [this](wxStyledTextEvent& e) { forwardScn(SCN_SAVEPOINTLEFT, e);    e.Skip(); });
         m_stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrame::onStcContextMenu, this);
@@ -1044,7 +1043,8 @@ private:
     }
     void onStcZoom(wxStyledTextEvent& e)      { if (g_onZoom) g_onZoom(static_cast<int>(sci(SCI_GETZOOM))); e.Skip(); }
     void onStcModified(wxStyledTextEvent& e)  { forwardScn(SCN_MODIFIED, e); if (m_flTimer) m_flTimer->StartOnce(600); e.Skip(); }   // debounce Function List re-parse
-    void onStcUriDropped(wxStyledTextEvent& e){ if (g_openDropped && !e.GetString().empty()) g_openDropped(e.GetString()); e.Skip(); }
+    // (file drops onto the editor are handled by the frame's wxFileDropTarget; wxEVT_STC_URIDROPPED is
+    //  deprecated in wx 3.3 - "never generated" - and absent when wx is built without drag-and-drop.)
     void onStcContextMenu(wxContextMenuEvent& e)
     {
         wxPoint p = e.GetPosition();
