@@ -81,6 +81,7 @@ typedef struct NibDocumentsApi {
     // Copy the active document's full path (UTF-8) into buf (NUL-terminated if it fits); returns the
     // byte length excluding the NUL, or 0 if the document is untitled (no path on disk yet).
     int  (*active_path)(NibHost*, char* buf, int cap);
+    int  (*open)(NibHost*, const char* utf8_path);  // open a file (load it into a tab); 1 on success, 0 on failure
 } NibDocumentsApi;
 
 // ---- nib.commands/1 : register + run commands ----------------------------------------------------

@@ -918,8 +918,10 @@ static void nibPanelShow(NibHost*, NibPanel* p, int v)            { if (g_nibPan
 // nib.documents/1 - the frame installs these (they need the tab list + the active page's path).
 static std::function<int()>            g_nibDocCount;
 static std::function<int(char*, int)>  g_nibDocActivePath;   // copy the active doc's UTF-8 path -> length, 0 if untitled
+static std::function<int(const char*)> g_nibDocOpen;         // open a file by UTF-8 path
 static int nibDocCount(NibHost*)                      { return g_nibDocCount ? g_nibDocCount() : 0; }
 static int nibDocActivePath(NibHost*, char* b, int c) { return g_nibDocActivePath ? g_nibDocActivePath(b, c) : 0; }
+static int nibDocOpen(NibHost*, const char* p)        { return g_nibDocOpen ? g_nibDocOpen(p) : 0; }
 #ifdef __WXMSW__
 // nib.win32/1 - Windows-only native-handle capability (the GPL npp-bridge uses it to rebuild NppData).
 static std::function<void*()> g_nibMainWindow, g_nibEditorMain, g_nibEditorSecond, g_nibPluginsMenu;
@@ -938,7 +940,7 @@ static const NibEditorApi   g_nibEditorApi   = { 1, sizeof(NibEditorApi),   nibE
 static const NibCommandsApi g_nibCommandsApi = { 1, sizeof(NibCommandsApi), nibCmdRegister };
 static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibSubscribe };
 static const NibPanelsApi   g_nibPanelsApi   = { 1, sizeof(NibPanelsApi),   nibPanelRegister, nibPanelSetText, nibPanelAppend, nibPanelShow };
-static const NibDocumentsApi g_nibDocumentsApi = { 1, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath };
+static const NibDocumentsApi g_nibDocumentsApi = { 1, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen };
 
 static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
 {
@@ -1043,6 +1045,7 @@ public:
             if (b && c > 0) { int n = static_cast<int>(u.size()); if (n > c - 1) n = c - 1; std::memcpy(b, u.data(), static_cast<size_t>(n)); b[n] = 0; }
             return static_cast<int>(u.size());
         };
+        g_nibDocOpen = [this](const char* p) -> int { if (!p) return 0; openPath(wxString::FromUTF8(p)); return 1; };
 #ifdef __WXMSW__   // nib.win32: hand the (optional, GPL) N++ bridge the native handles it needs
         g_nibMainWindow   = [this]() -> void* { return static_cast<HWND>(GetHandle()); };
         g_nibEditorMain   = [this]() -> void* { return m_sci; };
