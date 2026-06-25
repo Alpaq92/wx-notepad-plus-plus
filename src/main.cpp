@@ -1280,7 +1280,7 @@ private:
     void onStcCharAdded(wxStyledTextEvent& e)
     {
         const int ch = e.GetKey();
-        if (ch == '\n' || ch == '\r') autoIndentOnNewline(m_stc);
+        if ((ch == '\n' || ch == '\r') && m_autoindent) autoIndentOnNewline(m_stc);
         else if (ch == '}')           dedentCloseBrace(m_stc);
         else if (m_autocomplete && (std::isalnum((unsigned char)ch) || ch == '_'))   // auto word/keyword completion after 3+ chars
         {
@@ -3200,6 +3200,10 @@ private:
         c->Read("View/Toolbar", &m_showToolbar, true);
         c->Read("View/StatusBar", &m_showStatusbar, true);
         c->Read("Editing/AutoComplete", &m_autocomplete, true);
+        c->Read("Editing/CaretLine", &m_caretLine, true);
+        c->Read("Editing/AutoIndent", &m_autoindent, true);
+        long cw = 1; c->Read("Editing/CaretWidth", &cw, 1L); m_caretWidth = (int)cw;
+        long ec = 0; c->Read("Editing/EdgeColumn", &ec, 0L); m_edgeColumn = (int)ec;
         c->Read("Theme", &m_themeName, wxEmptyString);
     }
     void saveSettings()
@@ -3210,6 +3214,8 @@ private:
         c->Write("Editing/Whitespace", m_ws);             c->Write("Editing/IndentGuides", m_guides);
         c->Write("Editing/WrapSymbol", m_wrapSymbol);     c->Write("View/Toolbar", m_showToolbar);
         c->Write("View/StatusBar", m_showStatusbar);      c->Write("Editing/AutoComplete", m_autocomplete);
+        c->Write("Editing/CaretLine", m_caretLine);       c->Write("Editing/AutoIndent", m_autoindent);
+        c->Write("Editing/CaretWidth", (long)m_caretWidth); c->Write("Editing/EdgeColumn", (long)m_edgeColumn);
         c->Write("Theme", m_themeName);
         c->Flush();
     }
@@ -3224,6 +3230,10 @@ private:
             sci(SCI_SETVIEWEOL, m_ws ? 1 : 0);
             sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE);
             sci(SCI_SETWRAPVISUALFLAGS, m_wrapSymbol ? SC_WRAPVISUALFLAG_END : SC_WRAPVISUALFLAG_NONE);
+            sci(SCI_SETCARETLINEVISIBLE, m_caretLine ? 1 : 0);
+            sci(SCI_SETCARETWIDTH, m_caretWidth);
+            sci(SCI_SETEDGEMODE, m_edgeColumn > 0 ? EDGE_LINE : EDGE_NONE);
+            sci(SCI_SETEDGECOLUMN, m_edgeColumn);
             if (m_lineNumbers) updateLineMargin(); else sci(SCI_SETMARGINWIDTHN, 0, 0);
         }
         if (auto* mb = GetMenuBar()) { mb->Check(IDM_VIEW_WRAP, m_wrap); mb->Check(IDM_VIEW_ALL_CHARACTERS, m_ws); mb->Check(IDM_VIEW_INDENT_GUIDE, m_guides); }
@@ -3252,7 +3262,17 @@ private:
         auto* cbWrapSym = new wxCheckBox(ed, wxID_ANY, "Show wrap symbol");         cbWrapSym->SetValue(m_wrapSymbol);
         auto* cbWrap    = new wxCheckBox(ed, wxID_ANY, "Word wrap");                cbWrap->SetValue(m_wrap);
         auto* cbAuto    = new wxCheckBox(ed, wxID_ANY, "Enable auto-completion");   cbAuto->SetValue(m_autocomplete);
-        for (auto* c : { cbSpace, cbLineNum, cbGuides, cbWs, cbWrapSym, cbWrap, cbAuto }) es->Add(c, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        auto* cbCaretLn = new wxCheckBox(ed, wxID_ANY, "Highlight current line");   cbCaretLn->SetValue(m_caretLine);
+        auto* cbIndent  = new wxCheckBox(ed, wxID_ANY, "Auto-indent new lines");    cbIndent->SetValue(m_autoindent);
+        for (auto* c : { cbSpace, cbLineNum, cbGuides, cbWs, cbWrapSym, cbWrap, cbAuto, cbCaretLn, cbIndent }) es->Add(c, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        auto* erow = new wxBoxSizer(wxHORIZONTAL);
+        erow->Add(new wxStaticText(ed, wxID_ANY, "Caret width:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* spCaret = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS, 1, 3, m_caretWidth);
+        erow->Add(spCaret, 0, wxRIGHT, 24);
+        erow->Add(new wxStaticText(ed, wxID_ANY, "Vertical edge at column (0 = off):"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* spEdge = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 0, 300, m_edgeColumn);
+        erow->Add(spEdge, 0);
+        es->Add(erow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
         ed->SetSizer(es); book->AddPage(ed, "Editing");
         auto* dm = new wxPanel(book); auto* ds = new wxBoxSizer(wxVERTICAL);
         auto* cbDark = new wxCheckBox(dm, wxID_ANY, "Enable Dark Mode   (applied on restart)"); cbDark->SetValue(m_dark);
@@ -3265,6 +3285,7 @@ private:
         m_showToolbar = cbToolbar->GetValue(); m_showStatusbar = cbStatus->GetValue();
         m_tabWidth = spTab->GetValue(); m_useTabs = !cbSpace->GetValue(); m_lineNumbers = cbLineNum->GetValue();
         m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
+        m_caretLine = cbCaretLn->GetValue(); m_autoindent = cbIndent->GetValue(); m_caretWidth = spCaret->GetValue(); m_edgeColumn = spEdge->GetValue();
         applySettings(); saveSettings();
         if (newDark != m_dark) restartWithTheme(newDark);   // theme change needs a relaunch (wx can't reskin live)
     }
@@ -3554,7 +3575,7 @@ private:
             const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;
             for (int m : { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL, SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL })
             { sci(SCI_MARKERSETFORE, m, markFore); sci(SCI_MARKERSETBACK, m, markBack); sci(SCI_MARKERSETBACKSELECTED, m, markActive); }
-            const auto edge = G("Edge colour");          if (edge.first  >= 0) sci(SCI_SETEDGECOLOUR, edge.first);
+            sci(SCI_SETEDGECOLOUR, dark ? 0x4A4A4A : 0xC8C8C8);   // long-line ruler: a subtle but visible gray (column set in applySettings)
             const auto smart = G("Smart Highlighting");  if (smart.second >= 0) sci(SCI_INDICSETFORE, SMART_INDIC, smart.second);
             const auto findMk = G("Find Mark Style");    if (findMk.second >= 0) sci(SCI_INDICSETFORE, MARK_INDIC, findMk.second);
             const auto bmk = G("Bookmark margin");       if (bmk.second  >= 0) sci(SCI_SETMARGINBACKN, 1, bmk.second);
@@ -4080,6 +4101,8 @@ private:
     int         m_tabWidth = 4;                                   // persisted editor preferences (Settings > Preferences)
     bool        m_useTabs = true, m_lineNumbers = true, m_wrapSymbol = false, m_showToolbar = true, m_showStatusbar = true;
     bool        m_autocomplete = true;                            // auto word/keyword completion while typing
+    bool        m_caretLine = true, m_autoindent = true;          // highlight the current line; auto-indent new lines
+    int         m_caretWidth = 1, m_edgeColumn = 0;               // caret thickness (px); long-line marker column (0 = off)
     wxString    m_themeName;                                      // active editor theme (empty = dark/light default); Style Configurator
     std::vector<MacroStep> m_macro;                               // the current recorded macro
     bool        m_recording = false;
