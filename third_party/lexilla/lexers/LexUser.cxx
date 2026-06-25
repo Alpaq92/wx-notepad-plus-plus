@@ -22,7 +22,15 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #include <vector>
 #include <assert.h>
 #ifdef _WIN32
-#include <windows.h>   // vestigial (no Win32 symbols are actually used here); Win32-only, so guard it
+#include <windows.h>   // for _itoa (used below; MSVC CRT)
+#else
+#include <cstdio>      // _itoa is MSVC-only - portable shim (pattern from nextpad-plus-plus-macos)
+static inline char *_itoa(int value, char *str, int base) {
+    if (base == 16)      std::sprintf(str, "%x", value);
+    else if (base == 8)  std::sprintf(str, "%o", value);
+    else                 std::sprintf(str, "%d", value);
+    return str;
+}
 #endif
 
 #include "ILexer.h"
