@@ -14,6 +14,8 @@ target_include_directories(npp_bridge PRIVATE
     "${CMAKE_SOURCE_DIR}/include/npp-compat"             # PluginInterface.h / Notepad_plus_msgs.h / Docking.h (the N++ ABI)
     "${CMAKE_SOURCE_DIR}/third_party/scintilla/include") # Scintilla.h (SCNotification, pulled in by PluginInterface.h)
 
+target_link_libraries(npp_bridge PRIVATE comctl32)       # SetWindowSubclass / DefSubclassProc (NPPM_* router)
+
 if(MSVC)
     target_compile_options(npp_bridge PRIVATE /EHsc /utf-8)
 endif()

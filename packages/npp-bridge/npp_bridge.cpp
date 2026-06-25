@@ -14,6 +14,7 @@
 #include "nib.h"
 #include "PluginInterface.h"   // NppData, FuncItem, PFUNC* - the Notepad++ ABI this bridge targets
 #include <windows.h>
+#include <commctrl.h>          // SetWindowSubclass / DefSubclassProc - the bridge owns the NPPM_* router
 #include <string>
 #include <vector>
 #include <cstdio>
@@ -126,6 +127,36 @@ static void loadNppPlugins(NibHost* host, const NibCommandsApi* cmds)
     ::FindClose(hf);
 }
 
+// Stage 4: the bridge owns the NPPM_* router. It subclasses the frame (HWND from nib.win32) and serves
+// the messages the loaded plugins send. The common ones (GETCURRENTSCINTILLA, version, menu, exe paths,
+// MENUCOMMAND) are answered from the bridge's own resources; file-path / open-save / docking NPPM need
+// richer Nib interfaces, so they are acknowledged-but-stubbed for now.
+static HMENU g_pluginsMenu = nullptr;
+
+static bool bridge_handleNppm(UINT msg, WPARAM, LPARAM lParam, LRESULT& out)
+{
+    switch (msg) {
+        case NPPM_GETCURRENTSCINTILLA: if (lParam) *reinterpret_cast<int*>(lParam) = 0; out = TRUE; return true;   // main view
+        case NPPM_GETCURRENTLANGTYPE:  if (lParam) *reinterpret_cast<int*>(lParam) = 0; out = TRUE; return true;   // L_TEXT
+        case NPPM_GETNPPVERSION:       out = MAKELONG(96, 8); return true;
+        case NPPM_GETNBOPENFILES:      out = 1; return true;
+        case NPPM_GETMENUHANDLE:       out = reinterpret_cast<LRESULT>(g_pluginsMenu); return true;
+        case NPPM_MENUCOMMAND:         ::SendMessageW(g_npp._nppHandle, WM_COMMAND, static_cast<WPARAM>(lParam), 0); out = TRUE; return true;
+        case NPPM_GETNPPDIRECTORY:     if (lParam) ::lstrcpynW(reinterpret_cast<wchar_t*>(lParam), exeDir().c_str(), MAX_PATH); out = TRUE; return true;
+        case NPPM_GETPLUGINSCONFIGDIR: if (lParam) ::lstrcpynW(reinterpret_cast<wchar_t*>(lParam), (exeDir() + L"\\plugins\\Config").c_str(), MAX_PATH); out = TRUE; return true;
+        default:                       out = 0; return true;   // acknowledge unknown NPPM (don't hang the plugin)
+    }
+}
+
+static LRESULT CALLBACK bridge_frame_proc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR)
+{
+    if (msg >= (WM_USER + 1000) && msg < (WM_USER + 3000)) {   // the NPPM_ message range
+        LRESULT out = 0;
+        if (bridge_handleNppm(msg, w, l, out)) return out;
+    }
+    return ::DefSubclassProc(h, msg, w, l);
+}
+
 static void activate(NibHost* host, NibQueryFn query)
 {
     const NibWin32Api* w = static_cast<const NibWin32Api*>(query(host, NIB_IFACE_WIN32, 1));
@@ -133,6 +164,8 @@ static void activate(NibHost* host, NibQueryFn query)
         g_npp._nppHandle             = static_cast<HWND>(w->main_window(host));
         g_npp._scintillaMainHandle   = static_cast<HWND>(w->editor_main(host));
         g_npp._scintillaSecondHandle = static_cast<HWND>(w->editor_second(host));
+        g_pluginsMenu = static_cast<HMENU>(w->plugins_menu(host));
+        if (g_npp._nppHandle) ::SetWindowSubclass(g_npp._nppHandle, bridge_frame_proc, 1, 0);   // own the NPPM_* router
     }
     const NibCommandsApi* cmds = static_cast<const NibCommandsApi*>(query(host, NIB_IFACE_COMMANDS, 1));
     if (!cmds) return;
