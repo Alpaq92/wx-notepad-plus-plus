@@ -105,6 +105,21 @@ typedef struct NibEventsApi {
     void (*subscribe)(NibHost*, NibEventKind kind, NibEventFn fn, void* user);  // call from activate()
 } NibEventsApi;
 
+// ---- nib.panels/1 : dockable panels --------------------------------------------------------------
+// A panel is a host-owned, dockable text view (the portable content model - the plugin pushes text,
+// the host renders it via wxAui on every OS). Richer content models (canvas / webview) come later.
+#define NIB_IFACE_PANELS "nib.panels/1"
+typedef struct NibPanel NibPanel;   // opaque handle to a registered panel
+typedef enum { NIB_DOCK_BOTTOM = 0, NIB_DOCK_LEFT, NIB_DOCK_RIGHT, NIB_DOCK_TOP } NibDock;
+typedef struct NibPanelsApi {
+    uint32_t   version;
+    uint32_t   struct_size;
+    NibPanel*  (*register_panel)(NibHost*, const char* id, const char* title, NibDock dock);  // NULL on failure
+    void       (*set_text)(NibHost*, NibPanel*, const char* utf8);     // replace the panel's contents
+    void       (*append_text)(NibHost*, NibPanel*, const char* utf8);  // append
+    void       (*show)(NibHost*, NibPanel*, int visible);
+} NibPanelsApi;
+
 // ---- the plugin's lifecycle vtable ---------------------------------------------------------------
 typedef struct NibPluginApi {
     uint32_t    abi_version;                          // the ABI the plugin was built against

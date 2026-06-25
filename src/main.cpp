@@ -938,6 +938,15 @@ static std::vector<NibSub> g_nibSubs;
 static void nibSubscribe(NibHost*, NibEventKind kind, NibEventFn fn, void* u) { g_nibSubs.push_back({ kind, fn, u }); }
 static void nibFireEvent(const NibEvent& ev)   // called by the editor handlers below
 { for (const auto& s : g_nibSubs) if (s.kind == ev.kind && s.fn) s.fn(reinterpret_cast<NibHost*>(g_view), &ev, s.user); }
+// nib.panels/1 - the frame installs these (they need m_aui + the frame as parent), matching g_nppm/g_sciForward.
+static std::function<void*(const char*, const char*, int)> g_nibCreatePanel;
+static std::function<void(void*, const char*, bool)>        g_nibPanelText;   // (panel, utf8, append?)
+static std::function<void(void*, bool)>                     g_nibPanelShow;
+static NibPanel* nibPanelRegister(NibHost*, const char* id, const char* title, NibDock dock)
+{ return g_nibCreatePanel ? reinterpret_cast<NibPanel*>(g_nibCreatePanel(id, title, static_cast<int>(dock))) : nullptr; }
+static void nibPanelSetText(NibHost*, NibPanel* p, const char* t) { if (g_nibPanelText) g_nibPanelText(p, t, false); }
+static void nibPanelAppend(NibHost*, NibPanel* p, const char* t)  { if (g_nibPanelText) g_nibPanelText(p, t, true);  }
+static void nibPanelShow(NibHost*, NibPanel* p, int v)            { if (g_nibPanelShow) g_nibPanelShow(p, v != 0);   }
 // nib.host/1
 static const char* nibHostName(NibHost*) { return "wxNotepad++"; }
 static uint32_t     nibHostAbi(NibHost*) { return NIB_ABI_VERSION; }
@@ -946,6 +955,7 @@ static const NibHostApi     g_nibHostApi     = { 1, sizeof(NibHostApi),     nibH
 static const NibEditorApi   g_nibEditorApi   = { 1, sizeof(NibEditorApi),   nibEdLength, nibEdInsert, nibEdReplSel, nibEdSelStart, nibEdSelEnd, nibEdGetText };
 static const NibCommandsApi g_nibCommandsApi = { 1, sizeof(NibCommandsApi), nibCmdRegister };
 static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibSubscribe };
+static const NibPanelsApi   g_nibPanelsApi   = { 1, sizeof(NibPanelsApi),   nibPanelRegister, nibPanelSetText, nibPanelAppend, nibPanelShow };
 
 static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
 {
@@ -954,6 +964,7 @@ static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_EDITOR)   == 0) return &g_nibEditorApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_COMMANDS) == 0) return &g_nibCommandsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_EVENTS)   == 0) return &g_nibEventsApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PANELS)   == 0) return &g_nibPanelsApi;
     return nullptr;
 }
 static void nibLog(NibHost*, int, const char* msg) { if (msg) wxLogDebug("[nib] %s", msg); }
@@ -1018,6 +1029,27 @@ public:
         g_nppm = [this](UINT m, WPARAM w, LPARAM l, LRESULT& o) { return handleNppm(m, w, l, o); };   // serve plugin NPPM_* messages
         loadPlugins();   // load Win32 plugins from plugins/, hand them our HWNDs, build the Plugins menu
 #endif
+        // Nib panel host: host-owned, dockable wxAui text panels (cross-platform). Installed before plugins
+        // load so a plugin's activate() can register one. The opaque NibPanel handle is the wxTextCtrl*.
+        g_nibCreatePanel = [this](const char* id, const char* title, int dock) -> void* {
+            auto* txt = new wxTextCtrl(this, wxID_ANY, wxString(), wxDefaultPosition, wxDefaultSize,
+                                       wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP | wxBORDER_NONE);
+            txt->SetFont(wxFont(9, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+            if (m_dark) { txt->SetBackgroundColour(wxColour(30, 30, 30)); txt->SetForegroundColour(wxColour(220, 220, 220)); }
+            wxAuiPaneInfo pi; pi.Name(wxString::FromUTF8(id)).Caption(wxString::FromUTF8(title)).CloseButton(true).MaximizeButton(false);
+            switch (dock) { case 1: pi.Left().BestSize(240, 320); break; case 2: pi.Right().BestSize(240, 320); break;
+                            case 3: pi.Top().BestSize(320, 150);  break; default: pi.Bottom().BestSize(320, 150); }
+            m_aui.AddPane(txt, pi); m_aui.Update();
+            return txt;
+        };
+        g_nibPanelText = [](void* p, const char* utf8, bool append) {
+            auto* txt = static_cast<wxTextCtrl*>(p);
+            if (!txt || !utf8) return;
+            if (append) txt->AppendText(wxString::FromUTF8(utf8)); else txt->SetValue(wxString::FromUTF8(utf8));
+        };
+        g_nibPanelShow = [this](void* p, bool v) {
+            wxAuiPaneInfo& pi = m_aui.GetPane(static_cast<wxWindow*>(p)); if (pi.IsOk()) { pi.Show(v); m_aui.Update(); }
+        };
         loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
         if (!g_nibCommands.empty())   // surface registered Nib commands in the Plugins menu
             if (auto* mb = GetMenuBar()) { const int mi = mb->FindMenu("Plugins");

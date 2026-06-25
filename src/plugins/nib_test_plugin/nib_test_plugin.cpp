@@ -2,9 +2,15 @@
 //
 // A minimal Nib plugin for wxNotepad++ - reference implementation + smoke test for the Nib plugin API.
 // Cross-platform: it includes only nib.h (no Win32, no Notepad++ ABI) and is built as a shared module
-// loaded from <exe>/nib/. It exercises three interfaces: nib.commands, nib.editor, and nib.events.
+// loaded from <exe>/nib/. It exercises four interfaces: nib.commands, nib.editor, nib.events, nib.panels.
 #include "nib.h"
 #include <cstdio>
+
+// The bootstrap (host + query) is stashed at activate() so any callback can reach the host interfaces.
+static NibHost*    g_host  = nullptr;
+static NibQueryFn  g_query = nullptr;
+static NibPanel*   g_panel = nullptr;
+static int         g_textChanges = 0;
 
 static void cmd_hello(NibHost* host, NibQueryFn query, void*)
 {
@@ -21,10 +27,6 @@ static void cmd_doclen(NibHost* host, NibQueryFn query, void*)
     ed->replace_selection(host, buf);
 }
 
-// --- events: count text-change events, and a command to report the running count ---
-static int g_textChanges = 0;
-static void on_text_changed(NibHost*, const NibEvent*, void*) { ++g_textChanges; }
-
 static void cmd_evcount(NibHost* host, NibQueryFn query, void*)
 {
     const NibEditorApi* ed = static_cast<const NibEditorApi*>(query(host, NIB_IFACE_EDITOR, 1));
@@ -34,14 +36,38 @@ static void cmd_evcount(NibHost* host, NibQueryFn query, void*)
     ed->replace_selection(host, buf);
 }
 
+// On every text change, append a line to our docked panel (the nib.panels demo).
+static void on_text_changed(NibHost*, const NibEvent* ev, void*)
+{
+    ++g_textChanges;
+    if (!g_panel || !g_query) return;
+    const NibPanelsApi* panels = static_cast<const NibPanelsApi*>(g_query(g_host, NIB_IFACE_PANELS, 1));
+    if (!panels) return;
+    char line[96];
+    std::snprintf(line, sizeof(line), "text changed @ %lld  (+%lld -%lld)\n",
+                  static_cast<long long>(ev->as.text.pos),
+                  static_cast<long long>(ev->as.text.added),
+                  static_cast<long long>(ev->as.text.removed));
+    panels->append_text(g_host, g_panel, line);
+}
+
 static void activate(NibHost* host, NibQueryFn query)
 {
+    g_host = host; g_query = query;
+
     const NibCommandsApi* cmds = static_cast<const NibCommandsApi*>(query(host, NIB_IFACE_COMMANDS, 1));
     if (cmds) {
         cmds->register_command(host, "com.wxnpp.nibtest.hello",   "Insert Hello (Nib)",      cmd_hello,   nullptr);
         cmds->register_command(host, "com.wxnpp.nibtest.doclen",  "Insert Doc Length (Nib)", cmd_doclen,  nullptr);
         cmds->register_command(host, "com.wxnpp.nibtest.evcount", "Show Nib Event Count",    cmd_evcount, nullptr);
     }
+
+    const NibPanelsApi* panels = static_cast<const NibPanelsApi*>(query(host, NIB_IFACE_PANELS, 1));
+    if (panels) {
+        g_panel = panels->register_panel(host, "com.wxnpp.nibtest.log", "Nib Events Log", NIB_DOCK_BOTTOM);
+        if (g_panel) panels->set_text(host, g_panel, "Nib Events Log - type in the editor to see text-changed events.\n");
+    }
+
     const NibEventsApi* events = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 1));
     if (events) events->subscribe(host, NIB_EV_TEXT_CHANGED, on_text_changed, nullptr);
 }
