@@ -38,7 +38,9 @@
 #include <wx/datetime.h>        // wxDateTime - insert date/time
 #include <wx/dnd.h>             // wxFileDropTarget - drag & drop files to open
 #include <wx/dcgraph.h>         // wxGCDC - antialiased drawing (symmetric spinner triangles)
-#include <wx/dir.h>             // wxDir - scan the plugins/ folder
+#include <wx/dir.h>             // wxDir - scan the plugins/ folder + Find-in-Files traversal
+#include <wx/textfile.h>        // wxTextFile - read files line-by-line for Find in Files
+#include <wx/dirdlg.h>          // wxDirDialog - folder picker for Find in Files
 
 #ifdef __WXMSW__
 #include <windows.h>
@@ -392,6 +394,58 @@ static const std::regex* flCommentRe(const std::string& lang)
     }
     auto it = tbl.find(lang);
     return it == tbl.end() ? nullptr : &it->second;
+}
+
+// ---- Find in Files --------------------------------------------------------------------------------
+struct FifHit { wxString file; int line; wxString text; };
+class FifItemData : public wxTreeItemData { public: wxString file; int line; FifItemData(const wxString& f, int l) : file(f), line(l) {} };
+
+// Search every file under `dir` matching `filters` (e.g. "*.cpp;*.h", ';'-separated) for `term`,
+// line by line. Collects {file, line, text} hits; fills `searched` with the file count.
+static void findInFiles(const wxString& term, const wxString& dir, const wxString& filters,
+                        bool matchCase, bool wholeWord, bool useRegex, bool subdirs,
+                        std::vector<FifHit>& hits, int& searched)
+{
+    searched = 0;
+    if (term.empty() || !wxDirExists(dir)) return;
+    std::set<wxString> files;
+    wxArrayString pats = wxSplit(filters.empty() ? wxString("*.*") : filters, ';');
+    const int flags = wxDIR_FILES | (subdirs ? wxDIR_DIRS : 0);
+    for (wxString pat : pats) { pat.Trim(true).Trim(false); if (pat.empty()) continue;
+        wxArrayString f; wxDir::GetAllFiles(dir, &f, pat, flags); for (const auto& x : f) files.insert(x); }
+    std::regex re; bool re_ok = false;
+    if (useRegex) { try { auto fl = std::regex::ECMAScript; if (!matchCase) fl |= std::regex::icase; re = std::regex(term.ToStdString(), fl); re_ok = true; } catch (...) {} }
+    const wxString needle = matchCase ? term : term.Lower();
+    auto isWord = [](wxUniChar c) { return wxIsalnum(c) || c == '_'; };
+    for (const wxString& path : files)
+    {
+        wxTextFile tf(path);
+        if (!tf.Open()) continue;
+        ++searched;
+        for (size_t i = 0; i < tf.GetLineCount(); ++i)
+        {
+            const wxString& line = tf.GetLine(i);
+            bool m = false;
+            if (useRegex) { if (re_ok) { try { m = std::regex_search(line.ToStdString(), re); } catch (...) {} } }
+            else
+            {
+                const wxString hay = matchCase ? line : line.Lower();
+                size_t pos = hay.find(needle);
+                while (pos != wxString::npos)
+                {
+                    if (!wholeWord) { m = true; break; }
+                    const bool okB = (pos == 0) || !isWord(line[pos - 1]);
+                    const size_t end = pos + needle.length();
+                    const bool okA = (end >= line.length()) || !isWord(line[end]);
+                    if (okB && okA) { m = true; break; }
+                    pos = hay.find(needle, pos + 1);
+                }
+            }
+            if (m) hits.push_back({ path, (int)i + 1, line });
+            if (hits.size() > 50000) { tf.Close(); return; }    // safety cap on pathological searches
+        }
+        tf.Close();
+    }
 }
 
 // NOTE: SCN_* notifications used to arrive here as Win32 WM_NOTIFY via a subclass on the page panel.
@@ -919,6 +973,7 @@ private:
         m_aui.Update();
         buildDocMap();   // Document Map (minimap) pane - hidden until toggled from the View menu / toolbar
         buildFuncList(); // Function List (symbol tree) pane - hidden until toggled
+        buildFifPanel(); // Find-in-Files results pane - hidden until a search runs
     }
 
     // wxStyledTextCtrl fires wxEVT_STC_* (not Win32 WM_NOTIFY), so the N++ editor behaviours and the
@@ -1180,6 +1235,88 @@ private:
         pi.Show(!pi.IsShown());
         m_aui.Update();
         if (pi.IsShown()) parseFuncList();
+    }
+
+    // ---- Find in Files: a search dialog + a docked "Find result" panel (double-click a hit to jump) --
+    void buildFifPanel()
+    {
+        m_fifPanel = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                    wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxBORDER_NONE);
+        m_fifPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrame::onFifActivate, this);
+        m_aui.AddPane(m_fifPanel, wxAuiPaneInfo().Name("findresult").Caption("Find result")
+                          .Bottom().BestSize(800, 180).MinSize(150, 70).CloseButton(true).Hide());
+        m_aui.Update();
+    }
+    void onFindInFiles()
+    {
+        wxDialog dlg(this, wxID_ANY, "Find in Files");
+        auto* find = new wxTextCtrl(&dlg, wxID_ANY, selText());
+        wxString dir; if (auto* p = activePage()) dir = wxPathOnly(p->path); if (dir.empty()) dir = wxGetCwd();
+        auto* dirc = new wxTextCtrl(&dlg, wxID_ANY, dir);
+        auto* filt = new wxTextCtrl(&dlg, wxID_ANY, "*.*");
+        auto* cc = new wxCheckBox(&dlg, wxID_ANY, "Match case");
+        auto* ww = new wxCheckBox(&dlg, wxID_ANY, "Whole word only");
+        auto* rx = new wxCheckBox(&dlg, wxID_ANY, "Regular expression");
+        auto* sd = new wxCheckBox(&dlg, wxID_ANY, "In all sub-folders"); sd->SetValue(true);
+        auto* gs = new wxFlexGridSizer(2, 8, 8); gs->AddGrowableCol(1);
+        gs->Add(new wxStaticText(&dlg, wxID_ANY, "Find what:"), 0, wxALIGN_CENTRE_VERTICAL); gs->Add(find, 1, wxEXPAND);
+        gs->Add(new wxStaticText(&dlg, wxID_ANY, "Directory:"), 0, wxALIGN_CENTRE_VERTICAL);
+        auto* drow = new wxBoxSizer(wxHORIZONTAL); drow->Add(dirc, 1, wxEXPAND);
+        auto* browse = new wxButton(&dlg, wxID_ANY, "...", wxDefaultPosition, wxSize(32, -1)); drow->Add(browse, 0, wxLEFT, 4);
+        gs->Add(drow, 1, wxEXPAND);
+        gs->Add(new wxStaticText(&dlg, wxID_ANY, "Filters:"), 0, wxALIGN_CENTRE_VERTICAL); gs->Add(filt, 1, wxEXPAND);
+        browse->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) { wxDirDialog dd(&dlg, "Choose folder", dirc->GetValue()); if (dd.ShowModal() == wxID_OK) dirc->SetValue(dd.GetPath()); });
+        auto* opt = new wxBoxSizer(wxHORIZONTAL); opt->Add(cc, 0, wxRIGHT, 12); opt->Add(ww, 0, wxRIGHT, 12); opt->Add(rx, 0, wxRIGHT, 12); opt->Add(sd, 0);
+        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
+        auto* findAll = new wxButton(&dlg, wxID_OK, "Find All"); findAll->SetDefault();   // Enter submits
+        btn->Add(findAll, 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, "Close"), 0);
+        auto* top = new wxBoxSizer(wxVERTICAL);
+        top->Add(gs, 0, wxEXPAND | wxALL, 12); top->Add(opt, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+        dlg.SetSizerAndFit(top); dlg.SetSize(wxSize(480, dlg.GetSize().GetHeight()));
+        find->SetFocus();
+        themeDialog(&dlg);
+        if (dlg.ShowModal() != wxID_OK || find->GetValue().empty()) return;
+        std::vector<FifHit> hits; int searched = 0;
+        { wxBusyCursor busy; findInFiles(find->GetValue(), dirc->GetValue(), filt->GetValue(),
+                                         cc->IsChecked(), ww->IsChecked(), rx->IsChecked(), sd->IsChecked(), hits, searched); }
+        showFifResults(find->GetValue(), hits, searched);
+    }
+    void showFifResults(const wxString& term, const std::vector<FifHit>& hits, int searched)
+    {
+        if (!m_fifPanel) return;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_fifPanel);
+        if (pi.IsOk()) { pi.Show(); m_aui.Update(); }
+        m_fifPanel->Freeze();
+        m_fifPanel->DeleteAllItems();
+        const wxTreeItemId root = m_fifPanel->AddRoot("");
+        std::set<wxString> files; for (const auto& h : hits) files.insert(h.file);
+        const wxTreeItemId head = m_fifPanel->AppendItem(root, wxString::Format("Search \"%s\"  (%d hits in %d files of %d searched)",
+                                                          term, (int)hits.size(), (int)files.size(), searched));
+        m_fifPanel->SetItemBold(head, true);
+        wxString cur; wxTreeItemId fnode;
+        for (const auto& h : hits)
+        {
+            if (h.file != cur) { cur = h.file; fnode = m_fifPanel->AppendItem(head, h.file); m_fifPanel->SetItemBold(fnode, true); }
+            wxString t = h.text; t.Trim(true).Trim(false);
+            m_fifPanel->AppendItem(fnode, wxString::Format("Line %d:  %s", h.line, t), -1, -1, new FifItemData(h.file, h.line));
+        }
+        m_fifPanel->ExpandAll();
+        m_fifPanel->Thaw();
+    }
+    void onFifActivate(wxTreeEvent& e)
+    {
+        auto* d = m_fifPanel ? dynamic_cast<FifItemData*>(m_fifPanel->GetItemData(e.GetItem())) : nullptr;
+        if (d)
+        {
+            EditorPage* pg = nullptr;
+            for (size_t i = 0; i < m_tabs->GetPageCount(); ++i) { auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i)); if (p->path == d->file) { pg = p; m_tabs->SetSelection(i); break; } }
+            if (!pg) openPath(d->file);
+            sci(SCI_GOTOLINE, d->line - 1);
+            const int half = (int)sci(SCI_LINESONSCREEN) / 2;
+            sci(SCI_SETFIRSTVISIBLELINE, (d->line - 1) > half ? (d->line - 1) - half : 0);
+            m_stc->SetFocus();
+        }
+        e.Skip();
     }
 
     // Notepad++'s caption buttons (new / document-list / close), overlaid at the right of the tab strip.
@@ -2557,6 +2694,7 @@ private:
             case IDM_FORMAT_TOMAC: setEol(SC_EOL_CR); break;
 
             case IDM_SEARCH_FIND: onFind(); break;
+            case IDM_SEARCH_FINDINFILES: onFindInFiles(); break;
             case IDM_SEARCH_FINDNEXT: findNext(true); break;
             case IDM_SEARCH_FINDPREV: findNext(false); break;
             case IDM_SEARCH_REPLACE: onReplace(); break;
@@ -2711,6 +2849,7 @@ private:
     wxStyledTextCtrl* m_stc = nullptr;   // the cross-platform editor view; its native HWND on Windows == m_sci
     wxStyledTextCtrl* m_docMap = nullptr;   // Document Map (minimap): a second view sharing the active document
     wxTreeCtrl* m_funcList = nullptr;       // Function List: per-file symbol tree (regex-parsed)
+    wxTreeCtrl* m_fifPanel = nullptr;       // Find result: docked Find-in-Files results tree
     wxTimer*    m_flTimer  = nullptr;        // debounce re-parse of the Function List after edits
 #ifdef __WXMSW__
     HWND        m_sci  = nullptr;
