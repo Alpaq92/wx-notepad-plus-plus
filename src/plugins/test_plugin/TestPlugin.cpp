@@ -11,7 +11,7 @@
 #include "Scintilla.h"
 
 static NppData  g_npp{};
-static FuncItem g_funcs[4]{};
+static FuncItem g_funcs[6]{};
 static int      g_notifyCount = 0;
 static HWND     g_dock = nullptr;
 static bool     g_dockReg = false;
@@ -66,6 +66,14 @@ static void cmdShowDock()
     ::SendMessageW(g_npp._nppHandle, NPPM_DMMSHOW, 0, reinterpret_cast<LPARAM>(g_dock));
 }
 
+static void cmdSaveViaNppm()
+{
+    // Append a marker straight to the editor, then ask the host to persist the file via NPPM_SAVECURRENTFILE.
+    const char* mark = "\n// saved via NPPM_SAVECURRENTFILE\n";
+    ::SendMessageA(g_npp._scintillaMainHandle, SCI_APPENDTEXT, ::lstrlenA(mark), reinterpret_cast<LPARAM>(mark));
+    ::SendMessageW(g_npp._nppHandle, NPPM_SAVECURRENTFILE, 0, 0);
+}
+
 extern "C" __declspec(dllexport) void setInfo(NppData d) { g_npp = d; }
 extern "C" __declspec(dllexport) const wchar_t* getName() { return L"TestPlugin"; }
 
@@ -79,7 +87,9 @@ extern "C" __declspec(dllexport) FuncItem* getFuncsArray(int* n)
     g_funcs[2]._pFunc = cmdOpenViaNppm;
     ::wcscpy_s(g_funcs[3]._itemName, menuItemSize, L"Show Dock Panel (NPPM_DMM*)");
     g_funcs[3]._pFunc = cmdShowDock;
-    *n = 4;
+    ::wcscpy_s(g_funcs[4]._itemName, menuItemSize, L"Append + Save (NPPM_SAVECURRENTFILE)");
+    g_funcs[4]._pFunc = cmdSaveViaNppm;
+    *n = 5;
     return g_funcs;
 }
 

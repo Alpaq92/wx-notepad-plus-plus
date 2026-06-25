@@ -82,6 +82,7 @@ typedef struct NibDocumentsApi {
     // byte length excluding the NUL, or 0 if the document is untitled (no path on disk yet).
     int  (*active_path)(NibHost*, char* buf, int cap);
     int  (*open)(NibHost*, const char* utf8_path);  // open a file (load it into a tab); 1 on success, 0 on failure
+    int  (*save_active)(NibHost*);                  // save the active document to disk; 1 on success
 } NibDocumentsApi;
 
 // ---- nib.commands/1 : register + run commands ----------------------------------------------------
