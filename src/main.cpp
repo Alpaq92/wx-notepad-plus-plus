@@ -1476,7 +1476,7 @@ private:
     void buildFuncList()
     {
         m_funcList = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                                    wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxBORDER_NONE);
+                                    wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_NO_LINES | wxTR_FULL_ROW_HIGHLIGHT | wxBORDER_NONE);
         { wxVector<wxBitmapBundle> imgs; imgs.push_back(icon("func-leaf")); imgs.push_back(icon("func-node")); m_funcList->SetImages(imgs); }   // 0=symbol, 1=group/class (icon set)
         m_funcList->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrame::onFuncListActivate, this);
         m_funcList->Bind(wxEVT_TREE_SEL_CHANGED,     &NppShellFrame::onFuncListActivate, this);   // single-click jumps too (like N++)
@@ -1987,13 +1987,13 @@ private:
         auto G = [&](const char* n) -> std::pair<int,int> {
             auto it = m_theme.global.find(n); return it == m_theme.global.end() ? std::make_pair(-1,-1) : it->second; };
         const int defBg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT);
-        const auto lnm = G("Line number margin"), fold = G("Fold"), foldActive = G("Fold active");
+        const auto lnm = G("Line number margin"), fold = G("Fold");
         const int gutterBg = lnm.second >= 0 ? lnm.second : defBg;                // one-tone gutter: match the line-number margin
         sci(SCI_SETFOLDMARGINCOLOUR, 1, gutterBg);
         sci(SCI_SETFOLDMARGINHICOLOUR, 1, gutterBg);                              // COLOUR == HICOLOUR -> no checkerboard
         const int markFore   = fold.second >= 0 ? fold.second : gutterBg;                    // = "Fold" bg  (swap)
         const int markBack   = fold.first  >= 0 ? fold.first  : 0x808080;                    // = "Fold" fg  (swap)
-        const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;          // = "Fold active" fg
+        const int markActive = markBack;   // keep the active fold subtle: the theme's loud "Fold active" red lit the whole structure
         const int markers[7] = { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL,
                                  SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL };
         const int symbols[7] = { SC_MARK_BOXMINUS, SC_MARK_BOXPLUS, SC_MARK_VLINE, SC_MARK_LCORNER,   // box-tree (N++ default)
@@ -3601,12 +3601,12 @@ private:
             const auto wsp = G("White space symbol");    sci(SCI_SETWHITESPACEFORE, 1, wsp.first >= 0 ? wsp.first : (dark ? 0x606060 : 0xB0B0B0));
             // Fold margin + markers, edge, and highlight indicators - re-applied on every theme switch so the whole
             // editor surface follows the theme like Notepad++ (not just tokens + default background).
-            const auto fold = G("Fold"); const auto foldActive = G("Fold active"); const auto foldMargin = G("Fold margin");
+            const auto fold = G("Fold"); const auto foldMargin = G("Fold margin");
             const int fMarginBg = foldMargin.second >= 0 ? foldMargin.second : gutterBg;
             sci(SCI_SETFOLDMARGINCOLOUR, 1, fMarginBg); sci(SCI_SETFOLDMARGINHICOLOUR, 1, fMarginBg);
             const int markFore = fold.second >= 0 ? fold.second : gutterBg;        // N++ swaps Fold fg/bg onto the markers
             const int markBack = fold.first  >= 0 ? fold.first  : 0x808080;
-            const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;
+            const int markActive = markBack;   // keep the active fold subtle (the theme's loud "Fold active" red looked bad)
             for (int m : { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL, SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL })
             { sci(SCI_MARKERSETFORE, m, markFore); sci(SCI_MARKERSETBACK, m, markBack); sci(SCI_MARKERSETBACKSELECTED, m, markActive); }
             sci(SCI_SETEDGECOLOUR, dark ? 0x4A4A4A : 0xC8C8C8);   // long-line ruler: a subtle but visible gray (column set in applySettings)
