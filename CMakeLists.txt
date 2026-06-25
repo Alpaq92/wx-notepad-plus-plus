@@ -1,8 +1,9 @@
 # wxNotepad++ - experimental cross-platform (Windows / Linux / macOS) Notepad++-faithful editor.
 #
 # wxWidgets UI + wxStyledTextCtrl editor (which bundles Scintilla); our portable Lexilla supplies the
-# language lexers. On Windows it keeps Win32 plugin-ABI compatibility (real plugin loader, NPPM_*,
-# docking); on Linux/macOS the Win32-only subsystems are #ifdef __WXMSW__'d out (plugins need rebuild).
+# language lexers. The core exposes its own permissive cross-platform plugin API ("Nib") and contains no
+# Notepad++-ABI code; real N++ binary plugins are supported on Windows via the optional GPL
+# packages/npp-bridge (loaded like any plugin). Win32-only subsystems are #ifdef __WXMSW__'d out elsewhere.
 #
 #   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 #   cmake --build build
@@ -63,7 +64,7 @@ set_target_properties(wxnpp PROPERTIES
 target_include_directories(wxnpp PRIVATE
     "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"     # Scintilla.h, ILexer.h (SCI_* + SCNotification)
     "${CMAKE_SOURCE_DIR}/third_party/lexilla/include"       # Lexilla.h (CreateLexer), SciLexer.h (SCE_*)
-    "${CMAKE_SOURCE_DIR}/include/npp-compat"                # our Apache-2.0 clean-room plugin ABI (PluginInterface.h, Notepad_plus_msgs.h, Docking.h, menuCmdID.h)
+    "${CMAKE_SOURCE_DIR}/include/npp-compat"                # menuCmdID.h only (IDM_* command ids); the rest of the N++ ABI is used solely by packages/npp-bridge
     "${CMAKE_SOURCE_DIR}/include/nib"                       # nib.h - our own permissive, cross-platform plugin API
     "${CMAKE_SOURCE_DIR}/src")                              # app_icon_svg.h, npp_menu.h
 
