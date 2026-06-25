@@ -915,6 +915,11 @@ static NibPanel* nibPanelRegister(NibHost*, const char* id, const char* title, N
 static void nibPanelSetText(NibHost*, NibPanel* p, const char* t) { if (g_nibPanelText) g_nibPanelText(p, t, false); }
 static void nibPanelAppend(NibHost*, NibPanel* p, const char* t)  { if (g_nibPanelText) g_nibPanelText(p, t, true);  }
 static void nibPanelShow(NibHost*, NibPanel* p, int v)            { if (g_nibPanelShow) g_nibPanelShow(p, v != 0);   }
+// nib.documents/1 - the frame installs these (they need the tab list + the active page's path).
+static std::function<int()>            g_nibDocCount;
+static std::function<int(char*, int)>  g_nibDocActivePath;   // copy the active doc's UTF-8 path -> length, 0 if untitled
+static int nibDocCount(NibHost*)                      { return g_nibDocCount ? g_nibDocCount() : 0; }
+static int nibDocActivePath(NibHost*, char* b, int c) { return g_nibDocActivePath ? g_nibDocActivePath(b, c) : 0; }
 #ifdef __WXMSW__
 // nib.win32/1 - Windows-only native-handle capability (the GPL npp-bridge uses it to rebuild NppData).
 static std::function<void*()> g_nibMainWindow, g_nibEditorMain, g_nibEditorSecond, g_nibPluginsMenu;
@@ -933,12 +938,14 @@ static const NibEditorApi   g_nibEditorApi   = { 1, sizeof(NibEditorApi),   nibE
 static const NibCommandsApi g_nibCommandsApi = { 1, sizeof(NibCommandsApi), nibCmdRegister };
 static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibSubscribe };
 static const NibPanelsApi   g_nibPanelsApi   = { 1, sizeof(NibPanelsApi),   nibPanelRegister, nibPanelSetText, nibPanelAppend, nibPanelShow };
+static const NibDocumentsApi g_nibDocumentsApi = { 1, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath };
 
 static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
 {
     if (!iface) return nullptr;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_HOST)     == 0) return &g_nibHostApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_EDITOR)   == 0) return &g_nibEditorApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_DOCUMENTS)== 0) return &g_nibDocumentsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_COMMANDS) == 0) return &g_nibCommandsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_EVENTS)   == 0) return &g_nibEventsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PANELS)   == 0) return &g_nibPanelsApi;
@@ -1027,6 +1034,14 @@ public:
         };
         g_nibPanelShow = [this](void* p, bool v) {
             wxAuiPaneInfo& pi = m_aui.GetPane(static_cast<wxWindow*>(p)); if (pi.IsOk()) { pi.Show(v); m_aui.Update(); }
+        };
+        g_nibDocCount      = [this]() -> int { return m_tabs ? static_cast<int>(m_tabs->GetPageCount()) : 1; };
+        g_nibDocActivePath = [this](char* b, int c) -> int {   // active document's full path (UTF-8); 0 if untitled
+            EditorPage* p = activePage();
+            const std::string u = (p ? p->path : wxString()).utf8_string();
+            if (u.empty()) return 0;
+            if (b && c > 0) { int n = static_cast<int>(u.size()); if (n > c - 1) n = c - 1; std::memcpy(b, u.data(), static_cast<size_t>(n)); b[n] = 0; }
+            return static_cast<int>(u.size());
         };
 #ifdef __WXMSW__   // nib.win32: hand the (optional, GPL) N++ bridge the native handles it needs
         g_nibMainWindow   = [this]() -> void* { return static_cast<HWND>(GetHandle()); };

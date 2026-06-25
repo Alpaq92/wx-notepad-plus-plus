@@ -20,6 +20,8 @@
 #include <cstdio>
 
 static NppData g_npp = {};      // the Notepad++ environment, rebuilt from nib.win32
+static NibHost*               g_host = nullptr;   // stashed at activate so the NPPM router can reach Nib interfaces
+static const NibDocumentsApi* g_docs = nullptr;   // nib.documents - serves the current-file-path NPPM family
 
 struct NppPlugin {              // a loaded N++ plugin (kept alive for its FuncItem pointers + Stage-3 notifications)
     HMODULE      lib;
@@ -133,24 +135,49 @@ static void loadNppPlugins(NibHost* host, const NibCommandsApi* cmds)
 // richer Nib interfaces, so they are acknowledged-but-stubbed for now.
 static HMENU g_pluginsMenu = nullptr;
 
-static bool bridge_handleNppm(UINT msg, WPARAM, LPARAM lParam, LRESULT& out)
+// The active document's full path (wide), via nib.documents; empty if untitled or unavailable.
+static std::wstring activePathW()
+{
+    if (!g_docs || !g_host) return {};
+    char buf[2048];
+    int n = g_docs->active_path(g_host, buf, static_cast<int>(sizeof(buf)));
+    if (n <= 0) return {};
+    int w = ::MultiByteToWideChar(CP_UTF8, 0, buf, -1, nullptr, 0);
+    std::wstring s(w > 0 ? w - 1 : 0, L'\0');
+    if (w > 1) ::MultiByteToWideChar(CP_UTF8, 0, buf, -1, &s[0], w);
+    return s;
+}
+// Copy s into the plugin's wchar buffer (lParam); wParam is the buffer cap when set. Returns the length.
+static LRESULT putPath(WPARAM wParam, LPARAM lParam, const std::wstring& s)
+{
+    if (lParam) ::lstrcpynW(reinterpret_cast<wchar_t*>(lParam), s.c_str(), wParam ? static_cast<int>(wParam) : MAX_PATH);
+    return static_cast<LRESULT>(s.size());
+}
+
+static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& out)
 {
     switch (msg) {
         case NPPM_GETCURRENTSCINTILLA: if (lParam) *reinterpret_cast<int*>(lParam) = 0; out = TRUE; return true;   // main view
         case NPPM_GETCURRENTLANGTYPE:  if (lParam) *reinterpret_cast<int*>(lParam) = 0; out = TRUE; return true;   // L_TEXT
         case NPPM_GETNPPVERSION:       out = MAKELONG(96, 8); return true;
-        case NPPM_GETNBOPENFILES:      out = 1; return true;
+        case NPPM_GETNBOPENFILES:      out = g_docs ? g_docs->count(g_host) : 1; return true;
         case NPPM_GETMENUHANDLE:       out = reinterpret_cast<LRESULT>(g_pluginsMenu); return true;
         case NPPM_MENUCOMMAND:         ::SendMessageW(g_npp._nppHandle, WM_COMMAND, static_cast<WPARAM>(lParam), 0); out = TRUE; return true;
         case NPPM_GETNPPDIRECTORY:     if (lParam) ::lstrcpynW(reinterpret_cast<wchar_t*>(lParam), exeDir().c_str(), MAX_PATH); out = TRUE; return true;
         case NPPM_GETPLUGINSCONFIGDIR: if (lParam) ::lstrcpynW(reinterpret_cast<wchar_t*>(lParam), (exeDir() + L"\\plugins\\Config").c_str(), MAX_PATH); out = TRUE; return true;
-        default:                       out = 0; return true;   // acknowledge unknown NPPM (don't hang the plugin)
+        // the active document's path family, served from nib.documents
+        case NPPM_GETFULLCURRENTPATH:  out = putPath(wParam, lParam, activePathW()); return true;
+        case NPPM_GETCURRENTDIRECTORY: { const std::wstring p = activePathW(); const size_t s = p.find_last_of(L"\\/"); out = putPath(wParam, lParam, s == std::wstring::npos ? L"" : p.substr(0, s)); return true; }
+        case NPPM_GETFILENAME:         { const std::wstring p = activePathW(); const size_t s = p.find_last_of(L"\\/"); out = putPath(wParam, lParam, s == std::wstring::npos ? p : p.substr(s + 1)); return true; }
+        case NPPM_GETNAMEPART:         { std::wstring f = activePathW(); const size_t s = f.find_last_of(L"\\/"); if (s != std::wstring::npos) f = f.substr(s + 1); const size_t d = f.find_last_of(L'.'); out = putPath(wParam, lParam, d == std::wstring::npos ? f : f.substr(0, d)); return true; }
+        case NPPM_GETEXTPART:          { const std::wstring p = activePathW(); const size_t d = p.find_last_of(L'.'); const size_t s = p.find_last_of(L"\\/"); out = putPath(wParam, lParam, (d != std::wstring::npos && (s == std::wstring::npos || d > s)) ? p.substr(d) : L""); return true; }
+        default:                       return false;   // not one of ours -> fall through to DefSubclassProc
     }
 }
 
 static LRESULT CALLBACK bridge_frame_proc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR)
 {
-    if (msg >= (WM_USER + 1000) && msg < (WM_USER + 3000)) {   // the NPPM_ message range
+    if (msg >= (WM_USER + 1000)) {   // NPPM_ (NPPMSG = WM_USER+1000) + the RUNCOMMAND_USER (WM_USER+3000) family
         LRESULT out = 0;
         if (bridge_handleNppm(msg, w, l, out)) return out;
     }
@@ -159,6 +186,8 @@ static LRESULT CALLBACK bridge_frame_proc(HWND h, UINT msg, WPARAM w, LPARAM l, 
 
 static void activate(NibHost* host, NibQueryFn query)
 {
+    g_host = host;
+    g_docs = static_cast<const NibDocumentsApi*>(query(host, NIB_IFACE_DOCUMENTS, 1));   // current-file-path NPPM
     const NibWin32Api* w = static_cast<const NibWin32Api*>(query(host, NIB_IFACE_WIN32, 1));
     if (w) {
         g_npp._nppHandle             = static_cast<HWND>(w->main_window(host));

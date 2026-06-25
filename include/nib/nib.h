@@ -72,6 +72,17 @@ typedef struct NibEditorApi {
     int64_t  (*get_text)(NibHost*, int64_t start, int64_t end, char* buf, int64_t buf_size);
 } NibEditorApi;
 
+// ---- nib.documents/1 : the open documents --------------------------------------------------------
+#define NIB_IFACE_DOCUMENTS "nib.documents/1"
+typedef struct NibDocumentsApi {
+    uint32_t version;
+    uint32_t struct_size;
+    int  (*count)(NibHost*);                        // number of open documents
+    // Copy the active document's full path (UTF-8) into buf (NUL-terminated if it fits); returns the
+    // byte length excluding the NUL, or 0 if the document is untitled (no path on disk yet).
+    int  (*active_path)(NibHost*, char* buf, int cap);
+} NibDocumentsApi;
+
 // ---- nib.commands/1 : register + run commands ----------------------------------------------------
 #define NIB_IFACE_COMMANDS "nib.commands/1"
 // A command handler receives the host + query (to reach other interfaces) and its own user pointer.
