@@ -4,12 +4,14 @@ name: build
 # (FetchContent), so the only system dependency is GTK3 on Linux; macOS/Windows need just the
 # toolchain. Verifies the cross-platform claim - the parts the Windows dev machine can't check.
 
+# Note: each job builds wxWidgets from source (cached), so the matrix is heavy - on a *private* repo it
+# consumes Actions minutes (macOS counts 10x). Make the repo public for free runners, or trigger manually.
 on:
   push:
     branches: [ wx-migration, master ]
-    paths: [ 'src/**', 'third_party/**', 'resources/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
+    paths: [ 'src/**', 'include/**', 'third_party/**', 'resources/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
   pull_request:
-    paths: [ 'src/**', 'third_party/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
+    paths: [ 'src/**', 'include/**', 'third_party/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
   workflow_dispatch:
 
 jobs:
