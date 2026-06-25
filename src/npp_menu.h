@@ -713,6 +713,6 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         help->AppendSeparator();
         help->Append(IDM_DEBUGINFO, "Debug Info...");
         help->Append(IDM_ABOUT, "About Notepad++\tF1");
-        mb->Append(help, "&?");
+        mb->Append(help, "&About");
     }
 }

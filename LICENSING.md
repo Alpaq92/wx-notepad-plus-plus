@@ -1,89 +1,66 @@
 # Licensing
 
-> **Not legal advice.** This document records how the licenses of wxNotepad++'s components interact,
-> as understood from the license files in this repository. For any decision you intend to act on,
-> consult a lawyer (or the FSF) and read the full texts in [`LICENSE`](LICENSE),
-> [`third_party/scintilla/License.txt`](third_party/scintilla/License.txt) and
-> [`third_party/lexilla/License.txt`](third_party/lexilla/License.txt).
+> **Not legal advice.** This records how wxNotepad++'s components are licensed, as understood from the
+> license files in this repository. For anything you intend to rely on, consult a lawyer and read the
+> full texts in [`LICENSE`](LICENSE), [`NOTICE`](NOTICE), and the `third_party/*/License.txt` files.
 
 ## TL;DR
 
-**wxNotepad++ is licensed under the GNU GPL v3 (or later)** — the same as upstream Notepad++. The
-reimplemented editor compiles against Notepad++'s GPL plugin-ABI headers, so it is a derivative work
-of Notepad++ and inherits its copyleft.
+**wxNotepad++ is distributed under the GNU GPL v3** (see [`LICENSE`](LICENSE)), consistent with its
+Notepad++ heritage. It is an *independent reimplementation* — no Notepad++ source code is copied into
+`src/`; Notepad++ serves only as a functional reference and a test target (see [`NOTICE`](NOTICE)).
 
-Scintilla and Lexilla — which supply the actual editing/highlighting engine — are **permissively
-licensed** and impose **no** constraint. The GPL obligation comes **entirely from Notepad++**.
+We have already replaced or clean-room-reimplemented essentially every Notepad++-derived file (icons,
+command ids, plugin-ABI headers, themes, the default styler, and three GPL lexers). **Our committed goal
+is to relicense the project permissively** — purely to give users and downstream developers more
+freedom. **There is no commercial agenda.** We remain on GPL for now because that transition isn't safe
+to *claim* yet; the full reasoning, progress, and plan live in
+[`docs/FUTURE_PLANS.md`](docs/FUTURE_PLANS.md).
 
-## Components
+## Why still GPL (short version)
 
-| Component | License | In this repo? |
+Three gates remain before a permissive relicense would be honest:
+
+1. The plugin-ABI compatibility layer reproduces N++'s ABI for interoperability — permissively licensing
+   that is legally unsettled (defensible under *Google v. Oracle* + the merger doctrine, but not
+   settled law).
+2. The application still presents the **"Notepad++" name and logo** (a trademark matter) and must be
+   rebranded.
+3. `src/` should get a clean-room audit to back the "no copied code" claim.
+
+[`docs/FUTURE_PLANS.md`](docs/FUTURE_PLANS.md) explains these and the **Nib-API + GPL-bridge** plan that
+severs gate #1 (move the ABI reproduction into a separate, optional GPL plugin so the core can go
+permissive with zero N++-derived code).
+
+## Per-component licenses
+
+The project **as a whole is GPL v3**. Individual components we authored are licensed permissively where
+we are confident — permissively-licensed files composing into a GPL aggregate is normal and intended:
+
+| Component | License | Notes |
 |---|---|---|
-| `src/` (the wxNotepad++ editor) | **GPL v3 or later** (derivative work) | yes |
-| Notepad++ ABI headers — `third_party/notepad-plus-plus/` | **GPL v3 or later** | yes (4 headers, see below) |
-| Scintilla headers — `third_party/scintilla/` | Scintilla License (HPND, permissive) | yes (headers only) |
-| Lexilla — `third_party/lexilla/` | Scintilla License (HPND, permissive) | yes |
-| wxWidgets (incl. its bundled Scintilla/Lexilla) | wxWindows Licence (LGPL + static-linking exception) | no — fetched at build time |
-
-The original Notepad++ application source is **no longer in this repo** — only the four ABI/id headers
-needed for plugin and command-id compatibility are kept (with their GPL notices intact).
-
-## Why wxNotepad++ is GPL v3
-
-Copyleft is triggered by **inclusion, not by proportion** — if any GPL code is part of the work, the
-whole work is GPL. `src/main.cpp` compiles against these GPL v3+ Notepad++ headers, making the editor
-a derivative work of Notepad++:
-
-- `third_party/notepad-plus-plus/PluginInterface.h` — plugin ABI
-- `third_party/notepad-plus-plus/Notepad_plus_msgs.h` — `NPPM_*` message ids
-- `third_party/notepad-plus-plus/Docking.h` — docking struct (`tTbData`)
-- `third_party/notepad-plus-plus/menuCmdID.h` — `IDM_*` command ids
-
-Only the Notepad++ copyright holders (Don Ho and contributors) can relicense Notepad++'s code; a
-downstream derivative cannot.
-
-## What the reuse actually is
-
-The editor takes very little Notepad++ *code* — but "very little" is still enough to trigger GPL:
-
-- **Notepad++ logic reused: ~0 lines.** The editor is reimplemented in ~3,400 lines of original
-  wxWidgets C++ (`src/`), not by linking Notepad++'s backend.
-- **Notepad++ headers reused: ~2,099 lines** — the four interface headers above (`#define`s + struct
-  declarations: the plugin ABI + command ids), reused so plugins and command ids stay identical to
-  Notepad++. They carry the GPL v3+ notice, so including them imposes GPL.
-- **Editor engine: Scintilla + Lexilla (permissive)** — used via wxWidgets' `wxStyledTextCtrl`, plus
-  our Lexilla for `CreateLexer`.
+| `src/` (the editor) | under the project's **GPL v3** | original reimplementation |
+| Toolbar icons — `resources/icons/` | **MIT** | Tabler © Paweł Kuna, Open Color © Heeyeun Jeong |
+| Plugin ABI headers — `include/npp-compat/` | Apache-2.0 *expression*, but they **functionally reproduce N++'s GPL ABI** (gate #1) | to be replaced by the permissive Nib API |
+| Regenerated themes + `stylers.model.xml` | **Apache-2.0** | our data: factual Lexilla structure + permissive palettes |
+| Kept third-party themes — `resources/themes/` | **MIT** / upstream-permissive | © Fabio Zendhi Nagao, Oren Farhi, … |
+| Scintilla / Lexilla — `third_party/` | **HPND** (permissive) | the editing/highlighting engine |
+| wxWidgets | wxWindows Licence (LGPL + static-link exception) | fetched at build, not vendored |
 
 ## Scintilla / Lexilla license (permissive)
 
-From `third_party/scintilla/License.txt` and `third_party/lexilla/License.txt` (Neil Hodgson, the
-"Historical Permission Notice and Disclaimer" style):
+From `third_party/scintilla/License.txt` and `third_party/lexilla/License.txt` (Neil Hodgson, HPND-style):
 
 > Permission to use, copy, modify, and distribute this software and its documentation for any
 > purpose and without fee is hereby granted, provided that the above copyright notice appear in
 > all copies and that both that copyright notice and this permission notice appear in supporting
 > documentation.
 
-GPL-compatible and copyleft-free; it requires only that the copyright notice be preserved.
+Permissive and copyleft-free; it requires only that the copyright notice be preserved.
 
-## Could the license be changed to something permissive (MIT/BSD/…)?
+## Trademark
 
-Not while the editor compiles against Notepad++'s GPL headers. It would require fully **detaching
-from Notepad++'s GPL code**:
-
-1. **Clean-room replacements** for the four headers — your own command ids, and the plugin ABI
-   re-declared from public documentation without copying Notepad++'s header text.
-2. Dropping the **Notepad++ name and the green "N" logo** — trademark/identity, separate from the
-   code license (the logo is not even under the GPL).
-3. ⚠️ Re-declaring an ABI for binary compatibility is **legally unsettled** (cf. *Google v. Oracle*,
-   which leaned toward fair use for interoperability, but the question is jurisdiction-dependent).
-   This needs real legal review.
-
-After that you would have a *new, independent* editor (original code + permissive Scintilla/Lexilla)
-that merely speaks the Notepad++ plugin ABI — and *that* you could license permissively. It is a
-deliberate project decision, not a flag flip.
-
-## Recommendation
-
-For an experimental project, **stay on GPL v3.** It is the honest, zero-risk path. Pursue a permissive
-license only as a separate, clean-room, legally-reviewed effort.
+"Notepad++" is a trademark of its owner. wxNotepad++ is not affiliated with or endorsed by Notepad++ and
+references the name only nominatively. **Known gap:** the application UI currently still displays the
+Notepad++ name and logo as identity; removing that (a rebrand) is a tracked task — see gate #2 in
+[`docs/FUTURE_PLANS.md`](docs/FUTURE_PLANS.md).

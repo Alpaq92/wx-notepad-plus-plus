@@ -63,7 +63,7 @@ set_target_properties(wxnpp PROPERTIES
 target_include_directories(wxnpp PRIVATE
     "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"     # Scintilla.h, ILexer.h (SCI_* + SCNotification)
     "${CMAKE_SOURCE_DIR}/third_party/lexilla/include"       # Lexilla.h (CreateLexer), SciLexer.h (SCE_*)
-    "${CMAKE_SOURCE_DIR}/third_party/notepad-plus-plus"     # PluginInterface.h, Notepad_plus_msgs.h, Docking.h, menuCmdID.h
+    "${CMAKE_SOURCE_DIR}/include/npp-compat"                # our Apache-2.0 clean-room plugin ABI (PluginInterface.h, Notepad_plus_msgs.h, Docking.h, menuCmdID.h)
     "${CMAKE_SOURCE_DIR}/src")                              # app_icon_svg.h, npp_menu.h
 
 target_link_libraries(wxnpp PRIVATE

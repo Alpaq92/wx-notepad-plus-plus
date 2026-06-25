@@ -18,6 +18,8 @@
 
 #include <wx/wx.h>
 #include <wx/notebook.h>
+#include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
+#include <wx/clrpicker.h>      // wxColourPickerCtrl - Style Configurator foreground/background pickers
 #include <wx/aui/auibook.h>
 #include <wx/aui/aui.h>          // wxAuiManager - dock host for plugin panels (NPPM_DMM*)
 #include <wx/stc/stc.h>          // wxStyledTextCtrl - cross-platform editor (Phase 3 port target)
@@ -47,6 +49,9 @@
 #include <commctrl.h>
 #include <dwmapi.h>
 #include <uxtheme.h>
+#include <shellapi.h>          // ShellExecuteW / SHFileOperationW - File menu shell commands (Explorer, cmd, Recycle Bin)
+#include <bcrypt.h>            // BCrypt* - MD5 / SHA digests for the Tools menu
+#pragma comment(lib, "bcrypt.lib")
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
@@ -63,6 +68,12 @@ using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/
 #include <set>
 #include <algorithm>
 #include <cstdlib>
+#include <random>              // std::shuffle - "Randomize Line Order"
+
+#include <wx/clipbrd.h>        // wxClipboard - copy file paths / hashes to the clipboard
+#include <wx/utils.h>          // wxExecute / wxLaunchDefaultBrowser / wxLaunchDefaultApplication
+#include <wx/choicdlg.h>       // wxGetSingleChoiceIndex - the Window list dialog
+#include <wx/textdlg.h>        // wxGetTextFromUser - name a saved macro
 
 #include "Scintilla.h"
 #include "ILexer.h"             // Scintilla::ILexer5 (required by Lexilla.h)
@@ -85,12 +96,19 @@ static const int  MARK_INDIC    = 9;      // indicator number for "Mark All" hig
 static const int  SMART_INDIC   = 10;     // indicator number for smart-highlight (double-click a word)
 enum { myID_TIMER = 60000, myID_DARKMODE, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER };   // fixed ids, above the IDM_* range
 static const int myID_DOCLIST_ITEM = 61000;   // base id for the document-list dropdown entries
+static const int myID_MACRO_ITEM   = 62100;   // base id for saved-macro entries at the bottom of the Macro menu
 
 // The one persistent editor view (set by the frame), used to release a tab's Document when its
 // EditorPage is destroyed - the notebook switches away first, so the doc holds only the buffer ref.
 static wxStyledTextCtrl* g_view = nullptr;
 
 // One editor tab: a wxPanel that owns a Scintilla Document (the single shared view swaps to it).
+// On-disk text encoding of a buffer; the Scintilla document itself always holds UTF-8.
+enum Enc { ENC_UTF8 = 0, ENC_UTF8_BOM, ENC_UTF16_LE, ENC_UTF16_BE, ENC_ANSI, ENC_CHARSET };
+
+// One recorded Scintilla command in a macro (Macro menu: record / playback / run multiple).
+struct MacroStep { int msg; uptr_t wparam; sptr_t lparam; bool hasText = false; std::string text; };
+
 class EditorPage : public wxPanel
 {
 public:
@@ -101,10 +119,13 @@ public:
     wxString path;
     wxString title;            // tab/window title without the unsaved "*" marker
     wxString lang  = "Normal text file";   // status-bar language label (like Notepad++)
+    int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
+    int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
+    wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
 };
 
 // A parsed Notepad++ theme (stylers.model.xml / themes/*.xml).
-struct StyleDef { int id; int fg; int bg; int fontStyle; };   // fg/bg = -1 when unspecified
+struct StyleDef { int id; int fg; int bg; int fontStyle; wxString name; };   // fg/bg = -1 when unspecified
 struct NppTheme
 {
     bool loaded = false;
@@ -225,11 +246,44 @@ static LRESULT CALLBACK FrameSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LP
 // ignores them. Bridge it: subclass the wxSTC HWND and forward Scintilla-range messages (SCI_* live in
 // 2000-2999, the lexer messages in 4000-4999) to the real editor via the frame's sci(). (Set by frame.)
 static std::function<sptr_t(UINT, WPARAM, LPARAM)> g_sciForward;
+
+// Mirrors the frame's dark state so the editor's non-client painting (below) runs only in dark mode.
+static bool g_editorDark = false;
+
+// DarkMode_Explorer darkens the scrollbars but NOT the little "dead corner" square where the horizontal and
+// vertical scrollbars meet -- Windows fills it with a light system colour. When both bars are visible, repaint
+// that square with the scrollbar background so it blends in. Border-agnostic: the corner is derived from the
+// client rect vs the window rect, so any window border/edge is accounted for automatically.
+static void paintScrollbarCorner(HWND h)
+{
+    SCROLLBARINFO vsi = { sizeof(vsi) }, hsi = { sizeof(hsi) };
+    if (!::GetScrollBarInfo(h, OBJID_VSCROLL, &vsi) || !::GetScrollBarInfo(h, OBJID_HSCROLL, &hsi)) return;
+    if ((vsi.rgstate[0] & STATE_SYSTEM_INVISIBLE) || (hsi.rgstate[0] & STATE_SYSTEM_INVISIBLE)) return;  // need BOTH bars
+
+    RECT wr; ::GetWindowRect(h, &wr);
+    RECT cr; ::GetClientRect(h, &cr);
+    POINT org = { 0, 0 }; ::ClientToScreen(h, &org);                  // client origin in screen coords
+    const LONG left = (org.x - wr.left) + cr.right;                   // client's right edge, in window-DC coords
+    const LONG top  = (org.y - wr.top)  + cr.bottom;                  // client's bottom edge, in window-DC coords
+    RECT corner = { left, top, left + ::GetSystemMetrics(SM_CXVSCROLL), top + ::GetSystemMetrics(SM_CYHSCROLL) };
+
+    // The DarkMode_Explorer scrollbar track colour - a fixed Windows dark-theme system colour (not one of
+    // our editor-theme colours), so it lives here rather than in applyEditorTheme. Cached once: WM_NCPAINT
+    // fires on every scroll / resize / focus change.
+    static const HBRUSH s_corner = ::CreateSolidBrush(RGB(23, 23, 23));
+    HDC dc = ::GetWindowDC(h);
+    ::FillRect(dc, &corner, s_corner);
+    ::ReleaseDC(h, dc);
+}
+
 static LRESULT CALLBACK SciHwndProc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR)
 {
     if (g_sciForward && ((msg >= 2000 && msg < 3000) || (msg >= 4000 && msg < 5000)))
         return static_cast<LRESULT>(g_sciForward(msg, w, l));
-    return DefSubclassProc(h, msg, w, l);
+    const LRESULT res = DefSubclassProc(h, msg, w, l);
+    if (msg == WM_NCPAINT && g_editorDark)   // overpaint the scrollbar dead-corner once the bars are drawn
+        paintScrollbarCorner(h);
+    return res;
 }
 #endif // __WXMSW__ (Win32 plugin message plumbing)
 
@@ -806,6 +860,48 @@ private:
     std::function<void(const wxArrayString&)> m_cb;
 };
 
+#ifdef __WXMSW__
+// Custom status-bar size-grip. Windows draws the native grip (wxSTB_SIZEGRIP) on a light 3D corner that
+// ignores our dark chrome, so we drop the native one (see buildStatusBar) and paint our own dots on the
+// matching status-bar background here, forwarding the drag to the frame's bottom-right resize border.
+class SizeGripWin : public wxWindow
+{
+public:
+    explicit SizeGripWin(wxWindow* parent)
+        : wxWindow(parent, wxID_ANY, wxDefaultPosition, wxSize(16, 16), wxBORDER_NONE)
+    {
+        SetCursor(wxCursor(wxCURSOR_SIZENWSE));
+        Bind(wxEVT_PAINT,     &SizeGripWin::onPaint, this);
+        Bind(wxEVT_LEFT_DOWN, &SizeGripWin::onDown,  this);
+    }
+    void setColours(const wxColour& bg, const wxColour& dot)
+    {
+        m_bg = bg; m_dot = dot; SetBackgroundColour(bg); Refresh();
+    }
+private:
+    wxColour m_bg{32, 32, 32}, m_dot{112, 112, 112};
+    void onPaint(wxPaintEvent&)
+    {
+        wxPaintDC dc(this);
+        dc.SetBackground(wxBrush(m_bg));        // == the status bar's chrome colour: no "different background"
+        dc.Clear();
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.SetBrush(wxBrush(m_dot));
+        const wxSize s = GetClientSize();
+        const int M = 4, P = 4, D = 2;          // margin, pitch, dot size -> classic triangular grip
+        for (int j = 0; j <= 2; ++j)
+            for (int i = 0; i + j <= 2; ++i)
+                dc.DrawRectangle(s.x - M - i * P, s.y - M - j * P, D, D);
+    }
+    void onDown(wxMouseEvent&)
+    {
+        wxWindow* top = wxGetTopLevelParent(this);   // hand the drag to the native bottom-right resize border
+        ::ReleaseCapture();
+        ::SendMessage(static_cast<HWND>(top->GetHandle()), WM_NCLBUTTONDOWN, HTBOTTOMRIGHT, 0);
+    }
+};
+#endif // __WXMSW__
+
 class NppShellFrame : public wxFrame
 {
 public:
@@ -813,8 +909,9 @@ public:
         : wxFrame(nullptr, wxID_ANY, "new 1 - Notepad++", wxDefaultPosition, wxSize(1100, 720)),
           m_timer(this, myID_TIMER)
     {
-        m_dark = dark;          // theme is fixed for this process (restart-to-apply)
-        loadTheme();            // parse Notepad++'s stylers.model.xml / DarkModeDefault.xml for exact colours
+        m_dark = dark;          // chrome darkness is fixed for this process (restart-to-apply)
+        loadSettings();         // restore preferences incl. the chosen editor theme (before loadTheme reads m_themeName)
+        loadTheme();            // parse the active Notepad++ theme XML for exact colours
         { long z = 0; wxConfigBase::Get()->Read("Zoom", &z, 0L); m_zoom = static_cast<int>(z); }   // restore zoom
         setAppIcon();
         buildEditor();
@@ -838,6 +935,8 @@ public:
         Bind(wxEVT_CLOSE_WINDOW, &NppShellFrame::onCloseWindow, this);                 // prompt to save on exit
         m_timer.Start(150);
         applyTheme(m_dark);     // style for the mode this process was launched in
+        applySettings();        // apply persisted preferences (tab size, wrap, line numbers, toolbar/status visibility)
+        macroToolStates();      // sync the Macro menu/toolbar enable states (nothing recorded yet)
         updateStatus();
         updateUiState();
     }
@@ -893,7 +992,7 @@ private:
     // ----- Scintilla helpers --------------------------------------------
     // Editor message gateway - routes through wxSTC's portable SendMsg (was SendMessageW to the raw HWND).
     sptr_t sci(UINT m, uptr_t w = 0, sptr_t l = 0)
-    { return m_stc ? static_cast<sptr_t>(m_stc->SendMsg(static_cast<int>(m), static_cast<wxUIntPtr>(w), static_cast<wxIntPtr>(l))) : 0; }
+    { wxStyledTextCtrl* v = m_sciTgt ? m_sciTgt : m_stc; return v ? static_cast<sptr_t>(v->SendMsg(static_cast<int>(m), static_cast<wxUIntPtr>(w), static_cast<wxIntPtr>(l))) : 0; }
 
     wxString getAllText()
     {
@@ -986,6 +1085,7 @@ private:
         m_stc->Bind(wxEVT_STC_MARGINCLICK,      &NppShellFrame::onStcMarginClick, this);
         m_stc->Bind(wxEVT_STC_ZOOM,             &NppShellFrame::onStcZoom,        this);
         m_stc->Bind(wxEVT_STC_MODIFIED,         &NppShellFrame::onStcModified,    this);
+        m_stc->Bind(wxEVT_STC_MACRORECORD,      &NppShellFrame::onMacroRecord,    this);   // capture commands while recording a macro
         m_stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { forwardScn(SCN_SAVEPOINTREACHED, e); e.Skip(); });
         m_stc->Bind(wxEVT_STC_SAVEPOINTLEFT,    [this](wxStyledTextEvent& e) { forwardScn(SCN_SAVEPOINTLEFT, e);    e.Skip(); });
         m_stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrame::onStcContextMenu, this);
@@ -1018,6 +1118,11 @@ private:
         const int ch = e.GetKey();
         if (ch == '\n' || ch == '\r') autoIndentOnNewline(m_stc);
         else if (ch == '}')           dedentCloseBrace(m_stc);
+        else if (m_autocomplete && (std::isalnum((unsigned char)ch) || ch == '_'))   // auto word/keyword completion after 3+ chars
+        {
+            const int caret = (int)sci(SCI_GETCURRENTPOS);
+            if (caret - (int)sci(SCI_WORDSTARTPOSITION, caret, 1) >= 3) autoComplete(true);
+        }
         forwardScn(SCN_CHARADDED, e);
         e.Skip();
     }
@@ -1026,6 +1131,7 @@ private:
         updateBraceMatch(m_stc);
         if (g_smartActive && g_smartSci == m_stc && sci(SCI_GETSELECTIONEMPTY)) clearSmart(m_stc);
         updateDocMapViewport();   // keep the minimap's viewport band in sync with scrolling/caret
+        syncFrom(m_stc);          // mirror scroll to View 2 when synchronized scrolling is on
         forwardScn(SCN_UPDATEUI, e);
         e.Skip();
     }
@@ -1056,6 +1162,36 @@ private:
     // A second wxStyledTextCtrl that SHARES the active document (no copy, live), shrunk to minimap scale
     // in a right-docked pane. The visible viewport is shown with the minimap's OWN selection (selection
     // is per-view, so it doesn't bleed into the main editor); click/drag scrolls the main editor.
+    // ----- split view: a second editable view sharing the active document (like N++) -----
+    void buildSecondView()
+    {
+        if (m_view2) return;
+        m_view2 = new wxStyledTextCtrl(this, wxID_ANY);
+        m_view2->Bind(wxEVT_STC_UPDATEUI, [this](wxStyledTextEvent& e){ syncFrom(m_view2); e.Skip(); });
+        m_aui.AddPane(m_view2, wxAuiPaneInfo().Name("view2").Caption("Editor - View 2")
+                          .Right().BestSize(480, 400).MinSize(140, 80).CloseButton(true).Hide());
+        m_aui.Update();
+    }
+    void styleView2(const wxString& path)   // configure + theme View 2 to match the main view (sci() retargeted)
+    { m_sciTgt = m_view2; setupScintilla(); setLexerForFile(path); updateLineMargin(); m_sciTgt = nullptr; }
+    void cloneToOtherView()
+    {
+        auto* p = activePage(); if (!p || !p->doc) return;
+        buildSecondView();
+        m_view2->SetDocPointer(reinterpret_cast<void*>(p->doc));   // share the document - edits sync across both views
+        styleView2(p->path);
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_view2); if (pi.IsOk()) { pi.Show(); m_aui.Update(); }
+        m_view2->SetFocus();
+    }
+    void focusOtherView() { if (m_view2 && m_aui.GetPane(m_view2).IsShown()) m_view2->SetFocus(); else if (m_stc) m_stc->SetFocus(); }
+    void syncFrom(wxStyledTextCtrl* src)   // mirror the scroll position to the other view when sync is on
+    {
+        if (!m_syncScroll || m_syncing || !m_view2 || !m_aui.GetPane(m_view2).IsShown()) return;
+        m_syncing = true;
+        wxStyledTextCtrl* dst = (src == m_stc) ? m_view2 : m_stc;
+        if (dst && src) dst->SetFirstVisibleLine(src->GetFirstVisibleLine());
+        m_syncing = false;
+    }
     void buildDocMap()
     {
         m_docMap = new wxStyledTextCtrl(this, wxID_ANY);
@@ -1281,6 +1417,192 @@ private:
                                          cc->IsChecked(), ww->IsChecked(), rx->IsChecked(), sd->IsChecked(), hits, searched); }
         showFifResults(find->GetValue(), hits, searched);
     }
+    wxString curWord()   // the identifier under the caret (for $(CURRENT_WORD))
+    {
+        const int p = (int)sci(SCI_GETCURRENTPOS);
+        const int a = (int)sci(SCI_WORDSTARTPOSITION, p, 1), b = (int)sci(SCI_WORDENDPOSITION, p, 1);
+        if (b <= a) return "";
+        sci(SCI_SETTARGETSTART, a); sci(SCI_SETTARGETEND, b);
+        std::string buf((size_t)(b - a) + 1, '\0'); sci(SCI_GETTARGETTEXT, 0, reinterpret_cast<sptr_t>(&buf[0])); buf.resize(b - a);
+        return wxString::FromUTF8(buf.c_str(), buf.size());
+    }
+    wxString substituteRunVars(wxString c)   // expand Notepad++'s $(...) Run variables
+    {
+        const wxString full = curPath(); wxFileName fn(full);
+        c.Replace("$(FULL_CURRENT_PATH)", full);
+        c.Replace("$(CURRENT_DIRECTORY)", fn.GetPath());
+        c.Replace("$(FILE_NAME)", fn.GetFullName());
+        c.Replace("$(NAME_PART)", fn.GetName());
+        c.Replace("$(EXT_PART)", fn.GetExt());
+        c.Replace("$(CURRENT_WORD)", curWord());
+        c.Replace("$(CURRENT_LINE)", wxString::Format("%d", (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETCURRENTPOS)) + 1));
+        c.Replace("$(CURRENT_COLUMN)", wxString::Format("%d", (int)sci(SCI_GETCOLUMN, sci(SCI_GETCURRENTPOS)) + 1));
+        c.Replace("$(NPP_DIRECTORY)", wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath());
+        c.Replace("$(NPP_FULL_FILE_PATH)", wxStandardPaths::Get().GetExecutablePath());
+        return c;
+    }
+    void onRun()   // Run dialog (F5): enter a command with $(...) variables and launch it
+    {
+        wxString cmd; wxConfigBase::Get()->Read("RunCommand", &cmd, "");
+        wxDialog dlg(this, wxID_ANY, "Run...");
+        auto* tc = new wxTextCtrl(&dlg, wxID_ANY, cmd, wxDefaultPosition, wxSize(520, -1));
+        auto* browse = new wxButton(&dlg, wxID_ANY, "...", wxDefaultPosition, wxSize(32, -1));
+        auto* row = new wxBoxSizer(wxHORIZONTAL); row->Add(tc, 1, wxEXPAND); row->Add(browse, 0, wxLEFT, 4);
+        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
+        auto* runb = new wxButton(&dlg, wxID_OK, "Run"); runb->SetDefault();
+        btn->Add(runb, 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, "Cancel"), 0);
+        auto* top = new wxBoxSizer(wxVERTICAL);
+        top->Add(new wxStaticText(&dlg, wxID_ANY, "The Program to Run   (variables: $(FULL_CURRENT_PATH), $(CURRENT_DIRECTORY),\n$(FILE_NAME), $(CURRENT_WORD), $(CURRENT_LINE) ...)"), 0, wxALL, 12);
+        top->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT, 12);
+        top->Add(btn, 0, wxEXPAND | wxALL, 12);
+        dlg.SetSizerAndFit(top); dlg.SetSize(wxSize(540, dlg.GetSize().GetHeight()));
+        tc->SetFocus(); tc->SetInsertionPointEnd();
+        browse->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){ wxFileDialog fd(&dlg, "Select a program to run", "", "", "Programs (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|All files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST); if (fd.ShowModal() == wxID_OK) tc->SetValue("\"" + fd.GetPath() + "\" \"$(FULL_CURRENT_PATH)\""); });
+        themeDialog(&dlg);
+        if (dlg.ShowModal() != wxID_OK) return;
+        cmd = tc->GetValue().Trim().Trim(false); if (cmd.empty()) return;
+        wxConfigBase::Get()->Write("RunCommand", cmd); wxConfigBase::Get()->Flush();
+        const wxString full = substituteRunVars(cmd);
+        if (wxExecute(full, wxEXEC_ASYNC) == 0) wxMessageBox("Failed to run:\n" + full, "Run", wxOK | wxICON_ERROR, this);
+    }
+
+    // ----- sessions (File > Save / Load Session) ------------------------
+    // Notepad++-style session XML: <NotepadPlus><Session><mainView><File .../></mainView></Session>.
+    // The active buffer also stores caret position, first-visible line, and bookmarks (the structure NotepadNext uses).
+    void saveSession()
+    {
+        if (!m_tabs) return;
+        wxFileDialog d(this, "Save Session", "", "session.xml", "Session files (*.xml)|*.xml|All files (*.*)|*.*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        if (d.ShowModal() != wxID_OK) return;
+        const int active = m_tabs->GetSelection();
+        wxXmlDocument doc;
+        auto* root = new wxXmlNode(wxXML_ELEMENT_NODE, "NotepadPlus");
+        auto* sess = new wxXmlNode(wxXML_ELEMENT_NODE, "Session"); sess->AddAttribute("activeView", "0");
+        auto* view = new wxXmlNode(wxXML_ELEMENT_NODE, "mainView");
+        int saved = 0, sessActive = 0;
+        for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
+        {
+            auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i));
+            if (p->path.empty()) continue;                       // only real (saved) files go in a session
+            auto* f = new wxXmlNode(wxXML_ELEMENT_NODE, "File");
+            f->AddAttribute("filename", p->path); f->AddAttribute("lang", p->lang);
+            if ((int)i == active)                                // the live view holds caret/scroll/marks for the active tab
+            {
+                f->AddAttribute("position", wxString::Format("%d", (int)sci(SCI_GETCURRENTPOS)));
+                f->AddAttribute("firstVisibleLine", wxString::Format("%d", (int)sci(SCI_GETFIRSTVISIBLELINE)));
+                int ln = -1; const int lc = (int)sci(SCI_GETLINECOUNT);
+                while ((ln = (int)sci(SCI_MARKERNEXT, ln + 1, 1 << MARK_BOOKMARK)) >= 0 && ln < lc)
+                { auto* mk = new wxXmlNode(wxXML_ELEMENT_NODE, "Mark"); mk->AddAttribute("line", wxString::Format("%d", ln)); f->AddChild(mk); }
+                sessActive = saved;
+            }
+            else { f->AddAttribute("position", "0"); f->AddAttribute("firstVisibleLine", "0"); }
+            view->AddChild(f); ++saved;
+        }
+        view->AddAttribute("activeIndex", wxString::Format("%d", sessActive));
+        sess->AddChild(view); root->AddChild(sess); doc.SetRoot(root);
+        if (doc.Save(d.GetPath())) { setStatus(0, wxString::Format("Session saved - %d file(s)", saved)); m_hint = true; }
+    }
+    void loadSession()
+    {
+        wxFileDialog d(this, "Load Session", "", "", "Session files (*.xml)|*.xml|All files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (d.ShowModal() != wxID_OK) return;
+        wxXmlDocument doc;
+        if (!doc.Load(d.GetPath()) || !doc.GetRoot()) { wxMessageBox("Could not read the session file.", "Load Session", wxOK | wxICON_ERROR, this); return; }
+        wxXmlNode* view = nullptr;
+        for (wxXmlNode* a = doc.GetRoot()->GetChildren(); a && !view; a = a->GetNext())
+            if (a->GetName() == "Session")
+                for (wxXmlNode* b = a->GetChildren(); b; b = b->GetNext())
+                    if (b->GetName() == "mainView") { view = b; break; }
+        if (!view) { wxMessageBox("No session data in this file.", "Load Session", wxOK | wxICON_WARNING, this); return; }
+        const int activeIndex = wxAtoi(view->GetAttribute("activeIndex", "0"));
+        std::vector<EditorPage*> opened;
+        for (wxXmlNode* f = view->GetChildren(); f; f = f->GetNext())
+        {
+            if (f->GetName() != "File") continue;
+            const wxString path = f->GetAttribute("filename");
+            if (path.empty() || !wxFileExists(path)) continue;
+            openPath(path);                                      // opens it in a new tab and makes it active
+            sci(SCI_GOTOPOS, wxAtoi(f->GetAttribute("position", "0")));
+            sci(SCI_SETFIRSTVISIBLELINE, wxAtoi(f->GetAttribute("firstVisibleLine", "0")));
+            for (wxXmlNode* mk = f->GetChildren(); mk; mk = mk->GetNext())
+                if (mk->GetName() == "Mark") sci(SCI_MARKERADD, wxAtoi(mk->GetAttribute("line", "0")), MARK_BOOKMARK);
+            opened.push_back(activePage());
+        }
+        if (activeIndex >= 0 && activeIndex < (int)opened.size() && opened[activeIndex])
+        { const int idx = m_tabs->GetPageIndex(opened[activeIndex]); if (idx != wxNOT_FOUND) m_tabs->SetSelection(idx); }
+        setStatus(0, wxString::Format("Session loaded - %d file(s)", (int)opened.size())); m_hint = true;
+    }
+
+    // ----- auto-completion (word / keyword / path) ----------------------
+    // Word completion adapted from NotepadNext (scan the document for words sharing the prefix);
+    // keyword completion adapted from notepad-- (merge the language keyword list). Path completion is ours.
+    std::string rangeText(int a, int b) { if (b <= a) return {}; sci(SCI_SETTARGETSTART, a); sci(SCI_SETTARGETEND, b); std::string s((size_t)(b - a) + 1, '\0'); sci(SCI_GETTARGETTEXT, 0, reinterpret_cast<sptr_t>(&s[0])); s.resize(b - a); return s; }
+    static const char* keywordsForExt(const wxString& ext)
+    {
+        if (ext == "js" || ext == "jsx" || ext == "ts" || ext == "tsx") return JS_KEYWORDS;
+        if (ext == "java") return JAVA_KEYWORDS;
+        if (ext == "cs") return CS_KEYWORDS;
+        if (ext == "c" || ext == "cpp" || ext == "cc" || ext == "cxx" || ext == "h" || ext == "hpp" || ext == "hxx" || ext == "rc") return CPP_KEYWORDS;
+        return nullptr;   // no keyword list -> document-word completion only
+    }
+    const char* keywordsForActiveLang() { auto* p = activePage(); return p ? keywordsForExt(p->path.AfterLast('.').Lower()) : nullptr; }
+    static void collectWords(const std::string& doc, const std::string& prefix, std::set<std::string>& out)
+    {
+        auto isW = [](unsigned char c){ return std::isalnum(c) || c == '_'; }; const size_t pl = prefix.size();
+        for (size_t i = 0; i < doc.size(); )
+        {
+            if (!isW((unsigned char)doc[i])) { ++i; continue; }
+            size_t j = i; while (j < doc.size() && isW((unsigned char)doc[j])) ++j;
+            if (j - i > pl && doc.compare(i, pl, prefix) == 0) out.insert(doc.substr(i, j - i));
+            i = j;
+        }
+    }
+    void collectKeywords(const std::string& prefix, std::set<std::string>& out)
+    {
+        const char* kw = keywordsForActiveLang(); if (!kw) return;
+        const std::string s(kw); const size_t pl = prefix.size();
+        for (size_t i = 0; i < s.size(); )
+        {
+            if (s[i] == ' ' || s[i] == '\n' || s[i] == '\t') { ++i; continue; }
+            size_t j = i; while (j < s.size() && s[j] != ' ' && s[j] != '\n' && s[j] != '\t') ++j;
+            if (j - i > pl && s.compare(i, pl, prefix) == 0) out.insert(s.substr(i, j - i));
+            i = j;
+        }
+    }
+    void autoComplete(bool withKeywords)
+    {
+        if (!m_stc) return;
+        const int caret = (int)sci(SCI_GETCURRENTPOS), start = (int)sci(SCI_WORDSTARTPOSITION, caret, 1), plen = caret - start;
+        if (plen <= 0) { sci(SCI_AUTOCCANCEL); return; }
+        const std::string prefix = rangeText(start, caret);
+        std::set<std::string> cand; collectWords(getDocUtf8(), prefix, cand);
+        if (withKeywords) collectKeywords(prefix, cand);
+        cand.erase(prefix);
+        if (cand.empty()) { sci(SCI_AUTOCCANCEL); return; }
+        std::string list; for (const auto& w : cand) { if (!list.empty()) list += ' '; list += w; }
+        sci(SCI_AUTOCSETIGNORECASE, 0); sci(SCI_AUTOCSETSEPARATOR, ' '); sci(SCI_AUTOCSETMAXHEIGHT, 10); sci(SCI_AUTOCSETORDER, SC_ORDER_PERFORMSORT);
+        sci(SCI_AUTOCSHOW, plen, reinterpret_cast<sptr_t>(list.c_str()));
+    }
+    void autoCompletePath()
+    {
+        if (!m_stc) return;
+        const int caret = (int)sci(SCI_GETCURRENTPOS);
+        auto stop = [](char c){ return c == '"' || c == '\'' || c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '<' || c == '>' || c == '(' || c == ')'; };
+        int start = caret; while (start > 0 && !stop((char)sci(SCI_GETCHARAT, start - 1))) --start;
+        const std::string frag = rangeText(start, caret); if (frag.empty()) { sci(SCI_AUTOCCANCEL); return; }
+        wxString wf = wxString::FromUTF8(frag.data(), frag.size());
+        const int sl = std::max(wf.Find('/', true), wf.Find('\\', true));
+        wxString dir, partial;
+        if (sl == wxNOT_FOUND) { dir = curPath().empty() ? wxGetCwd() : wxFileName(curPath()).GetPath(); partial = wf; }
+        else { dir = wf.Left(sl + 1); partial = wf.Mid(sl + 1); }
+        std::set<std::string> cand; wxDir d(dir);
+        if (d.IsOpened())
+        { wxString name; bool more = d.GetFirst(&name, wxEmptyString, wxDIR_FILES | wxDIR_DIRS); while (more) { if (partial.empty() || name.Lower().StartsWith(partial.Lower())) cand.insert(std::string(name.utf8_str())); more = d.GetNext(&name); } }
+        if (cand.empty()) { sci(SCI_AUTOCCANCEL); return; }
+        std::string list; for (const auto& w : cand) { if (!list.empty()) list += ' '; list += w; }
+        sci(SCI_AUTOCSETSEPARATOR, ' '); sci(SCI_AUTOCSETORDER, SC_ORDER_PERFORMSORT);
+        sci(SCI_AUTOCSHOW, (int)std::string(partial.utf8_str()).size(), reinterpret_cast<sptr_t>(list.c_str()));
+    }
     void showFifResults(const wxString& term, const std::vector<FifHit>& hits, int searched)
     {
         if (!m_fifPanel) return;
@@ -1332,7 +1654,7 @@ private:
             b->Bind(wxEVT_BUTTON, [act](wxCommandEvent&) { act(); });
             s->Add(b, 0, wxALIGN_CENTRE_VERTICAL | wxLEFT, 2);
         };
-        mkBtn("M8 5 V11 M5 8 H11",                       "New",            [this] { doNew(); });
+        mkBtn("M8 4.5 V11.5 M4.5 8 H11.5",               "New",            [this] { doNew(); });   // span 4.5..11.5, matching the "x"
         mkBtn("M3.5 6.5 L8 11 L12.5 6.5",                "Open documents", [this] { onDocList(); });
         mkBtn("M4.5 4.5 L11.5 11.5 M11.5 4.5 L4.5 11.5", "Close current",  [this] { closeActive(); });
         m_capBar->SetSizerAndFit(s);
@@ -1407,6 +1729,7 @@ private:
         setupFolding();
 #ifdef __WXMSW__
         ::SetWindowTheme(m_sci, m_dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);   // dark/light scrollbars
+        g_editorDark = m_dark;   // so SciHwndProc repaints the scrollbar dead-corner to match in dark mode
 #endif
         sci(SCI_SETZOOM, m_zoom);   // new tabs inherit the current (persisted) zoom level
         updateLineMargin();
@@ -1491,6 +1814,7 @@ private:
         parseFuncList();                                                    // re-parse symbols for the newly active doc
         refreshTab(p);
         updateStatus();
+        updateEncodingMenuChecks();   // tick this buffer's encoding in the Encoding menu
         m_stc->SetFocus();
     }
     // Ask to save a modified document before closing it (Save / Don't Save / Cancel), themed like the
@@ -1570,6 +1894,7 @@ private:
         if (e.CanVeto())   // a forced close (e.g. the theme-restart) skips prompts and just exits
             for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
                 if (!confirmClose(static_cast<EditorPage*>(m_tabs->GetPage(i)))) { e.Veto(); return; }
+        saveSettings();    // persist any in-session View-menu toggle changes
         m_aui.UnInit();
         e.Skip();
     }
@@ -1871,8 +2196,20 @@ private:
     wxBitmapBundle icon(const wxString& name)
     {
         static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\";
+        // Permissive toolbar icons (Tabler x Open Color, MIT). They paint with stroke="currentColor";
+        // resolve that to Open-Color gray-3 on the dark toolbar / gray-8 on light, keeping the accent hues.
         const wxString path = dir + name + ".svg";
-        if (wxFileExists(path)) return wxBitmapBundle::FromSVGFile(path, wxSize(16, 16));
+        if (wxFileExists(path))
+        {
+            wxFile f(path); wxString svg;
+            if (f.IsOpened() && f.ReadAll(&svg))
+            {
+                svg.Replace("currentColor", m_dark ? "#dee2e6" : "#343a40");
+                const wxScopedCharBuffer u = svg.utf8_str();
+                return wxBitmapBundle::FromSVG(u.data(), wxSize(16, 16));
+            }
+            return wxBitmapBundle::FromSVGFile(path, wxSize(16, 16));
+        }
         return wxArtProvider::GetBitmapBundle(wxART_QUESTION, wxART_TOOLBAR, wxSize(16, 16));
     }
     // Small monochrome caption-button glyph (the +/v/x), themed to the current mode.
@@ -1953,13 +2290,30 @@ private:
 
     void buildStatusBar()
     {
-        auto* sb = CreateStatusBar(7);
+#ifdef __WXMSW__
+        // Drop the native size-grip (wxSTB_SIZEGRIP): Windows draws it on a light 3D corner that ignores
+        // our dark chrome. We park our own dark-matching grip (SizeGripWin) in the corner instead.
+        auto* sb = CreateStatusBar(7, wxSTB_DEFAULT_STYLE & ~wxSTB_SIZEGRIP);
+#else
+        auto* sb = CreateStatusBar(7);   // GTK/Cocoa theme their own grip correctly - keep the native one
+#endif
         // field 0 (doc type / message area) is proportional so the fields fill the whole bar and
         // the typing-mode field lands flush right, like Notepad++ (no dead slack on the right).
-        const int w[7] = { -1, 150, 210, 110, 130, 80, 46 };
+        const int w[7] = { -1, 150, 210, 110, 130, 120, 46 };   // field 5 (encoding) wide enough for "UTF-16 LE BOM"
         sb->SetStatusWidths(7, w);
         const int styles[7] = { wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT };
         sb->SetStatusStyles(7, styles);   // flat fields - no per-field sunken background
+#ifdef __WXMSW__
+        // our own resize grip, parked in the bottom-right corner and kept there as the bar resizes
+        m_grip = new SizeGripWin(sb);
+        auto place = [this, sb]() {
+            const wxSize ss = sb->GetClientSize();
+            const int gw = 16;
+            if (m_grip) m_grip->SetSize(ss.x - gw, 0, gw, ss.y);
+        };
+        sb->Bind(wxEVT_SIZE, [place](wxSizeEvent& e){ e.Skip(); place(); });
+        place();
+#endif
     }
 
     // ----- syntax highlighting (Lexilla + Notepad++ theme colours) -------
@@ -2085,14 +2439,179 @@ private:
     // ----- file actions --------------------------------------------------
     void setDocTitle(const wxString& name) { if (auto* p = activePage()) { p->title = name; refreshTab(p); } else SetTitle(name + " - Notepad++"); }
     void doNew() { addDocument("", nextNewName()); }   // New opens a fresh tab, like Notepad++
+    // ===== text encoding: detect on load, encode on save (the Scintilla doc is always UTF-8) =====
+    static bool isValidUtf8(const std::string& s)
+    {
+        for (size_t i = 0; i < s.size(); )
+        {
+            const unsigned char c = (unsigned char)s[i]; int n;
+            if (c < 0x80) n = 0; else if ((c >> 5) == 0x6) n = 1; else if ((c >> 4) == 0xE) n = 2; else if ((c >> 3) == 0x1E) n = 3; else return false;
+            for (int k = 1; k <= n; ++k) if (i + k >= s.size() || ((unsigned char)s[i + k] & 0xC0) != 0x80) return false;
+            i += n + 1;
+        }
+        return true;
+    }
+    static std::string utf16ToUtf8(const std::string& b, bool be)
+    {
+        std::string out; auto rd = [&](size_t i){ unsigned char a = b[i], c = b[i + 1]; return be ? (unsigned)((a << 8) | c) : (unsigned)((c << 8) | a); };
+        for (size_t i = 0; i + 1 < b.size(); )
+        {
+            unsigned u = rd(i); i += 2; unsigned cp;
+            if (u >= 0xD800 && u <= 0xDBFF && i + 1 < b.size()) { unsigned lo = rd(i); i += 2; cp = 0x10000 + ((u - 0xD800) << 10) + (lo - 0xDC00); } else cp = u;
+            if (cp < 0x80) out += (char)cp;
+            else if (cp < 0x800) { out += (char)(0xC0 | (cp >> 6)); out += (char)(0x80 | (cp & 0x3F)); }
+            else if (cp < 0x10000) { out += (char)(0xE0 | (cp >> 12)); out += (char)(0x80 | ((cp >> 6) & 0x3F)); out += (char)(0x80 | (cp & 0x3F)); }
+            else { out += (char)(0xF0 | (cp >> 18)); out += (char)(0x80 | ((cp >> 12) & 0x3F)); out += (char)(0x80 | ((cp >> 6) & 0x3F)); out += (char)(0x80 | (cp & 0x3F)); }
+        }
+        return out;
+    }
+    static std::string utf8ToUtf16(const std::string& s, bool be)
+    {
+        std::string out; auto emit = [&](unsigned u){ unsigned char hi = (u >> 8) & 0xFF, lo = u & 0xFF; if (be) { out += (char)hi; out += (char)lo; } else { out += (char)lo; out += (char)hi; } };
+        for (size_t i = 0; i < s.size(); )
+        {
+            unsigned char c = (unsigned char)s[i]; unsigned cp; int n;
+            if (c < 0x80) { cp = c; n = 1; } else if ((c >> 5) == 0x6) { cp = c & 0x1F; n = 2; } else if ((c >> 4) == 0xE) { cp = c & 0x0F; n = 3; } else if ((c >> 3) == 0x1E) { cp = c & 0x07; n = 4; } else { cp = 0xFFFD; n = 1; }
+            for (int k = 1; k < n && i + k < s.size(); ++k) cp = (cp << 6) | ((unsigned char)s[i + k] & 0x3F);
+            i += n;
+            if (cp <= 0xFFFF) emit(cp); else { cp -= 0x10000; emit(0xD800 | (cp >> 10)); emit(0xDC00 | (cp & 0x3FF)); }
+        }
+        return out;
+    }
+    std::string decodeToUtf8(const std::string& raw, int& enc)
+    {
+        if (raw.size() >= 3 && (unsigned char)raw[0] == 0xEF && (unsigned char)raw[1] == 0xBB && (unsigned char)raw[2] == 0xBF) { enc = ENC_UTF8_BOM; return raw.substr(3); }
+        if (raw.size() >= 2 && (unsigned char)raw[0] == 0xFF && (unsigned char)raw[1] == 0xFE) { enc = ENC_UTF16_LE; return utf16ToUtf8(raw.substr(2), false); }
+        if (raw.size() >= 2 && (unsigned char)raw[0] == 0xFE && (unsigned char)raw[1] == 0xFF) { enc = ENC_UTF16_BE; return utf16ToUtf8(raw.substr(2), true); }
+        bool hi = false; for (unsigned char c : raw) if (c >= 0x80) { hi = true; break; }
+        if (hi && isValidUtf8(raw)) { enc = ENC_UTF8; return raw; }                 // UTF-8 without BOM
+        if (!hi) { enc = ENC_ANSI; return raw; }                                    // pure ASCII -> "ANSI" like Notepad++ (bytes identical)
+        enc = ENC_ANSI;                                                             // high bytes, not valid UTF-8 -> system code page
+        return std::string(wxString(raw.data(), wxCSConv(wxFONTENCODING_SYSTEM), raw.size()).utf8_str());
+    }
+    std::string encodeFromUtf8(const std::string& u, int enc)
+    {
+        switch (enc)
+        {
+            case ENC_UTF8_BOM: return std::string("\xEF\xBB\xBF", 3) + u;
+            case ENC_UTF16_LE: return std::string("\xFF\xFE", 2) + utf8ToUtf16(u, false);
+            case ENC_UTF16_BE: return std::string("\xFE\xFF", 2) + utf8ToUtf16(u, true);
+            case ENC_ANSI: { wxString s = wxString::FromUTF8(u.data(), u.size()); wxScopedCharBuffer b = s.mb_str(wxCSConv(wxFONTENCODING_SYSTEM)); if (!u.empty() && b.length() == 0) return u; return std::string(b.data(), b.length()); }
+            default: return u;   // ENC_UTF8 (no BOM)
+        }
+    }
+    static const char* encName(int enc)
+    { switch (enc) { case ENC_UTF8_BOM: return "UTF-8-BOM"; case ENC_UTF16_LE: return "UTF-16 LE BOM"; case ENC_UTF16_BE: return "UTF-16 BE BOM"; case ENC_ANSI: return "ANSI"; default: return "UTF-8"; } }
+    std::string readRawBytes(const wxString& path)
+    {
+        wxFile f(path); if (!f.IsOpened()) return {};
+        const wxFileOffset len = f.Length(); if (len <= 0) return {};
+        std::string buf(static_cast<size_t>(len), '\0'); f.Read(&buf[0], len); return buf;
+    }
+#ifdef __WXMSW__
+    static std::string cpToUtf8(UINT cp, const std::string& bytes)   // code-page bytes -> UTF-8 (via UTF-16)
+    {
+        if (bytes.empty()) return {};
+        const int wn = MultiByteToWideChar(cp, 0, bytes.data(), (int)bytes.size(), nullptr, 0); if (wn <= 0) return bytes;
+        std::wstring w((size_t)wn, L'\0'); MultiByteToWideChar(cp, 0, bytes.data(), (int)bytes.size(), &w[0], wn);
+        const int un = WideCharToMultiByte(CP_UTF8, 0, w.data(), wn, nullptr, 0, nullptr, nullptr); if (un <= 0) return bytes;
+        std::string out((size_t)un, '\0'); WideCharToMultiByte(CP_UTF8, 0, w.data(), wn, &out[0], un, nullptr, nullptr); return out;
+    }
+    static std::string utf8ToCp(UINT cp, const std::string& u8)      // UTF-8 -> code-page bytes (via UTF-16)
+    {
+        if (u8.empty()) return {};
+        const int wn = MultiByteToWideChar(CP_UTF8, 0, u8.data(), (int)u8.size(), nullptr, 0); if (wn <= 0) return u8;
+        std::wstring w((size_t)wn, L'\0'); MultiByteToWideChar(CP_UTF8, 0, u8.data(), (int)u8.size(), &w[0], wn);
+        const int bn = WideCharToMultiByte(cp, 0, w.data(), wn, nullptr, 0, nullptr, nullptr); if (bn <= 0) return u8;
+        std::string out((size_t)bn, '\0'); WideCharToMultiByte(cp, 0, w.data(), wn, &out[0], bn, nullptr, nullptr); return out;
+    }
+#endif
+    static int codepageForId(int id)   // Encoding > character-set menu item -> Windows code page (0 = not a charset item)
+    {
+        switch (id)
+        {
+            case IDM_FORMAT_WIN_1250: return 1250; case IDM_FORMAT_WIN_1251: return 1251; case IDM_FORMAT_WIN_1252: return 1252;
+            case IDM_FORMAT_WIN_1253: return 1253; case IDM_FORMAT_WIN_1254: return 1254; case IDM_FORMAT_WIN_1255: return 1255;
+            case IDM_FORMAT_WIN_1256: return 1256; case IDM_FORMAT_WIN_1257: return 1257; case IDM_FORMAT_WIN_1258: return 1258;
+            case IDM_FORMAT_ISO_8859_1: return 28591; case IDM_FORMAT_ISO_8859_2: return 28592; case IDM_FORMAT_ISO_8859_3: return 28593;
+            case IDM_FORMAT_ISO_8859_4: return 28594; case IDM_FORMAT_ISO_8859_5: return 28595; case IDM_FORMAT_ISO_8859_6: return 28596;
+            case IDM_FORMAT_ISO_8859_7: return 28597; case IDM_FORMAT_ISO_8859_8: return 28598; case IDM_FORMAT_ISO_8859_9: return 28599;
+            case IDM_FORMAT_ISO_8859_13: return 28603; case IDM_FORMAT_ISO_8859_14: return 28604; case IDM_FORMAT_ISO_8859_15: return 28605;
+            case IDM_FORMAT_DOS_437: return 437; case IDM_FORMAT_DOS_720: return 720; case IDM_FORMAT_DOS_737: return 737;
+            case IDM_FORMAT_DOS_775: return 775; case IDM_FORMAT_DOS_850: return 850; case IDM_FORMAT_DOS_852: return 852;
+            case IDM_FORMAT_DOS_855: return 855; case IDM_FORMAT_DOS_857: return 857; case IDM_FORMAT_DOS_858: return 858;
+            case IDM_FORMAT_DOS_860: return 860; case IDM_FORMAT_DOS_861: return 861; case IDM_FORMAT_DOS_862: return 862;
+            case IDM_FORMAT_DOS_863: return 863; case IDM_FORMAT_DOS_865: return 865; case IDM_FORMAT_DOS_866: return 866;
+            case IDM_FORMAT_DOS_869: return 869;
+            case IDM_FORMAT_KOI8R_CYRILLIC: return 20866; case IDM_FORMAT_KOI8U_CYRILLIC: return 21866; case IDM_FORMAT_MAC_CYRILLIC: return 10007;
+            case IDM_FORMAT_BIG5: return 950; case IDM_FORMAT_GB2312: return 936; case IDM_FORMAT_SHIFT_JIS: return 932;
+            case IDM_FORMAT_EUC_KR: return 51949; case IDM_FORMAT_KOREAN_WIN: return 949; case IDM_FORMAT_TIS_620: return 874;
+            default: return 0;
+        }
+    }
+    void interpretCharset(int cp, const wxString& name)   // re-read the file decoded as that code page
+    {
+#ifdef __WXMSW__
+        const wxString p = curPath();
+        if (!p.empty())
+        {
+            if (sci(SCI_GETMODIFY) && wxMessageBox("Re-interpreting the encoding discards unsaved changes. Continue?", "Encoding", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
+            setDocUtf8(cpToUtf8((UINT)cp, readRawBytes(p))); sci(SCI_EMPTYUNDOBUFFER); sci(SCI_SETSAVEPOINT);
+        }
+        if (auto* pg = activePage()) { pg->encoding = ENC_CHARSET; pg->codepage = cp; pg->encLabel = name; }
+        updateStatus(); updateEncodingMenuChecks();
+#else
+        (void)cp; notImpl(name + " (Windows only)");
+#endif
+    }
+    std::string encodeForPage(const std::string& u, EditorPage* p)   // bytes to write for this buffer's encoding
+    {
+#ifdef __WXMSW__
+        if (p && p->encoding == ENC_CHARSET) return utf8ToCp((UINT)p->codepage, u);
+#endif
+        return encodeFromUtf8(u, p ? p->encoding : ENC_UTF8);
+    }
+    wxString encDisplay(EditorPage* p) { return (p && p->encoding == ENC_CHARSET) ? p->encLabel : wxString(encName(p ? p->encoding : ENC_UTF8)); }
+    void updateEncodingMenuChecks()   // tick the active encoding in the Encoding menu's interpret-as group
+    {
+        auto* mb = GetMenuBar(); if (!mb) return;
+        const int enc = activePage() ? activePage()->encoding : ENC_UTF8;
+        auto chk = [&](int id, bool on){ if (auto* it = mb->FindItem(id)) if (it->IsCheckable()) it->Check(on); };
+        chk(IDM_FORMAT_ANSI, enc == ENC_ANSI); chk(IDM_FORMAT_AS_UTF_8, enc == ENC_UTF8); chk(IDM_FORMAT_UTF_8, enc == ENC_UTF8_BOM);
+        chk(IDM_FORMAT_UTF_16LE, enc == ENC_UTF16_LE); chk(IDM_FORMAT_UTF_16BE, enc == ENC_UTF16_BE);
+    }
+    void convertTo(int enc)   // change the on-disk encoding; text is unchanged, written on next save
+    {
+        if (auto* p = activePage()) p->encoding = enc;
+        setStatus(0, wxString("Encoding: ") + encName(enc) + " (save to apply)"); m_hint = true;
+        updateStatus(); updateEncodingMenuChecks();
+    }
+    void interpretAs(int enc)   // re-read the file's bytes decoded as the chosen encoding (Notepad++ "interpret as")
+    {
+        const wxString p = curPath();
+        if (p.empty()) { if (auto* pg = activePage()) pg->encoding = enc; updateStatus(); updateEncodingMenuChecks(); return; }
+        if (sci(SCI_GETMODIFY) && wxMessageBox("Re-interpreting the encoding discards unsaved changes. Continue?", "Encoding", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
+        const std::string raw = readRawBytes(p); std::string u;
+        switch (enc)
+        {
+            case ENC_UTF8_BOM: u = (raw.size() >= 3 && (unsigned char)raw[0] == 0xEF) ? raw.substr(3) : raw; break;
+            case ENC_UTF16_LE: u = utf16ToUtf8(raw.size() >= 2 && (unsigned char)raw[0] == 0xFF ? raw.substr(2) : raw, false); break;
+            case ENC_UTF16_BE: u = utf16ToUtf8(raw.size() >= 2 && (unsigned char)raw[0] == 0xFE ? raw.substr(2) : raw, true); break;
+            case ENC_ANSI: u = std::string(wxString(raw.data(), wxCSConv(wxFONTENCODING_SYSTEM), raw.size()).utf8_str()); break;
+            default: u = raw; break;   // ENC_UTF8
+        }
+        setDocUtf8(u); sci(SCI_EMPTYUNDOBUFFER); sci(SCI_SETSAVEPOINT);
+        if (auto* pg = activePage()) pg->encoding = enc;
+        updateStatus(); updateEncodingMenuChecks();
+    }
     void loadFile(const wxString& path)
     {
-        wxFile f(path);
-        if (!f.IsOpened()) return;
-        wxString c; f.ReadAll(&c);
-        const wxScopedCharBuffer u = c.ToUTF8();
+        const std::string raw = readRawBytes(path);
+        int enc = ENC_UTF8;
+        const std::string u = decodeToUtf8(raw, enc);
+        if (auto* p = activePage()) p->encoding = enc;
         sci(SCI_CLEARALL);
-        sci(SCI_ADDTEXT, u.length(), reinterpret_cast<sptr_t>(u.data()));
+        sci(SCI_ADDTEXT, (int)u.length(), reinterpret_cast<sptr_t>(u.data()));
         // Detect the file's line-ending style and match Scintilla's EOL mode to it (like Notepad++), so the
         // status bar reports the real format (Unix/Windows/Mac) instead of the Windows default. Mode only -
         // the content's actual bytes are preserved (no SCI_CONVERTEOLS) until the user explicitly converts.
@@ -2111,6 +2630,7 @@ private:
         if (auto* p = activePage()) p->path = path;
         m_path = path; setDocTitle(wxFileNameFromPath(path));
         setLexerForFile(path);
+        updateEncodingMenuChecks();
     }
     void onOpen() { wxFileDialog d(this, "Open", "", "", "All files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST); if (d.ShowModal() == wxID_OK) addDocument(d.GetPath(), wxFileNameFromPath(d.GetPath())); }
     void onReload() { if (!m_path.empty()) loadFile(m_path); }
@@ -2119,9 +2639,10 @@ private:
         const int len = static_cast<int>(sci(SCI_GETLENGTH));
         std::string b(static_cast<size_t>(len) + 1, '\0');
         sci(SCI_GETTEXT, len + 1, reinterpret_cast<sptr_t>(&b[0])); b.resize(len);
+        const std::string out = encodeForPage(b, activePage());
         wxFile f(path, wxFile::write);
         if (!f.IsOpened()) return false;
-        f.Write(b.data(), b.size()); sci(SCI_SETSAVEPOINT);
+        f.Write(out.data(), out.size()); sci(SCI_SETSAVEPOINT);
         if (auto* p = activePage()) p->path = path;
         m_path = path; setDocTitle(wxFileNameFromPath(path)); setLexerForFile(path); addToMRU(path); return true;
     }
@@ -2234,11 +2755,15 @@ private:
         putLines(out);
     }
     void reverseLines() { auto v = docLines(); std::reverse(v.begin(), v.end()); putLines(v); }
-    void sortLines(int mode, bool desc)   // 0 = lexicographic, 1 = case-insensitive, 2 = integer
+    void sortLines(int mode, bool desc)   // 0=lexicographic 1=case-insensitive 2=integer 3=length 4=decimal-dot 5=decimal-comma
     {
         auto v = docLines();
         auto lower = [](std::string s){ for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; };
+        auto dec   = [](std::string s, bool comma){ if (comma) for (char& c : s) if (c == ',') c = '.'; return std::strtod(s.c_str(), nullptr); };
         std::stable_sort(v.begin(), v.end(), [&](const std::string& a, const std::string& b){
+            if (mode == 5) return dec(a, true)  < dec(b, true);
+            if (mode == 4) return dec(a, false) < dec(b, false);
+            if (mode == 3) return a.size() < b.size();
             if (mode == 2) return std::strtoll(a.c_str(), nullptr, 10) < std::strtoll(b.c_str(), nullptr, 10);
             if (mode == 1) return lower(a) < lower(b);
             return a < b;
@@ -2246,10 +2771,273 @@ private:
         if (desc) std::reverse(v.begin(), v.end());
         putLines(v);
     }
+    void shuffleLines() { auto v = docLines(); std::mt19937 g{ std::random_device{}() }; std::shuffle(v.begin(), v.end(), g); putLines(v); }
     void transformLines(const std::function<void(std::string&)>& fn) { auto v = docLines(); for (auto& l : v) fn(l); putLines(v); }
     void trimLeading() { transformLines([](std::string& s){ const size_t p = s.find_first_not_of(" \t"); s = (p == std::string::npos) ? std::string() : s.substr(p); }); }
     void trimBoth()    { transformLines([](std::string& s){ const size_t a = s.find_first_not_of(" \t"); const size_t b = s.find_last_not_of(" \t"); s = (a == std::string::npos) ? std::string() : s.substr(a, b - a + 1); }); }
     void eolToSpace()  { std::string b = getDocUtf8(), out; for (char c : b) { if (c == '\r') continue; out += (c == '\n') ? ' ' : c; } setDocUtf8(out); }
+
+    // ===================================================================================
+    //  Additional Notepad++ menu commands (clipboard / files / shell / search / view / tools)
+    // ===================================================================================
+    bool m_onTop = false;                                  // "Always on Top" state
+    wxString curPath() const { auto* p = activePage(); return p ? p->path : wxString(); }
+    void copyToClip(const wxString& t) { if (!t.empty() && wxTheClipboard->Open()) { wxTheClipboard->SetData(new wxTextDataObject(t)); wxTheClipboard->Close(); } }
+    wxString getClipText() { wxString t; if (wxTheClipboard->Open()) { if (wxTheClipboard->IsSupported(wxDF_UNICODETEXT)) { wxTextDataObject d; wxTheClipboard->GetData(d); t = d.GetText(); } wxTheClipboard->Close(); } return t; }
+    wxString allOpenPaths(bool namesOnly)
+    {
+        wxString out;
+        if (m_tabs) for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
+        { auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i)); wxString s = p->path.empty() ? p->title : p->path; out += (namesOnly ? wxFileNameFromPath(s) : s) + "\r\n"; }
+        return out;
+    }
+
+    // ---- open the file's folder / a shell there / the file in another app, and new instances ----
+    void revealInFolder()
+    {
+        const wxString p = curPath();
+        if (p.empty()) { notImpl("Open Containing Folder (save the file first)"); return; }
+#ifdef __WXMSW__
+        const std::wstring arg = L"/select,\"" + p.ToStdWstring() + L"\"";
+        ShellExecuteW(nullptr, L"open", L"explorer.exe", arg.c_str(), nullptr, SW_SHOWNORMAL);
+#else
+        wxLaunchDefaultApplication(wxFileName(p).GetPath());
+#endif
+    }
+    void openShellHere(bool powershell)
+    {
+        const wxString dir = curPath().empty() ? wxGetCwd() : wxFileName(curPath()).GetPath();
+#ifdef __WXMSW__
+        const std::wstring exe = powershell ? L"powershell.exe" : L"cmd.exe";
+        ShellExecuteW(nullptr, L"open", exe.c_str(), nullptr, dir.ToStdWstring().c_str(), SW_SHOWNORMAL);
+#else
+        (void)powershell; wxLaunchDefaultApplication(dir);
+#endif
+    }
+    void openInDefaultViewer() { const wxString p = curPath(); if (p.empty()) { notImpl("Open in Default Viewer (save the file first)"); return; } wxLaunchDefaultApplication(p); }
+    void openFolder(const wxString& dir)
+    {
+#ifdef __WXMSW__
+        ShellExecuteW(nullptr, L"open", dir.ToStdWstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#else
+        wxLaunchDefaultApplication(dir);
+#endif
+    }
+    void openInBrowser(const wxString& exe)   // exe = firefox/chrome/iexplore, or "" for Edge (Windows)
+    {
+        const wxString p = curPath();
+        const wxString url = p.empty() ? wxString("about:blank") : wxFileName(p).GetFullPath();
+#ifdef __WXMSW__
+        const wxString cmd = exe.empty() ? ("cmd /c start microsoft-edge:\"" + url + "\"") : (exe + " \"" + url + "\"");
+        if (wxExecute(cmd, wxEXEC_ASYNC) <= 0 && !exe.empty()) wxLaunchDefaultBrowser(url);
+#else
+        (void)exe; wxLaunchDefaultBrowser(url);
+#endif
+    }
+    void newInstance(bool withFile)
+    {
+        wxString cmd = "\"" + wxStandardPaths::Get().GetExecutablePath() + "\"";
+        if (withFile && !curPath().empty()) cmd += " \"" + curPath() + "\"";
+        wxExecute(cmd, wxEXEC_ASYNC);
+    }
+
+    // ---- file operations ----
+    void saveCopyAs()
+    {
+        wxFileDialog dlg(this, "Save a Copy As", wxFileName(curPath()).GetPath(), wxFileNameFromPath(curPath()), "All files (*.*)|*.*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        if (dlg.ShowModal() != wxID_OK) return;
+        const std::string body = encodeForPage(getDocUtf8(), activePage());
+        wxFile f(dlg.GetPath(), wxFile::write);
+        if (f.IsOpened()) { f.Write(body.data(), body.size()); setStatus(0, "Copy saved: " + dlg.GetPath()); }
+    }
+    void renameFile()
+    {
+        const wxString p = curPath();
+        if (p.empty()) { notImpl("Rename (save the file first)"); return; }
+        wxFileDialog dlg(this, "Rename", wxFileName(p).GetPath(), wxFileNameFromPath(p), "All files (*.*)|*.*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        if (dlg.ShowModal() != wxID_OK) return;
+        if (wxRenameFile(p, dlg.GetPath()))
+        { if (auto* ep = activePage()) { ep->path = dlg.GetPath(); ep->title = wxFileNameFromPath(dlg.GetPath()); setLexerForFile(dlg.GetPath()); refreshTab(ep); SetTitle(ep->title + " - Notepad++"); } }
+    }
+    void recycleFile()
+    {
+        const wxString p = curPath();
+        if (p.empty()) { notImpl("Move to Recycle Bin (save the file first)"); return; }
+        if (wxMessageBox("Move \"" + wxFileNameFromPath(p) + "\" to the Recycle Bin?", "Notepad++", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
+#ifdef __WXMSW__
+        std::wstring from = p.ToStdWstring(); from.push_back(L'\0'); from.push_back(L'\0');   // double-NUL terminated list
+        SHFILEOPSTRUCTW op{}; op.wFunc = FO_DELETE; op.pFrom = from.c_str(); op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+        if (SHFileOperationW(&op) == 0) closeActive();
+#else
+        if (wxRemoveFile(p)) closeActive();
+#endif
+    }
+    void closeAllSide(bool toRight)
+    {
+        const int cur = m_tabs->GetSelection();
+        for (int i = (int)m_tabs->GetPageCount() - 1; i >= 0; --i)
+            if ((toRight && i > cur) || (!toRight && i < cur)) m_tabs->DeletePage(i);
+    }
+    void closeAllUnchanged()
+    {
+        auto* keep = activePage();
+        for (int i = (int)m_tabs->GetPageCount() - 1; i >= 0; --i)
+        { auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i)); if (p != keep && !p->dirty) m_tabs->DeletePage(i); }
+    }
+
+    // ---- read-only ----
+    void toggleReadOnly() { const bool ro = sci(SCI_GETREADONLY) != 0; sci(SCI_SETREADONLY, ro ? 0 : 1); setStatus(0, ro ? "Read/Write" : "Read-Only"); }
+    void toggleSystemReadOnly()
+    {
+        const wxString p = curPath(); if (p.empty()) { notImpl("Read-Only Attribute (save the file first)"); return; }
+#ifdef __WXMSW__
+        const std::wstring w = p.ToStdWstring(); DWORD a = GetFileAttributesW(w.c_str());
+        if (a == INVALID_FILE_ATTRIBUTES) return;
+        a ^= FILE_ATTRIBUTE_READONLY; SetFileAttributesW(w.c_str(), a);
+        const bool ro = (a & FILE_ATTRIBUTE_READONLY) != 0; sci(SCI_SETREADONLY, ro ? 1 : 0);
+        setStatus(0, ro ? "File attribute: Read-Only" : "File attribute: Read/Write");
+#else
+        notImpl("Read-Only Attribute (Windows only)");
+#endif
+    }
+
+    // ---- comments (C-like): single-line add/remove + stream /* */ ----
+    void setLineComment(bool add)
+    {
+        const int l1 = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONSTART));
+        const int l2 = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONEND));
+        sci(SCI_BEGINUNDOACTION);
+        for (int l = l1; l <= l2; ++l)
+        {
+            const int p = (int)sci(SCI_POSITIONFROMLINE, l), ll = (int)sci(SCI_LINELENGTH, l);
+            std::string b(static_cast<size_t>(ll) + 1, '\0'); sci(SCI_GETLINE, l, reinterpret_cast<sptr_t>(&b[0])); b.resize(ll);
+            const size_t nb = b.find_first_not_of(" \t\r\n"); if (nb == std::string::npos) continue;
+            const bool commented = b.compare(nb, 2, "//") == 0;
+            if (add && !commented) sci(SCI_INSERTTEXT, p + (int)nb, reinterpret_cast<sptr_t>("//"));
+            else if (!add && commented) { sci(SCI_SETTARGETSTART, p + (int)nb); sci(SCI_SETTARGETEND, p + (int)nb + 2); sci(SCI_REPLACETARGET, 0, reinterpret_cast<sptr_t>("")); }
+        }
+        sci(SCI_ENDUNDOACTION);
+    }
+    void streamComment(bool add)
+    {
+        const int a = (int)sci(SCI_GETSELECTIONSTART), b = (int)sci(SCI_GETSELECTIONEND);
+        sci(SCI_BEGINUNDOACTION);
+        if (add) { sci(SCI_INSERTTEXT, b, reinterpret_cast<sptr_t>("*/")); sci(SCI_INSERTTEXT, a, reinterpret_cast<sptr_t>("/*")); sci(SCI_SETSEL, a, b + 4); }
+        else
+        {
+            std::string s = getSelUtf8(); const size_t i = s.find_first_not_of(" \t\r\n"), j = s.find_last_not_of(" \t\r\n");
+            if (i != std::string::npos && j != std::string::npos && j > i + 1 && s.compare(i, 2, "/*") == 0 && s.compare(j - 1, 2, "*/") == 0)
+            { s.erase(j - 1, 2); s.erase(i, 2); sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(s.c_str())); }
+        }
+        sci(SCI_ENDUNDOACTION);
+    }
+    void spacesToTabs(bool leadingOnly)
+    {
+        const int tw = (int)sci(SCI_GETTABWIDTH); if (tw <= 0) return;
+        const std::string sp(static_cast<size_t>(tw), ' ');
+        transformLines([&](std::string& s){
+            if (leadingOnly)
+            { size_t n = s.find_first_not_of(' '); if (n == std::string::npos) n = s.size(); std::string lead = s.substr(0, n), rest = s.substr(n); size_t pos; while ((pos = lead.find(sp)) != std::string::npos) lead.replace(pos, sp.size(), "\t"); s = lead + rest; }
+            else { size_t pos; while ((pos = s.find(sp)) != std::string::npos) s.replace(pos, sp.size(), "\t"); }
+        });
+    }
+    void removeEmptyLinesBlank() { auto v = docLines(); v.erase(std::remove_if(v.begin(), v.end(), [](const std::string& s){ return s.find_first_not_of(" \t") == std::string::npos; }), v.end()); putLines(v); }
+    void redactSelection() { transformSel([](std::string& s){ std::string o; for (size_t i = 0; i < s.size();) { unsigned char c = s[i]; if (c == '\r' || c == '\n') { o += (char)c; ++i; } else { const int n = (c >= 0xF0) ? 4 : (c >= 0xE0) ? 3 : (c >= 0x80) ? 2 : 1; o += "\xE2\x96\x88"; i += n; } } s = o; }); }
+    void searchOnInternet() { wxString q = selText().Trim().Trim(false); if (q.empty()) return; q.Replace(" ", "+"); wxLaunchDefaultBrowser("https://duckduckgo.com/?q=" + q); }
+    void openSelectedFile() { const wxString f = selText().Trim().Trim(false); if (!f.empty() && wxFileExists(f)) openPath(f); else notImpl("Open File (selection is not an existing path)"); }
+
+    // ---- search helpers: select word + find, volatile/next-found ----
+    void findSel(bool fwd, bool selectWord)
+    {
+        if (selectWord && sci(SCI_GETSELECTIONEMPTY)) { const int p = (int)sci(SCI_GETCURRENTPOS); sci(SCI_SETSEL, sci(SCI_WORDSTARTPOSITION, p, 1), sci(SCI_WORDENDPOSITION, p, 1)); }
+        const wxString term = selText();
+        if (term.empty()) { findNext(fwd); return; }
+        m_lastFind = term;
+        FindOpts o; if (m_findDlg) o = m_findDlg->opts(); o.find = term; o.forward = fwd; doFindNext(o);
+    }
+    void selectBetweenBraces()
+    {
+        const int p = (int)sci(SCI_GETCURRENTPOS);
+        sptr_t open = sci(SCI_BRACEMATCH, p, 0); if (open < 0 && p > 0) open = sci(SCI_BRACEMATCH, p - 1, 0);
+        if (open >= 0) { const sptr_t close = sci(SCI_BRACEMATCH, open, 0); if (close > open) sci(SCI_SETSEL, open + 1, close); }
+    }
+
+    // ---- bookmarked-line operations ----
+    void bookmarkLinesOp(int op)   // 0=copy 1=cut 2=remove-marked 3=remove-unmarked 4=paste-replace 5=inverse
+    {
+        const int n = (int)sci(SCI_GETLINECOUNT);
+        if (op == 5) { sci(SCI_BEGINUNDOACTION); for (int l = 0; l < n; ++l) { if (sci(SCI_MARKERGET, l) & (1 << MARK_BOOKMARK)) sci(SCI_MARKERDELETE, l, MARK_BOOKMARK); else sci(SCI_MARKERADD, l, MARK_BOOKMARK); } sci(SCI_ENDUNDOACTION); return; }
+        std::vector<bool> mark(n, false); for (int l = 0; l < n; ++l) mark[l] = (sci(SCI_MARKERGET, l) & (1 << MARK_BOOKMARK)) != 0;
+        auto lines = docLines();
+        if (op == 0 || op == 1) { wxString out; for (int l = 0; l < (int)lines.size() && l < n; ++l) if (mark[l]) out += wxString::FromUTF8(lines[l].data(), lines[l].size()) + "\r\n"; copyToClip(out); }
+        if (op == 1 || op == 2) { std::vector<std::string> keep; for (int l = 0; l < (int)lines.size(); ++l) if (l >= n || !mark[l]) keep.push_back(lines[l]); putLines(keep); sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); }
+        else if (op == 3)       { std::vector<std::string> keep; for (int l = 0; l < (int)lines.size(); ++l) if (l < n && mark[l]) keep.push_back(lines[l]); putLines(keep); sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); }
+        else if (op == 4)
+        {
+            wxString clip = getClipText(); std::vector<std::string> repl; wxString cur;
+            for (wxUniChar ch : clip) { if (ch == '\n') { repl.push_back(std::string(cur.utf8_str())); cur.clear(); } else if (ch != '\r') cur += ch; }
+            if (!cur.empty()) repl.push_back(std::string(cur.utf8_str()));
+            size_t ri = 0; std::vector<std::string> outv;
+            for (int l = 0; l < (int)lines.size(); ++l) { if (l < n && mark[l]) outv.push_back(ri < repl.size() ? repl[ri++] : std::string()); else outv.push_back(lines[l]); }
+            putLines(outv);
+        }
+    }
+
+    // ---- view ----
+    void toggleAlwaysOnTop()
+    {
+#ifdef __WXMSW__
+        m_onTop = !m_onTop;
+        SetWindowPos(static_cast<HWND>(GetHandle()), m_onTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        setStatus(0, m_onTop ? "Always on Top: ON" : "Always on Top: OFF");
+#else
+        notImpl("Always on Top (Windows only)");
+#endif
+    }
+    void toggleWrapSymbol() { sci(SCI_SETWRAPVISUALFLAGS, sci(SCI_GETWRAPVISUALFLAGS) ? SC_WRAPVISUALFLAG_NONE : SC_WRAPVISUALFLAG_END); }
+    void hideSelectedLines() { const int a = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONSTART)), b = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONEND)); sci(SCI_HIDELINES, a, b); }
+    void showSummary()
+    {
+        std::string t = getDocUtf8();
+        long cp = 0, words = 0; bool inw = false;
+        for (unsigned char c : t) { if ((c & 0xC0) != 0x80) ++cp; if (std::isspace(c)) inw = false; else if (!inw) { inw = true; ++words; } }
+        const wxString name = curPath().empty() ? (activePage() ? activePage()->title : wxString("(none)")) : curPath();
+        wxMessageBox(wxString::Format("File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d",
+            name, cp, words, (int)sci(SCI_GETLINECOUNT)), "Summary", wxOK | wxICON_INFORMATION, this);
+    }
+    void showWindowsList()
+    {
+        if (!m_tabs || !m_tabs->GetPageCount()) return;
+        wxArrayString items; for (size_t i = 0; i < m_tabs->GetPageCount(); ++i) { auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i)); items.Add(p->path.empty() ? p->title : p->path); }
+        const int sel = wxGetSingleChoiceIndex("Activate document:", "Windows", items, m_tabs->GetSelection(), this);
+        if (sel >= 0) m_tabs->SetSelection(sel);
+    }
+
+    // ---- Tools: MD5 / SHA digests ----
+    void hashSelection(const wchar_t* algo, const char* name, bool toClip)
+    {
+#ifdef __WXMSW__
+        std::string data = getSelUtf8(); if (data.empty()) data = getDocUtf8();
+        wxString hex; BCRYPT_ALG_HANDLE alg = nullptr; BCRYPT_HASH_HANDLE h = nullptr; DWORD len = 0, res = 0;
+        if (BCryptOpenAlgorithmProvider(&alg, algo, nullptr, 0) == 0)
+        {
+            BCryptGetProperty(alg, BCRYPT_HASH_LENGTH, reinterpret_cast<PUCHAR>(&len), sizeof(len), &res, 0);
+            if (BCryptCreateHash(alg, &h, nullptr, 0, nullptr, 0, 0) == 0)
+            {
+                BCryptHashData(h, reinterpret_cast<PUCHAR>(const_cast<char*>(data.data())), (ULONG)data.size(), 0);
+                std::vector<unsigned char> dig(len); BCryptFinishHash(h, dig.data(), len, 0);
+                for (unsigned char c : dig) hex += wxString::Format("%02x", c);
+                BCryptDestroyHash(h);
+            }
+            BCryptCloseAlgorithmProvider(alg, 0);
+        }
+        if (toClip) { copyToClip(hex); setStatus(0, wxString(name) + " copied to clipboard"); }
+        else wxMessageBox(hex, wxString(name) + " digest", wxOK, this);
+#else
+        (void)algo; (void)toClip; notImpl(wxString(name) + " (Windows only)");
+#endif
+    }
+    void setNormalText() { applyEditorTheme(m_dark); sci(SCI_SETILEXER, 0, 0); if (auto* p = activePage()) p->lang = "Normal text file"; updateStatus(); }
 
     // ----- search engine (drives the Find/Replace dialog) ----------------
     // Report a search outcome both in the main status bar and, if it is open, inside the Find dialog
@@ -2411,13 +3199,190 @@ private:
     void toggleWs()    { syncToggle(IDM_VIEW_ALL_CHARACTERS, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
     void toggleGuides(){ syncToggle(IDM_VIEW_INDENT_GUIDE, m_guides); sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE); }
 
+    // ----- persisted preferences (Settings > Preferences) ---------------
+    void loadSettings()
+    {
+        auto* c = wxConfigBase::Get();
+        long tw = 4; c->Read("Editing/TabWidth", &tw, 4L); m_tabWidth = (int)tw;
+        c->Read("Editing/UseTabs", &m_useTabs, true);
+        c->Read("Editing/LineNumbers", &m_lineNumbers, true);
+        c->Read("Editing/Wrap", &m_wrap, false);
+        c->Read("Editing/Whitespace", &m_ws, false);
+        c->Read("Editing/IndentGuides", &m_guides, false);
+        c->Read("Editing/WrapSymbol", &m_wrapSymbol, false);
+        c->Read("View/Toolbar", &m_showToolbar, true);
+        c->Read("View/StatusBar", &m_showStatusbar, true);
+        c->Read("Editing/AutoComplete", &m_autocomplete, true);
+        c->Read("Theme", &m_themeName, wxEmptyString);
+    }
+    void saveSettings()
+    {
+        auto* c = wxConfigBase::Get();
+        c->Write("Editing/TabWidth", (long)m_tabWidth);   c->Write("Editing/UseTabs", m_useTabs);
+        c->Write("Editing/LineNumbers", m_lineNumbers);   c->Write("Editing/Wrap", m_wrap);
+        c->Write("Editing/Whitespace", m_ws);             c->Write("Editing/IndentGuides", m_guides);
+        c->Write("Editing/WrapSymbol", m_wrapSymbol);     c->Write("View/Toolbar", m_showToolbar);
+        c->Write("View/StatusBar", m_showStatusbar);      c->Write("Editing/AutoComplete", m_autocomplete);
+        c->Write("Theme", m_themeName);
+        c->Flush();
+    }
+    void applySettings()   // push the current preferences onto the editor view + chrome
+    {
+        if (m_stc)
+        {
+            sci(SCI_SETTABWIDTH, m_tabWidth);
+            sci(SCI_SETUSETABS, m_useTabs ? 1 : 0);
+            sci(SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE);
+            sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE);
+            sci(SCI_SETVIEWEOL, m_ws ? 1 : 0);
+            sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE);
+            sci(SCI_SETWRAPVISUALFLAGS, m_wrapSymbol ? SC_WRAPVISUALFLAG_END : SC_WRAPVISUALFLAG_NONE);
+            if (m_lineNumbers) updateLineMargin(); else sci(SCI_SETMARGINWIDTHN, 0, 0);
+        }
+        if (auto* mb = GetMenuBar()) { mb->Check(IDM_VIEW_WRAP, m_wrap); mb->Check(IDM_VIEW_ALL_CHARACTERS, m_ws); mb->Check(IDM_VIEW_INDENT_GUIDE, m_guides); }
+        if (auto* tb = GetToolBar()) { tb->ToggleTool(IDM_VIEW_WRAP, m_wrap); tb->Show(m_showToolbar); }
+        if (auto* sb = GetStatusBar()) sb->Show(m_showStatusbar);
+        SendSizeEvent();
+    }
+    void onPreferences()
+    {
+        wxDialog dlg(this, wxID_ANY, "Preferences", wxDefaultPosition, wxSize(540, 400));
+        auto* book = new wxListbook(&dlg, wxID_ANY);
+        auto* gen = new wxPanel(book); auto* gs = new wxBoxSizer(wxVERTICAL);
+        auto* cbToolbar = new wxCheckBox(gen, wxID_ANY, "Show toolbar");    cbToolbar->SetValue(m_showToolbar);
+        auto* cbStatus  = new wxCheckBox(gen, wxID_ANY, "Show status bar"); cbStatus->SetValue(m_showStatusbar);
+        gs->Add(cbToolbar, 0, wxALL, 10); gs->Add(cbStatus, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        gen->SetSizer(gs); book->AddPage(gen, "General", true);
+        auto* ed = new wxPanel(book); auto* es = new wxBoxSizer(wxVERTICAL);
+        auto* trow = new wxBoxSizer(wxHORIZONTAL);
+        trow->Add(new wxStaticText(ed, wxID_ANY, "Tab size:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* spTab = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 16, m_tabWidth);
+        trow->Add(spTab, 0); es->Add(trow, 0, wxALL, 10);
+        auto* cbSpace   = new wxCheckBox(ed, wxID_ANY, "Replace by space");         cbSpace->SetValue(!m_useTabs);
+        auto* cbLineNum = new wxCheckBox(ed, wxID_ANY, "Display line number");      cbLineNum->SetValue(m_lineNumbers);
+        auto* cbGuides  = new wxCheckBox(ed, wxID_ANY, "Show indentation guide");   cbGuides->SetValue(m_guides);
+        auto* cbWs      = new wxCheckBox(ed, wxID_ANY, "Show white space and TAB"); cbWs->SetValue(m_ws);
+        auto* cbWrapSym = new wxCheckBox(ed, wxID_ANY, "Show wrap symbol");         cbWrapSym->SetValue(m_wrapSymbol);
+        auto* cbWrap    = new wxCheckBox(ed, wxID_ANY, "Word wrap");                cbWrap->SetValue(m_wrap);
+        auto* cbAuto    = new wxCheckBox(ed, wxID_ANY, "Enable auto-completion");   cbAuto->SetValue(m_autocomplete);
+        for (auto* c : { cbSpace, cbLineNum, cbGuides, cbWs, cbWrapSym, cbWrap, cbAuto }) es->Add(c, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        ed->SetSizer(es); book->AddPage(ed, "Editing");
+        auto* dm = new wxPanel(book); auto* ds = new wxBoxSizer(wxVERTICAL);
+        auto* cbDark = new wxCheckBox(dm, wxID_ANY, "Enable Dark Mode   (applied on restart)"); cbDark->SetValue(m_dark);
+        ds->Add(cbDark, 0, wxALL, 10); dm->SetSizer(ds); book->AddPage(dm, "Dark Mode");
+        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer(); btn->Add(new wxButton(&dlg, wxID_OK, "Close"), 0);
+        auto* top = new wxBoxSizer(wxVERTICAL); top->Add(book, 1, wxEXPAND | wxALL, 8); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
+        dlg.SetSizer(top); themeDialog(&dlg);
+        dlg.ShowModal();   // Notepad++ Preferences has no Cancel - changes apply on close
+        const bool newDark = cbDark->GetValue();
+        m_showToolbar = cbToolbar->GetValue(); m_showStatusbar = cbStatus->GetValue();
+        m_tabWidth = spTab->GetValue(); m_useTabs = !cbSpace->GetValue(); m_lineNumbers = cbLineNum->GetValue();
+        m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
+        applySettings(); saveSettings();
+        if (newDark != m_dark) restartWithTheme(newDark);   // theme change needs a relaunch (wx can't reskin live)
+    }
+
+    // ----- macros (record / playback / run multiple / save) -------------
+    static bool macroMsgHasText(int m) { return m == SCI_REPLACESEL || m == SCI_ADDTEXT || m == SCI_INSERTTEXT || m == SCI_APPENDTEXT; }
+    void onMacroRecord(wxStyledTextEvent& e)   // Scintilla emits one of these per recordable command while recording
+    {
+        if (!m_recording) return;
+        const int msg = (int)e.GetMessage(); const uptr_t wp = (uptr_t)e.GetWParam(); const sptr_t lp = (sptr_t)e.GetLParam();
+        // Merge char-by-char typing into one step (NotepadNext does this): consecutive ReplaceSel concatenate,
+        // and a Backspace right after typing trims the last character instead of adding a separate step.
+        if (msg == SCI_REPLACESEL && lp && !m_macro.empty() && m_macro.back().msg == SCI_REPLACESEL)
+        { m_macro.back().text += reinterpret_cast<const char*>(lp); return; }
+        if (msg == SCI_DELETEBACK && !m_macro.empty() && m_macro.back().msg == SCI_REPLACESEL && !m_macro.back().text.empty())
+        {
+            std::string& t = m_macro.back().text;
+            size_t n = 1; while (n < t.size() && ((unsigned char)t[t.size() - n] & 0xC0) == 0x80) ++n;   // drop a whole UTF-8 character
+            t.erase(t.size() - n); if (t.empty()) m_macro.pop_back(); return;
+        }
+        MacroStep s; s.msg = msg; s.wparam = wp; s.lparam = lp;
+        if (macroMsgHasText(msg) && lp)   // copy the string payload now (the pointer is transient)
+        { const char* t = reinterpret_cast<const char*>(lp); s.text = (msg == SCI_ADDTEXT) ? std::string(t, (size_t)wp) : std::string(t); s.hasText = true; }
+        m_macro.push_back(s);
+    }
+    void macroToolStates()
+    {
+        const bool has = !m_macro.empty();
+        auto* tb = GetToolBar(); auto* mb = GetMenuBar();
+        auto en = [&](int id, bool on){ if (tb) tb->EnableTool(id, on); if (mb) if (auto* it = mb->FindItem(id)) it->Enable(on); };
+        en(IDM_MACRO_STARTRECORDINGMACRO, !m_recording);
+        en(IDM_MACRO_STOPRECORDINGMACRO, m_recording);
+        en(IDM_MACRO_PLAYBACKRECORDEDMACRO, !m_recording && has);
+        en(IDM_MACRO_RUNMULTIMACRODLG, !m_recording && has);
+        en(IDM_MACRO_SAVECURRENTMACRO, !m_recording && has);
+    }
+    void startMacroRecord() { if (m_recording) return; m_macro.clear(); m_recording = true; sci(SCI_STARTRECORD); macroToolStates(); setStatus(0, "Recording macro..."); m_hint = true; }
+    void stopMacroRecord()  { if (!m_recording) return; sci(SCI_STOPRECORD); m_recording = false; macroToolStates(); setStatus(0, wxString::Format("Macro recorded - %d step(s)", (int)m_macro.size())); m_hint = true; }
+    void playSteps(const std::vector<MacroStep>& m) { for (const auto& s : m) sci((UINT)s.msg, s.wparam, s.hasText ? reinterpret_cast<sptr_t>(s.text.c_str()) : s.lparam); }
+    void playMacro(const std::vector<MacroStep>& m) { if (m.empty()) return; sci(SCI_BEGINUNDOACTION); playSteps(m); sci(SCI_ENDUNDOACTION); }
+    void runMultiple()
+    {
+        if (m_macro.empty()) return;
+        wxDialog dlg(this, wxID_ANY, "Run a Macro Multiple Times");
+        auto* rbN   = new wxRadioButton(&dlg, wxID_ANY, "Run", wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+        auto* sp    = new wxSpinCtrl(&dlg, wxID_ANY, "", wxDefaultPosition, wxSize(90, -1), wxSP_ARROW_KEYS, 1, 99999, 1);
+        auto* rbEof = new wxRadioButton(&dlg, wxID_ANY, "Run until the end of file");
+        auto* r1 = new wxBoxSizer(wxHORIZONTAL);
+        r1->Add(rbN, 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6); r1->Add(sp, 0, wxRIGHT, 6);
+        r1->Add(new wxStaticText(&dlg, wxID_ANY, "times"), 0, wxALIGN_CENTRE_VERTICAL);
+        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
+        auto* ok = new wxButton(&dlg, wxID_OK, "Run"); ok->SetDefault();
+        btn->Add(ok, 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, "Cancel"), 0);
+        auto* top = new wxBoxSizer(wxVERTICAL);
+        top->Add(r1, 0, wxALL, 12); top->Add(rbEof, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12); top->Add(btn, 0, wxEXPAND | wxALL, 12);
+        dlg.SetSizerAndFit(top); themeDialog(&dlg);
+        if (dlg.ShowModal() != wxID_OK) return;
+        sci(SCI_BEGINUNDOACTION);
+        if (rbEof->GetValue())   // replay until the caret stops advancing or reaches the end
+        { int guard = 0; while (guard++ < 100000) { const int before = (int)sci(SCI_GETCURRENTPOS); playSteps(m_macro); const int after = (int)sci(SCI_GETCURRENTPOS); if (after == before || after >= (int)sci(SCI_GETLENGTH)) break; } }
+        else { const int n = sp->GetValue(); for (int i = 0; i < n; ++i) playSteps(m_macro); }
+        sci(SCI_ENDUNDOACTION);
+    }
+    void appendMacroMenuItems()   // (re)list the saved macros at the bottom of the Macro menu
+    {
+        auto* mb = GetMenuBar(); if (!mb) return;
+        const int mi = mb->FindMenu("Macro"); if (mi == wxNOT_FOUND) return;
+        wxMenu* menu = mb->GetMenu(mi);
+        for (int id = myID_MACRO_ITEM; id < myID_MACRO_ITEM + 200; ++id) if (auto* it = menu->FindItem(id)) menu->Destroy(it);
+        if (!m_savedMacros.empty() && !m_macroSepAdded) { menu->AppendSeparator(); m_macroSepAdded = true; }
+        for (size_t i = 0; i < m_savedMacros.size(); ++i) menu->Append(myID_MACRO_ITEM + (int)i, m_savedMacros[i].first);
+    }
+    void saveMacro()
+    {
+        if (m_macro.empty()) return;
+        const wxString name = wxGetTextFromUser("Macro name:", "Save Current Recorded Macro", "", this);
+        if (name.empty()) return;
+        for (auto& kv : m_savedMacros) if (kv.first == name) { kv.second = m_macro; setStatus(0, "Macro updated: " + name); m_hint = true; return; }
+        m_savedMacros.emplace_back(name, m_macro); appendMacroMenuItems();
+        setStatus(0, "Macro saved: " + name); m_hint = true;
+    }
+
     // ----- dark / light theme -------------------------------------------
     // Parse Notepad++'s real theme XML (dark = themes/DarkModeDefault.xml, light = stylers.model.xml)
     // deployed next to the exe, so the editor uses Notepad++'s exact colours.
-    void loadTheme()
+    wxString themeFilePath(const wxString& name)   // resolve a theme name to its XML on disk
     {
-        const wxString dir  = wxPathOnly(wxStandardPaths::Get().GetExecutablePath());
-        const wxString path = m_dark ? dir + "\\themes\\DarkModeDefault.xml" : dir + "\\stylers.model.xml";
+        const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath());
+        if (name.empty() || name == "Default") return dir + "\\stylers.model.xml";
+        return dir + "\\themes\\" + name + ".xml";
+    }
+    wxArrayString availableThemes()   // "Default" + every themes/*.xml (the 22 Notepad++ themes)
+    {
+        wxArrayString out; out.Add("Default");
+        wxDir d(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\themes");
+        if (d.IsOpened()) { wxString f; bool more = d.GetFirst(&f, "*.xml", wxDIR_FILES); while (more) { out.Add(f.BeforeLast('.')); more = d.GetNext(&f); } }
+        return out;
+    }
+    void loadTheme()   // load the active theme: an explicit Style-Configurator choice, else the dark/light default
+    {
+        loadThemeFile(themeFilePath(!m_themeName.empty() ? m_themeName : (m_dark ? "DarkModeDefault" : "Default")));
+    }
+    void loadThemeFile(const wxString& path)
+    {
+        m_theme = NppTheme{};   // reset so switching themes fully replaces the previous palette
         wxXmlDocument doc;
         if (!wxFileExists(path) || !doc.Load(path) || !doc.GetRoot()) return;   // fall back to built-in palette
         for (wxXmlNode* sec = doc.GetRoot()->GetChildren(); sec; sec = sec->GetNext())
@@ -2435,7 +3400,7 @@ private:
                         w->GetAttribute("styleID", "-1").ToLong(&id);
                         w->GetAttribute("fontStyle", "0").ToLong(&fs);
                         styles.push_back({ (int)id, npp_bgr(w->GetAttribute("fgColor")),
-                                           npp_bgr(w->GetAttribute("bgColor")), (int)fs });
+                                           npp_bgr(w->GetAttribute("bgColor")), (int)fs, w->GetAttribute("name") });
                     }
                     m_theme.lexers[lt->GetAttribute("name")] = std::move(styles);
                 }
@@ -2456,6 +3421,118 @@ private:
             }
         }
         m_theme.loaded = true;
+    }
+    void applyThemeSelection(const wxString& name)   // switch the editor theme live (Style Configurator)
+    {
+        m_themeName = (name == "Default") ? wxString() : name;
+        loadTheme();
+        applyEditorTheme(m_dark);
+        if (auto* p = activePage()) setLexerForFile(p->path);   // re-apply per-token colours for the active doc
+        if (m_stc) m_stc->Refresh();
+    }
+    // ---- Style Configurator colour helpers + write-back to the theme XML ----
+    static wxColour bgrToColour(int bgr) { return bgr < 0 ? wxColour(*wxBLACK) : wxColour(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF); }
+    static int colourToBgr(const wxColour& c) { return (c.Blue() << 16) | (c.Green() << 8) | c.Red(); }
+    static wxString bgrToHex(int bgr) { return wxString::Format("%02X%02X%02X", bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF); }
+    static void setAttr(wxXmlNode* n, const wxString& a, const wxString& v) { n->DeleteAttribute(a); n->AddAttribute(a, v); }
+    void saveThemeToXml(const wxString& path)   // persist the edited m_theme back into its theme XML
+    {
+        wxXmlDocument doc;
+        if (!wxFileExists(path) || !doc.Load(path) || !doc.GetRoot()) return;
+        for (wxXmlNode* sec = doc.GetRoot()->GetChildren(); sec; sec = sec->GetNext())
+        {
+            if (sec->GetName() == "LexerStyles")
+                for (wxXmlNode* lt = sec->GetChildren(); lt; lt = lt->GetNext())
+                {
+                    if (lt->GetName() != "LexerType") continue;
+                    auto it = m_theme.lexers.find(lt->GetAttribute("name")); if (it == m_theme.lexers.end()) continue;
+                    for (wxXmlNode* w = lt->GetChildren(); w; w = w->GetNext())
+                    {
+                        if (w->GetName() != "WordsStyle") continue;
+                        long id = -1; w->GetAttribute("styleID", "-1").ToLong(&id);
+                        for (const StyleDef& s : it->second) if (s.id == (int)id)
+                        { if (s.fg >= 0) setAttr(w, "fgColor", bgrToHex(s.fg)); if (s.bg >= 0) setAttr(w, "bgColor", bgrToHex(s.bg)); setAttr(w, "fontStyle", wxString::Format("%d", s.fontStyle)); break; }
+                    }
+                }
+            else if (sec->GetName() == "GlobalStyles")
+                for (wxXmlNode* w = sec->GetChildren(); w; w = w->GetNext())
+                {
+                    if (w->GetName() != "WidgetStyle") continue;
+                    auto it = m_theme.global.find(w->GetAttribute("name")); if (it == m_theme.global.end()) continue;
+                    if (it->second.first  >= 0) setAttr(w, "fgColor", bgrToHex(it->second.first));
+                    if (it->second.second >= 0) setAttr(w, "bgColor", bgrToHex(it->second.second));
+                }
+        }
+        doc.Save(path);
+    }
+    void onStyleConfig()   // Settings > Style Configurator: theme picker + per-language token style editor (like N++)
+    {
+        const wxString original = m_themeName;
+        wxDialog dlg(this, wxID_ANY, "Style Configurator", wxDefaultPosition, wxSize(680, 440));
+        auto* themeRow = new wxBoxSizer(wxHORIZONTAL);
+        themeRow->Add(new wxStaticText(&dlg, wxID_ANY, "Select theme:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* themeCombo = new wxChoice(&dlg, wxID_ANY, wxDefaultPosition, wxSize(220, -1), availableThemes());
+        themeCombo->SetStringSelection(m_themeName.empty() ? "Default" : m_themeName);
+        themeRow->Add(themeCombo, 0);
+        auto* langList  = new wxListBox(&dlg, wxID_ANY, wxDefaultPosition, wxSize(180, 280));
+        auto* styleList = new wxListBox(&dlg, wxID_ANY, wxDefaultPosition, wxSize(180, 280));
+        auto* fgPick   = new wxColourPickerCtrl(&dlg, wxID_ANY);
+        auto* bgPick   = new wxColourPickerCtrl(&dlg, wxID_ANY);
+        auto* cbBold   = new wxCheckBox(&dlg, wxID_ANY, "Bold");
+        auto* cbItalic = new wxCheckBox(&dlg, wxID_ANY, "Italic");
+        auto* eg = new wxFlexGridSizer(2, 8, 10);
+        eg->Add(new wxStaticText(&dlg, wxID_ANY, "Foreground colour:"), 0, wxALIGN_CENTRE_VERTICAL); eg->Add(fgPick, 0);
+        eg->Add(new wxStaticText(&dlg, wxID_ANY, "Background colour:"), 0, wxALIGN_CENTRE_VERTICAL); eg->Add(bgPick, 0);
+        eg->Add(cbBold, 0); eg->Add(cbItalic, 0);
+        auto* edBox = new wxStaticBoxSizer(wxVERTICAL, &dlg, "Style settings"); edBox->Add(eg, 0, wxALL, 8);
+        auto col = [&](const char* cap, wxWindow* w){ auto* s = new wxBoxSizer(wxVERTICAL); s->Add(new wxStaticText(&dlg, wxID_ANY, cap), 0, wxBOTTOM, 4); s->Add(w, 1, wxEXPAND); return s; };
+        auto* mid = new wxBoxSizer(wxHORIZONTAL);
+        mid->Add(col("Language:", langList), 0, wxEXPAND | wxRIGHT, 10);
+        mid->Add(col("Style:", styleList), 0, wxEXPAND | wxRIGHT, 10);
+        mid->Add(edBox, 1, wxEXPAND);
+        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
+        btn->Add(new wxButton(&dlg, wxID_OK, "Save && Close"), 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, "Cancel"), 0);
+        auto* top = new wxBoxSizer(wxVERTICAL);
+        top->Add(themeRow, 0, wxALL, 12); top->Add(mid, 1, wxEXPAND | wxLEFT | wxRIGHT, 12); top->Add(btn, 0, wxEXPAND | wxALL, 12);
+        dlg.SetSizer(top);
+        auto fillLangs = [&]{ langList->Clear(); langList->Append("Global Styles"); for (auto& kv : m_theme.lexers) langList->Append(kv.first); };
+        auto fillStyles = [&]{
+            styleList->Clear(); const wxString lang = langList->GetStringSelection();
+            if (lang == "Global Styles") { for (auto& kv : m_theme.global) styleList->Append(kv.first); }
+            else { auto it = m_theme.lexers.find(lang); if (it != m_theme.lexers.end()) for (auto& s : it->second) styleList->Append(s.name.empty() ? wxString::Format("Style %d", s.id) : s.name); }
+        };
+        auto loadStyle = [&]{
+            const wxString lang = langList->GetStringSelection(); const int si = styleList->GetSelection(); if (si < 0) return;
+            if (lang == "Global Styles") { auto it = m_theme.global.begin(); std::advance(it, si); fgPick->SetColour(bgrToColour(it->second.first)); bgPick->SetColour(it->second.second < 0 ? *wxWHITE : bgrToColour(it->second.second)); cbBold->Disable(); cbItalic->Disable(); }
+            else { auto it = m_theme.lexers.find(lang); if (it == m_theme.lexers.end() || si >= (int)it->second.size()) return; const StyleDef& s = it->second[si]; fgPick->SetColour(bgrToColour(s.fg)); bgPick->SetColour(s.bg < 0 ? *wxWHITE : bgrToColour(s.bg)); cbBold->Enable(); cbItalic->Enable(); cbBold->SetValue((s.fontStyle & 1) != 0); cbItalic->SetValue((s.fontStyle & 2) != 0); }
+        };
+        auto applyEdit = [&]{
+            const wxString lang = langList->GetStringSelection(); const int si = styleList->GetSelection(); if (si < 0) return;
+            if (lang == "Global Styles") { auto it = m_theme.global.begin(); std::advance(it, si); it->second.first = colourToBgr(fgPick->GetColour()); it->second.second = colourToBgr(bgPick->GetColour()); }
+            else { auto it = m_theme.lexers.find(lang); if (it == m_theme.lexers.end() || si >= (int)it->second.size()) return; StyleDef& s = it->second[si]; s.fg = colourToBgr(fgPick->GetColour()); s.bg = colourToBgr(bgPick->GetColour()); s.fontStyle = (cbBold->GetValue() ? 1 : 0) | (cbItalic->GetValue() ? 2 : 0); }
+            applyEditorTheme(m_dark); if (auto* p = activePage()) setLexerForFile(p->path); if (m_stc) m_stc->Refresh();
+        };
+        fillLangs(); langList->SetSelection(0); fillStyles();
+        langList->Bind(wxEVT_LISTBOX,  [&](wxCommandEvent&){ fillStyles(); });
+        styleList->Bind(wxEVT_LISTBOX, [&](wxCommandEvent&){ loadStyle(); });
+        fgPick->Bind(wxEVT_COLOURPICKER_CHANGED, [&](wxColourPickerEvent&){ applyEdit(); });
+        bgPick->Bind(wxEVT_COLOURPICKER_CHANGED, [&](wxColourPickerEvent&){ applyEdit(); });
+        cbBold->Bind(wxEVT_CHECKBOX,   [&](wxCommandEvent&){ applyEdit(); });
+        cbItalic->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent&){ applyEdit(); });
+        themeCombo->Bind(wxEVT_CHOICE, [&](wxCommandEvent&){ applyThemeSelection(themeCombo->GetStringSelection()); fillLangs(); langList->SetSelection(0); fillStyles(); });
+        themeDialog(&dlg);
+        if (dlg.ShowModal() == wxID_OK)
+        { saveThemeToXml(themeFilePath(m_themeName.empty() ? (m_dark ? "DarkModeDefault" : "Default") : m_themeName)); saveSettings(); setStatus(0, "Theme styles saved"); m_hint = true; }
+        else applyThemeSelection(original.empty() ? "Default" : original);   // Cancel -> reload the original theme from disk
+    }
+    void importStyleTheme()
+    {
+        wxFileDialog d(this, "Import style theme(s)", "", "", "Theme files (*.xml)|*.xml", wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
+        if (d.ShowModal() != wxID_OK) return;
+        wxArrayString paths; d.GetPaths(paths);
+        const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\themes";
+        int n = 0; for (const auto& p : paths) if (wxCopyFile(p, dir + "\\" + wxFileNameFromPath(p))) ++n;
+        setStatus(0, wxString::Format("Imported %d theme(s) - choose them in Style Configurator", n)); m_hint = true;
     }
     void applyEditorTheme(bool dark)
     {
@@ -2480,6 +3557,20 @@ private:
             const auto cur = G("Current line background colour"); sci(SCI_SETCARETLINEBACK, cur.second >= 0 ? cur.second : (dark ? 0x2A2A2A : 0xF6F6F6));
             const auto sel = G("Selected text colour");  sci(SCI_SETSELBACK, 1, sel.second >= 0 ? sel.second : (dark ? 0x515151 : 0xC8C8C8));
             const auto wsp = G("White space symbol");    sci(SCI_SETWHITESPACEFORE, 1, wsp.first >= 0 ? wsp.first : (dark ? 0x606060 : 0xB0B0B0));
+            // Fold margin + markers, edge, and highlight indicators - re-applied on every theme switch so the whole
+            // editor surface follows the theme like Notepad++ (not just tokens + default background).
+            const auto fold = G("Fold"); const auto foldActive = G("Fold active"); const auto foldMargin = G("Fold margin");
+            const int fMarginBg = foldMargin.second >= 0 ? foldMargin.second : gutterBg;
+            sci(SCI_SETFOLDMARGINCOLOUR, 1, fMarginBg); sci(SCI_SETFOLDMARGINHICOLOUR, 1, fMarginBg);
+            const int markFore = fold.second >= 0 ? fold.second : gutterBg;        // N++ swaps Fold fg/bg onto the markers
+            const int markBack = fold.first  >= 0 ? fold.first  : 0x808080;
+            const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;
+            for (int m : { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL, SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL })
+            { sci(SCI_MARKERSETFORE, m, markFore); sci(SCI_MARKERSETBACK, m, markBack); sci(SCI_MARKERSETBACKSELECTED, m, markActive); }
+            const auto edge = G("Edge colour");          if (edge.first  >= 0) sci(SCI_SETEDGECOLOUR, edge.first);
+            const auto smart = G("Smart Highlighting");  if (smart.second >= 0) sci(SCI_INDICSETFORE, SMART_INDIC, smart.second);
+            const auto findMk = G("Find Mark Style");    if (findMk.second >= 0) sci(SCI_INDICSETFORE, MARK_INDIC, findMk.second);
+            const auto bmk = G("Bookmark margin");       if (bmk.second  >= 0) sci(SCI_SETMARGINBACKN, 1, bmk.second);
             applyBraceStyles(dark);
             return;
         }
@@ -2522,12 +3613,17 @@ private:
         setTitleBarDark(dark);
 #ifdef __WXMSW__
         ::SetWindowTheme(m_sci, dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);  // dark/light native scrollbars
+        g_editorDark = dark;
+        ::RedrawWindow(m_sci, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW);  // refresh the dead-corner now
 #endif
         if (GetMenuBar()) GetMenuBar()->Check(myID_DARKMODE, dark);
         const wxColour chromeBg = dark ? wxColour(32, 32, 32) : wxColour(240, 240, 240);   // explicit both ways
         const wxColour chromeFg = dark ? wxColour(220, 220, 220) : wxColour(0, 0, 0);
         if (auto* tb = GetToolBar()) { tb->SetBackgroundColour(chromeBg); tb->Refresh(); }
         if (auto* sb = GetStatusBar()) { sb->SetBackgroundColour(chromeBg); sb->SetForegroundColour(chromeFg); sb->Refresh(); }
+#ifdef __WXMSW__
+        if (m_grip) m_grip->setColours(chromeBg, dark ? wxColour(112, 112, 112) : wxColour(150, 150, 150));   // dots blend onto chrome
+#endif
         if (m_tabs) { m_tabs->SetBackgroundColour(chromeBg); m_tabs->Refresh(); }
     }
 
@@ -2634,6 +3730,8 @@ private:
 #endif
         if (cmd >= myID_DOCLIST_ITEM && cmd < myID_DOCLIST_ITEM + 1000)   // document-list dropdown entry
         { const size_t n = (size_t)(cmd - myID_DOCLIST_ITEM); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); return; }
+        if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + 200)        // a saved macro from the Macro menu
+        { const size_t n = (size_t)(cmd - myID_MACRO_ITEM); if (n < m_savedMacros.size()) playMacro(m_savedMacros[n].second); return; }
         // Win32 WM_COMMAND carries only a 16-bit id and wx sign-extends it, so command ids
         // above 32767 (all of Notepad++'s IDM_*) arrive negative. Read it as unsigned 16-bit,
         // exactly as Notepad++ does with LOWORD(wParam).
@@ -2744,14 +3842,146 @@ private:
             case IDM_VIEW_DOCLIST: notImpl("Document List panel"); break;
             case IDM_VIEW_FILEBROWSER: notImpl("Folder as Workspace panel"); break;
             case IDM_VIEW_MONITORING: notImpl("File monitoring"); break;
-            case IDM_VIEW_SYNSCROLLV: case IDM_VIEW_SYNSCROLLH: notImpl("Split-view sync scrolling"); break;
-            case IDM_MACRO_STARTRECORDINGMACRO: case IDM_MACRO_STOPRECORDINGMACRO:
-            case IDM_MACRO_PLAYBACKRECORDEDMACRO: case IDM_MACRO_RUNMULTIMACRODLG:
-            case IDM_MACRO_SAVECURRENTMACRO: notImpl("Macros"); break;
+            case IDM_VIEW_CLONE_TO_ANOTHER_VIEW: case IDM_VIEW_GOTO_ANOTHER_VIEW: cloneToOtherView(); break;
+            case IDM_VIEW_SWITCHTO_OTHER_VIEW: focusOtherView(); break;
+            case IDM_VIEW_SYNSCROLLV: case IDM_VIEW_SYNSCROLLH:
+                m_syncScroll = !m_syncScroll; setStatus(0, m_syncScroll ? "Synchronized scrolling: ON" : "Synchronized scrolling: OFF"); m_hint = true; break;
+            case IDM_MACRO_STARTRECORDINGMACRO: startMacroRecord(); break;
+            case IDM_MACRO_STOPRECORDINGMACRO: stopMacroRecord(); break;
+            case IDM_MACRO_PLAYBACKRECORDEDMACRO: playMacro(m_macro); break;
+            case IDM_MACRO_RUNMULTIMACRODLG: runMultiple(); break;
+            case IDM_MACRO_SAVECURRENTMACRO: saveMacro(); break;
             case IDM_LANG_USER_DLG: notImpl("User-Defined Language dialog"); break;
+
+            // ---- File: shell integration + file ops ----
+            case IDM_FILE_SAVECOPYAS: saveCopyAs(); break;
+            case IDM_FILE_SAVESESSION: saveSession(); break;
+            case IDM_FILE_LOADSESSION: loadSession(); break;
+            case IDM_FILE_RENAME: renameFile(); break;
+            case IDM_FILE_DELETE: recycleFile(); break;
+            case IDM_FILE_OPEN_FOLDER: revealInFolder(); break;
+            case IDM_FILE_OPEN_CMD: openShellHere(false); break;
+            case IDM_FILE_OPEN_POWERSHELL: openShellHere(true); break;
+            case IDM_FILE_OPEN_DEFAULT_VIEWER: openInDefaultViewer(); break;
+            case IDM_FILE_CLOSEALL_TOLEFT: closeAllSide(false); break;
+            case IDM_FILE_CLOSEALL_TORIGHT: closeAllSide(true); break;
+            case IDM_FILE_CLOSEALL_UNCHANGED: closeAllUnchanged(); break;
+
+            // ---- Edit: clipboard paths, case, comments, read-only, sorts, conversions ----
+            case IDM_EDIT_FULLPATHTOCLIP: copyToClip(curPath()); break;
+            case IDM_EDIT_FILENAMETOCLIP: copyToClip(wxFileNameFromPath(curPath())); break;
+            case IDM_EDIT_CURRENTDIRTOCLIP: copyToClip(wxFileName(curPath()).GetPath()); break;
+            case IDM_EDIT_COPY_ALL_NAMES: copyToClip(allOpenPaths(true)); break;
+            case IDM_EDIT_COPY_ALL_PATHS: copyToClip(allOpenPaths(false)); break;
+            case IDM_EDIT_RANDOMCASE: transformSel([](std::string& s){ std::mt19937 g{ std::random_device{}() }; for (char& c : s) if (std::isalpha((unsigned char)c)) c = (char)((g() & 1) ? std::toupper((unsigned char)c) : std::tolower((unsigned char)c)); }); break;
+            case IDM_EDIT_PROPERCASE_BLEND: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ if (st) c = (char)std::toupper((unsigned char)c); st = false; } else st = true; } }); break;
+            case IDM_EDIT_SENTENCECASE_BLEND: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ if (st) c = (char)std::toupper((unsigned char)c); st = false; } else if (c=='.'||c=='!'||c=='?') st = true; } }); break;
+            case IDM_EDIT_STREAM_COMMENT: streamComment(true); break;
+            case IDM_EDIT_STREAM_UNCOMMENT: streamComment(false); break;
+            case IDM_EDIT_BLOCK_COMMENT_SET: setLineComment(true); break;
+            case IDM_EDIT_BLOCK_UNCOMMENT: setLineComment(false); break;
+            case IDM_EDIT_TOGGLEREADONLY: toggleReadOnly(); break;
+            case IDM_EDIT_TOGGLESYSTEMREADONLY: toggleSystemReadOnly(); break;
+            case IDM_EDIT_SORTLINES_LENGTH_ASCENDING: sortLines(3, false); break;
+            case IDM_EDIT_SORTLINES_LENGTH_DESCENDING: sortLines(3, true); break;
+            case IDM_EDIT_SORTLINES_DECIMALDOT_ASCENDING: sortLines(4, false); break;
+            case IDM_EDIT_SORTLINES_DECIMALDOT_DESCENDING: sortLines(4, true); break;
+            case IDM_EDIT_SORTLINES_DECIMALCOMMA_ASCENDING: sortLines(5, false); break;
+            case IDM_EDIT_SORTLINES_DECIMALCOMMA_DESCENDING: sortLines(5, true); break;
+            case IDM_EDIT_SORTLINES_LOCALE_ASCENDING: sortLines(0, false); break;
+            case IDM_EDIT_SORTLINES_LOCALE_DESCENDING: sortLines(0, true); break;
+            case IDM_EDIT_SORTLINES_RANDOMLY: shuffleLines(); break;
+            case IDM_EDIT_REMOVEEMPTYLINESWITHBLANK: removeEmptyLinesBlank(); break;
+            case IDM_EDIT_SW2TAB_ALL: spacesToTabs(false); break;
+            case IDM_EDIT_SW2TAB_LEADING: spacesToTabs(true); break;
+            case IDM_EDIT_OPENSELECTEDFILEFOLDERINEXPLORER: revealInFolder(); break;
+            case IDM_EDIT_OPENSELECTEDFILETOEDIT: openSelectedFile(); break;
+            case IDM_EDIT_SEARCHONINTERNET: searchOnInternet(); break;
+            case IDM_EDIT_REDACT_SELECTION: redactSelection(); break;
+            case IDM_EDIT_INSERT_DATETIME_CUSTOMIZED: insertDateTime(true); break;
+            case IDM_EDIT_AUTOCOMPLETE: autoComplete(true); break;               // Function/keyword completion (Ctrl+Space)
+            case IDM_EDIT_AUTOCOMPLETE_CURRENTFILE: autoComplete(false); break;  // Word completion (document words)
+            case IDM_EDIT_AUTOCOMPLETE_PATH: autoCompletePath(); break;          // Path completion
+
+            // ---- Search: select-and-find, results nav, bookmarked lines ----
+            case IDM_SEARCH_SETANDFINDNEXT: findSel(true, true); break;
+            case IDM_SEARCH_SETANDFINDPREV: findSel(false, true); break;
+            case IDM_SEARCH_VOLATILE_FINDNEXT: findSel(true, true); break;
+            case IDM_SEARCH_VOLATILE_FINDPREV: findSel(false, true); break;
+            case IDM_SEARCH_GOTONEXTFOUND: findNext(true); break;
+            case IDM_SEARCH_GOTOPREVFOUND: findNext(false); break;
+            case IDM_SEARCH_SELECTMATCHINGBRACES: selectBetweenBraces(); break;
+            case IDM_SEARCH_CLEARALLMARKS: clearMarks(); break;
+            case IDM_SEARCH_COPYMARKEDLINES: bookmarkLinesOp(0); break;
+            case IDM_SEARCH_CUTMARKEDLINES: bookmarkLinesOp(1); break;
+            case IDM_SEARCH_DELETEMARKEDLINES: bookmarkLinesOp(2); break;
+            case IDM_SEARCH_DELETEUNMARKEDLINES: bookmarkLinesOp(3); break;
+            case IDM_SEARCH_PASTEMARKEDLINES: bookmarkLinesOp(4); break;
+            case IDM_SEARCH_INVERSEMARKS: bookmarkLinesOp(5); break;
+
+            // ---- View: always-on-top, wrap symbol, hide lines, summary, browsers, new instance ----
+            case IDM_VIEW_ALWAYSONTOP: toggleAlwaysOnTop(); break;
+            case IDM_VIEW_WRAP_SYMBOL: toggleWrapSymbol(); break;
+            case IDM_VIEW_HIDELINES: hideSelectedLines(); break;
+            case IDM_VIEW_SUMMARY: showSummary(); break;
+            case IDM_VIEW_IN_FIREFOX: openInBrowser("firefox"); break;
+            case IDM_VIEW_IN_CHROME: openInBrowser("chrome"); break;
+            case IDM_VIEW_IN_EDGE: openInBrowser(""); break;
+            case IDM_VIEW_IN_IE: openInBrowser("iexplore"); break;
+            case IDM_VIEW_LOAD_IN_NEW_INSTANCE: case IDM_VIEW_GOTO_NEW_INSTANCE: newInstance(true); break;
+            case IDM_VIEW_POSTIT: case IDM_VIEW_DISTRACTIONFREE: ShowFullScreen(!IsFullScreen()); break;
+
+            // ---- Tools: MD5 / SHA digests ----
+            case IDM_TOOL_MD5_GENERATEINTOCLIPBOARD: hashSelection(L"MD5", "MD5", true); break;
+            case IDM_TOOL_SHA1_GENERATEINTOCLIPBOARD: hashSelection(L"SHA1", "SHA-1", true); break;
+            case IDM_TOOL_SHA256_GENERATEINTOCLIPBOARD: hashSelection(L"SHA256", "SHA-256", true); break;
+            case IDM_TOOL_SHA512_GENERATEINTOCLIPBOARD: hashSelection(L"SHA512", "SHA-512", true); break;
+            case IDM_TOOL_MD5_GENERATE: hashSelection(L"MD5", "MD5", false); break;
+            case IDM_TOOL_SHA1_GENERATE: hashSelection(L"SHA1", "SHA-1", false); break;
+            case IDM_TOOL_SHA256_GENERATE: hashSelection(L"SHA256", "SHA-256", false); break;
+            case IDM_TOOL_SHA512_GENERATE: hashSelection(L"SHA512", "SHA-512", false); break;
+
+            // ---- Window / Settings / Language: list, folders, normal text ----
+            case IDM_WINDOW_WINDOWS: showWindowsList(); break;
+            case IDM_SETTING_PREFERENCE: onPreferences(); break;
+            case IDM_LANGSTYLE_CONFIG_DLG: onStyleConfig(); break;
+            case IDM_SETTING_IMPORTSTYLETHEMES: importStyleTheme(); break;
+            case IDM_SETTING_OPENPLUGINSDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "plugins"); break;
+            case IDM_LANG_TEXT: setNormalText(); break;
+            case IDM_LANG_OPENUDLDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "userDefineLangs"); break;
+
+            // ---- Help: external links + info ----
+            case IDM_HOMESWEETHOME: wxLaunchDefaultBrowser("https://notepad-plus-plus.org/"); break;
+            case IDM_PROJECTPAGE: wxLaunchDefaultBrowser("https://github.com/notepad-plus-plus/notepad-plus-plus"); break;
+            case IDM_ONLINEDOCUMENT: wxLaunchDefaultBrowser("https://npp-user-manual.org/"); break;
+            case IDM_FORUM: wxLaunchDefaultBrowser("https://community.notepad-plus-plus.org/"); break;
+            case IDM_LANG_UDLCOLLECTION_PROJECT_SITE: wxLaunchDefaultBrowser("https://github.com/notepad-plus-plus/userDefinedLanguages"); break;
+            case IDM_DEBUGINFO: wxMessageBox(wxString::Format("wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s",
+                wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER, wxGetOsDescription(), wxStandardPaths::Get().GetExecutablePath()), "Debug Info", wxOK | wxICON_INFORMATION, this); break;
+            case IDM_CMDLINEARGUMENTS: wxMessageBox("Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs.", "Command Line Arguments", wxOK | wxICON_INFORMATION, this); break;
+
+            case IDM_EXECUTE: onRun(); break;   // Run... (F5)
+
+            // ---- Encoding: interpret-as (re-decode the file) + convert-to (re-encode on save) ----
+            case IDM_FORMAT_ANSI: interpretAs(ENC_ANSI); break;
+            case IDM_FORMAT_AS_UTF_8: interpretAs(ENC_UTF8); break;
+            case IDM_FORMAT_UTF_8: interpretAs(ENC_UTF8_BOM); break;
+            case IDM_FORMAT_UTF_16LE: interpretAs(ENC_UTF16_LE); break;
+            case IDM_FORMAT_UTF_16BE: interpretAs(ENC_UTF16_BE); break;
+            case IDM_FORMAT_CONV2_ANSI: convertTo(ENC_ANSI); break;
+            case IDM_FORMAT_CONV2_AS_UTF_8: convertTo(ENC_UTF8); break;
+            case IDM_FORMAT_CONV2_UTF_8: convertTo(ENC_UTF8_BOM); break;
+            case IDM_FORMAT_CONV2_UTF_16LE: convertTo(ENC_UTF16_LE); break;
+            case IDM_FORMAT_CONV2_UTF_16BE: convertTo(ENC_UTF16_BE); break;
+
             default: {
-                // Any real menu/toolbar item we don't implement: name it so the click isn't silent.
                 const int mid = e.GetId() & 0xFFFF;
+                if (const int cp = codepageForId(mid))   // Encoding > character set -> interpret the file as that code page
+                {
+                    wxString nm; if (auto* mb = GetMenuBar()) if (auto* it = mb->FindItem(mid)) nm = it->GetItemLabelText();
+                    interpretCharset(cp, nm); break;
+                }
+                // Any real menu/toolbar item we don't implement: name it so the click isn't silent.
                 wxString lbl;
                 if (auto* mb = GetMenuBar()) if (wxMenuItem* it = mb->FindItem(mid)) lbl = it->GetItemLabelText();
                 if (lbl.empty()) { e.Skip(); return; }   // not one of ours -> let wx handle it
@@ -2764,6 +3994,7 @@ private:
 
     void updateLineMargin()   // right-justified numbers in a width sized to the digit count
     {
+        if (!m_lineNumbers) { sci(SCI_SETMARGINWIDTHN, 0, 0); return; }   // line-number margin disabled in Preferences
         const int lines = static_cast<int>(sci(SCI_GETLINECOUNT));
         int digits = 1; for (int n = lines; n >= 10; n /= 10) ++digits;
         if (digits < 2) digits = 2;
@@ -2798,7 +4029,7 @@ private:
         setStatus(2, wxString::Format("Ln : %d    Col : %d    Pos : %d", line, col, pos + 1));
         setStatus(3, wxString::Format("Sel : %d | %d", sel, selLines));
         setStatus(4, eol == SC_EOL_CRLF ? "Windows (CR LF)" : eol == SC_EOL_LF ? "Unix (LF)" : "Macintosh (CR)");
-        setStatus(5, "UTF-8");
+        setStatus(5, encDisplay(activePage()));
         setStatus(6, sci(SCI_GETOVERTYPE) ? "OVR" : "INS");   // typing mode, toggled by the Insert key
     }
 
@@ -2847,12 +4078,16 @@ private:
     FindReplaceDialog* m_findDlg = nullptr;   // modeless Find/Replace dialog
     wxFileHistory      m_fileHistory;         // Recent Files (MRU), persisted in wxConfig
     wxStyledTextCtrl* m_stc = nullptr;   // the cross-platform editor view; its native HWND on Windows == m_sci
+    wxStyledTextCtrl* m_sciTgt = nullptr;   // when set, sci() targets this view instead of m_stc (used to style View 2)
+    wxStyledTextCtrl* m_view2 = nullptr;    // split view: a 2nd editable view sharing the active document
+    bool        m_syncScroll = false, m_syncing = false;   // synchronize scrolling between the two views
     wxStyledTextCtrl* m_docMap = nullptr;   // Document Map (minimap): a second view sharing the active document
     wxTreeCtrl* m_funcList = nullptr;       // Function List: per-file symbol tree (regex-parsed)
     wxTreeCtrl* m_fifPanel = nullptr;       // Find result: docked Find-in-Files results tree
     wxTimer*    m_flTimer  = nullptr;        // debounce re-parse of the Function List after edits
 #ifdef __WXMSW__
     HWND        m_sci  = nullptr;
+    SizeGripWin* m_grip = nullptr;          // custom dark-themed status-bar resize grip (native one can't theme)
     NppData     m_npp{};
     // ----- loaded Win32 plugins -----
     struct LoadedPlugin {
@@ -2876,6 +4111,14 @@ private:
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
     bool        m_wrap = false, m_ws = false, m_guides = false, m_dark = true;
+    int         m_tabWidth = 4;                                   // persisted editor preferences (Settings > Preferences)
+    bool        m_useTabs = true, m_lineNumbers = true, m_wrapSymbol = false, m_showToolbar = true, m_showStatusbar = true;
+    bool        m_autocomplete = true;                            // auto word/keyword completion while typing
+    wxString    m_themeName;                                      // active editor theme (empty = dark/light default); Style Configurator
+    std::vector<MacroStep> m_macro;                               // the current recorded macro
+    bool        m_recording = false;
+    std::vector<std::pair<wxString, std::vector<MacroStep>>> m_savedMacros;   // named macros (Macro menu, this session)
+    bool        m_macroSepAdded = false;
     bool        m_hint = false;   // a "needs full app" message is showing in status field 0
     // cached toolbar/menu enable states (start enabled, matching the freshly-built toolbar)
     bool        m_stSave = true, m_stSaveAll = true, m_stUndo = true, m_stRedo = true, m_stSel = true, m_stPaste = true;

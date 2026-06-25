@@ -41,19 +41,27 @@ Plugins (Windows): drop `Plugin/Plugin.dll` into `build/bin/plugins/Plugin/` nex
 
 ```
 src/            the wxNotepad++ application (+ src/plugins/test_plugin)
+include/        npp-compat/ - clean-room, cross-platform plugin ABI headers
 resources/      toolbar icons, themes, default styler
-third_party/    scintilla (headers), lexilla (lexers), notepad-plus-plus (reused GPL ABI headers)
-docs/           design notes (WXWIDGETS_MIGRATION_PLAN.md)
+third_party/    scintilla (headers), lexilla (lexers) - both permissive (HPND)
+docs/           FUTURE_PLANS.md (licensing roadmap), WXWIDGETS_MIGRATION_PLAN.md
 ```
 
 ## License
 
-**GPL v3.** wxNotepad++ reuses Notepad++'s GPL plugin-ABI headers (`third_party/notepad-plus-plus/`),
-so it inherits Notepad++'s copyleft. See [`LICENSING.md`](LICENSING.md) for the full breakdown —
-Notepad++ (GPL) vs the permissive Scintilla/Lexilla license, and what relicensing would require.
+**GPL v3 today — with a committed plan to go permissive.** wxNotepad++ is an **independent
+reimplementation** — it copies no Notepad++ source code; Notepad++ is used only as a behavioral
+reference and a test target (see [`NOTICE`](NOTICE)). It ships under the GNU GPL v3 for now — the honest,
+conservative position given its heritage and the still-unsettled status of its plugin-ABI compatibility.
+We've already clean-room-reimplemented or replaced nearly every Notepad++-derived file, and our
+committed goal is to relicense permissively — **purely to give users and downstream developers more
+freedom, with no commercial agenda.** See [`docs/FUTURE_PLANS.md`](docs/FUTURE_PLANS.md) for the roadmap
+and [`LICENSING.md`](LICENSING.md) for the per-component record.
 
 ## Credits
 
-- [Notepad++](https://github.com/notepad-plus-plus/notepad-plus-plus) — Don Ho (GPL v3): the editor this is modeled on; its plugin ABI, command ids, and assets are reused.
+- [Notepad++](https://github.com/notepad-plus-plus/notepad-plus-plus) — Don Ho (GPL v3): the editor this reimplementation matches and tests against. Its plugin ABI is reimplemented **clean-room and cross-platform** in our own `include/npp-compat/` — no Notepad++ source is used (see [`LICENSING.md`](LICENSING.md)).
 - [Scintilla & Lexilla](https://www.scintilla.org/) — Neil Hodgson (permissive): the editing / syntax-highlighting engine.
 - [wxWidgets](https://www.wxwidgets.org/): the cross-platform UI toolkit.
+- [Tabler Icons](https://tabler.io/icons) (MIT) + [Open Color](https://yeun.github.io/open-color/) (MIT): the toolbar icon set.
+- Color themes: kept third-party themes are MIT (© Fabio Zendhi Nagao; Bespin © Oren Farhi); regenerated themes + the default styler use permissive palettes (GitHub Primer, Atom One, Nord, Dracula, VS Code — all MIT; canonical Zenburn/Obsidian colors). [Markdown Preview Enhanced](https://github.com/shd101wyy/vscode-markdown-preview-enhanced) (NCSA) was reviewed as a permissive palette source.
