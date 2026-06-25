@@ -906,7 +906,7 @@ class NppShellFrame : public wxFrame
 {
 public:
     explicit NppShellFrame(bool dark)
-        : wxFrame(nullptr, wxID_ANY, "new 1 - Notepad++", wxDefaultPosition, wxSize(1100, 720)),
+        : wxFrame(nullptr, wxID_ANY, "new 1 - wxNotepad++", wxDefaultPosition, wxSize(1100, 720)),
           m_timer(this, myID_TIMER)
     {
         m_dark = dark;          // chrome darkness is fixed for this process (restart-to-apply)
@@ -1691,7 +1691,7 @@ private:
         m_tabs->AddPage(page, title, true);    // selecting it fires PAGE_CHANGED -> activateBuffer
         activateBuffer(page);                  // ensure it (the first AddPage may not fire PAGE_CHANGED); idempotent
         if (!path.empty()) { loadFile(path); addToMRU(path); } else { sci(SCI_SETSAVEPOINT); setLexerForFile(""); }
-        SetTitle(title + " - Notepad++");
+        SetTitle(title + " - wxNotepad++");
         updateStatus();
         return page;
     }
@@ -1828,7 +1828,7 @@ private:
         if (idx != wxNOT_FOUND && idx != m_tabs->GetSelection()) m_tabs->SetSelection(idx);   // show the doc in question
         const wxString name = !p->path.empty() ? p->path : (p->title.empty() ? wxString("new") : p->title);
 
-        wxDialog dlg(this, wxID_ANY, "Notepad++");
+        wxDialog dlg(this, wxID_ANY, "wxNotepad++");
         auto* s = new wxBoxSizer(wxVERTICAL);
         s->Add(new wxStaticText(&dlg, wxID_ANY, "Save file\n" + name + " ?"), 0, wxALL, 16);
         auto* row = new wxBoxSizer(wxHORIZONTAL);
@@ -1909,7 +1909,7 @@ private:
         if (idx != wxNOT_FOUND && m_tabs->GetPageText(idx) != lbl) m_tabs->SetPageText(idx, lbl);
         if (p == activePage())                                           // title bar = full path, like Notepad++
         {
-            const wxString t = star + (p->path.empty() ? p->title : p->path) + " - Notepad++";
+            const wxString t = star + (p->path.empty() ? p->title : p->path) + " - wxNotepad++";
             if (GetTitle() != t) SetTitle(t);
         }
     }
@@ -2437,7 +2437,7 @@ private:
         S(SCE_P_WORD,kw);S(SCE_P_DEFNAME,kw);S(SCE_P_CLASSNAME,kw);
     }
     // ----- file actions --------------------------------------------------
-    void setDocTitle(const wxString& name) { if (auto* p = activePage()) { p->title = name; refreshTab(p); } else SetTitle(name + " - Notepad++"); }
+    void setDocTitle(const wxString& name) { if (auto* p = activePage()) { p->title = name; refreshTab(p); } else SetTitle(name + " - wxNotepad++"); }
     void doNew() { addDocument("", nextNewName()); }   // New opens a fresh tab, like Notepad++
     // ===== text encoding: detect on load, encode on save (the Scintilla doc is always UTF-8) =====
     static bool isValidUtf8(const std::string& s)
@@ -2857,13 +2857,13 @@ private:
         wxFileDialog dlg(this, "Rename", wxFileName(p).GetPath(), wxFileNameFromPath(p), "All files (*.*)|*.*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
         if (dlg.ShowModal() != wxID_OK) return;
         if (wxRenameFile(p, dlg.GetPath()))
-        { if (auto* ep = activePage()) { ep->path = dlg.GetPath(); ep->title = wxFileNameFromPath(dlg.GetPath()); setLexerForFile(dlg.GetPath()); refreshTab(ep); SetTitle(ep->title + " - Notepad++"); } }
+        { if (auto* ep = activePage()) { ep->path = dlg.GetPath(); ep->title = wxFileNameFromPath(dlg.GetPath()); setLexerForFile(dlg.GetPath()); refreshTab(ep); SetTitle(ep->title + " - wxNotepad++"); } }
     }
     void recycleFile()
     {
         const wxString p = curPath();
         if (p.empty()) { notImpl("Move to Recycle Bin (save the file first)"); return; }
-        if (wxMessageBox("Move \"" + wxFileNameFromPath(p) + "\" to the Recycle Bin?", "Notepad++", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
+        if (wxMessageBox("Move \"" + wxFileNameFromPath(p) + "\" to the Recycle Bin?", "wxNotepad++", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
 #ifdef __WXMSW__
         std::wstring from = p.ToStdWstring(); from.push_back(L'\0'); from.push_back(L'\0');   // double-NUL terminated list
         SHFILEOPSTRUCTW op{}; op.wFunc = FO_DELETE; op.pFrom = from.c_str(); op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
@@ -3686,16 +3686,19 @@ private:
 #endif
         w->Refresh();
     }
-    void notImpl(const wxString& what) { setStatus(0, what + " - needs the full Notepad++ app (not in the wx shell prototype)"); m_hint = true; }
+    void notImpl(const wxString& what) { setStatus(0, what + " - not yet implemented in this build"); m_hint = true; }
     void setStatus(int field, const wxString& text) { SetStatusText(" " + text, field); }  // leading space ~ 4px left margin, like Notepad++
     void showAbout()
     {
-        wxDialog dlg(this, wxID_ANY, "About");
+        wxDialog dlg(this, wxID_ANY, "About wxNotepad++");
         auto* s = new wxBoxSizer(wxVERTICAL);
+        s->Add(new wxStaticBitmap(&dlg, wxID_ANY, wxBitmapBundle::FromSVG(APP_ICON_SVG, wxSize(72, 72))),
+               0, wxALIGN_CENTRE | wxTOP, 18);
         s->Add(new wxStaticText(&dlg, wxID_ANY,
-                   "Notepad++ -> wxWidgets main-window shell.\n\n"
-                   "Native Scintilla editor + Notepad++ menu/toolbar (real IDM_* ids and icon\n"
-                   "pack), editor-backed commands fully wired, and a dark/light theme."),
+                   "wxNotepad++\n\n"
+                   "A cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\n"
+                   "a native Scintilla editor with dark/light themes and plugin support.\n\n"
+                   "Independent project - not affiliated with or endorsed by Notepad++."),
                0, wxALL, 16);
         s->Add(dlg.CreateButtonSizer(wxOK), 0, wxALL | wxALIGN_RIGHT, 10);
         dlg.SetSizerAndFit(s);

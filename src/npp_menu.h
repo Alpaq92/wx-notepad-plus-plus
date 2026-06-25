@@ -237,7 +237,7 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
             sub->Append(IDM_EDIT_TOGGLEREADONLY, "Read-Only on Current Document");
             sub->Append(IDM_EDIT_SETREADONLYFORALLDOCS, "Read-Only for All Documents");
             sub->Append(IDM_EDIT_CLEARREADONLYFORALLDOCS, "Clear Read-Only for All Documents");
-            edit->AppendSubMenu(sub, "Read-&Only in Notepad++");
+            edit->AppendSubMenu(sub, "Read-&Only");
         }
         edit->Append(IDM_EDIT_TOGGLESYSTEMREADONLY, "Read-Only Attribute in Windows");
         mb->Append(edit, "&Edit");
@@ -708,11 +708,11 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         help->Append(IDM_ONLINEDOCUMENT, "Notepad++ Online User Manual");
         help->Append(IDM_FORUM, "Notepad++ Community (Forum)");
         help->AppendSeparator();
-        help->Append(IDM_UPDATE_NPP, "Update Notepad++");
+        help->Append(IDM_UPDATE_NPP, "Check for Updates");
         help->Append(IDM_CONFUPDATERPROXY, "Set Updater Proxy...");
         help->AppendSeparator();
         help->Append(IDM_DEBUGINFO, "Debug Info...");
-        help->Append(IDM_ABOUT, "About Notepad++\tF1");
+        help->Append(IDM_ABOUT, "About wxNotepad++\tF1");
         mb->Append(help, "&About");
     }
 }

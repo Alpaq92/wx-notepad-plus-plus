@@ -27,14 +27,15 @@ conservatively on GPL is **not** lingering GPL files — it's three unresolved g
    headers reproduce N++'s ABI (struct layouts + message numbers). Reproducing an ABI for
    interoperability is *defensible* (cf. *Google v. Oracle* + the merger doctrine) but **not settled
    law**. We won't claim a permissive license over it until a lawyer blesses it.
-2. **Trademark.** The app still presents the **"Notepad++" name and logo** as identity. That's a
-   trademark matter (separate from copyright) and must be rebranded before we call the project
-   independent.
+2. **Trademark — addressed.** The app now presents its own identity: an original app icon (not the
+   green "N"), a "wxNotepad++" window title, and an "About wxNotepad++" box with an independence
+   disclaimer. The remaining "Notepad++" mentions are nominative (code comments, the `<NotepadPlus>`
+   data format, and Help-menu links to Notepad++'s own resources).
 3. **A clean-room audit of `src/`.** The whole permissive claim rests on `src/` being original. We
    assert it is; a focused line-audit (especially where we matched N++ behavior closely) would make the
    claim airtight.
 
-Until #1 is reviewed and #2/#3 are done, **staying on GPL is the truthful choice** — claiming permissive
+Until #1 is reviewed and #3 is done, **staying on GPL is the truthful choice** — claiming permissive
 prematurely would be dishonest.
 
 ## The plan to get there
@@ -49,7 +50,8 @@ prematurely would be dishonest.
    translates N++ `NPPM_*`/`FuncItem`/`SCNotification` ⇄ Nib. It is GPL and shipped separately. After
    this move, **the core contains zero N++-derived code** — the legally-grey reproduction lives only in
    a GPL module, which is compliant under any reading.
-3. **Rebrand** — window title, app/taskbar icon, and About box → wxNotepad++ identity (trademark gate).
+3. **Rebrand** — ✅ done: window title, app icon, About box, and dialog captions now carry the
+   wxNotepad++ identity (trademark gate closed).
 4. **Clean-room audit** of `src/`.
 5. **Relicense the core permissively.** The optional N++-bridge stays GPL; everyone else gets a
    permissive editor.

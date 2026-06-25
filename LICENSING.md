@@ -61,6 +61,7 @@ Permissive and copyleft-free; it requires only that the copyright notice be pres
 ## Trademark
 
 "Notepad++" is a trademark of its owner. wxNotepad++ is not affiliated with or endorsed by Notepad++ and
-references the name only nominatively. **Known gap:** the application UI currently still displays the
-Notepad++ name and logo as identity; removing that (a rebrand) is a tracked task — see gate #2 in
-[`docs/FUTURE_PLANS.md`](docs/FUTURE_PLANS.md).
+references the name only nominatively. The application presents **its own identity** — an original app
+icon, a "wxNotepad++" window title, and an "About wxNotepad++" box with an independence disclaimer. The
+remaining "Notepad++" mentions are nominative: code comments, the `<NotepadPlus>` theme/session data
+format, and Help-menu links to Notepad++'s own resources.
