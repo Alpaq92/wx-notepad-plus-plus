@@ -64,6 +64,7 @@ target_include_directories(wxnpp PRIVATE
     "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"     # Scintilla.h, ILexer.h (SCI_* + SCNotification)
     "${CMAKE_SOURCE_DIR}/third_party/lexilla/include"       # Lexilla.h (CreateLexer), SciLexer.h (SCE_*)
     "${CMAKE_SOURCE_DIR}/include/npp-compat"                # our Apache-2.0 clean-room plugin ABI (PluginInterface.h, Notepad_plus_msgs.h, Docking.h, menuCmdID.h)
+    "${CMAKE_SOURCE_DIR}/include/nib"                       # nib.h - our own permissive, cross-platform plugin API
     "${CMAKE_SOURCE_DIR}/src")                              # app_icon_svg.h, npp_menu.h
 
 target_link_libraries(wxnpp PRIVATE
@@ -93,3 +94,7 @@ if(WIN32)
     add_subdirectory(src/plugins/test_plugin)
     add_dependencies(wxnpp npp_test_plugin)
 endif()
+
+# ---- cross-platform Nib-API plugin (exercises our own permissive plugin API on every OS) -----------
+add_subdirectory(src/plugins/nib_test_plugin)
+add_dependencies(wxnpp nib_test_plugin)

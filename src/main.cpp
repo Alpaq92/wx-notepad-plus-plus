@@ -84,8 +84,11 @@ using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/
 #include "PluginInterface.h"   // real plugin ABI: NppData, FuncItem, setInfo/getFuncsArray/beNotified typedefs
 #include "Docking.h"           // tTbData - plugin docking-panel registration (NPPM_DMMREGASDCKDLG)
 #endif
+#include <wx/dynlib.h>         // wxDynamicLibrary - portable .dll/.so/.dylib loader (Nib plugin host)
+#include <cstring>             // strcmp / memcpy (Nib host)
 #include "menuCmdID.h"
 #include "app_icon_svg.h"
+#include "nib.h"               // our own permissive, cross-platform plugin API (Nib)
 #include "npp_menu.h"          // faithful 1:1 Notepad++ main-menu builder
 
 #ifdef __WXMSW__
@@ -902,6 +905,88 @@ private:
 };
 #endif // __WXMSW__
 
+// ============================ Nib plugin host (cross-platform) ============================
+// Loads plugins written against our own permissive plugin API (include/nib/nib.h) - no Win32, no
+// Notepad++ ABI. The editor bridge rides on g_view's portable SendMsg, so it works on every platform.
+struct NibCmd { std::string id, title; NibCommandFn fn; void* user; };
+static std::vector<NibCmd>            g_nibCommands;
+static std::vector<wxDynamicLibrary*> g_nibLibs;
+static const int NIB_CMD_BASE = 63000;   // Nib command menu ids (clear of IDM_*, doc-list 61xxx, N++ plugins 62xxx)
+
+static sptr_t nibSci(UINT m, uptr_t w = 0, sptr_t l = 0)
+{ return g_view ? static_cast<sptr_t>(g_view->SendMsg(static_cast<int>(m), static_cast<wxUIntPtr>(w), static_cast<wxIntPtr>(l))) : 0; }
+
+// nib.editor/1
+static int64_t nibEdLength(NibHost*)                             { return nibSci(SCI_GETLENGTH); }
+static void    nibEdInsert(NibHost*, int64_t pos, const char* t) { if (t) nibSci(SCI_INSERTTEXT, pos < 0 ? nibSci(SCI_GETCURRENTPOS) : static_cast<uptr_t>(pos), reinterpret_cast<sptr_t>(t)); }
+static void    nibEdReplSel(NibHost*, const char* t)             { if (t) nibSci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(t)); }
+static int64_t nibEdSelStart(NibHost*)                           { return nibSci(SCI_GETSELECTIONSTART); }
+static int64_t nibEdSelEnd(NibHost*)                             { return nibSci(SCI_GETSELECTIONEND); }
+static int64_t nibEdGetText(NibHost*, int64_t s, int64_t e, char* b, int64_t bs)
+{
+    const char* doc = reinterpret_cast<const char*>(nibSci(SCI_GETCHARACTERPOINTER));
+    int64_t len = e - s; if (len < 0) len = 0;
+    if (b && bs > 0) { int64_t n = (doc && len < bs - 1) ? len : 0; if (n) std::memcpy(b, doc + s, static_cast<size_t>(n)); b[n] = 0; }
+    return len;
+}
+// nib.commands/1
+static void nibCmdRegister(NibHost*, const char* id, const char* title, NibCommandFn fn, void* u)
+{ g_nibCommands.push_back({ id ? id : "", title ? title : "", fn, u }); }
+// nib.host/1
+static const char* nibHostName(NibHost*) { return "wxNotepad++"; }
+static uint32_t     nibHostAbi(NibHost*) { return NIB_ABI_VERSION; }
+
+static const NibHostApi     g_nibHostApi     = { 1, sizeof(NibHostApi),     nibHostName, nibHostAbi };
+static const NibEditorApi   g_nibEditorApi   = { 1, sizeof(NibEditorApi),   nibEdLength, nibEdInsert, nibEdReplSel, nibEdSelStart, nibEdSelEnd, nibEdGetText };
+static const NibCommandsApi g_nibCommandsApi = { 1, sizeof(NibCommandsApi), nibCmdRegister };
+
+static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
+{
+    if (!iface) return nullptr;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_HOST)     == 0) return &g_nibHostApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_EDITOR)   == 0) return &g_nibEditorApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_COMMANDS) == 0) return &g_nibCommandsApi;
+    return nullptr;
+}
+static void nibLog(NibHost*, int, const char* msg) { if (msg) wxLogDebug("[nib] %s", msg); }
+
+// Load Nib plugins from <exe>/nib/ via wxDynamicLibrary (portable: .dll / .so / .dylib).
+static void loadNibPlugins()
+{
+    const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "nib";
+    if (!wxDirExists(dir)) return;
+#if defined(__WXMSW__)
+    const wxString pat = "*.dll";
+#elif defined(__WXMAC__)
+    const wxString pat = "*.dylib";
+#else
+    const wxString pat = "*.so";
+#endif
+    wxDir d(dir); wxString f;
+    for (bool more = d.GetFirst(&f, pat, wxDIR_FILES); more; more = d.GetNext(&f))
+    {
+        auto* lib = new wxDynamicLibrary(dir + wxFILE_SEP_PATH + f);
+        bool ok = false;
+        if (lib->IsLoaded())
+        {
+            auto entry = reinterpret_cast<NibPluginMainFn>(lib->GetSymbol("nib_plugin_main"));
+            if (entry)
+            {
+                NibBootstrap boot{ NIB_ABI_VERSION, sizeof(NibBootstrap), reinterpret_cast<NibHost*>(g_view), &nibQuery, &nibLog };
+                const NibPluginApi* api = entry(&boot);
+                if (api && (api->abi_version >> 16) == (NIB_ABI_VERSION >> 16))   // compatible major version
+                {
+                    if (api->activate) api->activate(reinterpret_cast<NibHost*>(g_view), &nibQuery);
+                    g_nibLibs.push_back(lib);
+                    ok = true;
+                }
+            }
+        }
+        if (!ok) { lib->Unload(); delete lib; }
+    }
+}
+// ============================ end Nib plugin host ============================
+
 class NppShellFrame : public wxFrame
 {
 public:
@@ -925,6 +1010,13 @@ public:
         g_nppm = [this](UINT m, WPARAM w, LPARAM l, LRESULT& o) { return handleNppm(m, w, l, o); };   // serve plugin NPPM_* messages
         loadPlugins();   // load Win32 plugins from plugins/, hand them our HWNDs, build the Plugins menu
 #endif
+        loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
+        if (!g_nibCommands.empty())   // surface registered Nib commands in the Plugins menu
+            if (auto* mb = GetMenuBar()) { const int mi = mb->FindMenu("Plugins");
+                if (mi != wxNOT_FOUND) { wxMenu* pm = mb->GetMenu(mi);
+                    if (pm->GetMenuItemCount() > 0) pm->AppendSeparator();
+                    for (size_t i = 0; i < g_nibCommands.size(); ++i)
+                        pm->Append(NIB_CMD_BASE + static_cast<int>(i), wxString::FromUTF8(g_nibCommands[i].title)); } }
 
         Bind(wxEVT_MENU, &NppShellFrame::onCommand, this);          // one dispatcher for all menu+toolbar ids
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) { updateStatus(); updateUiState(); }, myID_TIMER);
@@ -3731,6 +3823,12 @@ private:
             return;
         }
 #endif
+        if (!g_nibCommands.empty() && cmd >= NIB_CMD_BASE && cmd < NIB_CMD_BASE + static_cast<int>(g_nibCommands.size()))
+        {   // Nib plugin command (cross-platform)
+            const NibCmd& nc = g_nibCommands[cmd - NIB_CMD_BASE];
+            if (nc.fn) nc.fn(reinterpret_cast<NibHost*>(g_view), &nibQuery, nc.user);
+            return;
+        }
         if (cmd >= myID_DOCLIST_ITEM && cmd < myID_DOCLIST_ITEM + 1000)   // document-list dropdown entry
         { const size_t n = (size_t)(cmd - myID_DOCLIST_ITEM); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); return; }
         if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + 200)        // a saved macro from the Macro menu
