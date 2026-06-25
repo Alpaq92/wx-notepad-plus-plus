@@ -8,31 +8,102 @@
 // NOT depend on it - it is loaded, like any plugin, only if present. Keeping it separate + GPL is what
 // lets the core relicense permissively (see docs/FUTURE_PLANS.md).
 //
-// STAGE 1: stand up the package and prove the bridge can reconstruct NppData from nib.win32. Loading
-// the N++ DLLs (Stage 2) and routing NPPM_*/SCI (Stage 3) follow; then the core's host is removed.
+// STAGE 2: load the real N++ plugin DLLs (LoadLibrary), hand them the rebuilt NppData, and surface each
+// FuncItem as a Nib command. The core's own loader is disabled, so the bridge is the sole N++ loader.
+// (NPPM_*/SCI routing is still served transitionally by the core's frame subclass; Stage 3 moves it.)
 #include "nib.h"
-#include "PluginInterface.h"   // NppData - the Notepad++ ABI this bridge targets
+#include "PluginInterface.h"   // NppData, FuncItem, PFUNC* - the Notepad++ ABI this bridge targets
+#include <windows.h>
+#include <string>
+#include <vector>
 #include <cstdio>
 
-static NppData g_npp = {};   // the Notepad++ environment, rebuilt from nib.win32
+static NppData g_npp = {};      // the Notepad++ environment, rebuilt from nib.win32
 
-// A temporary diagnostic command (Stage 1): report the NppData we reconstructed.
+struct NppPlugin {              // a loaded N++ plugin (kept alive for its FuncItem pointers + Stage-3 notifications)
+    HMODULE      lib;
+    PBENOTIFIED  beNotified;
+    PMESSAGEPROC messageProc;
+    FuncItem*    funcs;
+    int          count;
+};
+static std::vector<NppPlugin> g_plugins;
+
+static std::string toUtf8(const wchar_t* w)
+{
+    if (!w || !*w) return {};
+    int n = ::WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
+    std::string s(n > 0 ? n - 1 : 0, '\0');
+    if (n > 1) ::WideCharToMultiByte(CP_UTF8, 0, w, -1, &s[0], n, nullptr, nullptr);
+    return s;
+}
+
+static std::wstring exeDir()
+{
+    wchar_t buf[MAX_PATH]; DWORD n = ::GetModuleFileNameW(nullptr, buf, MAX_PATH);
+    std::wstring p(buf, n); size_t s = p.find_last_of(L"\\/");
+    return s == std::wstring::npos ? L"." : p.substr(0, s);
+}
+
+// The Nib command a FuncItem maps to: invoke the plugin's command function.
+static void npp_cmd_thunk(NibHost*, NibQueryFn, void* user)
+{
+    FuncItem* fi = static_cast<FuncItem*>(user);
+    if (fi && fi->_pFunc) fi->_pFunc();
+}
+
+// Diagnostic: report the rebuilt NppData + how many N++ plugins loaded.
 static void cmd_info(NibHost* host, NibQueryFn query, void*)
 {
     const NibEditorApi* ed = static_cast<const NibEditorApi*>(query(host, NIB_IFACE_EDITOR, 1));
     if (!ed) return;
-    char buf[176];
+    char buf[200];
     std::snprintf(buf, sizeof(buf),
-        "// npp-bridge: NppData rebuilt from nib.win32 - npp=%p sciMain=%p sciSecond=%p\n",
-        static_cast<void*>(g_npp._nppHandle),
-        static_cast<void*>(g_npp._scintillaMainHandle),
-        static_cast<void*>(g_npp._scintillaSecondHandle));
+        "// npp-bridge: %zu N++ plugin(s) loaded; NppData npp=%p sciMain=%p\n",
+        g_plugins.size(), static_cast<void*>(g_npp._nppHandle), static_cast<void*>(g_npp._scintillaMainHandle));
     ed->replace_selection(host, buf);
+}
+
+// Scan <exe>/plugins/<Name>/<Name>.dll, LoadLibrary each, setInfo(NppData), and register its commands.
+static void loadNppPlugins(NibHost* host, const NibCommandsApi* cmds)
+{
+    const std::wstring pdir = exeDir() + L"\\plugins";
+    WIN32_FIND_DATAW fd;
+    HANDLE hf = ::FindFirstFileW((pdir + L"\\*").c_str(), &fd);
+    if (hf == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == L'.') continue;
+        const std::wstring sub = fd.cFileName;
+        const std::wstring dll = pdir + L"\\" + sub + L"\\" + sub + L".dll";
+        if (::GetFileAttributesW(dll.c_str()) == INVALID_FILE_ATTRIBUTES) continue;
+
+        HMODULE lib = ::LoadLibraryW(dll.c_str());
+        if (!lib) continue;
+        auto setInfo  = reinterpret_cast<PFUNCSETINFO>(::GetProcAddress(lib, "setInfo"));
+        auto getFuncs = reinterpret_cast<PFUNCGETFUNCSARRAY>(::GetProcAddress(lib, "getFuncsArray"));
+        auto getName  = reinterpret_cast<PFUNCGETNAME>(::GetProcAddress(lib, "getName"));
+        if (!setInfo || !getFuncs || !getName) { ::FreeLibrary(lib); continue; }   // not a real N++ plugin
+
+        setInfo(g_npp);                          // hand the plugin the rebuilt NppData (frame + editor HWNDs)
+        int count = 0;
+        FuncItem* funcs = getFuncs(&count);      // the plugin's menu commands (array lives in the DLL)
+        const std::string pname = toUtf8(getName());
+        for (int i = 0; i < count; ++i) {
+            if (!funcs[i]._itemName[0]) continue;   // separator
+            const std::string id    = "npp." + pname + "." + std::to_string(i);
+            const std::string title = pname + ": " + toUtf8(funcs[i]._itemName);
+            cmds->register_command(host, id.c_str(), title.c_str(), npp_cmd_thunk, &funcs[i]);
+        }
+        g_plugins.push_back({ lib,
+            reinterpret_cast<PBENOTIFIED>(::GetProcAddress(lib, "beNotified")),
+            reinterpret_cast<PMESSAGEPROC>(::GetProcAddress(lib, "messageProc")),
+            funcs, count });
+    } while (::FindNextFileW(hf, &fd));
+    ::FindClose(hf);
 }
 
 static void activate(NibHost* host, NibQueryFn query)
 {
-    // Reach the host's native handles through the capability-gated nib.win32 interface.
     const NibWin32Api* w = static_cast<const NibWin32Api*>(query(host, NIB_IFACE_WIN32, 1));
     if (w) {
         g_npp._nppHandle             = static_cast<HWND>(w->main_window(host));
@@ -40,7 +111,9 @@ static void activate(NibHost* host, NibQueryFn query)
         g_npp._scintillaSecondHandle = static_cast<HWND>(w->editor_second(host));
     }
     const NibCommandsApi* cmds = static_cast<const NibCommandsApi*>(query(host, NIB_IFACE_COMMANDS, 1));
-    if (cmds) cmds->register_command(host, "org.wxnpp.npp-bridge.info", "N++ Bridge: NppData Info", cmd_info, nullptr);
+    if (!cmds) return;
+    cmds->register_command(host, "org.wxnpp.npp-bridge.info", "N++ Bridge: NppData Info", cmd_info, nullptr);
+    if (w) loadNppPlugins(host, cmds);
 }
 
 static const NibPluginApi PLUGIN = {

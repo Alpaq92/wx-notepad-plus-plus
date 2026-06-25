@@ -1039,7 +1039,9 @@ public:
         m_npp = { static_cast<HWND>(GetHandle()), m_sci, nullptr };
         ::SetWindowSubclass(static_cast<HWND>(GetHandle()), FrameSubclassProc, 1, reinterpret_cast<DWORD_PTR>(m_sci));
         g_nppm = [this](UINT m, WPARAM w, LPARAM l, LRESULT& o) { return handleNppm(m, w, l, o); };   // serve plugin NPPM_* messages
-        loadPlugins();   // load Win32 plugins from plugins/, hand them our HWNDs, build the Plugins menu
+        // loadPlugins();   // MOVED (Part 3, stage 2) to the optional GPL npp-bridge, which now loads the
+                            // N++ binary plugins via the nib.win32 capability. The core's loader + NPPM_*/SCI
+                            // routing stay (dead loader, live routing) until stage 4 removes them.
 #endif
         // Nib panel host: host-owned, dockable wxAui text panels (cross-platform). Installed before plugins
         // load so a plugin's activate() can register one. The opaque NibPanel handle is the wxTextCtrl*.
