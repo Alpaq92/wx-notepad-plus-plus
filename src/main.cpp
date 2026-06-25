@@ -1035,22 +1035,30 @@ public:
         // and serves NPPM_* itself. The core keeps only the generic SciHwndProc editor bridge (below), which
         // is not Notepad++-derived. Confining the N++ ABI to that GPL module is what lets the core relicense.
         // Nib panel host: host-owned, dockable wxAui text panels (cross-platform). Installed before plugins
-        // load so a plugin's activate() can register one. The opaque NibPanel handle is the wxTextCtrl*.
+        // load so a plugin's activate() can register one. The opaque NibPanel handle is a read-only
+        // wxStyledTextCtrl* - Scintilla auto-hides its scrollbars when the content fits (no empty scrollbars).
         g_nibCreatePanel = [this](const char* id, const char* title, int dock) -> void* {
-            auto* txt = new wxTextCtrl(this, wxID_ANY, wxString(), wxDefaultPosition, wxDefaultSize,
-                                       wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP | wxBORDER_NONE);
-            txt->SetFont(wxFont(9, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
-            if (m_dark) { txt->SetBackgroundColour(wxColour(30, 30, 30)); txt->SetForegroundColour(wxColour(220, 220, 220)); }
+            auto* stc = new wxStyledTextCtrl(this, wxID_ANY);
+            stc->SetWrapMode(wxSTC_WRAP_WORD);                       // wrap -> never a horizontal scrollbar
+            stc->SetUseHorizontalScrollBar(false);
+            for (int m = 0; m < 3; ++m) stc->SetMarginWidth(m, 0);  // no line-number / symbol / fold margins
+            stc->StyleSetFaceName(wxSTC_STYLE_DEFAULT, "Consolas"); stc->StyleSetSize(wxSTC_STYLE_DEFAULT, 9);
+            if (m_dark) { stc->StyleSetBackground(wxSTC_STYLE_DEFAULT, wxColour(30, 30, 30)); stc->StyleSetForeground(wxSTC_STYLE_DEFAULT, wxColour(220, 220, 220)); }
+            stc->StyleClearAll();
+            stc->SetReadOnly(true);
             wxAuiPaneInfo pi; pi.Name(wxString::FromUTF8(id)).Caption(wxString::FromUTF8(title)).CloseButton(true).MaximizeButton(false);
             switch (dock) { case 1: pi.Left().BestSize(240, 320); break; case 2: pi.Right().BestSize(240, 320); break;
                             case 3: pi.Top().BestSize(320, 150);  break; default: pi.Bottom().BestSize(320, 150); }
-            m_aui.AddPane(txt, pi); m_aui.Update();
-            return txt;
+            m_aui.AddPane(stc, pi); m_aui.Update();
+            return stc;
         };
         g_nibPanelText = [](void* p, const char* utf8, bool append) {
-            auto* txt = static_cast<wxTextCtrl*>(p);
-            if (!txt || !utf8) return;
-            if (append) txt->AppendText(wxString::FromUTF8(utf8)); else txt->SetValue(wxString::FromUTF8(utf8));
+            auto* stc = static_cast<wxStyledTextCtrl*>(p);
+            if (!stc || !utf8) return;
+            stc->SetReadOnly(false);
+            if (append) stc->AppendText(wxString::FromUTF8(utf8)); else stc->SetText(wxString::FromUTF8(utf8));
+            stc->GotoPos(stc->GetLength());   // keep the latest line in view (log-style)
+            stc->SetReadOnly(true);
         };
         g_nibPanelShow = [this](void* p, bool v) {
             wxAuiPaneInfo& pi = m_aui.GetPane(static_cast<wxWindow*>(p)); if (pi.IsOk()) { pi.Show(v); m_aui.Update(); }
