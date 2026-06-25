@@ -1019,22 +1019,28 @@ static void unloadNibPlugins()
 class PinTabArt : public wxAuiDefaultTabArt
 {
 public:
-    explicit PinTabArt(const wxColour& pinColour) : m_pinColour(pinColour) {}
-    void UpdateColoursFromSystem() override { wxAuiDefaultTabArt::UpdateColoursFromSystem(); applyPinIcon(); }
+    explicit PinTabArt(const wxColour& iconColour) : m_iconColour(iconColour) {}
+    void UpdateColoursFromSystem() override { wxAuiDefaultTabArt::UpdateColoursFromSystem(); reskin(); }
     // wxAuiFlatTabArt is non-copyable (private pimpl); clone a fresh one (the app sets no custom art
-    // colours, so a fresh instance has the same state) and re-skin its pin.
-    wxAuiTabArt* Clone() override { auto* a = new PinTabArt(m_pinColour); a->UpdateColoursFromSystem(); return a; }
+    // colours, so a fresh instance has the same state) and re-skin its buttons.
+    wxAuiTabArt* Clone() override { auto* a = new PinTabArt(m_iconColour); a->UpdateColoursFromSystem(); return a; }
 private:
-    wxColour m_pinColour;
-    void applyPinIcon()
+    wxColour m_iconColour;
+    wxBitmapBundle iconBundle(const wxString& name) const   // resources/icons/<name>.svg, recoloured to the button colour
     {
-        static const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\pin.svg";
-        if (!wxFileExists(path)) return;
+        const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\" + name + ".svg";
+        if (!wxFileExists(path)) return wxBitmapBundle();
         wxFile f(path); wxString svg;
-        if (!f.IsOpened() || !f.ReadAll(&svg)) return;
-        svg.Replace("currentColor", m_pinColour.GetAsString(wxC2S_HTML_SYNTAX));
-        const wxBitmapBundle b = wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(16, 16));
-        if (b.IsOk()) { m_activePinBmp = b; m_activeUnpinBmp = b; m_disabledPinBmp = b; m_disabledUnpinBmp = b; }
+        if (!f.IsOpened() || !f.ReadAll(&svg)) return wxBitmapBundle();
+        svg.Replace("currentColor", m_iconColour.GetAsString(wxC2S_HTML_SYNTAX));
+        return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(16, 16));
+    }
+    void reskin()
+    {
+        const wxBitmapBundle pin = iconBundle("pin");
+        if (pin.IsOk()) { m_activePinBmp = pin; m_activeUnpinBmp = pin; m_disabledPinBmp = pin; m_disabledUnpinBmp = pin; }
+        const wxBitmapBundle cls = iconBundle("close-tab");
+        if (cls.IsOk()) { m_activeCloseBmp = cls; m_disabledCloseBmp = cls; }
     }
 };
 
@@ -1471,6 +1477,7 @@ private:
     {
         m_funcList = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                     wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxBORDER_NONE);
+        { wxVector<wxBitmapBundle> imgs; imgs.push_back(icon("func-leaf")); imgs.push_back(icon("func-node")); m_funcList->SetImages(imgs); }   // 0=symbol, 1=group/class (icon set)
         m_funcList->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrame::onFuncListActivate, this);
         m_funcList->Bind(wxEVT_TREE_SEL_CHANGED,     &NppShellFrame::onFuncListActivate, this);   // single-click jumps too (like N++)
         m_flTimer = new wxTimer(this, myID_FLTIMER);
@@ -1553,7 +1560,7 @@ private:
                 while (!stack.empty() && s.pos >= stack.back().rangeEnd) stack.pop_back();
                 const wxTreeItemId parent = stack.empty() ? root : stack.back().item;
                 const int line = (int)sci(SCI_LINEFROMPOSITION, (uptr_t)s.pos);
-                const wxTreeItemId item = m_funcList->AppendItem(parent, s.name, -1, -1, new FLItemData(line));
+                const wxTreeItemId item = m_funcList->AppendItem(parent, s.name, s.kind == 1 ? 1 : 0, -1, new FLItemData(line));
                 if (s.kind == 1) { m_funcList->SetItemBold(item, true); stack.push_back({ s.rangeEnd, item }); }
             }
             m_funcList->ExpandAll();
