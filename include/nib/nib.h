@@ -144,6 +144,10 @@ typedef struct NibWin32Api {
     void* (*editor_main)(NibHost*);    // primary Scintilla editor HWND
     void* (*editor_second)(NibHost*);  // secondary editor HWND, or NULL if not split
     void* (*plugins_menu)(NibHost*);   // Plugins menu HMENU
+    // Host a plugin-owned native child window in a host dock pane. edge: 0=bottom,1=left,2=right,3=top.
+    // Starts hidden (call show_dock to reveal); calling again with the same hwnd is a no-op.
+    void  (*dock_native)(NibHost*, void* hwnd, const char* title_utf8, int edge);
+    void  (*show_dock)(NibHost*, void* hwnd, int visible);
 } NibWin32Api;
 
 // ---- the plugin's lifecycle vtable ---------------------------------------------------------------

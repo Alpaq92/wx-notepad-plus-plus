@@ -13,6 +13,7 @@
 // (NPPM_*/SCI routing is still served transitionally by the core's frame subclass; Stage 3 moves it.)
 #include "nib.h"
 #include "PluginInterface.h"   // NppData, FuncItem, PFUNC* - the Notepad++ ABI this bridge targets
+#include "Docking.h"           // tTbData / DWS_DF_* / CONT_* - the N++ docking-registration ABI
 #include <windows.h>
 #include <commctrl.h>          // SetWindowSubclass / DefSubclassProc - the bridge owns the NPPM_* router
 #include <string>
@@ -20,8 +21,9 @@
 #include <cstdio>
 
 static NppData g_npp = {};      // the Notepad++ environment, rebuilt from nib.win32
-static NibHost*               g_host = nullptr;   // stashed at activate so the NPPM router can reach Nib interfaces
-static const NibDocumentsApi* g_docs = nullptr;   // nib.documents - serves the current-file-path NPPM family
+static NibHost*               g_host  = nullptr;  // stashed at activate so the NPPM router can reach Nib interfaces
+static const NibDocumentsApi* g_docs  = nullptr;  // nib.documents - serves the current-file-path NPPM family
+static const NibWin32Api*     g_win32 = nullptr;  // nib.win32 - serves docking (NPPM_DMM*)
 
 struct NppPlugin {              // a loaded N++ plugin (kept alive for its FuncItem pointers + Stage-3 notifications)
     HMODULE      lib;
@@ -172,6 +174,16 @@ static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& o
         case NPPM_GETNAMEPART:         { std::wstring f = activePathW(); const size_t s = f.find_last_of(L"\\/"); if (s != std::wstring::npos) f = f.substr(s + 1); const size_t d = f.find_last_of(L'.'); out = putPath(wParam, lParam, d == std::wstring::npos ? f : f.substr(0, d)); return true; }
         case NPPM_GETEXTPART:          { const std::wstring p = activePathW(); const size_t d = p.find_last_of(L'.'); const size_t s = p.find_last_of(L"\\/"); out = putPath(wParam, lParam, (d != std::wstring::npos && (s == std::wstring::npos || d > s)) ? p.substr(d) : L""); return true; }
         case NPPM_DOOPEN:              if (g_docs && lParam) g_docs->open(g_host, toUtf8(reinterpret_cast<const wchar_t*>(lParam)).c_str()); out = TRUE; return true;
+        // docking: the plugin owns a native window and asks us to host it in a dock pane
+        case NPPM_DMMREGASDCKDLG:      if (g_win32 && lParam) {
+                                           const tTbData* d = reinterpret_cast<const tTbData*>(lParam);
+                                           int edge = 0;   // bottom
+                                           switch ((d->uMask >> 28) & 0x0F) { case CONT_LEFT: edge = 1; break; case CONT_RIGHT: edge = 2; break; case CONT_TOP: edge = 3; break; default: edge = 0; }
+                                           if (d->hClient) g_win32->dock_native(g_host, d->hClient, toUtf8(d->pszName).c_str(), edge);
+                                       } out = TRUE; return true;
+        case NPPM_DMMSHOW:             if (g_win32 && lParam) g_win32->show_dock(g_host, reinterpret_cast<void*>(lParam), 1); out = TRUE; return true;
+        case NPPM_DMMHIDE:             if (g_win32 && lParam) g_win32->show_dock(g_host, reinterpret_cast<void*>(lParam), 0); out = TRUE; return true;
+        case NPPM_DMMUPDATEDISPINFO:   if (lParam) ::InvalidateRect(reinterpret_cast<HWND>(lParam), nullptr, TRUE); out = TRUE; return true;
         default:                       return false;   // not one of ours -> fall through to DefSubclassProc
     }
 }
@@ -190,6 +202,7 @@ static void activate(NibHost* host, NibQueryFn query)
     g_host = host;
     g_docs = static_cast<const NibDocumentsApi*>(query(host, NIB_IFACE_DOCUMENTS, 1));   // current-file-path NPPM
     const NibWin32Api* w = static_cast<const NibWin32Api*>(query(host, NIB_IFACE_WIN32, 1));
+    g_win32 = w;   // docking (NPPM_DMM*) routes through nib.win32
     if (w) {
         g_npp._nppHandle             = static_cast<HWND>(w->main_window(host));
         g_npp._scintillaMainHandle   = static_cast<HWND>(w->editor_main(host));

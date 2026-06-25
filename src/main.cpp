@@ -925,11 +925,15 @@ static int nibDocOpen(NibHost*, const char* p)        { return g_nibDocOpen ? g_
 #ifdef __WXMSW__
 // nib.win32/1 - Windows-only native-handle capability (the GPL npp-bridge uses it to rebuild NppData).
 static std::function<void*()> g_nibMainWindow, g_nibEditorMain, g_nibEditorSecond, g_nibPluginsMenu;
+static std::function<void(void*, const char*, int)> g_nibDockNative;   // host a plugin's native HWND in a dock pane
+static std::function<void(void*, bool)>             g_nibShowDock;
 static void* nibW32Main(NibHost*)   { return g_nibMainWindow   ? g_nibMainWindow()   : nullptr; }
 static void* nibW32EdMain(NibHost*) { return g_nibEditorMain   ? g_nibEditorMain()   : nullptr; }
 static void* nibW32EdSec(NibHost*)  { return g_nibEditorSecond ? g_nibEditorSecond() : nullptr; }
 static void* nibW32Menu(NibHost*)   { return g_nibPluginsMenu  ? g_nibPluginsMenu()  : nullptr; }
-static const NibWin32Api g_nibWin32Api = { 1, sizeof(NibWin32Api), nibW32Main, nibW32EdMain, nibW32EdSec, nibW32Menu };
+static void  nibW32Dock(NibHost*, void* h, const char* t, int e) { if (g_nibDockNative) g_nibDockNative(h, t, e); }
+static void  nibW32ShowDock(NibHost*, void* h, int v)            { if (g_nibShowDock)   g_nibShowDock(h, v != 0); }
+static const NibWin32Api g_nibWin32Api = { 1, sizeof(NibWin32Api), nibW32Main, nibW32EdMain, nibW32EdSec, nibW32Menu, nibW32Dock, nibW32ShowDock };
 #endif
 // nib.host/1
 static const char* nibHostName(NibHost*) { return "wxNotepad++"; }
@@ -1054,6 +1058,29 @@ public:
             auto* mb = GetMenuBar(); if (!mb) return nullptr;
             const int mi = mb->FindMenu("Plugins");
             return mi == wxNOT_FOUND ? nullptr : reinterpret_cast<void*>(mb->GetMenu(mi)->GetHMenu());
+        };
+        g_nibDockNative = [this](void* hwndV, const char* title, int edge) {   // host a plugin's native window in a dock pane
+            HWND hc = static_cast<HWND>(hwndV);
+            if (!hc) return;
+            for (const auto& d : m_nibDocks) if (d.hClient == hc) return;   // already docked
+            auto* host = new wxPanel(this);
+            ::SetParent(hc, static_cast<HWND>(host->GetHandle()));
+            host->Bind(wxEVT_SIZE, [host, hc](wxSizeEvent& e) {
+                const wxSize s = host->GetClientSize(); ::MoveWindow(hc, 0, 0, s.GetWidth(), s.GetHeight(), TRUE); e.Skip();
+            });
+            const wxString name = wxString::FromUTF8(title ? title : "Plugin");
+            wxAuiPaneInfo pi; pi.Name(name).Caption(name).CloseButton(true).BestSize(340, 220).MinSize(160, 100).Hide();
+            switch (edge) { case 1: pi.Left(); break; case 2: pi.Right(); break; case 3: pi.Top(); break; default: pi.Bottom(); break; }
+            m_aui.AddPane(host, pi); m_aui.Update();
+            m_nibDocks.push_back({ hc, host, name });
+        };
+        g_nibShowDock = [this](void* hwndV, bool v) {
+            HWND hc = static_cast<HWND>(hwndV);
+            for (const auto& d : m_nibDocks) if (d.hClient == hc) {
+                wxAuiPaneInfo& pi = m_aui.GetPane(d.host);
+                if (pi.IsOk()) { pi.Show(v); if (v) ::ShowWindow(d.hClient, SW_SHOW); m_aui.Update(); }
+                return;
+            }
         };
 #endif
         loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
@@ -3997,6 +4024,8 @@ private:
 #ifdef __WXMSW__
     HWND        m_sci  = nullptr;
     SizeGripWin* m_grip = nullptr;          // custom dark-themed status-bar resize grip (native one can't theme)
+    struct NibDock { HWND hClient; wxPanel* host; wxString name; };   // a plugin's native window hosted in a dock pane
+    std::vector<NibDock> m_nibDocks;        // installed via nib.win32 dock_native (the GPL bridge maps NPPM_DMM* to it)
 #endif
     wxAuiManager m_aui;                          // hosts the dockable side/bottom panels (Function List, Doc Map, Find results, Nib panels)
     wxTimer     m_timer;
