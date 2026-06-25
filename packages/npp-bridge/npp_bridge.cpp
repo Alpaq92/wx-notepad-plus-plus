@@ -117,8 +117,8 @@ static void loadNppPlugins(NibHost* host, const NibCommandsApi* cmds)
         int count = 0;
         FuncItem* funcs = getFuncs(&count);      // the plugin's menu commands (array lives in the DLL)
         const std::string pname = toUtf8(getName());
-        for (int i = 0; i < count; ++i) {
-            if (!funcs[i]._itemName[0]) continue;   // separator
+        for (int i = 0; funcs && i < count; ++i) {
+            if (!funcs[i]._itemName[0] || ::lstrcmpW(funcs[i]._itemName, L"-SEPARATOR-") == 0) continue;   // separator
             const std::string id    = "npp." + pname + "." + std::to_string(i);
             const std::string title = pname + ": " + toUtf8(funcs[i]._itemName);
             cmds->register_command(host, id.c_str(), title.c_str(), npp_cmd_thunk, &funcs[i]);
@@ -225,8 +225,14 @@ static void activate(NibHost* host, NibQueryFn query)
     }
 }
 
+static void deactivate(NibHost*)
+{
+    if (g_npp._nppHandle) ::RemoveWindowSubclass(g_npp._nppHandle, bridge_frame_proc, 1);   // unhook before we unload
+    // The loaded N++ plugin DLLs + any docked windows are reclaimed at process exit.
+}
+
 static const NibPluginApi PLUGIN = {
-    NIB_ABI_VERSION, sizeof(NibPluginApi), "org.wxnpp.npp-bridge", activate, /*deactivate*/ nullptr
+    NIB_ABI_VERSION, sizeof(NibPluginApi), "org.wxnpp.npp-bridge", activate, deactivate
 };
 
 extern "C" NIB_API const NibPluginApi* nib_plugin_main(const NibBootstrap* boot)

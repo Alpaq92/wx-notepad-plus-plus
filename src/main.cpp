@@ -878,7 +878,8 @@ private:
 // Notepad++ ABI. The editor bridge rides on g_view's portable SendMsg, so it works on every platform.
 struct NibCmd { std::string id, title; NibCommandFn fn; void* user; };
 static std::vector<NibCmd>            g_nibCommands;
-static std::vector<wxDynamicLibrary*> g_nibLibs;
+struct NibLoaded { const NibPluginApi* api; wxDynamicLibrary* lib; };   // a loaded Nib plugin (kept for teardown)
+static std::vector<NibLoaded> g_nibLibs;
 static const int NIB_CMD_BASE = 63000;   // Nib command menu ids (clear of IDM_*, doc-list 61xxx, N++ plugins 62xxx)
 
 static sptr_t nibSci(UINT m, uptr_t w = 0, sptr_t l = 0)
@@ -991,13 +992,24 @@ static void loadNibPlugins()
                 if (api && (api->abi_version >> 16) == (NIB_ABI_VERSION >> 16))   // compatible major version
                 {
                     if (api->activate) api->activate(reinterpret_cast<NibHost*>(g_view), &nibQuery);
-                    g_nibLibs.push_back(lib);
+                    g_nibLibs.push_back({ api, lib });
                     ok = true;
                 }
             }
         }
         if (!ok) { lib->Unload(); delete lib; }
     }
+}
+
+// Tear down Nib plugins in reverse load order: deactivate (the GPL bridge removes its frame subclass), then unload.
+static void unloadNibPlugins()
+{
+    for (auto it = g_nibLibs.rbegin(); it != g_nibLibs.rend(); ++it)
+    {
+        if (it->api && it->api->deactivate) it->api->deactivate(reinterpret_cast<NibHost*>(g_view));
+        if (it->lib) { it->lib->Unload(); delete it->lib; }
+    }
+    g_nibLibs.clear();
 }
 // ============================ end Nib plugin host ============================
 
@@ -2059,6 +2071,7 @@ private:
                 if (!confirmClose(static_cast<EditorPage*>(m_tabs->GetPage(i)))) { e.Veto(); return; }
         saveSettings();    // persist any in-session View-menu toggle changes
         m_aui.UnInit();
+        unloadNibPlugins();   // deactivate + unload Nib plugins (the GPL bridge removes its frame subclass first)
         e.Skip();
     }
     // Show "*" on the active tab + title bar while the document has unsaved changes (like Notepad++).
