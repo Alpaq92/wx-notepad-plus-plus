@@ -1987,13 +1987,13 @@ private:
         auto G = [&](const char* n) -> std::pair<int,int> {
             auto it = m_theme.global.find(n); return it == m_theme.global.end() ? std::make_pair(-1,-1) : it->second; };
         const int defBg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT);
-        const auto lnm = G("Line number margin"), fold = G("Fold");
+        const auto lnm = G("Line number margin"), fold = G("Fold"), foldActive = G("Fold active");
         const int gutterBg = lnm.second >= 0 ? lnm.second : defBg;                // one-tone gutter: match the line-number margin
         sci(SCI_SETFOLDMARGINCOLOUR, 1, gutterBg);
         sci(SCI_SETFOLDMARGINHICOLOUR, 1, gutterBg);                              // COLOUR == HICOLOUR -> no checkerboard
         const int markFore   = fold.second >= 0 ? fold.second : gutterBg;                    // = "Fold" bg  (swap)
         const int markBack   = fold.first  >= 0 ? fold.first  : 0x808080;                    // = "Fold" fg  (swap)
-        const int markActive = markBack;   // keep the active fold subtle: the theme's loud "Fold active" red lit the whole structure
+        const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;   // "Fold active" accent - only the box markers use it on highlight
         const int markers[7] = { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL,
                                  SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL };
         const int symbols[7] = { SC_MARK_BOXMINUS, SC_MARK_BOXPLUS, SC_MARK_VLINE, SC_MARK_LCORNER,   // box-tree (N++ default)
@@ -2003,9 +2003,10 @@ private:
             sci(SCI_MARKERDEFINE, markers[i], symbols[i]);
             sci(SCI_MARKERSETFORE, markers[i], markFore);
             sci(SCI_MARKERSETBACK, markers[i], markBack);
-            sci(SCI_MARKERSETBACKSELECTED, markers[i], markActive);
+            const bool isLine = symbols[i] == SC_MARK_VLINE || symbols[i] == SC_MARK_LCORNER || symbols[i] == SC_MARK_TCORNER;
+            sci(SCI_MARKERSETBACKSELECTED, markers[i], isLine ? markBack : markActive);   // boxes take the accent on highlight; connector lines stay subtle
         }
-        sci(SCI_MARKERENABLEHIGHLIGHT, 0);   // no active-fold highlight: it lit the whole fold structure (boxes + lines) loud red
+        sci(SCI_MARKERENABLEHIGHLIGHT, 1);   // highlight the active fold - boxes go to the accent, lines stay gray (not the old loud-red flood)
         sci(SCI_SETAUTOMATICFOLD, SC_AUTOMATICFOLD_SHOW | SC_AUTOMATICFOLD_CLICK | SC_AUTOMATICFOLD_CHANGE);
         sci(SCI_SETFOLDFLAGS, SC_FOLDFLAG_LINEAFTER_CONTRACTED);
     }
@@ -3601,14 +3602,15 @@ private:
             const auto wsp = G("White space symbol");    sci(SCI_SETWHITESPACEFORE, 1, wsp.first >= 0 ? wsp.first : (dark ? 0x606060 : 0xB0B0B0));
             // Fold margin + markers, edge, and highlight indicators - re-applied on every theme switch so the whole
             // editor surface follows the theme like Notepad++ (not just tokens + default background).
-            const auto fold = G("Fold"); const auto foldMargin = G("Fold margin");
+            const auto fold = G("Fold"); const auto foldActive = G("Fold active"); const auto foldMargin = G("Fold margin");
             const int fMarginBg = foldMargin.second >= 0 ? foldMargin.second : gutterBg;
             sci(SCI_SETFOLDMARGINCOLOUR, 1, fMarginBg); sci(SCI_SETFOLDMARGINHICOLOUR, 1, fMarginBg);
             const int markFore = fold.second >= 0 ? fold.second : gutterBg;        // N++ swaps Fold fg/bg onto the markers
             const int markBack = fold.first  >= 0 ? fold.first  : 0x808080;
-            const int markActive = markBack;   // keep the active fold subtle (the theme's loud "Fold active" red looked bad)
+            const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;   // accent, applied to the box markers only
             for (int m : { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL, SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL })
-            { sci(SCI_MARKERSETFORE, m, markFore); sci(SCI_MARKERSETBACK, m, markBack); sci(SCI_MARKERSETBACKSELECTED, m, markActive); }
+            { const bool isLine = m == SC_MARKNUM_FOLDERSUB || m == SC_MARKNUM_FOLDERTAIL || m == SC_MARKNUM_FOLDERMIDTAIL;
+              sci(SCI_MARKERSETFORE, m, markFore); sci(SCI_MARKERSETBACK, m, markBack); sci(SCI_MARKERSETBACKSELECTED, m, isLine ? markBack : markActive); }
             sci(SCI_SETEDGECOLOUR, dark ? 0x4A4A4A : 0xC8C8C8);   // long-line ruler: a subtle but visible gray (column set in applySettings)
             const auto smart = G("Smart Highlighting");  if (smart.second >= 0) sci(SCI_INDICSETFORE, SMART_INDIC, smart.second);
             const auto findMk = G("Find Mark Style");    if (findMk.second >= 0) sci(SCI_INDICSETFORE, MARK_INDIC, findMk.second);
