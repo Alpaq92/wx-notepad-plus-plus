@@ -1871,15 +1871,37 @@ private:
         return page;
     }
 
+    // The bookmark margin marker, drawn from the project's own bookmark icon (resources/icons/bookmark.svg)
+    // as an RGBA image so its Open-Color accent shows through, instead of a flat Scintilla marker shape.
+    void defineBookmarkMarker()
+    {
+        static const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\bookmark.svg";
+        const int sz = 14;   // matches the bookmark margin width
+        wxImage img = wxFileExists(path)
+            ? wxBitmapBundle::FromSVGFile(path, wxSize(sz, sz)).GetBitmap(wxSize(sz, sz)).ConvertToImage()
+            : wxImage();
+        if (!img.IsOk()) { sci(SCI_MARKERDEFINE, MARK_BOOKMARK, SC_MARK_BOOKMARK); return; }   // fallback to the built-in shape
+        const int w = img.GetWidth(), h = img.GetHeight();
+        const unsigned char* rgb = img.GetData();
+        const unsigned char* a   = img.HasAlpha() ? img.GetAlpha() : nullptr;
+        std::vector<unsigned char> rgba(static_cast<size_t>(w) * h * 4);
+        for (int i = 0; i < w * h; ++i)
+        {
+            rgba[i*4+0] = rgb[i*3+0]; rgba[i*4+1] = rgb[i*3+1]; rgba[i*4+2] = rgb[i*3+2];
+            rgba[i*4+3] = a ? a[i] : 255;
+        }
+        sci(SCI_RGBAIMAGESETWIDTH,  w);
+        sci(SCI_RGBAIMAGESETHEIGHT, h);
+        sci(SCI_MARKERDEFINERGBAIMAGE, MARK_BOOKMARK, reinterpret_cast<sptr_t>(rgba.data()));
+    }
+
     // Per-editor Scintilla configuration: margins, font, options, theme, scrollbars.
     void setupScintilla()
     {
         sci(SCI_SETMARGINTYPEN, 0, SC_MARGIN_NUMBER);   // right-justified line numbers
         sci(SCI_SETMARGINWIDTHN, 1, 14);                 // bookmark/symbol margin (like Notepad++)
         sci(SCI_SETMARGINSENSITIVEN, 1, 1);
-        sci(SCI_MARKERDEFINE, MARK_BOOKMARK, SC_MARK_BOOKMARK);
-        sci(SCI_MARKERSETFORE, MARK_BOOKMARK, 0x707000);   // teal outline (BGR)
-        sci(SCI_MARKERSETBACK, MARK_BOOKMARK, 0xC0C000);   // cyan fill   (BGR)
+        defineBookmarkMarker();   // the project's own bookmark icon (resources/icons/bookmark.svg)
         sci(SCI_INDICSETSTYLE, MARK_INDIC, INDIC_ROUNDBOX);   // "Mark All" / found-highlight indicator
         sci(SCI_INDICSETFORE, MARK_INDIC, 0x00C800);
         sci(SCI_INDICSETALPHA, MARK_INDIC, 80);
