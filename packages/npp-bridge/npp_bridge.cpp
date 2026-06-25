@@ -52,6 +52,30 @@ static void npp_cmd_thunk(NibHost*, NibQueryFn, void* user)
     if (fi && fi->_pFunc) fi->_pFunc();
 }
 
+// Stage 3: forward host editor events to every loaded N++ plugin's beNotified, as Scintilla notifications.
+static void on_nib_event(NibHost*, const NibEvent* ev, void*)
+{
+    SCNotification scn = {};
+    scn.nmhdr.hwndFrom = g_npp._scintillaMainHandle;
+    switch (ev->kind) {
+        case NIB_EV_TEXT_CHANGED:
+            scn.nmhdr.code       = SCN_MODIFIED;
+            scn.position         = ev->as.text.pos;
+            scn.length           = ev->as.text.added ? ev->as.text.added : ev->as.text.removed;
+            scn.modificationType = ev->as.text.added ? SC_MOD_INSERTTEXT : SC_MOD_DELETETEXT;
+            break;
+        case NIB_EV_SELECTION_CHANGED:
+            scn.nmhdr.code = SCN_UPDATEUI;
+            scn.updated    = SC_UPDATE_SELECTION;
+            break;
+        case NIB_EV_DOCUMENT_SAVED:
+            scn.nmhdr.code = SCN_SAVEPOINTREACHED;
+            break;
+        default: return;
+    }
+    for (const auto& p : g_plugins) if (p.beNotified) p.beNotified(&scn);
+}
+
 // Diagnostic: report the rebuilt NppData + how many N++ plugins loaded.
 static void cmd_info(NibHost* host, NibQueryFn query, void*)
 {
@@ -114,6 +138,14 @@ static void activate(NibHost* host, NibQueryFn query)
     if (!cmds) return;
     cmds->register_command(host, "org.wxnpp.npp-bridge.info", "N++ Bridge: NppData Info", cmd_info, nullptr);
     if (w) loadNppPlugins(host, cmds);
+
+    // Forward editor events to the loaded plugins' beNotified (Stage 3).
+    const NibEventsApi* events = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 1));
+    if (events) {
+        events->subscribe(host, NIB_EV_TEXT_CHANGED,      on_nib_event, nullptr);
+        events->subscribe(host, NIB_EV_SELECTION_CHANGED, on_nib_event, nullptr);
+        events->subscribe(host, NIB_EV_DOCUMENT_SAVED,    on_nib_event, nullptr);
+    }
 }
 
 static const NibPluginApi PLUGIN = {
