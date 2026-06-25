@@ -1013,6 +1013,31 @@ static void unloadNibPlugins()
 }
 // ============================ end Nib plugin host ============================
 
+// The tab pin button, drawn from the project's own icon set (resources/icons/pin.svg) instead of the
+// wxAui default pin glyph. Subclasses the default flat tab art and re-skins the pin/unpin bitmaps
+// (recoloured to the tab-button colour) whenever the art refreshes its colours.
+class PinTabArt : public wxAuiDefaultTabArt
+{
+public:
+    explicit PinTabArt(const wxColour& pinColour) : m_pinColour(pinColour) {}
+    void UpdateColoursFromSystem() override { wxAuiDefaultTabArt::UpdateColoursFromSystem(); applyPinIcon(); }
+    // wxAuiFlatTabArt is non-copyable (private pimpl); clone a fresh one (the app sets no custom art
+    // colours, so a fresh instance has the same state) and re-skin its pin.
+    wxAuiTabArt* Clone() override { auto* a = new PinTabArt(m_pinColour); a->UpdateColoursFromSystem(); return a; }
+private:
+    wxColour m_pinColour;
+    void applyPinIcon()
+    {
+        static const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\pin.svg";
+        if (!wxFileExists(path)) return;
+        wxFile f(path); wxString svg;
+        if (!f.IsOpened() || !f.ReadAll(&svg)) return;
+        svg.Replace("currentColor", m_pinColour.GetAsString(wxC2S_HTML_SYNTAX));
+        const wxBitmapBundle b = wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(16, 16));
+        if (b.IsOk()) { m_activePinBmp = b; m_activeUnpinBmp = b; m_disabledPinBmp = b; m_disabledUnpinBmp = b; }
+    }
+};
+
 class NppShellFrame : public wxFrame
 {
 public:
@@ -1232,7 +1257,9 @@ private:
         m_tabs = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                    wxAUI_NB_TOP | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS |
                                    wxAUI_NB_CLOSE_ON_ALL_TABS | wxAUI_NB_MIDDLE_CLICK_CLOSE |
-                                   wxAUI_NB_PIN_ON_ACTIVE_TAB);   // N++-style pin button on the active tab
+                                   wxAUI_NB_PIN_ON_ACTIVE_TAB);   // pin button on the active tab
+        { auto* art = new PinTabArt(m_dark ? wxColour(222, 226, 230) : wxColour(52, 58, 64));
+          art->UpdateColoursFromSystem(); m_tabs->SetArtProvider(art); }   // pin glyph from resources/icons/pin.svg
         m_tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE,   &NppShellFrame::onPageClose,   this);
         m_tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &NppShellFrame::onPageChanged, this);
         m_tabs->Bind(wxEVT_AUINOTEBOOK_TAB_RIGHT_UP, &NppShellFrame::onTabContext,  this);
