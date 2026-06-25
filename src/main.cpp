@@ -79,11 +79,6 @@ using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/
 #include "ILexer.h"             // Scintilla::ILexer5 (required by Lexilla.h)
 #include "Lexilla.h"            // CreateLexer() - syntax highlighting
 #include "SciLexer.h"           // SCE_* lexer style numbers
-#ifdef __WXMSW__
-#include "Notepad_plus_msgs.h" // NPPM_* plugin message ids (Win32, HWND-based)
-#include "PluginInterface.h"   // real plugin ABI: NppData, FuncItem, setInfo/getFuncsArray/beNotified typedefs
-#include "Docking.h"           // tTbData - plugin docking-panel registration (NPPM_DMMREGASDCKDLG)
-#endif
 #include <wx/dynlib.h>         // wxDynamicLibrary - portable .dll/.so/.dylib loader (Nib plugin host)
 #include <cstring>             // strcmp / memcpy (Nib host)
 #include "menuCmdID.h"
@@ -91,9 +86,6 @@ using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/
 #include "nib.h"               // our own permissive, cross-platform plugin API (Nib)
 #include "npp_menu.h"          // faithful 1:1 Notepad++ main-menu builder
 
-#ifdef __WXMSW__
-static const UINT WM_SPIKE_PLUGINTEST = WM_APP + 2;
-#endif
 static const int  MARK_BOOKMARK = 2;      // a free Scintilla marker number for bookmarks
 static const int  MARK_INDIC    = 9;      // indicator number for "Mark All" highlights (Find dialog)
 static const int  SMART_INDIC   = 10;     // indicator number for smart-highlight (double-click a word)
@@ -222,28 +214,7 @@ static const char RUST_KEYWORDS[] =
     "as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub "
     "ref return self Self static struct super trait true type unsafe use where while bool char str u8 u32 u64 i32 i64 usize Vec String Option Result";
 
-#ifdef __WXMSW__   // ---- Win32 plugin message plumbing (NPPM_* routing + the SCI_* bridge) ----
-// Set by the frame: answer NPPM_*/RUNCOMMAND_USER plugin messages with real document/app info.
-static std::function<bool(UINT, WPARAM, LPARAM, LRESULT&)> g_nppm;
-
-static LRESULT CALLBACK FrameSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam,
-                                          UINT_PTR, DWORD_PTR dwRefData)
-{
-    if (msg == WM_SPIKE_PLUGINTEST)
-    {
-        int view = -1;
-        ::SendMessageW(hWnd, NPPM_GETCURRENTSCINTILLA, 0, reinterpret_cast<LPARAM>(&view));
-        return (static_cast<LRESULT>(view + 1) << 16) |
-               (::SendMessageW(reinterpret_cast<HWND>(dwRefData), SCI_GETLENGTH, 0, 0) & 0xFFFF);
-    }
-    if (g_nppm && msg >= (WM_USER + 1000))   // NPPM_ (WM_USER+1000) and RUNCOMMAND_USER (WM_USER+3000) ranges
-    {
-        LRESULT out = 0;
-        if (g_nppm(msg, wParam, lParam, out)) return out;
-    }
-    return DefSubclassProc(hWnd, msg, wParam, lParam);
-}
-
+#ifdef __WXMSW__   // ---- the SCI_* bridge: route Scintilla messages sent to the editor HWND into wxStyledTextCtrl ----
 // Win32 plugins reach the editor by SendMessage'ing SCI_* to the Scintilla HWND. But wxStyledTextCtrl
 // services Scintilla messages only through SendMsg (a direct ScintillaWX call); its HWND's WndProc
 // ignores them. Bridge it: subclass the wxSTC HWND and forward Scintilla-range messages (SCI_* live in
@@ -299,9 +270,6 @@ static std::function<void(const wxString&)> g_openDropped;
 
 // Set by the frame: a zoom change (Ctrl+wheel etc.) in one editor syncs all tabs + persists.
 static std::function<void(int)> g_onZoom;
-
-// Set by the frame: forward every Scintilla SCN_* notification to loaded plugins' beNotified().
-static std::function<void(SCNotification*)> g_pluginNotify;
 
 // ---- editor behaviours driven by Scintilla notifications (auto-indent, brace match, smart-hilite) ----
 static sptr_t sciSend(wxStyledTextCtrl* s, UINT m, uptr_t w = 0, sptr_t l = 0)
@@ -938,7 +906,7 @@ static std::vector<NibSub> g_nibSubs;
 static void nibSubscribe(NibHost*, NibEventKind kind, NibEventFn fn, void* u) { g_nibSubs.push_back({ kind, fn, u }); }
 static void nibFireEvent(const NibEvent& ev)   // called by the editor handlers below
 { for (const auto& s : g_nibSubs) if (s.kind == ev.kind && s.fn) s.fn(reinterpret_cast<NibHost*>(g_view), &ev, s.user); }
-// nib.panels/1 - the frame installs these (they need m_aui + the frame as parent), matching g_nppm/g_sciForward.
+// nib.panels/1 - the frame installs these (they need m_aui + the frame as parent), matching g_sciForward.
 static std::function<void*(const char*, const char*, int)> g_nibCreatePanel;
 static std::function<void(void*, const char*, bool)>        g_nibPanelText;   // (panel, utf8, append?)
 static std::function<void(void*, bool)>                     g_nibPanelShow;
@@ -1035,16 +1003,10 @@ public:
         buildToolBar();
         buildStatusBar();
 
-#ifdef __WXMSW__
-        // Part 3, stage 4: the N++ plugin host (NppData + the NPPM_* router + the loader) MOVED to the
-        // optional GPL npp-bridge, which subclasses this frame via nib.win32 and serves NPPM_* itself.
-        // The core no longer installs FrameSubclassProc / handleNppm / loadPlugins. (The generic
-        // SciHwndProc on the editor stays - it is not N++-derived.) The dead code is deleted in 4b.
-        // m_npp = { static_cast<HWND>(GetHandle()), m_sci, nullptr };
-        // ::SetWindowSubclass(static_cast<HWND>(GetHandle()), FrameSubclassProc, 1, reinterpret_cast<DWORD_PTR>(m_sci));
-        // g_nppm = [this](UINT m, WPARAM w, LPARAM l, LRESULT& o) { return handleNppm(m, w, l, o); };
-        // loadPlugins();
-#endif
+        // The Notepad++ binary-plugin host (NppData, the NPPM_* router, the DLL loader) is NOT in the core:
+        // it lives in the optional GPL npp-bridge, which reaches this frame through the nib.win32 capability
+        // and serves NPPM_* itself. The core keeps only the generic SciHwndProc editor bridge (below), which
+        // is not Notepad++-derived. Confining the N++ ABI to that GPL module is what lets the core relicense.
         // Nib panel host: host-owned, dockable wxAui text panels (cross-platform). Installed before plugins
         // load so a plugin's activate() can register one. The opaque NibPanel handle is the wxTextCtrl*.
         g_nibCreatePanel = [this](const char* id, const char* title, int dock) -> void* {
@@ -1070,7 +1032,11 @@ public:
         g_nibMainWindow   = [this]() -> void* { return static_cast<HWND>(GetHandle()); };
         g_nibEditorMain   = [this]() -> void* { return m_sci; };
         g_nibEditorSecond = [this]() -> void* { return m_view2 ? static_cast<HWND>(m_view2->GetHandle()) : nullptr; };
-        g_nibPluginsMenu  = [this]() -> void* { return pluginsMenuHandle(); };
+        g_nibPluginsMenu  = [this]() -> void* {           // the Plugins menu HMENU (the GPL bridge maps it to NPPM_GETMENUHANDLE)
+            auto* mb = GetMenuBar(); if (!mb) return nullptr;
+            const int mi = mb->FindMenu("Plugins");
+            return mi == wxNOT_FOUND ? nullptr : reinterpret_cast<void*>(mb->GetMenu(mi)->GetHMenu());
+        };
 #endif
         loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
         if (!g_nibCommands.empty())   // surface registered Nib commands in the Plugins menu
@@ -1240,32 +1206,8 @@ private:
         m_stc->Bind(wxEVT_STC_ZOOM,             &NppShellFrame::onStcZoom,        this);
         m_stc->Bind(wxEVT_STC_MODIFIED,         &NppShellFrame::onStcModified,    this);
         m_stc->Bind(wxEVT_STC_MACRORECORD,      &NppShellFrame::onMacroRecord,    this);   // capture commands while recording a macro
-        m_stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { forwardScn(SCN_SAVEPOINTREACHED, e); NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev); e.Skip(); });
-        m_stc->Bind(wxEVT_STC_SAVEPOINTLEFT,    [this](wxStyledTextEvent& e) { forwardScn(SCN_SAVEPOINTLEFT, e);    e.Skip(); });
+        m_stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev); e.Skip(); });
         m_stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrame::onStcContextMenu, this);
-    }
-    // Rebuild a Win32 SCNotification from the wx event and hand it to every plugin's beNotified().
-    void forwardScn(int code, wxStyledTextEvent& e)
-    {
-#ifdef __WXMSW__
-        if (!g_pluginNotify) return;
-        SCNotification scn{};
-        scn.nmhdr.hwndFrom = m_sci;
-        scn.nmhdr.idFrom = 0;
-        scn.nmhdr.code = static_cast<unsigned int>(code);
-        scn.position = e.GetPosition();
-        scn.ch = e.GetKey();
-        scn.modificationType = e.GetModificationType();
-        scn.length = e.GetLength();
-        scn.linesAdded = e.GetLinesAdded();
-        scn.line = e.GetLine();
-        scn.margin = e.GetMargin();
-        const std::string text = e.GetString().utf8_string();
-        if (!text.empty()) scn.text = text.c_str();
-        g_pluginNotify(&scn);
-#else
-        (void)code; (void)e;
-#endif
     }
     void onStcCharAdded(wxStyledTextEvent& e)
     {
@@ -1277,7 +1219,6 @@ private:
             const int caret = (int)sci(SCI_GETCURRENTPOS);
             if (caret - (int)sci(SCI_WORDSTARTPOSITION, caret, 1) >= 3) autoComplete(true);
         }
-        forwardScn(SCN_CHARADDED, e);
         e.Skip();
     }
     void onStcUpdateUI(wxStyledTextEvent& e)
@@ -1294,10 +1235,9 @@ private:
             ev.as.selection.caret  = sci(SCI_GETCURRENTPOS);
             nibFireEvent(ev);
         }
-        forwardScn(SCN_UPDATEUI, e);
         e.Skip();
     }
-    void onStcDoubleClick(wxStyledTextEvent& e) { smartHighlight(m_stc); forwardScn(SCN_DOUBLECLICK, e); e.Skip(); }
+    void onStcDoubleClick(wxStyledTextEvent& e) { smartHighlight(m_stc); e.Skip(); }
     void onStcMarginClick(wxStyledTextEvent& e)
     {
         if (e.GetMargin() == 1)   // the bookmark margin
@@ -1306,13 +1246,11 @@ private:
             if (sci(SCI_MARKERGET, line) & (1 << MARK_BOOKMARK)) sci(SCI_MARKERDELETE, line, MARK_BOOKMARK);
             else                                                 sci(SCI_MARKERADD, line, MARK_BOOKMARK);
         }
-        forwardScn(SCN_MARGINCLICK, e);
         e.Skip();
     }
     void onStcZoom(wxStyledTextEvent& e)      { if (g_onZoom) g_onZoom(static_cast<int>(sci(SCI_GETZOOM))); e.Skip(); }
     void onStcModified(wxStyledTextEvent& e)
     {
-        forwardScn(SCN_MODIFIED, e);
         const int mt = e.GetModificationType();
         if (mt & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT))   // raise a Nib text-changed event
         {
@@ -2149,225 +2087,6 @@ private:
         m_fileHistory.AddFileToHistory(path);
         auto* c = wxConfigBase::Get(); c->SetPath("/RecentFiles"); m_fileHistory.Save(*c); c->SetPath("/"); c->Flush();
     }
-
-    // ----- Win32 plugin host (real Notepad++ plugin ABI; Windows build) --------------------------
-#ifdef __WXMSW__
-    // Load each plugins/<Name>/<Name>.dll, hand it our HWNDs via setInfo(), and surface its
-    // getFuncsArray() commands under the Plugins menu - exactly like Notepad++'s PluginsManager.
-    void loadPlugins()
-    {
-        const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\plugins";
-        if (!wxDirExists(dir)) return;
-        wxDir d(dir);
-        wxString sub;
-        for (bool more = d.GetFirst(&sub, "", wxDIR_DIRS); more; more = d.GetNext(&sub))
-        {
-            const wxString dll = dir + "\\" + sub + "\\" + sub + ".dll";
-            if (wxFileExists(dll)) loadOnePlugin(dll);
-        }
-        if (!m_plugins.empty())
-        {
-            g_pluginNotify = [this](SCNotification* scn) { for (auto& p : m_plugins) if (p.beNotified) p.beNotified(scn); };
-            buildPluginsMenu();
-            setStatus(0, wxString::Format("%zu plugin(s) loaded", m_plugins.size()));
-        }
-    }
-    void loadOnePlugin(const wxString& path)
-    {
-        HMODULE lib = ::LoadLibraryW(path.wc_str());
-        if (!lib) return;
-        LoadedPlugin p;
-        p.lib         = lib;
-        p.setInfo     = reinterpret_cast<PFUNCSETINFO>(::GetProcAddress(lib, "setInfo"));
-        p.getFuncs    = reinterpret_cast<PFUNCGETFUNCSARRAY>(::GetProcAddress(lib, "getFuncsArray"));
-        p.beNotified  = reinterpret_cast<PBENOTIFIED>(::GetProcAddress(lib, "beNotified"));
-        p.messageProc = reinterpret_cast<PMESSAGEPROC>(::GetProcAddress(lib, "messageProc"));
-        auto getName  = reinterpret_cast<PFUNCGETNAME>(::GetProcAddress(lib, "getName"));
-        if (!p.setInfo || !p.getFuncs || !getName) { ::FreeLibrary(lib); return; }   // not a real plugin
-        p.name = getName();
-        p.setInfo(m_npp);                 // hand the plugin the frame + Scintilla HWNDs
-        p.funcs = p.getFuncs(&p.count);   // its menu commands
-        m_plugins.push_back(p);
-    }
-    void buildPluginsMenu()
-    {
-        wxMenuBar* mb = GetMenuBar();
-        if (!mb) return;
-        const int mi = mb->FindMenu("Plugins");
-        if (mi == wxNOT_FOUND) return;
-        wxMenu* menu = mb->GetMenu(mi);
-        while (menu->GetMenuItemCount() > 0) menu->Destroy(menu->FindItemByPosition(0));   // drop placeholders
-        for (size_t pi = 0; pi < m_plugins.size(); ++pi)
-        {
-            LoadedPlugin& p = m_plugins[pi];
-            auto* sub = new wxMenu;
-            for (int fi = 0; fi < p.count; ++fi)
-            {
-                const wxString name(p.funcs[fi]._itemName);
-                if (name.empty()) sub->AppendSeparator();
-                else sub->Append(PLUGIN_CMD_BASE + static_cast<int>(pi) * 100 + fi, name);
-            }
-            menu->AppendSubMenu(sub, p.name);
-        }
-    }
-    // Where plugins read/write their own config (Notepad++ uses plugins\Config\).
-    wxString pluginsConfigDir()
-    {
-        const wxString d = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\plugins\\Config";
-        if (!wxDirExists(d)) wxFileName::Mkdir(d, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-        return d;
-    }
-    wxString currentWord()
-    {
-        if (!m_stc) return wxString();
-        const int pos = static_cast<int>(sci(SCI_GETCURRENTPOS));
-        const int s = static_cast<int>(sci(SCI_WORDSTARTPOSITION, pos, 1));
-        const int e = static_cast<int>(sci(SCI_WORDENDPOSITION, pos, 1));
-        if (e <= s) return wxString();
-        std::string b;
-        for (int i = s; i < e; ++i) b += static_cast<char>(sci(SCI_GETCHARAT, i));   // a word is short; avoids Sci_TextRange
-        return wxString::FromUTF8(b.data(), b.size());
-    }
-    wxString currentLineStr()
-    {
-        if (!m_stc) return wxString();
-        const int line = static_cast<int>(sci(SCI_LINEFROMPOSITION, sci(SCI_GETCURRENTPOS)));
-        const int len = static_cast<int>(sci(SCI_GETLINE, line, 0));
-        if (len <= 0) return wxString();
-        std::string b(static_cast<size_t>(len) + 1, '\0');
-        sci(SCI_GETLINE, line, reinterpret_cast<sptr_t>(&b[0])); b.resize(len);
-        return wxString::FromUTF8(b.data(), b.size());
-    }
-    EditorPage* findPageByPath(const wchar_t* path)
-    {
-        if (!path || !m_tabs) return nullptr;
-        const wxString want(path);
-        for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
-        {
-            auto* pg = static_cast<EditorPage*>(m_tabs->GetPage(i));
-            if (pg && pg->path == want) return pg;
-        }
-        return nullptr;
-    }
-    LRESULT switchToFile(const wchar_t* path)
-    {
-        EditorPage* pg = findPageByPath(path);
-        if (!pg) return FALSE;
-        m_tabs->SetSelection(m_tabs->GetPageIndex(pg));
-        return TRUE;
-    }
-    LRESULT reloadFile(const wchar_t* path)
-    {
-        EditorPage* pg = findPageByPath(path);
-        if (!pg) return FALSE;
-        m_tabs->SetSelection(m_tabs->GetPageIndex(pg));
-        loadFile(wxString(path));
-        return TRUE;
-    }
-    LRESULT pathFromBufferId(WPARAM bufId, wchar_t* buf)   // bufferID is the EditorPage* (see NPPM_GETCURRENTBUFFERID)
-    {
-        auto* target = reinterpret_cast<EditorPage*>(bufId);
-        for (size_t i = 0; m_tabs && i < m_tabs->GetPageCount(); ++i)
-        {
-            auto* pg = static_cast<EditorPage*>(m_tabs->GetPage(i));
-            if (pg == target) { if (buf) wxStrlcpy(buf, pg->path.wc_str(), MAX_PATH); return static_cast<LRESULT>(pg->path.length()); }
-        }
-        return -1;
-    }
-    HMENU pluginsMenuHandle()   // plugins use NPPM_GETMENUHANDLE(NPPPLUGINMENU) to add submenu items at runtime
-    {
-        auto* mb = GetMenuBar();
-        if (!mb) return nullptr;
-        const int mi = mb->FindMenu("Plugins");
-        return mi == wxNOT_FOUND ? nullptr : reinterpret_cast<HMENU>(mb->GetMenu(mi)->GetHMenu());
-    }
-    // NPPM_DMMREGASDCKDLG: host the plugin's own dialog HWND in a wxAuiManager dock pane. The default
-    // edge comes from the uMask high bits (DWS_DF_CONT_*/DWS_DF_FLOATING). Starts hidden (DMMSHOW shows it).
-    LRESULT registerDockDialog(tTbData* d)
-    {
-        if (!d || !d->hClient) return FALSE;
-        HWND hc = d->hClient;
-        auto* host = new wxPanel(this);
-        ::SetParent(hc, static_cast<HWND>(host->GetHandle()));
-        host->Bind(wxEVT_SIZE, [host, hc](wxSizeEvent& e) {
-            const wxSize s = host->GetClientSize(); ::MoveWindow(hc, 0, 0, s.GetWidth(), s.GetHeight(), TRUE); e.Skip();
-        });
-        const wxString name(d->pszName ? d->pszName : L"Plugin");
-        wxAuiPaneInfo pi; pi.Name(name).Caption(name).CloseButton(true).BestSize(340, 220).MinSize(160, 100).Hide();
-        if (d->uMask & DWS_DF_FLOATING) pi.Float();
-        else switch ((d->uMask >> 28) & 0x0F)
-        {
-            case CONT_LEFT:  pi.Left();  break;
-            case CONT_RIGHT: pi.Right(); break;
-            case CONT_TOP:   pi.Top();   break;
-            default:         pi.Bottom();break;
-        }
-        m_aui.AddPane(host, pi);
-        m_aui.Update();
-        m_docks.push_back({ hc, host, name });
-        return TRUE;
-    }
-    LRESULT showDock(HWND hDlg, bool show)
-    {
-        for (auto& dk : m_docks)
-            if (dk.hClient == hDlg)
-            {
-                wxAuiPaneInfo& pi = m_aui.GetPane(dk.host);
-                if (pi.IsOk()) { pi.Show(show); if (show) ::ShowWindow(dk.hClient, SW_SHOW); m_aui.Update(); }
-                return TRUE;
-            }
-        return FALSE;
-    }
-    // Answer the common NPPM_*/RUNCOMMAND_USER plugin messages from real state. Returns true (with
-    // 'out' set) when handled; unhandled messages fall through to DefSubclassProc in the subclass proc.
-    bool handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& out)
-    {
-        EditorPage* p = activePage();
-        const wxString path = p ? p->path : wxString();
-        const wxFileName fn(path);
-        auto put = [&](const wxString& s) -> LRESULT {     // copy a string into the plugin's (strLen, wchar_t*) buffer
-            wchar_t* buf = reinterpret_cast<wchar_t*>(lParam);
-            if (!buf || wParam == 0) return static_cast<LRESULT>(s.length());
-            wxStrlcpy(buf, s.wc_str(), static_cast<size_t>(wParam));
-            return TRUE;
-        };
-        switch (msg)
-        {
-            case NPPM_GETNPPVERSION:        out = MAKELONG(96, 8); return true;
-            case NPPM_GETCURRENTSCINTILLA:  if (lParam) *reinterpret_cast<int*>(lParam) = 0; out = TRUE; return true;
-            case NPPM_GETNBOPENFILES:       out = static_cast<LRESULT>(m_tabs ? m_tabs->GetPageCount() : 1); return true;
-            case NPPM_GETCURRENTBUFFERID:   out = reinterpret_cast<LRESULT>(p); return true;   // EditorPage* = stable per-doc id
-            case NPPM_GETFULLCURRENTPATH:   out = put(path); return true;
-            case NPPM_GETCURRENTDIRECTORY:  out = put(fn.GetPath()); return true;
-            case NPPM_GETFILENAME:          out = put(fn.GetFullName()); return true;
-            case NPPM_GETNAMEPART:          out = put(fn.GetName()); return true;
-            case NPPM_GETEXTPART:           out = put(fn.GetExt()); return true;
-            case NPPM_GETNPPDIRECTORY:      out = put(wxPathOnly(wxStandardPaths::Get().GetExecutablePath())); return true;
-            case NPPM_GETNPPFULLFILEPATH:   out = put(wxStandardPaths::Get().GetExecutablePath()); return true;
-            case NPPM_GETPLUGINSCONFIGDIR:  out = put(pluginsConfigDir()); return true;
-            case NPPM_GETCURRENTWORD:       out = put(currentWord()); return true;
-            case NPPM_GETCURRENTLINESTR:    out = put(currentLineStr()); return true;
-            case NPPM_GETCURRENTLANGTYPE:   if (lParam) *reinterpret_cast<int*>(lParam) = 0; out = TRUE; return true;   // L_TEXT (minimal)
-            case NPPM_MENUCOMMAND:          ::SendMessageW(static_cast<HWND>(GetHandle()), WM_COMMAND, static_cast<WPARAM>(lParam), 0); out = TRUE; return true;
-            case NPPM_SETSTATUSBAR:         { auto* t = reinterpret_cast<const wchar_t*>(lParam); if (t) setStatus(0, wxString(t)); out = TRUE; return true; }
-            case NPPM_DOOPEN:               if (lParam) openPath(wxString(reinterpret_cast<const wchar_t*>(lParam))); out = TRUE; return true;
-            case NPPM_SAVECURRENTFILE:      onSave(); out = TRUE; return true;
-            case NPPM_MAKECURRENTBUFFERDIRTY: out = TRUE; return true;   // best-effort: Scintilla has no force-dirty API
-            case NPPM_ACTIVATEDOC:          if (m_tabs && static_cast<size_t>(lParam) < m_tabs->GetPageCount()) m_tabs->SetSelection(static_cast<size_t>(lParam)); out = TRUE; return true;
-            case NPPM_SWITCHTOFILE:         out = switchToFile(reinterpret_cast<const wchar_t*>(lParam)); return true;
-            case NPPM_RELOADFILE:           out = reloadFile(reinterpret_cast<const wchar_t*>(lParam)); return true;
-            case NPPM_GETFULLPATHFROMBUFFERID: out = pathFromBufferId(wParam, reinterpret_cast<wchar_t*>(lParam)); return true;
-            case NPPM_GETMENUHANDLE:        out = reinterpret_cast<LRESULT>(pluginsMenuHandle()); return true;
-            case NPPM_DMMREGASDCKDLG:       out = registerDockDialog(reinterpret_cast<tTbData*>(lParam)); return true;
-            case NPPM_DMMSHOW:              out = showDock(reinterpret_cast<HWND>(lParam), true); return true;
-            case NPPM_DMMHIDE:              out = showDock(reinterpret_cast<HWND>(lParam), false); return true;
-            case NPPM_DMMUPDATEDISPINFO:    if (lParam) ::InvalidateRect(reinterpret_cast<HWND>(lParam), nullptr, TRUE); out = TRUE; return true;
-            case RUNCOMMAND_USER + CURRENT_LINE:   out = m_sci ? sci(SCI_LINEFROMPOSITION, sci(SCI_GETCURRENTPOS)) : 0; return true;
-            case RUNCOMMAND_USER + CURRENT_COLUMN: out = m_sci ? sci(SCI_GETCOLUMN, sci(SCI_GETCURRENTPOS)) : 0; return true;
-        }
-        return false;
-    }
-#endif // __WXMSW__ (Win32 plugin host)
 
     // ----- toolbar (Notepad++ icon pack, native order) -------------------
     wxBitmapBundle icon(const wxString& name)
@@ -3815,9 +3534,6 @@ private:
         cfg->Write("DarkMode", dark);
         saveSession(cfg);                     // remember open files so the relaunch restores them
         cfg->Flush();
-#ifdef __WXMSW__
-        ::RemoveWindowSubclass(static_cast<HWND>(GetHandle()), FrameSubclassProc, 1);
-#endif
         wxExecute("\"" + wxStandardPaths::Get().GetExecutablePath() + "\"", wxEXEC_ASYNC);
         Close(true);
     }
@@ -3897,17 +3613,6 @@ private:
             else { m_fileHistory.RemoveFileFromHistory(i); auto* c = wxConfigBase::Get(); c->SetPath("/RecentFiles"); m_fileHistory.Save(*c); c->SetPath("/"); }
             return;
         }
-#ifdef __WXMSW__
-        if (!m_plugins.empty() && cmd >= PLUGIN_CMD_BASE &&
-            cmd < PLUGIN_CMD_BASE + static_cast<int>(m_plugins.size()) * 100)   // plugin menu command (use cmd: 62000 sign-extends negative)
-        {
-            const int rel = cmd - PLUGIN_CMD_BASE;
-            const size_t pi = rel / 100; const int fi = rel % 100;
-            if (pi < m_plugins.size() && fi < m_plugins[pi].count && m_plugins[pi].funcs[fi]._pFunc)
-                m_plugins[pi].funcs[fi]._pFunc();
-            return;
-        }
-#endif
         if (!g_nibCommands.empty() && cmd >= NIB_CMD_BASE && cmd < NIB_CMD_BASE + static_cast<int>(g_nibCommands.size()))
         {   // Nib plugin command (cross-platform)
             const NibCmd& nc = g_nibCommands[cmd - NIB_CMD_BASE];
@@ -4274,26 +3979,8 @@ private:
 #ifdef __WXMSW__
     HWND        m_sci  = nullptr;
     SizeGripWin* m_grip = nullptr;          // custom dark-themed status-bar resize grip (native one can't theme)
-    NppData     m_npp{};
-    // ----- loaded Win32 plugins -----
-    struct LoadedPlugin {
-        HMODULE             lib = nullptr;
-        std::wstring        name;
-        PFUNCSETINFO        setInfo = nullptr;
-        PFUNCGETFUNCSARRAY  getFuncs = nullptr;
-        PBENOTIFIED         beNotified = nullptr;
-        PMESSAGEPROC        messageProc = nullptr;
-        FuncItem*           funcs = nullptr;
-        int                 count = 0;
-    };
-    std::vector<LoadedPlugin> m_plugins;
 #endif
-    wxAuiManager m_aui;                          // hosts plugin docking panels around the editor
-#ifdef __WXMSW__
-    struct PluginDock { HWND hClient; wxPanel* host; wxString name; };
-    std::vector<PluginDock> m_docks;
-    static const int PLUGIN_CMD_BASE = 62000;   // plugin menu command ids: above doc-list (61xxx), clear of all IDM_* (40000-~50000)
-#endif
+    wxAuiManager m_aui;                          // hosts the dockable side/bottom panels (Function List, Doc Map, Find results, Nib panels)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
     bool        m_wrap = false, m_ws = false, m_guides = false, m_dark = true;
