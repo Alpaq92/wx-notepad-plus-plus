@@ -932,6 +932,12 @@ static int64_t nibEdGetText(NibHost*, int64_t s, int64_t e, char* b, int64_t bs)
 // nib.commands/1
 static void nibCmdRegister(NibHost*, const char* id, const char* title, NibCommandFn fn, void* u)
 { g_nibCommands.push_back({ id ? id : "", title ? title : "", fn, u }); }
+// nib.events/1
+struct NibSub { NibEventKind kind; NibEventFn fn; void* user; };
+static std::vector<NibSub> g_nibSubs;
+static void nibSubscribe(NibHost*, NibEventKind kind, NibEventFn fn, void* u) { g_nibSubs.push_back({ kind, fn, u }); }
+static void nibFireEvent(const NibEvent& ev)   // called by the editor handlers below
+{ for (const auto& s : g_nibSubs) if (s.kind == ev.kind && s.fn) s.fn(reinterpret_cast<NibHost*>(g_view), &ev, s.user); }
 // nib.host/1
 static const char* nibHostName(NibHost*) { return "wxNotepad++"; }
 static uint32_t     nibHostAbi(NibHost*) { return NIB_ABI_VERSION; }
@@ -939,6 +945,7 @@ static uint32_t     nibHostAbi(NibHost*) { return NIB_ABI_VERSION; }
 static const NibHostApi     g_nibHostApi     = { 1, sizeof(NibHostApi),     nibHostName, nibHostAbi };
 static const NibEditorApi   g_nibEditorApi   = { 1, sizeof(NibEditorApi),   nibEdLength, nibEdInsert, nibEdReplSel, nibEdSelStart, nibEdSelEnd, nibEdGetText };
 static const NibCommandsApi g_nibCommandsApi = { 1, sizeof(NibCommandsApi), nibCmdRegister };
+static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibSubscribe };
 
 static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
 {
@@ -946,6 +953,7 @@ static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_HOST)     == 0) return &g_nibHostApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_EDITOR)   == 0) return &g_nibEditorApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_COMMANDS) == 0) return &g_nibCommandsApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_EVENTS)   == 0) return &g_nibEventsApi;
     return nullptr;
 }
 static void nibLog(NibHost*, int, const char* msg) { if (msg) wxLogDebug("[nib] %s", msg); }
@@ -1178,7 +1186,7 @@ private:
         m_stc->Bind(wxEVT_STC_ZOOM,             &NppShellFrame::onStcZoom,        this);
         m_stc->Bind(wxEVT_STC_MODIFIED,         &NppShellFrame::onStcModified,    this);
         m_stc->Bind(wxEVT_STC_MACRORECORD,      &NppShellFrame::onMacroRecord,    this);   // capture commands while recording a macro
-        m_stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { forwardScn(SCN_SAVEPOINTREACHED, e); e.Skip(); });
+        m_stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { forwardScn(SCN_SAVEPOINTREACHED, e); NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev); e.Skip(); });
         m_stc->Bind(wxEVT_STC_SAVEPOINTLEFT,    [this](wxStyledTextEvent& e) { forwardScn(SCN_SAVEPOINTLEFT, e);    e.Skip(); });
         m_stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrame::onStcContextMenu, this);
     }
@@ -1224,6 +1232,14 @@ private:
         if (g_smartActive && g_smartSci == m_stc && sci(SCI_GETSELECTIONEMPTY)) clearSmart(m_stc);
         updateDocMapViewport();   // keep the minimap's viewport band in sync with scrolling/caret
         syncFrom(m_stc);          // mirror scroll to View 2 when synchronized scrolling is on
+        if (e.GetUpdated() & SC_UPDATE_SELECTION)   // raise a Nib selection-changed event
+        {
+            NibEvent ev{};
+            ev.kind = NIB_EV_SELECTION_CHANGED; ev.struct_size = sizeof(NibEvent);
+            ev.as.selection.anchor = sci(SCI_GETANCHOR);
+            ev.as.selection.caret  = sci(SCI_GETCURRENTPOS);
+            nibFireEvent(ev);
+        }
         forwardScn(SCN_UPDATEUI, e);
         e.Skip();
     }
@@ -1240,7 +1256,22 @@ private:
         e.Skip();
     }
     void onStcZoom(wxStyledTextEvent& e)      { if (g_onZoom) g_onZoom(static_cast<int>(sci(SCI_GETZOOM))); e.Skip(); }
-    void onStcModified(wxStyledTextEvent& e)  { forwardScn(SCN_MODIFIED, e); if (m_flTimer) m_flTimer->StartOnce(600); e.Skip(); }   // debounce Function List re-parse
+    void onStcModified(wxStyledTextEvent& e)
+    {
+        forwardScn(SCN_MODIFIED, e);
+        const int mt = e.GetModificationType();
+        if (mt & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT))   // raise a Nib text-changed event
+        {
+            NibEvent ev{};
+            ev.kind = NIB_EV_TEXT_CHANGED; ev.struct_size = sizeof(NibEvent);
+            ev.as.text.pos     = e.GetPosition();
+            ev.as.text.added   = (mt & SC_MOD_INSERTTEXT) ? e.GetLength() : 0;
+            ev.as.text.removed = (mt & SC_MOD_DELETETEXT) ? e.GetLength() : 0;
+            nibFireEvent(ev);
+        }
+        if (m_flTimer) m_flTimer->StartOnce(600);   // debounce Function List re-parse
+        e.Skip();
+    }
     // (file drops onto the editor are handled by the frame's wxFileDropTarget; wxEVT_STC_URIDROPPED is
     //  deprecated in wx 3.3 - "never generated" - and absent when wx is built without drag-and-drop.)
     void onStcContextMenu(wxContextMenuEvent& e)

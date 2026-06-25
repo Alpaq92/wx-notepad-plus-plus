@@ -83,6 +83,28 @@ typedef struct NibCommandsApi {
     void (*register_command)(NibHost*, const char* id, const char* title, NibCommandFn fn, void* user);
 } NibCommandsApi;
 
+// ---- nib.events/1 : subscribe to editor / document events ----------------------------------------
+#define NIB_IFACE_EVENTS "nib.events/1"
+typedef enum {
+    NIB_EV_TEXT_CHANGED = 1,    // as.text:      pos, added, removed (bytes)
+    NIB_EV_SELECTION_CHANGED,   // as.selection: anchor, caret
+    NIB_EV_DOCUMENT_SAVED       // (no payload)
+} NibEventKind;
+typedef struct NibEvent {
+    NibEventKind kind;
+    uint32_t     struct_size;
+    union {
+        struct { int64_t pos, added, removed; } text;
+        struct { int64_t anchor, caret; }       selection;
+    } as;
+} NibEvent;
+typedef void (*NibEventFn)(NibHost* host, const NibEvent* ev, void* user);
+typedef struct NibEventsApi {
+    uint32_t version;
+    uint32_t struct_size;
+    void (*subscribe)(NibHost*, NibEventKind kind, NibEventFn fn, void* user);  // call from activate()
+} NibEventsApi;
+
 // ---- the plugin's lifecycle vtable ---------------------------------------------------------------
 typedef struct NibPluginApi {
     uint32_t    abi_version;                          // the ABI the plugin was built against
