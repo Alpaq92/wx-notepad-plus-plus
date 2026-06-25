@@ -98,3 +98,9 @@ endif()
 # ---- cross-platform Nib-API plugin (exercises our own permissive plugin API on every OS) -----------
 add_subdirectory(src/plugins/nib_test_plugin)
 add_dependencies(wxnpp nib_test_plugin)
+
+# ---- optional GPL Notepad++ binary-plugin bridge (Windows-only; itself a Nib plugin) ---------------
+if(WIN32)
+    add_subdirectory(packages/npp-bridge)
+    add_dependencies(wxnpp npp_bridge)
+endif()
