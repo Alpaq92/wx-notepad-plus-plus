@@ -947,6 +947,15 @@ static NibPanel* nibPanelRegister(NibHost*, const char* id, const char* title, N
 static void nibPanelSetText(NibHost*, NibPanel* p, const char* t) { if (g_nibPanelText) g_nibPanelText(p, t, false); }
 static void nibPanelAppend(NibHost*, NibPanel* p, const char* t)  { if (g_nibPanelText) g_nibPanelText(p, t, true);  }
 static void nibPanelShow(NibHost*, NibPanel* p, int v)            { if (g_nibPanelShow) g_nibPanelShow(p, v != 0);   }
+#ifdef __WXMSW__
+// nib.win32/1 - Windows-only native-handle capability (the GPL npp-bridge uses it to rebuild NppData).
+static std::function<void*()> g_nibMainWindow, g_nibEditorMain, g_nibEditorSecond, g_nibPluginsMenu;
+static void* nibW32Main(NibHost*)   { return g_nibMainWindow   ? g_nibMainWindow()   : nullptr; }
+static void* nibW32EdMain(NibHost*) { return g_nibEditorMain   ? g_nibEditorMain()   : nullptr; }
+static void* nibW32EdSec(NibHost*)  { return g_nibEditorSecond ? g_nibEditorSecond() : nullptr; }
+static void* nibW32Menu(NibHost*)   { return g_nibPluginsMenu  ? g_nibPluginsMenu()  : nullptr; }
+static const NibWin32Api g_nibWin32Api = { 1, sizeof(NibWin32Api), nibW32Main, nibW32EdMain, nibW32EdSec, nibW32Menu };
+#endif
 // nib.host/1
 static const char* nibHostName(NibHost*) { return "wxNotepad++"; }
 static uint32_t     nibHostAbi(NibHost*) { return NIB_ABI_VERSION; }
@@ -965,6 +974,9 @@ static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_COMMANDS) == 0) return &g_nibCommandsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_EVENTS)   == 0) return &g_nibEventsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PANELS)   == 0) return &g_nibPanelsApi;
+#ifdef __WXMSW__
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_WIN32)    == 0) return &g_nibWin32Api;
+#endif
     return nullptr;
 }
 static void nibLog(NibHost*, int, const char* msg) { if (msg) wxLogDebug("[nib] %s", msg); }
@@ -1050,6 +1062,12 @@ public:
         g_nibPanelShow = [this](void* p, bool v) {
             wxAuiPaneInfo& pi = m_aui.GetPane(static_cast<wxWindow*>(p)); if (pi.IsOk()) { pi.Show(v); m_aui.Update(); }
         };
+#ifdef __WXMSW__   // nib.win32: hand the (optional, GPL) N++ bridge the native handles it needs
+        g_nibMainWindow   = [this]() -> void* { return static_cast<HWND>(GetHandle()); };
+        g_nibEditorMain   = [this]() -> void* { return m_sci; };
+        g_nibEditorSecond = [this]() -> void* { return m_view2 ? static_cast<HWND>(m_view2->GetHandle()) : nullptr; };
+        g_nibPluginsMenu  = [this]() -> void* { return pluginsMenuHandle(); };
+#endif
         loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
         if (!g_nibCommands.empty())   // surface registered Nib commands in the Plugins menu
             if (auto* mb = GetMenuBar()) { const int mi = mb->FindMenu("Plugins");

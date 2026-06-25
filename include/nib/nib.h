@@ -120,6 +120,20 @@ typedef struct NibPanelsApi {
     void       (*show)(NibHost*, NibPanel*, int visible);
 } NibPanelsApi;
 
+// ---- nib.win32/1 : Windows-only native-handle escape hatch (capability-gated) --------------------
+// Offered only by the Windows host; query() returns NULL on Linux/macOS. The optional GPL npp-bridge
+// uses it to rebuild the Notepad++ NppData environment for binary N++ plugins. Handles are void*
+// (HWND/HMENU on Windows) so this header stays Win32-free.
+#define NIB_IFACE_WIN32 "nib.win32/1"
+typedef struct NibWin32Api {
+    uint32_t version;
+    uint32_t struct_size;
+    void* (*main_window)(NibHost*);    // top-level frame HWND
+    void* (*editor_main)(NibHost*);    // primary Scintilla editor HWND
+    void* (*editor_second)(NibHost*);  // secondary editor HWND, or NULL if not split
+    void* (*plugins_menu)(NibHost*);   // Plugins menu HMENU
+} NibWin32Api;
+
 // ---- the plugin's lifecycle vtable ---------------------------------------------------------------
 typedef struct NibPluginApi {
     uint32_t    abi_version;                          // the ABI the plugin was built against

@@ -36,6 +36,19 @@ static void cmd_evcount(NibHost* host, NibQueryFn query, void*)
     ed->replace_selection(host, buf);
 }
 
+// Probe the Windows-only nib.win32 capability (it is the gate the GPL N++ bridge will use).
+static void cmd_win32(NibHost* host, NibQueryFn query, void*)
+{
+    const NibEditorApi* ed = static_cast<const NibEditorApi*>(query(host, NIB_IFACE_EDITOR, 1));
+    if (!ed) return;
+    const NibWin32Api* w = static_cast<const NibWin32Api*>(query(host, NIB_IFACE_WIN32, 1));
+    char buf[128];
+    if (w) std::snprintf(buf, sizeof(buf), "// nib.win32 available: frame=%p editor=%p menu=%p\n",
+                         w->main_window(host), w->editor_main(host), w->plugins_menu(host));
+    else   std::snprintf(buf, sizeof(buf), "// nib.win32 not offered on this platform (native plugins only)\n");
+    ed->replace_selection(host, buf);
+}
+
 // On every text change, append a line to our docked panel (the nib.panels demo).
 static void on_text_changed(NibHost*, const NibEvent* ev, void*)
 {
@@ -60,6 +73,7 @@ static void activate(NibHost* host, NibQueryFn query)
         cmds->register_command(host, "com.wxnpp.nibtest.hello",   "Insert Hello (Nib)",      cmd_hello,   nullptr);
         cmds->register_command(host, "com.wxnpp.nibtest.doclen",  "Insert Doc Length (Nib)", cmd_doclen,  nullptr);
         cmds->register_command(host, "com.wxnpp.nibtest.evcount", "Show Nib Event Count",    cmd_evcount, nullptr);
+        cmds->register_command(host, "com.wxnpp.nibtest.win32",   "Check nib.win32 (handles)", cmd_win32, nullptr);
     }
 
     const NibPanelsApi* panels = static_cast<const NibPanelsApi*>(query(host, NIB_IFACE_PANELS, 1));
