@@ -1013,6 +1013,16 @@ static void unloadNibPlugins()
 }
 // ============================ end Nib plugin host ============================
 
+// Blend two Scintilla colours (each 0xBBGGRR): pctA% of a over (100-pctA)% of b.
+static int blendColour(int a, int b, int pctA)
+{
+    auto ch = [](int c, int s) { return (c >> s) & 0xFF; };
+    const int r  = (ch(a, 0)  * pctA + ch(b, 0)  * (100 - pctA)) / 100;
+    const int g  = (ch(a, 8)  * pctA + ch(b, 8)  * (100 - pctA)) / 100;
+    const int bl = (ch(a, 16) * pctA + ch(b, 16) * (100 - pctA)) / 100;
+    return r | (g << 8) | (bl << 16);
+}
+
 // The tab pin button, drawn from the project's own icon set (resources/icons/pin.svg) instead of the
 // wxAui default pin glyph. Subclasses the default flat tab art and re-skins the pin/unpin bitmaps
 // (recoloured to the tab-button colour) whenever the art refreshes its colours.
@@ -1993,7 +2003,7 @@ private:
         sci(SCI_SETFOLDMARGINHICOLOUR, 1, gutterBg);                              // COLOUR == HICOLOUR -> no checkerboard
         const int markFore   = fold.second >= 0 ? fold.second : gutterBg;                    // = "Fold" bg  (swap)
         const int markBack   = fold.first  >= 0 ? fold.first  : 0x808080;                    // = "Fold" fg  (swap)
-        const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;   // "Fold active" accent - only the box markers use it on highlight
+        const int markActive = foldActive.first >= 0 ? blendColour(foldActive.first, markBack, 50) : markBack;   // muted accent (50% toward gray); box markers only
         const int markers[7] = { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL,
                                  SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL };
         const int symbols[7] = { SC_MARK_BOXMINUS, SC_MARK_BOXPLUS, SC_MARK_VLINE, SC_MARK_LCORNER,   // box-tree (N++ default)
@@ -3607,7 +3617,7 @@ private:
             sci(SCI_SETFOLDMARGINCOLOUR, 1, fMarginBg); sci(SCI_SETFOLDMARGINHICOLOUR, 1, fMarginBg);
             const int markFore = fold.second >= 0 ? fold.second : gutterBg;        // N++ swaps Fold fg/bg onto the markers
             const int markBack = fold.first  >= 0 ? fold.first  : 0x808080;
-            const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;   // accent, applied to the box markers only
+            const int markActive = foldActive.first >= 0 ? blendColour(foldActive.first, markBack, 50) : markBack;   // muted accent (50% toward gray); boxes only
             for (int m : { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL, SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL })
             { const bool isLine = m == SC_MARKNUM_FOLDERSUB || m == SC_MARKNUM_FOLDERTAIL || m == SC_MARKNUM_FOLDERMIDTAIL;
               sci(SCI_MARKERSETFORE, m, markFore); sci(SCI_MARKERSETBACK, m, markBack); sci(SCI_MARKERSETBACKSELECTED, m, isLine ? markBack : markActive); }
