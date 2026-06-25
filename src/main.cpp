@@ -2005,7 +2005,7 @@ private:
             sci(SCI_MARKERSETBACK, markers[i], markBack);
             sci(SCI_MARKERSETBACKSELECTED, markers[i], markActive);
         }
-        sci(SCI_MARKERENABLEHIGHLIGHT, 1);
+        sci(SCI_MARKERENABLEHIGHLIGHT, 0);   // no active-fold highlight: it lit the whole fold structure (boxes + lines) loud red
         sci(SCI_SETAUTOMATICFOLD, SC_AUTOMATICFOLD_SHOW | SC_AUTOMATICFOLD_CLICK | SC_AUTOMATICFOLD_CHANGE);
         sci(SCI_SETFOLDFLAGS, SC_FOLDFLAG_LINEAFTER_CONTRACTED);
     }
