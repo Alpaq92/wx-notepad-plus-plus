@@ -585,6 +585,53 @@ private:
     int         m_max;
 };
 
+// Notepad++-style Column Editor (Alt+C): insert text or an incrementing number down a column /
+// rectangular (or multi-) selection. The dialog gathers the choice; the frame applies it per selection.
+class ColumnEditorDialog : public wxDialog
+{
+public:
+    ColumnEditorDialog(wxWindow* p, bool dark) : wxDialog(p, wxID_ANY, "Column Editor")
+    {
+        const wxColour fbg = dark ? wxColour(32, 32, 32) : *wxWHITE, ffg = dark ? wxColour(220, 220, 220) : *wxBLACK;
+        auto field = [&](const wxString& v, int w) { auto* t = new wxTextCtrl(this, wxID_ANY, v, wxDefaultPosition, wxSize(w, -1)); if (dark) { t->SetBackgroundColour(fbg); t->SetForegroundColour(ffg); } return t; };
+        auto* s = new wxBoxSizer(wxVERTICAL);
+
+        m_radioText = new wxRadioButton(this, wxID_ANY, "Text to Insert", wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+        m_textField = field("", 250);
+        s->Add(m_radioText, 0, wxLEFT | wxTOP | wxRIGHT, 10);
+        s->Add(m_textField, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 26);
+
+        m_radioNum = new wxRadioButton(this, wxID_ANY, "Number to Insert");
+        s->Add(m_radioNum, 0, wxLEFT | wxRIGHT, 10);
+        auto* nrow = new wxBoxSizer(wxHORIZONTAL);
+        nrow->Add(new wxStaticText(this, wxID_ANY, "Initial:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        m_initial = field("1", 60); nrow->Add(m_initial, 0, wxRIGHT, 14);
+        nrow->Add(new wxStaticText(this, wxID_ANY, "Increase by:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        m_increase = field("1", 60); nrow->Add(m_increase);
+        s->Add(nrow, 0, wxLEFT | wxRIGHT | wxTOP, 26);
+        m_leadZero = new wxCheckBox(this, wxID_ANY, "Leading zeros");
+        s->Add(m_leadZero, 0, wxLEFT | wxTOP | wxBOTTOM, 26);
+        wxString fmts[] = { "Dec", "Hex", "Oct", "Bin" };
+        m_format = new wxRadioBox(this, wxID_ANY, "Format", wxDefaultPosition, wxDefaultSize, 4, fmts, 4, wxRA_SPECIFY_COLS);
+        s->Add(m_format, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 26);
+
+        s->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxALL | wxEXPAND, 10);
+        SetSizerAndFit(s);
+        m_radioText->SetValue(true);
+        m_textField->SetFocus();
+    }
+    bool     isText()       const { return m_radioText->GetValue(); }
+    wxString text()         const { return m_textField->GetValue(); }
+    long     initial()      const { long v = 0; m_initial->GetValue().ToLong(&v); return v; }
+    long     increase()     const { long v = 0; m_increase->GetValue().ToLong(&v); return v; }
+    bool     leadingZeros() const { return m_leadZero->GetValue(); }
+    int      base()         const { switch (m_format->GetSelection()) { case 1: return 16; case 2: return 8; case 3: return 2; default: return 10; } }
+private:
+    wxRadioButton* m_radioText = nullptr; wxRadioButton* m_radioNum = nullptr;
+    wxTextCtrl*    m_textField = nullptr; wxTextCtrl* m_initial = nullptr; wxTextCtrl* m_increase = nullptr;
+    wxCheckBox*    m_leadZero  = nullptr; wxRadioBox* m_format = nullptr;
+};
+
 // Options gathered from the Find/Replace dialog and passed to the editor search engine.
 struct FindOpts { wxString find, repl; bool matchCase = false, wholeWord = false, regex = false, wrap = true, forward = true, inSelection = false; };
 
@@ -1690,6 +1737,47 @@ private:
         wxAuiPaneInfo& pi = m_aui.GetPane(m_incBar);
         if (pi.IsOk() && pi.IsShown()) { pi.Hide(); m_aui.Update(); }
         if (m_stc) m_stc->SetFocus();
+    }
+
+    // ---- Column Editor (Alt+C): insert text or an incrementing number down a column selection ------
+    static std::string colNum(long v, int base)
+    {
+        if (base == 10 || v < 0) return std::to_string(v);
+        unsigned long u = (unsigned long)v; const char* digits = "0123456789abcdef"; std::string s;
+        if (u == 0) return "0";
+        while (u) { s += digits[u % (unsigned)base]; u /= (unsigned)base; }
+        std::reverse(s.begin(), s.end()); return s;
+    }
+    void columnEditor()
+    {
+        ColumnEditorDialog dlg(this, m_dark);
+        themeDialog(&dlg);
+        if (dlg.ShowModal() != wxID_OK) return;
+        const int nsel = (int)sci(SCI_GETSELECTIONS);
+        if (nsel <= 0) return;
+        struct Seln { int a, b; };
+        std::vector<Seln> sels;
+        for (int i = 0; i < nsel; ++i) { int a = (int)sci(SCI_GETSELECTIONNSTART, i), b = (int)sci(SCI_GETSELECTIONNEND, i); if (a > b) std::swap(a, b); sels.push_back({ a, b }); }
+        std::sort(sels.begin(), sels.end(), [](const Seln& x, const Seln& y) { return x.a < y.a; });   // top-to-bottom for the number order
+        std::vector<std::string> ins(sels.size());
+        if (dlg.isText())
+        {
+            const std::string t(dlg.text().utf8_str());
+            for (auto& v : ins) v = t;
+        }
+        else
+        {
+            const long init = dlg.initial(), inc = dlg.increase(); const int base = dlg.base(); size_t w = 0;
+            for (size_t i = 0; i < sels.size(); ++i) { ins[i] = colNum(init + (long)i * inc, base); w = std::max(w, ins[i].size()); }
+            if (dlg.leadingZeros()) for (auto& v : ins) if (v.size() < w) v = std::string(w - v.size(), '0') + v;
+        }
+        sci(SCI_BEGINUNDOACTION);
+        for (int i = (int)sels.size() - 1; i >= 0; --i)   // apply bottom-to-top so earlier edits don't shift later offsets
+        {
+            sci(SCI_SETTARGETRANGE, sels[i].a, sels[i].b);
+            sci(SCI_REPLACETARGET, (uptr_t)ins[i].size(), reinterpret_cast<sptr_t>(ins[i].c_str()));
+        }
+        sci(SCI_ENDUNDOACTION);
     }
 
     // ---- Find in Files: a search dialog + a docked "Find result" panel (double-click a hit to jump) --
@@ -4033,6 +4121,7 @@ private:
             case IDM_VIEW_DOCLIST: toggleDocList(); break;
             case IDM_VIEW_FILEBROWSER: toggleFileBrowser(); break;
             case IDM_SEARCH_FINDINCREMENT: showIncBar(); break;
+            case IDM_EDIT_COLUMNMODE: columnEditor(); break;
             case IDM_VIEW_MONITORING: notImpl("File monitoring"); break;
             case IDM_MACRO_STARTRECORDINGMACRO: startMacroRecord(); break;
             case IDM_MACRO_STOPRECORDINGMACRO: stopMacroRecord(); break;
