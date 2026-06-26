@@ -659,7 +659,8 @@ public:
     enum Tab { TAB_FIND, TAB_REPLACE, TAB_FIF, TAB_MARK };
     std::function<void(const FindOpts&)> findNextCb, countCb, replaceCb, replaceAllCb, markAllCb;
     std::function<void()> clearMarksCb;
-    std::function<void(const wxString&)> infoCb;   // hint for actions the wx shell can't do yet (Find in Files)
+    std::function<void(const FindOpts&, const wxString& dir, const wxString& filters, bool replace)> fifCb;   // Find/Replace in Files
+    std::function<void(const wxString&)> infoCb;   // hint for actions the wx shell can't do yet
 
     explicit FindReplaceDialog(wxWindow* parent)
         : wxDialog(parent, wxID_ANY, "Replace", wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE)
@@ -831,8 +832,8 @@ private:
             mk("Replace",     [this] { pushHistory(); if (replaceCb)    replaceCb(opts()); });
             mk("Replace All", [this] { pushHistory(); if (replaceAllCb) replaceAllCb(opts()); });
         } else if (t == TAB_FIF) {
-            mk("Find All",         [this] { if (infoCb) infoCb("Find in Files"); });
-            mk("Replace in Files", [this] { if (infoCb) infoCb("Replace in Files"); });
+            mk("Find All",         [this] { pushHistory(); if (fifCb) fifCb(opts(), m_pages[TAB_FIF]->dir->GetValue(), m_pages[TAB_FIF]->filters->GetValue(), false); });
+            mk("Replace in Files", [this] { pushHistory(); if (fifCb) fifCb(opts(), m_pages[TAB_FIF]->dir->GetValue(), m_pages[TAB_FIF]->filters->GetValue(), true); });
         } else { // TAB_MARK
             mk("Mark All",    [this] { pushHistory(); if (markAllCb) markAllCb(opts()); });
             mk("Clear Marks", [this] { if (clearMarksCb) clearMarksCb(); });
@@ -3752,6 +3753,88 @@ private:
         return count;
     }
     wxString selText() { const std::string s = getSelUtf8(); return wxString::FromUTF8(s.data(), s.size()); }
+    // ----- Find in Files: search / replace across files on disk, hits in a docked results panel --------
+    void ensureFifScratch() { if (!m_fifScratch) { m_fifScratch = new wxStyledTextCtrl(this, wxID_ANY); m_fifScratch->Hide(); } }
+    void ensureFindResultsPanel()
+    {
+        if (m_findResults) return;
+        m_findResults = new wxStyledTextCtrl(this, wxID_ANY);
+        m_findResults->SetReadOnly(true);
+        for (int mg = 0; mg < 3; ++mg) m_findResults->SetMarginWidth(mg, 0);
+        m_findResults->StyleSetBackground(wxSTC_STYLE_DEFAULT, m_dark ? wxColour(30, 30, 30) : *wxWHITE);
+        m_findResults->StyleSetForeground(wxSTC_STYLE_DEFAULT, m_dark ? wxColour(220, 220, 220) : wxColour(30, 30, 30));
+        m_findResults->StyleClearAll();
+        m_findResults->Bind(wxEVT_STC_DOUBLECLICK, [this](wxStyledTextEvent&) {
+            const int ln = static_cast<int>(m_findResults->GetCurrentLine());
+            if (ln >= 0 && ln < static_cast<int>(m_fifJump.size()) && !m_fifJump[ln].first.empty())
+            { openPath(m_fifJump[ln].first); sci(SCI_GOTOLINE, m_fifJump[ln].second); sci(SCI_SCROLLCARET); m_stc->SetFocus(); }
+        });
+        m_aui.AddPane(m_findResults, wxAuiPaneInfo().Name("findresults").Caption("Search results")
+                      .Bottom().Layer(1).BestSize(wxSize(-1, 200)).CloseButton(true).MaximizeButton(false));
+        m_aui.Update();
+    }
+    void doFindInFiles(const FindOpts& o, wxString dir, wxString filters, bool replace)
+    {
+        if (o.find.empty()) { findResult("Find in Files: nothing to search for"); return; }
+        if (dir.empty()) { auto* p = activePage(); dir = (p && !p->path.empty()) ? wxPathOnly(p->path) : wxGetCwd(); }
+        if (!wxDirExists(dir)) { findResult("Find in Files: no such directory - " + dir); return; }
+        filters.Trim(true).Trim(false); if (filters.empty()) filters = "*.*";
+
+        wxArrayString files;
+        for (wxString pat : wxSplit(filters, ';')) { pat.Trim(true).Trim(false); if (!pat.empty()) wxDir::GetAllFiles(dir, &files, pat, wxDIR_FILES); }
+        { std::set<wxString> seen; wxArrayString uniq; for (auto& f : files) if (seen.insert(f).second) uniq.Add(f); files = uniq; }
+
+        ensureFifScratch();
+        ensureFindResultsPanel();
+        m_findResults->SetReadOnly(false); m_findResults->ClearAll(); m_fifJump.clear();
+        auto out = [&](const wxString& txt, const wxString& file, int line) { m_findResults->AppendText(txt + "\n"); m_fifJump.push_back({ file, line }); };
+        out(wxString::Format("Search \"%s\" in %s  (%s)", o.find, dir, filters), "", -1);
+
+        int hits = 0, hitFiles = 0, repl = 0, replFiles = 0;
+        for (const wxString& file : files)
+        {
+            wxString content;
+            { wxFile fh(file); if (!fh.IsOpened() || !fh.ReadAll(&content)) continue; }
+            m_fifScratch->SetReadOnly(false); m_fifScratch->SetText(content);
+            m_fifScratch->SetSearchFlags(static_cast<int>(searchFlags(o)));
+            const int len = m_fifScratch->GetLength();
+            if (replace)
+            {
+                int n = 0, end = len; m_fifScratch->SetTargetStart(0); m_fifScratch->SetTargetEnd(end);
+                while (m_fifScratch->SearchInTarget(o.find) >= 0)
+                {
+                    const int s = m_fifScratch->GetTargetStart(), e = m_fifScratch->GetTargetEnd();
+                    if (o.regex) m_fifScratch->ReplaceTargetRE(o.repl); else m_fifScratch->ReplaceTarget(o.repl);
+                    int ne = m_fifScratch->GetTargetEnd(); end += (ne - e); if (e == s) ++ne;
+                    m_fifScratch->SetTargetStart(ne); m_fifScratch->SetTargetEnd(end); ++n;
+                }
+                if (n > 0) { wxFile w(file, wxFile::write); if (w.IsOpened()) w.Write(m_fifScratch->GetText()); ++replFiles; repl += n; out(wxString::Format("  %s  (%d replaced)", file, n), file, 0); }
+            }
+            else
+            {
+                int pos = 0, n = 0;
+                while (pos <= len)
+                {
+                    m_fifScratch->SetTargetStart(pos); m_fifScratch->SetTargetEnd(len);
+                    if (m_fifScratch->SearchInTarget(o.find) < 0) break;
+                    const int s = m_fifScratch->GetTargetStart(), e = m_fifScratch->GetTargetEnd();
+                    const int line = m_fifScratch->LineFromPosition(s);
+                    if (n == 0) out(wxString::Format("  %s", file), file, 0);
+                    wxString lt = m_fifScratch->GetTextRange(m_fifScratch->PositionFromLine(line), m_fifScratch->GetLineEndPosition(line));
+                    out(wxString::Format("    Line %d:  %s", line + 1, lt.Trim(true).Trim(false)), file, line);
+                    ++n; ++hits; pos = (e > s) ? e : e + 1;
+                }
+                if (n > 0) ++hitFiles;
+            }
+        }
+        const wxString summary = replace
+            ? wxString::Format("Replace in Files: %d occurrence(s) in %d file(s)", repl, replFiles)
+            : wxString::Format("Find in Files: %d hit(s) in %d / %d file(s)", hits, hitFiles, static_cast<int>(files.size()));
+        out("  === " + summary + " ===", "", -1);
+        m_findResults->SetReadOnly(true);
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_findResults); pi.Show(); m_aui.Update();
+        findResult(summary);
+    }
     FindReplaceDialog* ensureFindDlg()
     {
         if (!m_findDlg)
@@ -3763,6 +3846,7 @@ private:
             m_findDlg->replaceAllCb = [this](const FindOpts& o) { findResult(wxString::Format("Replaced %d occurrence(s)", doReplaceAll(o))); };
             m_findDlg->markAllCb    = [this](const FindOpts& o) { findResult(wxString::Format("Marked %d match(es)", doMarkAll(o))); };
             m_findDlg->clearMarksCb = [this]() { clearMarks(); };
+            m_findDlg->fifCb        = [this](const FindOpts& o, const wxString& dir, const wxString& filters, bool replace) { m_lastFind = o.find; m_lastReplace = o.repl; doFindInFiles(o, dir, filters, replace); };
             m_findDlg->infoCb       = [this](const wxString& what) { notImpl(what); };
         }
         return m_findDlg;
@@ -4817,6 +4901,9 @@ private:
     wxAuiNotebook* m_tabs = nullptr;
     wxPanel*       m_capBar = nullptr;   // +/v/x caption buttons on the tab strip
     FindReplaceDialog* m_findDlg = nullptr;   // modeless Find/Replace dialog
+    wxStyledTextCtrl*  m_findResults = nullptr;   // Find-in-Files results panel (docked, bottom)
+    wxStyledTextCtrl*  m_fifScratch  = nullptr;   // hidden scratch buffer for searching file contents
+    std::vector<std::pair<wxString, int>> m_fifJump;   // results panel line -> (file, 0-based editor line)
     wxFileHistory      m_fileHistory{ recentMaxFromConfig() };   // Recent Files (MRU); max read from config at construction (restart-to-apply)
     wxStyledTextCtrl* m_stc = nullptr;   // the cross-platform editor view; its native HWND on Windows == m_sci
     wxStyledTextCtrl* m_docMap = nullptr;   // Document Map (minimap): a second view sharing the active document
