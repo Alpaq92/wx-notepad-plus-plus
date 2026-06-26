@@ -1091,18 +1091,18 @@ public:
     wxAuiTabArt* Clone() override { auto* a = new PinTabArt(m_iconColour); a->UpdateColoursFromSystem(); return a; }
 private:
     wxColour m_iconColour;
-    wxBitmapBundle iconBundle(const wxString& name) const   // resources/icons/<name>.svg, recoloured to the button colour
+    wxBitmapBundle iconBundle(const wxString& name, int px = 16) const   // resources/icons/<name>.svg, recoloured to the button colour
     {
         const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\" + name + ".svg";
         if (!wxFileExists(path)) return wxBitmapBundle();
         wxFile f(path); wxString svg;
         if (!f.IsOpened() || !f.ReadAll(&svg)) return wxBitmapBundle();
         svg.Replace("currentColor", m_iconColour.GetAsString(wxC2S_HTML_SYNTAX));
-        return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(16, 16));
+        return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(px, px));
     }
     void reskin()
     {
-        const wxBitmapBundle pin = iconBundle("pin");
+        const wxBitmapBundle pin = iconBundle("pin", 11);   // small secondary button, like Notepad++'s pin (close stays 16)
         if (pin.IsOk()) { m_activePinBmp = pin; m_activeUnpinBmp = pin; m_disabledPinBmp = pin; m_disabledUnpinBmp = pin; }
         const wxBitmapBundle cls = iconBundle("close-tab");
         if (cls.IsOk()) { m_activeCloseBmp = cls; m_disabledCloseBmp = cls; }
