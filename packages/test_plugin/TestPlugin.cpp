@@ -29,12 +29,15 @@ static void cmdInsertHello()
 static void cmdNppInfo()
 {
     // Query the host via real NPPM_* messages (to the Notepad++ HWND) and insert what comes back.
-    wchar_t path[1024] = {0}, nppdir[1024] = {0}, cfg[1024] = {0};
+    wchar_t path[1024] = {0}, nppdir[1024] = {0}, cfg[1024] = {0}, bufpath[1024] = {0};
     ::SendMessageW(g_npp._nppHandle, NPPM_GETFULLCURRENTPATH, 1024, reinterpret_cast<LPARAM>(path));
     ::SendMessageW(g_npp._nppHandle, NPPM_GETNPPDIRECTORY,    1024, reinterpret_cast<LPARAM>(nppdir));
     ::SendMessageW(g_npp._nppHandle, NPPM_GETPLUGINSCONFIGDIR, 1024, reinterpret_cast<LPARAM>(cfg));
+    // v2 per-buffer tracking: get the active buffer id, then resolve it back to a path
+    LRESULT bufId = ::SendMessageW(g_npp._nppHandle, NPPM_GETCURRENTBUFFERID, 0, 0);
+    ::SendMessageW(g_npp._nppHandle, NPPM_GETFULLPATHFROMBUFFERID, static_cast<WPARAM>(bufId), reinterpret_cast<LPARAM>(bufpath));
     char buf[4096];
-    ::sprintf_s(buf, 4096, "NPPM_GETFULLCURRENTPATH: %ls | NPPM_GETNPPDIRECTORY: %ls | NPPM_GETPLUGINSCONFIGDIR: %ls", path, nppdir, cfg);
+    ::sprintf_s(buf, 4096, "NPPM_GETFULLCURRENTPATH: %ls | NPPM_GETNPPDIRECTORY: %ls | NPPM_GETPLUGINSCONFIGDIR: %ls | NPPM_GETCURRENTBUFFERID: 0x%p -> %ls", path, nppdir, cfg, reinterpret_cast<void*>(bufId), bufpath);
     if (g_npp._scintillaMainHandle)
         ::SendMessageA(g_npp._scintillaMainHandle, SCI_REPLACESEL, 0, reinterpret_cast<LPARAM>(buf));
 }

@@ -137,17 +137,30 @@ static void loadNppPlugins(NibHost* host, const NibCommandsApi* cmds)
 // richer Nib interfaces, so they are acknowledged-but-stubbed for now.
 static HMENU g_pluginsMenu = nullptr;
 
+// UTF-8 -> wide (the inverse of toUtf8); empty on empty/null input.
+static std::wstring wFromUtf8(const char* s)
+{
+    if (!s || !*s) return {};
+    int w = ::MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);
+    std::wstring r(w > 0 ? w - 1 : 0, L'\0');
+    if (w > 1) ::MultiByteToWideChar(CP_UTF8, 0, s, -1, &r[0], w);
+    return r;
+}
 // The active document's full path (wide), via nib.documents; empty if untitled or unavailable.
 static std::wstring activePathW()
 {
     if (!g_docs || !g_host) return {};
     char buf[2048];
     int n = g_docs->active_path(g_host, buf, static_cast<int>(sizeof(buf)));
-    if (n <= 0) return {};
-    int w = ::MultiByteToWideChar(CP_UTF8, 0, buf, -1, nullptr, 0);
-    std::wstring s(w > 0 ? w - 1 : 0, L'\0');
-    if (w > 1) ::MultiByteToWideChar(CP_UTF8, 0, buf, -1, &s[0], w);
-    return s;
+    return n <= 0 ? std::wstring{} : wFromUtf8(buf);
+}
+// The full path (wide) of the document with buffer id `id`; empty if not found (needs nib.documents v2).
+static std::wstring pathFromIdW(intptr_t id)
+{
+    if (!g_docs || !g_host || g_docs->version < 2 || !g_docs->path_from_id) return {};
+    char buf[2048];
+    int n = g_docs->path_from_id(g_host, id, buf, static_cast<int>(sizeof(buf)));
+    return n <= 0 ? std::wstring{} : wFromUtf8(buf);
 }
 // Copy s into the plugin's wchar buffer (lParam); wParam is the buffer cap when set. Returns the length.
 static LRESULT putPath(WPARAM wParam, LPARAM lParam, const std::wstring& s)
@@ -192,6 +205,9 @@ static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& o
         case NPPM_GETPLUGINHOMEPATH:   if (lParam) ::lstrcpynW(reinterpret_cast<wchar_t*>(lParam), (exeDir() + L"\\plugins").c_str(), wParam ? static_cast<int>(wParam) : MAX_PATH); out = TRUE; return true;
         case NPPM_SETSTATUSBAR:        { HWND sb = ::FindWindowExW(g_npp._nppHandle, nullptr, L"msctls_statusbar32", nullptr);   // the wx status bar is a native msctls_statusbar32
                                          if (sb && lParam) ::SendMessageW(sb, SB_SETTEXTW, static_cast<WPARAM>(wParam), lParam); out = TRUE; return true; }
+        // per-buffer tracking, via nib.documents v2 (the host's EditorPage* is the opaque buffer id)
+        case NPPM_GETCURRENTBUFFERID:      out = (g_docs && g_docs->version >= 2 && g_docs->active_id) ? g_docs->active_id(g_host) : 0; return true;
+        case NPPM_GETFULLPATHFROMBUFFERID: out = putPath(0, lParam, pathFromIdW(static_cast<intptr_t>(wParam))); return true;
         default:                       return false;   // not one of ours -> fall through to DefSubclassProc
     }
 }

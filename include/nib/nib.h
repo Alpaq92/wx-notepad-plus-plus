@@ -83,6 +83,13 @@ typedef struct NibDocumentsApi {
     int  (*active_path)(NibHost*, char* buf, int cap);
     int  (*open)(NibHost*, const char* utf8_path);  // open a file (load it into a tab); 1 on success, 0 on failure
     int  (*save_active)(NibHost*);                  // save the active document to disk; 1 on success
+    // ---- v2 additions (struct grows only at the end; guard with `version >= 2` before calling) -----
+    // A stable, opaque per-document id (a Notepad++ "buffer id"): unique per open document, valid until
+    // that document closes. 0 when there is no active document.
+    intptr_t (*active_id)(NibHost*);
+    // Copy the UTF-8 path of the document whose id is `id` into buf (NUL-terminated if it fits); returns
+    // the byte length excluding the NUL, or 0 if no open document has that id (or it is untitled).
+    int  (*path_from_id)(NibHost*, intptr_t id, char* buf, int cap);
 } NibDocumentsApi;
 
 // ---- nib.commands/1 : register + run commands ----------------------------------------------------

@@ -987,10 +987,14 @@ static std::function<int()>            g_nibDocCount;
 static std::function<int(char*, int)>  g_nibDocActivePath;   // copy the active doc's UTF-8 path -> length, 0 if untitled
 static std::function<int(const char*)> g_nibDocOpen;         // open a file by UTF-8 path
 static std::function<int()>            g_nibDocSave;         // save the active document
+static std::function<intptr_t()>              g_nibDocActiveId;    // v2: stable opaque id of the active document; 0 if none
+static std::function<int(intptr_t,char*,int)> g_nibDocPathFromId;  // v2: copy a document id's UTF-8 path -> length, 0 if no such id
 static int nibDocCount(NibHost*)                      { return g_nibDocCount ? g_nibDocCount() : 0; }
 static int nibDocActivePath(NibHost*, char* b, int c) { return g_nibDocActivePath ? g_nibDocActivePath(b, c) : 0; }
 static int nibDocOpen(NibHost*, const char* p)        { return g_nibDocOpen ? g_nibDocOpen(p) : 0; }
 static int nibDocSave(NibHost*)                       { return g_nibDocSave ? g_nibDocSave() : 0; }
+static intptr_t nibDocActiveId(NibHost*)                              { return g_nibDocActiveId ? g_nibDocActiveId() : 0; }
+static int      nibDocPathFromId(NibHost*, intptr_t id, char* b, int c) { return g_nibDocPathFromId ? g_nibDocPathFromId(id, b, c) : 0; }
 #ifdef __WXMSW__
 // nib.win32/1 - Windows-only native-handle capability (the GPL npp-bridge uses it to rebuild NppData).
 static std::function<void*()> g_nibMainWindow, g_nibEditorMain, g_nibPluginsMenu;
@@ -1013,7 +1017,7 @@ static const NibEditorApi   g_nibEditorApi   = { 1, sizeof(NibEditorApi),   nibE
 static const NibCommandsApi g_nibCommandsApi = { 1, sizeof(NibCommandsApi), nibCmdRegister };
 static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibSubscribe };
 static const NibPanelsApi   g_nibPanelsApi   = { 1, sizeof(NibPanelsApi),   nibPanelRegister, nibPanelSetText, nibPanelAppend, nibPanelShow };
-static const NibDocumentsApi g_nibDocumentsApi = { 1, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen, nibDocSave };
+static const NibDocumentsApi g_nibDocumentsApi = { 2, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen, nibDocSave, nibDocActiveId, nibDocPathFromId };
 
 static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
 {
@@ -1212,6 +1216,18 @@ public:
         };
         g_nibDocOpen = [this](const char* p) -> int { if (!p) return 0; openPath(wxString::FromUTF8(p)); return 1; };
         g_nibDocSave = [this]() -> int { onSave(); return 1; };
+        g_nibDocActiveId   = [this]() -> intptr_t { return reinterpret_cast<intptr_t>(activePage()); };   // the EditorPage* IS the buffer id
+        g_nibDocPathFromId = [this](intptr_t id, char* b, int c) -> int {   // resolve a buffer id back to its on-disk path
+            if (!m_tabs) return 0;
+            for (size_t i = 0; i < m_tabs->GetPageCount(); ++i) {
+                EditorPage* pg = static_cast<EditorPage*>(m_tabs->GetPage(i));
+                if (reinterpret_cast<intptr_t>(pg) != id) continue;
+                const std::string u = pg->path.utf8_string();
+                if (b && c > 0) { int n = static_cast<int>(u.size()); if (n > c - 1) n = c - 1; std::memcpy(b, u.data(), static_cast<size_t>(n)); b[n] = 0; }
+                return static_cast<int>(u.size());
+            }
+            return 0;
+        };
 #ifdef __WXMSW__   // nib.win32: hand the (optional, GPL) N++ bridge the native handles it needs
         g_nibMainWindow   = [this]() -> void* { return static_cast<HWND>(GetHandle()); };
         g_nibEditorMain   = [this]() -> void* { return m_sci; };
