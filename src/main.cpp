@@ -1140,10 +1140,10 @@ public:
     static constexpr int  kTitleBarH  = 30;   // height (px) of the integrated top bar
     // Window-control glyphs drawn (not text): crisp + correctly sized, in a 10x10 box. Restore is the
     // canonical two-overlapping-squares; maximize is a single square.
-    static constexpr const char* GLYPH_MIN     = "M1 5 H9";
-    static constexpr const char* GLYPH_MAX     = "M1 1 H9 V9 H1 Z";
-    static constexpr const char* GLYPH_RESTORE = "M1 3.5 H6.5 V9 H1 Z M3 3.5 V1 H9 V6.5 H6.5";
-    static constexpr const char* GLYPH_CLOSE   = "M1 1 L9 9 M9 1 L1 9";
+    static constexpr const char* GLYPH_MIN     = "M1 6 H11";                          // ~10px line, centered (matches native)
+    static constexpr const char* GLYPH_MAX     = "M1 1 H11 V11 H1 Z";                 // ~10px square
+    static constexpr const char* GLYPH_RESTORE = "M1 4 H8 V11 H1 Z M4 4 V1 H11 V8 H8"; // two overlapping squares
+    static constexpr const char* GLYPH_CLOSE   = "M1 1 L11 11 M11 1 L1 11";           // ~10px X
 #else
     static constexpr bool kBorderless = false;
 #endif
@@ -2618,12 +2618,12 @@ private:
     // A window-control glyph stroked into a small bitmap (10x10 box), themed to the bar.
     wxBitmapBundle winGlyph(const char* path) const
     {
-        const char* col = m_dark ? "#e6e6e6" : "#2b2b2b";
+        const char* col = m_dark ? "#f0f0f0" : "#171717";
         const wxString svg = wxString::Format(
-            "<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'>"
-            "<path d='%s' fill='none' stroke='%s' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter'/></svg>",
+            "<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'>"
+            "<path d='%s' fill='none' stroke='%s' stroke-width='1.3' stroke-linecap='square' stroke-linejoin='miter'/></svg>",
             path, col);
-        return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(10, 10));
+        return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(12, 12));
     }
     void updateMaxGlyph() { if (m_maxBtn) m_maxBtn->SetBitmap(winGlyph(IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX)); }
     void onWindowControl(int which)
