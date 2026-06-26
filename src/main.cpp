@@ -2548,7 +2548,9 @@ private:
         const wxColour barFg = m_dark ? wxColour(220, 220, 220) : wxColour(30, 30, 30);
         m_titleBar = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, kTitleBarH));
         m_titleBar->SetBackgroundColour(barBg);
-        m_titleBar->Bind(wxEVT_LEFT_DOWN, &NppShellFrameT::onTitleBarDrag, this);   // drag empty area to move
+        m_titleBar->Bind(wxEVT_LEFT_DOWN, &NppShellFrameT::onTitleBarDrag, this);     // drag empty area to move
+        m_titleBar->Bind(wxEVT_LEFT_DCLICK, [this](wxMouseEvent&){ onWindowControl(1); });   // double-click = maximize/restore
+        this->Bind(wxEVT_SIZE, [this](wxSizeEvent& e){ updateMaxGlyph(); e.Skip(); });       // keep the glyph synced (snap, Win+Up)
 
         auto* sz = new wxBoxSizer(wxHORIZONTAL);
 
@@ -2575,7 +2577,7 @@ private:
         sz->AddStretchSpacer(1);   // empty middle stays draggable
 
         // Window controls (right): minimize, maximize/restore, close (close hovers red, VS-style)
-        auto ctrl = [&](const wxString& glyph, int which, const wxColour& hot) {
+        auto ctrl = [&](const wxString& glyph, int which, const wxColour& hot) -> wxButton* {
             auto* b = new wxButton(m_titleBar, wxID_ANY, glyph, wxDefaultPosition,
                                    wxSize(46, kTitleBarH), wxBU_EXACTFIT | wxBORDER_NONE);
             b->SetBackgroundColour(barBg); b->SetForegroundColour(barFg);
@@ -2583,11 +2585,12 @@ private:
             b->Bind(wxEVT_ENTER_WINDOW, [b, hot](wxMouseEvent& e)   { b->SetBackgroundColour(hot);   b->Refresh(); e.Skip(); });
             b->Bind(wxEVT_LEAVE_WINDOW, [b, barBg](wxMouseEvent& e) { b->SetBackgroundColour(barBg); b->Refresh(); e.Skip(); });
             sz->Add(b, 0, wxEXPAND);
+            return b;
         };
         const wxColour hover = m_dark ? wxColour(63, 63, 70) : wxColour(220, 220, 220);
-        ctrl(L"—", 0, hover);                    // minimize  (em dash)
-        ctrl(L"☐", 1, hover);                    // maximize  (ballot box)
-        ctrl(L"✕", 2, wxColour(232, 17, 35));    // close     (multiplication X, red hover)
+        ctrl(L"—", 0, hover);                            // minimize  (em dash)
+        m_maxBtn = ctrl(maxGlyph(), 1, hover);           // maximize / restore (glyph tracks the window state)
+        ctrl(L"✕", 2, wxColour(232, 17, 35));            // close     (multiplication X, red hover)
 
         m_titleBar->SetSizer(sz);
         m_aui.AddPane(m_titleBar, wxAuiPaneInfo().Name("titlebar").Top().Layer(2)
@@ -2606,10 +2609,12 @@ private:
 #endif
     }
 
+    const wxChar* maxGlyph() const { return IsMaximized() ? L"❐" : L"☐"; }   // restore vs maximize glyph
+    void updateMaxGlyph() { if (m_maxBtn) m_maxBtn->SetLabel(maxGlyph()); }
     void onWindowControl(int which)
     {
         if      (which == 0) Iconize(true);
-        else if (which == 1) Maximize(!IsMaximized());
+        else if (which == 1) { Maximize(!IsMaximized()); updateMaxGlyph(); }
         else                 Close();
     }
 
@@ -4620,6 +4625,7 @@ private:
 #ifdef WXNPP_HAS_BORDERLESS
     wxPanel*    m_titleBar  = nullptr;            // integrated top bar (icon + menu-buttons + window controls)
     wxMenuBar*  m_menuOwner = nullptr;            // owns the wxMenus the title-bar buttons pop (never attached as a real menu bar)
+    wxButton*   m_maxBtn    = nullptr;            // the maximize/restore button (its glyph tracks IsMaximized())
 #endif
     wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
