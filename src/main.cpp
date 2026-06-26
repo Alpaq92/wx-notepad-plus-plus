@@ -1362,8 +1362,8 @@ private:
     {
         m_tabs = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                    wxAUI_NB_TOP | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS |
-                                   wxAUI_NB_CLOSE_ON_ALL_TABS | wxAUI_NB_MIDDLE_CLICK_CLOSE |
-                                   wxAUI_NB_PIN_ON_ACTIVE_TAB);   // pin button on the active tab
+                                   (m_tabCloseBtn ? wxAUI_NB_CLOSE_ON_ALL_TABS : 0) | wxAUI_NB_MIDDLE_CLICK_CLOSE |
+                                   wxAUI_NB_PIN_ON_ACTIVE_TAB);   // close button per Preferences (Tab Bar); pin on active tab
         { auto* art = new PinTabArt(m_dark ? wxColour(222, 226, 230) : wxColour(52, 58, 64));
           art->UpdateColoursFromSystem(); m_tabs->SetArtProvider(art); }   // pin glyph from resources/icons/pin.svg
         m_tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE,   &NppShellFrameT::onPageClose,   this);
@@ -3756,10 +3756,17 @@ private:
     void toggleGuides(){ syncToggle(IDM_VIEW_INDENT_GUIDE, m_guides); sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE); }
 
     // ----- persisted preferences (Settings > Preferences) ---------------
+    static size_t recentMaxFromConfig()   // Recent Files max, read straight from config so the m_fileHistory member init can use it
+    {
+        long m = 10; wxConfigBase::Get()->Read("RecentFiles/Max", &m, 10L);
+        return (size_t)(m < 1 ? 1 : (m > 50 ? 50 : m));
+    }
     void loadSettings()
     {
         auto* c = wxConfigBase::Get();
-        c->Read("IntegratedBar", &m_integratedBar, false);   // integrated top bar on/off (also read in OnInit; here for the Preferences checkbox)
+        c->Read("IntegratedBar", &m_integratedBar, false);
+        long mr = 10; c->Read("RecentFiles/Max", &mr, 10L); m_maxRecent = (int)mr;
+        c->Read("TabBar/CloseButton", &m_tabCloseBtn, true);   // integrated top bar on/off (also read in OnInit; here for the Preferences checkbox)
         long tw = 4; c->Read("Editing/TabWidth", &tw, 4L); m_tabWidth = (int)tw;
         c->Read("Editing/UseTabs", &m_useTabs, true);
         c->Read("Editing/LineNumbers", &m_lineNumbers, true);
@@ -3796,6 +3803,7 @@ private:
         c->Write("Editing/CaretWidth", (long)m_caretWidth); c->Write("Editing/EdgeColumn", (long)m_edgeColumn);
         c->Write("NewDoc/Eol", (long)m_defaultEol);         c->Write("NewDoc/Lang", (long)m_defaultLangId);
         c->Write("NewDoc/Encoding", (long)m_defaultEncoding);
+        c->Write("RecentFiles/Max", (long)m_maxRecent);     c->Write("TabBar/CloseButton", m_tabCloseBtn);
         c->Write("Editing/CaretBlink", (long)m_caretBlink); c->Write("Editing/ScrollBeyond", m_scrollBeyond);
         c->Write("Editing/MultiEdit", m_multiEdit);
         c->Write("AutoComplete/FromChar", (long)m_autoCompFrom); c->Write("AutoComplete/InsertPairs", m_autoInsertPairs);
@@ -3923,6 +3931,18 @@ private:
         lrow->Add(chLang, 0, wxALIGN_CENTRE_VERTICAL);
         nds->Add(lrow, 0, wxALL, 10); nd->SetSizer(nds);
 
+        // ---- Tab Bar --------------------------------------------------------------------------
+        auto* tbp = pg("Tab Bar"); auto* tbs = new wxBoxSizer(wxVERTICAL);
+        auto* cbTabClose = new wxCheckBox(tbp, wxID_ANY, "Show close button on each tab   (applied on restart)");
+        cbTabClose->SetValue(m_tabCloseBtn); row(tbs, cbTabClose); tbp->SetSizer(tbs);
+
+        // ---- Recent Files History -------------------------------------------------------------
+        auto* rf = pg("Recent Files History"); auto* rfs = new wxBoxSizer(wxVERTICAL);
+        auto* rfrow = new wxBoxSizer(wxHORIZONTAL);
+        rfrow->Add(new wxStaticText(rf, wxID_ANY, "Max number of entries (applied on restart):"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* spMaxRec = new wxSpinCtrl(rf, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 50, m_maxRecent);
+        rfrow->Add(spMaxRec, 0); rfs->Add(rfrow, 0, wxALL, 10); rf->SetSizer(rfs);
+
         auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer(); btn->Add(new wxButton(&dlg, wxID_OK, "Close"), 0);
         auto* top = new wxBoxSizer(wxVERTICAL); top->Add(book, 1, wxEXPAND | wxALL, 8); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
         dlg.SetSizer(top); themeDialog(&dlg);
@@ -3938,8 +3958,10 @@ private:
         m_defaultEncoding = rbEnc->GetSelection();   // index maps directly to the Enc enum (UTF8=0 .. ANSI=4)
         { int s = chLang->GetSelection(); if (s <= 0) m_defaultLangId = -1;
           else { size_t ln; const NppLang* lt = nppLangTable(ln); m_defaultLangId = (s - 1 < (int)ln) ? lt[s - 1].id : -1; } }
+        const bool tabRecentChanged = (cbTabClose->GetValue() != m_tabCloseBtn) || (spMaxRec->GetValue() != m_maxRecent);
+        m_tabCloseBtn = cbTabClose->GetValue(); m_maxRecent = spMaxRec->GetValue();
         applySettings(); saveSettings();
-        bool needRestart = (newDark != m_dark);
+        bool needRestart = (newDark != m_dark) || tabRecentChanged;
 #ifdef WXNPP_HAS_BORDERLESS
         if (cbIntBar->GetValue() != m_integratedBar)   // the chrome base is fixed per process - relaunch to switch
         { wxConfigBase::Get()->Write("IntegratedBar", cbIntBar->GetValue()); needRestart = true; }
@@ -4734,7 +4756,7 @@ private:
     wxAuiNotebook* m_tabs = nullptr;
     wxPanel*       m_capBar = nullptr;   // +/v/x caption buttons on the tab strip
     FindReplaceDialog* m_findDlg = nullptr;   // modeless Find/Replace dialog
-    wxFileHistory      m_fileHistory;         // Recent Files (MRU), persisted in wxConfig
+    wxFileHistory      m_fileHistory{ recentMaxFromConfig() };   // Recent Files (MRU); max read from config at construction (restart-to-apply)
     wxStyledTextCtrl* m_stc = nullptr;   // the cross-platform editor view; its native HWND on Windows == m_sci
     wxStyledTextCtrl* m_docMap = nullptr;   // Document Map (minimap): a second view sharing the active document
     wxTreeCtrl* m_funcList = nullptr;       // Function List: per-file symbol tree (regex-parsed)
@@ -4765,6 +4787,8 @@ private:
     int         m_caretWidth = 1, m_edgeColumn = 0;               // caret thickness (px); long-line marker column (0 = off)
     int         m_defaultEol = SC_EOL_CRLF, m_defaultLangId = -1; // New Document: default line-ending + language (IDM_LANG_*; -1 = Normal Text)
     int         m_defaultEncoding = ENC_UTF8;                     // New Document: default on-disk encoding (Enc enum)
+    int         m_maxRecent = 10;                                // Recent Files: max entries (restart-to-apply; see recentMaxFromConfig)
+    bool        m_tabCloseBtn = true;                            // Tab Bar: a close button on each tab (restart-to-apply)
     int         m_caretBlink = 500;                              // caret blink rate (ms; 0 = steady)
     bool        m_scrollBeyond = false, m_multiEdit = true;      // scroll past the last line; multi-selection / multi-caret editing
     int         m_autoCompFrom = 3;                              // auto-completion triggers from the Nth typed character
