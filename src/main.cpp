@@ -25,6 +25,7 @@
 #include <wx/aui/aui.h>          // wxAuiManager - dock host for plugin panels (NPPM_DMM*)
 #include <wx/stc/stc.h>          // wxStyledTextCtrl - cross-platform editor (Phase 3 port target)
 #include <wx/treectrl.h>         // wxTreeCtrl - Function List symbol tree
+#include <wx/dirctrl.h>          // wxGenericDirCtrl - Folder as Workspace file browser
 #include <wx/spinctrl.h>
 #include <wx/file.h>
 #include <wx/filename.h>
@@ -1598,6 +1599,35 @@ private:
         pi.Show(!pi.IsShown());
         m_aui.Update();
         if (pi.IsShown()) refreshDocList();
+    }
+
+    // ---- Folder as Workspace (a dockable file-system browser rooted at a chosen folder) -----------
+    wxGenericDirCtrl* m_fileBrowser = nullptr;
+    void toggleFileBrowser()
+    {
+        if (!m_fileBrowser)
+        {
+            wxString root = curPath().empty() ? wxGetCwd() : wxFileName(curPath()).GetPath();   // start expanded at the current file's folder
+            if (root.empty()) root = wxGetCwd();
+            m_fileBrowser = new wxGenericDirCtrl(this, wxID_ANY, root, wxDefaultPosition, wxDefaultSize,
+                                                 wxDIRCTRL_SHOW_FILTERS | wxBORDER_NONE);
+            if (auto* tree = m_fileBrowser->GetTreeCtrl())   // theme the tree to the editor's colours
+            {
+                const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
+                tree->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));
+                tree->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
+            }
+            m_fileBrowser->Bind(wxEVT_DIRCTRL_FILEACTIVATED, [this](wxTreeEvent&) {
+                const wxString f = m_fileBrowser->GetFilePath();
+                if (!f.empty() && wxFileExists(f)) openPath(f);   // double-click a file -> open it
+            });
+            m_aui.AddPane(m_fileBrowser, wxAuiPaneInfo().Name("filebrowser").Caption("Folder as Workspace")
+                              .Left().BestSize(240, 500).MinSize(140, 100).CloseButton(true).Hide());
+        }
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_fileBrowser);
+        if (!pi.IsOk()) return;
+        pi.Show(!pi.IsShown());
+        m_aui.Update();
     }
 
     // ---- Find in Files: a search dialog + a docked "Find result" panel (double-click a hit to jump) --
@@ -3939,7 +3969,7 @@ private:
             case IDM_VIEW_DOC_MAP: toggleDocMap(); break;
             case IDM_VIEW_FUNC_LIST: toggleFuncList(); break;
             case IDM_VIEW_DOCLIST: toggleDocList(); break;
-            case IDM_VIEW_FILEBROWSER: notImpl("Folder as Workspace panel"); break;
+            case IDM_VIEW_FILEBROWSER: toggleFileBrowser(); break;
             case IDM_VIEW_MONITORING: notImpl("File monitoring"); break;
             case IDM_MACRO_STARTRECORDINGMACRO: startMacroRecord(); break;
             case IDM_MACRO_STOPRECORDINGMACRO: stopMacroRecord(); break;
