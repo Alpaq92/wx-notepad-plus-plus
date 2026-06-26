@@ -1,0 +1,59 @@
+name: build
+
+# Builds wxNotepad++ on all three target platforms. wxWidgets is fetched + built from source
+# (FetchContent), so the only system dependency is GTK3 on Linux; macOS/Windows need just the
+# toolchain. Verifies the cross-platform claim - the parts the Windows dev machine can't check.
+
+# Note: each job builds wxWidgets from source (cached after the first green run), so the matrix is heavy.
+# The repo is public, so GitHub-hosted runners are free; macOS just queues longer than linux/windows.
+on:
+  push:
+    branches: [ wx-migration, master ]
+    paths: [ 'src/**', 'include/**', 'third_party/**', 'resources/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
+  pull_request:
+    paths: [ 'src/**', 'include/**', 'third_party/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
+  workflow_dispatch:
+
+# A newer push to a branch cancels that branch's still-queued/running build, so the matrix doesn't
+# pile up (each macOS run counts 10x against private-repo Actions minutes). Only the latest commit
+# on a branch is verified, which is what we want.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  name: linux }
+          - { os: macos-latest,   name: macos }
+          - { os: windows-latest, name: windows }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GTK3 (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config libgtk-3-dev
+
+      # Cache the fetched + built wxWidgets so iterations don't rebuild it from source each run.
+      - name: Cache wxWidgets
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: wx331-${{ matrix.name }}-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: wx331-${{ matrix.name }}-
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      # Cap parallelism to 2: one cc1plus per core compiling wxWidgets + the large single-TU main.cpp
+      # at -O2 all at once OOM-kills cc1plus on the hosted runners (esp. the 7 GB macOS M1). Two at a
+      # time fits, at the cost of a slower (but reliable) build.
+      - name: Build wxnpp
+        run: cmake --build build --config Release --target wxnpp --parallel 2

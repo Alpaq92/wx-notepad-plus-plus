@@ -1,0 +1,69 @@
+wxNotepad++
+Copyright 2026 The wxNotepad++ Authors
+
+This product is distributed under the GNU General Public License, version 3
+(see LICENSE), consistent with its Notepad++ heritage. This NOTICE records the
+project's provenance and third-party attributions.
+
+------------------------------------------------------------------------------
+A license-aware, independent reimplementation
+------------------------------------------------------------------------------
+
+wxNotepad++ is an independent, ground-up reimplementation of a Notepad++-style
+editor built on wxWidgets + wxStyledTextCtrl (Scintilla) and Lexilla. It is NOT
+a fork of, and contains no source code copied from, the Notepad++ application.
+
+Notepad++ is used ONLY as:
+  * a functional/behavioral reference (to match look-and-feel and command
+    semantics), and
+  * a test target (to compare behavior against).
+
+No Notepad++ implementation code is reproduced in this project's own sources
+(`src/`); the editor is original work. This mirrors the approach taken by other
+clean reimplementations (e.g. DjvuNet relative to DjVuLibre): the reference
+implementation informs and validates behavior, it is not a code dependency.
+
+Notepad++ is a trademark of its respective owner. This project is not affiliated
+with, endorsed by, or sponsored by Notepad++ or its authors. The UI uses the
+wxNotepad++ name throughout; the app icon is the project's own SVG (whose green
+plate + monogram echo the upstream styling).
+
+------------------------------------------------------------------------------
+Licensing direction (GPL now, permissive later)
+------------------------------------------------------------------------------
+
+The project is GPL v3 today. Most Notepad++-derived files have already been
+replaced or clean-room-reimplemented (icons, command ids, plugin-ABI headers,
+themes, the default styler, and three GPL lexers). The committed goal is to drop
+the remaining GPL ties and relicense the project permissively — solely to give
+users and downstream developers more freedom, with NO commercial agenda. The
+reasons we remain on GPL for now (chiefly the legally-unsettled plugin-ABI
+reproduction), the progress so far, and the plan to get permissive are in
+docs/FUTURE_PLANS.md.
+
+------------------------------------------------------------------------------
+Third-party components and their licenses
+------------------------------------------------------------------------------
+
+Scintilla and Lexilla
+  Copyright 1998-2021 by Neil Hodgson <neilh@scintilla.org>
+  "License for Lexilla, Scintilla, and SciTE" (HPND-style, permissive).
+  See third_party/scintilla/License.txt and third_party/lexilla/License.txt.
+
+wxWidgets
+  Copyright (c) the wxWidgets team.
+  wxWindows Library Licence (LGPL-2.1 plus a binary-distribution exception).
+  Fetched at build time; not vendored in this repository.
+
+Toolbar icons — "Notepad++ Toolbar Icons (Tabler x Open Color)"
+  A derivative work of two MIT-licensed projects, released under the MIT License:
+    * Tabler Icons   - Copyright (c) Pawel Kuna,      MIT License.
+    * Open Color      - Copyright (c) Heeyeun Jeong,   MIT License.
+
+Color themes — resources/themes/
+  Kept third-party themes under their own permissive licenses (MIT: © 2008 Fabio
+  Zendhi Nagao; Bespin © 2009 Oren Farhi; plus a few carrying an upstream "feel
+  free to modify" grant). Regenerated themes + stylers.model.xml are our own data
+  (Apache-2.0): the factual Lexilla style structure recoloured from permissive
+  palettes - GitHub Primer, Atom One Dark/Light, Nord, Dracula and VS Code (all
+  MIT) plus the canonical Zenburn / Obsidian palettes (colour values are facts).
