@@ -1308,8 +1308,10 @@ public:
         }
         if (restored > 0 && initial && initial->path.empty() && (int)m_tabs->GetPageCount() > restored)
         {
-            const int idx = m_tabs->GetPageIndex(initial);          // drop the redundant empty "new 1"
-            if (idx != wxNOT_FOUND) m_tabs->DeletePage(idx);
+            // Defer dropping the redundant empty "new 1": restoreSession runs during OnInit, before the
+            // event loop starts, and deleting an aui-notebook page that early crashes. CallAfter runs it
+            // once the loop is up (adding the restored docs beforehand is fine - argv-open does the same).
+            this->CallAfter([this, initial]() { const int idx = m_tabs->GetPageIndex(initial); if (idx != wxNOT_FOUND) m_tabs->DeletePage(idx); });
         }
         if (activePg) { const int idx = m_tabs->GetPageIndex(activePg); if (idx != wxNOT_FOUND) m_tabs->SetSelection(idx); }
     }
@@ -2449,6 +2451,8 @@ private:
             for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
                 if (!confirmClose(static_cast<EditorPage*>(m_tabs->GetPage(i)))) { e.Veto(); return; }
         saveSettings();    // persist any in-session View-menu toggle changes
+        saveSession(wxConfigBase::Get());   // remember the open (saved) files so the next launch reopens them, like Notepad++
+        wxConfigBase::Get()->Flush();
         m_aui.UnInit();
         unloadNibPlugins();   // deactivate + unload Nib plugins (the GPL bridge removes its frame subclass first)
         e.Skip();
