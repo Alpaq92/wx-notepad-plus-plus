@@ -1460,11 +1460,7 @@ private:
         ::SetWindowSubclass(v.sci, SciHwndProc, 3, reinterpret_cast<DWORD_PTR>(v.stc));   // plugin SendMessage(SCI_*) to THIS handle -> THIS view
 #endif
         bindViewEvents(v);                  // wxEVT_STC_* -> editor behaviours + plugin beNotified
-        if (prev) { m_active = prev; m_stc = prev->stc; m_tabs = prev->tabs;
-#ifdef __WXMSW__
-                    m_sci = prev->sci;
-#endif
-        }
+        if (prev) setActiveView(prev);      // restore the previously-active view (re-point the aliases)
     }
 
     // wxStyledTextCtrl fires wxEVT_STC_* (not Win32 WM_NOTIFY); bind the editor behaviours + plugin
@@ -2426,6 +2422,20 @@ private:
 #endif
         return true;
     }
+    // The view whose tab strip fired this notebook event (MAIN unless the SUB notebook fired).
+    ViewPane* viewOfEvent(wxAuiNotebookEvent& e)
+    { return dynamic_cast<wxAuiNotebook*>(e.GetEventObject()) == m_sub.tabs ? &m_sub : &m_main; }
+    // Total open documents across BOTH views (>= 1 once the editor is built).
+    int totalDocs() const
+    { return (m_main.tabs ? (int)m_main.tabs->GetPageCount() : 0) + (m_sub.tabs ? (int)m_sub.tabs->GetPageCount() : 0); }
+    // Every open document across both views (MAIN then SUB) - for cross-view ops (exit save-prompts).
+    std::vector<EditorPage*> allPages()
+    {
+        std::vector<EditorPage*> v;
+        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
+            if (nb) for (size_t i = 0; i < nb->GetPageCount(); ++i) v.push_back(static_cast<EditorPage*>(nb->GetPage(i)));
+        return v;
+    }
     // A view's editor gained focus: make it active and sync the chrome (status bar + minimap) to its doc.
     void onViewFocus(ViewPane* v)
     {
@@ -2437,8 +2447,7 @@ private:
     }
     void onPageChanged(wxAuiNotebookEvent& e)
     {
-        auto* nb = dynamic_cast<wxAuiNotebook*>(e.GetEventObject());   // route by the notebook that fired
-        setActiveView(nb == m_sub.tabs ? &m_sub : &m_main);
+        setActiveView(viewOfEvent(e));   // route by the notebook that fired
         if (auto* p = activePage()) activateBuffer(p);
         e.Skip();
     }
@@ -2503,12 +2512,10 @@ private:
     }
     void onPageClose(wxAuiNotebookEvent& e)
     {
-        auto* nb = dynamic_cast<wxAuiNotebook*>(e.GetEventObject());
-        setActiveView(nb == m_sub.tabs ? &m_sub : &m_main);   // close from the view whose tab fired
+        setActiveView(viewOfEvent(e));   // close from the view whose tab fired
         auto* p = static_cast<EditorPage*>(m_tabs->GetPage(e.GetSelection()));
         if (!confirmClose(p)) { e.Veto(); return; }
-        const int total = (int)m_main.tabs->GetPageCount() + (int)m_sub.tabs->GetPageCount();
-        if (total <= 1) { e.Veto(); resetActiveDoc(); return; }                              // never zero documents (N++)
+        if (totalDocs() <= 1) { e.Veto(); resetActiveDoc(); return; }                        // never zero documents (N++)
         // Remove the page ourselves (after this event) so the collapse check sees the real count - wxAui's
         // own removal races a CallAfter, which would leave an empty pane behind.
         e.Veto();
@@ -2520,8 +2527,7 @@ private:
     void closeActive()
     {
         if (!confirmClose(activePage())) return;
-        const int total = (int)m_main.tabs->GetPageCount() + (int)m_sub.tabs->GetPageCount();
-        if (total <= 1) { resetActiveDoc(); return; }                                        // last document - keep one empty
+        if (totalDocs() <= 1) { resetActiveDoc(); return; }                                  // last document - keep one empty
         m_tabs->DeletePage(m_tabs->GetSelection());
         collapseIfEmpty();
     }
@@ -2558,8 +2564,8 @@ private:
     void onCloseWindow(wxCloseEvent& e)
     {
         if (e.CanVeto())   // a forced close (e.g. the theme-restart) skips prompts and just exits
-            for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
-                if (!confirmClose(static_cast<EditorPage*>(m_tabs->GetPage(i)))) { e.Veto(); return; }
+            for (EditorPage* p : allPages())   // prompt EVERY modified doc across BOTH views - none lost on exit
+                if (!confirmClose(p)) { e.Veto(); return; }
         saveSettings();    // persist any in-session View-menu toggle changes
         saveSession(wxConfigBase::Get());   // remember the open (saved) files so the next launch reopens them, like Notepad++
         wxConfigBase::Get()->Flush();
@@ -2584,8 +2590,7 @@ private:
     }
     void onTabContext(wxAuiNotebookEvent& e)
     {
-        auto* nb = dynamic_cast<wxAuiNotebook*>(e.GetEventObject());   // the right-clicked tab's view
-        setActiveView(nb == m_sub.tabs ? &m_sub : &m_main);
+        setActiveView(viewOfEvent(e));   // the right-clicked tab's view
         if (e.GetSelection() != wxNOT_FOUND) m_tabs->SetSelection(e.GetSelection());
         wxMenu menu;
         menu.Append(IDM_FILE_CLOSE, "Close");
