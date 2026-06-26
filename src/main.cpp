@@ -1563,6 +1563,43 @@ private:
         if (pi.IsShown()) parseFuncList();
     }
 
+    // ---- Document List (dockable list of the open documents; click an entry to switch to it) -------
+    wxListBox* m_docList = nullptr;
+    void buildDocList()
+    {
+        m_docList = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE | wxBORDER_NONE);
+        const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
+        m_docList->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));   // match the editor (Scintilla colours are BGR)
+        m_docList->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
+        m_docList->Bind(wxEVT_LISTBOX, [this](wxCommandEvent& ev) {
+            const int s = ev.GetSelection();
+            if (m_tabs && s >= 0 && (size_t)s < m_tabs->GetPageCount()) m_tabs->SetSelection((size_t)s);
+        });
+        m_aui.AddPane(m_docList, wxAuiPaneInfo().Name("doclist").Caption("Document List")
+                          .Right().BestSize(210, 400).MinSize(110, 80).CloseButton(true).Hide());
+        m_aui.Update();
+    }
+    void refreshDocList()   // keep the panel's entries + selection in sync with the open tabs (no-op when hidden)
+    {
+        if (!m_docList) return;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_docList);
+        if (!pi.IsOk() || !pi.IsShown()) return;
+        m_docList->Freeze();
+        m_docList->Clear();
+        if (m_tabs) for (size_t i = 0; i < m_tabs->GetPageCount(); ++i) m_docList->Append(m_tabs->GetPageText(i));
+        if (m_tabs && m_tabs->GetSelection() != wxNOT_FOUND) m_docList->SetSelection(m_tabs->GetSelection());
+        m_docList->Thaw();
+    }
+    void toggleDocList()
+    {
+        if (!m_docList) buildDocList();
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_docList);
+        if (!pi.IsOk()) return;
+        pi.Show(!pi.IsShown());
+        m_aui.Update();
+        if (pi.IsShown()) refreshDocList();
+    }
+
     // ---- Find in Files: a search dialog + a docked "Find result" panel (double-click a hit to jump) --
     void buildFifPanel()
     {
@@ -2067,6 +2104,7 @@ private:
         m_lastFoldSection = -2; refreshFoldNestedAccent();                  // the nested-square accent marker is global to the view - re-evaluate it for the swapped-in document
         if (m_docMap) { m_docMap->SetDocPointer(reinterpret_cast<void*>(p->doc)); updateDocMapViewport(); }   // minimap follows the active doc
         parseFuncList();                                                    // re-parse symbols for the newly active doc
+        refreshDocList();                                                   // keep the Document List panel + its selection in sync
         refreshTab(p);
         updateStatus();
         updateEncodingMenuChecks();   // tick this buffer's encoding in the Encoding menu
@@ -3900,7 +3938,7 @@ private:
             case IDM_FILE_PRINT: notImpl("Print"); break;
             case IDM_VIEW_DOC_MAP: toggleDocMap(); break;
             case IDM_VIEW_FUNC_LIST: toggleFuncList(); break;
-            case IDM_VIEW_DOCLIST: notImpl("Document List panel"); break;
+            case IDM_VIEW_DOCLIST: toggleDocList(); break;
             case IDM_VIEW_FILEBROWSER: notImpl("Folder as Workspace panel"); break;
             case IDM_VIEW_MONITORING: notImpl("File monitoring"); break;
             case IDM_MACRO_STARTRECORDINGMACRO: startMacroRecord(); break;
