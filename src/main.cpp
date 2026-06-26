@@ -1410,15 +1410,38 @@ private:
         m_stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev); e.Skip(); });
         m_stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrameT::onStcContextMenu, this);
     }
+    // Auto-insert the matching closer (caret stays between), or skip over an existing one. Returns true if it
+    // consumed the character. Brackets + quotes; ASCII only; never inserts right before a word character.
+    bool autoInsertPair(int ch)
+    {
+        if (!m_autoInsertPairs || ch <= 0 || ch > 127) return false;
+        static const char opens[] = "([{\"'", closes[] = ")]}\"'";
+        const int caret = (int)sci(SCI_GETCURRENTPOS), len = (int)sci(SCI_GETLENGTH);
+        const int next  = (caret < len) ? (int)sci(SCI_GETCHARAT, caret) : 0;
+        if (std::strchr(closes, ch) && next == ch) { sci(SCI_DELETERANGE, caret, 1); return true; }   // skip over
+        if (const char* o = std::strchr(opens, ch))
+            if (caret >= len || !(std::isalnum((unsigned char)next) || next == '_'))
+            {
+                const char buf[2] = { closes[o - opens], 0 };
+                sci(SCI_INSERTTEXT, caret, reinterpret_cast<sptr_t>(buf));
+                sci(SCI_GOTOPOS, caret);   // keep the caret between the pair
+                return true;
+            }
+        return false;
+    }
     void onStcCharAdded(wxStyledTextEvent& e)
     {
         const int ch = e.GetKey();
         if ((ch == '\n' || ch == '\r') && m_autoindent) autoIndentOnNewline(m_stc);
-        else if (ch == '}')           dedentCloseBrace(m_stc);
-        else if (m_autocomplete && (std::isalnum((unsigned char)ch) || ch == '_'))   // auto word/keyword completion after 3+ chars
+        else
         {
-            const int caret = (int)sci(SCI_GETCURRENTPOS);
-            if (caret - (int)sci(SCI_WORDSTARTPOSITION, caret, 1) >= 3) autoComplete(true);
+            const bool paired = autoInsertPair(ch);            // insert matching )]}"' or skip over an existing one
+            if (ch == '}') dedentCloseBrace(m_stc);
+            else if (!paired && m_autocomplete && (std::isalnum((unsigned char)ch) || ch == '_'))   // word/keyword completion
+            {
+                const int caret = (int)sci(SCI_GETCURRENTPOS);
+                if (caret - (int)sci(SCI_WORDSTARTPOSITION, caret, 1) >= m_autoCompFrom) autoComplete(true);
+            }
         }
         e.Skip();
     }
@@ -3754,6 +3777,8 @@ private:
         long cbk = 500; c->Read("Editing/CaretBlink", &cbk, 500L); m_caretBlink = (int)cbk;
         c->Read("Editing/ScrollBeyond", &m_scrollBeyond, false);
         c->Read("Editing/MultiEdit", &m_multiEdit, true);
+        long acf = 3; c->Read("AutoComplete/FromChar", &acf, 3L); m_autoCompFrom = (int)acf;
+        c->Read("AutoComplete/InsertPairs", &m_autoInsertPairs, false);
         c->Read("Theme", &m_themeName, wxEmptyString);
     }
     void saveSettings()
@@ -3769,6 +3794,7 @@ private:
         c->Write("NewDoc/Eol", (long)m_defaultEol);         c->Write("NewDoc/Lang", (long)m_defaultLangId);
         c->Write("Editing/CaretBlink", (long)m_caretBlink); c->Write("Editing/ScrollBeyond", m_scrollBeyond);
         c->Write("Editing/MultiEdit", m_multiEdit);
+        c->Write("AutoComplete/FromChar", (long)m_autoCompFrom); c->Write("AutoComplete/InsertPairs", m_autoInsertPairs);
         c->Write("Theme", m_themeName);
         c->Flush();
     }
@@ -3855,8 +3881,16 @@ private:
 
         // ---- Auto-Completion ------------------------------------------------------------------
         auto* ac = pg("Auto-Completion"); auto* as = new wxBoxSizer(wxVERTICAL);
-        auto* cbAuto = new wxCheckBox(ac, wxID_ANY, "Enable auto-completion"); cbAuto->SetValue(m_autocomplete);
-        row(as, cbAuto); ac->SetSizer(as);
+        auto* cbAuto = new wxCheckBox(ac, wxID_ANY, "Enable auto-completion on each input"); cbAuto->SetValue(m_autocomplete);
+        row(as, cbAuto);
+        auto* acrow = new wxBoxSizer(wxHORIZONTAL);
+        acrow->Add(new wxStaticText(ac, wxID_ANY, "From the"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6);
+        auto* spFrom = new wxSpinCtrl(ac, wxID_ANY, "", wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS, 1, 10, m_autoCompFrom);
+        acrow->Add(spFrom, 0, wxRIGHT, 6);
+        acrow->Add(new wxStaticText(ac, wxID_ANY, "th character"), 0, wxALIGN_CENTRE_VERTICAL);
+        as->Add(acrow, 0, wxALL, 10);
+        auto* cbPairs = new wxCheckBox(ac, wxID_ANY, "Auto-insert matching brackets and quotes"); cbPairs->SetValue(m_autoInsertPairs);
+        row(as, cbPairs); ac->SetSizer(as);
 
         // ---- Dark Mode ------------------------------------------------------------------------
         auto* dm = pg("Dark Mode"); auto* ds = new wxBoxSizer(wxVERTICAL);
@@ -3890,6 +3924,7 @@ private:
         m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
         m_caretLine = cbCaretLn->GetValue(); m_autoindent = cbIndent->GetValue(); m_caretWidth = spCaret->GetValue(); m_edgeColumn = spEdge->GetValue();
         m_scrollBeyond = cbScroll->GetValue(); m_multiEdit = cbMulti->GetValue(); m_caretBlink = spBlink->GetValue();
+        m_autoCompFrom = spFrom->GetValue(); m_autoInsertPairs = cbPairs->GetValue();
         m_defaultEol = (rbEol->GetSelection() == 1) ? SC_EOL_LF : (rbEol->GetSelection() == 2) ? SC_EOL_CR : SC_EOL_CRLF;
         { int s = chLang->GetSelection(); if (s <= 0) m_defaultLangId = -1;
           else { size_t ln; const NppLang* lt = nppLangTable(ln); m_defaultLangId = (s - 1 < (int)ln) ? lt[s - 1].id : -1; } }
@@ -4721,6 +4756,8 @@ private:
     int         m_defaultEol = SC_EOL_CRLF, m_defaultLangId = -1; // New Document: default line-ending + language (IDM_LANG_*; -1 = Normal Text)
     int         m_caretBlink = 500;                              // caret blink rate (ms; 0 = steady)
     bool        m_scrollBeyond = false, m_multiEdit = true;      // scroll past the last line; multi-selection / multi-caret editing
+    int         m_autoCompFrom = 3;                              // auto-completion triggers from the Nth typed character
+    bool        m_autoInsertPairs = false;                       // auto-insert matching brackets/quotes while typing
     wxString    m_themeName;                                      // active editor theme (empty = dark/light default); Style Configurator
     std::vector<MacroStep> m_macro;                               // the current recorded macro
     bool        m_recording = false;
