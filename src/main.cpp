@@ -2940,7 +2940,13 @@ private:
     }
     // ----- file actions --------------------------------------------------
     void setDocTitle(const wxString& name) { if (auto* p = activePage()) { p->title = name; refreshTab(p); } else SetTitle(name + " - wxNotepad++"); }
-    void doNew() { addDocument("", nextNewName()); }   // New opens a fresh tab, like Notepad++
+    void doNew()   // New opens a fresh tab, like Notepad++ - honouring the New Document default EOL + language
+    {
+        addDocument("", nextNewName());
+        setEol(m_defaultEol);
+        if (m_defaultLangId >= 0) { if (const NppLang* L = nppLangFind(m_defaultLangId)) setForcedLang(L->lexer, L->name); }
+        updateStatus();   // reflect the default EOL/language in the status bar
+    }
     // ===== text encoding: detect on load, encode on save (the Scintilla doc is always UTF-8) =====
     static bool isValidUtf8(const std::string& s)
     {
@@ -3742,6 +3748,8 @@ private:
         c->Read("Editing/AutoIndent", &m_autoindent, true);
         long cw = 1; c->Read("Editing/CaretWidth", &cw, 1L); m_caretWidth = (int)cw;
         long ec = 0; c->Read("Editing/EdgeColumn", &ec, 0L); m_edgeColumn = (int)ec;
+        long de = SC_EOL_CRLF; c->Read("NewDoc/Eol", &de, (long)SC_EOL_CRLF); m_defaultEol = (int)de;
+        long dl = -1; c->Read("NewDoc/Lang", &dl, -1L); m_defaultLangId = (int)dl;
         c->Read("Theme", &m_themeName, wxEmptyString);
     }
     void saveSettings()
@@ -3754,6 +3762,7 @@ private:
         c->Write("View/StatusBar", m_showStatusbar);      c->Write("Editing/AutoComplete", m_autocomplete);
         c->Write("Editing/CaretLine", m_caretLine);       c->Write("Editing/AutoIndent", m_autoindent);
         c->Write("Editing/CaretWidth", (long)m_caretWidth); c->Write("Editing/EdgeColumn", (long)m_edgeColumn);
+        c->Write("NewDoc/Eol", (long)m_defaultEol);         c->Write("NewDoc/Lang", (long)m_defaultLangId);
         c->Write("Theme", m_themeName);
         c->Flush();
     }
@@ -3838,6 +3847,23 @@ private:
         auto* cbDark = new wxCheckBox(dm, wxID_ANY, "Enable Dark Mode   (applied on restart)"); cbDark->SetValue(m_dark);
         row(ds, cbDark); dm->SetSizer(ds);
 
+        // ---- New Document ---------------------------------------------------------------------
+        auto* nd = pg("New Document"); auto* nds = new wxBoxSizer(wxVERTICAL);
+        const wxString eolChoices[3] = { "Windows (CR LF)", "Unix (LF)", "Macintosh (CR)" };
+        auto* rbEol = new wxRadioBox(nd, wxID_ANY, "Format (Line ending)", wxDefaultPosition, wxDefaultSize,
+                                     3, eolChoices, 1, wxRA_SPECIFY_COLS);
+        rbEol->SetSelection(m_defaultEol == SC_EOL_LF ? 1 : (m_defaultEol == SC_EOL_CR ? 2 : 0));
+        nds->Add(rbEol, 0, wxALL, 10);
+        auto* lrow = new wxBoxSizer(wxHORIZONTAL);
+        lrow->Add(new wxStaticText(nd, wxID_ANY, "Default language:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* chLang = new wxChoice(nd, wxID_ANY);
+        chLang->Append("Normal Text");
+        { size_t ln; const NppLang* lt = nppLangTable(ln); int sel = 0;
+          for (size_t i = 0; i < ln; ++i) { chLang->Append(lt[i].name); if (lt[i].id == m_defaultLangId) sel = (int)i + 1; }
+          chLang->SetSelection(sel); }
+        lrow->Add(chLang, 0, wxALIGN_CENTRE_VERTICAL);
+        nds->Add(lrow, 0, wxALL, 10); nd->SetSizer(nds);
+
         auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer(); btn->Add(new wxButton(&dlg, wxID_OK, "Close"), 0);
         auto* top = new wxBoxSizer(wxVERTICAL); top->Add(book, 1, wxEXPAND | wxALL, 8); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
         dlg.SetSizer(top); themeDialog(&dlg);
@@ -3847,6 +3873,9 @@ private:
         m_tabWidth = spTab->GetValue(); m_useTabs = !cbSpace->GetValue(); m_lineNumbers = cbLineNum->GetValue();
         m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
         m_caretLine = cbCaretLn->GetValue(); m_autoindent = cbIndent->GetValue(); m_caretWidth = spCaret->GetValue(); m_edgeColumn = spEdge->GetValue();
+        m_defaultEol = (rbEol->GetSelection() == 1) ? SC_EOL_LF : (rbEol->GetSelection() == 2) ? SC_EOL_CR : SC_EOL_CRLF;
+        { int s = chLang->GetSelection(); if (s <= 0) m_defaultLangId = -1;
+          else { size_t ln; const NppLang* lt = nppLangTable(ln); m_defaultLangId = (s - 1 < (int)ln) ? lt[s - 1].id : -1; } }
         applySettings(); saveSettings();
         bool needRestart = (newDark != m_dark);
 #ifdef WXNPP_HAS_BORDERLESS
@@ -4672,6 +4701,7 @@ private:
     bool        m_autocomplete = true;                            // auto word/keyword completion while typing
     bool        m_caretLine = true, m_autoindent = true;          // highlight the current line; auto-indent new lines
     int         m_caretWidth = 1, m_edgeColumn = 0;               // caret thickness (px); long-line marker column (0 = off)
+    int         m_defaultEol = SC_EOL_CRLF, m_defaultLangId = -1; // New Document: default line-ending + language (IDM_LANG_*; -1 = Normal Text)
     wxString    m_themeName;                                      // active editor theme (empty = dark/light default); Style Configurator
     std::vector<MacroStep> m_macro;                               // the current recorded macro
     bool        m_recording = false;
