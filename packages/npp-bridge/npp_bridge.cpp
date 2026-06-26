@@ -146,9 +146,11 @@ static HMENU g_pluginsMenu = nullptr;
 static std::wstring wFromUtf8(const char* s)
 {
     if (!s || !*s) return {};
-    int w = ::MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);
-    std::wstring r(w > 0 ? w - 1 : 0, L'\0');
-    if (w > 1) ::MultiByteToWideChar(CP_UTF8, 0, s, -1, &r[0], w);
+    int w = ::MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);   // w counts the terminating NUL too
+    if (w <= 1) return {};
+    std::wstring r(static_cast<size_t>(w), L'\0');                  // allocate room for the content + NUL...
+    ::MultiByteToWideChar(CP_UTF8, 0, s, -1, &r[0], w);
+    r.resize(static_cast<size_t>(w - 1));                           // ...then drop the trailing NUL from size()
     return r;
 }
 // The active document's full path (wide), via nib.documents; empty if untitled or unavailable.

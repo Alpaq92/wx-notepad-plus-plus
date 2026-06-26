@@ -43,6 +43,11 @@ Stubbed messages fall through and return 0; coverage grows additively as the `ni
 (each new capability is a few lines here). Note: the path family lives in the `RUNCOMMAND_USER`
 (`WM_USER+3000`) range, so the frame subclass forwards everything `>= WM_USER+1000` (no upper bound).
 
+**Partial** (answered with a constant, pending host-side support): `GETCURRENTVIEW` (and the SCI view
+index) always report MAIN, `GETBUFFERLANGTYPE` always reports `L_TEXT` (no per-buffer lexer lookup yet),
+and `SWITCHTOFILE` *opens* the path rather than switching to an already-open tab. Each needs a small
+`nib` addition (active-view index / lexer mapping / open-tab lookup).
+
 ## Build
 
 Built by the top-level CMake on Windows (`if(WIN32) add_subdirectory(packages/npp-bridge)`), output to

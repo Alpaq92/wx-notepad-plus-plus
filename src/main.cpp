@@ -1220,7 +1220,7 @@ public:
         g_nibPanelShow = [this](void* p, bool v) {
             wxAuiPaneInfo& pi = m_aui.GetPane(static_cast<wxWindow*>(p)); if (pi.IsOk()) { pi.Show(v); m_aui.Update(); }
         };
-        g_nibDocCount      = [this]() -> int { return m_tabs ? static_cast<int>(m_tabs->GetPageCount()) : 1; };
+        g_nibDocCount      = [this]() -> int { const int n = (m_main.tabs ? (int)m_main.tabs->GetPageCount() : 0) + (m_sub.tabs ? (int)m_sub.tabs->GetPageCount() : 0); return n > 0 ? n : 1; };   // across BOTH views
         g_nibDocActivePath = [this](char* b, int c) -> int {   // active document's full path (UTF-8); 0 if untitled
             EditorPage* p = activePage();
             const std::string u = (p ? p->path : wxString()).utf8_string();
@@ -1232,13 +1232,15 @@ public:
         g_nibDocSave = [this]() -> int { onSave(); return 1; };
         g_nibDocActiveId   = [this]() -> intptr_t { return reinterpret_cast<intptr_t>(activePage()); };   // the EditorPage* IS the buffer id
         g_nibDocPathFromId = [this](intptr_t id, char* b, int c) -> int {   // resolve a buffer id back to its on-disk path
-            if (!m_tabs) return 0;
-            for (size_t i = 0; i < m_tabs->GetPageCount(); ++i) {
-                EditorPage* pg = static_cast<EditorPage*>(m_tabs->GetPage(i));
-                if (reinterpret_cast<intptr_t>(pg) != id) continue;
-                const std::string u = pg->path.utf8_string();
-                if (b && c > 0) { int n = static_cast<int>(u.size()); if (n > c - 1) n = c - 1; std::memcpy(b, u.data(), static_cast<size_t>(n)); b[n] = 0; }
-                return static_cast<int>(u.size());
+            for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs }) {          // a buffer id can live in EITHER view
+                if (!nb) continue;
+                for (size_t i = 0; i < nb->GetPageCount(); ++i) {
+                    EditorPage* pg = static_cast<EditorPage*>(nb->GetPage(i));
+                    if (reinterpret_cast<intptr_t>(pg) != id) continue;
+                    const std::string u = pg->path.utf8_string();
+                    if (b && c > 0) { int n = static_cast<int>(u.size()); if (n > c - 1) n = c - 1; std::memcpy(b, u.data(), static_cast<size_t>(n)); b[n] = 0; }
+                    return static_cast<int>(u.size());
+                }
             }
             return 0;
         };
