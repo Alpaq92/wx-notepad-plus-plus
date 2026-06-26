@@ -14,6 +14,13 @@ on:
     paths: [ 'src/**', 'include/**', 'third_party/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
   workflow_dispatch:
 
+# A newer push to a branch cancels that branch's still-queued/running build, so the matrix doesn't
+# pile up (each macOS run counts 10x against private-repo Actions minutes). Only the latest commit
+# on a branch is verified, which is what we want.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: ${{ matrix.name }}
