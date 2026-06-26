@@ -4,8 +4,8 @@ name: build
 # (FetchContent), so the only system dependency is GTK3 on Linux; macOS/Windows need just the
 # toolchain. Verifies the cross-platform claim - the parts the Windows dev machine can't check.
 
-# Note: each job builds wxWidgets from source (cached), so the matrix is heavy - on a *private* repo it
-# consumes Actions minutes (macOS counts 10x). Make the repo public for free runners, or trigger manually.
+# Note: each job builds wxWidgets from source (cached after the first green run), so the matrix is heavy.
+# The repo is public, so GitHub-hosted runners are free; macOS just queues longer than linux/windows.
 on:
   push:
     branches: [ wx-migration, master ]
@@ -35,14 +35,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The 7 GB Linux runner OOM-kills cc1plus while compiling wxWidgets + the large single-TU
-      # main.cpp at -O2. Add swap so the peak fits instead of getting killed.
-      - name: Add swap space (Linux)
-        if: matrix.name == 'linux'
-        run: |
-          sudo fallocate -l 12G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
-          free -h
-
       - name: Install GTK3 (Linux)
         if: matrix.name == 'linux'
         run: |
@@ -60,5 +52,8 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
+      # Cap parallelism to 2: one cc1plus per core compiling wxWidgets + the large single-TU main.cpp
+      # at -O2 all at once OOM-kills cc1plus on the hosted runners (esp. the 7 GB macOS M1). Two at a
+      # time fits, at the cost of a slower (but reliable) build.
       - name: Build wxnpp
-        run: cmake --build build --config Release --target wxnpp --parallel
+        run: cmake --build build --config Release --target wxnpp --parallel 2
