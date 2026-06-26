@@ -2003,8 +2003,7 @@ private:
             sci(SCI_MARKERDEFINE, markers[i], symbols[i]);
             sci(SCI_MARKERSETFORE, markers[i], markFore);
             sci(SCI_MARKERSETBACK, markers[i], markBack);
-            const bool isLine = symbols[i] == SC_MARK_VLINE || symbols[i] == SC_MARK_LCORNER || symbols[i] == SC_MARK_TCORNER;
-            sci(SCI_MARKERSETBACKSELECTED, markers[i], isLine ? markBack : markActive);   // boxes take the accent on highlight; connector lines stay subtle
+            sci(SCI_MARKERSETBACKSELECTED, markers[i], markActive);   // whole active fold (boxes + connector lines) takes the accent - consistent, not one-sided
         }
         sci(SCI_MARKERENABLEHIGHLIGHT, 1);   // highlight the active fold - boxes go to the accent, lines stay gray (not the old loud-red flood)
         sci(SCI_SETAUTOMATICFOLD, SC_AUTOMATICFOLD_SHOW | SC_AUTOMATICFOLD_CLICK | SC_AUTOMATICFOLD_CHANGE);
@@ -3609,8 +3608,7 @@ private:
             const int markBack = fold.first  >= 0 ? fold.first  : 0x808080;
             const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;   // full "Fold active" accent on the box markers
             for (int m : { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL, SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL })
-            { const bool isLine = m == SC_MARKNUM_FOLDERSUB || m == SC_MARKNUM_FOLDERTAIL || m == SC_MARKNUM_FOLDERMIDTAIL;
-              sci(SCI_MARKERSETFORE, m, markFore); sci(SCI_MARKERSETBACK, m, markBack); sci(SCI_MARKERSETBACKSELECTED, m, isLine ? markBack : markActive); }
+            { sci(SCI_MARKERSETFORE, m, markFore); sci(SCI_MARKERSETBACK, m, markBack); sci(SCI_MARKERSETBACKSELECTED, m, markActive); }
             sci(SCI_SETEDGECOLOUR, dark ? 0x4A4A4A : 0xC8C8C8);   // long-line ruler: a subtle but visible gray (column set in applySettings)
             const auto smart = G("Smart Highlighting");  if (smart.second >= 0) sci(SCI_INDICSETFORE, SMART_INDIC, smart.second);
             const auto findMk = G("Find Mark Style");    if (findMk.second >= 0) sci(SCI_INDICSETFORE, MARK_INDIC, findMk.second);
