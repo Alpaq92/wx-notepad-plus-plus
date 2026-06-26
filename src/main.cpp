@@ -2584,10 +2584,21 @@ private:
         sz->AddStretchSpacer(1);   // empty middle stays draggable
 
         // Window controls (right): minimize, maximize/restore, close (close hovers red, VS-style)
-        auto ctrl = [&](const char* glyphPath, int which, const wxColour& hot) -> wxButton* {
+#ifdef __WXMSW__
+        // Windows draws its caption buttons from the Segoe MDL2 Assets icon font - use the very same font
+        // + glyphs (Chrome{Minimize,Maximize,Restore,Close}) so the controls are pixel-identical to native.
+        const wxFont mdl2(wxFontInfo(10).FaceName("Segoe MDL2 Assets"));
+#endif
+        auto ctrl = [&](wchar_t mdl2Glyph, const char* svgPath, int which, const wxColour& hot) -> wxButton* {
             auto* b = new wxButton(m_titleBar, wxID_ANY, "", wxDefaultPosition,
                                    wxSize(46, kTitleBarH), wxBU_EXACTFIT | wxBORDER_NONE);
-            b->SetBitmap(winGlyph(glyphPath));
+#ifdef __WXMSW__
+            b->SetFont(mdl2); b->SetLabel(wxString(wxUniChar(mdl2Glyph)));
+            b->SetForegroundColour(m_dark ? wxColour(240, 240, 240) : wxColour(20, 20, 20));
+            (void)svgPath;
+#else
+            b->SetBitmap(winGlyph(svgPath)); (void)mdl2Glyph;   // Linux/GTK: no Segoe MDL2 - drawn fallback
+#endif
             b->SetBackgroundColour(barBg);
             b->Bind(wxEVT_BUTTON,       [this, which](wxCommandEvent&) { onWindowControl(which); });
             b->Bind(wxEVT_ENTER_WINDOW, [b, hot](wxMouseEvent& e)   { b->SetBackgroundColour(hot);   b->Refresh(); e.Skip(); });
@@ -2596,9 +2607,9 @@ private:
             return b;
         };
         const wxColour hover = m_dark ? wxColour(63, 63, 70) : wxColour(220, 220, 220);
-        ctrl(GLYPH_MIN, 0, hover);                                            // minimize
-        m_maxBtn = ctrl(IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX, 1, hover); // maximize / restore (glyph tracks state)
-        ctrl(GLYPH_CLOSE, 2, wxColour(232, 17, 35));                          // close (red hover)
+        ctrl(0xE921, GLYPH_MIN, 0, hover);                                                                 // minimize
+        m_maxBtn = ctrl(IsMaximized() ? 0xE923 : 0xE922, IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX, 1, hover);  // max/restore
+        ctrl(0xE8BB, GLYPH_CLOSE, 2, wxColour(232, 17, 35));                                                // close (red hover)
 
         m_titleBar->SetSizer(sz);
         m_aui.AddPane(m_titleBar, wxAuiPaneInfo().Name("titlebar").Top().Layer(2)
@@ -2625,7 +2636,15 @@ private:
             path, col);
         return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(12, 12));
     }
-    void updateMaxGlyph() { if (m_maxBtn) m_maxBtn->SetBitmap(winGlyph(IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX)); }
+    void updateMaxGlyph()
+    {
+        if (!m_maxBtn) return;
+#ifdef __WXMSW__
+        m_maxBtn->SetLabel(wxString(wxUniChar(IsMaximized() ? 0xE923 : 0xE922)));   // ChromeRestore / ChromeMaximize
+#else
+        m_maxBtn->SetBitmap(winGlyph(IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX));
+#endif
+    }
     void onWindowControl(int which)
     {
         if      (which == 0) Iconize(true);
