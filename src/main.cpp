@@ -2388,6 +2388,9 @@ private:
         updateStatus();
         updateEncodingMenuChecks();   // tick this buffer's encoding in the Encoding menu
         m_stc->SetFocus();
+        // Notify subscribers (e.g. the N++ bridge -> NPPN_BUFFERACTIVATED) that this document is now active.
+        NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_ACTIVATED; ev.struct_size = sizeof(NibEvent);
+        ev.as.document.id = reinterpret_cast<intptr_t>(p); nibFireEvent(ev);
     }
     // Ask to save a modified document before closing it (Save / Don't Save / Cancel), themed like the
     // rest of the app. Returns true if the caller may close the page, false if the user cancelled.

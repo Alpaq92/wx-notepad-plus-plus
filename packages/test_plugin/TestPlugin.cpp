@@ -13,6 +13,8 @@
 static NppData  g_npp{};
 static FuncItem g_funcs[6]{};
 static int      g_notifyCount = 0;
+static int      g_bufActivatedCount = 0;   // NPPN_BUFFERACTIVATED notifications seen
+static void*    g_lastBufId = nullptr;      // buffer id from the most recent NPPN_BUFFERACTIVATED
 static HWND     g_dock = nullptr;
 static bool     g_dockReg = false;
 
@@ -20,8 +22,8 @@ static void cmdInsertHello()
 {
     // The text reports the live SCN_ notification count, so this one command verifies both the
     // command dispatch AND that beNotified() is being forwarded to us.
-    char buf[160];
-    ::sprintf_s(buf, 160, "Hello from TestPlugin! (received %d SCN_ notifications via beNotified)", g_notifyCount);
+    char buf[256];
+    ::sprintf_s(buf, 256, "Hello from TestPlugin! (%d notifications via beNotified; %d were NPPN_BUFFERACTIVATED; last activated buffer = 0x%p)", g_notifyCount, g_bufActivatedCount, g_lastBufId);
     if (g_npp._scintillaMainHandle)
         ::SendMessageA(g_npp._scintillaMainHandle, SCI_REPLACESEL, 0, reinterpret_cast<LPARAM>(buf));
 }
@@ -96,6 +98,10 @@ extern "C" __declspec(dllexport) FuncItem* getFuncsArray(int* n)
     return g_funcs;
 }
 
-extern "C" __declspec(dllexport) void beNotified(SCNotification*) { ++g_notifyCount; }
+extern "C" __declspec(dllexport) void beNotified(SCNotification* scn)
+{
+    ++g_notifyCount;
+    if (scn && scn->nmhdr.code == NPPN_BUFFERACTIVATED) { ++g_bufActivatedCount; g_lastBufId = reinterpret_cast<void*>(scn->nmhdr.idFrom); }
+}
 extern "C" __declspec(dllexport) LRESULT messageProc(UINT, WPARAM, LPARAM) { return TRUE; }
 extern "C" __declspec(dllexport) BOOL isUnicode() { return TRUE; }

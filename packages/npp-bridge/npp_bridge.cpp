@@ -76,6 +76,11 @@ static void on_nib_event(NibHost*, const NibEvent* ev, void*)
         case NIB_EV_DOCUMENT_SAVED:
             scn.nmhdr.code = SCN_SAVEPOINTREACHED;
             break;
+        case NIB_EV_DOCUMENT_ACTIVATED:
+            scn.nmhdr.hwndFrom = g_npp._nppHandle;   // an NPPN_ notification comes from the frame, not the editor
+            scn.nmhdr.code     = NPPN_BUFFERACTIVATED;
+            scn.nmhdr.idFrom   = static_cast<uptr_t>(ev->as.document.id);   // the now-active buffer id
+            break;
         default: return;
     }
     for (const auto& p : g_plugins) if (p.beNotified) p.beNotified(&scn);
@@ -242,9 +247,10 @@ static void activate(NibHost* host, NibQueryFn query)
     // Forward editor events to the loaded plugins' beNotified (Stage 3).
     const NibEventsApi* events = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 1));
     if (events) {
-        events->subscribe(host, NIB_EV_TEXT_CHANGED,      on_nib_event, nullptr);
-        events->subscribe(host, NIB_EV_SELECTION_CHANGED, on_nib_event, nullptr);
-        events->subscribe(host, NIB_EV_DOCUMENT_SAVED,    on_nib_event, nullptr);
+        events->subscribe(host, NIB_EV_TEXT_CHANGED,       on_nib_event, nullptr);
+        events->subscribe(host, NIB_EV_SELECTION_CHANGED,  on_nib_event, nullptr);
+        events->subscribe(host, NIB_EV_DOCUMENT_SAVED,     on_nib_event, nullptr);
+        events->subscribe(host, NIB_EV_DOCUMENT_ACTIVATED, on_nib_event, nullptr);   // -> NPPN_BUFFERACTIVATED
     }
 }
 

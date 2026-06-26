@@ -108,7 +108,8 @@ typedef struct NibCommandsApi {
 typedef enum {
     NIB_EV_TEXT_CHANGED = 1,    // as.text:      pos, added, removed (bytes)
     NIB_EV_SELECTION_CHANGED,   // as.selection: anchor, caret
-    NIB_EV_DOCUMENT_SAVED       // (no payload)
+    NIB_EV_DOCUMENT_SAVED,      // (no payload)
+    NIB_EV_DOCUMENT_ACTIVATED   // as.document:   id (the now-active document's buffer id)
 } NibEventKind;
 typedef struct NibEvent {
     NibEventKind kind;
@@ -116,6 +117,7 @@ typedef struct NibEvent {
     union {
         struct { int64_t pos, added, removed; } text;
         struct { int64_t anchor, caret; }       selection;
+        struct { intptr_t id; }                 document;
     } as;
 } NibEvent;
 typedef void (*NibEventFn)(NibHost* host, const NibEvent* ev, void* user);

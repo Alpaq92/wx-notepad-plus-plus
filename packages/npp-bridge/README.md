@@ -33,11 +33,11 @@ Editor (`SCI_*`) messages a plugin sends to the editor HWND are bridged to wxSty
 |---|---|
 | GETCURRENTSCINTILLA, GETNPPVERSION, GETCURRENTLANGTYPE, **GETCURRENTVIEW**, **GETBUFFERLANGTYPE** | ACTIVATEDOC (doc tracking) |
 | GETMENUHANDLE, MENUCOMMAND, **SWITCHTOFILE**, **SETSTATUSBAR**, **GETPLUGINHOMEPATH**, **GETCURRENTBUFFERID**, **GETFULLPATHFROMBUFFERID** | |
-| GETNPPDIRECTORY, GETNPPFULLFILEPATH-ish, GETPLUGINSCONFIGDIR | richer `beNotified` (char-added, margin-click, buffer-activated) |
+| GETNPPDIRECTORY, GETNPPFULLFILEPATH-ish, GETPLUGINSCONFIGDIR | richer `beNotified` (char-added, margin-click) |
 | **GETFULLCURRENTPATH / GETCURRENTDIRECTORY / GETFILENAME / GETNAMEPART / GETEXTPART**, GETNBOPENFILES | RELOADFILE, MAKECURRENTBUFFERDIRTY |
 | **DOOPEN**, **SAVECURRENTFILE** | |
 | **DMMREGASDCKDLG / DMMSHOW / DMMHIDE / DMMUPDATEDISPINFO** (docking) | |
-| `beNotified` for text-changed / selection / save | |
+| `beNotified` for text-changed / selection / save / **buffer-activated** (NPPN_BUFFERACTIVATED) | |
 
 Stubbed messages fall through and return 0; coverage grows additively as the `nib.*` interfaces grow
 (each new capability is a few lines here). Note: the path family lives in the `RUNCOMMAND_USER`
