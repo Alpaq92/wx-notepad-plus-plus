@@ -1138,6 +1138,12 @@ public:
 #ifdef WXNPP_HAS_BORDERLESS
     static constexpr bool kBorderless = std::is_base_of<wxBorderlessFrameBase, FB>::value;
     static constexpr int  kTitleBarH  = 30;   // height (px) of the integrated top bar
+    // Window-control glyphs drawn (not text): crisp + correctly sized, in a 10x10 box. Restore is the
+    // canonical two-overlapping-squares; maximize is a single square.
+    static constexpr const char* GLYPH_MIN     = "M1 5 H9";
+    static constexpr const char* GLYPH_MAX     = "M1 1 H9 V9 H1 Z";
+    static constexpr const char* GLYPH_RESTORE = "M1 3.5 H6.5 V9 H1 Z M3 3.5 V1 H9 V6.5 H6.5";
+    static constexpr const char* GLYPH_CLOSE   = "M1 1 L9 9 M9 1 L1 9";
 #else
     static constexpr bool kBorderless = false;
 #endif
@@ -2578,10 +2584,11 @@ private:
         sz->AddStretchSpacer(1);   // empty middle stays draggable
 
         // Window controls (right): minimize, maximize/restore, close (close hovers red, VS-style)
-        auto ctrl = [&](const wxString& glyph, int which, const wxColour& hot) -> wxButton* {
-            auto* b = new wxButton(m_titleBar, wxID_ANY, glyph, wxDefaultPosition,
+        auto ctrl = [&](const char* glyphPath, int which, const wxColour& hot) -> wxButton* {
+            auto* b = new wxButton(m_titleBar, wxID_ANY, "", wxDefaultPosition,
                                    wxSize(46, kTitleBarH), wxBU_EXACTFIT | wxBORDER_NONE);
-            b->SetBackgroundColour(barBg); b->SetForegroundColour(barFg);
+            b->SetBitmap(winGlyph(glyphPath));
+            b->SetBackgroundColour(barBg);
             b->Bind(wxEVT_BUTTON,       [this, which](wxCommandEvent&) { onWindowControl(which); });
             b->Bind(wxEVT_ENTER_WINDOW, [b, hot](wxMouseEvent& e)   { b->SetBackgroundColour(hot);   b->Refresh(); e.Skip(); });
             b->Bind(wxEVT_LEAVE_WINDOW, [b, barBg](wxMouseEvent& e) { b->SetBackgroundColour(barBg); b->Refresh(); e.Skip(); });
@@ -2589,9 +2596,9 @@ private:
             return b;
         };
         const wxColour hover = m_dark ? wxColour(63, 63, 70) : wxColour(220, 220, 220);
-        ctrl(L"—", 0, hover);                            // minimize  (em dash)
-        m_maxBtn = ctrl(maxGlyph(), 1, hover);           // maximize / restore (glyph tracks the window state)
-        ctrl(L"✕", 2, wxColour(232, 17, 35));            // close     (multiplication X, red hover)
+        ctrl(GLYPH_MIN, 0, hover);                                            // minimize
+        m_maxBtn = ctrl(IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX, 1, hover); // maximize / restore (glyph tracks state)
+        ctrl(GLYPH_CLOSE, 2, wxColour(232, 17, 35));                          // close (red hover)
 
         m_titleBar->SetSizer(sz);
         m_aui.AddPane(m_titleBar, wxAuiPaneInfo().Name("titlebar").Top().Layer(2)
@@ -2608,8 +2615,17 @@ private:
         if (!m_gripper || !m_gripper->StartDragMove(this)) ev.Skip();
     }
 
-    const wxChar* maxGlyph() const { return IsMaximized() ? L"❐" : L"☐"; }   // restore vs maximize glyph
-    void updateMaxGlyph() { if (m_maxBtn) m_maxBtn->SetLabel(maxGlyph()); }
+    // A window-control glyph stroked into a small bitmap (10x10 box), themed to the bar.
+    wxBitmapBundle winGlyph(const char* path) const
+    {
+        const char* col = m_dark ? "#e6e6e6" : "#2b2b2b";
+        const wxString svg = wxString::Format(
+            "<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'>"
+            "<path d='%s' fill='none' stroke='%s' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter'/></svg>",
+            path, col);
+        return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(10, 10));
+    }
+    void updateMaxGlyph() { if (m_maxBtn) m_maxBtn->SetBitmap(winGlyph(IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX)); }
     void onWindowControl(int which)
     {
         if      (which == 0) Iconize(true);
