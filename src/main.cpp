@@ -115,6 +115,8 @@ public:
     wxString path;
     wxString title;            // tab/window title without the unsaved "*" marker
     wxString lang  = "Normal text file";   // status-bar language label (like Notepad++)
+    bool     langForced = false;           // true once the user picks a language from the Language menu
+    wxString forcedExt;                    // that pick's representative extension ("" = forced Normal Text)
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
@@ -2401,8 +2403,9 @@ private:
     void setLexerForFile(const wxString& path)
     {
         applyEditorTheme(m_dark);          // reset every style to the theme base (incl. line numbers)
-        const wxString ext = path.AfterLast('.').Lower();
-        if (auto* p = activePage()) p->lang = langDisplayName(ext);
+        auto* page = activePage();
+        const wxString ext = (page && page->langForced) ? page->forcedExt : path.AfterLast('.').Lower();
+        if (page) page->lang = langDisplayName(ext);
         const LexMap lm = lexerForExt(ext);
         sci(SCI_SETILEXER, 0, reinterpret_cast<sptr_t>(lm.lexer ? CreateLexer(lm.lexer) : nullptr));
         if (lm.lexer)
@@ -3069,7 +3072,17 @@ private:
         (void)algo; (void)toClip; notImpl(wxString(name) + " (Windows only)");
 #endif
     }
-    void setNormalText() { applyEditorTheme(m_dark); sci(SCI_SETILEXER, 0, 0); if (auto* p = activePage()) p->lang = "Normal text file"; updateStatus(); }
+    // Manually force a language on the active buffer (Language menu). ext "" forces Normal Text. The
+    // choice sticks across tab switches via EditorPage::langForced (setLexerForFile honours it over the
+    // file extension).
+    void setForcedLang(const wxString& ext)
+    {
+        auto* p = activePage(); if (!p) return;
+        p->langForced = true; p->forcedExt = ext;
+        setLexerForFile(p->path);
+        updateStatus();
+        if (m_stc) m_stc->Refresh();
+    }
 
     // ----- search engine (drives the Find/Replace dialog) ----------------
     // Report a search outcome both in the main status bar and, if it is open, inside the Find dialog
@@ -3777,6 +3790,7 @@ private:
         }
         if (cmd >= myID_DOCLIST_ITEM && cmd < myID_DOCLIST_ITEM + 1000)   // document-list dropdown entry
         { const size_t n = (size_t)(cmd - myID_DOCLIST_ITEM); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); return; }
+        if (const char* langExt = nppLangExt(cmd)) { setForcedLang(langExt); return; }   // Language menu: force that lexer on the active buffer
         if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + 200)        // a saved macro from the Macro menu
         { const size_t n = (size_t)(cmd - myID_MACRO_ITEM); if (n < m_savedMacros.size()) playMacro(m_savedMacros[n].second); return; }
         // Win32 WM_COMMAND carries only a 16-bit id and wx sign-extends it, so command ids
@@ -3990,7 +4004,7 @@ private:
             case IDM_LANGSTYLE_CONFIG_DLG: onStyleConfig(); break;
             case IDM_SETTING_IMPORTSTYLETHEMES: importStyleTheme(); break;
             case IDM_SETTING_OPENPLUGINSDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "plugins"); break;
-            case IDM_LANG_TEXT: setNormalText(); break;
+            case IDM_LANG_TEXT: setForcedLang(""); break;   // force Normal Text (a manual pick, like the languages)
             case IDM_LANG_OPENUDLDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "userDefineLangs"); break;
 
             // ---- Help: external links + info ----

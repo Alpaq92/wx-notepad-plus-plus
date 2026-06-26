@@ -13,7 +13,47 @@
 // "&&" in a label is a literal ampersand (wx escaping), matching the .rc "&&".
 // =====================================================================
 #include <wx/menu.h>
+#include <cstddef>
 #include "menuCmdID.h"
+
+// The manual Language menu: the subset of Notepad++ languages this build has a Lexilla lexer + theme
+// for, each mapped to a representative extension that the lexer dispatch (setLexerForFile) understands.
+// Shared so it both POPULATES the Language menu and DISPATCHES a manual pick (force that lexer on the
+// active buffer). (Go has a lexer but no IDM_LANG_* id, so it stays auto-detect-only for now.)
+struct NppLang { int id; const char* name; const char* ext; };
+inline const NppLang* nppLangTable(size_t& n)
+{
+    static const NppLang t[] = {
+        { IDM_LANG_BATCH,      "Batch",          "bat"        },
+        { IDM_LANG_C,          "C",              "c"          },
+        { IDM_LANG_CPP,        "C++",            "cpp"        },
+        { IDM_LANG_CS,         "C#",             "cs"         },
+        { IDM_LANG_CSS,        "CSS",            "css"        },
+        { IDM_LANG_JAVA,       "Java",           "java"       },
+        { IDM_LANG_JS,         "JavaScript",     "js"         },
+        { IDM_LANG_JSON,       "JSON",           "json"       },
+        { IDM_LANG_LUA,        "Lua",            "lua"        },
+        { IDM_LANG_PERL,       "Perl",           "pl"         },
+        { IDM_LANG_POWERSHELL, "PowerShell",     "ps1"        },
+        { IDM_LANG_PROPS,      "Properties/INI", "properties" },
+        { IDM_LANG_PYTHON,     "Python",         "py"         },
+        { IDM_LANG_RUBY,       "Ruby",           "rb"         },
+        { IDM_LANG_RUST,       "Rust",           "rs"         },
+        { IDM_LANG_BASH,       "Shell",          "sh"         },
+        { IDM_LANG_SQL,        "SQL",            "sql"        },
+        { IDM_LANG_TYPESCRIPT, "TypeScript",     "ts"         },
+        { IDM_LANG_XML,        "XML",            "xml"        },
+        { IDM_LANG_YAML,       "YAML",           "yml"        },
+    };
+    n = sizeof(t) / sizeof(t[0]);
+    return t;
+}
+inline const char* nppLangExt(int id)
+{
+    size_t n; const NppLang* t = nppLangTable(n);
+    for (size_t i = 0; i < n; ++i) if (t[i].id == id) return t[i].ext;
+    return nullptr;
+}
 
 // darkModeId: our extra restart-to-apply "Dark Mode" toggle (myID_DARKMODE),
 // added under Settings (real Notepad++ keeps dark mode under Settings too).
@@ -583,7 +623,7 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         auto* lang = new wxMenu;
         lang->Append(IDM_LANG_TEXT, "None (Normal Text)");
         lang->AppendSeparator();
-        lang->Append(0, "(languages populated at runtime)")->Enable(false);
+        { size_t ln; const NppLang* lt = nppLangTable(ln); for (size_t i = 0; i < ln; ++i) lang->Append(lt[i].id, lt[i].name); }
         lang->AppendSeparator();
         {
             auto* sub = new wxMenu;
