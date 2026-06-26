@@ -62,6 +62,16 @@ if(WIN32 OR (UNIX AND NOT APPLE))
     if(MSVC)
         target_compile_options(wxbf PRIVATE /EHsc /utf-8)
     endif()
+    # The GTK backend (borderless_frame_gtk.cpp) includes <gdk/gdk.h> directly; wxWidgets does not
+    # propagate the GTK include dirs to dependents, so add them explicitly (the upstream CMake does the
+    # same in its UNIX block). GTK3 is already present - wxGTK itself was built against it.
+    if(UNIX AND NOT APPLE)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
+        target_include_directories(wxbf PRIVATE ${GTK3_INCLUDE_DIRS})
+        target_link_directories(wxbf PUBLIC ${GTK3_LIBRARY_DIRS})
+        target_link_libraries(wxbf PUBLIC ${GTK3_LIBRARIES})
+    endif()
 endif()
 
 # ---- the wxNotepad++ executable --------------------------------------------------------------------
