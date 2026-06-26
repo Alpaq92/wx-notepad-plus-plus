@@ -20,10 +20,12 @@
 #include <wx/wx.h>
 #include <wx/notebook.h>
 #include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
+#include <wx/listctrl.h>       // wxListView - wxListbook's page list (we widen it so labels don't truncate)
 #include <wx/clrpicker.h>      // wxColourPickerCtrl - Style Configurator foreground/background pickers
 #include <wx/aui/auibook.h>
 #include <wx/aui/aui.h>          // wxAuiManager - dock host for plugin panels (NPPM_DMM*)
 #include <wx/stc/stc.h>          // wxStyledTextCtrl - cross-platform editor (Phase 3 port target)
+#include <wx/splitter.h>         // wxSplitterWindow - hosts the two editor views (MAIN | SUB) side by side
 #include <wx/treectrl.h>         // wxTreeCtrl - Function List symbol tree
 #include <wx/dirctrl.h>          // wxGenericDirCtrl - Folder as Workspace file browser
 #include <wx/spinctrl.h>
@@ -135,6 +137,16 @@ public:
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
+};
+
+// One editor "view" = a tab strip + ONE persistent wxStyledTextCtrl that hops across its pages (Notepad++'s
+// MAIN_VIEW / SUB_VIEW). The frame keeps two and aliases m_tabs/m_stc/m_sci to whichever is active.
+struct ViewPane {
+    wxAuiNotebook*    tabs = nullptr;
+    wxStyledTextCtrl* stc  = nullptr;
+#ifdef __WXMSW__
+    HWND              sci  = nullptr;
+#endif
 };
 
 // A parsed Notepad++ theme (stylers.model.xml / themes/*.xml).
@@ -268,10 +280,13 @@ static void paintScrollbarCorner(HWND h)
     ::ReleaseDC(h, dc);
 }
 
-static LRESULT CALLBACK SciHwndProc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR)
+static LRESULT CALLBACK SciHwndProc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR ref)
 {
-    if (g_sciForward && ((msg >= 2000 && msg < 3000) || (msg >= 4000 && msg < 5000)))
-        return static_cast<LRESULT>(g_sciForward(msg, w, l));
+    if ((msg >= 2000 && msg < 3000) || (msg >= 4000 && msg < 5000)) {   // SCI_* + Lexilla range
+        if (auto* stc = reinterpret_cast<wxStyledTextCtrl*>(ref))       // per-view: route to THIS handle's editor
+            return static_cast<LRESULT>(stc->SendMsg(static_cast<int>(msg), static_cast<wxUIntPtr>(w), static_cast<wxIntPtr>(l)));
+        if (g_sciForward) return static_cast<LRESULT>(g_sciForward(msg, w, l));   // fallback: active view
+    }
     const LRESULT res = DefSubclassProc(h, msg, w, l);
     if (msg == WM_NCPAINT && g_editorDark)   // overpaint the scrollbar dead-corner once the bars are drawn
         paintScrollbarCorner(h);
@@ -987,18 +1002,24 @@ static std::function<int()>            g_nibDocCount;
 static std::function<int(char*, int)>  g_nibDocActivePath;   // copy the active doc's UTF-8 path -> length, 0 if untitled
 static std::function<int(const char*)> g_nibDocOpen;         // open a file by UTF-8 path
 static std::function<int()>            g_nibDocSave;         // save the active document
+static std::function<intptr_t()>              g_nibDocActiveId;    // v2: stable opaque id of the active document; 0 if none
+static std::function<int(intptr_t,char*,int)> g_nibDocPathFromId;  // v2: copy a document id's UTF-8 path -> length, 0 if no such id
+static std::function<int()>                   g_nibDocActiveView;  // v3: which view holds the active doc (0=main, 1=sub)
 static int nibDocCount(NibHost*)                      { return g_nibDocCount ? g_nibDocCount() : 0; }
 static int nibDocActivePath(NibHost*, char* b, int c) { return g_nibDocActivePath ? g_nibDocActivePath(b, c) : 0; }
 static int nibDocOpen(NibHost*, const char* p)        { return g_nibDocOpen ? g_nibDocOpen(p) : 0; }
 static int nibDocSave(NibHost*)                       { return g_nibDocSave ? g_nibDocSave() : 0; }
+static intptr_t nibDocActiveId(NibHost*)                              { return g_nibDocActiveId ? g_nibDocActiveId() : 0; }
+static int      nibDocPathFromId(NibHost*, intptr_t id, char* b, int c) { return g_nibDocPathFromId ? g_nibDocPathFromId(id, b, c) : 0; }
+static int      nibDocActiveView(NibHost*)                             { return g_nibDocActiveView ? g_nibDocActiveView() : 0; }
 #ifdef __WXMSW__
 // nib.win32/1 - Windows-only native-handle capability (the GPL npp-bridge uses it to rebuild NppData).
-static std::function<void*()> g_nibMainWindow, g_nibEditorMain, g_nibPluginsMenu;
+static std::function<void*()> g_nibMainWindow, g_nibEditorMain, g_nibEditorSecond, g_nibPluginsMenu;
 static std::function<void(void*, const char*, int)> g_nibDockNative;   // host a plugin's native HWND in a dock pane
 static std::function<void(void*, bool)>             g_nibShowDock;
 static void* nibW32Main(NibHost*)   { return g_nibMainWindow   ? g_nibMainWindow()   : nullptr; }
 static void* nibW32EdMain(NibHost*) { return g_nibEditorMain   ? g_nibEditorMain()   : nullptr; }
-static void* nibW32EdSec(NibHost*)  { return nullptr; }   // split view dropped: the host exposes no secondary editor
+static void* nibW32EdSec(NibHost*)  { return g_nibEditorSecond ? g_nibEditorSecond() : nullptr; }   // the SUB view's HWND (NULL until split)
 static void* nibW32Menu(NibHost*)   { return g_nibPluginsMenu  ? g_nibPluginsMenu()  : nullptr; }
 static void  nibW32Dock(NibHost*, void* h, const char* t, int e) { if (g_nibDockNative) g_nibDockNative(h, t, e); }
 static void  nibW32ShowDock(NibHost*, void* h, int v)            { if (g_nibShowDock)   g_nibShowDock(h, v != 0); }
@@ -1013,7 +1034,7 @@ static const NibEditorApi   g_nibEditorApi   = { 1, sizeof(NibEditorApi),   nibE
 static const NibCommandsApi g_nibCommandsApi = { 1, sizeof(NibCommandsApi), nibCmdRegister };
 static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibSubscribe };
 static const NibPanelsApi   g_nibPanelsApi   = { 1, sizeof(NibPanelsApi),   nibPanelRegister, nibPanelSetText, nibPanelAppend, nibPanelShow };
-static const NibDocumentsApi g_nibDocumentsApi = { 1, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen, nibDocSave };
+static const NibDocumentsApi g_nibDocumentsApi = { 3, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen, nibDocSave, nibDocActiveId, nibDocPathFromId, nibDocActiveView };
 
 static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
 {
@@ -1202,7 +1223,7 @@ public:
         g_nibPanelShow = [this](void* p, bool v) {
             wxAuiPaneInfo& pi = m_aui.GetPane(static_cast<wxWindow*>(p)); if (pi.IsOk()) { pi.Show(v); m_aui.Update(); }
         };
-        g_nibDocCount      = [this]() -> int { return m_tabs ? static_cast<int>(m_tabs->GetPageCount()) : 1; };
+        g_nibDocCount      = [this]() -> int { const int n = (m_main.tabs ? (int)m_main.tabs->GetPageCount() : 0) + (m_sub.tabs ? (int)m_sub.tabs->GetPageCount() : 0); return n > 0 ? n : 1; };   // across BOTH views
         g_nibDocActivePath = [this](char* b, int c) -> int {   // active document's full path (UTF-8); 0 if untitled
             EditorPage* p = activePage();
             const std::string u = (p ? p->path : wxString()).utf8_string();
@@ -1212,9 +1233,25 @@ public:
         };
         g_nibDocOpen = [this](const char* p) -> int { if (!p) return 0; openPath(wxString::FromUTF8(p)); return 1; };
         g_nibDocSave = [this]() -> int { onSave(); return 1; };
+        g_nibDocActiveId   = [this]() -> intptr_t { return reinterpret_cast<intptr_t>(activePage()); };   // the EditorPage* IS the buffer id
+        g_nibDocPathFromId = [this](intptr_t id, char* b, int c) -> int {   // resolve a buffer id back to its on-disk path
+            for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs }) {          // a buffer id can live in EITHER view
+                if (!nb) continue;
+                for (size_t i = 0; i < nb->GetPageCount(); ++i) {
+                    EditorPage* pg = static_cast<EditorPage*>(nb->GetPage(i));
+                    if (reinterpret_cast<intptr_t>(pg) != id) continue;
+                    const std::string u = pg->path.utf8_string();
+                    if (b && c > 0) { int n = static_cast<int>(u.size()); if (n > c - 1) n = c - 1; std::memcpy(b, u.data(), static_cast<size_t>(n)); b[n] = 0; }
+                    return static_cast<int>(u.size());
+                }
+            }
+            return 0;
+        };
+        g_nibDocActiveView = [this]() -> int { return m_active == &m_sub ? 1 : 0; };   // 0 = main, 1 = sub
 #ifdef __WXMSW__   // nib.win32: hand the (optional, GPL) N++ bridge the native handles it needs
         g_nibMainWindow   = [this]() -> void* { return static_cast<HWND>(GetHandle()); };
-        g_nibEditorMain   = [this]() -> void* { return m_sci; };
+        g_nibEditorMain   = [this]() -> void* { return m_main.sci; };   // _scintillaMainHandle is always the MAIN view (not the active alias)
+        g_nibEditorSecond = [this]() -> void* { return m_sub.sci; };    // _scintillaSecondHandle is the SUB view (valid even before first split)
         g_nibPluginsMenu  = [this]() -> void* {           // the Plugins menu HMENU (the GPL bridge maps it to NPPM_GETMENUHANDLE)
             auto* mb = menuBar(); if (!mb) return nullptr;
             const int mi = mb->FindMenu("Plugins");
@@ -1366,58 +1403,84 @@ private:
         if (icons.GetIconCount() > 0) SetIcons(icons);
     }
 
-    // ----- editor + tabs (one native Scintilla per document) -------------
+    // ----- editor + tabs: two views (MAIN | SUB), each one persistent Scintilla per document ------
     void buildEditor()
     {
-        m_tabs = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                                   wxAUI_NB_TOP | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS |
-                                   (m_tabCloseBtn ? wxAUI_NB_CLOSE_ON_ALL_TABS : 0) | wxAUI_NB_MIDDLE_CLICK_CLOSE |
-                                   wxAUI_NB_PIN_ON_ACTIVE_TAB);   // close button per Preferences (Tab Bar); pin on active tab
-        { auto* art = new PinTabArt(m_dark ? wxColour(222, 226, 230) : wxColour(52, 58, 64));
-          art->UpdateColoursFromSystem(); m_tabs->SetArtProvider(art); }   // pin glyph from resources/icons/pin.svg
-        m_tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE,   &NppShellFrameT::onPageClose,   this);
-        m_tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &NppShellFrameT::onPageChanged, this);
-        m_tabs->Bind(wxEVT_AUINOTEBOOK_TAB_RIGHT_UP, &NppShellFrameT::onTabContext,  this);
-        // ONE persistent editor view (wxStyledTextCtrl, like N++'s ScintillaEditView). Each tab is a
-        // Scintilla Document; switching tabs swaps the document behind this view via SCI_SETDOCPOINTER,
-        // so the editor handle a plugin cached at setInfo() stays valid across tabs. wxSTC bundles its
-        // own Scintilla+Lexilla (cross-platform); on Windows its native HWND is what plugins target.
-        m_stc = new wxStyledTextCtrl(m_tabs, wxID_ANY);
-        m_stc->Hide();                                       // activateBuffer mounts it onto the active page
+        // The center pane is a splitter holding both views' tab strips; SUB is hidden until first split.
+        m_split = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_NOBORDER);
+        m_split->SetSashGravity(0.5);
+        m_split->SetMinimumPaneSize(120);
+        buildView(m_main, m_split);
+        buildView(m_sub,  m_split);
+        m_active = &m_main; m_tabs = m_main.tabs; m_stc = m_main.stc;   // MAIN is active to start
 #ifdef __WXMSW__
-        m_sci = static_cast<HWND>(m_stc->GetHandle());       // the native Scintilla HWND (plugins/NPPM use it)
+        m_sci = m_main.sci;
+        g_sciForward = [this](UINT m, WPARAM w, LPARAM l) { return sci(m, static_cast<uptr_t>(w), static_cast<sptr_t>(l)); };   // fallback router -> active view
 #endif
-        g_view = m_stc;                     // so EditorPage::~EditorPage can release its Document (portable)
-        setupScintilla();                   // view-level setup once (margins, markers, styles, options)
-#ifdef __WXMSW__
-        ::SetWindowSubclass(m_sci, SciHwndProc, 3, 0);   // bridge plugin SendMessage(SCI_*) -> wxSTC SendMsg
-        g_sciForward = [this](UINT m, WPARAM w, LPARAM l) { return sci(m, static_cast<uptr_t>(w), static_cast<sptr_t>(l)); };
-#endif
-        bindEditorEvents();                 // wxEVT_STC_* -> editor behaviours + plugin beNotified (was PageSubclassProc)
-        addDocument("", nextNewName());     // initial "new 1" buffer
-        buildTabCaptionButtons();           // +/v/x buttons at the right end of the tab strip
-        // wxAuiManager: the tab area is the center; plugin docking panels attach around it.
+        g_view = m_main.stc;                // EditorPage::~EditorPage releases its Document through an always-valid view
+        m_sub.tabs->Hide();
+        m_split->Initialize(m_main.tabs);   // unsplit: only MAIN shows - identical to the old single-view layout
+        addDocument("", nextNewName());     // initial "new 1" buffer (lands in the active = MAIN view)
+        buildTabCaptionButtons();           // +/v/x buttons at the right end of the active tab strip
+        // wxAuiManager: the editor splitter is the center; plugin docking panels attach around it.
         m_aui.SetManagedWindow(this);
-        m_aui.AddPane(m_tabs, wxAuiPaneInfo().CenterPane().PaneBorder(false));
+        m_aui.AddPane(m_split, wxAuiPaneInfo().CenterPane().PaneBorder(false));
         m_aui.Update();
         buildDocMap();   // Document Map (minimap) pane - hidden until toggled from the View menu / toolbar
         buildFuncList(); // Function List (symbol tree) pane - hidden until toggled
         buildFifPanel(); // Find-in-Files results pane - hidden until a search runs
     }
 
-    // wxStyledTextCtrl fires wxEVT_STC_* (not Win32 WM_NOTIFY), so the N++ editor behaviours and the
-    // plugin beNotified() forwarding bind here instead of in a page subclass.
-    void bindEditorEvents()
+    // Build one view = a tab strip + ONE persistent wxStyledTextCtrl that hops across its pages (N++'s
+    // ScintillaEditView). Each tab is a Scintilla Document; switching tabs swaps it via SCI_SETDOCPOINTER,
+    // so a handle a plugin cached at setInfo() stays valid. On Windows the native HWND is what plugins target.
+    void buildView(ViewPane& v, wxWindow* parent)
     {
-        m_stc->Bind(wxEVT_STC_CHARADDED,        &NppShellFrameT::onStcCharAdded,   this);
-        m_stc->Bind(wxEVT_STC_UPDATEUI,         &NppShellFrameT::onStcUpdateUI,    this);
-        m_stc->Bind(wxEVT_STC_DOUBLECLICK,      &NppShellFrameT::onStcDoubleClick, this);
-        m_stc->Bind(wxEVT_STC_MARGINCLICK,      &NppShellFrameT::onStcMarginClick, this);
-        m_stc->Bind(wxEVT_STC_ZOOM,             &NppShellFrameT::onStcZoom,        this);
-        m_stc->Bind(wxEVT_STC_MODIFIED,         &NppShellFrameT::onStcModified,    this);
-        m_stc->Bind(wxEVT_STC_MACRORECORD,      &NppShellFrameT::onMacroRecord,    this);   // capture commands while recording a macro
-        m_stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev); e.Skip(); });
-        m_stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrameT::onStcContextMenu, this);
+        v.tabs = new wxAuiNotebook(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                   wxAUI_NB_TOP | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS |
+                                   (m_tabCloseBtn ? wxAUI_NB_CLOSE_ON_ALL_TABS : 0) | wxAUI_NB_MIDDLE_CLICK_CLOSE |
+                                   wxAUI_NB_PIN_ON_ACTIVE_TAB);
+        { auto* art = new PinTabArt(m_dark ? wxColour(222, 226, 230) : wxColour(52, 58, 64));
+          art->UpdateColoursFromSystem(); v.tabs->SetArtProvider(art); }   // pin glyph from resources/icons/pin.svg
+        v.tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE,   &NppShellFrameT::onPageClose,   this);
+        v.tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &NppShellFrameT::onPageChanged, this);
+        v.tabs->Bind(wxEVT_AUINOTEBOOK_TAB_RIGHT_UP, &NppShellFrameT::onTabContext,  this);
+        v.stc = new wxStyledTextCtrl(v.tabs, wxID_ANY);
+        v.stc->Hide();                                       // activateBuffer mounts it onto the active page
+#ifdef __WXMSW__
+        v.sci = static_cast<HWND>(v.stc->GetHandle());       // the native Scintilla HWND (plugins/NPPM use it)
+#endif
+        // setupScintilla() drives the view through sci()/m_stc, so make THIS view active while we set it up.
+        ViewPane* prev = m_active; m_active = &v; m_stc = v.stc; m_tabs = v.tabs;
+#ifdef __WXMSW__
+        m_sci = v.sci;
+#endif
+        setupScintilla();                   // margins, markers, styles, options for this view
+#ifdef __WXMSW__
+        ::SetWindowSubclass(v.sci, SciHwndProc, 3, reinterpret_cast<DWORD_PTR>(v.stc));   // plugin SendMessage(SCI_*) to THIS handle -> THIS view
+#endif
+        bindViewEvents(v);                  // wxEVT_STC_* -> editor behaviours + plugin beNotified
+        if (prev) { m_active = prev; m_stc = prev->stc; m_tabs = prev->tabs;
+#ifdef __WXMSW__
+                    m_sci = prev->sci;
+#endif
+        }
+    }
+
+    // wxStyledTextCtrl fires wxEVT_STC_* (not Win32 WM_NOTIFY); bind the editor behaviours + plugin
+    // beNotified() forwarding per view, plus a focus-in that makes that view the active one.
+    void bindViewEvents(ViewPane& v)
+    {
+        v.stc->Bind(wxEVT_STC_CHARADDED,        &NppShellFrameT::onStcCharAdded,   this);
+        v.stc->Bind(wxEVT_STC_UPDATEUI,         &NppShellFrameT::onStcUpdateUI,    this);
+        v.stc->Bind(wxEVT_STC_DOUBLECLICK,      &NppShellFrameT::onStcDoubleClick, this);
+        v.stc->Bind(wxEVT_STC_MARGINCLICK,      &NppShellFrameT::onStcMarginClick, this);
+        v.stc->Bind(wxEVT_STC_ZOOM,             &NppShellFrameT::onStcZoom,        this);
+        v.stc->Bind(wxEVT_STC_MODIFIED,         &NppShellFrameT::onStcModified,    this);
+        v.stc->Bind(wxEVT_STC_MACRORECORD,      &NppShellFrameT::onMacroRecord,    this);   // capture commands while recording a macro
+        v.stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev); e.Skip(); });
+        v.stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrameT::onStcContextMenu, this);
+        v.stc->Bind(wxEVT_SET_FOCUS, [this, vp = &v](wxFocusEvent& e) { onViewFocus(vp); e.Skip(); });   // focus -> this view becomes active
     }
     // Auto-insert the matching closer (caret stays between), or skip over an existing one. Returns true if it
     // consumed the character. Brackets + quotes; ASCII only; never inserts right before a word character.
@@ -2345,15 +2408,46 @@ private:
         }
     }
 
+    // Which view owns this page (by tab membership - robust to wxAui's internal page reparenting).
+    ViewPane* viewOf(EditorPage* p)
+    {
+        if (p && m_main.tabs && m_main.tabs->GetPageIndex(p) != wxNOT_FOUND) return &m_main;
+        if (p && m_sub.tabs  && m_sub.tabs->GetPageIndex(p)  != wxNOT_FOUND) return &m_sub;
+        return nullptr;
+    }
+    // Repoint the active-view aliases (m_tabs/m_stc/m_sci) so every sci()/m_stc/m_tabs call site follows
+    // focus. Returns true if the active view actually changed.
+    bool setActiveView(ViewPane* v)
+    {
+        if (!v || !v->stc || m_active == v) return false;
+        m_active = v; m_tabs = v->tabs; m_stc = v->stc;
+#ifdef __WXMSW__
+        m_sci = v->sci;
+#endif
+        return true;
+    }
+    // A view's editor gained focus: make it active and sync the chrome (status bar + minimap) to its doc.
+    void onViewFocus(ViewPane* v)
+    {
+        if (!setActiveView(v)) return;
+        if (auto* p = activePage()) {
+            if (m_docMap) { m_docMap->SetDocPointer(reinterpret_cast<void*>(p->doc)); updateDocMapViewport(); }
+            updateStatus();
+        }
+    }
     void onPageChanged(wxAuiNotebookEvent& e)
     {
+        auto* nb = dynamic_cast<wxAuiNotebook*>(e.GetEventObject());   // route by the notebook that fired
+        setActiveView(nb == m_sub.tabs ? &m_sub : &m_main);
         if (auto* p = activePage()) activateBuffer(p);
         e.Skip();
     }
     // Mount the single view on the active page and swap to its document - Notepad++'s activateBuffer.
     void activateBuffer(EditorPage* p)
     {
-        if (!p || !m_stc) return;
+        if (!p) return;
+        setActiveView(viewOf(p));            // mount on the view whose tab strip owns this page
+        if (!m_stc) return;
         if (m_stc->GetParent() == p && sci(SCI_GETDOCPOINTER) == p->doc)
         { m_stc->SetFocus(); return; }                                      // already showing this buffer - nothing to do
         if (m_stc->GetParent() != p) m_stc->Reparent(p);                    // the one view hops onto the active page (wx-tracked)
@@ -2372,6 +2466,9 @@ private:
         updateStatus();
         updateEncodingMenuChecks();   // tick this buffer's encoding in the Encoding menu
         m_stc->SetFocus();
+        // Notify subscribers (e.g. the N++ bridge -> NPPN_BUFFERACTIVATED) that this document is now active.
+        NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_ACTIVATED; ev.struct_size = sizeof(NibEvent);
+        ev.as.document.id = reinterpret_cast<intptr_t>(p); nibFireEvent(ev);
     }
     // Ask to save a modified document before closing it (Save / Don't Save / Cancel), themed like the
     // rest of the app. Returns true if the caller may close the page, false if the user cancelled.
@@ -2406,14 +2503,27 @@ private:
     }
     void onPageClose(wxAuiNotebookEvent& e)
     {
-        if (!confirmClose(static_cast<EditorPage*>(m_tabs->GetPage(e.GetSelection())))) { e.Veto(); return; }
-        if (m_tabs->GetPageCount() <= 1) { e.Veto(); resetActiveDoc(); }   // keep one document open, like Notepad++
+        auto* nb = dynamic_cast<wxAuiNotebook*>(e.GetEventObject());
+        setActiveView(nb == m_sub.tabs ? &m_sub : &m_main);   // close from the view whose tab fired
+        auto* p = static_cast<EditorPage*>(m_tabs->GetPage(e.GetSelection()));
+        if (!confirmClose(p)) { e.Veto(); return; }
+        const int total = (int)m_main.tabs->GetPageCount() + (int)m_sub.tabs->GetPageCount();
+        if (total <= 1) { e.Veto(); resetActiveDoc(); return; }                              // never zero documents (N++)
+        // Remove the page ourselves (after this event) so the collapse check sees the real count - wxAui's
+        // own removal races a CallAfter, which would leave an empty pane behind.
+        e.Veto();
+        this->CallAfter([this, p]{
+            if (ViewPane* v = viewOf(p)) { const int i = v->tabs->GetPageIndex(p); if (i != wxNOT_FOUND) v->tabs->DeletePage(i); }
+            collapseIfEmpty();
+        });
     }
     void closeActive()
     {
         if (!confirmClose(activePage())) return;
-        if (m_tabs->GetPageCount() <= 1) resetActiveDoc();
-        else m_tabs->DeletePage(m_tabs->GetSelection());
+        const int total = (int)m_main.tabs->GetPageCount() + (int)m_sub.tabs->GetPageCount();
+        if (total <= 1) { resetActiveDoc(); return; }                                        // last document - keep one empty
+        m_tabs->DeletePage(m_tabs->GetSelection());
+        collapseIfEmpty();
     }
     void closeAll()
     {
@@ -2474,6 +2584,8 @@ private:
     }
     void onTabContext(wxAuiNotebookEvent& e)
     {
+        auto* nb = dynamic_cast<wxAuiNotebook*>(e.GetEventObject());   // the right-clicked tab's view
+        setActiveView(nb == m_sub.tabs ? &m_sub : &m_main);
         if (e.GetSelection() != wxNOT_FOUND) m_tabs->SetSelection(e.GetSelection());
         wxMenu menu;
         menu.Append(IDM_FILE_CLOSE, "Close");
@@ -2482,7 +2594,76 @@ private:
         menu.AppendSeparator();
         menu.Append(IDM_FILE_SAVE, "Save");
         menu.Append(IDM_FILE_SAVEAS, "Save As...");
+        menu.AppendSeparator();
+        menu.Append(IDM_VIEW_GOTO_ANOTHER_VIEW,     "Move to Other View");
+        menu.Append(IDM_VIEW_CLONE_TO_ANOTHER_VIEW, "Clone to Other View");
         PopupMenu(&menu);
+    }
+
+    // ----- second view (Notepad++'s MAIN | SUB split) ---------------------------------------------
+    // Reveal the other view (splitting if needed) and put the active document into it, side by side.
+    // clone=true shares the document (edits sync); clone=false relocates the tab, but falls back to a
+    // clone when the source view has only this one tab (so a view never goes empty).
+    void openInOtherView(bool clone)
+    {
+        ViewPane& from = m_active ? *m_active : m_main;
+        ViewPane& to   = (&from == &m_main) ? m_sub : m_main;
+        EditorPage* p  = activePage();
+        if (!p) return;
+        const int idx = from.tabs->GetPageIndex(p);
+        if (idx == wxNOT_FOUND) return;
+        const wxString title = from.tabs->GetPageText(idx);
+        ensureSplit();
+        if (clone || from.tabs->GetPageCount() <= 1)
+        {
+            auto* np = new EditorPage(to.tabs);
+            np->doc = p->doc;
+            sci(SCI_ADDREFDOCUMENT, 0, p->doc);    // share the Scintilla Document (extra ref) - N++ "Clone to Other View"
+            np->path = p->path; np->title = p->title; np->lang = p->lang;
+            np->langForced = p->langForced; np->forcedLexer = p->forcedLexer; np->forcedName = p->forcedName;
+            np->encoding = p->encoding; np->codepage = p->codepage; np->encLabel = p->encLabel;
+            to.tabs->AddPage(np, title, true);
+            setActiveView(&to); activateBuffer(np);
+        }
+        else
+        {
+            from.tabs->RemovePage(idx);            // detach the page without destroying it
+            p->Reparent(to.tabs);
+            to.tabs->AddPage(p, title, true);
+            setActiveView(&to); activateBuffer(p);
+        }
+    }
+    // Split the editor area so both views show; theme the sub view's editor to match on first reveal.
+    void ensureSplit()
+    {
+        if (!m_split || m_split->IsSplit()) return;
+        if (!m_subThemed) { ViewPane* prev = m_active; setActiveView(&m_sub); applyEditorTheme(m_dark); if (prev) setActiveView(prev); m_subThemed = true; }
+        m_sub.tabs->Show();
+        m_split->SplitVertically(m_main.tabs, m_sub.tabs);
+    }
+    // After a close: if the editor is split and a view emptied, collapse back to one view (N++ hides the
+    // sub view when it has no documents). If MAIN emptied, the sub's pages move into it so MAIN stays the
+    // always-present primary view (keeps _scintillaMainHandle meaningful).
+    void collapseIfEmpty()
+    {
+        if (!m_split || !m_split->IsSplit()) return;
+        const bool mainEmpty = (m_main.tabs->GetPageCount() == 0);
+        const bool subEmpty  = (m_sub.tabs->GetPageCount() == 0);
+        if (!mainEmpty && !subEmpty) return;
+        if (mainEmpty && !subEmpty)
+            while (m_sub.tabs->GetPageCount() > 0)            // consolidate the sub view's pages into main
+            {
+                auto* pg = static_cast<EditorPage*>(m_sub.tabs->GetPage(0));
+                const wxString t = m_sub.tabs->GetPageText(0);
+                m_sub.tabs->RemovePage(0);
+                pg->Reparent(m_main.tabs);
+                m_main.tabs->AddPage(pg, t, true);
+            }
+        m_split->Unsplit(m_sub.tabs);                        // show MAIN only
+        m_sub.tabs->Hide();
+        m_split->UpdateSize();                               // let the surviving notebook fill the splitter
+        setActiveView(&m_main);
+        if (auto* p = activePage()) { activateBuffer(p); if (m_stc) m_stc->SetSize(p->GetClientSize()); }
     }
 
     // Editor right-click menu (Notepad++'s default editor context menu, themed). Item ids are the
@@ -3967,7 +4148,7 @@ private:
     {
         // Page layout mirrors Notepad++'s Preferences (General / Editing / Indentation /
         // Auto-Completion / Dark Mode); the labels are Notepad++'s exact wording.
-        wxDialog dlg(this, wxID_ANY, "Preferences", wxDefaultPosition, wxSize(560, 440));
+        wxDialog dlg(this, wxID_ANY, "Preferences", wxDefaultPosition, wxSize(620, 440));
         auto* book = new wxListbook(&dlg, wxID_ANY);
         auto pg  = [&](const wxString& name, bool sel = false) { auto* p = new wxPanel(book); book->AddPage(p, name, sel); return p; };
         auto row = [&](wxBoxSizer* s, wxWindow* w) { s->Add(w, 0, wxLEFT | wxRIGHT | wxTOP, 10); };
@@ -4069,6 +4250,19 @@ private:
         rfrow->Add(new wxStaticText(rf, wxID_ANY, "Max number of entries (applied on restart):"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spMaxRec = new wxSpinCtrl(rf, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 50, m_maxRecent);
         rfrow->Add(spMaxRec, 0); rfs->Add(rfrow, 0, wxALL, 10); rf->SetSizer(rfs);
+
+        // wxListbook leaves its single-column page list too narrow, so the longer labels truncate
+        // ("Auto-Comp...", "Recent Files ..."). Grow the column to the widest label - which feeds the list's
+        // best width, so the whole selector pane widens to fit - and pin a matching min size.
+        if (auto* lv = book->GetListView())
+        {
+            int maxw = 0;
+            for (size_t i = 0; i < book->GetPageCount(); ++i)
+            { int tw = 0, th = 0; lv->GetTextExtent(book->GetPageText(i), &tw, &th); if (tw > maxw) maxw = tw; }
+            if (lv->GetColumnCount() > 0) lv->SetColumnWidth(0, maxw + lv->FromDIP(28));
+            lv->SetMinSize(wxSize(maxw + lv->FromDIP(36), -1));
+            lv->InvalidateBestSize();
+        }
 
         auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer(); btn->Add(new wxButton(&dlg, wxID_OK, "Close"), 0);
         auto* top = new wxBoxSizer(wxVERTICAL); top->Add(book, 1, wxEXPAND | wxALL, 8); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
@@ -4578,6 +4772,9 @@ private:
             case IDM_FILE_CLOSEALL_BUT_CURRENT: closeAllBut(activePage()); break;
             case IDM_FILE_EXIT: Close(true); break;
 
+            case IDM_VIEW_GOTO_ANOTHER_VIEW:     openInOtherView(false); break;   // move the active doc to the other view
+            case IDM_VIEW_CLONE_TO_ANOTHER_VIEW: openInOtherView(true);  break;   // clone it there (shared document)
+
             case IDM_EDIT_UNDO: sci(SCI_UNDO); break;
             case IDM_EDIT_REDO: sci(SCI_REDO); break;
             case IDM_EDIT_CUT: sci(SCI_CUT); break;
@@ -4902,7 +5099,13 @@ private:
         }
     }
 
-    wxAuiNotebook* m_tabs = nullptr;
+    // ---- two editor views (Notepad++'s MAIN_VIEW / SUB_VIEW; ViewPane defined above the frame) -----
+    // m_tabs/m_stc/m_sci are ALIASES to the *active* view, so the ~140 sci()/m_stc/m_tabs sites follow focus.
+    ViewPane          m_main, m_sub;            // the two views (sub is empty + hidden until first split)
+    ViewPane*         m_active = nullptr;       // -> &m_main or &m_sub
+    wxSplitterWindow* m_split  = nullptr;       // center pane: [ main | sub ]
+    bool              m_subThemed = false;      // sub view's editor gets the theme on first reveal
+    wxAuiNotebook* m_tabs = nullptr;            // alias -> m_active->tabs
     wxPanel*       m_capBar = nullptr;   // +/v/x caption buttons on the tab strip
     FindReplaceDialog* m_findDlg = nullptr;   // modeless Find/Replace dialog
     wxStyledTextCtrl*  m_findResults = nullptr;   // Find-in-Files results panel (docked, bottom)

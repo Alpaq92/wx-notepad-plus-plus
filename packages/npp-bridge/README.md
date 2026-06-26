@@ -31,17 +31,22 @@ Editor (`SCI_*`) messages a plugin sends to the editor HWND are bridged to wxSty
 
 | Served | Stubbed / not yet |
 |---|---|
-| GETCURRENTSCINTILLA, GETNPPVERSION, GETCURRENTLANGTYPE | SETSTATUSBAR (status bar) |
-| GETMENUHANDLE, MENUCOMMAND | GETCURRENTBUFFERID, ACTIVATEDOC, SWITCHTOFILE (doc tracking) |
-| GETNPPDIRECTORY, GETNPPFULLFILEPATH-ish, GETPLUGINSCONFIGDIR | richer `beNotified` (char-added, margin-click, buffer-activated) |
+| GETCURRENTSCINTILLA, GETNPPVERSION, GETCURRENTLANGTYPE, **GETCURRENTVIEW**, **GETBUFFERLANGTYPE** | ACTIVATEDOC (doc tracking) |
+| GETMENUHANDLE, MENUCOMMAND, **SWITCHTOFILE**, **SETSTATUSBAR**, **GETPLUGINHOMEPATH**, **GETCURRENTBUFFERID**, **GETFULLPATHFROMBUFFERID** | |
+| GETNPPDIRECTORY, GETNPPFULLFILEPATH-ish, GETPLUGINSCONFIGDIR | richer `beNotified` (char-added, margin-click) |
 | **GETFULLCURRENTPATH / GETCURRENTDIRECTORY / GETFILENAME / GETNAMEPART / GETEXTPART**, GETNBOPENFILES | RELOADFILE, MAKECURRENTBUFFERDIRTY |
 | **DOOPEN**, **SAVECURRENTFILE** | |
 | **DMMREGASDCKDLG / DMMSHOW / DMMHIDE / DMMUPDATEDISPINFO** (docking) | |
-| `beNotified` for text-changed / selection / save | |
+| `beNotified` for text-changed / selection / save / **buffer-activated** (NPPN_BUFFERACTIVATED) | |
 
 Stubbed messages fall through and return 0; coverage grows additively as the `nib.*` interfaces grow
 (each new capability is a few lines here). Note: the path family lives in the `RUNCOMMAND_USER`
 (`WM_USER+3000`) range, so the frame subclass forwards everything `>= WM_USER+1000` (no upper bound).
+
+`GETCURRENTVIEW` / `GETCURRENTSCINTILLA` report the focused pane (0=main, 1=sub) via `nib.documents` v3, so
+view-aware plugins target the right editor in a split. **Partial**: `GETBUFFERLANGTYPE` / `GETCURRENTLANGTYPE`
+report the language **by file extension** (a Language-menu override isn't reflected), and `SWITCHTOFILE`
+*opens* the path rather than switching to an already-open tab (needs an open-tab lookup in the host).
 
 ## Build
 

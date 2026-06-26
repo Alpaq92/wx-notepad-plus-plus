@@ -83,6 +83,16 @@ typedef struct NibDocumentsApi {
     int  (*active_path)(NibHost*, char* buf, int cap);
     int  (*open)(NibHost*, const char* utf8_path);  // open a file (load it into a tab); 1 on success, 0 on failure
     int  (*save_active)(NibHost*);                  // save the active document to disk; 1 on success
+    // ---- v2 additions (struct grows only at the end; guard with `version >= 2` before calling) -----
+    // A stable, opaque per-document id (a Notepad++ "buffer id"): unique per open document, valid until
+    // that document closes. 0 when there is no active document.
+    intptr_t (*active_id)(NibHost*);
+    // Copy the UTF-8 path of the document whose id is `id` into buf (NUL-terminated if it fits); returns
+    // the byte length excluding the NUL, or 0 if no open document has that id (or it is untitled).
+    int  (*path_from_id)(NibHost*, intptr_t id, char* buf, int cap);
+    // ---- v3 ---- which editor view holds the active document: 0 = main, 1 = sub. Lets NPPM_GETCURRENTVIEW
+    // / NPPM_GETCURRENTSCINTILLA report the focused pane so view-aware plugins target the right editor.
+    int  (*active_view)(NibHost*);
 } NibDocumentsApi;
 
 // ---- nib.commands/1 : register + run commands ----------------------------------------------------
@@ -101,7 +111,8 @@ typedef struct NibCommandsApi {
 typedef enum {
     NIB_EV_TEXT_CHANGED = 1,    // as.text:      pos, added, removed (bytes)
     NIB_EV_SELECTION_CHANGED,   // as.selection: anchor, caret
-    NIB_EV_DOCUMENT_SAVED       // (no payload)
+    NIB_EV_DOCUMENT_SAVED,      // (no payload)
+    NIB_EV_DOCUMENT_ACTIVATED   // as.document:   id (the now-active document's buffer id)
 } NibEventKind;
 typedef struct NibEvent {
     NibEventKind kind;
@@ -109,6 +120,7 @@ typedef struct NibEvent {
     union {
         struct { int64_t pos, added, removed; } text;
         struct { int64_t anchor, caret; }       selection;
+        struct { intptr_t id; }                 document;
     } as;
 } NibEvent;
 typedef void (*NibEventFn)(NibHost* host, const NibEvent* ev, void* user);

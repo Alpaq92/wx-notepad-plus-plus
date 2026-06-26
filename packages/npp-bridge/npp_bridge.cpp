@@ -76,6 +76,11 @@ static void on_nib_event(NibHost*, const NibEvent* ev, void*)
         case NIB_EV_DOCUMENT_SAVED:
             scn.nmhdr.code = SCN_SAVEPOINTREACHED;
             break;
+        case NIB_EV_DOCUMENT_ACTIVATED:
+            scn.nmhdr.hwndFrom = g_npp._nppHandle;   // an NPPN_ notification comes from the frame, not the editor
+            scn.nmhdr.code     = NPPN_BUFFERACTIVATED;
+            scn.nmhdr.idFrom   = static_cast<uptr_t>(ev->as.document.id);   // the now-active buffer id
+            break;
         default: return;
     }
     for (const auto& p : g_plugins) if (p.beNotified) p.beNotified(&scn);
@@ -137,17 +142,77 @@ static void loadNppPlugins(NibHost* host, const NibCommandsApi* cmds)
 // richer Nib interfaces, so they are acknowledged-but-stubbed for now.
 static HMENU g_pluginsMenu = nullptr;
 
+// UTF-8 -> wide (the inverse of toUtf8); empty on empty/null input.
+static std::wstring wFromUtf8(const char* s)
+{
+    if (!s || !*s) return {};
+    int w = ::MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);   // w counts the terminating NUL too
+    if (w <= 1) return {};
+    std::wstring r(static_cast<size_t>(w), L'\0');                  // allocate room for the content + NUL...
+    ::MultiByteToWideChar(CP_UTF8, 0, s, -1, &r[0], w);
+    r.resize(static_cast<size_t>(w - 1));                           // ...then drop the trailing NUL from size()
+    return r;
+}
 // The active document's full path (wide), via nib.documents; empty if untitled or unavailable.
 static std::wstring activePathW()
 {
     if (!g_docs || !g_host) return {};
     char buf[2048];
     int n = g_docs->active_path(g_host, buf, static_cast<int>(sizeof(buf)));
-    if (n <= 0) return {};
-    int w = ::MultiByteToWideChar(CP_UTF8, 0, buf, -1, nullptr, 0);
-    std::wstring s(w > 0 ? w - 1 : 0, L'\0');
-    if (w > 1) ::MultiByteToWideChar(CP_UTF8, 0, buf, -1, &s[0], w);
-    return s;
+    return n <= 0 ? std::wstring{} : wFromUtf8(buf);
+}
+// The full path (wide) of the document with buffer id `id`; empty if not found (needs nib.documents v2).
+static std::wstring pathFromIdW(intptr_t id)
+{
+    if (!g_docs || !g_host || g_docs->version < 2 || !g_docs->path_from_id) return {};
+    char buf[2048];
+    int n = g_docs->path_from_id(g_host, id, buf, static_cast<int>(sizeof(buf)));
+    return n <= 0 ? std::wstring{} : wFromUtf8(buf);
+}
+// The focused editor view (0 = main, 1 = sub), via nib.documents v3; 0 (main) if unavailable.
+static int activeView()
+{
+    return (g_docs && g_docs->version >= 3 && g_docs->active_view) ? g_docs->active_view(g_host) : 0;
+}
+// Map a file path's extension to a Notepad++ LangType. The L_* enum is N++ ABI, so this mapping lives in
+// the GPL bridge (not the permissive core). Untitled / unknown -> L_TEXT.
+static int langTypeForPath(const std::wstring& path)
+{
+    const size_t dot = path.find_last_of(L'.');
+    const size_t sl  = path.find_last_of(L"\\/");
+    if (dot == std::wstring::npos || (sl != std::wstring::npos && dot < sl)) return L_TEXT;
+    std::wstring e = path.substr(dot + 1);
+    for (auto& c : e) if (c >= L'A' && c <= L'Z') c = static_cast<wchar_t>(c + 32);   // ASCII lower
+    auto is = [&](const wchar_t* s){ return e == s; };
+    if (is(L"cpp")||is(L"cc")||is(L"cxx")||is(L"hpp")||is(L"hxx")||is(L"ino")) return L_CPP;
+    if (is(L"c")||is(L"h"))                  return L_C;
+    if (is(L"cs"))                           return L_CS;
+    if (is(L"py")||is(L"pyw"))               return L_PYTHON;
+    if (is(L"js")||is(L"mjs")||is(L"jsx"))   return L_JAVASCRIPT;
+    if (is(L"ts")||is(L"tsx"))               return L_TYPESCRIPT;
+    if (is(L"json"))                         return L_JSON;
+    if (is(L"java"))                         return L_JAVA;
+    if (is(L"html")||is(L"htm"))             return L_HTML;
+    if (is(L"xml")||is(L"xaml")||is(L"svg")) return L_XML;
+    if (is(L"css"))                          return L_CSS;
+    if (is(L"php"))                          return L_PHP;
+    if (is(L"sql"))                          return L_SQL;
+    if (is(L"lua"))                          return L_LUA;
+    if (is(L"pl")||is(L"pm"))                return L_PERL;
+    if (is(L"rb"))                           return L_RUBY;
+    if (is(L"rs"))                           return L_RUST;
+    if (is(L"go"))                           return L_GOLANG;
+    if (is(L"sh")||is(L"bash"))              return L_BASH;
+    if (is(L"bat")||is(L"cmd"))              return L_BATCH;
+    if (is(L"ini"))                          return L_INI;
+    if (is(L"yml")||is(L"yaml"))             return L_YAML;
+    if (is(L"vb"))                           return L_VB;
+    if (is(L"ps1"))                          return L_POWERSHELL;
+    if (is(L"pas"))                          return L_PASCAL;
+    if (is(L"tex"))                          return L_TEX;
+    if (is(L"asm")||is(L"s"))                return L_ASM;
+    if (is(L"diff")||is(L"patch"))           return L_DIFF;
+    return L_TEXT;
 }
 // Copy s into the plugin's wchar buffer (lParam); wParam is the buffer cap when set. Returns the length.
 static LRESULT putPath(WPARAM wParam, LPARAM lParam, const std::wstring& s)
@@ -159,8 +224,8 @@ static LRESULT putPath(WPARAM wParam, LPARAM lParam, const std::wstring& s)
 static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& out)
 {
     switch (msg) {
-        case NPPM_GETCURRENTSCINTILLA: if (lParam) *reinterpret_cast<int*>(lParam) = 0; out = TRUE; return true;   // main view
-        case NPPM_GETCURRENTLANGTYPE:  if (lParam) *reinterpret_cast<int*>(lParam) = 0; out = TRUE; return true;   // L_TEXT
+        case NPPM_GETCURRENTSCINTILLA: if (lParam) *reinterpret_cast<int*>(lParam) = activeView(); out = TRUE; return true;   // 0=main, 1=sub
+        case NPPM_GETCURRENTLANGTYPE:  if (lParam) *reinterpret_cast<int*>(lParam) = langTypeForPath(activePathW()); out = TRUE; return true;
         case NPPM_GETNPPVERSION:       out = MAKELONG(96, 8); return true;
         case NPPM_GETNBOPENFILES:      out = g_docs ? g_docs->count(g_host) : 1; return true;
         case NPPM_GETMENUHANDLE:       out = reinterpret_cast<LRESULT>(g_pluginsMenu); return true;
@@ -185,6 +250,16 @@ static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& o
         case NPPM_DMMSHOW:             if (g_win32 && lParam) g_win32->show_dock(g_host, reinterpret_cast<void*>(lParam), 1); out = TRUE; return true;
         case NPPM_DMMHIDE:             if (g_win32 && lParam) g_win32->show_dock(g_host, reinterpret_cast<void*>(lParam), 0); out = TRUE; return true;
         case NPPM_DMMUPDATEDISPINFO:   if (lParam) ::InvalidateRect(reinterpret_cast<HWND>(lParam), nullptr, TRUE); out = TRUE; return true;
+        // ---- additional coverage, served from existing nib.* + the frame's native children ----
+        case NPPM_SWITCHTOFILE:        if (g_docs && lParam) g_docs->open(g_host, toUtf8(reinterpret_cast<const wchar_t*>(lParam)).c_str()); out = TRUE; return true;   // open-or-switch
+        case NPPM_GETCURRENTVIEW:      out = activeView(); return true;   // 0=main, 1=sub
+        case NPPM_GETBUFFERLANGTYPE:   out = langTypeForPath(pathFromIdW(static_cast<intptr_t>(wParam))); return true;   // by file extension
+        case NPPM_GETPLUGINHOMEPATH:   if (lParam) ::lstrcpynW(reinterpret_cast<wchar_t*>(lParam), (exeDir() + L"\\plugins").c_str(), wParam ? static_cast<int>(wParam) : MAX_PATH); out = TRUE; return true;
+        case NPPM_SETSTATUSBAR:        { HWND sb = ::FindWindowExW(g_npp._nppHandle, nullptr, L"msctls_statusbar32", nullptr);   // the wx status bar is a native msctls_statusbar32
+                                         if (sb && lParam) ::SendMessageW(sb, SB_SETTEXTW, static_cast<WPARAM>(wParam), lParam); out = TRUE; return true; }
+        // per-buffer tracking, via nib.documents v2 (the host's EditorPage* is the opaque buffer id)
+        case NPPM_GETCURRENTBUFFERID:      out = (g_docs && g_docs->version >= 2 && g_docs->active_id) ? g_docs->active_id(g_host) : 0; return true;
+        case NPPM_GETFULLPATHFROMBUFFERID: out = putPath(0, lParam, pathFromIdW(static_cast<intptr_t>(wParam))); return true;
         default:                       return false;   // not one of ours -> fall through to DefSubclassProc
     }
 }
@@ -219,9 +294,10 @@ static void activate(NibHost* host, NibQueryFn query)
     // Forward editor events to the loaded plugins' beNotified (Stage 3).
     const NibEventsApi* events = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 1));
     if (events) {
-        events->subscribe(host, NIB_EV_TEXT_CHANGED,      on_nib_event, nullptr);
-        events->subscribe(host, NIB_EV_SELECTION_CHANGED, on_nib_event, nullptr);
-        events->subscribe(host, NIB_EV_DOCUMENT_SAVED,    on_nib_event, nullptr);
+        events->subscribe(host, NIB_EV_TEXT_CHANGED,       on_nib_event, nullptr);
+        events->subscribe(host, NIB_EV_SELECTION_CHANGED,  on_nib_event, nullptr);
+        events->subscribe(host, NIB_EV_DOCUMENT_SAVED,     on_nib_event, nullptr);
+        events->subscribe(host, NIB_EV_DOCUMENT_ACTIVATED, on_nib_event, nullptr);   // -> NPPN_BUFFERACTIVATED
     }
 }
 
