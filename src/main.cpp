@@ -46,6 +46,12 @@
 #include <wx/textfile.h>        // wxTextFile - read files line-by-line for Find in Files
 #include <wx/dirdlg.h>          // wxDirDialog - folder picker for Find in Files
 
+#ifdef WXNPP_HAS_BORDERLESS
+#include <type_traits>                  // std::is_base_of - detect the borderless base in NppShellFrameT<FB>
+#include <vector>                       // std::vector - accelerator-entry list for installAccelsFromMenuBar
+#include <wxbf/borderless_frame.h>      // wxBorderlessFrame - the optional integrated/borderless title bar (Windows + GTK)
+#endif
+
 #ifdef __WXMSW__
 #include <windows.h>
 #include <commctrl.h>
@@ -117,7 +123,8 @@ public:
     wxString title;            // tab/window title without the unsaved "*" marker
     wxString lang  = "Normal text file";   // status-bar language label (like Notepad++)
     bool     langForced = false;           // true once the user picks a language from the Language menu
-    wxString forcedExt;                    // that pick's representative extension ("" = forced Normal Text)
+    wxString forcedLexer;                  // that pick's Lexilla lexer name ("" = forced Normal Text)
+    wxString forcedName;                   // that pick's display label for the status bar, e.g. "C++"
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
@@ -1123,6 +1130,16 @@ public:
     using FB::GetHandle; using FB::SetTransparent; using FB::Raise; using FB::SetDropTarget;
     using FB::SetAcceleratorTable; using FB::GetClientAreaOrigin; using FB::GetParent; using FB::GetFont;
     using FB::SetExtraStyle; using FB::GetContentScaleFactor; using FB::ProcessWindowEvent;
+
+    // True when the chrome base is the borderless frame (integrated top bar), false for native wxFrame.
+    // Compile-time, so the borderless-only branches below are `if constexpr` and never instantiated for
+    // the native frame (and never reference wxBorderlessFrame symbols on macOS, where the lib is absent).
+#ifdef WXNPP_HAS_BORDERLESS
+    static constexpr bool kBorderless = std::is_base_of<wxBorderlessFrameBase, FB>::value;
+    static constexpr int  kTitleBarH  = 30;   // height (px) of the integrated top bar
+#else
+    static constexpr bool kBorderless = false;
+#endif
 
     explicit NppShellFrameT(bool dark)
         : FB(nullptr, wxID_ANY, "new 1 - wxNotepad++", wxDefaultPosition, wxSize(1100, 720)),
@@ -2465,8 +2482,133 @@ private:
             m_fileHistory.UseMenu(recent);
             auto* c = wxConfigBase::Get(); c->SetPath("/RecentFiles"); m_fileHistory.Load(*c); c->SetPath("/");
         }
+#ifdef WXNPP_HAS_BORDERLESS
+        if constexpr (kBorderless)
+        {
+            m_menuOwner = mb;                  // keep the wxMenus alive for the title-bar buttons to pop
+            installAccelsFromMenuBar(mb);      // keyboard shortcuts still fire without a native menu bar
+            buildIntegratedTitleBar(mb);       // VS-style top bar: icon + menu-buttons + window controls
+            return;
+        }
+#endif
         SetMenuBar(mb);
     }
+
+#ifdef WXNPP_HAS_BORDERLESS
+    // ---- integrated/borderless top bar (compiled only where wxBorderlessFrame exists; instantiated only
+    //      for the borderless frame, i.e. kBorderless - the native frame never reaches these) ------------
+
+    // Borderless hit-testing. We use real child controls for the menu/window buttons and a manual drag
+    // (onTitleBarDrag), so the inner area is plain client; the lib still handles the resize borders itself.
+    wxWindowPart GetWindowPart(wxPoint) const { return wxWP_CLIENT_AREA; }
+
+    // A wxAcceleratorTable built from every menu item's shortcut, so Ctrl+S / Ctrl+F / ... keep working
+    // even though integrated mode never attaches a native wxMenuBar.
+    void installAccelsFromMenuBar(wxMenuBar* mb)
+    {
+        std::vector<wxAcceleratorEntry> accels;
+        std::function<void(wxMenu*)> scan = [&](wxMenu* m) {
+            for (wxMenuItem* item : m->GetMenuItems())
+            {
+                if (item->IsSubMenu()) { scan(item->GetSubMenu()); continue; }
+                if (wxAcceleratorEntry* a = item->GetAccel())
+                {
+                    accels.push_back(wxAcceleratorEntry(a->GetFlags(), a->GetKeyCode(), item->GetId()));
+                    delete a;
+                }
+            }
+        };
+        for (size_t i = 0; i < mb->GetMenuCount(); ++i) scan(mb->GetMenu(i));
+        if (!accels.empty()) SetAcceleratorTable(wxAcceleratorTable((int)accels.size(), accels.data()));
+    }
+
+    void buildIntegratedTitleBar(wxMenuBar* mb)
+    {
+        const wxColour barBg = m_dark ? wxColour(45, 45, 48)    : wxColour(240, 240, 240);
+        const wxColour barFg = m_dark ? wxColour(220, 220, 220) : wxColour(30, 30, 30);
+        m_titleBar = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, kTitleBarH));
+        m_titleBar->SetBackgroundColour(barBg);
+        m_titleBar->Bind(wxEVT_LEFT_DOWN, &NppShellFrameT::onTitleBarDrag, this);   // drag empty area to move
+
+        auto* sz = new wxBoxSizer(wxHORIZONTAL);
+
+        // App icon (left)
+        wxBitmap ico = wxBitmapBundle::FromSVG(APP_ICON_SVG, wxSize(18, 18)).GetBitmap(wxSize(18, 18));
+        sz->Add(new wxStaticBitmap(m_titleBar, wxID_ANY, ico), 0, wxALIGN_CENTRE_VERTICAL | wxLEFT | wxRIGHT, 8);
+
+        // Menu-buttons - each pops the same wxMenu the native menu bar would show. Pop on the frame so the
+        // resulting command events land on our onCommand dispatcher (which is bound to the frame).
+        for (size_t i = 0; i < mb->GetMenuCount(); ++i)
+        {
+            wxMenu* menu = mb->GetMenu(i);
+            auto* b = new wxButton(m_titleBar, wxID_ANY, mb->GetMenuLabelText(i),
+                                   wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT | wxBORDER_NONE);
+            b->SetBackgroundColour(barBg); b->SetForegroundColour(barFg);
+            b->Bind(wxEVT_BUTTON, [this, b, menu](wxCommandEvent&) {
+                wxPoint p = this->ScreenToClient(b->GetParent()->ClientToScreen(
+                                b->GetPosition() + wxPoint(0, b->GetSize().y)));
+                this->PopupMenu(menu, p);
+            });
+            sz->Add(b, 0, wxALIGN_CENTRE_VERTICAL);
+        }
+
+        sz->AddStretchSpacer(1);   // empty middle stays draggable
+
+        // Window controls (right): minimize, maximize/restore, close (close hovers red, VS-style)
+        auto ctrl = [&](const wxString& glyph, int which, const wxColour& hot) {
+            auto* b = new wxButton(m_titleBar, wxID_ANY, glyph, wxDefaultPosition,
+                                   wxSize(46, kTitleBarH), wxBU_EXACTFIT | wxBORDER_NONE);
+            b->SetBackgroundColour(barBg); b->SetForegroundColour(barFg);
+            b->Bind(wxEVT_BUTTON,       [this, which](wxCommandEvent&) { onWindowControl(which); });
+            b->Bind(wxEVT_ENTER_WINDOW, [b, hot](wxMouseEvent& e)   { b->SetBackgroundColour(hot);   b->Refresh(); e.Skip(); });
+            b->Bind(wxEVT_LEAVE_WINDOW, [b, barBg](wxMouseEvent& e) { b->SetBackgroundColour(barBg); b->Refresh(); e.Skip(); });
+            sz->Add(b, 0, wxEXPAND);
+        };
+        const wxColour hover = m_dark ? wxColour(63, 63, 70) : wxColour(220, 220, 220);
+        ctrl(L"—", 0, hover);                    // minimize  (em dash)
+        ctrl(L"☐", 1, hover);                    // maximize  (ballot box)
+        ctrl(L"✕", 2, wxColour(232, 17, 35));    // close     (multiplication X, red hover)
+
+        m_titleBar->SetSizer(sz);
+        m_aui.AddPane(m_titleBar, wxAuiPaneInfo().Name("titlebar").Top().Layer(2)
+            .CaptionVisible(false).PaneBorder(false).Gripper(false).Floatable(false).Movable(false)
+            .Dockable(false).DockFixed().Resizable(false).MinSize(-1, kTitleBarH).MaxSize(-1, kTitleBarH));
+        m_aui.Update();
+    }
+
+    void onTitleBarDrag(wxMouseEvent& ev)
+    {
+#ifdef __WXMSW__
+        ::ReleaseCapture();
+        ::SendMessage(GetHandle(), WM_NCLBUTTONDOWN, HTCAPTION, 0);   // let Windows move the borderless window
+#else
+        ev.Skip();   // TODO: GTK window-move on Linux
+#endif
+    }
+
+    void onWindowControl(int which)
+    {
+        if      (which == 0) Iconize(true);
+        else if (which == 1) Maximize(!IsMaximized());
+        else                 Close();
+    }
+
+    wxToolBar* makeIntegratedToolBar()
+    {
+        return new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                             wxTB_FLAT | wxTB_HORIZONTAL | wxTB_NODIVIDER);
+    }
+    void dockIntegratedToolBar(wxToolBar* tb)
+    {
+        // ToolbarPane() must come FIRST: it turns gripper/movable/floatable back ON, so the locking flags
+        // have to follow it. Result is a fixed toolbar - no drag gripper, not movable, not floatable.
+        m_aui.AddPane(tb, wxAuiPaneInfo().Name("toolbar").ToolbarPane().Top().Layer(1)
+            .Gripper(false).Floatable(false).Movable(false).Dockable(false).DockFixed()
+            .CaptionVisible(false).PaneBorder(false).Resizable(false));
+        m_aui.Update();
+    }
+#endif // WXNPP_HAS_BORDERLESS
+
     void addToMRU(const wxString& path)
     {
         m_fileHistory.AddFileToHistory(path);
@@ -2519,7 +2661,15 @@ private:
 
     void buildToolBar()
     {
-        auto* tb = CreateToolBar(wxTB_FLAT | wxTB_HORIZONTAL);
+        // Native frame: the frame's own toolbar (CreateToolBar). Integrated frame: a child wxToolBar we
+        // dock as an aui pane just under the title bar (the frame toolbar would otherwise sit above it).
+        wxToolBar* tb;
+#ifdef WXNPP_HAS_BORDERLESS
+        if constexpr (kBorderless) tb = makeIntegratedToolBar();
+        else                       tb = CreateToolBar(wxTB_FLAT | wxTB_HORIZONTAL);
+#else
+        tb = CreateToolBar(wxTB_FLAT | wxTB_HORIZONTAL);
+#endif
         tb->SetToolBitmapSize(wxSize(16, 16));
         auto T  = [&](int id, const wxString& svg, const wxString& tip) { tb->AddTool(id, tip, icon(svg), tip); };
         auto TC = [&](int id, const wxString& svg, const wxString& tip) { tb->AddCheckTool(id, tip, icon(svg), wxNullBitmap, tip); };
@@ -2563,6 +2713,9 @@ private:
         tb->EnableTool(IDM_MACRO_SAVECURRENTMACRO, false);
 #ifdef __WXMSW__
         ::SendMessageW(static_cast<HWND>(tb->GetHandle()), TB_SETINDENT, 4, 0);  // small left margin before the first button
+#endif
+#ifdef WXNPP_HAS_BORDERLESS
+        if constexpr (kBorderless) dockIntegratedToolBar(tb);   // dock the child toolbar under the title bar
 #endif
     }
 
@@ -2648,18 +2801,23 @@ private:
     {
         applyEditorTheme(m_dark);          // reset every style to the theme base (incl. line numbers)
         auto* page = activePage();
-        const wxString ext = (page && page->langForced) ? page->forcedExt : path.AfterLast('.').Lower();
-        if (page) page->lang = langDisplayName(ext);
-        const LexMap lm = lexerForExt(ext);
-        sci(SCI_SETILEXER, 0, reinterpret_cast<sptr_t>(lm.lexer ? CreateLexer(lm.lexer) : nullptr));
-        if (lm.lexer)
+        // A manual Language pick forces its lexer directly; otherwise auto-detect from the file extension.
+        wxString lexer, themeKey, disp, ext;
+        if (page && page->langForced) { lexer = page->forcedLexer; themeKey = page->forcedLexer; disp = page->forcedName; }
+        else { ext = path.AfterLast('.').Lower(); const LexMap lm = lexerForExt(ext);
+               lexer = lm.lexer ? lm.lexer : ""; themeKey = lm.theme ? lm.theme : ""; disp = langDisplayName(ext); }
+        if (page) page->lang = disp;
+        const bool hasLexer = !lexer.empty();
+        const std::string lx = lexer.ToStdString();
+        sci(SCI_SETILEXER, 0, reinterpret_cast<sptr_t>(hasLexer ? CreateLexer(lx.c_str()) : nullptr));
+        if (hasLexer)
         {
             sci(SCI_SETPROPERTY, reinterpret_cast<uptr_t>("fold"), reinterpret_cast<sptr_t>("1"));
             sci(SCI_SETPROPERTY, reinterpret_cast<uptr_t>("fold.compact"), reinterpret_cast<sptr_t>("0"));
             bool themed = false;
             if (m_theme.loaded)
             {
-                auto it = m_theme.lexers.find(lm.theme);
+                auto it = m_theme.lexers.find(themeKey.ToStdString());
                 if (it != m_theme.lexers.end())
                 {
                     for (const StyleDef& s : it->second)   // apply Notepad++'s exact per-token colours
@@ -2673,14 +2831,14 @@ private:
                     themed = true;
                 }
             }
-            if (!themed) { if (std::string(lm.lexer) == "python") stylePythonFallback(); else styleCppFallback(); }
-            const std::string lx(lm.lexer);
+            if (!themed) { if (lx == "python") stylePythonFallback(); else styleCppFallback(); }
             auto kw = [&](const char* words) { sci(SCI_SETKEYWORDS, 0, reinterpret_cast<sptr_t>(words)); };
-            if (lx == "cpp") {   // the C-family lexer is shared; pick keywords by file extension
-                if      (ext == "js" || ext == "jsx" || ext == "ts" || ext == "tsx") kw(JS_KEYWORDS);
-                else if (ext == "java")                                              kw(JAVA_KEYWORDS);
-                else if (ext == "cs")                                                kw(CS_KEYWORDS);
-                else                                                                 kw(CPP_KEYWORDS);
+            if (lx == "cpp") {   // shared C-family lexer: pick keywords by extension (auto) or picked name (forced)
+                const wxString v = (page && page->langForced) ? page->forcedName : ext;
+                if      (v=="js"||v=="jsx"||v=="ts"||v=="tsx"||v=="JavaScript"||v=="TypeScript") kw(JS_KEYWORDS);
+                else if (v=="java"||v=="Java")                                                   kw(JAVA_KEYWORDS);
+                else if (v=="cs"||v=="C#")                                                       kw(CS_KEYWORDS);
+                else                                                                             kw(CPP_KEYWORDS);
             }
             else if (lx == "python")     kw(PY_KEYWORDS);
             else if (lx == "sql")        kw(SQL_KEYWORDS);
@@ -3331,10 +3489,10 @@ private:
     // Manually force a language on the active buffer (Language menu). ext "" forces Normal Text. The
     // choice sticks across tab switches via EditorPage::langForced (setLexerForFile honours it over the
     // file extension).
-    void setForcedLang(const wxString& ext)
+    void setForcedLang(const wxString& lexer, const wxString& name)
     {
         auto* p = activePage(); if (!p) return;
-        p->langForced = true; p->forcedExt = ext;
+        p->langForced = true; p->forcedLexer = lexer; p->forcedName = name;
         setLexerForFile(p->path);
         updateStatus();
         if (m_stc) m_stc->Refresh();
@@ -3504,6 +3662,7 @@ private:
     void loadSettings()
     {
         auto* c = wxConfigBase::Get();
+        c->Read("IntegratedBar", &m_integratedBar, false);   // integrated top bar on/off (also read in OnInit; here for the Preferences checkbox)
         long tw = 4; c->Read("Editing/TabWidth", &tw, 4L); m_tabWidth = (int)tw;
         c->Read("Editing/UseTabs", &m_useTabs, true);
         c->Read("Editing/LineNumbers", &m_lineNumbers, true);
@@ -3568,7 +3727,12 @@ private:
         auto* gen = pg("General", true); auto* gs = new wxBoxSizer(wxVERTICAL);
         auto* cbToolbar = new wxCheckBox(gen, wxID_ANY, "Show toolbar");    cbToolbar->SetValue(m_showToolbar);
         auto* cbStatus  = new wxCheckBox(gen, wxID_ANY, "Show status bar"); cbStatus->SetValue(m_showStatusbar);
-        row(gs, cbToolbar); row(gs, cbStatus); gen->SetSizer(gs);
+        row(gs, cbToolbar); row(gs, cbStatus);
+#ifdef WXNPP_HAS_BORDERLESS
+        auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, "Show integrated top bar - VS-style icon + menus + window controls (applied on restart)");
+        cbIntBar->SetValue(m_integratedBar); row(gs, cbIntBar);
+#endif
+        gen->SetSizer(gs);
 
         // ---- Editing --------------------------------------------------------------------------
         auto* ed = pg("Editing"); auto* es = new wxBoxSizer(wxVERTICAL);
@@ -3618,7 +3782,12 @@ private:
         m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
         m_caretLine = cbCaretLn->GetValue(); m_autoindent = cbIndent->GetValue(); m_caretWidth = spCaret->GetValue(); m_edgeColumn = spEdge->GetValue();
         applySettings(); saveSettings();
-        if (newDark != m_dark) restartWithTheme(newDark);   // theme change needs a relaunch (wx can't reskin live)
+        bool needRestart = (newDark != m_dark);
+#ifdef WXNPP_HAS_BORDERLESS
+        if (cbIntBar->GetValue() != m_integratedBar)   // the chrome base is fixed per process - relaunch to switch
+        { wxConfigBase::Get()->Write("IntegratedBar", cbIntBar->GetValue()); needRestart = true; }
+#endif
+        if (needRestart) restartWithTheme(newDark);   // a chrome change (dark mode / integrated bar) needs a relaunch
     }
 
     // ----- macros (record / playback / run multiple / save) -------------
@@ -4063,7 +4232,7 @@ private:
         }
         if (cmd >= myID_DOCLIST_ITEM && cmd < myID_DOCLIST_ITEM + 1000)   // document-list dropdown entry
         { const size_t n = (size_t)(cmd - myID_DOCLIST_ITEM); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); return; }
-        if (const char* langExt = nppLangExt(cmd)) { setForcedLang(langExt); return; }   // Language menu: force that lexer on the active buffer
+        if (const NppLang* L = nppLangFind(cmd)) { setForcedLang(L->lexer, L->name); return; }   // Language menu: force that lexer on the active buffer
         if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + 200)        // a saved macro from the Macro menu
         { const size_t n = (size_t)(cmd - myID_MACRO_ITEM); if (n < m_savedMacros.size()) playMacro(m_savedMacros[n].second); return; }
         // Win32 WM_COMMAND carries only a 16-bit id and wx sign-extends it, so command ids
@@ -4279,7 +4448,7 @@ private:
             case IDM_LANGSTYLE_CONFIG_DLG: onStyleConfig(); break;
             case IDM_SETTING_IMPORTSTYLETHEMES: importStyleTheme(); break;
             case IDM_SETTING_OPENPLUGINSDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "plugins"); break;
-            case IDM_LANG_TEXT: setForcedLang(""); break;   // force Normal Text (a manual pick, like the languages)
+            case IDM_LANG_TEXT: setForcedLang("", "Normal text file"); break;   // force Normal Text (a manual pick, like the languages)
             case IDM_LANG_OPENUDLDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "userDefineLangs"); break;
 
             // ---- Help: external links + info ----
@@ -4421,6 +4590,11 @@ private:
     std::vector<NibDock> m_nibDocks;        // installed via nib.win32 dock_native (the GPL bridge maps NPPM_DMM* to it)
 #endif
     wxAuiManager m_aui;                          // hosts the dockable side/bottom panels (Function List, Doc Map, Find results, Nib panels)
+#ifdef WXNPP_HAS_BORDERLESS
+    wxPanel*    m_titleBar  = nullptr;            // integrated top bar (icon + menu-buttons + window controls)
+    wxMenuBar*  m_menuOwner = nullptr;            // owns the wxMenus the title-bar buttons pop (never attached as a real menu bar)
+#endif
+    bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
     bool        m_wrap = false, m_ws = false, m_guides = false, m_dark = true;
@@ -4442,9 +4616,12 @@ private:
     NppTheme    m_theme;          // exact Notepad++ colours (loaded from theme XML)
 };
 
-// Chrome base, chosen at startup (restart-to-apply). Native by default; the borderless variant is added
-// in Phase 2b (needs the wxBorderlessFrame header + is only available where WXNPP_HAS_BORDERLESS).
+// Chrome base, chosen at startup (restart-to-apply): native wxFrame, or - when the "integrated top bar"
+// option is on and the platform supports it (Windows + Linux/GTK) - the borderless wxBorderlessFrame.
 using NppShellFrame = NppShellFrameT<wxFrame>;
+#ifdef WXNPP_HAS_BORDERLESS
+using NppIntegratedFrame = NppShellFrameT<wxBorderlessFrame>;
+#endif
 
 class NppApp : public wxApp
 {
@@ -4459,6 +4636,20 @@ public:
             MSWEnableDarkMode(DarkMode_Always);                // native dark chrome ONLY in dark mode; light
                                                                // mode never enables it, so it stays fully native-light.
                                                                // MSW-only API; other platforms theme via wx below.
+#endif
+#ifdef WXNPP_HAS_BORDERLESS
+        // Integrated top bar (Settings > Preferences, restart-to-apply): a borderless frame whose chrome is
+        // our own title bar. Only available where the wxBorderlessFrame backend exists (Windows + Linux/GTK).
+        bool integrated = false;
+        wxConfigBase::Get()->Read("IntegratedBar", &integrated, false);
+        if (integrated)
+        {
+            auto* frame = new NppIntegratedFrame(dark);
+            frame->Show(true);
+            frame->restoreSession();
+            for (int i = 1; i < argc; ++i) frame->openPath(argv[i]);
+            return true;
+        }
 #endif
         auto* frame = new NppShellFrame(dark);
         frame->Show(true);
