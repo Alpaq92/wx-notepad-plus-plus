@@ -20,6 +20,7 @@
 #include <wx/wx.h>
 #include <wx/notebook.h>
 #include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
+#include <wx/listctrl.h>       // wxListView - wxListbook's page list (we widen it so labels don't truncate)
 #include <wx/clrpicker.h>      // wxColourPickerCtrl - Style Configurator foreground/background pickers
 #include <wx/aui/auibook.h>
 #include <wx/aui/aui.h>          // wxAuiManager - dock host for plugin panels (NPPM_DMM*)
@@ -4144,7 +4145,7 @@ private:
     {
         // Page layout mirrors Notepad++'s Preferences (General / Editing / Indentation /
         // Auto-Completion / Dark Mode); the labels are Notepad++'s exact wording.
-        wxDialog dlg(this, wxID_ANY, "Preferences", wxDefaultPosition, wxSize(560, 440));
+        wxDialog dlg(this, wxID_ANY, "Preferences", wxDefaultPosition, wxSize(620, 440));
         auto* book = new wxListbook(&dlg, wxID_ANY);
         auto pg  = [&](const wxString& name, bool sel = false) { auto* p = new wxPanel(book); book->AddPage(p, name, sel); return p; };
         auto row = [&](wxBoxSizer* s, wxWindow* w) { s->Add(w, 0, wxLEFT | wxRIGHT | wxTOP, 10); };
@@ -4246,6 +4247,19 @@ private:
         rfrow->Add(new wxStaticText(rf, wxID_ANY, "Max number of entries (applied on restart):"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spMaxRec = new wxSpinCtrl(rf, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 50, m_maxRecent);
         rfrow->Add(spMaxRec, 0); rfs->Add(rfrow, 0, wxALL, 10); rf->SetSizer(rfs);
+
+        // wxListbook leaves its single-column page list too narrow, so the longer labels truncate
+        // ("Auto-Comp...", "Recent Files ..."). Grow the column to the widest label - which feeds the list's
+        // best width, so the whole selector pane widens to fit - and pin a matching min size.
+        if (auto* lv = book->GetListView())
+        {
+            int maxw = 0;
+            for (size_t i = 0; i < book->GetPageCount(); ++i)
+            { int tw = 0, th = 0; lv->GetTextExtent(book->GetPageText(i), &tw, &th); if (tw > maxw) maxw = tw; }
+            if (lv->GetColumnCount() > 0) lv->SetColumnWidth(0, maxw + lv->FromDIP(28));
+            lv->SetMinSize(wxSize(maxw + lv->FromDIP(36), -1));
+            lv->InvalidateBestSize();
+        }
 
         auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer(); btn->Add(new wxButton(&dlg, wxID_OK, "Close"), 0);
         auto* top = new wxBoxSizer(wxVERTICAL); top->Add(book, 1, wxEXPAND | wxALL, 8); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
