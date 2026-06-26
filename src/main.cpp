@@ -25,6 +25,7 @@
 #include <wx/aui/aui.h>          // wxAuiManager - dock host for plugin panels (NPPM_DMM*)
 #include <wx/stc/stc.h>          // wxStyledTextCtrl - cross-platform editor (Phase 3 port target)
 #include <wx/treectrl.h>         // wxTreeCtrl - Function List symbol tree
+#include <wx/dirctrl.h>          // wxGenericDirCtrl - Folder as Workspace file browser
 #include <wx/spinctrl.h>
 #include <wx/file.h>
 #include <wx/filename.h>
@@ -45,6 +46,13 @@
 #include <wx/textfile.h>        // wxTextFile - read files line-by-line for Find in Files
 #include <wx/dirdlg.h>          // wxDirDialog - folder picker for Find in Files
 
+#ifdef WXNPP_HAS_BORDERLESS
+#include <type_traits>                  // std::is_base_of - detect the borderless base in NppShellFrameT<FB>
+#include <vector>                       // std::vector - accelerator-entry list for installAccelsFromMenuBar
+#include <wxbf/borderless_frame.h>      // wxBorderlessFrame - the optional integrated/borderless title bar (Windows + GTK)
+#include <wxbf/window_gripper.h>        // wxWindowGripper - cross-platform window move (MSW + GTK begin_move_drag)
+#endif
+
 #ifdef __WXMSW__
 #include <windows.h>
 #include <commctrl.h>
@@ -55,6 +63,12 @@
 #pragma comment(lib, "bcrypt.lib")
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
+#endif
+#ifndef DWMWA_WINDOW_CORNER_PREFERENCE
+#define DWMWA_WINDOW_CORNER_PREFERENCE 33   // Win11 rounded-corner control
+#endif
+#ifndef DWMWCP_DONOTROUND
+#define DWMWCP_DONOTROUND 1
 #endif
 #else
 using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/sciSend() message-id params
@@ -115,6 +129,9 @@ public:
     wxString path;
     wxString title;            // tab/window title without the unsaved "*" marker
     wxString lang  = "Normal text file";   // status-bar language label (like Notepad++)
+    bool     langForced = false;           // true once the user picks a language from the Language menu
+    wxString forcedLexer;                  // that pick's Lexilla lexer name ("" = forced Normal Text)
+    wxString forcedName;                   // that pick's display label for the status bar, e.g. "C++"
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
@@ -582,6 +599,53 @@ private:
     int         m_max;
 };
 
+// Notepad++-style Column Editor (Alt+C): insert text or an incrementing number down a column /
+// rectangular (or multi-) selection. The dialog gathers the choice; the frame applies it per selection.
+class ColumnEditorDialog : public wxDialog
+{
+public:
+    ColumnEditorDialog(wxWindow* p, bool dark) : wxDialog(p, wxID_ANY, "Column Editor")
+    {
+        const wxColour fbg = dark ? wxColour(32, 32, 32) : *wxWHITE, ffg = dark ? wxColour(220, 220, 220) : *wxBLACK;
+        auto field = [&](const wxString& v, int w) { auto* t = new wxTextCtrl(this, wxID_ANY, v, wxDefaultPosition, wxSize(w, -1)); if (dark) { t->SetBackgroundColour(fbg); t->SetForegroundColour(ffg); } return t; };
+        auto* s = new wxBoxSizer(wxVERTICAL);
+
+        m_radioText = new wxRadioButton(this, wxID_ANY, "Text to Insert", wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+        m_textField = field("", 250);
+        s->Add(m_radioText, 0, wxLEFT | wxTOP | wxRIGHT, 10);
+        s->Add(m_textField, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 26);
+
+        m_radioNum = new wxRadioButton(this, wxID_ANY, "Number to Insert");
+        s->Add(m_radioNum, 0, wxLEFT | wxRIGHT, 10);
+        auto* nrow = new wxBoxSizer(wxHORIZONTAL);
+        nrow->Add(new wxStaticText(this, wxID_ANY, "Initial:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        m_initial = field("1", 60); nrow->Add(m_initial, 0, wxRIGHT, 14);
+        nrow->Add(new wxStaticText(this, wxID_ANY, "Increase by:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        m_increase = field("1", 60); nrow->Add(m_increase);
+        s->Add(nrow, 0, wxLEFT | wxRIGHT | wxTOP, 26);
+        m_leadZero = new wxCheckBox(this, wxID_ANY, "Leading zeros");
+        s->Add(m_leadZero, 0, wxLEFT | wxTOP | wxBOTTOM, 26);
+        wxString fmts[] = { "Dec", "Hex", "Oct", "Bin" };
+        m_format = new wxRadioBox(this, wxID_ANY, "Format", wxDefaultPosition, wxDefaultSize, 4, fmts, 4, wxRA_SPECIFY_COLS);
+        s->Add(m_format, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 26);
+
+        s->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxALL | wxEXPAND, 10);
+        SetSizerAndFit(s);
+        m_radioText->SetValue(true);
+        m_textField->SetFocus();
+    }
+    bool     isText()       const { return m_radioText->GetValue(); }
+    wxString text()         const { return m_textField->GetValue(); }
+    long     initial()      const { long v = 0; m_initial->GetValue().ToLong(&v); return v; }
+    long     increase()     const { long v = 0; m_increase->GetValue().ToLong(&v); return v; }
+    bool     leadingZeros() const { return m_leadZero->GetValue(); }
+    int      base()         const { switch (m_format->GetSelection()) { case 1: return 16; case 2: return 8; case 3: return 2; default: return 10; } }
+private:
+    wxRadioButton* m_radioText = nullptr; wxRadioButton* m_radioNum = nullptr;
+    wxTextCtrl*    m_textField = nullptr; wxTextCtrl* m_initial = nullptr; wxTextCtrl* m_increase = nullptr;
+    wxCheckBox*    m_leadZero  = nullptr; wxRadioBox* m_format = nullptr;
+};
+
 // Options gathered from the Find/Replace dialog and passed to the editor search engine.
 struct FindOpts { wxString find, repl; bool matchCase = false, wholeWord = false, regex = false, wrap = true, forward = true, inSelection = false; };
 
@@ -595,7 +659,8 @@ public:
     enum Tab { TAB_FIND, TAB_REPLACE, TAB_FIF, TAB_MARK };
     std::function<void(const FindOpts&)> findNextCb, countCb, replaceCb, replaceAllCb, markAllCb;
     std::function<void()> clearMarksCb;
-    std::function<void(const wxString&)> infoCb;   // hint for actions the wx shell can't do yet (Find in Files)
+    std::function<void(const FindOpts&, const wxString& dir, const wxString& filters, bool replace)> fifCb;   // Find/Replace in Files
+    std::function<void(const wxString&)> infoCb;   // hint for actions the wx shell can't do yet
 
     explicit FindReplaceDialog(wxWindow* parent)
         : wxDialog(parent, wxID_ANY, "Replace", wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE)
@@ -767,8 +832,8 @@ private:
             mk("Replace",     [this] { pushHistory(); if (replaceCb)    replaceCb(opts()); });
             mk("Replace All", [this] { pushHistory(); if (replaceAllCb) replaceAllCb(opts()); });
         } else if (t == TAB_FIF) {
-            mk("Find All",         [this] { if (infoCb) infoCb("Find in Files"); });
-            mk("Replace in Files", [this] { if (infoCb) infoCb("Replace in Files"); });
+            mk("Find All",         [this] { pushHistory(); if (fifCb) fifCb(opts(), m_pages[TAB_FIF]->dir->GetValue(), m_pages[TAB_FIF]->filters->GetValue(), false); });
+            mk("Replace in Files", [this] { pushHistory(); if (fifCb) fifCb(opts(), m_pages[TAB_FIF]->dir->GetValue(), m_pages[TAB_FIF]->filters->GetValue(), true); });
         } else { // TAB_MARK
             mk("Mark All",    [this] { pushHistory(); if (markAllCb) markAllCb(opts()); });
             mk("Clear Marks", [this] { if (clearMarksCb) clearMarksCb(); });
@@ -1027,29 +1092,71 @@ public:
     wxAuiTabArt* Clone() override { auto* a = new PinTabArt(m_iconColour); a->UpdateColoursFromSystem(); return a; }
 private:
     wxColour m_iconColour;
-    wxBitmapBundle iconBundle(const wxString& name) const   // resources/icons/<name>.svg, recoloured to the button colour
+    wxBitmapBundle iconBundle(const wxString& name, int px = 16) const   // resources/icons/<name>.svg, recoloured to the button colour
     {
         const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\" + name + ".svg";
         if (!wxFileExists(path)) return wxBitmapBundle();
         wxFile f(path); wxString svg;
         if (!f.IsOpened() || !f.ReadAll(&svg)) return wxBitmapBundle();
         svg.Replace("currentColor", m_iconColour.GetAsString(wxC2S_HTML_SYNTAX));
-        return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(16, 16));
+        return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(px, px));
     }
     void reskin()
     {
-        const wxBitmapBundle pin = iconBundle("pin");
+        const wxBitmapBundle pin = iconBundle("pin", 11);   // small secondary button, like Notepad++'s pin (close stays 16)
         if (pin.IsOk()) { m_activePinBmp = pin; m_activeUnpinBmp = pin; m_disabledPinBmp = pin; m_disabledUnpinBmp = pin; }
-        const wxBitmapBundle cls = iconBundle("close-tab");
+        const wxBitmapBundle cls = iconBundle("close-tab", 12);   // match the tab bar's (smaller) global close button
         if (cls.IsOk()) { m_activeCloseBmp = cls; m_disabledCloseBmp = cls; }
     }
 };
 
-class NppShellFrame : public wxFrame
+// The shell frame is a template on its chrome base so the same ~3300 lines work whether the base is the
+// native wxFrame or the borderless wxBorderlessFrame. The base is chosen at startup (restart-to-apply)
+// via the two aliases defined just after the class. (Two-phase lookup: MSVC is permissive, but GCC needs
+// the inherited wxFrame methods brought into scope - see the `using FB::` block below.)
+template <class FB> class NppShellFrameT : public FB
 {
 public:
-    explicit NppShellFrame(bool dark)
-        : wxFrame(nullptr, wxID_ANY, "new 1 - wxNotepad++", wxDefaultPosition, wxSize(1100, 720)),
+    // Bring inherited wxFrame/wxWindow/wxEvtHandler members into scope. MSVC's permissive lookup resolves
+    // them through the dependent base FB on its own; GCC/Clang's strict two-phase lookup does not, so an
+    // unqualified SetMenuBar(...) etc. would otherwise be "not declared". Real methods only - unused ones
+    // are harmless; a missing one is a GCC-only error surfaced by CI.
+    using FB::Bind; using FB::Unbind; using FB::Connect;
+    using FB::SetMenuBar; using FB::GetMenuBar; using FB::CreateToolBar; using FB::GetToolBar;
+    using FB::CreateStatusBar; using FB::GetStatusBar; using FB::SetStatusText; using FB::SetStatusWidths;
+    using FB::SetTitle; using FB::GetTitle; using FB::SetIcon; using FB::SetIcons; using FB::SetLabel;
+    using FB::Iconize; using FB::IsIconized; using FB::Maximize; using FB::IsMaximized; using FB::Restore;
+    using FB::Close; using FB::Destroy; using FB::Show; using FB::Hide; using FB::IsShown;
+    using FB::SetFocus; using FB::Refresh; using FB::Update; using FB::SendSizeEvent; using FB::Fit;
+    using FB::PopupMenu; using FB::SetSizer; using FB::SetSizerAndFit; using FB::GetSizer; using FB::Layout;
+    using FB::SetSize; using FB::GetSize; using FB::SetClientSize; using FB::GetClientSize;
+    using FB::GetClientRect; using FB::Move; using FB::Centre; using FB::SetMinSize; using FB::SetMaxSize;
+    using FB::SetBackgroundColour; using FB::GetBackgroundColour; using FB::SetForegroundColour;
+    using FB::ClientToScreen; using FB::ScreenToClient; using FB::GetPosition; using FB::GetScreenPosition;
+    using FB::GetEventHandler; using FB::CaptureMouse; using FB::ReleaseMouse; using FB::HasCapture;
+    using FB::ShowFullScreen; using FB::IsFullScreen; using FB::Freeze; using FB::Thaw; using FB::IsFrozen;
+    using FB::GetHandle; using FB::SetTransparent; using FB::Raise; using FB::SetDropTarget;
+    using FB::SetAcceleratorTable; using FB::GetClientAreaOrigin; using FB::GetParent; using FB::GetFont;
+    using FB::SetExtraStyle; using FB::GetContentScaleFactor; using FB::ProcessWindowEvent;
+
+    // True when the chrome base is the borderless frame (integrated top bar), false for native wxFrame.
+    // Compile-time, so the borderless-only branches below are `if constexpr` and never instantiated for
+    // the native frame (and never reference wxBorderlessFrame symbols on macOS, where the lib is absent).
+#ifdef WXNPP_HAS_BORDERLESS
+    static constexpr bool kBorderless = std::is_base_of<wxBorderlessFrameBase, FB>::value;
+    static constexpr int  kTitleBarH  = 30;   // height (px) of the integrated top bar
+    // Window-control glyphs drawn (not text): crisp + correctly sized, in a 10x10 box. Restore is the
+    // canonical two-overlapping-squares; maximize is a single square.
+    static constexpr const char* GLYPH_MIN     = "M1 6 H11";                          // ~10px line, centered (matches native)
+    static constexpr const char* GLYPH_MAX     = "M1 1 H11 V11 H1 Z";                 // ~10px square
+    static constexpr const char* GLYPH_RESTORE = "M1 4 H8 V11 H1 Z M4 4 V1 H11 V8 H8"; // two overlapping squares
+    static constexpr const char* GLYPH_CLOSE   = "M1 1 L11 11 M11 1 L1 11";           // ~10px X
+#else
+    static constexpr bool kBorderless = false;
+#endif
+
+    explicit NppShellFrameT(bool dark)
+        : FB(nullptr, wxID_ANY, "new 1 - wxNotepad++", wxDefaultPosition, wxSize(1100, 720)),
           m_timer(this, myID_TIMER)
     {
         m_dark = dark;          // chrome darkness is fixed for this process (restart-to-apply)
@@ -1109,7 +1216,7 @@ public:
         g_nibMainWindow   = [this]() -> void* { return static_cast<HWND>(GetHandle()); };
         g_nibEditorMain   = [this]() -> void* { return m_sci; };
         g_nibPluginsMenu  = [this]() -> void* {           // the Plugins menu HMENU (the GPL bridge maps it to NPPM_GETMENUHANDLE)
-            auto* mb = GetMenuBar(); if (!mb) return nullptr;
+            auto* mb = menuBar(); if (!mb) return nullptr;
             const int mi = mb->FindMenu("Plugins");
             return mi == wxNOT_FOUND ? nullptr : reinterpret_cast<void*>(mb->GetMenu(mi)->GetHMenu());
         };
@@ -1139,19 +1246,19 @@ public:
 #endif
         loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
         if (!g_nibCommands.empty())   // surface registered Nib commands in the Plugins menu
-            if (auto* mb = GetMenuBar()) { const int mi = mb->FindMenu("Plugins");
+            if (auto* mb = menuBar()) { const int mi = mb->FindMenu("Plugins");
                 if (mi != wxNOT_FOUND) { wxMenu* pm = mb->GetMenu(mi);
                     if (pm->GetMenuItemCount() > 0) pm->AppendSeparator();
                     for (size_t i = 0; i < g_nibCommands.size(); ++i)
                         pm->Append(NIB_CMD_BASE + static_cast<int>(i), wxString::FromUTF8(g_nibCommands[i].title)); } }
 
-        Bind(wxEVT_MENU, &NppShellFrame::onCommand, this);          // one dispatcher for all menu+toolbar ids
+        Bind(wxEVT_MENU, &NppShellFrameT::onCommand, this);          // one dispatcher for all menu+toolbar ids
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) { updateStatus(); updateUiState(); }, myID_TIMER);
         g_editorContextMenu = [this](int sx, int sy) { showEditorContext(sx, sy); };   // editor right-click menu
         g_openDropped = [this](const wxString& s) { openDroppedPaths(s); };            // files dropped on the editor
         g_onZoom = [this](int z) { onZoomChanged(z); };                                // sync + persist zoom
         SetDropTarget(new FileDrop([this](const wxArrayString& fs) { for (const auto& f : fs) openPath(f); }));
-        Bind(wxEVT_CLOSE_WINDOW, &NppShellFrame::onCloseWindow, this);                 // prompt to save on exit
+        Bind(wxEVT_CLOSE_WINDOW, &NppShellFrameT::onCloseWindow, this);                 // prompt to save on exit
         m_timer.Start(150);
         applyTheme(m_dark);     // style for the mode this process was launched in
         applySettings();        // apply persisted preferences (tab size, wrap, line numbers, toolbar/status visibility)
@@ -1201,8 +1308,10 @@ public:
         }
         if (restored > 0 && initial && initial->path.empty() && (int)m_tabs->GetPageCount() > restored)
         {
-            const int idx = m_tabs->GetPageIndex(initial);          // drop the redundant empty "new 1"
-            if (idx != wxNOT_FOUND) m_tabs->DeletePage(idx);
+            // Defer dropping the redundant empty "new 1": restoreSession runs during OnInit, before the
+            // event loop starts, and deleting an aui-notebook page that early crashes. CallAfter runs it
+            // once the loop is up (adding the restored docs beforehand is fine - argv-open does the same).
+            this->CallAfter([this, initial]() { const int idx = m_tabs->GetPageIndex(initial); if (idx != wxNOT_FOUND) m_tabs->DeletePage(idx); });
         }
         if (activePg) { const int idx = m_tabs->GetPageIndex(activePg); if (idx != wxNOT_FOUND) m_tabs->SetSelection(idx); }
     }
@@ -1262,13 +1371,13 @@ private:
     {
         m_tabs = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                    wxAUI_NB_TOP | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS |
-                                   wxAUI_NB_CLOSE_ON_ALL_TABS | wxAUI_NB_MIDDLE_CLICK_CLOSE |
-                                   wxAUI_NB_PIN_ON_ACTIVE_TAB);   // pin button on the active tab
+                                   (m_tabCloseBtn ? wxAUI_NB_CLOSE_ON_ALL_TABS : 0) | wxAUI_NB_MIDDLE_CLICK_CLOSE |
+                                   wxAUI_NB_PIN_ON_ACTIVE_TAB);   // close button per Preferences (Tab Bar); pin on active tab
         { auto* art = new PinTabArt(m_dark ? wxColour(222, 226, 230) : wxColour(52, 58, 64));
           art->UpdateColoursFromSystem(); m_tabs->SetArtProvider(art); }   // pin glyph from resources/icons/pin.svg
-        m_tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE,   &NppShellFrame::onPageClose,   this);
-        m_tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &NppShellFrame::onPageChanged, this);
-        m_tabs->Bind(wxEVT_AUINOTEBOOK_TAB_RIGHT_UP, &NppShellFrame::onTabContext,  this);
+        m_tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE,   &NppShellFrameT::onPageClose,   this);
+        m_tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &NppShellFrameT::onPageChanged, this);
+        m_tabs->Bind(wxEVT_AUINOTEBOOK_TAB_RIGHT_UP, &NppShellFrameT::onTabContext,  this);
         // ONE persistent editor view (wxStyledTextCtrl, like N++'s ScintillaEditView). Each tab is a
         // Scintilla Document; switching tabs swaps the document behind this view via SCI_SETDOCPOINTER,
         // so the editor handle a plugin cached at setInfo() stays valid across tabs. wxSTC bundles its
@@ -1300,25 +1409,48 @@ private:
     // plugin beNotified() forwarding bind here instead of in a page subclass.
     void bindEditorEvents()
     {
-        m_stc->Bind(wxEVT_STC_CHARADDED,        &NppShellFrame::onStcCharAdded,   this);
-        m_stc->Bind(wxEVT_STC_UPDATEUI,         &NppShellFrame::onStcUpdateUI,    this);
-        m_stc->Bind(wxEVT_STC_DOUBLECLICK,      &NppShellFrame::onStcDoubleClick, this);
-        m_stc->Bind(wxEVT_STC_MARGINCLICK,      &NppShellFrame::onStcMarginClick, this);
-        m_stc->Bind(wxEVT_STC_ZOOM,             &NppShellFrame::onStcZoom,        this);
-        m_stc->Bind(wxEVT_STC_MODIFIED,         &NppShellFrame::onStcModified,    this);
-        m_stc->Bind(wxEVT_STC_MACRORECORD,      &NppShellFrame::onMacroRecord,    this);   // capture commands while recording a macro
+        m_stc->Bind(wxEVT_STC_CHARADDED,        &NppShellFrameT::onStcCharAdded,   this);
+        m_stc->Bind(wxEVT_STC_UPDATEUI,         &NppShellFrameT::onStcUpdateUI,    this);
+        m_stc->Bind(wxEVT_STC_DOUBLECLICK,      &NppShellFrameT::onStcDoubleClick, this);
+        m_stc->Bind(wxEVT_STC_MARGINCLICK,      &NppShellFrameT::onStcMarginClick, this);
+        m_stc->Bind(wxEVT_STC_ZOOM,             &NppShellFrameT::onStcZoom,        this);
+        m_stc->Bind(wxEVT_STC_MODIFIED,         &NppShellFrameT::onStcModified,    this);
+        m_stc->Bind(wxEVT_STC_MACRORECORD,      &NppShellFrameT::onMacroRecord,    this);   // capture commands while recording a macro
         m_stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev); e.Skip(); });
-        m_stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrame::onStcContextMenu, this);
+        m_stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrameT::onStcContextMenu, this);
+    }
+    // Auto-insert the matching closer (caret stays between), or skip over an existing one. Returns true if it
+    // consumed the character. Brackets + quotes; ASCII only; never inserts right before a word character.
+    bool autoInsertPair(int ch)
+    {
+        if (!m_autoInsertPairs || ch <= 0 || ch > 127) return false;
+        static const char opens[] = "([{\"'", closes[] = ")]}\"'";
+        const int caret = (int)sci(SCI_GETCURRENTPOS), len = (int)sci(SCI_GETLENGTH);
+        const int next  = (caret < len) ? (int)sci(SCI_GETCHARAT, caret) : 0;
+        if (std::strchr(closes, ch) && next == ch) { sci(SCI_DELETERANGE, caret, 1); return true; }   // skip over
+        if (const char* o = std::strchr(opens, ch))
+            if (caret >= len || !(std::isalnum((unsigned char)next) || next == '_'))
+            {
+                const char buf[2] = { closes[o - opens], 0 };
+                sci(SCI_INSERTTEXT, caret, reinterpret_cast<sptr_t>(buf));
+                sci(SCI_GOTOPOS, caret);   // keep the caret between the pair
+                return true;
+            }
+        return false;
     }
     void onStcCharAdded(wxStyledTextEvent& e)
     {
         const int ch = e.GetKey();
         if ((ch == '\n' || ch == '\r') && m_autoindent) autoIndentOnNewline(m_stc);
-        else if (ch == '}')           dedentCloseBrace(m_stc);
-        else if (m_autocomplete && (std::isalnum((unsigned char)ch) || ch == '_'))   // auto word/keyword completion after 3+ chars
+        else
         {
-            const int caret = (int)sci(SCI_GETCURRENTPOS);
-            if (caret - (int)sci(SCI_WORDSTARTPOSITION, caret, 1) >= 3) autoComplete(true);
+            const bool paired = autoInsertPair(ch);            // insert matching )]}"' or skip over an existing one
+            if (ch == '}') dedentCloseBrace(m_stc);
+            else if (!paired && m_autocomplete && (std::isalnum((unsigned char)ch) || ch == '_'))   // word/keyword completion
+            {
+                const int caret = (int)sci(SCI_GETCURRENTPOS);
+                if (caret - (int)sci(SCI_WORDSTARTPOSITION, caret, 1) >= m_autoCompFrom) autoComplete(true);
+            }
         }
         e.Skip();
     }
@@ -1391,8 +1523,8 @@ private:
         m_docMap->SetSelEOLFilled(true);                             // viewport band spans the full line width
         m_docMap->SetExtraAscent(-1); m_docMap->SetExtraDescent(-1); // tighten line spacing
         applyDocMapTheme();
-        m_docMap->Bind(wxEVT_LEFT_DOWN, &NppShellFrame::onDocMapClick, this);
-        m_docMap->Bind(wxEVT_MOTION,    &NppShellFrame::onDocMapDrag,  this);
+        m_docMap->Bind(wxEVT_LEFT_DOWN, &NppShellFrameT::onDocMapClick, this);
+        m_docMap->Bind(wxEVT_MOTION,    &NppShellFrameT::onDocMapDrag,  this);
         m_aui.AddPane(m_docMap, wxAuiPaneInfo().Name("docmap").Caption("Document Map")
                           .Right().BestSize(150, 400).MinSize(70, 80).CloseButton(true).Hide());
         m_aui.Update();
@@ -1449,8 +1581,8 @@ private:
         m_funcList = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                     wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_NO_LINES | wxTR_FULL_ROW_HIGHLIGHT | wxBORDER_NONE);
         { wxVector<wxBitmapBundle> imgs; imgs.push_back(icon("func-leaf")); imgs.push_back(icon("func-node")); m_funcList->SetImages(imgs); }   // 0=symbol, 1=group/class (icon set)
-        m_funcList->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrame::onFuncListActivate, this);
-        m_funcList->Bind(wxEVT_TREE_SEL_CHANGED,     &NppShellFrame::onFuncListActivate, this);   // single-click jumps too (like N++)
+        m_funcList->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrameT::onFuncListActivate, this);
+        m_funcList->Bind(wxEVT_TREE_SEL_CHANGED,     &NppShellFrameT::onFuncListActivate, this);   // single-click jumps too (like N++)
         m_flTimer = new wxTimer(this, myID_FLTIMER);
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) { parseFuncList(); }, myID_FLTIMER);
         m_aui.AddPane(m_funcList, wxAuiPaneInfo().Name("funclist").Caption("Function List")
@@ -1561,12 +1693,181 @@ private:
         if (pi.IsShown()) parseFuncList();
     }
 
+    // ---- Document List (dockable list of the open documents; click an entry to switch to it) -------
+    wxListBox* m_docList = nullptr;
+    void buildDocList()
+    {
+        m_docList = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE | wxBORDER_NONE);
+        const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
+        m_docList->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));   // match the editor (Scintilla colours are BGR)
+        m_docList->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
+        m_docList->Bind(wxEVT_LISTBOX, [this](wxCommandEvent& ev) {
+            const int s = ev.GetSelection();
+            if (m_tabs && s >= 0 && (size_t)s < m_tabs->GetPageCount()) m_tabs->SetSelection((size_t)s);
+        });
+        m_aui.AddPane(m_docList, wxAuiPaneInfo().Name("doclist").Caption("Document List")
+                          .Right().BestSize(210, 400).MinSize(110, 80).CloseButton(true).Hide());
+        m_aui.Update();
+    }
+    void refreshDocList()   // keep the panel's entries + selection in sync with the open tabs (no-op when hidden)
+    {
+        if (!m_docList) return;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_docList);
+        if (!pi.IsOk() || !pi.IsShown()) return;
+        m_docList->Freeze();
+        m_docList->Clear();
+        if (m_tabs) for (size_t i = 0; i < m_tabs->GetPageCount(); ++i) m_docList->Append(m_tabs->GetPageText(i));
+        if (m_tabs && m_tabs->GetSelection() != wxNOT_FOUND) m_docList->SetSelection(m_tabs->GetSelection());
+        m_docList->Thaw();
+    }
+    void toggleDocList()
+    {
+        if (!m_docList) buildDocList();
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_docList);
+        if (!pi.IsOk()) return;
+        pi.Show(!pi.IsShown());
+        m_aui.Update();
+        if (pi.IsShown()) refreshDocList();
+    }
+
+    // ---- Folder as Workspace (a dockable file-system browser rooted at a chosen folder) -----------
+    wxGenericDirCtrl* m_fileBrowser = nullptr;
+    void toggleFileBrowser()
+    {
+        if (!m_fileBrowser)
+        {
+            wxString root = curPath().empty() ? wxGetCwd() : wxFileName(curPath()).GetPath();   // start expanded at the current file's folder
+            if (root.empty()) root = wxGetCwd();
+            m_fileBrowser = new wxGenericDirCtrl(this, wxID_ANY, root, wxDefaultPosition, wxDefaultSize,
+                                                 wxDIRCTRL_SHOW_FILTERS | wxBORDER_NONE);
+            if (auto* tree = m_fileBrowser->GetTreeCtrl())   // theme the tree to the editor's colours
+            {
+                const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
+                tree->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));
+                tree->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
+            }
+            m_fileBrowser->Bind(wxEVT_DIRCTRL_FILEACTIVATED, [this](wxTreeEvent&) {
+                const wxString f = m_fileBrowser->GetFilePath();
+                if (!f.empty() && wxFileExists(f)) openPath(f);   // double-click a file -> open it
+            });
+            m_aui.AddPane(m_fileBrowser, wxAuiPaneInfo().Name("filebrowser").Caption("Folder as Workspace")
+                              .Left().BestSize(240, 500).MinSize(140, 100).CloseButton(true).Hide());
+        }
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_fileBrowser);
+        if (!pi.IsOk()) return;
+        pi.Show(!pi.IsShown());
+        m_aui.Update();
+    }
+
+    // ---- Incremental Search (Ctrl+Alt+I): find-as-you-type bar; Enter = next, Esc = close ---------
+    wxPanel*    m_incBar = nullptr;
+    wxTextCtrl* m_incField = nullptr;
+    int         m_incAnchor = 0;
+    void buildIncBar()
+    {
+        m_incBar = new wxPanel(this);
+        if (m_dark) m_incBar->SetBackgroundColour(wxColour(45, 45, 45));
+        auto* sz  = new wxBoxSizer(wxHORIZONTAL);
+        auto* lbl = new wxStaticText(m_incBar, wxID_ANY, "Find: ");
+        if (m_dark) lbl->SetForegroundColour(wxColour(220, 220, 220));
+        m_incField = new wxTextCtrl(m_incBar, wxID_ANY, "", wxDefaultPosition, wxSize(260, -1), wxTE_PROCESS_ENTER);
+        if (m_dark) { m_incField->SetBackgroundColour(wxColour(30, 30, 30)); m_incField->SetForegroundColour(wxColour(220, 220, 220)); }
+        auto* nextB  = new wxButton(m_incBar, wxID_ANY, "Next",  wxDefaultPosition, wxSize(60, -1));
+        auto* closeB = new wxButton(m_incBar, wxID_ANY, "Close", wxDefaultPosition, wxSize(60, -1));
+        sz->Add(lbl, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8);
+        sz->Add(m_incField, 0, wxALIGN_CENTER_VERTICAL | wxALL, 4);
+        sz->Add(nextB,  0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        sz->Add(closeB, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+        m_incBar->SetSizer(sz);
+        m_incField->Bind(wxEVT_TEXT,       [this](wxCommandEvent&){ incFind(true);  });
+        m_incField->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent&){ incFind(false); });
+        m_incField->Bind(wxEVT_CHAR_HOOK,  [this](wxKeyEvent& e){ if (e.GetKeyCode() == WXK_ESCAPE) hideIncBar(); else e.Skip(); });
+        nextB->Bind(wxEVT_BUTTON,  [this](wxCommandEvent&){ incFind(false); m_incField->SetFocus(); });
+        closeB->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){ hideIncBar(); });
+        m_aui.AddPane(m_incBar, wxAuiPaneInfo().Name("incsearch").Bottom().CaptionVisible(false)
+                          .DockFixed(true).Resizable(false).BestSize(-1, 38).MinSize(-1, 34).CloseButton(false).Hide());
+        m_aui.Update();
+    }
+    void incFind(bool fromAnchor)   // search from the original anchor (typing) or from the current match (Next)
+    {
+        if (!m_incField) return;
+        const wxString needle = m_incField->GetValue();
+        const wxColour ok = m_dark ? wxColour(220, 220, 220) : *wxBLACK;
+        if (needle.empty()) { sci(SCI_SETSEL, m_incAnchor, m_incAnchor); m_incField->SetForegroundColour(ok); m_incField->Refresh(); return; }
+        const int start = fromAnchor ? m_incAnchor : (int)sci(SCI_GETSELECTIONEND);
+        sci(SCI_SETSEL, start, start);
+        sci(SCI_SEARCHANCHOR);
+        const wxScopedCharBuffer u = needle.utf8_str();
+        sptr_t pos = sci(SCI_SEARCHNEXT, 0, reinterpret_cast<sptr_t>(u.data()));
+        if (pos < 0) { sci(SCI_SETSEL, 0, 0); sci(SCI_SEARCHANCHOR); pos = sci(SCI_SEARCHNEXT, 0, reinterpret_cast<sptr_t>(u.data())); }   // wrap to top
+        m_incField->SetForegroundColour(pos >= 0 ? ok : *wxRED);   // red field = not found
+        m_incField->Refresh();
+        if (pos >= 0) sci(SCI_SCROLLCARET);
+    }
+    void showIncBar()
+    {
+        if (!m_incBar) buildIncBar();
+        m_incAnchor = (int)sci(SCI_GETCURRENTPOS);
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_incBar);
+        if (!pi.IsOk()) return;
+        pi.Show(); m_aui.Update();
+        m_incField->ChangeValue(""); m_incField->SetFocus();
+    }
+    void hideIncBar()
+    {
+        if (!m_incBar) return;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_incBar);
+        if (pi.IsOk() && pi.IsShown()) { pi.Hide(); m_aui.Update(); }
+        if (m_stc) m_stc->SetFocus();
+    }
+
+    // ---- Column Editor (Alt+C): insert text or an incrementing number down a column selection ------
+    static std::string colNum(long v, int base)
+    {
+        if (base == 10 || v < 0) return std::to_string(v);
+        unsigned long u = (unsigned long)v; const char* digits = "0123456789abcdef"; std::string s;
+        if (u == 0) return "0";
+        while (u) { s += digits[u % (unsigned)base]; u /= (unsigned)base; }
+        std::reverse(s.begin(), s.end()); return s;
+    }
+    void columnEditor()
+    {
+        ColumnEditorDialog dlg(this, m_dark);
+        themeDialog(&dlg);
+        if (dlg.ShowModal() != wxID_OK) return;
+        const int nsel = (int)sci(SCI_GETSELECTIONS);
+        if (nsel <= 0) return;
+        struct Seln { int a, b; };
+        std::vector<Seln> sels;
+        for (int i = 0; i < nsel; ++i) { int a = (int)sci(SCI_GETSELECTIONNSTART, i), b = (int)sci(SCI_GETSELECTIONNEND, i); if (a > b) std::swap(a, b); sels.push_back({ a, b }); }
+        std::sort(sels.begin(), sels.end(), [](const Seln& x, const Seln& y) { return x.a < y.a; });   // top-to-bottom for the number order
+        std::vector<std::string> ins(sels.size());
+        if (dlg.isText())
+        {
+            const std::string t(dlg.text().utf8_str());
+            for (auto& v : ins) v = t;
+        }
+        else
+        {
+            const long init = dlg.initial(), inc = dlg.increase(); const int base = dlg.base(); size_t w = 0;
+            for (size_t i = 0; i < sels.size(); ++i) { ins[i] = colNum(init + (long)i * inc, base); w = std::max(w, ins[i].size()); }
+            if (dlg.leadingZeros()) for (auto& v : ins) if (v.size() < w) v = std::string(w - v.size(), '0') + v;
+        }
+        sci(SCI_BEGINUNDOACTION);
+        for (int i = (int)sels.size() - 1; i >= 0; --i)   // apply bottom-to-top so earlier edits don't shift later offsets
+        {
+            sci(SCI_SETTARGETRANGE, sels[i].a, sels[i].b);
+            sci(SCI_REPLACETARGET, (uptr_t)ins[i].size(), reinterpret_cast<sptr_t>(ins[i].c_str()));
+        }
+        sci(SCI_ENDUNDOACTION);
+    }
+
     // ---- Find in Files: a search dialog + a docked "Find result" panel (double-click a hit to jump) --
     void buildFifPanel()
     {
         m_fifPanel = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                     wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxBORDER_NONE);
-        m_fifPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrame::onFifActivate, this);
+        m_fifPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrameT::onFifActivate, this);
         m_aui.AddPane(m_fifPanel, wxAuiPaneInfo().Name("findresult").Caption("Find result")
                           .Bottom().BestSize(800, 180).MinSize(150, 70).CloseButton(true).Hide());
         m_aui.Update();
@@ -1928,10 +2229,11 @@ private:
         sci(SCI_SETTABWIDTH, 4);
         sci(SCI_SETSCROLLWIDTH, 1);
         sci(SCI_SETSCROLLWIDTHTRACKING, 1);
-        sci(SCI_SETENDATLASTLINE, 1);
+        sci(SCI_SETENDATLASTLINE, m_scrollBeyond ? 0 : 1);
+        sci(SCI_SETCARETPERIOD, m_caretBlink);
         sci(SCI_USEPOPUP, SC_POPUP_NEVER);   // suppress Scintilla's light popup; we show our own themed menu
         // Column (Alt+drag) + multi-caret (Ctrl+click) selection, typing into all - exactly Notepad++'s setup.
-        sci(SCI_SETMULTIPLESELECTION, 1);
+        sci(SCI_SETMULTIPLESELECTION, m_multiEdit ? 1 : 0);
         sci(SCI_SETADDITIONALSELECTIONTYPING, 1);
         sci(SCI_SETVIRTUALSPACEOPTIONS, SCVS_RECTANGULARSELECTION);
         sci(SCI_SETMULTIPASTE, SC_MULTIPASTE_EACH);
@@ -2065,6 +2367,7 @@ private:
         m_lastFoldSection = -2; refreshFoldNestedAccent();                  // the nested-square accent marker is global to the view - re-evaluate it for the swapped-in document
         if (m_docMap) { m_docMap->SetDocPointer(reinterpret_cast<void*>(p->doc)); updateDocMapViewport(); }   // minimap follows the active doc
         parseFuncList();                                                    // re-parse symbols for the newly active doc
+        refreshDocList();                                                   // keep the Document List panel + its selection in sync
         refreshTab(p);
         updateStatus();
         updateEncodingMenuChecks();   // tick this buffer's encoding in the Encoding menu
@@ -2148,6 +2451,8 @@ private:
             for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
                 if (!confirmClose(static_cast<EditorPage*>(m_tabs->GetPage(i)))) { e.Veto(); return; }
         saveSettings();    // persist any in-session View-menu toggle changes
+        saveSession(wxConfigBase::Get());   // remember the open (saved) files so the next launch reopens them, like Notepad++
+        wxConfigBase::Get()->Flush();
         m_aui.UnInit();
         unloadNibPlugins();   // deactivate + unload Nib plugins (the GPL bridge removes its frame subclass first)
         e.Skip();
@@ -2206,6 +2511,26 @@ private:
     // ----- menu bar ------------------------------------------------------
     static void placeholder(wxMenu* m) { wxMenuItem* it = m->Append(wxID_ANY, "(more items added incrementally)"); it->Enable(false); }
 
+    // Menu/tool-bar accessors that work in BOTH chrome modes. Integrated mode has no native menu bar
+    // (menus live in m_menuOwner) and its toolbar is an aui pane, not the frame toolbar - so the built-in
+    // GetMenuBar()/GetToolBar() return null there. Route all item enable/check/toggle state through these.
+    wxMenuBar* menuBar() const
+    {
+#ifdef WXNPP_HAS_BORDERLESS
+        if (m_menuOwner) return m_menuOwner;
+#endif
+        return GetMenuBar();
+    }
+    wxToolBar* toolBar() const { return m_toolBarPtr ? m_toolBarPtr : GetToolBar(); }
+    void showToolBar(bool show)
+    {
+        auto* tb = toolBar(); if (!tb) return;
+#ifdef WXNPP_HAS_BORDERLESS
+        if constexpr (kBorderless) { auto& pi = m_aui.GetPane(tb); if (pi.IsOk()) { pi.Show(show); m_aui.Update(); } return; }
+#endif
+        tb->Show(show);   // native frame toolbar
+    }
+
     void buildMenuBar()
     {
         auto* mb = new wxMenuBar;
@@ -2219,8 +2544,179 @@ private:
             m_fileHistory.UseMenu(recent);
             auto* c = wxConfigBase::Get(); c->SetPath("/RecentFiles"); m_fileHistory.Load(*c); c->SetPath("/");
         }
+#ifdef WXNPP_HAS_BORDERLESS
+        if constexpr (kBorderless)
+        {
+            m_menuOwner = mb;                  // keep the wxMenus alive for the title-bar buttons to pop
+            // The bar is never SetMenuBar'd, so a popped menu's commands route to it, not the frame - bind
+            // onCommand on the bar itself so menu clicks actually fire (otherwise items appear but do nothing).
+            mb->Bind(wxEVT_MENU, &NppShellFrameT::onCommand, this);
+            installAccelsFromMenuBar(mb);      // keyboard shortcuts still fire without a native menu bar
+            buildIntegratedTitleBar(mb);       // VS-style top bar: icon + menu-buttons + window controls
+            return;
+        }
+#endif
         SetMenuBar(mb);
     }
+
+#ifdef WXNPP_HAS_BORDERLESS
+    // ---- integrated/borderless top bar (compiled only where wxBorderlessFrame exists; instantiated only
+    //      for the borderless frame, i.e. kBorderless - the native frame never reaches these) ------------
+
+    // Borderless hit-testing. We use real child controls for the menu/window buttons and a manual drag
+    // (onTitleBarDrag), so the inner area is plain client; the lib still handles the resize borders itself.
+    wxWindowPart GetWindowPart(wxPoint) const { return wxWP_CLIENT_AREA; }
+
+    // A wxAcceleratorTable built from every menu item's shortcut, so Ctrl+S / Ctrl+F / ... keep working
+    // even though integrated mode never attaches a native wxMenuBar.
+    void installAccelsFromMenuBar(wxMenuBar* mb)
+    {
+        std::vector<wxAcceleratorEntry> accels;
+        std::function<void(wxMenu*)> scan = [&](wxMenu* m) {
+            for (wxMenuItem* item : m->GetMenuItems())
+            {
+                if (item->IsSubMenu()) { scan(item->GetSubMenu()); continue; }
+                if (wxAcceleratorEntry* a = item->GetAccel())
+                {
+                    accels.push_back(wxAcceleratorEntry(a->GetFlags(), a->GetKeyCode(), item->GetId()));
+                    delete a;
+                }
+            }
+        };
+        for (size_t i = 0; i < mb->GetMenuCount(); ++i) scan(mb->GetMenu(i));
+        if (!accels.empty()) SetAcceleratorTable(wxAcceleratorTable((int)accels.size(), accels.data()));
+    }
+
+    void buildIntegratedTitleBar(wxMenuBar* mb)
+    {
+        // Match the toolbar/status/frame chrome (32,32,32) exactly so the whole top is one colour and the
+        // window corners have no shade seam against the frame backing.
+        const wxColour barBg = m_dark ? wxColour(32, 32, 32)    : wxColour(240, 240, 240);
+        const wxColour barFg = m_dark ? wxColour(220, 220, 220) : wxColour(30, 30, 30);
+        // wxbf's default 1px window border is light grey (168,168,168) - jarring on dark chrome, and its
+        // square corner is exactly what notches against Win11's rounded window. Match it to the bar.
+        this->SetBorderColour(barBg);
+#ifdef __WXMSW__
+        // Win11 rounds top-level windows; the rounded cut-off leaves a small notch at the corner of our
+        // square chrome. Square the window (DWMWCP_DONOTROUND) so all four corners are clean.
+        { DWORD corner = DWMWCP_DONOTROUND;
+          ::DwmSetWindowAttribute(static_cast<HWND>(this->GetHandle()), DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner)); }
+#endif
+        m_titleBar = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, kTitleBarH));
+        m_titleBar->SetBackgroundColour(barBg);
+        m_titleBar->Bind(wxEVT_LEFT_DOWN, &NppShellFrameT::onTitleBarDrag, this);     // drag empty area to move
+        m_titleBar->Bind(wxEVT_LEFT_DCLICK, [this](wxMouseEvent&){ onWindowControl(1); });   // double-click = maximize/restore
+        this->Bind(wxEVT_SIZE, [this](wxSizeEvent& e){ updateMaxGlyph(); e.Skip(); });       // keep the glyph synced (snap, Win+Up)
+
+        auto* sz = new wxBoxSizer(wxHORIZONTAL);
+
+        // App icon (left)
+        wxBitmap ico = wxBitmapBundle::FromSVG(APP_ICON_SVG, wxSize(18, 18)).GetBitmap(wxSize(18, 18));
+        sz->Add(new wxStaticBitmap(m_titleBar, wxID_ANY, ico), 0, wxALIGN_CENTRE_VERTICAL | wxLEFT | wxRIGHT, 8);
+
+        // Menu-buttons - each pops the same wxMenu the native menu bar would show. Pop on the frame so the
+        // resulting command events land on our onCommand dispatcher (which is bound to the frame).
+        for (size_t i = 0; i < mb->GetMenuCount(); ++i)
+        {
+            wxMenu* menu = mb->GetMenu(i);
+            auto* b = new wxButton(m_titleBar, wxID_ANY, mb->GetMenuLabelText(i),
+                                   wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT | wxBORDER_NONE);
+            b->SetBackgroundColour(barBg); b->SetForegroundColour(barFg);
+            b->Bind(wxEVT_BUTTON, [this, b, menu](wxCommandEvent&) {
+                wxPoint p = this->ScreenToClient(b->GetParent()->ClientToScreen(
+                                b->GetPosition() + wxPoint(0, b->GetSize().y)));
+                this->PopupMenu(menu, p);
+            });
+            sz->Add(b, 0, wxALIGN_CENTRE_VERTICAL);
+        }
+
+        sz->AddStretchSpacer(1);   // empty middle stays draggable
+
+        // Window controls (right): minimize, maximize/restore, close (close hovers red, VS-style)
+#ifdef __WXMSW__
+        // Windows draws its caption buttons from the Segoe MDL2 Assets icon font - use the very same font
+        // + glyphs (Chrome{Minimize,Maximize,Restore,Close}) so the controls are pixel-identical to native.
+        const wxFont mdl2(wxFontInfo(10).FaceName("Segoe MDL2 Assets"));
+#endif
+        auto ctrl = [&](wchar_t mdl2Glyph, const char* svgPath, int which, const wxColour& hot) -> wxButton* {
+            auto* b = new wxButton(m_titleBar, wxID_ANY, "", wxDefaultPosition,
+                                   wxSize(46, kTitleBarH), wxBU_EXACTFIT | wxBORDER_NONE);
+#ifdef __WXMSW__
+            b->SetFont(mdl2); b->SetLabel(wxString(wxUniChar(mdl2Glyph)));
+            b->SetForegroundColour(m_dark ? wxColour(240, 240, 240) : wxColour(20, 20, 20));
+            (void)svgPath;
+#else
+            b->SetBitmap(winGlyph(svgPath)); (void)mdl2Glyph;   // Linux/GTK: no Segoe MDL2 - drawn fallback
+#endif
+            b->SetBackgroundColour(barBg);
+            b->Bind(wxEVT_BUTTON,       [this, which](wxCommandEvent&) { onWindowControl(which); });
+            b->Bind(wxEVT_ENTER_WINDOW, [b, hot](wxMouseEvent& e)   { b->SetBackgroundColour(hot);   b->Refresh(); e.Skip(); });
+            b->Bind(wxEVT_LEAVE_WINDOW, [b, barBg](wxMouseEvent& e) { b->SetBackgroundColour(barBg); b->Refresh(); e.Skip(); });
+            sz->Add(b, 0, wxEXPAND);
+            return b;
+        };
+        const wxColour hover = m_dark ? wxColour(63, 63, 70) : wxColour(220, 220, 220);
+        ctrl(0xE921, GLYPH_MIN, 0, hover);                                                                 // minimize
+        m_maxBtn = ctrl(IsMaximized() ? 0xE923 : 0xE922, IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX, 1, hover);  // max/restore
+        ctrl(0xE8BB, GLYPH_CLOSE, 2, wxColour(232, 17, 35));                                                // close (red hover)
+
+        m_titleBar->SetSizer(sz);
+        m_aui.AddPane(m_titleBar, wxAuiPaneInfo().Name("titlebar").Top().Layer(2)
+            .CaptionVisible(false).PaneBorder(false).Gripper(false).Floatable(false).Movable(false)
+            .Dockable(false).DockFixed().Resizable(false).MinSize(-1, kTitleBarH).MaxSize(-1, kTitleBarH));
+        m_aui.Update();
+    }
+
+    void onTitleBarDrag(wxMouseEvent& ev)
+    {
+        // The lib's gripper moves the window on BOTH platforms (WM_NCLBUTTONDOWN on MSW,
+        // gtk_window_begin_move_drag on GTK) - so dragging the bar works on Linux too.
+        if (!m_gripper) m_gripper = wxWindowGripper::Create();
+        if (!m_gripper || !m_gripper->StartDragMove(this)) ev.Skip();
+    }
+
+    // A window-control glyph stroked into a small bitmap (10x10 box), themed to the bar.
+    wxBitmapBundle winGlyph(const char* path) const
+    {
+        const char* col = m_dark ? "#f0f0f0" : "#171717";
+        const wxString svg = wxString::Format(
+            "<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'>"
+            "<path d='%s' fill='none' stroke='%s' stroke-width='1.3' stroke-linecap='square' stroke-linejoin='miter'/></svg>",
+            path, col);
+        return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(12, 12));
+    }
+    void updateMaxGlyph()
+    {
+        if (!m_maxBtn) return;
+#ifdef __WXMSW__
+        m_maxBtn->SetLabel(wxString(wxUniChar(IsMaximized() ? 0xE923 : 0xE922)));   // ChromeRestore / ChromeMaximize
+#else
+        m_maxBtn->SetBitmap(winGlyph(IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX));
+#endif
+    }
+    void onWindowControl(int which)
+    {
+        if      (which == 0) Iconize(true);
+        else if (which == 1) { Maximize(!IsMaximized()); updateMaxGlyph(); }
+        else                 Close();
+    }
+
+    wxToolBar* makeIntegratedToolBar()
+    {
+        return new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                             wxTB_FLAT | wxTB_HORIZONTAL | wxTB_NODIVIDER);
+    }
+    void dockIntegratedToolBar(wxToolBar* tb)
+    {
+        // ToolbarPane() must come FIRST: it turns gripper/movable/floatable back ON, so the locking flags
+        // have to follow it. Result is a fixed toolbar - no drag gripper, not movable, not floatable.
+        m_aui.AddPane(tb, wxAuiPaneInfo().Name("toolbar").ToolbarPane().Top().Layer(1)
+            .Gripper(false).Floatable(false).Movable(false).Dockable(false).DockFixed()
+            .CaptionVisible(false).PaneBorder(false).Resizable(false));
+        m_aui.Update();
+    }
+#endif // WXNPP_HAS_BORDERLESS
+
     void addToMRU(const wxString& path)
     {
         m_fileHistory.AddFileToHistory(path);
@@ -2231,15 +2727,19 @@ private:
     wxBitmapBundle icon(const wxString& name)
     {
         static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\";
-        // Permissive toolbar icons (Tabler x Open Color, MIT). They paint with stroke="currentColor";
-        // resolve that to Open-Color gray-3 on the dark toolbar / gray-8 on light, keeping the accent hues.
+        // Permissive toolbar icons (Tabler x Open Color, MIT) - monochrome by default, with a meaning-accent
+        // on 8 of the 32 (gold New "+", blue Save/Save-All, red Record/Stop, green Playback/-multiple). Neutral
+        // parts paint with stroke="currentColor"; the accents are explicit Open-Color hues. Resolve ONLY
+        // currentColor to the theme grey (Open-Color gray-3 dark / gray-8 light) and keep the accents, so the
+        // toolbar matches the icon set's design (README: "color only where it carries meaning").
         const wxString path = dir + name + ".svg";
         if (wxFileExists(path))
         {
             wxFile f(path); wxString svg;
             if (f.IsOpened() && f.ReadAll(&svg))
             {
-                svg.Replace("currentColor", m_dark ? "#dee2e6" : "#343a40");
+                const wxString col = m_dark ? "#dee2e6" : "#343a40";
+                svg.Replace("currentColor", col);
                 const wxScopedCharBuffer u = svg.utf8_str();
                 return wxBitmapBundle::FromSVG(u.data(), wxSize(16, 16));
             }
@@ -2273,7 +2773,16 @@ private:
 
     void buildToolBar()
     {
-        auto* tb = CreateToolBar(wxTB_FLAT | wxTB_HORIZONTAL);
+        // Native frame: the frame's own toolbar (CreateToolBar). Integrated frame: a child wxToolBar we
+        // dock as an aui pane just under the title bar (the frame toolbar would otherwise sit above it).
+        wxToolBar* tb;
+#ifdef WXNPP_HAS_BORDERLESS
+        if constexpr (kBorderless) tb = makeIntegratedToolBar();
+        else                       tb = CreateToolBar(wxTB_FLAT | wxTB_HORIZONTAL);
+#else
+        tb = CreateToolBar(wxTB_FLAT | wxTB_HORIZONTAL);
+#endif
+        m_toolBarPtr = tb;                 // so toolBar() works in both modes (frame toolbar / aui pane)
         tb->SetToolBitmapSize(wxSize(16, 16));
         auto T  = [&](int id, const wxString& svg, const wxString& tip) { tb->AddTool(id, tip, icon(svg), tip); };
         auto TC = [&](int id, const wxString& svg, const wxString& tip) { tb->AddCheckTool(id, tip, icon(svg), wxNullBitmap, tip); };
@@ -2317,6 +2826,29 @@ private:
         tb->EnableTool(IDM_MACRO_SAVECURRENTMACRO, false);
 #ifdef __WXMSW__
         ::SendMessageW(static_cast<HWND>(tb->GetHandle()), TB_SETINDENT, 4, 0);  // small left margin before the first button
+#endif
+#ifdef WXNPP_HAS_BORDERLESS
+        if constexpr (kBorderless)
+        {
+            dockIntegratedToolBar(tb);            // dock the child toolbar under the title bar
+#ifndef __WXMSW__
+            // The aui-docked toolbar's tool clicks don't reach onCommand on their own. On MSW the
+            // WM_COMMAND override above already redispatches them; elsewhere there's no WM_COMMAND, so fire
+            // the tool from the mouse-up via hit-test. (No double-fire: MSW is excluded, and the toolbar's
+            // own wxEVT_TOOL never reaches onCommand, which listens on wxEVT_MENU.)
+            tb->Bind(wxEVT_LEFT_UP, [this, tb](wxMouseEvent& ev){
+                wxToolBarToolBase* tool = tb->FindToolForPosition(ev.GetX(), ev.GetY());
+                if (tool && tool->IsEnabled())
+                {
+                    if (tool->CanBeToggled()) tb->ToggleTool(tool->GetId(), !tool->IsToggled());   // reflect check-tool state
+                    wxCommandEvent ce(wxEVT_MENU, tool->GetId());
+                    ce.SetInt(tool->IsToggled() ? 1 : 0);
+                    this->onCommand(ce);
+                }
+                ev.Skip();
+            });
+#endif
+        }
 #endif
     }
 
@@ -2401,18 +2933,24 @@ private:
     void setLexerForFile(const wxString& path)
     {
         applyEditorTheme(m_dark);          // reset every style to the theme base (incl. line numbers)
-        const wxString ext = path.AfterLast('.').Lower();
-        if (auto* p = activePage()) p->lang = langDisplayName(ext);
-        const LexMap lm = lexerForExt(ext);
-        sci(SCI_SETILEXER, 0, reinterpret_cast<sptr_t>(lm.lexer ? CreateLexer(lm.lexer) : nullptr));
-        if (lm.lexer)
+        auto* page = activePage();
+        // A manual Language pick forces its lexer directly; otherwise auto-detect from the file extension.
+        wxString lexer, themeKey, disp, ext;
+        if (page && page->langForced) { lexer = page->forcedLexer; themeKey = page->forcedLexer; disp = page->forcedName; }
+        else { ext = path.AfterLast('.').Lower(); const LexMap lm = lexerForExt(ext);
+               lexer = lm.lexer ? lm.lexer : ""; themeKey = lm.theme ? lm.theme : ""; disp = langDisplayName(ext); }
+        if (page) page->lang = disp;
+        const bool hasLexer = !lexer.empty();
+        const std::string lx = lexer.ToStdString();
+        sci(SCI_SETILEXER, 0, reinterpret_cast<sptr_t>(hasLexer ? CreateLexer(lx.c_str()) : nullptr));
+        if (hasLexer)
         {
             sci(SCI_SETPROPERTY, reinterpret_cast<uptr_t>("fold"), reinterpret_cast<sptr_t>("1"));
             sci(SCI_SETPROPERTY, reinterpret_cast<uptr_t>("fold.compact"), reinterpret_cast<sptr_t>("0"));
             bool themed = false;
             if (m_theme.loaded)
             {
-                auto it = m_theme.lexers.find(lm.theme);
+                auto it = m_theme.lexers.find(themeKey.ToStdString());
                 if (it != m_theme.lexers.end())
                 {
                     for (const StyleDef& s : it->second)   // apply Notepad++'s exact per-token colours
@@ -2426,14 +2964,14 @@ private:
                     themed = true;
                 }
             }
-            if (!themed) { if (std::string(lm.lexer) == "python") stylePythonFallback(); else styleCppFallback(); }
-            const std::string lx(lm.lexer);
+            if (!themed) { if (lx == "python") stylePythonFallback(); else styleCppFallback(); }
             auto kw = [&](const char* words) { sci(SCI_SETKEYWORDS, 0, reinterpret_cast<sptr_t>(words)); };
-            if (lx == "cpp") {   // the C-family lexer is shared; pick keywords by file extension
-                if      (ext == "js" || ext == "jsx" || ext == "ts" || ext == "tsx") kw(JS_KEYWORDS);
-                else if (ext == "java")                                              kw(JAVA_KEYWORDS);
-                else if (ext == "cs")                                                kw(CS_KEYWORDS);
-                else                                                                 kw(CPP_KEYWORDS);
+            if (lx == "cpp") {   // shared C-family lexer: pick keywords by extension (auto) or picked name (forced)
+                const wxString v = (page && page->langForced) ? page->forcedName : ext;
+                if      (v=="js"||v=="jsx"||v=="ts"||v=="tsx"||v=="JavaScript"||v=="TypeScript") kw(JS_KEYWORDS);
+                else if (v=="java"||v=="Java")                                                   kw(JAVA_KEYWORDS);
+                else if (v=="cs"||v=="C#")                                                       kw(CS_KEYWORDS);
+                else                                                                             kw(CPP_KEYWORDS);
             }
             else if (lx == "python")     kw(PY_KEYWORDS);
             else if (lx == "sql")        kw(SQL_KEYWORDS);
@@ -2470,7 +3008,15 @@ private:
     }
     // ----- file actions --------------------------------------------------
     void setDocTitle(const wxString& name) { if (auto* p = activePage()) { p->title = name; refreshTab(p); } else SetTitle(name + " - wxNotepad++"); }
-    void doNew() { addDocument("", nextNewName()); }   // New opens a fresh tab, like Notepad++
+    void doNew()   // New opens a fresh tab, like Notepad++ - honouring the New Document default EOL + language
+    {
+        addDocument("", nextNewName());
+        if (auto* p = activePage()) p->encoding = m_defaultEncoding;
+        setEol(m_defaultEol);
+        if (m_defaultLangId >= 0) { if (const NppLang* L = nppLangFind(m_defaultLangId)) setForcedLang(L->lexer, L->name); }
+        updateEncodingMenuChecks();
+        updateStatus();   // reflect the default EOL/encoding/language in the status bar
+    }
     // ===== text encoding: detect on load, encode on save (the Scintilla doc is always UTF-8) =====
     static bool isValidUtf8(const std::string& s)
     {
@@ -2606,7 +3152,7 @@ private:
     wxString encDisplay(EditorPage* p) { return (p && p->encoding == ENC_CHARSET) ? p->encLabel : wxString(encName(p ? p->encoding : ENC_UTF8)); }
     void updateEncodingMenuChecks()   // tick the active encoding in the Encoding menu's interpret-as group
     {
-        auto* mb = GetMenuBar(); if (!mb) return;
+        auto* mb = menuBar(); if (!mb) return;
         const int enc = activePage() ? activePage()->encoding : ENC_UTF8;
         auto chk = [&](int id, bool on){ if (auto* it = mb->FindItem(id)) if (it->IsCheckable()) it->Check(on); };
         chk(IDM_FORMAT_ANSI, enc == ENC_ANSI); chk(IDM_FORMAT_AS_UTF_8, enc == ENC_UTF8); chk(IDM_FORMAT_UTF_8, enc == ENC_UTF8_BOM);
@@ -3028,14 +3574,26 @@ private:
     }
     void toggleWrapSymbol() { sci(SCI_SETWRAPVISUALFLAGS, sci(SCI_GETWRAPVISUALFLAGS) ? SC_WRAPVISUALFLAG_NONE : SC_WRAPVISUALFLAG_END); }
     void hideSelectedLines() { const int a = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONSTART)), b = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONEND)); sci(SCI_HIDELINES, a, b); }
+    // A dark-theme-aware replacement for wxMessageBox(... wxOK ...): the native message box ignores the
+    // app theme (white body in dark mode), so info popups must be a themed wxDialog instead.
+    void themedInfo(const wxString& msg, const wxString& title)
+    {
+        wxDialog dlg(this, wxID_ANY, title);
+        auto* s = new wxBoxSizer(wxVERTICAL);
+        s->Add(new wxStaticText(&dlg, wxID_ANY, msg), 0, wxALL, 16);
+        s->Add(dlg.CreateButtonSizer(wxOK), 0, wxALIGN_RIGHT | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+        dlg.SetSizerAndFit(s); dlg.Centre();
+        themeDialog(&dlg);
+        dlg.ShowModal();
+    }
     void showSummary()
     {
         std::string t = getDocUtf8();
         long cp = 0, words = 0; bool inw = false;
         for (unsigned char c : t) { if ((c & 0xC0) != 0x80) ++cp; if (std::isspace(c)) inw = false; else if (!inw) { inw = true; ++words; } }
         const wxString name = curPath().empty() ? (activePage() ? activePage()->title : wxString("(none)")) : curPath();
-        wxMessageBox(wxString::Format("File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d",
-            name, cp, words, (int)sci(SCI_GETLINECOUNT)), "Summary", wxOK | wxICON_INFORMATION, this);
+        themedInfo(wxString::Format("File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d",
+            name, cp, words, (int)sci(SCI_GETLINECOUNT)), "Summary");
     }
     void showWindowsList()
     {
@@ -3064,12 +3622,22 @@ private:
             BCryptCloseAlgorithmProvider(alg, 0);
         }
         if (toClip) { copyToClip(hex); setStatus(0, wxString(name) + " copied to clipboard"); }
-        else wxMessageBox(hex, wxString(name) + " digest", wxOK, this);
+        else themedInfo(hex, wxString(name) + " digest");
 #else
         (void)algo; (void)toClip; notImpl(wxString(name) + " (Windows only)");
 #endif
     }
-    void setNormalText() { applyEditorTheme(m_dark); sci(SCI_SETILEXER, 0, 0); if (auto* p = activePage()) p->lang = "Normal text file"; updateStatus(); }
+    // Manually force a language on the active buffer (Language menu). ext "" forces Normal Text. The
+    // choice sticks across tab switches via EditorPage::langForced (setLexerForFile honours it over the
+    // file extension).
+    void setForcedLang(const wxString& lexer, const wxString& name)
+    {
+        auto* p = activePage(); if (!p) return;
+        p->langForced = true; p->forcedLexer = lexer; p->forcedName = name;
+        setLexerForFile(p->path);
+        updateStatus();
+        if (m_stc) m_stc->Refresh();
+    }
 
     // ----- search engine (drives the Find/Replace dialog) ----------------
     // Report a search outcome both in the main status bar and, if it is open, inside the Find dialog
@@ -3189,6 +3757,88 @@ private:
         return count;
     }
     wxString selText() { const std::string s = getSelUtf8(); return wxString::FromUTF8(s.data(), s.size()); }
+    // ----- Find in Files: search / replace across files on disk, hits in a docked results panel --------
+    void ensureFifScratch() { if (!m_fifScratch) { m_fifScratch = new wxStyledTextCtrl(this, wxID_ANY); m_fifScratch->Hide(); } }
+    void ensureFindResultsPanel()
+    {
+        if (m_findResults) return;
+        m_findResults = new wxStyledTextCtrl(this, wxID_ANY);
+        m_findResults->SetReadOnly(true);
+        for (int mg = 0; mg < 3; ++mg) m_findResults->SetMarginWidth(mg, 0);
+        m_findResults->StyleSetBackground(wxSTC_STYLE_DEFAULT, m_dark ? wxColour(30, 30, 30) : *wxWHITE);
+        m_findResults->StyleSetForeground(wxSTC_STYLE_DEFAULT, m_dark ? wxColour(220, 220, 220) : wxColour(30, 30, 30));
+        m_findResults->StyleClearAll();
+        m_findResults->Bind(wxEVT_STC_DOUBLECLICK, [this](wxStyledTextEvent&) {
+            const int ln = static_cast<int>(m_findResults->GetCurrentLine());
+            if (ln >= 0 && ln < static_cast<int>(m_fifJump.size()) && !m_fifJump[ln].first.empty())
+            { openPath(m_fifJump[ln].first); sci(SCI_GOTOLINE, m_fifJump[ln].second); sci(SCI_SCROLLCARET); m_stc->SetFocus(); }
+        });
+        m_aui.AddPane(m_findResults, wxAuiPaneInfo().Name("findresults").Caption("Search results")
+                      .Bottom().Layer(1).BestSize(wxSize(-1, 200)).CloseButton(true).MaximizeButton(false));
+        m_aui.Update();
+    }
+    void doFindInFiles(const FindOpts& o, wxString dir, wxString filters, bool replace)
+    {
+        if (o.find.empty()) { findResult("Find in Files: nothing to search for"); return; }
+        if (dir.empty()) { auto* p = activePage(); dir = (p && !p->path.empty()) ? wxPathOnly(p->path) : wxGetCwd(); }
+        if (!wxDirExists(dir)) { findResult("Find in Files: no such directory - " + dir); return; }
+        filters.Trim(true).Trim(false); if (filters.empty()) filters = "*.*";
+
+        wxArrayString files;
+        for (wxString pat : wxSplit(filters, ';')) { pat.Trim(true).Trim(false); if (!pat.empty()) wxDir::GetAllFiles(dir, &files, pat, wxDIR_FILES); }
+        { std::set<wxString> seen; wxArrayString uniq; for (auto& f : files) if (seen.insert(f).second) uniq.Add(f); files = uniq; }
+
+        ensureFifScratch();
+        ensureFindResultsPanel();
+        m_findResults->SetReadOnly(false); m_findResults->ClearAll(); m_fifJump.clear();
+        auto out = [&](const wxString& txt, const wxString& file, int line) { m_findResults->AppendText(txt + "\n"); m_fifJump.push_back({ file, line }); };
+        out(wxString::Format("Search \"%s\" in %s  (%s)", o.find, dir, filters), "", -1);
+
+        int hits = 0, hitFiles = 0, repl = 0, replFiles = 0;
+        for (const wxString& file : files)
+        {
+            wxString content;
+            { wxFile fh(file); if (!fh.IsOpened() || !fh.ReadAll(&content)) continue; }
+            m_fifScratch->SetReadOnly(false); m_fifScratch->SetText(content);
+            m_fifScratch->SetSearchFlags(static_cast<int>(searchFlags(o)));
+            const int len = m_fifScratch->GetLength();
+            if (replace)
+            {
+                int n = 0, end = len; m_fifScratch->SetTargetStart(0); m_fifScratch->SetTargetEnd(end);
+                while (m_fifScratch->SearchInTarget(o.find) >= 0)
+                {
+                    const int s = m_fifScratch->GetTargetStart(), e = m_fifScratch->GetTargetEnd();
+                    if (o.regex) m_fifScratch->ReplaceTargetRE(o.repl); else m_fifScratch->ReplaceTarget(o.repl);
+                    int ne = m_fifScratch->GetTargetEnd(); end += (ne - e); if (e == s) ++ne;
+                    m_fifScratch->SetTargetStart(ne); m_fifScratch->SetTargetEnd(end); ++n;
+                }
+                if (n > 0) { wxFile w(file, wxFile::write); if (w.IsOpened()) w.Write(m_fifScratch->GetText()); ++replFiles; repl += n; out(wxString::Format("  %s  (%d replaced)", file, n), file, 0); }
+            }
+            else
+            {
+                int pos = 0, n = 0;
+                while (pos <= len)
+                {
+                    m_fifScratch->SetTargetStart(pos); m_fifScratch->SetTargetEnd(len);
+                    if (m_fifScratch->SearchInTarget(o.find) < 0) break;
+                    const int s = m_fifScratch->GetTargetStart(), e = m_fifScratch->GetTargetEnd();
+                    const int line = m_fifScratch->LineFromPosition(s);
+                    if (n == 0) out(wxString::Format("  %s", file), file, 0);
+                    wxString lt = m_fifScratch->GetTextRange(m_fifScratch->PositionFromLine(line), m_fifScratch->GetLineEndPosition(line));
+                    out(wxString::Format("    Line %d:  %s", line + 1, lt.Trim(true).Trim(false)), file, line);
+                    ++n; ++hits; pos = (e > s) ? e : e + 1;
+                }
+                if (n > 0) ++hitFiles;
+            }
+        }
+        const wxString summary = replace
+            ? wxString::Format("Replace in Files: %d occurrence(s) in %d file(s)", repl, replFiles)
+            : wxString::Format("Find in Files: %d hit(s) in %d / %d file(s)", hits, hitFiles, static_cast<int>(files.size()));
+        out("  === " + summary + " ===", "", -1);
+        m_findResults->SetReadOnly(true);
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_findResults); pi.Show(); m_aui.Update();
+        findResult(summary);
+    }
     FindReplaceDialog* ensureFindDlg()
     {
         if (!m_findDlg)
@@ -3200,6 +3850,7 @@ private:
             m_findDlg->replaceAllCb = [this](const FindOpts& o) { findResult(wxString::Format("Replaced %d occurrence(s)", doReplaceAll(o))); };
             m_findDlg->markAllCb    = [this](const FindOpts& o) { findResult(wxString::Format("Marked %d match(es)", doMarkAll(o))); };
             m_findDlg->clearMarksCb = [this]() { clearMarks(); };
+            m_findDlg->fifCb        = [this](const FindOpts& o, const wxString& dir, const wxString& filters, bool replace) { m_lastFind = o.find; m_lastReplace = o.repl; doFindInFiles(o, dir, filters, replace); };
             m_findDlg->infoCb       = [this](const wxString& what) { notImpl(what); };
         }
         return m_findDlg;
@@ -3226,15 +3877,23 @@ private:
     }
 
     // ----- view toggles --------------------------------------------------
-    void syncToggle(int id, bool& flag) { flag = !flag; if (GetMenuBar()) GetMenuBar()->Check(id, flag); if (GetToolBar()) GetToolBar()->ToggleTool(id, flag); }
+    void syncToggle(int id, bool& flag) { flag = !flag; if (menuBar()) menuBar()->Check(id, flag); if (toolBar()) toolBar()->ToggleTool(id, flag); }
     void toggleWrap()  { syncToggle(IDM_VIEW_WRAP, m_wrap); sci(SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE); }
     void toggleWs()    { syncToggle(IDM_VIEW_ALL_CHARACTERS, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
     void toggleGuides(){ syncToggle(IDM_VIEW_INDENT_GUIDE, m_guides); sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE); }
 
     // ----- persisted preferences (Settings > Preferences) ---------------
+    static size_t recentMaxFromConfig()   // Recent Files max, read straight from config so the m_fileHistory member init can use it
+    {
+        long m = 10; wxConfigBase::Get()->Read("RecentFiles/Max", &m, 10L);
+        return (size_t)(m < 1 ? 1 : (m > 50 ? 50 : m));
+    }
     void loadSettings()
     {
         auto* c = wxConfigBase::Get();
+        c->Read("IntegratedBar", &m_integratedBar, false);
+        long mr = 10; c->Read("RecentFiles/Max", &mr, 10L); m_maxRecent = (int)mr;
+        c->Read("TabBar/CloseButton", &m_tabCloseBtn, true);   // integrated top bar on/off (also read in OnInit; here for the Preferences checkbox)
         long tw = 4; c->Read("Editing/TabWidth", &tw, 4L); m_tabWidth = (int)tw;
         c->Read("Editing/UseTabs", &m_useTabs, true);
         c->Read("Editing/LineNumbers", &m_lineNumbers, true);
@@ -3249,6 +3908,14 @@ private:
         c->Read("Editing/AutoIndent", &m_autoindent, true);
         long cw = 1; c->Read("Editing/CaretWidth", &cw, 1L); m_caretWidth = (int)cw;
         long ec = 0; c->Read("Editing/EdgeColumn", &ec, 0L); m_edgeColumn = (int)ec;
+        long de = SC_EOL_CRLF; c->Read("NewDoc/Eol", &de, (long)SC_EOL_CRLF); m_defaultEol = (int)de;
+        long dl = -1; c->Read("NewDoc/Lang", &dl, -1L); m_defaultLangId = (int)dl;
+        long den = ENC_UTF8; c->Read("NewDoc/Encoding", &den, (long)ENC_UTF8); m_defaultEncoding = (int)den;
+        long cbk = 500; c->Read("Editing/CaretBlink", &cbk, 500L); m_caretBlink = (int)cbk;
+        c->Read("Editing/ScrollBeyond", &m_scrollBeyond, false);
+        c->Read("Editing/MultiEdit", &m_multiEdit, true);
+        long acf = 3; c->Read("AutoComplete/FromChar", &acf, 3L); m_autoCompFrom = (int)acf;
+        c->Read("AutoComplete/InsertPairs", &m_autoInsertPairs, false);
         c->Read("Theme", &m_themeName, wxEmptyString);
     }
     void saveSettings()
@@ -3261,6 +3928,12 @@ private:
         c->Write("View/StatusBar", m_showStatusbar);      c->Write("Editing/AutoComplete", m_autocomplete);
         c->Write("Editing/CaretLine", m_caretLine);       c->Write("Editing/AutoIndent", m_autoindent);
         c->Write("Editing/CaretWidth", (long)m_caretWidth); c->Write("Editing/EdgeColumn", (long)m_edgeColumn);
+        c->Write("NewDoc/Eol", (long)m_defaultEol);         c->Write("NewDoc/Lang", (long)m_defaultLangId);
+        c->Write("NewDoc/Encoding", (long)m_defaultEncoding);
+        c->Write("RecentFiles/Max", (long)m_maxRecent);     c->Write("TabBar/CloseButton", m_tabCloseBtn);
+        c->Write("Editing/CaretBlink", (long)m_caretBlink); c->Write("Editing/ScrollBeyond", m_scrollBeyond);
+        c->Write("Editing/MultiEdit", m_multiEdit);
+        c->Write("AutoComplete/FromChar", (long)m_autoCompFrom); c->Write("AutoComplete/InsertPairs", m_autoInsertPairs);
         c->Write("Theme", m_themeName);
         c->Flush();
     }
@@ -3279,37 +3952,48 @@ private:
             sci(SCI_SETCARETWIDTH, m_caretWidth);
             sci(SCI_SETEDGEMODE, m_edgeColumn > 0 ? EDGE_LINE : EDGE_NONE);
             sci(SCI_SETEDGECOLUMN, m_edgeColumn);
+            sci(SCI_SETCARETPERIOD, m_caretBlink);
+            sci(SCI_SETENDATLASTLINE, m_scrollBeyond ? 0 : 1);
+            sci(SCI_SETMULTIPLESELECTION, m_multiEdit ? 1 : 0);
             if (m_lineNumbers) updateLineMargin(); else sci(SCI_SETMARGINWIDTHN, 0, 0);
         }
-        if (auto* mb = GetMenuBar()) { mb->Check(IDM_VIEW_WRAP, m_wrap); mb->Check(IDM_VIEW_ALL_CHARACTERS, m_ws); mb->Check(IDM_VIEW_INDENT_GUIDE, m_guides); }
-        if (auto* tb = GetToolBar()) { tb->ToggleTool(IDM_VIEW_WRAP, m_wrap); tb->Show(m_showToolbar); }
+        if (auto* mb = menuBar()) { mb->Check(IDM_VIEW_WRAP, m_wrap); mb->Check(IDM_VIEW_ALL_CHARACTERS, m_ws); mb->Check(IDM_VIEW_INDENT_GUIDE, m_guides); }
+        if (auto* tb = toolBar()) tb->ToggleTool(IDM_VIEW_WRAP, m_wrap);
+        showToolBar(m_showToolbar);   // aui-aware: hides the pane in integrated mode, the frame toolbar in native
         if (auto* sb = GetStatusBar()) sb->Show(m_showStatusbar);
         SendSizeEvent();
     }
     void onPreferences()
     {
-        wxDialog dlg(this, wxID_ANY, "Preferences", wxDefaultPosition, wxSize(540, 400));
+        // Page layout mirrors Notepad++'s Preferences (General / Editing / Indentation /
+        // Auto-Completion / Dark Mode); the labels are Notepad++'s exact wording.
+        wxDialog dlg(this, wxID_ANY, "Preferences", wxDefaultPosition, wxSize(560, 440));
         auto* book = new wxListbook(&dlg, wxID_ANY);
-        auto* gen = new wxPanel(book); auto* gs = new wxBoxSizer(wxVERTICAL);
+        auto pg  = [&](const wxString& name, bool sel = false) { auto* p = new wxPanel(book); book->AddPage(p, name, sel); return p; };
+        auto row = [&](wxBoxSizer* s, wxWindow* w) { s->Add(w, 0, wxLEFT | wxRIGHT | wxTOP, 10); };
+
+        // ---- General --------------------------------------------------------------------------
+        auto* gen = pg("General", true); auto* gs = new wxBoxSizer(wxVERTICAL);
         auto* cbToolbar = new wxCheckBox(gen, wxID_ANY, "Show toolbar");    cbToolbar->SetValue(m_showToolbar);
         auto* cbStatus  = new wxCheckBox(gen, wxID_ANY, "Show status bar"); cbStatus->SetValue(m_showStatusbar);
-        gs->Add(cbToolbar, 0, wxALL, 10); gs->Add(cbStatus, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
-        gen->SetSizer(gs); book->AddPage(gen, "General", true);
-        auto* ed = new wxPanel(book); auto* es = new wxBoxSizer(wxVERTICAL);
-        auto* trow = new wxBoxSizer(wxHORIZONTAL);
-        trow->Add(new wxStaticText(ed, wxID_ANY, "Tab size:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
-        auto* spTab = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 16, m_tabWidth);
-        trow->Add(spTab, 0); es->Add(trow, 0, wxALL, 10);
-        auto* cbSpace   = new wxCheckBox(ed, wxID_ANY, "Replace by space");         cbSpace->SetValue(!m_useTabs);
+        row(gs, cbToolbar); row(gs, cbStatus);
+#ifdef WXNPP_HAS_BORDERLESS
+        auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, "Show integrated top bar");
+        cbIntBar->SetValue(m_integratedBar); row(gs, cbIntBar);
+#endif
+        gen->SetSizer(gs);
+
+        // ---- Editing --------------------------------------------------------------------------
+        auto* ed = pg("Editing"); auto* es = new wxBoxSizer(wxVERTICAL);
         auto* cbLineNum = new wxCheckBox(ed, wxID_ANY, "Display line number");      cbLineNum->SetValue(m_lineNumbers);
         auto* cbGuides  = new wxCheckBox(ed, wxID_ANY, "Show indentation guide");   cbGuides->SetValue(m_guides);
         auto* cbWs      = new wxCheckBox(ed, wxID_ANY, "Show white space and TAB"); cbWs->SetValue(m_ws);
         auto* cbWrapSym = new wxCheckBox(ed, wxID_ANY, "Show wrap symbol");         cbWrapSym->SetValue(m_wrapSymbol);
         auto* cbWrap    = new wxCheckBox(ed, wxID_ANY, "Word wrap");                cbWrap->SetValue(m_wrap);
-        auto* cbAuto    = new wxCheckBox(ed, wxID_ANY, "Enable auto-completion");   cbAuto->SetValue(m_autocomplete);
         auto* cbCaretLn = new wxCheckBox(ed, wxID_ANY, "Highlight current line");   cbCaretLn->SetValue(m_caretLine);
-        auto* cbIndent  = new wxCheckBox(ed, wxID_ANY, "Auto-indent new lines");    cbIndent->SetValue(m_autoindent);
-        for (auto* c : { cbSpace, cbLineNum, cbGuides, cbWs, cbWrapSym, cbWrap, cbAuto, cbCaretLn, cbIndent }) es->Add(c, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        auto* cbScroll  = new wxCheckBox(ed, wxID_ANY, "Enable scrolling beyond last line");      cbScroll->SetValue(m_scrollBeyond);
+        auto* cbMulti   = new wxCheckBox(ed, wxID_ANY, "Enable multi-editing (multi-selection)"); cbMulti->SetValue(m_multiEdit);
+        for (auto* c : { cbLineNum, cbGuides, cbWs, cbWrapSym, cbWrap, cbCaretLn, cbScroll, cbMulti }) row(es, c);
         auto* erow = new wxBoxSizer(wxHORIZONTAL);
         erow->Add(new wxStaticText(ed, wxID_ANY, "Caret width:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spCaret = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS, 1, 3, m_caretWidth);
@@ -3317,11 +4001,75 @@ private:
         erow->Add(new wxStaticText(ed, wxID_ANY, "Vertical edge at column (0 = off):"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spEdge = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 0, 300, m_edgeColumn);
         erow->Add(spEdge, 0);
-        es->Add(erow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
-        ed->SetSizer(es); book->AddPage(ed, "Editing");
-        auto* dm = new wxPanel(book); auto* ds = new wxBoxSizer(wxVERTICAL);
+        es->Add(erow, 0, wxALL, 10);
+        auto* brow = new wxBoxSizer(wxHORIZONTAL);
+        brow->Add(new wxStaticText(ed, wxID_ANY, "Caret blink rate (ms, 0 = steady):"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* spBlink = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, 0, 2000, m_caretBlink);
+        brow->Add(spBlink, 0);
+        es->Add(brow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10); ed->SetSizer(es);
+
+        // ---- Indentation ----------------------------------------------------------------------
+        auto* ind = pg("Indentation"); auto* is = new wxBoxSizer(wxVERTICAL);
+        auto* trow = new wxBoxSizer(wxHORIZONTAL);
+        trow->Add(new wxStaticText(ind, wxID_ANY, "Tab size:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* spTab = new wxSpinCtrl(ind, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 16, m_tabWidth);
+        trow->Add(spTab, 0); is->Add(trow, 0, wxALL, 10);
+        auto* cbSpace  = new wxCheckBox(ind, wxID_ANY, "Replace by space");      cbSpace->SetValue(!m_useTabs);
+        auto* cbIndent = new wxCheckBox(ind, wxID_ANY, "Auto-indent new lines"); cbIndent->SetValue(m_autoindent);
+        row(is, cbSpace); row(is, cbIndent); ind->SetSizer(is);
+
+        // ---- Auto-Completion ------------------------------------------------------------------
+        auto* ac = pg("Auto-Completion"); auto* as = new wxBoxSizer(wxVERTICAL);
+        auto* cbAuto = new wxCheckBox(ac, wxID_ANY, "Enable auto-completion on each input"); cbAuto->SetValue(m_autocomplete);
+        row(as, cbAuto);
+        auto* acrow = new wxBoxSizer(wxHORIZONTAL);
+        acrow->Add(new wxStaticText(ac, wxID_ANY, "From the"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6);
+        auto* spFrom = new wxSpinCtrl(ac, wxID_ANY, "", wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS, 1, 10, m_autoCompFrom);
+        acrow->Add(spFrom, 0, wxRIGHT, 6);
+        acrow->Add(new wxStaticText(ac, wxID_ANY, "th character"), 0, wxALIGN_CENTRE_VERTICAL);
+        as->Add(acrow, 0, wxALL, 10);
+        auto* cbPairs = new wxCheckBox(ac, wxID_ANY, "Auto-insert matching brackets and quotes"); cbPairs->SetValue(m_autoInsertPairs);
+        row(as, cbPairs); ac->SetSizer(as);
+
+        // ---- Dark Mode ------------------------------------------------------------------------
+        auto* dm = pg("Dark Mode"); auto* ds = new wxBoxSizer(wxVERTICAL);
         auto* cbDark = new wxCheckBox(dm, wxID_ANY, "Enable Dark Mode   (applied on restart)"); cbDark->SetValue(m_dark);
-        ds->Add(cbDark, 0, wxALL, 10); dm->SetSizer(ds); book->AddPage(dm, "Dark Mode");
+        row(ds, cbDark); dm->SetSizer(ds);
+
+        // ---- New Document ---------------------------------------------------------------------
+        auto* nd = pg("New Document"); auto* nds = new wxBoxSizer(wxVERTICAL);
+        const wxString eolChoices[3] = { "Windows (CR LF)", "Unix (LF)", "Macintosh (CR)" };
+        auto* rbEol = new wxRadioBox(nd, wxID_ANY, "Format (Line ending)", wxDefaultPosition, wxDefaultSize,
+                                     3, eolChoices, 1, wxRA_SPECIFY_COLS);
+        rbEol->SetSelection(m_defaultEol == SC_EOL_LF ? 1 : (m_defaultEol == SC_EOL_CR ? 2 : 0));
+        nds->Add(rbEol, 0, wxALL, 10);
+        const wxString encChoices[5] = { "UTF-8", "UTF-8 with BOM", "UTF-16 LE", "UTF-16 BE", "ANSI" };
+        auto* rbEnc = new wxRadioBox(nd, wxID_ANY, "Encoding", wxDefaultPosition, wxDefaultSize,
+                                     5, encChoices, 1, wxRA_SPECIFY_COLS);
+        rbEnc->SetSelection((m_defaultEncoding >= 0 && m_defaultEncoding <= 4) ? m_defaultEncoding : 0);
+        nds->Add(rbEnc, 0, wxALL, 10);
+        auto* lrow = new wxBoxSizer(wxHORIZONTAL);
+        lrow->Add(new wxStaticText(nd, wxID_ANY, "Default language:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* chLang = new wxChoice(nd, wxID_ANY);
+        chLang->Append("Normal Text");
+        { size_t ln; const NppLang* lt = nppLangTable(ln); int sel = 0;
+          for (size_t i = 0; i < ln; ++i) { chLang->Append(lt[i].name); if (lt[i].id == m_defaultLangId) sel = (int)i + 1; }
+          chLang->SetSelection(sel); }
+        lrow->Add(chLang, 0, wxALIGN_CENTRE_VERTICAL);
+        nds->Add(lrow, 0, wxALL, 10); nd->SetSizer(nds);
+
+        // ---- Tab Bar --------------------------------------------------------------------------
+        auto* tbp = pg("Tab Bar"); auto* tbs = new wxBoxSizer(wxVERTICAL);
+        auto* cbTabClose = new wxCheckBox(tbp, wxID_ANY, "Show close button on each tab   (applied on restart)");
+        cbTabClose->SetValue(m_tabCloseBtn); row(tbs, cbTabClose); tbp->SetSizer(tbs);
+
+        // ---- Recent Files History -------------------------------------------------------------
+        auto* rf = pg("Recent Files History"); auto* rfs = new wxBoxSizer(wxVERTICAL);
+        auto* rfrow = new wxBoxSizer(wxHORIZONTAL);
+        rfrow->Add(new wxStaticText(rf, wxID_ANY, "Max number of entries (applied on restart):"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* spMaxRec = new wxSpinCtrl(rf, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 50, m_maxRecent);
+        rfrow->Add(spMaxRec, 0); rfs->Add(rfrow, 0, wxALL, 10); rf->SetSizer(rfs);
+
         auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer(); btn->Add(new wxButton(&dlg, wxID_OK, "Close"), 0);
         auto* top = new wxBoxSizer(wxVERTICAL); top->Add(book, 1, wxEXPAND | wxALL, 8); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
         dlg.SetSizer(top); themeDialog(&dlg);
@@ -3331,8 +4079,21 @@ private:
         m_tabWidth = spTab->GetValue(); m_useTabs = !cbSpace->GetValue(); m_lineNumbers = cbLineNum->GetValue();
         m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
         m_caretLine = cbCaretLn->GetValue(); m_autoindent = cbIndent->GetValue(); m_caretWidth = spCaret->GetValue(); m_edgeColumn = spEdge->GetValue();
+        m_scrollBeyond = cbScroll->GetValue(); m_multiEdit = cbMulti->GetValue(); m_caretBlink = spBlink->GetValue();
+        m_autoCompFrom = spFrom->GetValue(); m_autoInsertPairs = cbPairs->GetValue();
+        m_defaultEol = (rbEol->GetSelection() == 1) ? SC_EOL_LF : (rbEol->GetSelection() == 2) ? SC_EOL_CR : SC_EOL_CRLF;
+        m_defaultEncoding = rbEnc->GetSelection();   // index maps directly to the Enc enum (UTF8=0 .. ANSI=4)
+        { int s = chLang->GetSelection(); if (s <= 0) m_defaultLangId = -1;
+          else { size_t ln; const NppLang* lt = nppLangTable(ln); m_defaultLangId = (s - 1 < (int)ln) ? lt[s - 1].id : -1; } }
+        const bool tabRecentChanged = (cbTabClose->GetValue() != m_tabCloseBtn) || (spMaxRec->GetValue() != m_maxRecent);
+        m_tabCloseBtn = cbTabClose->GetValue(); m_maxRecent = spMaxRec->GetValue();
         applySettings(); saveSettings();
-        if (newDark != m_dark) restartWithTheme(newDark);   // theme change needs a relaunch (wx can't reskin live)
+        bool needRestart = (newDark != m_dark) || tabRecentChanged;
+#ifdef WXNPP_HAS_BORDERLESS
+        if (cbIntBar->GetValue() != m_integratedBar)   // the chrome base is fixed per process - relaunch to switch
+        { wxConfigBase::Get()->Write("IntegratedBar", cbIntBar->GetValue()); needRestart = true; }
+#endif
+        if (needRestart) restartWithTheme(newDark);   // a chrome change (dark mode / integrated bar) needs a relaunch
     }
 
     // ----- macros (record / playback / run multiple / save) -------------
@@ -3359,7 +4120,7 @@ private:
     void macroToolStates()
     {
         const bool has = !m_macro.empty();
-        auto* tb = GetToolBar(); auto* mb = GetMenuBar();
+        auto* tb = toolBar(); auto* mb = menuBar();
         auto en = [&](int id, bool on){ if (tb) tb->EnableTool(id, on); if (mb) if (auto* it = mb->FindItem(id)) it->Enable(on); };
         en(IDM_MACRO_STARTRECORDINGMACRO, !m_recording);
         en(IDM_MACRO_STOPRECORDINGMACRO, m_recording);
@@ -3396,7 +4157,7 @@ private:
     }
     void appendMacroMenuItems()   // (re)list the saved macros at the bottom of the Macro menu
     {
-        auto* mb = GetMenuBar(); if (!mb) return;
+        auto* mb = menuBar(); if (!mb) return;
         const int mi = mb->FindMenu("Macro"); if (mi == wxNOT_FOUND) return;
         wxMenu* menu = mb->GetMenu(mi);
         for (int id = myID_MACRO_ITEM; id < myID_MACRO_ITEM + 200; ++id) if (auto* it = menu->FindItem(id)) menu->Destroy(it);
@@ -3668,15 +4429,19 @@ private:
         g_editorDark = dark;
         ::RedrawWindow(m_sci, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW);  // refresh the dead-corner now
 #endif
-        if (GetMenuBar()) GetMenuBar()->Check(myID_DARKMODE, dark);
+        if (menuBar()) menuBar()->Check(myID_DARKMODE, dark);
         const wxColour chromeBg = dark ? wxColour(32, 32, 32) : wxColour(240, 240, 240);   // explicit both ways
         const wxColour chromeFg = dark ? wxColour(220, 220, 220) : wxColour(0, 0, 0);
-        if (auto* tb = GetToolBar()) { tb->SetBackgroundColour(chromeBg); tb->Refresh(); }
+        if (auto* tb = toolBar()) { tb->SetBackgroundColour(chromeBg); tb->Refresh(); }
         if (auto* sb = GetStatusBar()) { sb->SetBackgroundColour(chromeBg); sb->SetForegroundColour(chromeFg); sb->Refresh(); }
 #ifdef __WXMSW__
         if (m_grip) m_grip->setColours(chromeBg, dark ? wxColour(112, 112, 112) : wxColour(150, 150, 150));   // dots blend onto chrome
 #endif
         if (m_tabs) { m_tabs->SetBackgroundColour(chromeBg); m_tabs->Refresh(); }
+        // The integrated toolbar is an aui pane that doesn't span the full width; paint the dock
+        // background (the strip to the right of the icons) the same chrome colour so there's no grey gap.
+        if (auto* art = m_aui.GetArtProvider()) { art->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, chromeBg); m_aui.Update(); }
+        this->SetBackgroundColour(chromeBg);   // frame backing shows through the Win11 rounded corners - chrome, not black
     }
 
     // wxWidgets refuses to re-theme live: wxApp::SetAppearance() returns CannotChange once a
@@ -3690,6 +4455,7 @@ private:
         cfg->Write("DarkMode", dark);
         saveSession(cfg);                     // remember open files so the relaunch restores them
         cfg->Flush();
+        this->Hide();   // hide the current window before relaunching so the two processes' windows don't briefly overlap on screen
         wxExecute("\"" + wxStandardPaths::Get().GetExecutablePath() + "\"", wxEXEC_ASYNC);
         Close(true);
     }
@@ -3755,6 +4521,23 @@ private:
         dlg.ShowModal();
     }
 
+#ifdef __WXMSW__
+    // wxToolBar::MSWCommand sign-extends the 16-bit WM_COMMAND id to a signed short, so N++'s command ids
+    // above 32767 (e.g. IDM_FILE_NEW = 41001) wrap negative and its FindById() can't match the tool - the
+    // click is silently dropped (this also breaks the native frame toolbar, not just the aui one). Catch a
+    // toolbar's WM_COMMAND here and redispatch it through onCommand with the correct, unsigned id.
+    WXLRESULT MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam) override
+    {
+        if (message == WM_COMMAND && lParam && m_toolBarPtr &&
+            (void*)lParam == (void*)m_toolBarPtr->GetHandle())
+        {
+            wxCommandEvent ce(wxEVT_MENU, LOWORD(wParam));
+            onCommand(ce);
+            return 0;
+        }
+        return FB::MSWWindowProc(message, wParam, lParam);
+    }
+#endif
     // ----- the one dispatcher -------------------------------------------
     void onCommand(wxCommandEvent& e)
     {
@@ -3777,6 +4560,7 @@ private:
         }
         if (cmd >= myID_DOCLIST_ITEM && cmd < myID_DOCLIST_ITEM + 1000)   // document-list dropdown entry
         { const size_t n = (size_t)(cmd - myID_DOCLIST_ITEM); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); return; }
+        if (const NppLang* L = nppLangFind(cmd)) { setForcedLang(L->lexer, L->name); return; }   // Language menu: force that lexer on the active buffer
         if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + 200)        // a saved macro from the Macro menu
         { const size_t n = (size_t)(cmd - myID_MACRO_ITEM); if (n < m_savedMacros.size()) playMacro(m_savedMacros[n].second); return; }
         // Win32 WM_COMMAND carries only a 16-bit id and wx sign-extends it, so command ids
@@ -3886,8 +4670,10 @@ private:
             case IDM_FILE_PRINT: notImpl("Print"); break;
             case IDM_VIEW_DOC_MAP: toggleDocMap(); break;
             case IDM_VIEW_FUNC_LIST: toggleFuncList(); break;
-            case IDM_VIEW_DOCLIST: notImpl("Document List panel"); break;
-            case IDM_VIEW_FILEBROWSER: notImpl("Folder as Workspace panel"); break;
+            case IDM_VIEW_DOCLIST: toggleDocList(); break;
+            case IDM_VIEW_FILEBROWSER: toggleFileBrowser(); break;
+            case IDM_SEARCH_FINDINCREMENT: showIncBar(); break;
+            case IDM_EDIT_COLUMNMODE: columnEditor(); break;
             case IDM_VIEW_MONITORING: notImpl("File monitoring"); break;
             case IDM_MACRO_STARTRECORDINGMACRO: startMacroRecord(); break;
             case IDM_MACRO_STOPRECORDINGMACRO: stopMacroRecord(); break;
@@ -3990,7 +4776,7 @@ private:
             case IDM_LANGSTYLE_CONFIG_DLG: onStyleConfig(); break;
             case IDM_SETTING_IMPORTSTYLETHEMES: importStyleTheme(); break;
             case IDM_SETTING_OPENPLUGINSDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "plugins"); break;
-            case IDM_LANG_TEXT: setNormalText(); break;
+            case IDM_LANG_TEXT: setForcedLang("", "Normal text file"); break;   // force Normal Text (a manual pick, like the languages)
             case IDM_LANG_OPENUDLDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "userDefineLangs"); break;
 
             // ---- Help: external links + info ----
@@ -3999,9 +4785,9 @@ private:
             case IDM_ONLINEDOCUMENT: wxLaunchDefaultBrowser("https://npp-user-manual.org/"); break;
             case IDM_FORUM: wxLaunchDefaultBrowser("https://community.notepad-plus-plus.org/"); break;
             case IDM_LANG_UDLCOLLECTION_PROJECT_SITE: wxLaunchDefaultBrowser("https://github.com/notepad-plus-plus/userDefinedLanguages"); break;
-            case IDM_DEBUGINFO: wxMessageBox(wxString::Format("wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s",
-                wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER, wxGetOsDescription(), wxStandardPaths::Get().GetExecutablePath()), "Debug Info", wxOK | wxICON_INFORMATION, this); break;
-            case IDM_CMDLINEARGUMENTS: wxMessageBox("Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs.", "Command Line Arguments", wxOK | wxICON_INFORMATION, this); break;
+            case IDM_DEBUGINFO: themedInfo(wxString::Format("wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s",
+                wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER, wxGetOsDescription(), wxStandardPaths::Get().GetExecutablePath()), "Debug Info"); break;
+            case IDM_CMDLINEARGUMENTS: themedInfo("Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs.", "Command Line Arguments"); break;
 
             case IDM_EXECUTE: onRun(); break;   // Run... (F5)
 
@@ -4021,12 +4807,12 @@ private:
                 const int mid = e.GetId() & 0xFFFF;
                 if (const int cp = codepageForId(mid))   // Encoding > character set -> interpret the file as that code page
                 {
-                    wxString nm; if (auto* mb = GetMenuBar()) if (auto* it = mb->FindItem(mid)) nm = it->GetItemLabelText();
+                    wxString nm; if (auto* mb = menuBar()) if (auto* it = mb->FindItem(mid)) nm = it->GetItemLabelText();
                     interpretCharset(cp, nm); break;
                 }
                 // Any real menu/toolbar item we don't implement: name it so the click isn't silent.
                 wxString lbl;
-                if (auto* mb = GetMenuBar()) if (wxMenuItem* it = mb->FindItem(mid)) lbl = it->GetItemLabelText();
+                if (auto* mb = menuBar()) if (wxMenuItem* it = mb->FindItem(mid)) lbl = it->GetItemLabelText();
                 if (lbl.empty()) { e.Skip(); return; }   // not one of ours -> let wx handle it
                 notImpl(lbl);
                 break;
@@ -4100,14 +4886,14 @@ private:
             return;   // nothing changed
         m_stSave = dirty; m_stSaveAll = anyDirty; m_stUndo = canUndo; m_stRedo = canRedo;
         m_stSel = hasSel; m_stPaste = canPaste;
-        if (auto* tb = GetToolBar())
+        if (auto* tb = toolBar())
         {
             tb->EnableTool(IDM_FILE_SAVE, dirty);   tb->EnableTool(IDM_FILE_SAVEALL, anyDirty);
             tb->EnableTool(IDM_EDIT_UNDO, canUndo); tb->EnableTool(IDM_EDIT_REDO, canRedo);
             tb->EnableTool(IDM_EDIT_CUT, hasSel);   tb->EnableTool(IDM_EDIT_COPY, hasSel);
             tb->EnableTool(IDM_EDIT_PASTE, canPaste);
         }
-        if (auto* mb = GetMenuBar())
+        if (auto* mb = menuBar())
         {
             mb->Enable(IDM_FILE_SAVE, dirty);   mb->Enable(IDM_FILE_SAVEALL, anyDirty);
             mb->Enable(IDM_EDIT_UNDO, canUndo); mb->Enable(IDM_EDIT_REDO, canRedo);
@@ -4119,7 +4905,10 @@ private:
     wxAuiNotebook* m_tabs = nullptr;
     wxPanel*       m_capBar = nullptr;   // +/v/x caption buttons on the tab strip
     FindReplaceDialog* m_findDlg = nullptr;   // modeless Find/Replace dialog
-    wxFileHistory      m_fileHistory;         // Recent Files (MRU), persisted in wxConfig
+    wxStyledTextCtrl*  m_findResults = nullptr;   // Find-in-Files results panel (docked, bottom)
+    wxStyledTextCtrl*  m_fifScratch  = nullptr;   // hidden scratch buffer for searching file contents
+    std::vector<std::pair<wxString, int>> m_fifJump;   // results panel line -> (file, 0-based editor line)
+    wxFileHistory      m_fileHistory{ recentMaxFromConfig() };   // Recent Files (MRU); max read from config at construction (restart-to-apply)
     wxStyledTextCtrl* m_stc = nullptr;   // the cross-platform editor view; its native HWND on Windows == m_sci
     wxStyledTextCtrl* m_docMap = nullptr;   // Document Map (minimap): a second view sharing the active document
     wxTreeCtrl* m_funcList = nullptr;       // Function List: per-file symbol tree (regex-parsed)
@@ -4132,6 +4921,14 @@ private:
     std::vector<NibDock> m_nibDocks;        // installed via nib.win32 dock_native (the GPL bridge maps NPPM_DMM* to it)
 #endif
     wxAuiManager m_aui;                          // hosts the dockable side/bottom panels (Function List, Doc Map, Find results, Nib panels)
+#ifdef WXNPP_HAS_BORDERLESS
+    wxPanel*    m_titleBar  = nullptr;            // integrated top bar (icon + menu-buttons + window controls)
+    wxMenuBar*  m_menuOwner = nullptr;            // owns the wxMenus the title-bar buttons pop (never attached as a real menu bar)
+    wxButton*   m_maxBtn    = nullptr;            // the maximize/restore button (its glyph tracks IsMaximized())
+    wxWindowGripper* m_gripper = nullptr;         // lib helper for cross-platform window move (drag the bar)
+#endif
+    wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()
+    bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
     bool        m_wrap = false, m_ws = false, m_guides = false, m_dark = true;
@@ -4140,6 +4937,14 @@ private:
     bool        m_autocomplete = true;                            // auto word/keyword completion while typing
     bool        m_caretLine = true, m_autoindent = true;          // highlight the current line; auto-indent new lines
     int         m_caretWidth = 1, m_edgeColumn = 0;               // caret thickness (px); long-line marker column (0 = off)
+    int         m_defaultEol = SC_EOL_CRLF, m_defaultLangId = -1; // New Document: default line-ending + language (IDM_LANG_*; -1 = Normal Text)
+    int         m_defaultEncoding = ENC_UTF8;                     // New Document: default on-disk encoding (Enc enum)
+    int         m_maxRecent = 10;                                // Recent Files: max entries (restart-to-apply; see recentMaxFromConfig)
+    bool        m_tabCloseBtn = true;                            // Tab Bar: a close button on each tab (restart-to-apply)
+    int         m_caretBlink = 500;                              // caret blink rate (ms; 0 = steady)
+    bool        m_scrollBeyond = false, m_multiEdit = true;      // scroll past the last line; multi-selection / multi-caret editing
+    int         m_autoCompFrom = 3;                              // auto-completion triggers from the Nth typed character
+    bool        m_autoInsertPairs = false;                       // auto-insert matching brackets/quotes while typing
     wxString    m_themeName;                                      // active editor theme (empty = dark/light default); Style Configurator
     std::vector<MacroStep> m_macro;                               // the current recorded macro
     bool        m_recording = false;
@@ -4152,6 +4957,13 @@ private:
     int         m_zoom = 0;       // shared zoom level across all tabs (Ctrl+wheel), persisted
     NppTheme    m_theme;          // exact Notepad++ colours (loaded from theme XML)
 };
+
+// Chrome base, chosen at startup (restart-to-apply): native wxFrame, or - when the "integrated top bar"
+// option is on and the platform supports it (Windows + Linux/GTK) - the borderless wxBorderlessFrame.
+using NppShellFrame = NppShellFrameT<wxFrame>;
+#ifdef WXNPP_HAS_BORDERLESS
+using NppIntegratedFrame = NppShellFrameT<wxBorderlessFrame>;
+#endif
 
 class NppApp : public wxApp
 {
@@ -4166,6 +4978,20 @@ public:
             MSWEnableDarkMode(DarkMode_Always);                // native dark chrome ONLY in dark mode; light
                                                                // mode never enables it, so it stays fully native-light.
                                                                // MSW-only API; other platforms theme via wx below.
+#endif
+#ifdef WXNPP_HAS_BORDERLESS
+        // Integrated top bar (Settings > Preferences, restart-to-apply): a borderless frame whose chrome is
+        // our own title bar. Only available where the wxBorderlessFrame backend exists (Windows + Linux/GTK).
+        bool integrated = false;
+        wxConfigBase::Get()->Read("IntegratedBar", &integrated, false);
+        if (integrated)
+        {
+            auto* frame = new NppIntegratedFrame(dark);
+            frame->Show(true);
+            frame->restoreSession();
+            for (int i = 1; i < argc; ++i) frame->openPath(argv[i]);
+            return true;
+        }
 #endif
         auto* frame = new NppShellFrame(dark);
         frame->Show(true);
