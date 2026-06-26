@@ -185,6 +185,13 @@ static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& o
         case NPPM_DMMSHOW:             if (g_win32 && lParam) g_win32->show_dock(g_host, reinterpret_cast<void*>(lParam), 1); out = TRUE; return true;
         case NPPM_DMMHIDE:             if (g_win32 && lParam) g_win32->show_dock(g_host, reinterpret_cast<void*>(lParam), 0); out = TRUE; return true;
         case NPPM_DMMUPDATEDISPINFO:   if (lParam) ::InvalidateRect(reinterpret_cast<HWND>(lParam), nullptr, TRUE); out = TRUE; return true;
+        // ---- additional coverage, served from existing nib.* + the frame's native children ----
+        case NPPM_SWITCHTOFILE:        if (g_docs && lParam) g_docs->open(g_host, toUtf8(reinterpret_cast<const wchar_t*>(lParam)).c_str()); out = TRUE; return true;   // open-or-switch
+        case NPPM_GETCURRENTVIEW:      out = 0; return true;   // main view
+        case NPPM_GETBUFFERLANGTYPE:   out = 0; return true;   // L_TEXT (per-buffer lexer tracking not wired yet)
+        case NPPM_GETPLUGINHOMEPATH:   if (lParam) ::lstrcpynW(reinterpret_cast<wchar_t*>(lParam), (exeDir() + L"\\plugins").c_str(), wParam ? static_cast<int>(wParam) : MAX_PATH); out = TRUE; return true;
+        case NPPM_SETSTATUSBAR:        { HWND sb = ::FindWindowExW(g_npp._nppHandle, nullptr, L"msctls_statusbar32", nullptr);   // the wx status bar is a native msctls_statusbar32
+                                         if (sb && lParam) ::SendMessageW(sb, SB_SETTEXTW, static_cast<WPARAM>(wParam), lParam); out = TRUE; return true; }
         default:                       return false;   // not one of ours -> fall through to DefSubclassProc
     }
 }
