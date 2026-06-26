@@ -2537,6 +2537,9 @@ private:
         if constexpr (kBorderless)
         {
             m_menuOwner = mb;                  // keep the wxMenus alive for the title-bar buttons to pop
+            // The bar is never SetMenuBar'd, so a popped menu's commands route to it, not the frame - bind
+            // onCommand on the bar itself so menu clicks actually fire (otherwise items appear but do nothing).
+            mb->Bind(wxEVT_MENU, &NppShellFrameT::onCommand, this);
             installAccelsFromMenuBar(mb);      // keyboard shortcuts still fire without a native menu bar
             buildIntegratedTitleBar(mb);       // VS-style top bar: icon + menu-buttons + window controls
             return;
