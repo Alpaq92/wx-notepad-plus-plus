@@ -2002,10 +2002,18 @@ private:
         {
             sci(SCI_MARKERDEFINE, markers[i], symbols[i]);
             sci(SCI_MARKERSETFORE, markers[i], markFore);
-            sci(SCI_MARKERSETBACK, markers[i], markBack);
-            sci(SCI_MARKERSETBACKSELECTED, markers[i], markActive);   // whole active fold (boxes + connector lines) takes the accent - consistent, not one-sided
+            // The [-]/[+] BOXES carry the accent at their base colour, so an active fold's WHOLE
+            // bracket - header box, every nested child box, and the connector lines - reads as one
+            // solid accent. (Scintilla's highlight only lights up the innermost fold, so nested
+            // child boxes never get "selected" - left at the grey base they made the accent look
+            // half-applied down one side.) The tree LINES stay neutral until their fold is active,
+            // which preserves the active-fold cue.
+            const bool isBox = symbols[i] == SC_MARK_BOXMINUS || symbols[i] == SC_MARK_BOXPLUS
+                            || symbols[i] == SC_MARK_BOXMINUSCONNECTED || symbols[i] == SC_MARK_BOXPLUSCONNECTED;
+            sci(SCI_MARKERSETBACK, markers[i], isBox ? markActive : markBack);
+            sci(SCI_MARKERSETBACKSELECTED, markers[i], markActive);
         }
-        sci(SCI_MARKERENABLEHIGHLIGHT, 1);   // highlight the active fold - boxes go to the accent, lines stay gray (not the old loud-red flood)
+        sci(SCI_MARKERENABLEHIGHLIGHT, 1);   // active fold's connector lines also go to the accent (boxes already are)
         sci(SCI_SETAUTOMATICFOLD, SC_AUTOMATICFOLD_SHOW | SC_AUTOMATICFOLD_CLICK | SC_AUTOMATICFOLD_CHANGE);
         sci(SCI_SETFOLDFLAGS, SC_FOLDFLAG_LINEAFTER_CONTRACTED);
     }
@@ -3608,7 +3616,13 @@ private:
             const int markBack = fold.first  >= 0 ? fold.first  : 0x808080;
             const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;   // full "Fold active" accent on the box markers
             for (int m : { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL, SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL })
-            { sci(SCI_MARKERSETFORE, m, markFore); sci(SCI_MARKERSETBACK, m, markBack); sci(SCI_MARKERSETBACKSELECTED, m, markActive); }
+            {
+                // boxes accent at base (so nested child boxes match an active fold's spine); lines stay neutral until active. See setupScintilla.
+                const bool isBox = m == SC_MARKNUM_FOLDEROPEN || m == SC_MARKNUM_FOLDER || m == SC_MARKNUM_FOLDEREND || m == SC_MARKNUM_FOLDEROPENMID;
+                sci(SCI_MARKERSETFORE, m, markFore);
+                sci(SCI_MARKERSETBACK, m, isBox ? markActive : markBack);
+                sci(SCI_MARKERSETBACKSELECTED, m, markActive);
+            }
             sci(SCI_SETEDGECOLOUR, dark ? 0x4A4A4A : 0xC8C8C8);   // long-line ruler: a subtle but visible gray (column set in applySettings)
             const auto smart = G("Smart Highlighting");  if (smart.second >= 0) sci(SCI_INDICSETFORE, SMART_INDIC, smart.second);
             const auto findMk = G("Find Mark Style");    if (findMk.second >= 0) sci(SCI_INDICSETFORE, MARK_INDIC, findMk.second);
