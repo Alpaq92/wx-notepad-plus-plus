@@ -1095,11 +1095,37 @@ private:
     }
 };
 
-class NppShellFrame : public wxFrame
+// The shell frame is a template on its chrome base so the same ~3300 lines work whether the base is the
+// native wxFrame or the borderless wxBorderlessFrame. The base is chosen at startup (restart-to-apply)
+// via the two aliases defined just after the class. (Two-phase lookup: MSVC is permissive, but GCC needs
+// the inherited wxFrame methods brought into scope - see the `using FB::` block below.)
+template <class FB> class NppShellFrameT : public FB
 {
 public:
-    explicit NppShellFrame(bool dark)
-        : wxFrame(nullptr, wxID_ANY, "new 1 - wxNotepad++", wxDefaultPosition, wxSize(1100, 720)),
+    // Bring inherited wxFrame/wxWindow/wxEvtHandler members into scope. MSVC's permissive lookup resolves
+    // them through the dependent base FB on its own; GCC/Clang's strict two-phase lookup does not, so an
+    // unqualified SetMenuBar(...) etc. would otherwise be "not declared". Real methods only - unused ones
+    // are harmless; a missing one is a GCC-only error surfaced by CI.
+    using FB::Bind; using FB::Unbind; using FB::Connect;
+    using FB::SetMenuBar; using FB::GetMenuBar; using FB::CreateToolBar; using FB::GetToolBar;
+    using FB::CreateStatusBar; using FB::GetStatusBar; using FB::SetStatusText; using FB::SetStatusWidths;
+    using FB::SetTitle; using FB::GetTitle; using FB::SetIcon; using FB::SetIcons; using FB::SetLabel;
+    using FB::Iconize; using FB::IsIconized; using FB::Maximize; using FB::IsMaximized; using FB::Restore;
+    using FB::Close; using FB::Destroy; using FB::Show; using FB::Hide; using FB::IsShown;
+    using FB::SetFocus; using FB::Refresh; using FB::Update; using FB::SendSizeEvent; using FB::Fit;
+    using FB::PopupMenu; using FB::SetSizer; using FB::SetSizerAndFit; using FB::GetSizer; using FB::Layout;
+    using FB::SetSize; using FB::GetSize; using FB::SetClientSize; using FB::GetClientSize;
+    using FB::GetClientRect; using FB::Move; using FB::Centre; using FB::SetMinSize; using FB::SetMaxSize;
+    using FB::SetBackgroundColour; using FB::GetBackgroundColour; using FB::SetForegroundColour;
+    using FB::ClientToScreen; using FB::ScreenToClient; using FB::GetPosition; using FB::GetScreenPosition;
+    using FB::GetEventHandler; using FB::CaptureMouse; using FB::ReleaseMouse; using FB::HasCapture;
+    using FB::ShowFullScreen; using FB::IsFullScreen; using FB::Freeze; using FB::Thaw; using FB::IsFrozen;
+    using FB::GetHandle; using FB::SetTransparent; using FB::Raise; using FB::SetDropTarget;
+    using FB::SetAcceleratorTable; using FB::GetClientAreaOrigin; using FB::GetParent; using FB::GetFont;
+    using FB::SetExtraStyle; using FB::GetContentScaleFactor; using FB::ProcessWindowEvent;
+
+    explicit NppShellFrameT(bool dark)
+        : FB(nullptr, wxID_ANY, "new 1 - wxNotepad++", wxDefaultPosition, wxSize(1100, 720)),
           m_timer(this, myID_TIMER)
     {
         m_dark = dark;          // chrome darkness is fixed for this process (restart-to-apply)
@@ -1195,13 +1221,13 @@ public:
                     for (size_t i = 0; i < g_nibCommands.size(); ++i)
                         pm->Append(NIB_CMD_BASE + static_cast<int>(i), wxString::FromUTF8(g_nibCommands[i].title)); } }
 
-        Bind(wxEVT_MENU, &NppShellFrame::onCommand, this);          // one dispatcher for all menu+toolbar ids
+        Bind(wxEVT_MENU, &NppShellFrameT::onCommand, this);          // one dispatcher for all menu+toolbar ids
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) { updateStatus(); updateUiState(); }, myID_TIMER);
         g_editorContextMenu = [this](int sx, int sy) { showEditorContext(sx, sy); };   // editor right-click menu
         g_openDropped = [this](const wxString& s) { openDroppedPaths(s); };            // files dropped on the editor
         g_onZoom = [this](int z) { onZoomChanged(z); };                                // sync + persist zoom
         SetDropTarget(new FileDrop([this](const wxArrayString& fs) { for (const auto& f : fs) openPath(f); }));
-        Bind(wxEVT_CLOSE_WINDOW, &NppShellFrame::onCloseWindow, this);                 // prompt to save on exit
+        Bind(wxEVT_CLOSE_WINDOW, &NppShellFrameT::onCloseWindow, this);                 // prompt to save on exit
         m_timer.Start(150);
         applyTheme(m_dark);     // style for the mode this process was launched in
         applySettings();        // apply persisted preferences (tab size, wrap, line numbers, toolbar/status visibility)
@@ -1316,9 +1342,9 @@ private:
                                    wxAUI_NB_PIN_ON_ACTIVE_TAB);   // pin button on the active tab
         { auto* art = new PinTabArt(m_dark ? wxColour(222, 226, 230) : wxColour(52, 58, 64));
           art->UpdateColoursFromSystem(); m_tabs->SetArtProvider(art); }   // pin glyph from resources/icons/pin.svg
-        m_tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE,   &NppShellFrame::onPageClose,   this);
-        m_tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &NppShellFrame::onPageChanged, this);
-        m_tabs->Bind(wxEVT_AUINOTEBOOK_TAB_RIGHT_UP, &NppShellFrame::onTabContext,  this);
+        m_tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE,   &NppShellFrameT::onPageClose,   this);
+        m_tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &NppShellFrameT::onPageChanged, this);
+        m_tabs->Bind(wxEVT_AUINOTEBOOK_TAB_RIGHT_UP, &NppShellFrameT::onTabContext,  this);
         // ONE persistent editor view (wxStyledTextCtrl, like N++'s ScintillaEditView). Each tab is a
         // Scintilla Document; switching tabs swaps the document behind this view via SCI_SETDOCPOINTER,
         // so the editor handle a plugin cached at setInfo() stays valid across tabs. wxSTC bundles its
@@ -1350,15 +1376,15 @@ private:
     // plugin beNotified() forwarding bind here instead of in a page subclass.
     void bindEditorEvents()
     {
-        m_stc->Bind(wxEVT_STC_CHARADDED,        &NppShellFrame::onStcCharAdded,   this);
-        m_stc->Bind(wxEVT_STC_UPDATEUI,         &NppShellFrame::onStcUpdateUI,    this);
-        m_stc->Bind(wxEVT_STC_DOUBLECLICK,      &NppShellFrame::onStcDoubleClick, this);
-        m_stc->Bind(wxEVT_STC_MARGINCLICK,      &NppShellFrame::onStcMarginClick, this);
-        m_stc->Bind(wxEVT_STC_ZOOM,             &NppShellFrame::onStcZoom,        this);
-        m_stc->Bind(wxEVT_STC_MODIFIED,         &NppShellFrame::onStcModified,    this);
-        m_stc->Bind(wxEVT_STC_MACRORECORD,      &NppShellFrame::onMacroRecord,    this);   // capture commands while recording a macro
+        m_stc->Bind(wxEVT_STC_CHARADDED,        &NppShellFrameT::onStcCharAdded,   this);
+        m_stc->Bind(wxEVT_STC_UPDATEUI,         &NppShellFrameT::onStcUpdateUI,    this);
+        m_stc->Bind(wxEVT_STC_DOUBLECLICK,      &NppShellFrameT::onStcDoubleClick, this);
+        m_stc->Bind(wxEVT_STC_MARGINCLICK,      &NppShellFrameT::onStcMarginClick, this);
+        m_stc->Bind(wxEVT_STC_ZOOM,             &NppShellFrameT::onStcZoom,        this);
+        m_stc->Bind(wxEVT_STC_MODIFIED,         &NppShellFrameT::onStcModified,    this);
+        m_stc->Bind(wxEVT_STC_MACRORECORD,      &NppShellFrameT::onMacroRecord,    this);   // capture commands while recording a macro
         m_stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev); e.Skip(); });
-        m_stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrame::onStcContextMenu, this);
+        m_stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrameT::onStcContextMenu, this);
     }
     void onStcCharAdded(wxStyledTextEvent& e)
     {
@@ -1441,8 +1467,8 @@ private:
         m_docMap->SetSelEOLFilled(true);                             // viewport band spans the full line width
         m_docMap->SetExtraAscent(-1); m_docMap->SetExtraDescent(-1); // tighten line spacing
         applyDocMapTheme();
-        m_docMap->Bind(wxEVT_LEFT_DOWN, &NppShellFrame::onDocMapClick, this);
-        m_docMap->Bind(wxEVT_MOTION,    &NppShellFrame::onDocMapDrag,  this);
+        m_docMap->Bind(wxEVT_LEFT_DOWN, &NppShellFrameT::onDocMapClick, this);
+        m_docMap->Bind(wxEVT_MOTION,    &NppShellFrameT::onDocMapDrag,  this);
         m_aui.AddPane(m_docMap, wxAuiPaneInfo().Name("docmap").Caption("Document Map")
                           .Right().BestSize(150, 400).MinSize(70, 80).CloseButton(true).Hide());
         m_aui.Update();
@@ -1499,8 +1525,8 @@ private:
         m_funcList = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                     wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_NO_LINES | wxTR_FULL_ROW_HIGHLIGHT | wxBORDER_NONE);
         { wxVector<wxBitmapBundle> imgs; imgs.push_back(icon("func-leaf")); imgs.push_back(icon("func-node")); m_funcList->SetImages(imgs); }   // 0=symbol, 1=group/class (icon set)
-        m_funcList->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrame::onFuncListActivate, this);
-        m_funcList->Bind(wxEVT_TREE_SEL_CHANGED,     &NppShellFrame::onFuncListActivate, this);   // single-click jumps too (like N++)
+        m_funcList->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrameT::onFuncListActivate, this);
+        m_funcList->Bind(wxEVT_TREE_SEL_CHANGED,     &NppShellFrameT::onFuncListActivate, this);   // single-click jumps too (like N++)
         m_flTimer = new wxTimer(this, myID_FLTIMER);
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) { parseFuncList(); }, myID_FLTIMER);
         m_aui.AddPane(m_funcList, wxAuiPaneInfo().Name("funclist").Caption("Function List")
@@ -1785,7 +1811,7 @@ private:
     {
         m_fifPanel = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                     wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxBORDER_NONE);
-        m_fifPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrame::onFifActivate, this);
+        m_fifPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrameT::onFifActivate, this);
         m_aui.AddPane(m_fifPanel, wxAuiPaneInfo().Name("findresult").Caption("Find result")
                           .Bottom().BestSize(800, 180).MinSize(150, 70).CloseButton(true).Hide());
         m_aui.Update();
@@ -4415,6 +4441,10 @@ private:
     int         m_zoom = 0;       // shared zoom level across all tabs (Ctrl+wheel), persisted
     NppTheme    m_theme;          // exact Notepad++ colours (loaded from theme XML)
 };
+
+// Chrome base, chosen at startup (restart-to-apply). Native by default; the borderless variant is added
+// in Phase 2b (needs the wxBorderlessFrame header + is only available where WXNPP_HAS_BORDERLESS).
+using NppShellFrame = NppShellFrameT<wxFrame>;
 
 class NppApp : public wxApp
 {
