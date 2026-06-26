@@ -2824,7 +2824,27 @@ private:
         ::SendMessageW(static_cast<HWND>(tb->GetHandle()), TB_SETINDENT, 4, 0);  // small left margin before the first button
 #endif
 #ifdef WXNPP_HAS_BORDERLESS
-        if constexpr (kBorderless) dockIntegratedToolBar(tb);   // dock the child toolbar under the title bar
+        if constexpr (kBorderless)
+        {
+            dockIntegratedToolBar(tb);            // dock the child toolbar under the title bar
+            // A standalone aui toolbar's tool clicks don't reach the frame's wxEVT_MENU dispatcher (a
+            // frame-owned CreateToolBar would, via WM_COMMAND). Bind onCommand on the toolbar itself -
+            // wxEVT_TOOL and wxEVT_MENU - so the buttons actually fire in integrated mode.
+            // The aui-docked wxToolBar receives the mouse (down AND up) but never fires a tool command -
+            // no wxEVT_TOOL/wxEVT_MENU ever leaves it - so its buttons are dead in integrated mode. Fire
+            // the tool ourselves from the toolbar's mouse-up via hit-test, through the onCommand dispatcher.
+            tb->Bind(wxEVT_LEFT_UP, [this, tb](wxMouseEvent& ev){
+                wxToolBarToolBase* tool = tb->FindToolForPosition(ev.GetX(), ev.GetY());
+                if (tool && tool->IsEnabled())
+                {
+                    if (tool->CanBeToggled()) tb->ToggleTool(tool->GetId(), !tool->IsToggled());   // reflect check-tool state
+                    wxCommandEvent ce(wxEVT_MENU, tool->GetId());
+                    ce.SetInt(tool->IsToggled() ? 1 : 0);
+                    this->onCommand(ce);
+                }
+                ev.Skip();
+            });
+        }
 #endif
     }
 
@@ -3871,7 +3891,7 @@ private:
         auto* cbStatus  = new wxCheckBox(gen, wxID_ANY, "Show status bar"); cbStatus->SetValue(m_showStatusbar);
         row(gs, cbToolbar); row(gs, cbStatus);
 #ifdef WXNPP_HAS_BORDERLESS
-        auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, "Show integrated top bar - VS-style icon + menus + window controls (applied on restart)");
+        auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, "Show integrated top bar");
         cbIntBar->SetValue(m_integratedBar); row(gs, cbIntBar);
 #endif
         gen->SetSizer(gs);
@@ -4348,6 +4368,7 @@ private:
         cfg->Write("DarkMode", dark);
         saveSession(cfg);                     // remember open files so the relaunch restores them
         cfg->Flush();
+        this->Hide();   // hide the current window before relaunching so the two processes' windows don't briefly overlap on screen
         wxExecute("\"" + wxStandardPaths::Get().GetExecutablePath() + "\"", wxEXEC_ASYNC);
         Close(true);
     }
