@@ -3519,28 +3519,28 @@ private:
     }
     void onPreferences()
     {
-        wxDialog dlg(this, wxID_ANY, "Preferences", wxDefaultPosition, wxSize(540, 400));
+        // Page layout mirrors Notepad++'s Preferences (General / Editing / Indentation /
+        // Auto-Completion / Dark Mode); the labels are Notepad++'s exact wording.
+        wxDialog dlg(this, wxID_ANY, "Preferences", wxDefaultPosition, wxSize(560, 440));
         auto* book = new wxListbook(&dlg, wxID_ANY);
-        auto* gen = new wxPanel(book); auto* gs = new wxBoxSizer(wxVERTICAL);
+        auto pg  = [&](const wxString& name, bool sel = false) { auto* p = new wxPanel(book); book->AddPage(p, name, sel); return p; };
+        auto row = [&](wxBoxSizer* s, wxWindow* w) { s->Add(w, 0, wxLEFT | wxRIGHT | wxTOP, 10); };
+
+        // ---- General --------------------------------------------------------------------------
+        auto* gen = pg("General", true); auto* gs = new wxBoxSizer(wxVERTICAL);
         auto* cbToolbar = new wxCheckBox(gen, wxID_ANY, "Show toolbar");    cbToolbar->SetValue(m_showToolbar);
         auto* cbStatus  = new wxCheckBox(gen, wxID_ANY, "Show status bar"); cbStatus->SetValue(m_showStatusbar);
-        gs->Add(cbToolbar, 0, wxALL, 10); gs->Add(cbStatus, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
-        gen->SetSizer(gs); book->AddPage(gen, "General", true);
-        auto* ed = new wxPanel(book); auto* es = new wxBoxSizer(wxVERTICAL);
-        auto* trow = new wxBoxSizer(wxHORIZONTAL);
-        trow->Add(new wxStaticText(ed, wxID_ANY, "Tab size:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
-        auto* spTab = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 16, m_tabWidth);
-        trow->Add(spTab, 0); es->Add(trow, 0, wxALL, 10);
-        auto* cbSpace   = new wxCheckBox(ed, wxID_ANY, "Replace by space");         cbSpace->SetValue(!m_useTabs);
+        row(gs, cbToolbar); row(gs, cbStatus); gen->SetSizer(gs);
+
+        // ---- Editing --------------------------------------------------------------------------
+        auto* ed = pg("Editing"); auto* es = new wxBoxSizer(wxVERTICAL);
         auto* cbLineNum = new wxCheckBox(ed, wxID_ANY, "Display line number");      cbLineNum->SetValue(m_lineNumbers);
         auto* cbGuides  = new wxCheckBox(ed, wxID_ANY, "Show indentation guide");   cbGuides->SetValue(m_guides);
         auto* cbWs      = new wxCheckBox(ed, wxID_ANY, "Show white space and TAB"); cbWs->SetValue(m_ws);
         auto* cbWrapSym = new wxCheckBox(ed, wxID_ANY, "Show wrap symbol");         cbWrapSym->SetValue(m_wrapSymbol);
         auto* cbWrap    = new wxCheckBox(ed, wxID_ANY, "Word wrap");                cbWrap->SetValue(m_wrap);
-        auto* cbAuto    = new wxCheckBox(ed, wxID_ANY, "Enable auto-completion");   cbAuto->SetValue(m_autocomplete);
         auto* cbCaretLn = new wxCheckBox(ed, wxID_ANY, "Highlight current line");   cbCaretLn->SetValue(m_caretLine);
-        auto* cbIndent  = new wxCheckBox(ed, wxID_ANY, "Auto-indent new lines");    cbIndent->SetValue(m_autoindent);
-        for (auto* c : { cbSpace, cbLineNum, cbGuides, cbWs, cbWrapSym, cbWrap, cbAuto, cbCaretLn, cbIndent }) es->Add(c, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        for (auto* c : { cbLineNum, cbGuides, cbWs, cbWrapSym, cbWrap, cbCaretLn }) row(es, c);
         auto* erow = new wxBoxSizer(wxHORIZONTAL);
         erow->Add(new wxStaticText(ed, wxID_ANY, "Caret width:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spCaret = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS, 1, 3, m_caretWidth);
@@ -3548,11 +3548,28 @@ private:
         erow->Add(new wxStaticText(ed, wxID_ANY, "Vertical edge at column (0 = off):"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spEdge = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 0, 300, m_edgeColumn);
         erow->Add(spEdge, 0);
-        es->Add(erow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
-        ed->SetSizer(es); book->AddPage(ed, "Editing");
-        auto* dm = new wxPanel(book); auto* ds = new wxBoxSizer(wxVERTICAL);
+        es->Add(erow, 0, wxALL, 10); ed->SetSizer(es);
+
+        // ---- Indentation ----------------------------------------------------------------------
+        auto* ind = pg("Indentation"); auto* is = new wxBoxSizer(wxVERTICAL);
+        auto* trow = new wxBoxSizer(wxHORIZONTAL);
+        trow->Add(new wxStaticText(ind, wxID_ANY, "Tab size:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* spTab = new wxSpinCtrl(ind, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 16, m_tabWidth);
+        trow->Add(spTab, 0); is->Add(trow, 0, wxALL, 10);
+        auto* cbSpace  = new wxCheckBox(ind, wxID_ANY, "Replace by space");      cbSpace->SetValue(!m_useTabs);
+        auto* cbIndent = new wxCheckBox(ind, wxID_ANY, "Auto-indent new lines"); cbIndent->SetValue(m_autoindent);
+        row(is, cbSpace); row(is, cbIndent); ind->SetSizer(is);
+
+        // ---- Auto-Completion ------------------------------------------------------------------
+        auto* ac = pg("Auto-Completion"); auto* as = new wxBoxSizer(wxVERTICAL);
+        auto* cbAuto = new wxCheckBox(ac, wxID_ANY, "Enable auto-completion"); cbAuto->SetValue(m_autocomplete);
+        row(as, cbAuto); ac->SetSizer(as);
+
+        // ---- Dark Mode ------------------------------------------------------------------------
+        auto* dm = pg("Dark Mode"); auto* ds = new wxBoxSizer(wxVERTICAL);
         auto* cbDark = new wxCheckBox(dm, wxID_ANY, "Enable Dark Mode   (applied on restart)"); cbDark->SetValue(m_dark);
-        ds->Add(cbDark, 0, wxALL, 10); dm->SetSizer(ds); book->AddPage(dm, "Dark Mode");
+        row(ds, cbDark); dm->SetSizer(ds);
+
         auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer(); btn->Add(new wxButton(&dlg, wxID_OK, "Close"), 0);
         auto* top = new wxBoxSizer(wxVERTICAL); top->Add(book, 1, wxEXPAND | wxALL, 8); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
         dlg.SetSizer(top); themeDialog(&dlg);
