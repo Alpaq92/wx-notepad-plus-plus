@@ -3249,14 +3249,26 @@ private:
     }
     void toggleWrapSymbol() { sci(SCI_SETWRAPVISUALFLAGS, sci(SCI_GETWRAPVISUALFLAGS) ? SC_WRAPVISUALFLAG_NONE : SC_WRAPVISUALFLAG_END); }
     void hideSelectedLines() { const int a = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONSTART)), b = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONEND)); sci(SCI_HIDELINES, a, b); }
+    // A dark-theme-aware replacement for wxMessageBox(... wxOK ...): the native message box ignores the
+    // app theme (white body in dark mode), so info popups must be a themed wxDialog instead.
+    void themedInfo(const wxString& msg, const wxString& title)
+    {
+        wxDialog dlg(this, wxID_ANY, title);
+        auto* s = new wxBoxSizer(wxVERTICAL);
+        s->Add(new wxStaticText(&dlg, wxID_ANY, msg), 0, wxALL, 16);
+        s->Add(dlg.CreateButtonSizer(wxOK), 0, wxALIGN_RIGHT | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+        dlg.SetSizerAndFit(s); dlg.Centre();
+        themeDialog(&dlg);
+        dlg.ShowModal();
+    }
     void showSummary()
     {
         std::string t = getDocUtf8();
         long cp = 0, words = 0; bool inw = false;
         for (unsigned char c : t) { if ((c & 0xC0) != 0x80) ++cp; if (std::isspace(c)) inw = false; else if (!inw) { inw = true; ++words; } }
         const wxString name = curPath().empty() ? (activePage() ? activePage()->title : wxString("(none)")) : curPath();
-        wxMessageBox(wxString::Format("File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d",
-            name, cp, words, (int)sci(SCI_GETLINECOUNT)), "Summary", wxOK | wxICON_INFORMATION, this);
+        themedInfo(wxString::Format("File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d",
+            name, cp, words, (int)sci(SCI_GETLINECOUNT)), "Summary");
     }
     void showWindowsList()
     {
@@ -3285,7 +3297,7 @@ private:
             BCryptCloseAlgorithmProvider(alg, 0);
         }
         if (toClip) { copyToClip(hex); setStatus(0, wxString(name) + " copied to clipboard"); }
-        else wxMessageBox(hex, wxString(name) + " digest", wxOK, this);
+        else themedInfo(hex, wxString(name) + " digest");
 #else
         (void)algo; (void)toClip; notImpl(wxString(name) + " (Windows only)");
 #endif
@@ -4250,9 +4262,9 @@ private:
             case IDM_ONLINEDOCUMENT: wxLaunchDefaultBrowser("https://npp-user-manual.org/"); break;
             case IDM_FORUM: wxLaunchDefaultBrowser("https://community.notepad-plus-plus.org/"); break;
             case IDM_LANG_UDLCOLLECTION_PROJECT_SITE: wxLaunchDefaultBrowser("https://github.com/notepad-plus-plus/userDefinedLanguages"); break;
-            case IDM_DEBUGINFO: wxMessageBox(wxString::Format("wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s",
-                wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER, wxGetOsDescription(), wxStandardPaths::Get().GetExecutablePath()), "Debug Info", wxOK | wxICON_INFORMATION, this); break;
-            case IDM_CMDLINEARGUMENTS: wxMessageBox("Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs.", "Command Line Arguments", wxOK | wxICON_INFORMATION, this); break;
+            case IDM_DEBUGINFO: themedInfo(wxString::Format("wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s",
+                wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER, wxGetOsDescription(), wxStandardPaths::Get().GetExecutablePath()), "Debug Info"); break;
+            case IDM_CMDLINEARGUMENTS: themedInfo("Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs.", "Command Line Arguments"); break;
 
             case IDM_EXECUTE: onRun(); break;   // Run... (F5)
 
