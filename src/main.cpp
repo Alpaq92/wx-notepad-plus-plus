@@ -2497,14 +2497,27 @@ private:
     }
     void onPageClose(wxAuiNotebookEvent& e)
     {
-        if (!confirmClose(static_cast<EditorPage*>(m_tabs->GetPage(e.GetSelection())))) { e.Veto(); return; }
-        if (m_tabs->GetPageCount() <= 1) { e.Veto(); resetActiveDoc(); }   // keep one document open, like Notepad++
+        auto* nb = dynamic_cast<wxAuiNotebook*>(e.GetEventObject());
+        setActiveView(nb == m_sub.tabs ? &m_sub : &m_main);   // close from the view whose tab fired
+        auto* p = static_cast<EditorPage*>(m_tabs->GetPage(e.GetSelection()));
+        if (!confirmClose(p)) { e.Veto(); return; }
+        const int total = (int)m_main.tabs->GetPageCount() + (int)m_sub.tabs->GetPageCount();
+        if (total <= 1) { e.Veto(); resetActiveDoc(); return; }                              // never zero documents (N++)
+        // Remove the page ourselves (after this event) so the collapse check sees the real count - wxAui's
+        // own removal races a CallAfter, which would leave an empty pane behind.
+        e.Veto();
+        this->CallAfter([this, p]{
+            if (ViewPane* v = viewOf(p)) { const int i = v->tabs->GetPageIndex(p); if (i != wxNOT_FOUND) v->tabs->DeletePage(i); }
+            collapseIfEmpty();
+        });
     }
     void closeActive()
     {
         if (!confirmClose(activePage())) return;
-        if (m_tabs->GetPageCount() <= 1) resetActiveDoc();
-        else m_tabs->DeletePage(m_tabs->GetSelection());
+        const int total = (int)m_main.tabs->GetPageCount() + (int)m_sub.tabs->GetPageCount();
+        if (total <= 1) { resetActiveDoc(); return; }                                        // last document - keep one empty
+        m_tabs->DeletePage(m_tabs->GetSelection());
+        collapseIfEmpty();
     }
     void closeAll()
     {
@@ -2621,6 +2634,30 @@ private:
         if (!m_subThemed) { ViewPane* prev = m_active; setActiveView(&m_sub); applyEditorTheme(m_dark); if (prev) setActiveView(prev); m_subThemed = true; }
         m_sub.tabs->Show();
         m_split->SplitVertically(m_main.tabs, m_sub.tabs);
+    }
+    // After a close: if the editor is split and a view emptied, collapse back to one view (N++ hides the
+    // sub view when it has no documents). If MAIN emptied, the sub's pages move into it so MAIN stays the
+    // always-present primary view (keeps _scintillaMainHandle meaningful).
+    void collapseIfEmpty()
+    {
+        if (!m_split || !m_split->IsSplit()) return;
+        const bool mainEmpty = (m_main.tabs->GetPageCount() == 0);
+        const bool subEmpty  = (m_sub.tabs->GetPageCount() == 0);
+        if (!mainEmpty && !subEmpty) return;
+        if (mainEmpty && !subEmpty)
+            while (m_sub.tabs->GetPageCount() > 0)            // consolidate the sub view's pages into main
+            {
+                auto* pg = static_cast<EditorPage*>(m_sub.tabs->GetPage(0));
+                const wxString t = m_sub.tabs->GetPageText(0);
+                m_sub.tabs->RemovePage(0);
+                pg->Reparent(m_main.tabs);
+                m_main.tabs->AddPage(pg, t, true);
+            }
+        m_split->Unsplit(m_sub.tabs);                        // show MAIN only
+        m_sub.tabs->Hide();
+        m_split->UpdateSize();                               // let the surviving notebook fill the splitter
+        setActiveView(&m_main);
+        if (auto* p = activePage()) { activateBuffer(p); if (m_stc) m_stc->SetSize(p->GetClientSize()); }
     }
 
     // Editor right-click menu (Notepad++'s default editor context menu, themed). Item ids are the
