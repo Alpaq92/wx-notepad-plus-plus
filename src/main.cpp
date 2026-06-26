@@ -2827,12 +2827,11 @@ private:
         if constexpr (kBorderless)
         {
             dockIntegratedToolBar(tb);            // dock the child toolbar under the title bar
-            // A standalone aui toolbar's tool clicks don't reach the frame's wxEVT_MENU dispatcher (a
-            // frame-owned CreateToolBar would, via WM_COMMAND). Bind onCommand on the toolbar itself -
-            // wxEVT_TOOL and wxEVT_MENU - so the buttons actually fire in integrated mode.
-            // The aui-docked wxToolBar receives the mouse (down AND up) but never fires a tool command -
-            // no wxEVT_TOOL/wxEVT_MENU ever leaves it - so its buttons are dead in integrated mode. Fire
-            // the tool ourselves from the toolbar's mouse-up via hit-test, through the onCommand dispatcher.
+#ifndef __WXMSW__
+            // The aui-docked toolbar's tool clicks don't reach onCommand on their own. On MSW the
+            // WM_COMMAND override above already redispatches them; elsewhere there's no WM_COMMAND, so fire
+            // the tool from the mouse-up via hit-test. (No double-fire: MSW is excluded, and the toolbar's
+            // own wxEVT_TOOL never reaches onCommand, which listens on wxEVT_MENU.)
             tb->Bind(wxEVT_LEFT_UP, [this, tb](wxMouseEvent& ev){
                 wxToolBarToolBase* tool = tb->FindToolForPosition(ev.GetX(), ev.GetY());
                 if (tool && tool->IsEnabled())
@@ -2844,6 +2843,7 @@ private:
                 }
                 ev.Skip();
             });
+#endif
         }
 #endif
     }
@@ -4434,6 +4434,23 @@ private:
         dlg.ShowModal();
     }
 
+#ifdef __WXMSW__
+    // wxToolBar::MSWCommand sign-extends the 16-bit WM_COMMAND id to a signed short, so N++'s command ids
+    // above 32767 (e.g. IDM_FILE_NEW = 41001) wrap negative and its FindById() can't match the tool - the
+    // click is silently dropped (this also breaks the native frame toolbar, not just the aui one). Catch a
+    // toolbar's WM_COMMAND here and redispatch it through onCommand with the correct, unsigned id.
+    WXLRESULT MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam) override
+    {
+        if (message == WM_COMMAND && lParam && m_toolBarPtr &&
+            (void*)lParam == (void*)m_toolBarPtr->GetHandle())
+        {
+            wxCommandEvent ce(wxEVT_MENU, LOWORD(wParam));
+            onCommand(ce);
+            return 0;
+        }
+        return FB::MSWWindowProc(message, wParam, lParam);
+    }
+#endif
     // ----- the one dispatcher -------------------------------------------
     void onCommand(wxCommandEvent& e)
     {
