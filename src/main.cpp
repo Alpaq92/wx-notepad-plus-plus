@@ -64,6 +64,12 @@
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
+#ifndef DWMWA_WINDOW_CORNER_PREFERENCE
+#define DWMWA_WINDOW_CORNER_PREFERENCE 33   // Win11 rounded-corner control
+#endif
+#ifndef DWMWCP_DONOTROUND
+#define DWMWCP_DONOTROUND 1
+#endif
 #else
 using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/sciSend() message-id params
 #endif
@@ -2578,8 +2584,19 @@ private:
 
     void buildIntegratedTitleBar(wxMenuBar* mb)
     {
-        const wxColour barBg = m_dark ? wxColour(45, 45, 48)    : wxColour(240, 240, 240);
+        // Match the toolbar/status/frame chrome (32,32,32) exactly so the whole top is one colour and the
+        // window corners have no shade seam against the frame backing.
+        const wxColour barBg = m_dark ? wxColour(32, 32, 32)    : wxColour(240, 240, 240);
         const wxColour barFg = m_dark ? wxColour(220, 220, 220) : wxColour(30, 30, 30);
+        // wxbf's default 1px window border is light grey (168,168,168) - jarring on dark chrome, and its
+        // square corner is exactly what notches against Win11's rounded window. Match it to the bar.
+        this->SetBorderColour(barBg);
+#ifdef __WXMSW__
+        // Win11 rounds top-level windows; the rounded cut-off leaves a small notch at the corner of our
+        // square chrome. Square the window (DWMWCP_DONOTROUND) so all four corners are clean.
+        { DWORD corner = DWMWCP_DONOTROUND;
+          ::DwmSetWindowAttribute(static_cast<HWND>(this->GetHandle()), DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner)); }
+#endif
         m_titleBar = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, kTitleBarH));
         m_titleBar->SetBackgroundColour(barBg);
         m_titleBar->Bind(wxEVT_LEFT_DOWN, &NppShellFrameT::onTitleBarDrag, this);     // drag empty area to move
@@ -4314,6 +4331,10 @@ private:
         if (m_grip) m_grip->setColours(chromeBg, dark ? wxColour(112, 112, 112) : wxColour(150, 150, 150));   // dots blend onto chrome
 #endif
         if (m_tabs) { m_tabs->SetBackgroundColour(chromeBg); m_tabs->Refresh(); }
+        // The integrated toolbar is an aui pane that doesn't span the full width; paint the dock
+        // background (the strip to the right of the icons) the same chrome colour so there's no grey gap.
+        if (auto* art = m_aui.GetArtProvider()) { art->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, chromeBg); m_aui.Update(); }
+        this->SetBackgroundColour(chromeBg);   // frame backing shows through the Win11 rounded corners - chrome, not black
     }
 
     // wxWidgets refuses to re-theme live: wxApp::SetAppearance() returns CannotChange once a
