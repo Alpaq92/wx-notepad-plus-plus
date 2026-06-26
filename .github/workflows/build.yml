@@ -35,6 +35,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The 7 GB Linux runner OOM-kills cc1plus while compiling wxWidgets + the large single-TU
+      # main.cpp at -O2. Add swap so the peak fits instead of getting killed.
+      - name: Add swap space (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          sudo fallocate -l 12G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+          free -h
+
       - name: Install GTK3 (Linux)
         if: matrix.name == 'linux'
         run: |
