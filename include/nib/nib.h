@@ -90,6 +90,9 @@ typedef struct NibDocumentsApi {
     // Copy the UTF-8 path of the document whose id is `id` into buf (NUL-terminated if it fits); returns
     // the byte length excluding the NUL, or 0 if no open document has that id (or it is untitled).
     int  (*path_from_id)(NibHost*, intptr_t id, char* buf, int cap);
+    // ---- v3 ---- which editor view holds the active document: 0 = main, 1 = sub. Lets NPPM_GETCURRENTVIEW
+    // / NPPM_GETCURRENTSCINTILLA report the focused pane so view-aware plugins target the right editor.
+    int  (*active_view)(NibHost*);
 } NibDocumentsApi;
 
 // ---- nib.commands/1 : register + run commands ----------------------------------------------------

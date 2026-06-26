@@ -1004,12 +1004,14 @@ static std::function<int(const char*)> g_nibDocOpen;         // open a file by U
 static std::function<int()>            g_nibDocSave;         // save the active document
 static std::function<intptr_t()>              g_nibDocActiveId;    // v2: stable opaque id of the active document; 0 if none
 static std::function<int(intptr_t,char*,int)> g_nibDocPathFromId;  // v2: copy a document id's UTF-8 path -> length, 0 if no such id
+static std::function<int()>                   g_nibDocActiveView;  // v3: which view holds the active doc (0=main, 1=sub)
 static int nibDocCount(NibHost*)                      { return g_nibDocCount ? g_nibDocCount() : 0; }
 static int nibDocActivePath(NibHost*, char* b, int c) { return g_nibDocActivePath ? g_nibDocActivePath(b, c) : 0; }
 static int nibDocOpen(NibHost*, const char* p)        { return g_nibDocOpen ? g_nibDocOpen(p) : 0; }
 static int nibDocSave(NibHost*)                       { return g_nibDocSave ? g_nibDocSave() : 0; }
 static intptr_t nibDocActiveId(NibHost*)                              { return g_nibDocActiveId ? g_nibDocActiveId() : 0; }
 static int      nibDocPathFromId(NibHost*, intptr_t id, char* b, int c) { return g_nibDocPathFromId ? g_nibDocPathFromId(id, b, c) : 0; }
+static int      nibDocActiveView(NibHost*)                             { return g_nibDocActiveView ? g_nibDocActiveView() : 0; }
 #ifdef __WXMSW__
 // nib.win32/1 - Windows-only native-handle capability (the GPL npp-bridge uses it to rebuild NppData).
 static std::function<void*()> g_nibMainWindow, g_nibEditorMain, g_nibEditorSecond, g_nibPluginsMenu;
@@ -1032,7 +1034,7 @@ static const NibEditorApi   g_nibEditorApi   = { 1, sizeof(NibEditorApi),   nibE
 static const NibCommandsApi g_nibCommandsApi = { 1, sizeof(NibCommandsApi), nibCmdRegister };
 static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibSubscribe };
 static const NibPanelsApi   g_nibPanelsApi   = { 1, sizeof(NibPanelsApi),   nibPanelRegister, nibPanelSetText, nibPanelAppend, nibPanelShow };
-static const NibDocumentsApi g_nibDocumentsApi = { 2, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen, nibDocSave, nibDocActiveId, nibDocPathFromId };
+static const NibDocumentsApi g_nibDocumentsApi = { 3, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen, nibDocSave, nibDocActiveId, nibDocPathFromId, nibDocActiveView };
 
 static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
 {
@@ -1245,6 +1247,7 @@ public:
             }
             return 0;
         };
+        g_nibDocActiveView = [this]() -> int { return m_active == &m_sub ? 1 : 0; };   // 0 = main, 1 = sub
 #ifdef __WXMSW__   // nib.win32: hand the (optional, GPL) N++ bridge the native handles it needs
         g_nibMainWindow   = [this]() -> void* { return static_cast<HWND>(GetHandle()); };
         g_nibEditorMain   = [this]() -> void* { return m_main.sci; };   // _scintillaMainHandle is always the MAIN view (not the active alias)

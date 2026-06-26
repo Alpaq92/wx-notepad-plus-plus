@@ -43,10 +43,10 @@ Stubbed messages fall through and return 0; coverage grows additively as the `ni
 (each new capability is a few lines here). Note: the path family lives in the `RUNCOMMAND_USER`
 (`WM_USER+3000`) range, so the frame subclass forwards everything `>= WM_USER+1000` (no upper bound).
 
-**Partial** (answered with a constant, pending host-side support): `GETCURRENTVIEW` (and the SCI view
-index) always report MAIN, `GETBUFFERLANGTYPE` always reports `L_TEXT` (no per-buffer lexer lookup yet),
-and `SWITCHTOFILE` *opens* the path rather than switching to an already-open tab. Each needs a small
-`nib` addition (active-view index / lexer mapping / open-tab lookup).
+`GETCURRENTVIEW` / `GETCURRENTSCINTILLA` report the focused pane (0=main, 1=sub) via `nib.documents` v3, so
+view-aware plugins target the right editor in a split. **Partial**: `GETBUFFERLANGTYPE` / `GETCURRENTLANGTYPE`
+report the language **by file extension** (a Language-menu override isn't reflected), and `SWITCHTOFILE`
+*opens* the path rather than switching to an already-open tab (needs an open-tab lookup in the host).
 
 ## Build
 
