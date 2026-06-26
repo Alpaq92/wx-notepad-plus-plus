@@ -499,6 +499,9 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         }
         {
             auto* sub = new wxMenu;
+            sub->Append(IDM_VIEW_GOTO_ANOTHER_VIEW,     "Move to Other &View");
+            sub->Append(IDM_VIEW_CLONE_TO_ANOTHER_VIEW, "Clone to Other Vie&w");
+            sub->AppendSeparator();
             sub->Append(IDM_VIEW_GOTO_NEW_INSTANCE, "Mo&ve to New Instance");
             sub->Append(IDM_VIEW_LOAD_IN_NEW_INSTANCE, "&Open in New Instance");
             view->AppendSubMenu(sub, "&Move/Clone Current Document");
