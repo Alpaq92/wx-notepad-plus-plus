@@ -1630,6 +1630,68 @@ private:
         m_aui.Update();
     }
 
+    // ---- Incremental Search (Ctrl+Alt+I): find-as-you-type bar; Enter = next, Esc = close ---------
+    wxPanel*    m_incBar = nullptr;
+    wxTextCtrl* m_incField = nullptr;
+    int         m_incAnchor = 0;
+    void buildIncBar()
+    {
+        m_incBar = new wxPanel(this);
+        if (m_dark) m_incBar->SetBackgroundColour(wxColour(45, 45, 45));
+        auto* sz  = new wxBoxSizer(wxHORIZONTAL);
+        auto* lbl = new wxStaticText(m_incBar, wxID_ANY, "Find: ");
+        if (m_dark) lbl->SetForegroundColour(wxColour(220, 220, 220));
+        m_incField = new wxTextCtrl(m_incBar, wxID_ANY, "", wxDefaultPosition, wxSize(260, -1), wxTE_PROCESS_ENTER);
+        if (m_dark) { m_incField->SetBackgroundColour(wxColour(30, 30, 30)); m_incField->SetForegroundColour(wxColour(220, 220, 220)); }
+        auto* nextB  = new wxButton(m_incBar, wxID_ANY, "Next",  wxDefaultPosition, wxSize(60, -1));
+        auto* closeB = new wxButton(m_incBar, wxID_ANY, "Close", wxDefaultPosition, wxSize(60, -1));
+        sz->Add(lbl, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8);
+        sz->Add(m_incField, 0, wxALIGN_CENTER_VERTICAL | wxALL, 4);
+        sz->Add(nextB,  0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        sz->Add(closeB, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+        m_incBar->SetSizer(sz);
+        m_incField->Bind(wxEVT_TEXT,       [this](wxCommandEvent&){ incFind(true);  });
+        m_incField->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent&){ incFind(false); });
+        m_incField->Bind(wxEVT_CHAR_HOOK,  [this](wxKeyEvent& e){ if (e.GetKeyCode() == WXK_ESCAPE) hideIncBar(); else e.Skip(); });
+        nextB->Bind(wxEVT_BUTTON,  [this](wxCommandEvent&){ incFind(false); m_incField->SetFocus(); });
+        closeB->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){ hideIncBar(); });
+        m_aui.AddPane(m_incBar, wxAuiPaneInfo().Name("incsearch").Bottom().CaptionVisible(false)
+                          .DockFixed(true).Resizable(false).BestSize(-1, 38).MinSize(-1, 34).CloseButton(false).Hide());
+        m_aui.Update();
+    }
+    void incFind(bool fromAnchor)   // search from the original anchor (typing) or from the current match (Next)
+    {
+        if (!m_incField) return;
+        const wxString needle = m_incField->GetValue();
+        const wxColour ok = m_dark ? wxColour(220, 220, 220) : *wxBLACK;
+        if (needle.empty()) { sci(SCI_SETSEL, m_incAnchor, m_incAnchor); m_incField->SetForegroundColour(ok); m_incField->Refresh(); return; }
+        const int start = fromAnchor ? m_incAnchor : (int)sci(SCI_GETSELECTIONEND);
+        sci(SCI_SETSEL, start, start);
+        sci(SCI_SEARCHANCHOR);
+        const wxScopedCharBuffer u = needle.utf8_str();
+        sptr_t pos = sci(SCI_SEARCHNEXT, 0, reinterpret_cast<sptr_t>(u.data()));
+        if (pos < 0) { sci(SCI_SETSEL, 0, 0); sci(SCI_SEARCHANCHOR); pos = sci(SCI_SEARCHNEXT, 0, reinterpret_cast<sptr_t>(u.data())); }   // wrap to top
+        m_incField->SetForegroundColour(pos >= 0 ? ok : *wxRED);   // red field = not found
+        m_incField->Refresh();
+        if (pos >= 0) sci(SCI_SCROLLCARET);
+    }
+    void showIncBar()
+    {
+        if (!m_incBar) buildIncBar();
+        m_incAnchor = (int)sci(SCI_GETCURRENTPOS);
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_incBar);
+        if (!pi.IsOk()) return;
+        pi.Show(); m_aui.Update();
+        m_incField->ChangeValue(""); m_incField->SetFocus();
+    }
+    void hideIncBar()
+    {
+        if (!m_incBar) return;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_incBar);
+        if (pi.IsOk() && pi.IsShown()) { pi.Hide(); m_aui.Update(); }
+        if (m_stc) m_stc->SetFocus();
+    }
+
     // ---- Find in Files: a search dialog + a docked "Find result" panel (double-click a hit to jump) --
     void buildFifPanel()
     {
@@ -3970,6 +4032,7 @@ private:
             case IDM_VIEW_FUNC_LIST: toggleFuncList(); break;
             case IDM_VIEW_DOCLIST: toggleDocList(); break;
             case IDM_VIEW_FILEBROWSER: toggleFileBrowser(); break;
+            case IDM_SEARCH_FINDINCREMENT: showIncBar(); break;
             case IDM_VIEW_MONITORING: notImpl("File monitoring"); break;
             case IDM_MACRO_STARTRECORDINGMACRO: startMacroRecord(); break;
             case IDM_MACRO_STOPRECORDINGMACRO: stopMacroRecord(); break;
