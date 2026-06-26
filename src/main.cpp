@@ -3426,7 +3426,7 @@ private:
     }
     void loadTheme()   // load the active theme: an explicit Style-Configurator choice, else the dark/light default
     {
-        loadThemeFile(themeFilePath(!m_themeName.empty() ? m_themeName : (m_dark ? "DarkModeDefault" : "Default")));
+        loadThemeFile(themeFilePath(!m_themeName.empty() ? m_themeName : wxString(m_dark ? "DarkModeDefault" : "Default")));
     }
     void loadThemeFile(const wxString& path)
     {
@@ -3570,7 +3570,7 @@ private:
         themeCombo->Bind(wxEVT_CHOICE, [&](wxCommandEvent&){ applyThemeSelection(themeCombo->GetStringSelection()); fillLangs(); langList->SetSelection(0); fillStyles(); });
         themeDialog(&dlg);
         if (dlg.ShowModal() == wxID_OK)
-        { saveThemeToXml(themeFilePath(m_themeName.empty() ? (m_dark ? "DarkModeDefault" : "Default") : m_themeName)); saveSettings(); setStatus(0, "Theme styles saved"); m_hint = true; }
+        { saveThemeToXml(themeFilePath(m_themeName.empty() ? wxString(m_dark ? "DarkModeDefault" : "Default") : m_themeName)); saveSettings(); setStatus(0, "Theme styles saved"); m_hint = true; }
         else applyThemeSelection(original.empty() ? "Default" : original);   // Cancel -> reload the original theme from disk
     }
     void importStyleTheme()
