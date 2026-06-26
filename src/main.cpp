@@ -2029,23 +2029,24 @@ private:
     {
         if (!m_foldAccent && !m_foldGrey) return;   // colours not resolved yet
         const int caret = static_cast<int>(sci(SCI_LINEFROMPOSITION, sci(SCI_GETCURRENTPOS)));
-        int section = static_cast<int>(sci(SCI_GETFOLDPARENT, caret));   // outermost fold containing the caret = the "section"
-        if (section < 0) { if (sci(SCI_GETFOLDLEVEL, caret) & SC_FOLDLEVELHEADERFLAG) section = caret; }
-        else { int p; while ((p = static_cast<int>(sci(SCI_GETFOLDPARENT, section))) >= 0) section = p; }
-        if (section == m_lastFoldSection) return;   // same section -> nesting verdict can't have changed
-        m_lastFoldSection = section;
-        bool nesting = false;
-        if (section >= 0)
+        // INNERMOST fold the caret is in (same fold Scintilla highlights for the lines): the fold the
+        // caret heads if it's on a header line, otherwise its immediate parent fold.
+        const int fold = (sci(SCI_GETFOLDLEVEL, caret) & SC_FOLDLEVELHEADERFLAG)
+                       ? caret : static_cast<int>(sci(SCI_GETFOLDPARENT, caret));
+        if (fold == m_lastFoldSection) return;      // same fold -> verdict can't have changed
+        m_lastFoldSection = fold;
+        bool hasChildren = false;                   // does that fold DIRECTLY contain nested child folds?
+        if (fold >= 0)
         {
-            int last = static_cast<int>(sci(SCI_GETLASTCHILD, section, -1));
-            if (last > section + 2000) last = section + 2000;          // bound the scan on pathological sections
-            for (int l = section + 1; l <= last; ++l)
-                if (sci(SCI_GETFOLDLEVEL, l) & SC_FOLDLEVELHEADERFLAG) { nesting = true; break; }
+            int last = static_cast<int>(sci(SCI_GETLASTCHILD, fold, -1));
+            if (last > fold + 2000) last = fold + 2000;            // bound the scan on pathological folds
+            for (int l = fold + 1; l <= last; ++l)
+                if (sci(SCI_GETFOLDLEVEL, l) & SC_FOLDLEVELHEADERFLAG) { hasChildren = true; break; }
         }
-        const int want = nesting ? 1 : 0;
+        const int want = hasChildren ? 1 : 0;
         if (want == m_foldNestedOn) return;
         m_foldNestedOn = want;
-        const int back = nesting ? m_foldAccent : m_foldGrey;
+        const int back = hasChildren ? m_foldAccent : m_foldGrey;
         sci(SCI_MARKERSETBACK, SC_MARKNUM_FOLDEROPENMID, back);   // BOXMINUSCONNECTED (expanded nested header)
         sci(SCI_MARKERSETBACK, SC_MARKNUM_FOLDEREND,     back);   // BOXPLUSCONNECTED  (collapsed nested header)
     }
