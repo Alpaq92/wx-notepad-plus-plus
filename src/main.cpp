@@ -1104,7 +1104,7 @@ private:
     {
         const wxBitmapBundle pin = iconBundle("pin", 11);   // small secondary button, like Notepad++'s pin (close stays 16)
         if (pin.IsOk()) { m_activePinBmp = pin; m_activeUnpinBmp = pin; m_disabledPinBmp = pin; m_disabledUnpinBmp = pin; }
-        const wxBitmapBundle cls = iconBundle("close-tab");
+        const wxBitmapBundle cls = iconBundle("close-tab", 12);   // match the tab bar's (smaller) global close button
         if (cls.IsOk()) { m_activeCloseBmp = cls; m_disabledCloseBmp = cls; }
     }
 };
