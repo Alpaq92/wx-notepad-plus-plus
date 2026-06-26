@@ -1969,15 +1969,9 @@ private:
         const int symbols[7] = { SC_MARK_BOXMINUS, SC_MARK_BOXPLUS, SC_MARK_VLINE, SC_MARK_LCORNER,   // box-tree (N++ default)
                                  SC_MARK_BOXPLUSCONNECTED, SC_MARK_BOXMINUSCONNECTED, SC_MARK_TCORNER };
         for (int i = 0; i < 7; ++i)
-        {
-            sci(SCI_MARKERDEFINE, markers[i], symbols[i]);
-            sci(SCI_MARKERSETFORE, markers[i], markFore);
-            sci(SCI_MARKERSETBACK, markers[i], markBack);            // grey base for every fold marker...
-            sci(SCI_MARKERSETBACKSELECTED, markers[i], markActive);  // ...accent when its own fold is active (Scintilla highlight)
-        }
-        sci(SCI_MARKERENABLEHIGHLIGHT, 1);   // active fold's top header box + connector lines take the accent
-        m_foldAccent = markActive; m_foldGrey = markBack; m_foldNestedOn = -1; m_lastFoldSection = -2;
-        refreshFoldNestedAccent();           // tint the active section's NESTED boxes too (kept in sync on every caret move)
+            sci(SCI_MARKERDEFINE, markers[i], symbols[i]);   // box-tree shapes (defined once; colours live in applyFoldMarkerColours)
+        sci(SCI_MARKERENABLEHIGHLIGHT, 1);                   // active fold's top header box + connector lines take the accent
+        applyFoldMarkerColours(markFore, markBack, markActive);
         sci(SCI_SETAUTOMATICFOLD, SC_AUTOMATICFOLD_SHOW | SC_AUTOMATICFOLD_CLICK | SC_AUTOMATICFOLD_CHANGE);
         sci(SCI_SETFOLDFLAGS, SC_FOLDFLAG_LINEAFTER_CONTRACTED);
     }
@@ -1993,6 +1987,15 @@ private:
     int  m_foldAccent = 0, m_foldGrey = 0;   // resolved from the theme in setupScintilla / applyEditorTheme
     int  m_foldNestedOn = -1;                // cached marker state: -1 unknown, 0 grey, 1 accent (avoids needless repaints)
     int  m_lastFoldSection = -2;             // last outermost-fold start line we evaluated (avoids needless re-scans)
+    // Paint the 7 fold-margin markers (grey base + accent-when-active via the highlight) and re-arm the
+    // nested-square accent. Shared by setupScintilla (after the shapes are defined) and applyEditorTheme.
+    void applyFoldMarkerColours(int markFore, int markBack, int markActive)
+    {
+        for (int m : { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL, SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL })
+        { sci(SCI_MARKERSETFORE, m, markFore); sci(SCI_MARKERSETBACK, m, markBack); sci(SCI_MARKERSETBACKSELECTED, m, markActive); }
+        m_foldAccent = markActive; m_foldGrey = markBack; m_foldNestedOn = -1; m_lastFoldSection = -2;
+        refreshFoldNestedAccent();
+    }
     void refreshFoldNestedAccent()
     {
         if (!m_foldAccent && !m_foldGrey) return;   // colours not resolved yet
@@ -2058,6 +2061,7 @@ private:
         sci(SCI_SETMODEVENTMASK, SC_MODEVENTMASKALL);
         m_path = p->path;
         setLexerForFile(p->path);                                           // re-apply lexer/styling for this doc (N++ defineDocType)
+        m_lastFoldSection = -2; refreshFoldNestedAccent();                  // the nested-square accent marker is global to the view - re-evaluate it for the swapped-in document
         if (m_docMap) { m_docMap->SetDocPointer(reinterpret_cast<void*>(p->doc)); updateDocMapViewport(); }   // minimap follows the active doc
         parseFuncList();                                                    // re-parse symbols for the newly active doc
         refreshTab(p);
@@ -3613,10 +3617,7 @@ private:
             const int markFore = fold.second >= 0 ? fold.second : gutterBg;        // N++ swaps Fold fg/bg onto the markers
             const int markBack = fold.first  >= 0 ? fold.first  : 0x808080;
             const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;   // full "Fold active" accent on the box markers
-            for (int m : { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL, SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL })
-            { sci(SCI_MARKERSETFORE, m, markFore); sci(SCI_MARKERSETBACK, m, markBack); sci(SCI_MARKERSETBACKSELECTED, m, markActive); }
-            m_foldAccent = markActive; m_foldGrey = markBack; m_foldNestedOn = -1; m_lastFoldSection = -2;
-            refreshFoldNestedAccent();   // re-tint the active section's nested boxes for the new theme
+            applyFoldMarkerColours(markFore, markBack, markActive);   // recolour the 7 fold markers + re-arm the nested-square accent
             sci(SCI_SETEDGECOLOUR, dark ? 0x4A4A4A : 0xC8C8C8);   // long-line ruler: a subtle but visible gray (column set in applySettings)
             const auto smart = G("Smart Highlighting");  if (smart.second >= 0) sci(SCI_INDICSETFORE, SMART_INDIC, smart.second);
             const auto findMk = G("Find Mark Style");    if (findMk.second >= 0) sci(SCI_INDICSETFORE, MARK_INDIC, findMk.second);
