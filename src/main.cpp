@@ -2967,9 +2967,11 @@ private:
     void doNew()   // New opens a fresh tab, like Notepad++ - honouring the New Document default EOL + language
     {
         addDocument("", nextNewName());
+        if (auto* p = activePage()) p->encoding = m_defaultEncoding;
         setEol(m_defaultEol);
         if (m_defaultLangId >= 0) { if (const NppLang* L = nppLangFind(m_defaultLangId)) setForcedLang(L->lexer, L->name); }
-        updateStatus();   // reflect the default EOL/language in the status bar
+        updateEncodingMenuChecks();
+        updateStatus();   // reflect the default EOL/encoding/language in the status bar
     }
     // ===== text encoding: detect on load, encode on save (the Scintilla doc is always UTF-8) =====
     static bool isValidUtf8(const std::string& s)
@@ -3774,6 +3776,7 @@ private:
         long ec = 0; c->Read("Editing/EdgeColumn", &ec, 0L); m_edgeColumn = (int)ec;
         long de = SC_EOL_CRLF; c->Read("NewDoc/Eol", &de, (long)SC_EOL_CRLF); m_defaultEol = (int)de;
         long dl = -1; c->Read("NewDoc/Lang", &dl, -1L); m_defaultLangId = (int)dl;
+        long den = ENC_UTF8; c->Read("NewDoc/Encoding", &den, (long)ENC_UTF8); m_defaultEncoding = (int)den;
         long cbk = 500; c->Read("Editing/CaretBlink", &cbk, 500L); m_caretBlink = (int)cbk;
         c->Read("Editing/ScrollBeyond", &m_scrollBeyond, false);
         c->Read("Editing/MultiEdit", &m_multiEdit, true);
@@ -3792,6 +3795,7 @@ private:
         c->Write("Editing/CaretLine", m_caretLine);       c->Write("Editing/AutoIndent", m_autoindent);
         c->Write("Editing/CaretWidth", (long)m_caretWidth); c->Write("Editing/EdgeColumn", (long)m_edgeColumn);
         c->Write("NewDoc/Eol", (long)m_defaultEol);         c->Write("NewDoc/Lang", (long)m_defaultLangId);
+        c->Write("NewDoc/Encoding", (long)m_defaultEncoding);
         c->Write("Editing/CaretBlink", (long)m_caretBlink); c->Write("Editing/ScrollBeyond", m_scrollBeyond);
         c->Write("Editing/MultiEdit", m_multiEdit);
         c->Write("AutoComplete/FromChar", (long)m_autoCompFrom); c->Write("AutoComplete/InsertPairs", m_autoInsertPairs);
@@ -3904,6 +3908,11 @@ private:
                                      3, eolChoices, 1, wxRA_SPECIFY_COLS);
         rbEol->SetSelection(m_defaultEol == SC_EOL_LF ? 1 : (m_defaultEol == SC_EOL_CR ? 2 : 0));
         nds->Add(rbEol, 0, wxALL, 10);
+        const wxString encChoices[5] = { "UTF-8", "UTF-8 with BOM", "UTF-16 LE", "UTF-16 BE", "ANSI" };
+        auto* rbEnc = new wxRadioBox(nd, wxID_ANY, "Encoding", wxDefaultPosition, wxDefaultSize,
+                                     5, encChoices, 1, wxRA_SPECIFY_COLS);
+        rbEnc->SetSelection((m_defaultEncoding >= 0 && m_defaultEncoding <= 4) ? m_defaultEncoding : 0);
+        nds->Add(rbEnc, 0, wxALL, 10);
         auto* lrow = new wxBoxSizer(wxHORIZONTAL);
         lrow->Add(new wxStaticText(nd, wxID_ANY, "Default language:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* chLang = new wxChoice(nd, wxID_ANY);
@@ -3926,6 +3935,7 @@ private:
         m_scrollBeyond = cbScroll->GetValue(); m_multiEdit = cbMulti->GetValue(); m_caretBlink = spBlink->GetValue();
         m_autoCompFrom = spFrom->GetValue(); m_autoInsertPairs = cbPairs->GetValue();
         m_defaultEol = (rbEol->GetSelection() == 1) ? SC_EOL_LF : (rbEol->GetSelection() == 2) ? SC_EOL_CR : SC_EOL_CRLF;
+        m_defaultEncoding = rbEnc->GetSelection();   // index maps directly to the Enc enum (UTF8=0 .. ANSI=4)
         { int s = chLang->GetSelection(); if (s <= 0) m_defaultLangId = -1;
           else { size_t ln; const NppLang* lt = nppLangTable(ln); m_defaultLangId = (s - 1 < (int)ln) ? lt[s - 1].id : -1; } }
         applySettings(); saveSettings();
@@ -4754,6 +4764,7 @@ private:
     bool        m_caretLine = true, m_autoindent = true;          // highlight the current line; auto-indent new lines
     int         m_caretWidth = 1, m_edgeColumn = 0;               // caret thickness (px); long-line marker column (0 = off)
     int         m_defaultEol = SC_EOL_CRLF, m_defaultLangId = -1; // New Document: default line-ending + language (IDM_LANG_*; -1 = Normal Text)
+    int         m_defaultEncoding = ENC_UTF8;                     // New Document: default on-disk encoding (Enc enum)
     int         m_caretBlink = 500;                              // caret blink rate (ms; 0 = steady)
     bool        m_scrollBeyond = false, m_multiEdit = true;      // scroll past the last line; multi-selection / multi-caret editing
     int         m_autoCompFrom = 3;                              // auto-completion triggers from the Nth typed character
