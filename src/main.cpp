@@ -50,6 +50,7 @@
 #include <type_traits>                  // std::is_base_of - detect the borderless base in NppShellFrameT<FB>
 #include <vector>                       // std::vector - accelerator-entry list for installAccelsFromMenuBar
 #include <wxbf/borderless_frame.h>      // wxBorderlessFrame - the optional integrated/borderless title bar (Windows + GTK)
+#include <wxbf/window_gripper.h>        // wxWindowGripper - cross-platform window move (MSW + GTK begin_move_drag)
 #endif
 
 #ifdef __WXMSW__
@@ -2601,12 +2602,10 @@ private:
 
     void onTitleBarDrag(wxMouseEvent& ev)
     {
-#ifdef __WXMSW__
-        ::ReleaseCapture();
-        ::SendMessage(GetHandle(), WM_NCLBUTTONDOWN, HTCAPTION, 0);   // let Windows move the borderless window
-#else
-        ev.Skip();   // TODO: GTK window-move on Linux
-#endif
+        // The lib's gripper moves the window on BOTH platforms (WM_NCLBUTTONDOWN on MSW,
+        // gtk_window_begin_move_drag on GTK) - so dragging the bar works on Linux too.
+        if (!m_gripper) m_gripper = wxWindowGripper::Create();
+        if (!m_gripper || !m_gripper->StartDragMove(this)) ev.Skip();
     }
 
     const wxChar* maxGlyph() const { return IsMaximized() ? L"❐" : L"☐"; }   // restore vs maximize glyph
@@ -4626,6 +4625,7 @@ private:
     wxPanel*    m_titleBar  = nullptr;            // integrated top bar (icon + menu-buttons + window controls)
     wxMenuBar*  m_menuOwner = nullptr;            // owns the wxMenus the title-bar buttons pop (never attached as a real menu bar)
     wxButton*   m_maxBtn    = nullptr;            // the maximize/restore button (its glyph tracks IsMaximized())
+    wxWindowGripper* m_gripper = nullptr;         // lib helper for cross-platform window move (drag the bar)
 #endif
     wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
