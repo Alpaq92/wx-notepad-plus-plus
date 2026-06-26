@@ -1330,6 +1330,7 @@ private:
         syncFrom(m_stc);          // mirror scroll to View 2 when synchronized scrolling is on
         if (e.GetUpdated() & SC_UPDATE_SELECTION)   // raise a Nib selection-changed event
         {
+            refreshFoldNestedAccent();   // keep the nested fold-square accent tracking the active section
             NibEvent ev{};
             ev.kind = NIB_EV_SELECTION_CHANGED; ev.struct_size = sizeof(NibEvent);
             ev.as.selection.anchor = sci(SCI_GETANCHOR);
@@ -1362,6 +1363,7 @@ private:
             ev.as.text.removed = (mt & SC_MOD_DELETETEXT) ? e.GetLength() : 0;
             nibFireEvent(ev);
         }
+        if (mt & SC_MOD_CHANGEFOLD) m_lastFoldSection = -2;   // fold structure changed -> re-evaluate nested-square accent on next caret move
         if (m_flTimer) m_flTimer->StartOnce(600);   // debounce Function List re-parse
         e.Skip();
     }
@@ -2002,20 +2004,50 @@ private:
         {
             sci(SCI_MARKERDEFINE, markers[i], symbols[i]);
             sci(SCI_MARKERSETFORE, markers[i], markFore);
-            // A NESTED fold-header box (the "...CONNECTED" box variants Scintilla uses for headers
-            // that sit inside a parent fold) carries the accent at its BASE colour: Scintilla's
-            // highlight only ever "selects" the innermost fold, never the nested child boxes, so
-            // without this an active fold's inner boxes stay grey while its spine is accented (the
-            // "accent only on one side" look). TOP-LEVEL header boxes and all tree LINES keep the
-            // grey base and go to the accent only when their own fold is active (via the highlight),
-            // so an UNSELECTED top-level section stays fully grey.
-            const bool nestedBox = symbols[i] == SC_MARK_BOXMINUSCONNECTED || symbols[i] == SC_MARK_BOXPLUSCONNECTED;
-            sci(SCI_MARKERSETBACK, markers[i], nestedBox ? markActive : markBack);
-            sci(SCI_MARKERSETBACKSELECTED, markers[i], markActive);
+            sci(SCI_MARKERSETBACK, markers[i], markBack);            // grey base for every fold marker...
+            sci(SCI_MARKERSETBACKSELECTED, markers[i], markActive);  // ...accent when its own fold is active (Scintilla highlight)
         }
-        sci(SCI_MARKERENABLEHIGHLIGHT, 1);   // active fold: its top header box + spine take the accent; nested boxes already do
+        sci(SCI_MARKERENABLEHIGHLIGHT, 1);   // active fold's top header box + connector lines take the accent
+        m_foldAccent = markActive; m_foldGrey = markBack; m_foldNestedOn = -1; m_lastFoldSection = -2;
+        refreshFoldNestedAccent();           // tint the active section's NESTED boxes too (kept in sync on every caret move)
         sci(SCI_SETAUTOMATICFOLD, SC_AUTOMATICFOLD_SHOW | SC_AUTOMATICFOLD_CLICK | SC_AUTOMATICFOLD_CHANGE);
         sci(SCI_SETFOLDFLAGS, SC_FOLDFLAG_LINEAFTER_CONTRACTED);
+    }
+    // --- active-section accent for NESTED fold squares -------------------------------------------
+    // Scintilla's fold highlight (SCI_MARKERENABLEHIGHLIGHT) accents the active fold's top header box
+    // and its connector lines, but NEVER the nested child header boxes. A static colour therefore
+    // can't make those inner squares follow the active/inactive state the lines already follow - the
+    // user's "buttons don't follow this logic". So we recolour the nested-box markers on each caret
+    // move: accent only while the caret sits in a section that actually contains nested folds, grey
+    // otherwise. (Marker colours are global, so this tracks at section granularity - if two sibling
+    // sections each nest, entering one tints both their inner squares. That's the one rough edge of
+    // doing it without per-line marker colours, which Scintilla doesn't offer.)
+    int  m_foldAccent = 0, m_foldGrey = 0;   // resolved from the theme in setupScintilla / applyEditorTheme
+    int  m_foldNestedOn = -1;                // cached marker state: -1 unknown, 0 grey, 1 accent (avoids needless repaints)
+    int  m_lastFoldSection = -2;             // last outermost-fold start line we evaluated (avoids needless re-scans)
+    void refreshFoldNestedAccent()
+    {
+        if (!m_foldAccent && !m_foldGrey) return;   // colours not resolved yet
+        const int caret = static_cast<int>(sci(SCI_LINEFROMPOSITION, sci(SCI_GETCURRENTPOS)));
+        int section = static_cast<int>(sci(SCI_GETFOLDPARENT, caret));   // outermost fold containing the caret = the "section"
+        if (section < 0) { if (sci(SCI_GETFOLDLEVEL, caret) & SC_FOLDLEVELHEADERFLAG) section = caret; }
+        else { int p; while ((p = static_cast<int>(sci(SCI_GETFOLDPARENT, section))) >= 0) section = p; }
+        if (section == m_lastFoldSection) return;   // same section -> nesting verdict can't have changed
+        m_lastFoldSection = section;
+        bool nesting = false;
+        if (section >= 0)
+        {
+            int last = static_cast<int>(sci(SCI_GETLASTCHILD, section, -1));
+            if (last > section + 2000) last = section + 2000;          // bound the scan on pathological sections
+            for (int l = section + 1; l <= last; ++l)
+                if (sci(SCI_GETFOLDLEVEL, l) & SC_FOLDLEVELHEADERFLAG) { nesting = true; break; }
+        }
+        const int want = nesting ? 1 : 0;
+        if (want == m_foldNestedOn) return;
+        m_foldNestedOn = want;
+        const int back = nesting ? m_foldAccent : m_foldGrey;
+        sci(SCI_MARKERSETBACK, SC_MARKNUM_FOLDEROPENMID, back);   // BOXMINUSCONNECTED (expanded nested header)
+        sci(SCI_MARKERSETBACK, SC_MARKNUM_FOLDEREND,     back);   // BOXPLUSCONNECTED  (collapsed nested header)
     }
     void foldCurrent(bool contract)
     {
@@ -3616,13 +3648,9 @@ private:
             const int markBack = fold.first  >= 0 ? fold.first  : 0x808080;
             const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;   // full "Fold active" accent on the box markers
             for (int m : { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL, SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL })
-            {
-                // nested header boxes (...MID/END) accent at base; top-level boxes + all lines grey until their fold is active. See setupScintilla.
-                const bool nestedBox = m == SC_MARKNUM_FOLDEROPENMID || m == SC_MARKNUM_FOLDEREND;
-                sci(SCI_MARKERSETFORE, m, markFore);
-                sci(SCI_MARKERSETBACK, m, nestedBox ? markActive : markBack);
-                sci(SCI_MARKERSETBACKSELECTED, m, markActive);
-            }
+            { sci(SCI_MARKERSETFORE, m, markFore); sci(SCI_MARKERSETBACK, m, markBack); sci(SCI_MARKERSETBACKSELECTED, m, markActive); }
+            m_foldAccent = markActive; m_foldGrey = markBack; m_foldNestedOn = -1; m_lastFoldSection = -2;
+            refreshFoldNestedAccent();   // re-tint the active section's nested boxes for the new theme
             sci(SCI_SETEDGECOLOUR, dark ? 0x4A4A4A : 0xC8C8C8);   // long-line ruler: a subtle but visible gray (column set in applySettings)
             const auto smart = G("Smart Highlighting");  if (smart.second >= 0) sci(SCI_INDICSETFORE, SMART_INDIC, smart.second);
             const auto findMk = G("Find Mark Style");    if (findMk.second >= 0) sci(SCI_INDICSETFORE, MARK_INDIC, findMk.second);
