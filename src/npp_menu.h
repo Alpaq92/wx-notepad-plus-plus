@@ -386,14 +386,10 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
             sub->Append(IDM_VIEW_ZOOMIN, "Zoom &In (Ctrl+Mouse Wheel Up)");
             sub->Append(IDM_VIEW_ZOOMOUT, "Zoom &Out (Ctrl+Mouse Wheel Down)");
             sub->Append(IDM_VIEW_ZOOMRESTORE, "&Restore Default Zoom");
-            sub->AppendSeparator();
-            sub->AppendCheckItem(IDM_VIEW_ZOOM_SYNC, "&Synchronize Across Views");
             view->AppendSubMenu(sub, "&Zoom");
         }
         {
             auto* sub = new wxMenu;
-            sub->Append(IDM_VIEW_GOTO_ANOTHER_VIEW, "&Move to Other View");
-            sub->Append(IDM_VIEW_CLONE_TO_ANOTHER_VIEW, "&Clone to Other View");
             sub->Append(IDM_VIEW_GOTO_NEW_INSTANCE, "Mo&ve to New Instance");
             sub->Append(IDM_VIEW_LOAD_IN_NEW_INSTANCE, "&Open in New Instance");
             view->AppendSubMenu(sub, "&Move/Clone Current Document");
@@ -429,7 +425,6 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
             view->AppendSubMenu(sub, "Ta&b");
         }
         view->AppendCheckItem(IDM_VIEW_WRAP, "&Word wrap");
-        view->Append(IDM_VIEW_SWITCHTO_OTHER_VIEW, "Focus on &Another View");
         view->Append(IDM_VIEW_HIDELINES, "&Hide Lines");
         view->AppendSeparator();
         view->Append(IDM_VIEW_FOLDALL, "Fold All\tAlt+0");
@@ -474,9 +469,6 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         view->Append(IDM_VIEW_DOC_MAP, "&Document Map");
         view->Append(IDM_VIEW_DOCLIST, "D&ocument List");
         view->Append(IDM_VIEW_FUNC_LIST, "Function &List");
-        view->AppendSeparator();
-        view->AppendCheckItem(IDM_VIEW_SYNSCROLLV, "Sy&nchronize Vertical Scrolling");
-        view->AppendCheckItem(IDM_VIEW_SYNSCROLLH, "Syn&chronize Horizontal Scrolling");
         view->AppendSeparator();
         view->Append(IDM_EDIT_RTL, "T&ext Direction RTL");
         view->Append(IDM_EDIT_LTR, "Te&xt Direction LTR");

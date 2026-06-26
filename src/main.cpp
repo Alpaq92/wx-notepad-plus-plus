@@ -927,12 +927,12 @@ static int nibDocOpen(NibHost*, const char* p)        { return g_nibDocOpen ? g_
 static int nibDocSave(NibHost*)                       { return g_nibDocSave ? g_nibDocSave() : 0; }
 #ifdef __WXMSW__
 // nib.win32/1 - Windows-only native-handle capability (the GPL npp-bridge uses it to rebuild NppData).
-static std::function<void*()> g_nibMainWindow, g_nibEditorMain, g_nibEditorSecond, g_nibPluginsMenu;
+static std::function<void*()> g_nibMainWindow, g_nibEditorMain, g_nibPluginsMenu;
 static std::function<void(void*, const char*, int)> g_nibDockNative;   // host a plugin's native HWND in a dock pane
 static std::function<void(void*, bool)>             g_nibShowDock;
 static void* nibW32Main(NibHost*)   { return g_nibMainWindow   ? g_nibMainWindow()   : nullptr; }
 static void* nibW32EdMain(NibHost*) { return g_nibEditorMain   ? g_nibEditorMain()   : nullptr; }
-static void* nibW32EdSec(NibHost*)  { return g_nibEditorSecond ? g_nibEditorSecond() : nullptr; }
+static void* nibW32EdSec(NibHost*)  { return nullptr; }   // split view dropped: the host exposes no secondary editor
 static void* nibW32Menu(NibHost*)   { return g_nibPluginsMenu  ? g_nibPluginsMenu()  : nullptr; }
 static void  nibW32Dock(NibHost*, void* h, const char* t, int e) { if (g_nibDockNative) g_nibDockNative(h, t, e); }
 static void  nibW32ShowDock(NibHost*, void* h, int v)            { if (g_nibShowDock)   g_nibShowDock(h, v != 0); }
@@ -1107,7 +1107,6 @@ public:
 #ifdef __WXMSW__   // nib.win32: hand the (optional, GPL) N++ bridge the native handles it needs
         g_nibMainWindow   = [this]() -> void* { return static_cast<HWND>(GetHandle()); };
         g_nibEditorMain   = [this]() -> void* { return m_sci; };
-        g_nibEditorSecond = [this]() -> void* { return m_view2 ? static_cast<HWND>(m_view2->GetHandle()) : nullptr; };
         g_nibPluginsMenu  = [this]() -> void* {           // the Plugins menu HMENU (the GPL bridge maps it to NPPM_GETMENUHANDLE)
             auto* mb = GetMenuBar(); if (!mb) return nullptr;
             const int mi = mb->FindMenu("Plugins");
@@ -1211,7 +1210,7 @@ private:
     // ----- Scintilla helpers --------------------------------------------
     // Editor message gateway - routes through wxSTC's portable SendMsg (was SendMessageW to the raw HWND).
     sptr_t sci(UINT m, uptr_t w = 0, sptr_t l = 0)
-    { wxStyledTextCtrl* v = m_sciTgt ? m_sciTgt : m_stc; return v ? static_cast<sptr_t>(v->SendMsg(static_cast<int>(m), static_cast<wxUIntPtr>(w), static_cast<wxIntPtr>(l))) : 0; }
+    { return m_stc ? static_cast<sptr_t>(m_stc->SendMsg(static_cast<int>(m), static_cast<wxUIntPtr>(w), static_cast<wxIntPtr>(l))) : 0; }
 
     wxString getAllText()
     {
@@ -1327,7 +1326,6 @@ private:
         updateBraceMatch(m_stc);
         if (g_smartActive && g_smartSci == m_stc && sci(SCI_GETSELECTIONEMPTY)) clearSmart(m_stc);
         updateDocMapViewport();   // keep the minimap's viewport band in sync with scrolling/caret
-        syncFrom(m_stc);          // mirror scroll to View 2 when synchronized scrolling is on
         if (e.GetUpdated() & SC_UPDATE_SELECTION)   // raise a Nib selection-changed event
         {
             refreshFoldNestedAccent();   // keep the nested fold-square accent tracking the active section
@@ -1380,36 +1378,6 @@ private:
     // A second wxStyledTextCtrl that SHARES the active document (no copy, live), shrunk to minimap scale
     // in a right-docked pane. The visible viewport is shown with the minimap's OWN selection (selection
     // is per-view, so it doesn't bleed into the main editor); click/drag scrolls the main editor.
-    // ----- split view: a second editable view sharing the active document (like N++) -----
-    void buildSecondView()
-    {
-        if (m_view2) return;
-        m_view2 = new wxStyledTextCtrl(this, wxID_ANY);
-        m_view2->Bind(wxEVT_STC_UPDATEUI, [this](wxStyledTextEvent& e){ syncFrom(m_view2); e.Skip(); });
-        m_aui.AddPane(m_view2, wxAuiPaneInfo().Name("view2").Caption("Editor - View 2")
-                          .Right().BestSize(480, 400).MinSize(140, 80).CloseButton(true).Hide());
-        m_aui.Update();
-    }
-    void styleView2(const wxString& path)   // configure + theme View 2 to match the main view (sci() retargeted)
-    { m_sciTgt = m_view2; setupScintilla(); setLexerForFile(path); updateLineMargin(); m_sciTgt = nullptr; }
-    void cloneToOtherView()
-    {
-        auto* p = activePage(); if (!p || !p->doc) return;
-        buildSecondView();
-        m_view2->SetDocPointer(reinterpret_cast<void*>(p->doc));   // share the document - edits sync across both views
-        styleView2(p->path);
-        wxAuiPaneInfo& pi = m_aui.GetPane(m_view2); if (pi.IsOk()) { pi.Show(); m_aui.Update(); }
-        m_view2->SetFocus();
-    }
-    void focusOtherView() { if (m_view2 && m_aui.GetPane(m_view2).IsShown()) m_view2->SetFocus(); else if (m_stc) m_stc->SetFocus(); }
-    void syncFrom(wxStyledTextCtrl* src)   // mirror the scroll position to the other view when sync is on
-    {
-        if (!m_syncScroll || m_syncing || !m_view2 || !m_aui.GetPane(m_view2).IsShown()) return;
-        m_syncing = true;
-        wxStyledTextCtrl* dst = (src == m_stc) ? m_view2 : m_stc;
-        if (dst && src) dst->SetFirstVisibleLine(src->GetFirstVisibleLine());
-        m_syncing = false;
-    }
     void buildDocMap()
     {
         m_docMap = new wxStyledTextCtrl(this, wxID_ANY);
@@ -2317,9 +2285,6 @@ private:
         T(IDM_SEARCH_FIND, "find", "Find");      T(IDM_SEARCH_REPLACE, "replace", "Replace");
         tb->AddSeparator();
         T(IDM_VIEW_ZOOMIN, "zoom-in", "Zoom In");  T(IDM_VIEW_ZOOMOUT, "zoom-out", "Zoom Out");
-        tb->AddSeparator();
-        TC(IDM_VIEW_SYNSCROLLV, "sync-vertical", "Synchronize Vertical Scrolling");
-        TC(IDM_VIEW_SYNSCROLLH, "sync-horizontal", "Synchronize Horizontal Scrolling");
         tb->AddSeparator();
         TC(IDM_VIEW_WRAP, "word-wrap", "Word Wrap");
         TC(IDM_VIEW_ALL_CHARACTERS, "all-chars", "Show All Characters");
@@ -3922,10 +3887,6 @@ private:
             case IDM_VIEW_DOCLIST: notImpl("Document List panel"); break;
             case IDM_VIEW_FILEBROWSER: notImpl("Folder as Workspace panel"); break;
             case IDM_VIEW_MONITORING: notImpl("File monitoring"); break;
-            case IDM_VIEW_CLONE_TO_ANOTHER_VIEW: case IDM_VIEW_GOTO_ANOTHER_VIEW: cloneToOtherView(); break;
-            case IDM_VIEW_SWITCHTO_OTHER_VIEW: focusOtherView(); break;
-            case IDM_VIEW_SYNSCROLLV: case IDM_VIEW_SYNSCROLLH:
-                m_syncScroll = !m_syncScroll; setStatus(0, m_syncScroll ? "Synchronized scrolling: ON" : "Synchronized scrolling: OFF"); m_hint = true; break;
             case IDM_MACRO_STARTRECORDINGMACRO: startMacroRecord(); break;
             case IDM_MACRO_STOPRECORDINGMACRO: stopMacroRecord(); break;
             case IDM_MACRO_PLAYBACKRECORDEDMACRO: playMacro(m_macro); break;
@@ -4158,9 +4119,6 @@ private:
     FindReplaceDialog* m_findDlg = nullptr;   // modeless Find/Replace dialog
     wxFileHistory      m_fileHistory;         // Recent Files (MRU), persisted in wxConfig
     wxStyledTextCtrl* m_stc = nullptr;   // the cross-platform editor view; its native HWND on Windows == m_sci
-    wxStyledTextCtrl* m_sciTgt = nullptr;   // when set, sci() targets this view instead of m_stc (used to style View 2)
-    wxStyledTextCtrl* m_view2 = nullptr;    // split view: a 2nd editable view sharing the active document
-    bool        m_syncScroll = false, m_syncing = false;   // synchronize scrolling between the two views
     wxStyledTextCtrl* m_docMap = nullptr;   // Document Map (minimap): a second view sharing the active document
     wxTreeCtrl* m_funcList = nullptr;       // Function List: per-file symbol tree (regex-parsed)
     wxTreeCtrl* m_fifPanel = nullptr;       // Find result: docked Find-in-Files results tree
