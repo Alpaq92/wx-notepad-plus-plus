@@ -40,13 +40,14 @@ conservatively on GPL is **not** lingering GPL files — it's three unresolved g
    The app icon is the project's own SVG (`src/app_icon_svg.h`); its green plate + "N" monogram echo the
    upstream styling. The remaining "Notepad++" mentions are nominative (code comments, the
    `<NotepadPlus>` data format, and Help-menu links to Notepad++'s own resources).
-3. **A final clean-room audit of `src/`.** The permissive claim rests on `src/` being original. The
-   N++-host removal already verified (by grep) that `src/` carries no `NPPM_*`/`NppData`/`FuncItem` ABI
-   code and no N++ plugin-ABI headers; a last focused line-audit would make the claim airtight.
+3. **A final clean-room audit of `src/`.** — ✅ **done.** A full line-audit confirmed the core
+   (`main.cpp` + `npp_menu.h`) carries no `NPPM_*`/`NppData`/`FuncItem` ABI code and no N++ plugin-ABI
+   headers — only nominative references (comments, the `<NotepadPlus>` data format, Help links). The one
+   N++-ABI *consumer* still in the tree (the Windows-only test-fixture plugin) was relocated out of
+   `src/` to `packages/test_plugin/`, so `src/` is now uniformly permissive.
 
 The engineering gates are now cleared — the core is *technically* relicensable. We nonetheless keep GPL
-until the maintainer makes the deliberate call (and does the final audit in #3); claiming permissive
-prematurely would be dishonest.
+until the maintainer makes the deliberate call; claiming permissive prematurely would be dishonest.
 
 ## The plan to get there
 
@@ -62,7 +63,8 @@ prematurely would be dishonest.
    code** — verified, and real N++ plugins (MIME Tools, Converter) still load + run through the bridge.
 3. **Rebrand** — ✅ name done: window title, About box, dialog captions, and menu labels now carry the
    wxNotepad++ name (the app icon is the project's own SVG).
-4. **Clean-room audit** of `src/` — substantially done (grep-verified N++-ABI-free); a final line-audit remains.
+4. **Clean-room audit** of `src/` — ✅ **done.** Full line-audit; only nominative N++ references remain.
+   The one N++-ABI test fixture was moved out of `src/` to `packages/test_plugin/`, keeping `src/` permissive.
 5. **Relicense the core permissively.** — the remaining step, a deliberate maintainer decision. The
    optional N++-bridge stays GPL; everyone else gets a permissive editor.
 

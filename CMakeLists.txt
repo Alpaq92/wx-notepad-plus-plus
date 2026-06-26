@@ -90,9 +90,11 @@ add_custom_command(TARGET wxnpp POST_BUILD
         "${CMAKE_SOURCE_DIR}/resources/stylers.model.xml" "$<TARGET_FILE_DIR:wxnpp>/stylers.model.xml"
     VERBATIM)
 
-# ---- Windows-only test plugin (exercises the Win32 plugin loader) ----------------------------------
+# ---- Windows-only Notepad++-ABI test plugin (exercises the Win32 plugin loader) --------------------
+# Lives OUTSIDE the permissive src/: it CONSUMES the N++ ABI (from include/npp-compat) like a real N++
+# plugin, so it stays with the N++-compat world in packages/, keeping src/ free of N++-ABI code.
 if(WIN32)
-    add_subdirectory(src/plugins/test_plugin)
+    add_subdirectory(packages/test_plugin)
     add_dependencies(wxnpp npp_test_plugin)
 endif()
 

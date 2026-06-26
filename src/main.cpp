@@ -1,20 +1,21 @@
-// Notepad++ -> wxWidgets  |  main-window shell prototype
+// wxNotepad++  |  cross-platform main-window shell
 // ---------------------------------------------------------------------------
-// A wxWidgets reproduction of the Notepad++ main window, pursuing a 1:1 match
-// with the NATIVE (default/light) UI:
-//   * wxMenuBar with Notepad++'s real menu labels + IDM_* command ids (from
-//     PowerEditor/src/Notepad_plus.rc)
-//   * wxToolBar using Notepad++'s icon pack (spike/icons/*.svg) in native order
-//   * native tab strip + the real native Scintilla editor
+// A wxWidgets reproduction of the Notepad++ UI, pursuing a close match with the
+// native (default/light) look while building cross-platform (Windows/Linux/macOS):
+//   * wxMenuBar with Notepad++-style menu labels + the project's OWN clean-room
+//     IDM_* command ids (include/npp-compat/menuCmdID.h, Apache-2.0)
+//   * wxToolBar using the project's own MIT icon set (resources/icons/*.svg)
+//   * wxAuiNotebook tab strip + a wxStyledTextCtrl editor (bundles Scintilla + Lexilla)
 //   * 6-field status bar, updated live
-//   * the application icon (spike/wxNotepad++.svg)
-//   * the wxFrame HWND still services real NPPM_* plugin messages (ABI shim)
+//   * the application's own icon (src/app_icon_svg.h)
+//   * plugins via the core's OWN permissive "Nib" API (include/nib/nib.h); real
+//     Notepad++ binary plugins load through the optional GPL packages/npp-bridge -
+//     the core itself reproduces NO Notepad++ plugin ABI.
 //
 // Commands are routed through one onCommand() dispatcher. Editor-backed functions
-// (file I/O, clipboard, case/EOL/line ops, comment, find/replace, bookmarks,
-// brace match, zoom, wrap/whitespace/guides, full screen) are implemented against
-// Scintilla. Subsystem-only items (dockable panels, macros, preferences, plugins)
-// report status -- they need the full app, not the shell.
+// (file I/O, clipboard, case/EOL/line ops, comment, find/replace, bookmarks, brace
+// match, zoom, wrap/whitespace/guides, full screen) are implemented against
+// Scintilla via wxStyledTextCtrl.
 
 #include <wx/wx.h>
 #include <wx/notebook.h>
