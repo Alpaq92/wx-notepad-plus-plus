@@ -2197,10 +2197,11 @@ private:
         sci(SCI_SETTABWIDTH, 4);
         sci(SCI_SETSCROLLWIDTH, 1);
         sci(SCI_SETSCROLLWIDTHTRACKING, 1);
-        sci(SCI_SETENDATLASTLINE, 1);
+        sci(SCI_SETENDATLASTLINE, m_scrollBeyond ? 0 : 1);
+        sci(SCI_SETCARETPERIOD, m_caretBlink);
         sci(SCI_USEPOPUP, SC_POPUP_NEVER);   // suppress Scintilla's light popup; we show our own themed menu
         // Column (Alt+drag) + multi-caret (Ctrl+click) selection, typing into all - exactly Notepad++'s setup.
-        sci(SCI_SETMULTIPLESELECTION, 1);
+        sci(SCI_SETMULTIPLESELECTION, m_multiEdit ? 1 : 0);
         sci(SCI_SETADDITIONALSELECTIONTYPING, 1);
         sci(SCI_SETVIRTUALSPACEOPTIONS, SCVS_RECTANGULARSELECTION);
         sci(SCI_SETMULTIPASTE, SC_MULTIPASTE_EACH);
@@ -3750,6 +3751,9 @@ private:
         long ec = 0; c->Read("Editing/EdgeColumn", &ec, 0L); m_edgeColumn = (int)ec;
         long de = SC_EOL_CRLF; c->Read("NewDoc/Eol", &de, (long)SC_EOL_CRLF); m_defaultEol = (int)de;
         long dl = -1; c->Read("NewDoc/Lang", &dl, -1L); m_defaultLangId = (int)dl;
+        long cbk = 500; c->Read("Editing/CaretBlink", &cbk, 500L); m_caretBlink = (int)cbk;
+        c->Read("Editing/ScrollBeyond", &m_scrollBeyond, false);
+        c->Read("Editing/MultiEdit", &m_multiEdit, true);
         c->Read("Theme", &m_themeName, wxEmptyString);
     }
     void saveSettings()
@@ -3763,6 +3767,8 @@ private:
         c->Write("Editing/CaretLine", m_caretLine);       c->Write("Editing/AutoIndent", m_autoindent);
         c->Write("Editing/CaretWidth", (long)m_caretWidth); c->Write("Editing/EdgeColumn", (long)m_edgeColumn);
         c->Write("NewDoc/Eol", (long)m_defaultEol);         c->Write("NewDoc/Lang", (long)m_defaultLangId);
+        c->Write("Editing/CaretBlink", (long)m_caretBlink); c->Write("Editing/ScrollBeyond", m_scrollBeyond);
+        c->Write("Editing/MultiEdit", m_multiEdit);
         c->Write("Theme", m_themeName);
         c->Flush();
     }
@@ -3781,6 +3787,9 @@ private:
             sci(SCI_SETCARETWIDTH, m_caretWidth);
             sci(SCI_SETEDGEMODE, m_edgeColumn > 0 ? EDGE_LINE : EDGE_NONE);
             sci(SCI_SETEDGECOLUMN, m_edgeColumn);
+            sci(SCI_SETCARETPERIOD, m_caretBlink);
+            sci(SCI_SETENDATLASTLINE, m_scrollBeyond ? 0 : 1);
+            sci(SCI_SETMULTIPLESELECTION, m_multiEdit ? 1 : 0);
             if (m_lineNumbers) updateLineMargin(); else sci(SCI_SETMARGINWIDTHN, 0, 0);
         }
         if (auto* mb = menuBar()) { mb->Check(IDM_VIEW_WRAP, m_wrap); mb->Check(IDM_VIEW_ALL_CHARACTERS, m_ws); mb->Check(IDM_VIEW_INDENT_GUIDE, m_guides); }
@@ -3817,7 +3826,9 @@ private:
         auto* cbWrapSym = new wxCheckBox(ed, wxID_ANY, "Show wrap symbol");         cbWrapSym->SetValue(m_wrapSymbol);
         auto* cbWrap    = new wxCheckBox(ed, wxID_ANY, "Word wrap");                cbWrap->SetValue(m_wrap);
         auto* cbCaretLn = new wxCheckBox(ed, wxID_ANY, "Highlight current line");   cbCaretLn->SetValue(m_caretLine);
-        for (auto* c : { cbLineNum, cbGuides, cbWs, cbWrapSym, cbWrap, cbCaretLn }) row(es, c);
+        auto* cbScroll  = new wxCheckBox(ed, wxID_ANY, "Enable scrolling beyond last line");      cbScroll->SetValue(m_scrollBeyond);
+        auto* cbMulti   = new wxCheckBox(ed, wxID_ANY, "Enable multi-editing (multi-selection)"); cbMulti->SetValue(m_multiEdit);
+        for (auto* c : { cbLineNum, cbGuides, cbWs, cbWrapSym, cbWrap, cbCaretLn, cbScroll, cbMulti }) row(es, c);
         auto* erow = new wxBoxSizer(wxHORIZONTAL);
         erow->Add(new wxStaticText(ed, wxID_ANY, "Caret width:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spCaret = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS, 1, 3, m_caretWidth);
@@ -3825,7 +3836,12 @@ private:
         erow->Add(new wxStaticText(ed, wxID_ANY, "Vertical edge at column (0 = off):"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spEdge = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 0, 300, m_edgeColumn);
         erow->Add(spEdge, 0);
-        es->Add(erow, 0, wxALL, 10); ed->SetSizer(es);
+        es->Add(erow, 0, wxALL, 10);
+        auto* brow = new wxBoxSizer(wxHORIZONTAL);
+        brow->Add(new wxStaticText(ed, wxID_ANY, "Caret blink rate (ms, 0 = steady):"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* spBlink = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, 0, 2000, m_caretBlink);
+        brow->Add(spBlink, 0);
+        es->Add(brow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10); ed->SetSizer(es);
 
         // ---- Indentation ----------------------------------------------------------------------
         auto* ind = pg("Indentation"); auto* is = new wxBoxSizer(wxVERTICAL);
@@ -3873,6 +3889,7 @@ private:
         m_tabWidth = spTab->GetValue(); m_useTabs = !cbSpace->GetValue(); m_lineNumbers = cbLineNum->GetValue();
         m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
         m_caretLine = cbCaretLn->GetValue(); m_autoindent = cbIndent->GetValue(); m_caretWidth = spCaret->GetValue(); m_edgeColumn = spEdge->GetValue();
+        m_scrollBeyond = cbScroll->GetValue(); m_multiEdit = cbMulti->GetValue(); m_caretBlink = spBlink->GetValue();
         m_defaultEol = (rbEol->GetSelection() == 1) ? SC_EOL_LF : (rbEol->GetSelection() == 2) ? SC_EOL_CR : SC_EOL_CRLF;
         { int s = chLang->GetSelection(); if (s <= 0) m_defaultLangId = -1;
           else { size_t ln; const NppLang* lt = nppLangTable(ln); m_defaultLangId = (s - 1 < (int)ln) ? lt[s - 1].id : -1; } }
@@ -4702,6 +4719,8 @@ private:
     bool        m_caretLine = true, m_autoindent = true;          // highlight the current line; auto-indent new lines
     int         m_caretWidth = 1, m_edgeColumn = 0;               // caret thickness (px); long-line marker column (0 = off)
     int         m_defaultEol = SC_EOL_CRLF, m_defaultLangId = -1; // New Document: default line-ending + language (IDM_LANG_*; -1 = Normal Text)
+    int         m_caretBlink = 500;                              // caret blink rate (ms; 0 = steady)
+    bool        m_scrollBeyond = false, m_multiEdit = true;      // scroll past the last line; multi-selection / multi-caret editing
     wxString    m_themeName;                                      // active editor theme (empty = dark/light default); Style Configurator
     std::vector<MacroStep> m_macro;                               // the current recorded macro
     bool        m_recording = false;
