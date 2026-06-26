@@ -1202,7 +1202,7 @@ public:
         g_nibMainWindow   = [this]() -> void* { return static_cast<HWND>(GetHandle()); };
         g_nibEditorMain   = [this]() -> void* { return m_sci; };
         g_nibPluginsMenu  = [this]() -> void* {           // the Plugins menu HMENU (the GPL bridge maps it to NPPM_GETMENUHANDLE)
-            auto* mb = GetMenuBar(); if (!mb) return nullptr;
+            auto* mb = menuBar(); if (!mb) return nullptr;
             const int mi = mb->FindMenu("Plugins");
             return mi == wxNOT_FOUND ? nullptr : reinterpret_cast<void*>(mb->GetMenu(mi)->GetHMenu());
         };
@@ -1232,7 +1232,7 @@ public:
 #endif
         loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
         if (!g_nibCommands.empty())   // surface registered Nib commands in the Plugins menu
-            if (auto* mb = GetMenuBar()) { const int mi = mb->FindMenu("Plugins");
+            if (auto* mb = menuBar()) { const int mi = mb->FindMenu("Plugins");
                 if (mi != wxNOT_FOUND) { wxMenu* pm = mb->GetMenu(mi);
                     if (pm->GetMenuItemCount() > 0) pm->AppendSeparator();
                     for (size_t i = 0; i < g_nibCommands.size(); ++i)
@@ -2469,6 +2469,26 @@ private:
     // ----- menu bar ------------------------------------------------------
     static void placeholder(wxMenu* m) { wxMenuItem* it = m->Append(wxID_ANY, "(more items added incrementally)"); it->Enable(false); }
 
+    // Menu/tool-bar accessors that work in BOTH chrome modes. Integrated mode has no native menu bar
+    // (menus live in m_menuOwner) and its toolbar is an aui pane, not the frame toolbar - so the built-in
+    // GetMenuBar()/GetToolBar() return null there. Route all item enable/check/toggle state through these.
+    wxMenuBar* menuBar() const
+    {
+#ifdef WXNPP_HAS_BORDERLESS
+        if (m_menuOwner) return m_menuOwner;
+#endif
+        return GetMenuBar();
+    }
+    wxToolBar* toolBar() const { return m_toolBarPtr ? m_toolBarPtr : GetToolBar(); }
+    void showToolBar(bool show)
+    {
+        auto* tb = toolBar(); if (!tb) return;
+#ifdef WXNPP_HAS_BORDERLESS
+        if constexpr (kBorderless) { auto& pi = m_aui.GetPane(tb); if (pi.IsOk()) { pi.Show(show); m_aui.Update(); } return; }
+#endif
+        tb->Show(show);   // native frame toolbar
+    }
+
     void buildMenuBar()
     {
         auto* mb = new wxMenuBar;
@@ -2670,6 +2690,7 @@ private:
 #else
         tb = CreateToolBar(wxTB_FLAT | wxTB_HORIZONTAL);
 #endif
+        m_toolBarPtr = tb;                 // so toolBar() works in both modes (frame toolbar / aui pane)
         tb->SetToolBitmapSize(wxSize(16, 16));
         auto T  = [&](int id, const wxString& svg, const wxString& tip) { tb->AddTool(id, tip, icon(svg), tip); };
         auto TC = [&](int id, const wxString& svg, const wxString& tip) { tb->AddCheckTool(id, tip, icon(svg), wxNullBitmap, tip); };
@@ -3011,7 +3032,7 @@ private:
     wxString encDisplay(EditorPage* p) { return (p && p->encoding == ENC_CHARSET) ? p->encLabel : wxString(encName(p ? p->encoding : ENC_UTF8)); }
     void updateEncodingMenuChecks()   // tick the active encoding in the Encoding menu's interpret-as group
     {
-        auto* mb = GetMenuBar(); if (!mb) return;
+        auto* mb = menuBar(); if (!mb) return;
         const int enc = activePage() ? activePage()->encoding : ENC_UTF8;
         auto chk = [&](int id, bool on){ if (auto* it = mb->FindItem(id)) if (it->IsCheckable()) it->Check(on); };
         chk(IDM_FORMAT_ANSI, enc == ENC_ANSI); chk(IDM_FORMAT_AS_UTF_8, enc == ENC_UTF8); chk(IDM_FORMAT_UTF_8, enc == ENC_UTF8_BOM);
@@ -3653,7 +3674,7 @@ private:
     }
 
     // ----- view toggles --------------------------------------------------
-    void syncToggle(int id, bool& flag) { flag = !flag; if (GetMenuBar()) GetMenuBar()->Check(id, flag); if (GetToolBar()) GetToolBar()->ToggleTool(id, flag); }
+    void syncToggle(int id, bool& flag) { flag = !flag; if (menuBar()) menuBar()->Check(id, flag); if (toolBar()) toolBar()->ToggleTool(id, flag); }
     void toggleWrap()  { syncToggle(IDM_VIEW_WRAP, m_wrap); sci(SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE); }
     void toggleWs()    { syncToggle(IDM_VIEW_ALL_CHARACTERS, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
     void toggleGuides(){ syncToggle(IDM_VIEW_INDENT_GUIDE, m_guides); sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE); }
@@ -3709,8 +3730,9 @@ private:
             sci(SCI_SETEDGECOLUMN, m_edgeColumn);
             if (m_lineNumbers) updateLineMargin(); else sci(SCI_SETMARGINWIDTHN, 0, 0);
         }
-        if (auto* mb = GetMenuBar()) { mb->Check(IDM_VIEW_WRAP, m_wrap); mb->Check(IDM_VIEW_ALL_CHARACTERS, m_ws); mb->Check(IDM_VIEW_INDENT_GUIDE, m_guides); }
-        if (auto* tb = GetToolBar()) { tb->ToggleTool(IDM_VIEW_WRAP, m_wrap); tb->Show(m_showToolbar); }
+        if (auto* mb = menuBar()) { mb->Check(IDM_VIEW_WRAP, m_wrap); mb->Check(IDM_VIEW_ALL_CHARACTERS, m_ws); mb->Check(IDM_VIEW_INDENT_GUIDE, m_guides); }
+        if (auto* tb = toolBar()) tb->ToggleTool(IDM_VIEW_WRAP, m_wrap);
+        showToolBar(m_showToolbar);   // aui-aware: hides the pane in integrated mode, the frame toolbar in native
         if (auto* sb = GetStatusBar()) sb->Show(m_showStatusbar);
         SendSizeEvent();
     }
@@ -3814,7 +3836,7 @@ private:
     void macroToolStates()
     {
         const bool has = !m_macro.empty();
-        auto* tb = GetToolBar(); auto* mb = GetMenuBar();
+        auto* tb = toolBar(); auto* mb = menuBar();
         auto en = [&](int id, bool on){ if (tb) tb->EnableTool(id, on); if (mb) if (auto* it = mb->FindItem(id)) it->Enable(on); };
         en(IDM_MACRO_STARTRECORDINGMACRO, !m_recording);
         en(IDM_MACRO_STOPRECORDINGMACRO, m_recording);
@@ -3851,7 +3873,7 @@ private:
     }
     void appendMacroMenuItems()   // (re)list the saved macros at the bottom of the Macro menu
     {
-        auto* mb = GetMenuBar(); if (!mb) return;
+        auto* mb = menuBar(); if (!mb) return;
         const int mi = mb->FindMenu("Macro"); if (mi == wxNOT_FOUND) return;
         wxMenu* menu = mb->GetMenu(mi);
         for (int id = myID_MACRO_ITEM; id < myID_MACRO_ITEM + 200; ++id) if (auto* it = menu->FindItem(id)) menu->Destroy(it);
@@ -4123,10 +4145,10 @@ private:
         g_editorDark = dark;
         ::RedrawWindow(m_sci, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW);  // refresh the dead-corner now
 #endif
-        if (GetMenuBar()) GetMenuBar()->Check(myID_DARKMODE, dark);
+        if (menuBar()) menuBar()->Check(myID_DARKMODE, dark);
         const wxColour chromeBg = dark ? wxColour(32, 32, 32) : wxColour(240, 240, 240);   // explicit both ways
         const wxColour chromeFg = dark ? wxColour(220, 220, 220) : wxColour(0, 0, 0);
-        if (auto* tb = GetToolBar()) { tb->SetBackgroundColour(chromeBg); tb->Refresh(); }
+        if (auto* tb = toolBar()) { tb->SetBackgroundColour(chromeBg); tb->Refresh(); }
         if (auto* sb = GetStatusBar()) { sb->SetBackgroundColour(chromeBg); sb->SetForegroundColour(chromeFg); sb->Refresh(); }
 #ifdef __WXMSW__
         if (m_grip) m_grip->setColours(chromeBg, dark ? wxColour(112, 112, 112) : wxColour(150, 150, 150));   // dots blend onto chrome
@@ -4479,12 +4501,12 @@ private:
                 const int mid = e.GetId() & 0xFFFF;
                 if (const int cp = codepageForId(mid))   // Encoding > character set -> interpret the file as that code page
                 {
-                    wxString nm; if (auto* mb = GetMenuBar()) if (auto* it = mb->FindItem(mid)) nm = it->GetItemLabelText();
+                    wxString nm; if (auto* mb = menuBar()) if (auto* it = mb->FindItem(mid)) nm = it->GetItemLabelText();
                     interpretCharset(cp, nm); break;
                 }
                 // Any real menu/toolbar item we don't implement: name it so the click isn't silent.
                 wxString lbl;
-                if (auto* mb = GetMenuBar()) if (wxMenuItem* it = mb->FindItem(mid)) lbl = it->GetItemLabelText();
+                if (auto* mb = menuBar()) if (wxMenuItem* it = mb->FindItem(mid)) lbl = it->GetItemLabelText();
                 if (lbl.empty()) { e.Skip(); return; }   // not one of ours -> let wx handle it
                 notImpl(lbl);
                 break;
@@ -4558,14 +4580,14 @@ private:
             return;   // nothing changed
         m_stSave = dirty; m_stSaveAll = anyDirty; m_stUndo = canUndo; m_stRedo = canRedo;
         m_stSel = hasSel; m_stPaste = canPaste;
-        if (auto* tb = GetToolBar())
+        if (auto* tb = toolBar())
         {
             tb->EnableTool(IDM_FILE_SAVE, dirty);   tb->EnableTool(IDM_FILE_SAVEALL, anyDirty);
             tb->EnableTool(IDM_EDIT_UNDO, canUndo); tb->EnableTool(IDM_EDIT_REDO, canRedo);
             tb->EnableTool(IDM_EDIT_CUT, hasSel);   tb->EnableTool(IDM_EDIT_COPY, hasSel);
             tb->EnableTool(IDM_EDIT_PASTE, canPaste);
         }
-        if (auto* mb = GetMenuBar())
+        if (auto* mb = menuBar())
         {
             mb->Enable(IDM_FILE_SAVE, dirty);   mb->Enable(IDM_FILE_SAVEALL, anyDirty);
             mb->Enable(IDM_EDIT_UNDO, canUndo); mb->Enable(IDM_EDIT_REDO, canRedo);
@@ -4594,6 +4616,7 @@ private:
     wxPanel*    m_titleBar  = nullptr;            // integrated top bar (icon + menu-buttons + window controls)
     wxMenuBar*  m_menuOwner = nullptr;            // owns the wxMenus the title-bar buttons pop (never attached as a real menu bar)
 #endif
+    wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
