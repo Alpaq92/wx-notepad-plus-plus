@@ -2722,10 +2722,11 @@ private:
     wxBitmapBundle icon(const wxString& name)
     {
         static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\";
-        // Permissive toolbar icons (Tabler x Open Color, MIT). They paint with stroke="currentColor" plus a
-        // few hardcoded accent hues (blue file ops, red/green macro, orange bookmark). Resolve currentColor
-        // to Open-Color gray-3 on the dark toolbar / gray-8 on light, and collapse the accents to the SAME
-        // colour so the toolbar is one colour (no blue-vs-white split).
+        // Permissive toolbar icons (Tabler x Open Color, MIT) - monochrome by default, with a meaning-accent
+        // on 8 of the 32 (gold New "+", blue Save/Save-All, red Record/Stop, green Playback/-multiple). Neutral
+        // parts paint with stroke="currentColor"; the accents are explicit Open-Color hues. Resolve ONLY
+        // currentColor to the theme grey (Open-Color gray-3 dark / gray-8 light) and keep the accents, so the
+        // toolbar matches the icon set's design (README: "color only where it carries meaning").
         const wxString path = dir + name + ".svg";
         if (wxFileExists(path))
         {
@@ -2734,8 +2735,6 @@ private:
             {
                 const wxString col = m_dark ? "#dee2e6" : "#343a40";
                 svg.Replace("currentColor", col);
-                for (const char* accent : { "#1971c2", "#e03131", "#2f9e44", "#f08c00", "#e8590c" })
-                    svg.Replace(accent, col);
                 const wxScopedCharBuffer u = svg.utf8_str();
                 return wxBitmapBundle::FromSVG(u.data(), wxSize(16, 16));
             }
