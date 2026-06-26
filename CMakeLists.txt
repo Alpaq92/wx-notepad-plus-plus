@@ -49,6 +49,21 @@ if(MSVC)
     target_compile_options(lexilla PRIVATE /EHsc /utf-8)
 endif()
 
+# ---- wxBorderlessFrame (vendored; the optional integrated/borderless title bar) ---------------------
+# Windows + Linux(GTK) only: the library has no macOS backend - its platform .cpp self-guard on _WIN32 /
+# __WXGTK__, so on Apple they compile to nothing and wxBorderlessFrame is unusable. Built with our own
+# wx targets because the upstream CMake uses find_package(wxWidgets) (a system wx), not our FetchContent.
+if(WIN32 OR (UNIX AND NOT APPLE))
+    file(GLOB WXBF_SRC CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/third_party/wxbf/src/*.cpp")
+    add_library(wxbf STATIC ${WXBF_SRC})
+    target_include_directories(wxbf PUBLIC "${CMAKE_SOURCE_DIR}/third_party/wxbf/include")
+    target_link_libraries(wxbf PUBLIC wx::core wx::base)
+    set_target_properties(wxbf PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+    if(MSVC)
+        target_compile_options(wxbf PRIVATE /EHsc /utf-8)
+    endif()
+endif()
+
 # ---- the wxNotepad++ executable --------------------------------------------------------------------
 # WIN32 = GUI-subsystem app on Windows; a plain executable elsewhere (GTK on Linux, Cocoa on macOS).
 if(WIN32)
@@ -71,6 +86,13 @@ target_include_directories(wxnpp PRIVATE
 target_link_libraries(wxnpp PRIVATE
     wx::core wx::aui wx::base wx::xml wx::stc
     lexilla)
+
+# Optional integrated/borderless title bar (Settings > Preferences): link the vendored wxBorderlessFrame
+# where it exists + let the code use it (WXNPP_HAS_BORDERLESS). Off on macOS (keeps the native bar).
+if(WIN32 OR (UNIX AND NOT APPLE))
+    target_link_libraries(wxnpp PRIVATE wxbf)
+    target_compile_definitions(wxnpp PRIVATE WXNPP_HAS_BORDERLESS=1)
+endif()
 
 # Windows-only chrome + plugin host (all behind #ifdef __WXMSW__ in src/main.cpp).
 if(WIN32)
