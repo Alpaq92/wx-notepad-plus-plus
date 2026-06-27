@@ -2544,12 +2544,18 @@ private:
     }
     void closeAll()
     {
-        for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
-            if (!confirmClose(static_cast<EditorPage*>(m_tabs->GetPage(i)))) return;   // cancelled -> abort
-        m_tabs->Freeze();
-        while (m_tabs->GetPageCount() > 1) m_tabs->DeletePage(0);
-        resetActiveDoc();
-        m_tabs->Thaw();
+        for (EditorPage* p : allPages())
+            if (!confirmClose(p)) return;                  // prompt across BOTH views; cancel aborts
+        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
+            if (nb)
+            {
+                ViewPane* v = (nb == m_sub.tabs) ? &m_sub : &m_main;
+                if (nb->GetSelection() != wxNOT_FOUND) detachViewEditor(v, static_cast<EditorPage*>(nb->GetPage(nb->GetSelection())));
+                while (nb->GetPageCount() > 0) nb->DeletePage(0);
+            }
+        setActiveView(&m_main);
+        addDocument("", nextNewName());                    // leave one empty doc in MAIN (N++ never has zero)
+        collapseIfEmpty();                                 // unsplit the now-empty SUB
     }
     void resetActiveDoc()
     {
@@ -2571,15 +2577,19 @@ private:
     }
     void closeAllBut(EditorPage* keep)
     {
-        for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
-        {
-            auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i));
-            if (p != keep && !confirmClose(p)) return;   // cancelled -> abort
-        }
-        m_tabs->Freeze();
-        for (int i = (int)m_tabs->GetPageCount() - 1; i >= 0; --i)
-            if (m_tabs->GetPage(i) != keep) m_tabs->DeletePage(i);
-        m_tabs->Thaw();
+        for (EditorPage* p : allPages())
+            if (p != keep && !confirmClose(p)) return;     // prompt across BOTH views; cancel aborts
+        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
+            if (nb)
+            {
+                ViewPane* v = (nb == m_sub.tabs) ? &m_sub : &m_main;
+                if (nb->GetSelection() != wxNOT_FOUND)     // protect a view's editor if its active page is being deleted
+                { auto* ap = static_cast<EditorPage*>(nb->GetPage(nb->GetSelection())); if (ap != keep) detachViewEditor(v, ap); }
+                for (int i = (int)nb->GetPageCount() - 1; i >= 0; --i)
+                    if (nb->GetPage(i) != keep) nb->DeletePage(i);
+            }
+        setActiveView(viewOf(keep));
+        collapseIfEmpty();                                 // unsplit whichever view is now empty
     }
     // On window close / app exit, prompt for every modified document; a Cancel aborts the close.
     void onCloseWindow(wxCloseEvent& e)
@@ -2681,16 +2691,19 @@ private:
         if (!mainEmpty && !subEmpty) return;
         if (mainEmpty && !subEmpty)
         {
-            if (m_sub.tabs->GetSelection() != wxNOT_FOUND)   // lift SUB's editor off its page before the pages migrate to MAIN
-                detachViewEditor(&m_sub, static_cast<EditorPage*>(m_sub.tabs->GetPage(m_sub.tabs->GetSelection())));
+            const int ssel = m_sub.tabs->GetSelection();
+            EditorPage* keep = static_cast<EditorPage*>(m_sub.tabs->GetPage(ssel == wxNOT_FOUND ? 0 : ssel));
+            detachViewEditor(&m_sub, keep);                  // lift SUB's editor off its page before the pages migrate to MAIN
             while (m_sub.tabs->GetPageCount() > 0)            // consolidate the sub view's pages into main
             {
                 auto* pg = static_cast<EditorPage*>(m_sub.tabs->GetPage(0));
                 const wxString t = m_sub.tabs->GetPageText(0);
                 m_sub.tabs->RemovePage(0);
                 pg->Reparent(m_main.tabs);
-                m_main.tabs->AddPage(pg, t, true);
+                m_main.tabs->AddPage(pg, t, false);          // don't churn the selection per page
             }
+            const int ki = m_main.tabs->GetPageIndex(keep);
+            if (ki != wxNOT_FOUND) m_main.tabs->SetSelection(ki);   // restore the doc that was active in SUB
         }
         m_split->Unsplit(m_sub.tabs);                        // show MAIN only
         m_sub.tabs->Hide();
@@ -5227,12 +5240,13 @@ private:
         const bool canPaste = sci(SCI_CANPASTE) != 0;
         if (auto* ap = activePage()) ap->dirty = dirty;   // keep the active tab's cached flag current (others use their last-active value)
         bool anyDirty = dirty;
-        if (m_tabs)
-            for (size_t i = 0; i < m_tabs->GetPageCount() && !anyDirty; ++i)
-            {
-                auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i));
-                if (p && p->dirty) anyDirty = true;
-            }
+        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })   // Save-All reflects modified docs in BOTH views
+            if (nb)
+                for (size_t i = 0; i < nb->GetPageCount() && !anyDirty; ++i)
+                {
+                    auto* p = static_cast<EditorPage*>(nb->GetPage(i));
+                    if (p && p->dirty) anyDirty = true;
+                }
         if (dirty == m_stSave && anyDirty == m_stSaveAll && canUndo == m_stUndo && canRedo == m_stRedo &&
             hasSel == m_stSel && canPaste == m_stPaste)
             return;   // nothing changed
