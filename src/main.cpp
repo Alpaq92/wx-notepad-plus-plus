@@ -2436,6 +2436,11 @@ private:
             if (nb) for (size_t i = 0; i < nb->GetPageCount(); ++i) v.push_back(static_cast<EditorPage*>(nb->GetPage(i)));
         return v;
     }
+    // Before deleting page `p`, move view `v`'s persistent editor off it (to the notebook, hidden) so the
+    // page's destruction can't take the editor with it - matters when p is the view's only remaining page
+    // (wxAui has no sibling page to re-home it onto). activateBuffer re-mounts it on the next activation.
+    void detachViewEditor(ViewPane* v, EditorPage* p)
+    { if (v && v->stc && v->stc->GetParent() == p) { v->stc->Hide(); v->stc->Reparent(v->tabs); } }
     // A view's editor gained focus: make it active and sync the chrome (status bar + minimap) to its doc.
     void onViewFocus(ViewPane* v)
     {
@@ -2520,7 +2525,13 @@ private:
         // own removal races a CallAfter, which would leave an empty pane behind.
         e.Veto();
         this->CallAfter([this, p]{
-            if (ViewPane* v = viewOf(p)) { const int i = v->tabs->GetPageIndex(p); if (i != wxNOT_FOUND) v->tabs->DeletePage(i); }
+            if (ViewPane* v = viewOf(p)) {
+                const int i = v->tabs->GetPageIndex(p);
+                if (i != wxNOT_FOUND) {
+                    detachViewEditor(v, p);   // lift the editor off the page so its deletion can't take it (last-page case)
+                    v->tabs->DeletePage(i);
+                }
+            }
             collapseIfEmpty();
         });
     }
@@ -2528,6 +2539,7 @@ private:
     {
         if (!confirmClose(activePage())) return;
         if (totalDocs() <= 1) { resetActiveDoc(); return; }                                  // last document - keep one empty
+        detachViewEditor(m_active, activePage());   // lift the editor off the page before deleting it
         m_tabs->DeletePage(m_tabs->GetSelection());
         collapseIfEmpty();
     }
