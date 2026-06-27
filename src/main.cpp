@@ -3885,21 +3885,19 @@ private:
     // Returns the UTF-8 bytes, empty if there's nothing to match.
     std::string multiSelTerm()
     {
-        int a = static_cast<int>(sci(SCI_GETSELECTIONSTART)), b = static_cast<int>(sci(SCI_GETSELECTIONEND));
+        const int mi = static_cast<int>(sci(SCI_GETMAINSELECTION));   // robust when there are already multiple selections
+        int a = static_cast<int>(sci(SCI_GETSELECTIONNSTART, mi)), b = static_cast<int>(sci(SCI_GETSELECTIONNEND, mi));
+        if (a > b) { const int t = a; a = b; b = t; }
         if (a == b)
         {
-            const int pos = static_cast<int>(sci(SCI_GETCURRENTPOS));
+            const int pos = static_cast<int>(sci(SCI_GETSELECTIONNCARET, mi));
             a = static_cast<int>(sci(SCI_WORDSTARTPOSITION, pos, 1));
             b = static_cast<int>(sci(SCI_WORDENDPOSITION,   pos, 1));
             if (a == b) return {};                       // caret not on a word
             sci(SCI_SETSEL, a, b);
         }
-        const int len = b - a;
-        if (len <= 0 || len > 4096) return {};
-        std::string s(static_cast<size_t>(len) + 1, '\0');
-        sci(SCI_GETSELTEXT, 0, reinterpret_cast<sptr_t>(&s[0]));
-        s.resize(len);
-        return s;
+        if (b - a <= 0 || b - a > 4096) return {};
+        return m_stc->GetTextRange(a, b).utf8_string();   // UTF-8 bytes of the main selection
     }
     // Notepad++ "Multi-select All": box every occurrence of the term as its own selection so typing edits
     // them all at once (multi-cursor). flags picks MATCHCASE / WHOLEWORD per the menu variant.
@@ -3931,6 +3929,58 @@ private:
             if (hits[i].first <= caret && caret <= hits[i].second) mainIdx = static_cast<int>(i);   // keep the caret's occurrence as the main selection
         }
         sci(SCI_SETMAINSELECTION, mainIdx);
+        sci(SCI_SCROLLCARET);
+    }
+    // Does any current selection overlap [a,b)?
+    bool rangeSelected(int a, int b)
+    {
+        const int n = static_cast<int>(sci(SCI_GETSELECTIONS));
+        for (int i = 0; i < n; ++i)
+        {
+            int s = static_cast<int>(sci(SCI_GETSELECTIONNSTART, i)), e = static_cast<int>(sci(SCI_GETSELECTIONNEND, i));
+            if (s > e) { const int t = s; s = e; e = t; }
+            if (a < e && s < b) return true;
+        }
+        return false;
+    }
+    // Notepad++ "Multi-select Next" (VS Code's Ctrl+D): add the next occurrence of the current term as an
+    // extra selection and make it the main one. Wraps around; skips occurrences already selected.
+    void multiSelectNext(int flags)
+    {
+        if (!m_stc) return;
+        const std::string term = multiSelTerm();
+        if (term.empty()) return;
+        sci(SCI_SETMULTIPLESELECTION, 1);
+        sci(SCI_SETSEARCHFLAGS, flags);
+        const int len = static_cast<int>(sci(SCI_GETLENGTH));
+        std::vector<std::pair<int, int>> hits;
+        for (int start = 0; start < len; )
+        {
+            sci(SCI_SETTARGETSTART, start); sci(SCI_SETTARGETEND, len);
+            if (sci(SCI_SEARCHINTARGET, term.size(), reinterpret_cast<sptr_t>(term.c_str())) < 0) break;
+            const int ms = static_cast<int>(sci(SCI_GETTARGETSTART)), me = static_cast<int>(sci(SCI_GETTARGETEND));
+            if (me <= ms) { start = ms + 1; continue; }
+            hits.emplace_back(ms, me);
+            start = me;
+        }
+        if (hits.empty()) return;
+        const int mi = static_cast<int>(sci(SCI_GETMAINSELECTION));
+        const int from = static_cast<int>(sci(SCI_GETSELECTIONNEND, mi));   // look after the main selection first
+        int pick = -1;
+        for (size_t i = 0; i < hits.size(); ++i) if (hits[i].first >= from && !rangeSelected(hits[i].first, hits[i].second)) { pick = static_cast<int>(i); break; }
+        if (pick < 0) for (size_t i = 0; i < hits.size(); ++i) if (!rangeSelected(hits[i].first, hits[i].second)) { pick = static_cast<int>(i); break; }   // wrap around
+        if (pick < 0) return;   // every occurrence is already selected
+        sci(SCI_ADDSELECTION, hits[pick].second, hits[pick].first);
+        sci(SCI_SETMAINSELECTION, static_cast<int>(sci(SCI_GETSELECTIONS)) - 1);
+        sci(SCI_SCROLLCARET);
+    }
+    // Drop the most recently added multi-selection (undo a Multi-select Next).
+    void multiSelectUndo()
+    {
+        const int n = static_cast<int>(sci(SCI_GETSELECTIONS));
+        if (n <= 1) return;
+        sci(SCI_DROPSELECTIONN, static_cast<uptr_t>(n - 1));
+        sci(SCI_SETMAINSELECTION, static_cast<int>(sci(SCI_GETSELECTIONS)) - 1);
         sci(SCI_SCROLLCARET);
     }
     int doCount(const FindOpts& o)
@@ -4855,6 +4905,11 @@ private:
             case IDM_EDIT_MULTISELECTALLMATCHCASE:          multiSelectAll(SCFIND_MATCHCASE); break;
             case IDM_EDIT_MULTISELECTALLWHOLEWORD:          multiSelectAll(SCFIND_WHOLEWORD); break;
             case IDM_EDIT_MULTISELECTALLMATCHCASEWHOLEWORD: multiSelectAll(SCFIND_MATCHCASE | SCFIND_WHOLEWORD); break;
+            case IDM_EDIT_MULTISELECTNEXT:                   multiSelectNext(0); break;
+            case IDM_EDIT_MULTISELECTNEXTMATCHCASE:          multiSelectNext(SCFIND_MATCHCASE); break;
+            case IDM_EDIT_MULTISELECTNEXTWHOLEWORD:          multiSelectNext(SCFIND_WHOLEWORD); break;
+            case IDM_EDIT_MULTISELECTNEXTMATCHCASEWHOLEWORD: multiSelectNext(SCFIND_MATCHCASE | SCFIND_WHOLEWORD); break;
+            case IDM_EDIT_MULTISELECTUNDO:                   multiSelectUndo(); break;
             case IDM_EDIT_UPPERCASE: sci(SCI_UPPERCASE); break;
             case IDM_EDIT_LOWERCASE: sci(SCI_LOWERCASE); break;
             case IDM_EDIT_INVERTCASE: transformSel([](std::string& s){ for (char& c : s) c = (char)(std::isupper((unsigned char)c) ? std::tolower((unsigned char)c) : std::toupper((unsigned char)c)); }); break;
