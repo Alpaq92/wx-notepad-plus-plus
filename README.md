@@ -17,7 +17,8 @@ Notepad++; the Linux/macOS builds are structured and CI-wired but still being va
 
 **Implemented:** tabbed editor with per-tab Scintilla documents, a **split second view** (Notepad++'s
 MAIN | SUB — Move/Clone to Other View, with the split collapsing when a pane empties), syntax
-highlighting (Lexilla), find/replace and find/replace-in-files, Go-to-line, dark mode, auto-indent /
+highlighting (Lexilla), find/replace and find/replace-in-files, **find-driven multi-cursor** (Select All
+Occurrences / Add Next), Go-to-line, dark mode, auto-indent /
 brace-match / smart-highlight, bookmarks, a **Document Map** (minimap), a **Function List** (symbol
 tree), pinned tabs, EOL detection, session restore, and — on Windows — a **Win32 plugin host** (real
 `LoadLibrary` loader, broad `NPPM_*` coverage incl. per-buffer tracking and view/language-aware queries,
