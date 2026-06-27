@@ -3983,6 +3983,17 @@ private:
         sci(SCI_SETMAINSELECTION, static_cast<int>(sci(SCI_GETSELECTIONS)) - 1);
         sci(SCI_SCROLLCARET);
     }
+    // Notepad++/VS Code "skip this occurrence": jump to the next occurrence without keeping the current
+    // one (add next, then drop the old main).
+    void multiSelectSkip(int flags)
+    {
+        if (!m_stc) return;
+        const int oldMain = static_cast<int>(sci(SCI_GETMAINSELECTION));
+        const int before  = static_cast<int>(sci(SCI_GETSELECTIONS));
+        multiSelectNext(flags);
+        if (static_cast<int>(sci(SCI_GETSELECTIONS)) > before)   // a next occurrence was added -> drop the skipped one
+            sci(SCI_DROPSELECTIONN, static_cast<uptr_t>(oldMain));
+    }
     int doCount(const FindOpts& o)
     {
         if (o.find.empty()) return 0;
@@ -4910,6 +4921,7 @@ private:
             case IDM_EDIT_MULTISELECTNEXTWHOLEWORD:          multiSelectNext(SCFIND_WHOLEWORD); break;
             case IDM_EDIT_MULTISELECTNEXTMATCHCASEWHOLEWORD: multiSelectNext(SCFIND_MATCHCASE | SCFIND_WHOLEWORD); break;
             case IDM_EDIT_MULTISELECTUNDO:                   multiSelectUndo(); break;
+            case IDM_EDIT_MULTISELECTSSKIP:                  multiSelectSkip(0); break;
             case IDM_EDIT_UPPERCASE: sci(SCI_UPPERCASE); break;
             case IDM_EDIT_LOWERCASE: sci(SCI_LOWERCASE); break;
             case IDM_EDIT_INVERTCASE: transformSel([](std::string& s){ for (char& c : s) c = (char)(std::isupper((unsigned char)c) ? std::tolower((unsigned char)c) : std::toupper((unsigned char)c)); }); break;
