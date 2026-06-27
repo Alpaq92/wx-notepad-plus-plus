@@ -22,6 +22,7 @@
 #include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
 #include <wx/listctrl.h>       // wxListView - wxListbook's page list (we widen it so labels don't truncate)
 #include <wx/clrpicker.h>      // wxColourPickerCtrl - Style Configurator foreground/background pickers
+#include <wx/tglbtn.h>         // wxToggleButton - incremental search bar match-case/whole-word/regex toggles
 #include <wx/aui/auibook.h>
 #include <wx/aui/aui.h>          // wxAuiManager - dock host for plugin panels (NPPM_DMM*)
 #include <wx/stc/stc.h>          // wxStyledTextCtrl - cross-platform editor (Phase 3 port target)
@@ -1821,7 +1822,17 @@ private:
     // ---- Incremental Search (Ctrl+Alt+I): find-as-you-type bar; Enter = next, Esc = close ---------
     wxPanel*    m_incBar = nullptr;
     wxTextCtrl* m_incField = nullptr;
+    wxToggleButton* m_incCaseBtn = nullptr; wxToggleButton* m_incWordBtn = nullptr; wxToggleButton* m_incRegexBtn = nullptr;
+    wxStaticText*   m_incCount = nullptr;
     int         m_incAnchor = 0;
+    int incFlags() const   // SCFIND_* flags from the incremental bar's three toggle buttons
+    {
+        int f = 0;
+        if (m_incCaseBtn  && m_incCaseBtn->GetValue())  f |= SCFIND_MATCHCASE;
+        if (m_incWordBtn  && m_incWordBtn->GetValue())  f |= SCFIND_WHOLEWORD;
+        if (m_incRegexBtn && m_incRegexBtn->GetValue()) f |= SCFIND_REGEXP | SCFIND_CXX11REGEX;
+        return f;
+    }
     void buildIncBar()
     {
         m_incBar = new wxPanel(this);
@@ -1829,18 +1840,33 @@ private:
         auto* sz  = new wxBoxSizer(wxHORIZONTAL);
         auto* lbl = new wxStaticText(m_incBar, wxID_ANY, "Find: ");
         if (m_dark) lbl->SetForegroundColour(wxColour(220, 220, 220));
-        m_incField = new wxTextCtrl(m_incBar, wxID_ANY, "", wxDefaultPosition, wxSize(260, -1), wxTE_PROCESS_ENTER);
+        m_incField = new wxTextCtrl(m_incBar, wxID_ANY, "", wxDefaultPosition, wxSize(220, -1), wxTE_PROCESS_ENTER);
         if (m_dark) { m_incField->SetBackgroundColour(wxColour(30, 30, 30)); m_incField->SetForegroundColour(wxColour(220, 220, 220)); }
+        auto mkToggle = [&](const wxString& cap, const wxString& tip) {
+            auto* b = new wxToggleButton(m_incBar, wxID_ANY, cap, wxDefaultPosition, wxSize(34, -1)); b->SetToolTip(tip); return b; };
+        m_incCaseBtn  = mkToggle("Aa",  "Match case");
+        m_incWordBtn  = mkToggle("\\b", "Match whole word only");
+        m_incRegexBtn = mkToggle(".*",  "Regular expression");
+        m_incCount = new wxStaticText(m_incBar, wxID_ANY, "", wxDefaultPosition, wxSize(108, -1));
+        if (m_dark) m_incCount->SetForegroundColour(wxColour(170, 170, 170));
         auto* nextB  = new wxButton(m_incBar, wxID_ANY, "Next",  wxDefaultPosition, wxSize(60, -1));
         auto* closeB = new wxButton(m_incBar, wxID_ANY, "Close", wxDefaultPosition, wxSize(60, -1));
         sz->Add(lbl, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8);
         sz->Add(m_incField, 0, wxALIGN_CENTER_VERTICAL | wxALL, 4);
+        sz->Add(m_incCaseBtn,  0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
+        sz->Add(m_incWordBtn,  0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
+        sz->Add(m_incRegexBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+        sz->Add(m_incCount, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
         sz->Add(nextB,  0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
         sz->Add(closeB, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
         m_incBar->SetSizer(sz);
+        auto reFind = [this](wxCommandEvent&){ incFind(true); m_incField->SetFocus(); };   // a toggle changed -> re-search from the anchor
         m_incField->Bind(wxEVT_TEXT,       [this](wxCommandEvent&){ incFind(true);  });
         m_incField->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent&){ incFind(false); });
         m_incField->Bind(wxEVT_CHAR_HOOK,  [this](wxKeyEvent& e){ if (e.GetKeyCode() == WXK_ESCAPE) hideIncBar(); else e.Skip(); });
+        m_incCaseBtn->Bind(wxEVT_TOGGLEBUTTON,  reFind);
+        m_incWordBtn->Bind(wxEVT_TOGGLEBUTTON,  reFind);
+        m_incRegexBtn->Bind(wxEVT_TOGGLEBUTTON, reFind);
         nextB->Bind(wxEVT_BUTTON,  [this](wxCommandEvent&){ incFind(false); m_incField->SetFocus(); });
         closeB->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){ hideIncBar(); });
         m_aui.AddPane(m_incBar, wxAuiPaneInfo().Name("incsearch").Bottom().CaptionVisible(false)
@@ -1852,16 +1878,47 @@ private:
         if (!m_incField) return;
         const wxString needle = m_incField->GetValue();
         const wxColour ok = m_dark ? wxColour(220, 220, 220) : *wxBLACK;
-        if (needle.empty()) { sci(SCI_SETSEL, m_incAnchor, m_incAnchor); m_incField->SetForegroundColour(ok); m_incField->Refresh(); return; }
+        if (needle.empty()) { sci(SCI_SETSEL, m_incAnchor, m_incAnchor); m_incField->SetForegroundColour(ok); m_incField->Refresh(); incUpdate(); return; }
+        const int flags = incFlags();
         const int start = fromAnchor ? m_incAnchor : (int)sci(SCI_GETSELECTIONEND);
         sci(SCI_SETSEL, start, start);
         sci(SCI_SEARCHANCHOR);
         const wxScopedCharBuffer u = needle.utf8_str();
-        sptr_t pos = sci(SCI_SEARCHNEXT, 0, reinterpret_cast<sptr_t>(u.data()));
-        if (pos < 0) { sci(SCI_SETSEL, 0, 0); sci(SCI_SEARCHANCHOR); pos = sci(SCI_SEARCHNEXT, 0, reinterpret_cast<sptr_t>(u.data())); }   // wrap to top
+        sptr_t pos = sci(SCI_SEARCHNEXT, flags, reinterpret_cast<sptr_t>(u.data()));
+        if (pos < 0) { sci(SCI_SETSEL, 0, 0); sci(SCI_SEARCHANCHOR); pos = sci(SCI_SEARCHNEXT, flags, reinterpret_cast<sptr_t>(u.data())); }   // wrap to top
         m_incField->SetForegroundColour(pos >= 0 ? ok : *wxRED);   // red field = not found
         m_incField->Refresh();
         if (pos >= 0) sci(SCI_SCROLLCARET);
+        incUpdate();   // highlight every match + refresh the "n of m" counter
+    }
+    void incUpdate()   // highlight all matches (MARK_INDIC) and show "n of m" in the bar's counter
+    {
+        if (!m_incField || !m_incCount) return;
+        clearMarks();
+        const wxString needle = m_incField->GetValue();
+        if (needle.empty()) { m_incCount->SetLabel(""); return; }
+        const wxScopedCharBuffer u = needle.utf8_str();
+        const int len = (int)sci(SCI_GETLENGTH);
+        const int selStart = (int)sci(SCI_GETSELECTIONSTART);
+        const int CAP = 10000;   // bound per-keystroke work so a common letter in a huge file can't stall typing
+        sci(SCI_SETSEARCHFLAGS, incFlags());
+        sci(SCI_SETINDICATORCURRENT, MARK_INDIC);
+        int total = 0, current = 0;
+        sci(SCI_SETTARGETSTART, 0); sci(SCI_SETTARGETEND, len);
+        while (total < CAP && sci(SCI_SEARCHINTARGET, u.length(), reinterpret_cast<sptr_t>(u.data())) >= 0)
+        {
+            const int s = (int)sci(SCI_GETTARGETSTART), e = (int)sci(SCI_GETTARGETEND);
+            sci(SCI_INDICATORFILLRANGE, s, (e > s) ? e - s : 1);
+            ++total;
+            if (s == selStart) current = total;
+            const int adv = (e > s) ? e : e + 1;   // step past zero-length (regex) matches
+            if (adv >= len) break;
+            sci(SCI_SETTARGETSTART, adv); sci(SCI_SETTARGETEND, len);
+        }
+        m_incCount->SetLabel(!total      ? wxString("No matches")
+                             : total >= CAP ? wxString::Format("%d+ matches", CAP)
+                             : current    ? wxString::Format("%d of %d", current, total)
+                                          : wxString::Format("%d matches", total));
     }
     void showIncBar()
     {
@@ -1875,6 +1932,7 @@ private:
     void hideIncBar()
     {
         if (!m_incBar) return;
+        clearMarks(); if (m_incCount) m_incCount->SetLabel("");   // drop the highlight-all + counter when the bar closes
         wxAuiPaneInfo& pi = m_aui.GetPane(m_incBar);
         if (pi.IsOk() && pi.IsShown()) { pi.Hide(); m_aui.Update(); }
         if (m_stc) m_stc->SetFocus();
