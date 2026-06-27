@@ -2644,10 +2644,13 @@ private:
         }
         else
         {
+            detachViewEditor(&from, p);            // lift FROM's editor off p so the move can't strand/destroy it
             from.tabs->RemovePage(idx);            // detach the page without destroying it
             p->Reparent(to.tabs);
             to.tabs->AddPage(p, title, true);
-            setActiveView(&to); activateBuffer(p);
+            if (from.tabs->GetPageCount() > 0)     // re-home FROM's editor onto its surviving active page
+                activateBuffer(static_cast<EditorPage*>(from.tabs->GetPage(from.tabs->GetSelection())));
+            setActiveView(&to); activateBuffer(p); // ...then leave the moved doc active in the other view
         }
     }
     // Split the editor area so both views show; theme the sub view's editor to match on first reveal.
@@ -2668,6 +2671,9 @@ private:
         const bool subEmpty  = (m_sub.tabs->GetPageCount() == 0);
         if (!mainEmpty && !subEmpty) return;
         if (mainEmpty && !subEmpty)
+        {
+            if (m_sub.tabs->GetSelection() != wxNOT_FOUND)   // lift SUB's editor off its page before the pages migrate to MAIN
+                detachViewEditor(&m_sub, static_cast<EditorPage*>(m_sub.tabs->GetPage(m_sub.tabs->GetSelection())));
             while (m_sub.tabs->GetPageCount() > 0)            // consolidate the sub view's pages into main
             {
                 auto* pg = static_cast<EditorPage*>(m_sub.tabs->GetPage(0));
@@ -2676,6 +2682,7 @@ private:
                 pg->Reparent(m_main.tabs);
                 m_main.tabs->AddPage(pg, t, true);
             }
+        }
         m_split->Unsplit(m_sub.tabs);                        // show MAIN only
         m_sub.tabs->Hide();
         m_split->UpdateSize();                               // let the surviving notebook fill the splitter
