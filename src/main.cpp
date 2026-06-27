@@ -3881,6 +3881,58 @@ private:
         if (o.inSelection) { start = static_cast<int>(sci(SCI_GETSELECTIONSTART)); end = static_cast<int>(sci(SCI_GETSELECTIONEND)); }
         else               { start = 0; end = static_cast<int>(sci(SCI_GETLENGTH)); }
     }
+    // The multi-select search term: the current selection, or the word under the caret (which it selects).
+    // Returns the UTF-8 bytes, empty if there's nothing to match.
+    std::string multiSelTerm()
+    {
+        int a = static_cast<int>(sci(SCI_GETSELECTIONSTART)), b = static_cast<int>(sci(SCI_GETSELECTIONEND));
+        if (a == b)
+        {
+            const int pos = static_cast<int>(sci(SCI_GETCURRENTPOS));
+            a = static_cast<int>(sci(SCI_WORDSTARTPOSITION, pos, 1));
+            b = static_cast<int>(sci(SCI_WORDENDPOSITION,   pos, 1));
+            if (a == b) return {};                       // caret not on a word
+            sci(SCI_SETSEL, a, b);
+        }
+        const int len = b - a;
+        if (len <= 0 || len > 4096) return {};
+        std::string s(static_cast<size_t>(len) + 1, '\0');
+        sci(SCI_GETSELTEXT, 0, reinterpret_cast<sptr_t>(&s[0]));
+        s.resize(len);
+        return s;
+    }
+    // Notepad++ "Multi-select All": box every occurrence of the term as its own selection so typing edits
+    // them all at once (multi-cursor). flags picks MATCHCASE / WHOLEWORD per the menu variant.
+    void multiSelectAll(int flags)
+    {
+        if (!m_stc) return;
+        const std::string term = multiSelTerm();
+        if (term.empty()) return;
+        sci(SCI_SETMULTIPLESELECTION, 1);            // these commands need multi-selection even if it's off in Preferences
+        const int caret = static_cast<int>(sci(SCI_GETCURRENTPOS)), len = static_cast<int>(sci(SCI_GETLENGTH));
+        sci(SCI_SETSEARCHFLAGS, flags);
+        std::vector<std::pair<int, int>> hits;
+        for (int start = 0; start < len; )
+        {
+            sci(SCI_SETTARGETSTART, start); sci(SCI_SETTARGETEND, len);
+            if (sci(SCI_SEARCHINTARGET, term.size(), reinterpret_cast<sptr_t>(term.c_str())) < 0) break;
+            const int ms = static_cast<int>(sci(SCI_GETTARGETSTART)), me = static_cast<int>(sci(SCI_GETTARGETEND));
+            if (me <= ms) { start = ms + 1; continue; }   // zero-length guard
+            hits.emplace_back(ms, me);
+            start = me;
+        }
+        if (hits.empty()) return;
+        sci(SCI_CLEARSELECTIONS);
+        int mainIdx = 0;
+        for (size_t i = 0; i < hits.size(); ++i)
+        {
+            if (i == 0) sci(SCI_SETSELECTION, hits[i].second, hits[i].first);   // (caret, anchor)
+            else        sci(SCI_ADDSELECTION, hits[i].second, hits[i].first);
+            if (hits[i].first <= caret && caret <= hits[i].second) mainIdx = static_cast<int>(i);   // keep the caret's occurrence as the main selection
+        }
+        sci(SCI_SETMAINSELECTION, mainIdx);
+        sci(SCI_SCROLLCARET);
+    }
     int doCount(const FindOpts& o)
     {
         if (o.find.empty()) return 0;
@@ -4799,6 +4851,10 @@ private:
             case IDM_EDIT_PASTE: sci(SCI_PASTE); break;
             case IDM_EDIT_DELETE: sci(SCI_CLEAR); break;
             case IDM_EDIT_SELECTALL: sci(SCI_SELECTALL); break;
+            case IDM_EDIT_MULTISELECTALL:                   multiSelectAll(0); break;
+            case IDM_EDIT_MULTISELECTALLMATCHCASE:          multiSelectAll(SCFIND_MATCHCASE); break;
+            case IDM_EDIT_MULTISELECTALLWHOLEWORD:          multiSelectAll(SCFIND_WHOLEWORD); break;
+            case IDM_EDIT_MULTISELECTALLMATCHCASEWHOLEWORD: multiSelectAll(SCFIND_MATCHCASE | SCFIND_WHOLEWORD); break;
             case IDM_EDIT_UPPERCASE: sci(SCI_UPPERCASE); break;
             case IDM_EDIT_LOWERCASE: sci(SCI_LOWERCASE); break;
             case IDM_EDIT_INVERTCASE: transformSel([](std::string& s){ for (char& c : s) c = (char)(std::isupper((unsigned char)c) ? std::tolower((unsigned char)c) : std::toupper((unsigned char)c)); }); break;
