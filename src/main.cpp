@@ -22,6 +22,7 @@
 #include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
 #include <wx/listctrl.h>       // wxListView - wxListbook's page list (we widen it so labels don't truncate)
 #include <wx/clrpicker.h>      // wxColourPickerCtrl - Style Configurator foreground/background pickers
+#include <wx/tglbtn.h>         // wxToggleButton - incremental search bar match-case/whole-word/regex toggles
 #include <wx/aui/auibook.h>
 #include <wx/aui/aui.h>          // wxAuiManager - dock host for plugin panels (NPPM_DMM*)
 #include <wx/stc/stc.h>          // wxStyledTextCtrl - cross-platform editor (Phase 3 port target)
@@ -1460,11 +1461,7 @@ private:
         ::SetWindowSubclass(v.sci, SciHwndProc, 3, reinterpret_cast<DWORD_PTR>(v.stc));   // plugin SendMessage(SCI_*) to THIS handle -> THIS view
 #endif
         bindViewEvents(v);                  // wxEVT_STC_* -> editor behaviours + plugin beNotified
-        if (prev) { m_active = prev; m_stc = prev->stc; m_tabs = prev->tabs;
-#ifdef __WXMSW__
-                    m_sci = prev->sci;
-#endif
-        }
+        if (prev) setActiveView(prev);      // restore the previously-active view (re-point the aliases)
     }
 
     // wxStyledTextCtrl fires wxEVT_STC_* (not Win32 WM_NOTIFY); bind the editor behaviours + plugin
@@ -1825,7 +1822,17 @@ private:
     // ---- Incremental Search (Ctrl+Alt+I): find-as-you-type bar; Enter = next, Esc = close ---------
     wxPanel*    m_incBar = nullptr;
     wxTextCtrl* m_incField = nullptr;
+    wxToggleButton* m_incCaseBtn = nullptr; wxToggleButton* m_incWordBtn = nullptr; wxToggleButton* m_incRegexBtn = nullptr;
+    wxStaticText*   m_incCount = nullptr;
     int         m_incAnchor = 0;
+    int incFlags() const   // SCFIND_* flags from the incremental bar's three toggle buttons
+    {
+        int f = 0;
+        if (m_incCaseBtn  && m_incCaseBtn->GetValue())  f |= SCFIND_MATCHCASE;
+        if (m_incWordBtn  && m_incWordBtn->GetValue())  f |= SCFIND_WHOLEWORD;
+        if (m_incRegexBtn && m_incRegexBtn->GetValue()) f |= SCFIND_REGEXP | SCFIND_CXX11REGEX;
+        return f;
+    }
     void buildIncBar()
     {
         m_incBar = new wxPanel(this);
@@ -1833,18 +1840,33 @@ private:
         auto* sz  = new wxBoxSizer(wxHORIZONTAL);
         auto* lbl = new wxStaticText(m_incBar, wxID_ANY, "Find: ");
         if (m_dark) lbl->SetForegroundColour(wxColour(220, 220, 220));
-        m_incField = new wxTextCtrl(m_incBar, wxID_ANY, "", wxDefaultPosition, wxSize(260, -1), wxTE_PROCESS_ENTER);
+        m_incField = new wxTextCtrl(m_incBar, wxID_ANY, "", wxDefaultPosition, wxSize(220, -1), wxTE_PROCESS_ENTER);
         if (m_dark) { m_incField->SetBackgroundColour(wxColour(30, 30, 30)); m_incField->SetForegroundColour(wxColour(220, 220, 220)); }
+        auto mkToggle = [&](const wxString& cap, const wxString& tip) {
+            auto* b = new wxToggleButton(m_incBar, wxID_ANY, cap, wxDefaultPosition, wxSize(34, -1)); b->SetToolTip(tip); return b; };
+        m_incCaseBtn  = mkToggle("Aa",  "Match case");
+        m_incWordBtn  = mkToggle("\\b", "Match whole word only");
+        m_incRegexBtn = mkToggle(".*",  "Regular expression");
+        m_incCount = new wxStaticText(m_incBar, wxID_ANY, "", wxDefaultPosition, wxSize(108, -1));
+        if (m_dark) m_incCount->SetForegroundColour(wxColour(170, 170, 170));
         auto* nextB  = new wxButton(m_incBar, wxID_ANY, "Next",  wxDefaultPosition, wxSize(60, -1));
         auto* closeB = new wxButton(m_incBar, wxID_ANY, "Close", wxDefaultPosition, wxSize(60, -1));
         sz->Add(lbl, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8);
         sz->Add(m_incField, 0, wxALIGN_CENTER_VERTICAL | wxALL, 4);
+        sz->Add(m_incCaseBtn,  0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
+        sz->Add(m_incWordBtn,  0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
+        sz->Add(m_incRegexBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+        sz->Add(m_incCount, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
         sz->Add(nextB,  0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
         sz->Add(closeB, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
         m_incBar->SetSizer(sz);
+        auto reFind = [this](wxCommandEvent&){ incFind(true); m_incField->SetFocus(); };   // a toggle changed -> re-search from the anchor
         m_incField->Bind(wxEVT_TEXT,       [this](wxCommandEvent&){ incFind(true);  });
         m_incField->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent&){ incFind(false); });
         m_incField->Bind(wxEVT_CHAR_HOOK,  [this](wxKeyEvent& e){ if (e.GetKeyCode() == WXK_ESCAPE) hideIncBar(); else e.Skip(); });
+        m_incCaseBtn->Bind(wxEVT_TOGGLEBUTTON,  reFind);
+        m_incWordBtn->Bind(wxEVT_TOGGLEBUTTON,  reFind);
+        m_incRegexBtn->Bind(wxEVT_TOGGLEBUTTON, reFind);
         nextB->Bind(wxEVT_BUTTON,  [this](wxCommandEvent&){ incFind(false); m_incField->SetFocus(); });
         closeB->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){ hideIncBar(); });
         m_aui.AddPane(m_incBar, wxAuiPaneInfo().Name("incsearch").Bottom().CaptionVisible(false)
@@ -1856,16 +1878,47 @@ private:
         if (!m_incField) return;
         const wxString needle = m_incField->GetValue();
         const wxColour ok = m_dark ? wxColour(220, 220, 220) : *wxBLACK;
-        if (needle.empty()) { sci(SCI_SETSEL, m_incAnchor, m_incAnchor); m_incField->SetForegroundColour(ok); m_incField->Refresh(); return; }
+        if (needle.empty()) { sci(SCI_SETSEL, m_incAnchor, m_incAnchor); m_incField->SetForegroundColour(ok); m_incField->Refresh(); incUpdate(); return; }
+        const int flags = incFlags();
         const int start = fromAnchor ? m_incAnchor : (int)sci(SCI_GETSELECTIONEND);
         sci(SCI_SETSEL, start, start);
         sci(SCI_SEARCHANCHOR);
         const wxScopedCharBuffer u = needle.utf8_str();
-        sptr_t pos = sci(SCI_SEARCHNEXT, 0, reinterpret_cast<sptr_t>(u.data()));
-        if (pos < 0) { sci(SCI_SETSEL, 0, 0); sci(SCI_SEARCHANCHOR); pos = sci(SCI_SEARCHNEXT, 0, reinterpret_cast<sptr_t>(u.data())); }   // wrap to top
+        sptr_t pos = sci(SCI_SEARCHNEXT, flags, reinterpret_cast<sptr_t>(u.data()));
+        if (pos < 0) { sci(SCI_SETSEL, 0, 0); sci(SCI_SEARCHANCHOR); pos = sci(SCI_SEARCHNEXT, flags, reinterpret_cast<sptr_t>(u.data())); }   // wrap to top
         m_incField->SetForegroundColour(pos >= 0 ? ok : *wxRED);   // red field = not found
         m_incField->Refresh();
         if (pos >= 0) sci(SCI_SCROLLCARET);
+        incUpdate();   // highlight every match + refresh the "n of m" counter
+    }
+    void incUpdate()   // highlight all matches (MARK_INDIC) and show "n of m" in the bar's counter
+    {
+        if (!m_incField || !m_incCount) return;
+        clearMarks();
+        const wxString needle = m_incField->GetValue();
+        if (needle.empty()) { m_incCount->SetLabel(""); return; }
+        const wxScopedCharBuffer u = needle.utf8_str();
+        const int len = (int)sci(SCI_GETLENGTH);
+        const int selStart = (int)sci(SCI_GETSELECTIONSTART);
+        const int CAP = 10000;   // bound per-keystroke work so a common letter in a huge file can't stall typing
+        sci(SCI_SETSEARCHFLAGS, incFlags());
+        sci(SCI_SETINDICATORCURRENT, MARK_INDIC);
+        int total = 0, current = 0;
+        sci(SCI_SETTARGETSTART, 0); sci(SCI_SETTARGETEND, len);
+        while (total < CAP && sci(SCI_SEARCHINTARGET, u.length(), reinterpret_cast<sptr_t>(u.data())) >= 0)
+        {
+            const int s = (int)sci(SCI_GETTARGETSTART), e = (int)sci(SCI_GETTARGETEND);
+            sci(SCI_INDICATORFILLRANGE, s, (e > s) ? e - s : 1);
+            ++total;
+            if (s == selStart) current = total;
+            const int adv = (e > s) ? e : e + 1;   // step past zero-length (regex) matches
+            if (adv >= len) break;
+            sci(SCI_SETTARGETSTART, adv); sci(SCI_SETTARGETEND, len);
+        }
+        m_incCount->SetLabel(!total      ? wxString("No matches")
+                             : total >= CAP ? wxString::Format("%d+ matches", CAP)
+                             : current    ? wxString::Format("%d of %d", current, total)
+                                          : wxString::Format("%d matches", total));
     }
     void showIncBar()
     {
@@ -1879,6 +1932,7 @@ private:
     void hideIncBar()
     {
         if (!m_incBar) return;
+        clearMarks(); if (m_incCount) m_incCount->SetLabel("");   // drop the highlight-all + counter when the bar closes
         wxAuiPaneInfo& pi = m_aui.GetPane(m_incBar);
         if (pi.IsOk() && pi.IsShown()) { pi.Hide(); m_aui.Update(); }
         if (m_stc) m_stc->SetFocus();
@@ -2426,6 +2480,25 @@ private:
 #endif
         return true;
     }
+    // The view whose tab strip fired this notebook event (MAIN unless the SUB notebook fired).
+    ViewPane* viewOfEvent(wxAuiNotebookEvent& e)
+    { return dynamic_cast<wxAuiNotebook*>(e.GetEventObject()) == m_sub.tabs ? &m_sub : &m_main; }
+    // Total open documents across BOTH views (>= 1 once the editor is built).
+    int totalDocs() const
+    { return (m_main.tabs ? (int)m_main.tabs->GetPageCount() : 0) + (m_sub.tabs ? (int)m_sub.tabs->GetPageCount() : 0); }
+    // Every open document across both views (MAIN then SUB) - for cross-view ops (exit save-prompts).
+    std::vector<EditorPage*> allPages()
+    {
+        std::vector<EditorPage*> v;
+        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
+            if (nb) for (size_t i = 0; i < nb->GetPageCount(); ++i) v.push_back(static_cast<EditorPage*>(nb->GetPage(i)));
+        return v;
+    }
+    // Before deleting page `p`, move view `v`'s persistent editor off it (to the notebook, hidden) so the
+    // page's destruction can't take the editor with it - matters when p is the view's only remaining page
+    // (wxAui has no sibling page to re-home it onto). activateBuffer re-mounts it on the next activation.
+    void detachViewEditor(ViewPane* v, EditorPage* p)
+    { if (v && v->stc && v->stc->GetParent() == p) { v->stc->Hide(); v->stc->Reparent(v->tabs); } }
     // A view's editor gained focus: make it active and sync the chrome (status bar + minimap) to its doc.
     void onViewFocus(ViewPane* v)
     {
@@ -2437,8 +2510,7 @@ private:
     }
     void onPageChanged(wxAuiNotebookEvent& e)
     {
-        auto* nb = dynamic_cast<wxAuiNotebook*>(e.GetEventObject());   // route by the notebook that fired
-        setActiveView(nb == m_sub.tabs ? &m_sub : &m_main);
+        setActiveView(viewOfEvent(e));   // route by the notebook that fired
         if (auto* p = activePage()) activateBuffer(p);
         e.Skip();
     }
@@ -2475,10 +2547,9 @@ private:
     bool confirmClose(EditorPage* p)
     {
         if (!p) return true;
-        const bool dirty = (p == activePage()) ? (sci(SCI_GETMODIFY) != 0) : p->dirty;
-        if (!dirty) return true;
-        const int idx = m_tabs->GetPageIndex(p);
-        if (idx != wxNOT_FOUND && idx != m_tabs->GetSelection()) m_tabs->SetSelection(idx);   // show the doc in question
+        setActiveView(viewOf(p));            // make p's view active so sci()/m_path/onSave refer to p (incl. the OTHER split view)
+        activateBuffer(p);                   // swap that view to p's document and select its tab
+        if (sci(SCI_GETMODIFY) == 0) return true;
         const wxString name = !p->path.empty() ? p->path : (p->title.empty() ? wxString("new") : p->title);
 
         wxDialog dlg(this, wxID_ANY, "wxNotepad++");
@@ -2503,63 +2574,87 @@ private:
     }
     void onPageClose(wxAuiNotebookEvent& e)
     {
-        auto* nb = dynamic_cast<wxAuiNotebook*>(e.GetEventObject());
-        setActiveView(nb == m_sub.tabs ? &m_sub : &m_main);   // close from the view whose tab fired
+        setActiveView(viewOfEvent(e));   // close from the view whose tab fired
         auto* p = static_cast<EditorPage*>(m_tabs->GetPage(e.GetSelection()));
         if (!confirmClose(p)) { e.Veto(); return; }
-        const int total = (int)m_main.tabs->GetPageCount() + (int)m_sub.tabs->GetPageCount();
-        if (total <= 1) { e.Veto(); resetActiveDoc(); return; }                              // never zero documents (N++)
+        if (totalDocs() <= 1) { e.Veto(); resetActiveDoc(); return; }                        // never zero documents (N++)
         // Remove the page ourselves (after this event) so the collapse check sees the real count - wxAui's
         // own removal races a CallAfter, which would leave an empty pane behind.
         e.Veto();
         this->CallAfter([this, p]{
-            if (ViewPane* v = viewOf(p)) { const int i = v->tabs->GetPageIndex(p); if (i != wxNOT_FOUND) v->tabs->DeletePage(i); }
+            if (ViewPane* v = viewOf(p)) {
+                const int i = v->tabs->GetPageIndex(p);
+                if (i != wxNOT_FOUND) {
+                    detachViewEditor(v, p);   // lift the editor off the page so its deletion can't take it (last-page case)
+                    v->tabs->DeletePage(i);
+                }
+            }
             collapseIfEmpty();
         });
     }
     void closeActive()
     {
         if (!confirmClose(activePage())) return;
-        const int total = (int)m_main.tabs->GetPageCount() + (int)m_sub.tabs->GetPageCount();
-        if (total <= 1) { resetActiveDoc(); return; }                                        // last document - keep one empty
+        if (totalDocs() <= 1) { resetActiveDoc(); return; }                                  // last document - keep one empty
+        detachViewEditor(m_active, activePage());   // lift the editor off the page before deleting it
         m_tabs->DeletePage(m_tabs->GetSelection());
         collapseIfEmpty();
     }
     void closeAll()
     {
-        for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
-            if (!confirmClose(static_cast<EditorPage*>(m_tabs->GetPage(i)))) return;   // cancelled -> abort
-        m_tabs->Freeze();
-        while (m_tabs->GetPageCount() > 1) m_tabs->DeletePage(0);
-        resetActiveDoc();
-        m_tabs->Thaw();
+        for (EditorPage* p : allPages())
+            if (!confirmClose(p)) return;                  // prompt across BOTH views; cancel aborts
+        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
+            if (nb)
+            {
+                ViewPane* v = (nb == m_sub.tabs) ? &m_sub : &m_main;
+                if (nb->GetSelection() != wxNOT_FOUND) detachViewEditor(v, static_cast<EditorPage*>(nb->GetPage(nb->GetSelection())));
+                while (nb->GetPageCount() > 0) nb->DeletePage(0);
+            }
+        setActiveView(&m_main);
+        addDocument("", nextNewName());                    // leave one empty doc in MAIN (N++ never has zero)
+        collapseIfEmpty();                                 // unsplit the now-empty SUB
     }
     void resetActiveDoc()
     {
-        sci(SCI_CLEARALL); sci(SCI_EMPTYUNDOBUFFER); sci(SCI_SETSAVEPOINT);
-        if (auto* p = activePage()) { p->path.clear(); p->dirty = false; }
+        EditorPage* keep = activePage();
+        bool shared = false;                 // is this doc cloned into the other view? then don't wipe the shared buffer
+        if (keep) for (EditorPage* o : allPages()) if (o != keep && o->doc == keep->doc) { shared = true; break; }
+        if (shared)                          // hand the kept page a fresh empty buffer; the clone keeps the original content
+        {
+            const sptr_t nd = sci(SCI_CREATEDOCUMENT, 0, SC_DOCUMENTOPTION_TEXT_LARGE);
+            sci(SCI_SETDOCPOINTER, 0, nd);   // switch the view to the new doc (releases the shared ref without clearing it)
+            if (keep) keep->doc = nd;
+        }
+        else { sci(SCI_CLEARALL); sci(SCI_EMPTYUNDOBUFFER); }
+        sci(SCI_SETSAVEPOINT);
+        if (keep) { keep->path.clear(); keep->dirty = false; }
         m_path.clear();
         setLexerForFile("");
         setDocTitle(nextNewName());
     }
     void closeAllBut(EditorPage* keep)
     {
-        for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
-        {
-            auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i));
-            if (p != keep && !confirmClose(p)) return;   // cancelled -> abort
-        }
-        m_tabs->Freeze();
-        for (int i = (int)m_tabs->GetPageCount() - 1; i >= 0; --i)
-            if (m_tabs->GetPage(i) != keep) m_tabs->DeletePage(i);
-        m_tabs->Thaw();
+        for (EditorPage* p : allPages())
+            if (p != keep && !confirmClose(p)) return;     // prompt across BOTH views; cancel aborts
+        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
+            if (nb)
+            {
+                ViewPane* v = (nb == m_sub.tabs) ? &m_sub : &m_main;
+                if (nb->GetSelection() != wxNOT_FOUND)     // protect a view's editor if its active page is being deleted
+                { auto* ap = static_cast<EditorPage*>(nb->GetPage(nb->GetSelection())); if (ap != keep) detachViewEditor(v, ap); }
+                for (int i = (int)nb->GetPageCount() - 1; i >= 0; --i)
+                    if (nb->GetPage(i) != keep) nb->DeletePage(i);
+            }
+        setActiveView(viewOf(keep));
+        collapseIfEmpty();                                 // unsplit whichever view is now empty
     }
     // On window close / app exit, prompt for every modified document; a Cancel aborts the close.
     void onCloseWindow(wxCloseEvent& e)
     {
         if (e.CanVeto())   // a forced close (e.g. the theme-restart) skips prompts and just exits
-            for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
-                if (!confirmClose(static_cast<EditorPage*>(m_tabs->GetPage(i)))) { e.Veto(); return; }
+            for (EditorPage* p : allPages())   // prompt EVERY modified doc across BOTH views - none lost on exit
+                if (!confirmClose(p)) { e.Veto(); return; }
         saveSettings();    // persist any in-session View-menu toggle changes
         saveSession(wxConfigBase::Get());   // remember the open (saved) files so the next launch reopens them, like Notepad++
         wxConfigBase::Get()->Flush();
@@ -2584,8 +2679,7 @@ private:
     }
     void onTabContext(wxAuiNotebookEvent& e)
     {
-        auto* nb = dynamic_cast<wxAuiNotebook*>(e.GetEventObject());   // the right-clicked tab's view
-        setActiveView(nb == m_sub.tabs ? &m_sub : &m_main);
+        setActiveView(viewOfEvent(e));   // the right-clicked tab's view
         if (e.GetSelection() != wxNOT_FOUND) m_tabs->SetSelection(e.GetSelection());
         wxMenu menu;
         menu.Append(IDM_FILE_CLOSE, "Close");
@@ -2627,10 +2721,13 @@ private:
         }
         else
         {
+            detachViewEditor(&from, p);            // lift FROM's editor off p so the move can't strand/destroy it
             from.tabs->RemovePage(idx);            // detach the page without destroying it
             p->Reparent(to.tabs);
             to.tabs->AddPage(p, title, true);
-            setActiveView(&to); activateBuffer(p);
+            if (from.tabs->GetPageCount() > 0)     // re-home FROM's editor onto its surviving active page
+                activateBuffer(static_cast<EditorPage*>(from.tabs->GetPage(from.tabs->GetSelection())));
+            setActiveView(&to); activateBuffer(p); // ...then leave the moved doc active in the other view
         }
     }
     // Split the editor area so both views show; theme the sub view's editor to match on first reveal.
@@ -2651,14 +2748,21 @@ private:
         const bool subEmpty  = (m_sub.tabs->GetPageCount() == 0);
         if (!mainEmpty && !subEmpty) return;
         if (mainEmpty && !subEmpty)
+        {
+            const int ssel = m_sub.tabs->GetSelection();
+            EditorPage* keep = static_cast<EditorPage*>(m_sub.tabs->GetPage(ssel == wxNOT_FOUND ? 0 : ssel));
+            detachViewEditor(&m_sub, keep);                  // lift SUB's editor off its page before the pages migrate to MAIN
             while (m_sub.tabs->GetPageCount() > 0)            // consolidate the sub view's pages into main
             {
                 auto* pg = static_cast<EditorPage*>(m_sub.tabs->GetPage(0));
                 const wxString t = m_sub.tabs->GetPageText(0);
                 m_sub.tabs->RemovePage(0);
                 pg->Reparent(m_main.tabs);
-                m_main.tabs->AddPage(pg, t, true);
+                m_main.tabs->AddPage(pg, t, false);          // don't churn the selection per page
             }
+            const int ki = m_main.tabs->GetPageIndex(keep);
+            if (ki != wxNOT_FOUND) m_main.tabs->SetSelection(ki);   // restore the doc that was active in SUB
+        }
         m_split->Unsplit(m_sub.tabs);                        // show MAIN only
         m_sub.tabs->Hide();
         m_split->UpdateSize();                               // let the surviving notebook fill the splitter
@@ -3864,6 +3968,119 @@ private:
         if (o.inSelection) { start = static_cast<int>(sci(SCI_GETSELECTIONSTART)); end = static_cast<int>(sci(SCI_GETSELECTIONEND)); }
         else               { start = 0; end = static_cast<int>(sci(SCI_GETLENGTH)); }
     }
+    // The multi-select search term: the current selection, or the word under the caret (which it selects).
+    // Returns the UTF-8 bytes, empty if there's nothing to match.
+    std::string multiSelTerm()
+    {
+        const int mi = static_cast<int>(sci(SCI_GETMAINSELECTION));   // robust when there are already multiple selections
+        int a = static_cast<int>(sci(SCI_GETSELECTIONNSTART, mi)), b = static_cast<int>(sci(SCI_GETSELECTIONNEND, mi));
+        if (a > b) { const int t = a; a = b; b = t; }
+        if (a == b)
+        {
+            const int pos = static_cast<int>(sci(SCI_GETSELECTIONNCARET, mi));
+            a = static_cast<int>(sci(SCI_WORDSTARTPOSITION, pos, 1));
+            b = static_cast<int>(sci(SCI_WORDENDPOSITION,   pos, 1));
+            if (a == b) return {};                       // caret not on a word
+            sci(SCI_SETSEL, a, b);
+        }
+        if (b - a <= 0 || b - a > 4096) return {};
+        return m_stc->GetTextRange(a, b).utf8_string();   // UTF-8 bytes of the main selection
+    }
+    // Notepad++ "Multi-select All": box every occurrence of the term as its own selection so typing edits
+    // them all at once (multi-cursor). flags picks MATCHCASE / WHOLEWORD per the menu variant.
+    void multiSelectAll(int flags)
+    {
+        if (!m_stc) return;
+        const std::string term = multiSelTerm();
+        if (term.empty()) return;
+        sci(SCI_SETMULTIPLESELECTION, 1);            // these commands need multi-selection even if it's off in Preferences
+        const int caret = static_cast<int>(sci(SCI_GETCURRENTPOS)), len = static_cast<int>(sci(SCI_GETLENGTH));
+        sci(SCI_SETSEARCHFLAGS, flags);
+        std::vector<std::pair<int, int>> hits;
+        for (int start = 0; start < len; )
+        {
+            sci(SCI_SETTARGETSTART, start); sci(SCI_SETTARGETEND, len);
+            if (sci(SCI_SEARCHINTARGET, term.size(), reinterpret_cast<sptr_t>(term.c_str())) < 0) break;
+            const int ms = static_cast<int>(sci(SCI_GETTARGETSTART)), me = static_cast<int>(sci(SCI_GETTARGETEND));
+            if (me <= ms) { start = ms + 1; continue; }   // zero-length guard
+            hits.emplace_back(ms, me);
+            start = me;
+        }
+        if (hits.empty()) return;
+        sci(SCI_CLEARSELECTIONS);
+        int mainIdx = 0;
+        for (size_t i = 0; i < hits.size(); ++i)
+        {
+            if (i == 0) sci(SCI_SETSELECTION, hits[i].second, hits[i].first);   // (caret, anchor)
+            else        sci(SCI_ADDSELECTION, hits[i].second, hits[i].first);
+            if (hits[i].first <= caret && caret <= hits[i].second) mainIdx = static_cast<int>(i);   // keep the caret's occurrence as the main selection
+        }
+        sci(SCI_SETMAINSELECTION, mainIdx);
+        sci(SCI_SCROLLCARET);
+    }
+    // Does any current selection overlap [a,b)?
+    bool rangeSelected(int a, int b)
+    {
+        const int n = static_cast<int>(sci(SCI_GETSELECTIONS));
+        for (int i = 0; i < n; ++i)
+        {
+            int s = static_cast<int>(sci(SCI_GETSELECTIONNSTART, i)), e = static_cast<int>(sci(SCI_GETSELECTIONNEND, i));
+            if (s > e) { const int t = s; s = e; e = t; }
+            if (a < e && s < b) return true;
+        }
+        return false;
+    }
+    // Notepad++ "Multi-select Next" (VS Code's Ctrl+D): add the next occurrence of the current term as an
+    // extra selection and make it the main one. Wraps around; skips occurrences already selected.
+    void multiSelectNext(int flags)
+    {
+        if (!m_stc) return;
+        const std::string term = multiSelTerm();
+        if (term.empty()) return;
+        sci(SCI_SETMULTIPLESELECTION, 1);
+        sci(SCI_SETSEARCHFLAGS, flags);
+        const int len = static_cast<int>(sci(SCI_GETLENGTH));
+        std::vector<std::pair<int, int>> hits;
+        for (int start = 0; start < len; )
+        {
+            sci(SCI_SETTARGETSTART, start); sci(SCI_SETTARGETEND, len);
+            if (sci(SCI_SEARCHINTARGET, term.size(), reinterpret_cast<sptr_t>(term.c_str())) < 0) break;
+            const int ms = static_cast<int>(sci(SCI_GETTARGETSTART)), me = static_cast<int>(sci(SCI_GETTARGETEND));
+            if (me <= ms) { start = ms + 1; continue; }
+            hits.emplace_back(ms, me);
+            start = me;
+        }
+        if (hits.empty()) return;
+        const int mi = static_cast<int>(sci(SCI_GETMAINSELECTION));
+        const int from = static_cast<int>(sci(SCI_GETSELECTIONNEND, mi));   // look after the main selection first
+        int pick = -1;
+        for (size_t i = 0; i < hits.size(); ++i) if (hits[i].first >= from && !rangeSelected(hits[i].first, hits[i].second)) { pick = static_cast<int>(i); break; }
+        if (pick < 0) for (size_t i = 0; i < hits.size(); ++i) if (!rangeSelected(hits[i].first, hits[i].second)) { pick = static_cast<int>(i); break; }   // wrap around
+        if (pick < 0) return;   // every occurrence is already selected
+        sci(SCI_ADDSELECTION, hits[pick].second, hits[pick].first);
+        sci(SCI_SETMAINSELECTION, static_cast<int>(sci(SCI_GETSELECTIONS)) - 1);
+        sci(SCI_SCROLLCARET);
+    }
+    // Drop the most recently added multi-selection (undo a Multi-select Next).
+    void multiSelectUndo()
+    {
+        const int n = static_cast<int>(sci(SCI_GETSELECTIONS));
+        if (n <= 1) return;
+        sci(SCI_DROPSELECTIONN, static_cast<uptr_t>(n - 1));
+        sci(SCI_SETMAINSELECTION, static_cast<int>(sci(SCI_GETSELECTIONS)) - 1);
+        sci(SCI_SCROLLCARET);
+    }
+    // Notepad++/VS Code "skip this occurrence": jump to the next occurrence without keeping the current
+    // one (add next, then drop the old main).
+    void multiSelectSkip(int flags)
+    {
+        if (!m_stc) return;
+        const int oldMain = static_cast<int>(sci(SCI_GETMAINSELECTION));
+        const int before  = static_cast<int>(sci(SCI_GETSELECTIONS));
+        multiSelectNext(flags);
+        if (static_cast<int>(sci(SCI_GETSELECTIONS)) > before)   // a next occurrence was added -> drop the skipped one
+            sci(SCI_DROPSELECTIONN, static_cast<uptr_t>(oldMain));
+    }
     int doCount(const FindOpts& o)
     {
         if (o.find.empty()) return 0;
@@ -4656,12 +4873,11 @@ private:
     void saveSession(wxConfigBase* cfg)
     {
         int count = 0, active = -1;
-        const int sel = m_tabs->GetSelection();
-        for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
+        EditorPage* activeP = activePage();
+        for (EditorPage* p : allPages())                       // BOTH views, so the sub view's files aren't dropped at exit
         {
-            auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i));
             if (!p || p->path.empty()) continue;               // only saved files can be restored
-            if ((int)i == sel) active = count;
+            if (p == activeP) active = count;
             cfg->Write(wxString::Format("Session/File%d", count), p->path);
             ++count;
         }
@@ -4782,6 +4998,16 @@ private:
             case IDM_EDIT_PASTE: sci(SCI_PASTE); break;
             case IDM_EDIT_DELETE: sci(SCI_CLEAR); break;
             case IDM_EDIT_SELECTALL: sci(SCI_SELECTALL); break;
+            case IDM_EDIT_MULTISELECTALL:                   multiSelectAll(0); break;
+            case IDM_EDIT_MULTISELECTALLMATCHCASE:          multiSelectAll(SCFIND_MATCHCASE); break;
+            case IDM_EDIT_MULTISELECTALLWHOLEWORD:          multiSelectAll(SCFIND_WHOLEWORD); break;
+            case IDM_EDIT_MULTISELECTALLMATCHCASEWHOLEWORD: multiSelectAll(SCFIND_MATCHCASE | SCFIND_WHOLEWORD); break;
+            case IDM_EDIT_MULTISELECTNEXT:                   multiSelectNext(0); break;
+            case IDM_EDIT_MULTISELECTNEXTMATCHCASE:          multiSelectNext(SCFIND_MATCHCASE); break;
+            case IDM_EDIT_MULTISELECTNEXTWHOLEWORD:          multiSelectNext(SCFIND_WHOLEWORD); break;
+            case IDM_EDIT_MULTISELECTNEXTMATCHCASEWHOLEWORD: multiSelectNext(SCFIND_MATCHCASE | SCFIND_WHOLEWORD); break;
+            case IDM_EDIT_MULTISELECTUNDO:                   multiSelectUndo(); break;
+            case IDM_EDIT_MULTISELECTSSKIP:                  multiSelectSkip(0); break;
             case IDM_EDIT_UPPERCASE: sci(SCI_UPPERCASE); break;
             case IDM_EDIT_LOWERCASE: sci(SCI_LOWERCASE); break;
             case IDM_EDIT_INVERTCASE: transformSel([](std::string& s){ for (char& c : s) c = (char)(std::isupper((unsigned char)c) ? std::tolower((unsigned char)c) : std::toupper((unsigned char)c)); }); break;
@@ -5072,12 +5298,13 @@ private:
         const bool canPaste = sci(SCI_CANPASTE) != 0;
         if (auto* ap = activePage()) ap->dirty = dirty;   // keep the active tab's cached flag current (others use their last-active value)
         bool anyDirty = dirty;
-        if (m_tabs)
-            for (size_t i = 0; i < m_tabs->GetPageCount() && !anyDirty; ++i)
-            {
-                auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i));
-                if (p && p->dirty) anyDirty = true;
-            }
+        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })   // Save-All reflects modified docs in BOTH views
+            if (nb)
+                for (size_t i = 0; i < nb->GetPageCount() && !anyDirty; ++i)
+                {
+                    auto* p = static_cast<EditorPage*>(nb->GetPage(i));
+                    if (p && p->dirty) anyDirty = true;
+                }
         if (dirty == m_stSave && anyDirty == m_stSaveAll && canUndo == m_stUndo && canRedo == m_stRedo &&
             hasSel == m_stSel && canPaste == m_stPaste)
             return;   // nothing changed

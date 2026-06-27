@@ -15,11 +15,16 @@ Windows build** (on Linux/macOS, plugins must be rebuilt; Windows-only plugins a
 Experimental, under active development. The Windows build is feature-rich and closely matches native
 Notepad++; the Linux/macOS builds are structured and CI-wired but still being validated.
 
-**Implemented:** tabbed editor with per-tab Scintilla documents, syntax highlighting (Lexilla),
-find/replace, Go-to-line, dark mode, auto-indent / brace-match / smart-highlight, bookmarks, a
-**Document Map** (minimap), a **Function List** (symbol tree), pinned tabs, EOL detection, and — on
-Windows — a **Win32 plugin host** (real `LoadLibrary` loader, broad `NPPM_*` coverage, `NPPM_DMM*`
-docking panels, and a subclass bridging plugin `SCI_*` messages into wxSTC).
+**Implemented:** tabbed editor with per-tab Scintilla documents, a **split second view** (Notepad++'s
+MAIN | SUB — Move/Clone to Other View, with the split collapsing when a pane empties), syntax
+highlighting (Lexilla), find/replace and find/replace-in-files, an **incremental search bar**
+(match-case / whole-word / regex toggles, live highlight-all, and an n-of-m match counter), **find-driven
+multi-cursor** (Select All Occurrences / Add Next), Go-to-line, dark mode, auto-indent /
+brace-match / smart-highlight, bookmarks, a **Document Map** (minimap), a **Function List** (symbol
+tree), pinned tabs, EOL detection, session restore, and — on Windows — a **Win32 plugin host** (real
+`LoadLibrary` loader, broad `NPPM_*` coverage incl. per-buffer tracking and view/language-aware queries,
+`NPPN_BUFFERACTIVATED` notifications, `NPPM_DMM*` docking panels, and a subclass bridging plugin `SCI_*`
+messages into wxSTC).
 
 ## Building
 
