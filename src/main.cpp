@@ -1790,6 +1790,63 @@ private:
         if (pi.IsShown()) refreshDocList();
     }
 
+    // ---- Clipboard History (Notepad++'s panel: a ring of recent cut/copy entries; double-click to paste) ----
+    wxListBox* m_clipList = nullptr;
+    std::vector<wxString> m_clipHist;   // most-recent-first, capped ring of copied/cut text
+    static wxString clipPreview(const wxString& t)   // collapse a (possibly multi-line) entry to a one-line list label
+    {
+        wxString s = t; s.Replace("\r", " "); s.Replace("\n", " "); s.Replace("\t", " ");
+        s.Trim(true).Trim(false);
+        if (s.size() > 60) s = s.Left(57) + "...";
+        return s.empty() ? wxString("(whitespace)") : s;
+    }
+    void recordClip()   // push the latest cut/copy to the front of the history (deduped, capped)
+    {
+        const wxString t = getClipText();
+        if (t.empty()) return;
+        for (size_t i = 0; i < m_clipHist.size(); ++i) if (m_clipHist[i] == t) { m_clipHist.erase(m_clipHist.begin() + i); break; }
+        m_clipHist.insert(m_clipHist.begin(), t);
+        if (m_clipHist.size() > 50) m_clipHist.resize(50);
+        refreshClipList();
+    }
+    void buildClipList()
+    {
+        m_clipList = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE | wxBORDER_NONE);
+        const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
+        m_clipList->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));   // match the editor (Scintilla colours are BGR)
+        m_clipList->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
+        m_clipList->Bind(wxEVT_LISTBOX_DCLICK, [this](wxCommandEvent& ev) { pasteClip(ev.GetSelection()); });   // double-click to paste
+        m_aui.AddPane(m_clipList, wxAuiPaneInfo().Name("cliphistory").Caption("Clipboard History")
+                          .Right().BestSize(210, 400).MinSize(110, 80).CloseButton(true).Hide());
+        m_aui.Update();
+    }
+    void refreshClipList()   // re-fill the panel from the ring (no-op while hidden)
+    {
+        if (!m_clipList) return;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_clipList);
+        if (!pi.IsOk() || !pi.IsShown()) return;
+        m_clipList->Freeze();
+        m_clipList->Clear();
+        for (const wxString& t : m_clipHist) m_clipList->Append(clipPreview(t));
+        m_clipList->Thaw();
+    }
+    void pasteClip(int idx)   // insert a history entry at the caret, replacing any selection
+    {
+        if (idx < 0 || (size_t)idx >= m_clipHist.size()) return;
+        const wxScopedCharBuffer u = m_clipHist[(size_t)idx].utf8_str();
+        sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(u.data()));
+        if (m_stc) m_stc->SetFocus();
+    }
+    void toggleClipHistory()
+    {
+        if (!m_clipList) buildClipList();
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_clipList);
+        if (!pi.IsOk()) return;
+        pi.Show(!pi.IsShown());
+        m_aui.Update();
+        if (pi.IsShown()) refreshClipList();
+    }
+
     // ---- Folder as Workspace (a dockable file-system browser rooted at a chosen folder) -----------
     wxGenericDirCtrl* m_fileBrowser = nullptr;
     void toggleFileBrowser()
@@ -4993,8 +5050,8 @@ private:
 
             case IDM_EDIT_UNDO: sci(SCI_UNDO); break;
             case IDM_EDIT_REDO: sci(SCI_REDO); break;
-            case IDM_EDIT_CUT: sci(SCI_CUT); break;
-            case IDM_EDIT_COPY: sci(SCI_COPY); break;
+            case IDM_EDIT_CUT: sci(SCI_CUT); recordClip(); break;
+            case IDM_EDIT_COPY: sci(SCI_COPY); recordClip(); break;
             case IDM_EDIT_PASTE: sci(SCI_PASTE); break;
             case IDM_EDIT_DELETE: sci(SCI_CLEAR); break;
             case IDM_EDIT_SELECTALL: sci(SCI_SELECTALL); break;
@@ -5094,6 +5151,7 @@ private:
             case IDM_VIEW_DOC_MAP: toggleDocMap(); break;
             case IDM_VIEW_FUNC_LIST: toggleFuncList(); break;
             case IDM_VIEW_DOCLIST: toggleDocList(); break;
+            case IDM_EDIT_CLIPBOARDHISTORY_PANEL: toggleClipHistory(); break;
             case IDM_VIEW_FILEBROWSER: toggleFileBrowser(); break;
             case IDM_SEARCH_FINDINCREMENT: showIncBar(); break;
             case IDM_EDIT_COLUMNMODE: columnEditor(); break;

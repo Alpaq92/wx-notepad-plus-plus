@@ -21,7 +21,7 @@ highlighting (Lexilla), find/replace and find/replace-in-files, an **incremental
 (match-case / whole-word / regex toggles, live highlight-all, and an n-of-m match counter), **find-driven
 multi-cursor** (Select All Occurrences / Add Next), Go-to-line, dark mode, auto-indent /
 brace-match / smart-highlight, bookmarks, a **Document Map** (minimap), a **Function List** (symbol
-tree), pinned tabs, EOL detection, session restore, and — on Windows — a **Win32 plugin host** (real
+tree), a **Clipboard History** panel, pinned tabs, EOL detection, session restore, and — on Windows — a **Win32 plugin host** (real
 `LoadLibrary` loader, broad `NPPM_*` coverage incl. per-buffer tracking and view/language-aware queries,
 `NPPN_BUFFERACTIVATED` notifications, `NPPM_DMM*` docking panels, and a subclass bridging plugin `SCI_*`
 messages into wxSTC).
