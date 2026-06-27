@@ -2489,10 +2489,9 @@ private:
     bool confirmClose(EditorPage* p)
     {
         if (!p) return true;
-        const bool dirty = (p == activePage()) ? (sci(SCI_GETMODIFY) != 0) : p->dirty;
-        if (!dirty) return true;
-        const int idx = m_tabs->GetPageIndex(p);
-        if (idx != wxNOT_FOUND && idx != m_tabs->GetSelection()) m_tabs->SetSelection(idx);   // show the doc in question
+        setActiveView(viewOf(p));            // make p's view active so sci()/m_path/onSave refer to p (incl. the OTHER split view)
+        activateBuffer(p);                   // swap that view to p's document and select its tab
+        if (sci(SCI_GETMODIFY) == 0) return true;
         const wxString name = !p->path.empty() ? p->path : (p->title.empty() ? wxString("new") : p->title);
 
         wxDialog dlg(this, wxID_ANY, "wxNotepad++");
@@ -2554,8 +2553,18 @@ private:
     }
     void resetActiveDoc()
     {
-        sci(SCI_CLEARALL); sci(SCI_EMPTYUNDOBUFFER); sci(SCI_SETSAVEPOINT);
-        if (auto* p = activePage()) { p->path.clear(); p->dirty = false; }
+        EditorPage* keep = activePage();
+        bool shared = false;                 // is this doc cloned into the other view? then don't wipe the shared buffer
+        if (keep) for (EditorPage* o : allPages()) if (o != keep && o->doc == keep->doc) { shared = true; break; }
+        if (shared)                          // hand the kept page a fresh empty buffer; the clone keeps the original content
+        {
+            const sptr_t nd = sci(SCI_CREATEDOCUMENT, 0, SC_DOCUMENTOPTION_TEXT_LARGE);
+            sci(SCI_SETDOCPOINTER, 0, nd);   // switch the view to the new doc (releases the shared ref without clearing it)
+            if (keep) keep->doc = nd;
+        }
+        else { sci(SCI_CLEARALL); sci(SCI_EMPTYUNDOBUFFER); }
+        sci(SCI_SETSAVEPOINT);
+        if (keep) { keep->path.clear(); keep->dirty = false; }
         m_path.clear();
         setLexerForFile("");
         setDocTitle(nextNewName());
@@ -4793,12 +4802,11 @@ private:
     void saveSession(wxConfigBase* cfg)
     {
         int count = 0, active = -1;
-        const int sel = m_tabs->GetSelection();
-        for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
+        EditorPage* activeP = activePage();
+        for (EditorPage* p : allPages())                       // BOTH views, so the sub view's files aren't dropped at exit
         {
-            auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i));
             if (!p || p->path.empty()) continue;               // only saved files can be restored
-            if ((int)i == sel) active = count;
+            if (p == activeP) active = count;
             cfg->Write(wxString::Format("Session/File%d", count), p->path);
             ++count;
         }
