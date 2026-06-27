@@ -2568,8 +2568,53 @@ private:
     void onPageChanged(wxAuiNotebookEvent& e)
     {
         setActiveView(viewOfEvent(e));   // route by the notebook that fired
-        if (auto* p = activePage()) activateBuffer(p);
+        if (auto* p = activePage()) { activateBuffer(p); noteMru(p); }
         e.Skip();
+    }
+    // ---- Most-recently-used tab order (Ctrl+Tab) + Restore Recent Closed File (Ctrl+Shift+T) ------
+    std::vector<EditorPage*> m_mru;          // live pages, most-recently-active first
+    std::vector<wxString>    m_closedFiles;  // recently-closed file paths (stack; back = most recent)
+    void noteMru(EditorPage* p)              // record an activation; keep the list pruned to live pages
+    {
+        if (!p) return;
+        for (size_t i = 0; i < m_mru.size(); ++i) if (m_mru[i] == p) { m_mru.erase(m_mru.begin() + i); break; }
+        m_mru.insert(m_mru.begin(), p);
+        const std::vector<EditorPage*> live = allPages();
+        for (size_t i = m_mru.size(); i-- > 0;)
+            if (std::find(live.begin(), live.end(), m_mru[i]) == live.end()) m_mru.erase(m_mru.begin() + i);
+    }
+    void activatePage(EditorPage* p)         // select p's tab (fires PAGE_CHANGED -> activateBuffer + noteMru)
+    {
+        ViewPane* v = viewOf(p); if (!v) return;
+        setActiveView(v);
+        const int i = v->tabs->GetPageIndex(p);
+        if (i != wxNOT_FOUND) v->tabs->SetSelection(i);
+    }
+    void mruSwitch()                         // Ctrl+Tab: jump to the most-recently-used other document
+    {
+        const std::vector<EditorPage*> live = allPages();
+        EditorPage* cur = activePage();
+        for (EditorPage* p : m_mru)
+            if (p != cur && std::find(live.begin(), live.end(), p) != live.end()) { activatePage(p); return; }
+    }
+    void recordClosed(EditorPage* p)         // remember a closed file's path (deduped, capped)
+    {
+        if (!p || p->path.empty()) return;
+        for (size_t i = 0; i < m_closedFiles.size(); ++i) if (m_closedFiles[i] == p->path) { m_closedFiles.erase(m_closedFiles.begin() + i); break; }
+        m_closedFiles.push_back(p->path);
+        if (m_closedFiles.size() > 30) m_closedFiles.erase(m_closedFiles.begin());
+    }
+    void restoreLastClosed()                 // Ctrl+Shift+T: reopen the most-recently-closed file (skip vanished/already-open)
+    {
+        while (!m_closedFiles.empty())
+        {
+            const wxString path = m_closedFiles.back();
+            m_closedFiles.pop_back();
+            if (!wxFileExists(path)) continue;
+            for (EditorPage* p : allPages()) if (p->path == path) { activatePage(p); return; }   // already open -> focus it
+            openPath(path);
+            return;
+        }
     }
     // Mount the single view on the active page and swap to its document - Notepad++'s activateBuffer.
     void activateBuffer(EditorPage* p)
@@ -2634,6 +2679,7 @@ private:
         setActiveView(viewOfEvent(e));   // close from the view whose tab fired
         auto* p = static_cast<EditorPage*>(m_tabs->GetPage(e.GetSelection()));
         if (!confirmClose(p)) { e.Veto(); return; }
+        recordClosed(p);                                                                     // remember it for Restore Recent Closed File
         if (totalDocs() <= 1) { e.Veto(); resetActiveDoc(); return; }                        // never zero documents (N++)
         // Remove the page ourselves (after this event) so the collapse check sees the real count - wxAui's
         // own removal races a CallAfter, which would leave an empty pane behind.
@@ -2652,6 +2698,7 @@ private:
     void closeActive()
     {
         if (!confirmClose(activePage())) return;
+        recordClosed(activePage());                                                          // remember it for Restore Recent Closed File
         if (totalDocs() <= 1) { resetActiveDoc(); return; }                                  // last document - keep one empty
         detachViewEditor(m_active, activePage());   // lift the editor off the page before deleting it
         m_tabs->DeletePage(m_tabs->GetSelection());
@@ -2661,6 +2708,7 @@ private:
     {
         for (EditorPage* p : allPages())
             if (!confirmClose(p)) return;                  // prompt across BOTH views; cancel aborts
+        for (EditorPage* p : allPages()) recordClosed(p);  // all become restorable via Ctrl+Shift+T
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
             if (nb)
             {
@@ -2694,6 +2742,7 @@ private:
     {
         for (EditorPage* p : allPages())
             if (p != keep && !confirmClose(p)) return;     // prompt across BOTH views; cancel aborts
+        for (EditorPage* p : allPages()) if (p != keep) recordClosed(p);
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
             if (nb)
             {
@@ -5041,6 +5090,7 @@ private:
             case IDM_FILE_SAVE: case IDM_FILE_SAVEALL: onSave(); break;
             case IDM_FILE_SAVEAS: onSaveAs(); break;
             case IDM_FILE_CLOSE: closeActive(); break;
+            case IDM_FILE_RESTORELASTCLOSEDFILE: restoreLastClosed(); break;
             case IDM_FILE_CLOSEALL: closeAll(); break;
             case IDM_FILE_CLOSEALL_BUT_CURRENT: closeAllBut(activePage()); break;
             case IDM_FILE_EXIT: Close(true); break;
@@ -5122,7 +5172,7 @@ private:
             case IDM_VIEW_INDENT_GUIDE: toggleGuides(); break;
             case IDM_VIEW_TAB_SPACE: toggleWs(); break;            // "Show Space and Tab"
             case IDM_VIEW_EOL: sci(SCI_SETVIEWEOL, sci(SCI_GETVIEWEOL) ? 0 : 1); break;
-            case IDM_VIEW_TAB_NEXT: m_tabs->AdvanceSelection(true); break;
+            case IDM_VIEW_TAB_NEXT: mruSwitch(); break;   // Ctrl+Tab -> most-recently-used switch (N++ MRU behaviour)
             case IDM_VIEW_TAB_PREV: m_tabs->AdvanceSelection(false); break;
             case IDM_VIEW_TAB_START: if (m_tabs->GetPageCount()) m_tabs->SetSelection(0); break;
             case IDM_VIEW_TAB_END:   if (m_tabs->GetPageCount()) m_tabs->SetSelection(m_tabs->GetPageCount() - 1); break;
