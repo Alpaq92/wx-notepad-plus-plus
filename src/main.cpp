@@ -22,6 +22,7 @@
 #include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
 #include <wx/listctrl.h>       // wxListView - wxListbook's page list (we widen it so labels don't truncate)
 #include <wx/clrpicker.h>      // wxColourPickerCtrl - Style Configurator foreground/background pickers
+#include <wx/graphics.h>       // wxGraphicsContext - translucent per-tab colour tint
 #include <wx/tglbtn.h>         // wxToggleButton - incremental search bar match-case/whole-word/regex toggles
 #include <wx/aui/auibook.h>
 #include <wx/aui/aui.h>          // wxAuiManager - dock host for plugin panels (NPPM_DMM*)
@@ -1115,18 +1116,25 @@ public:
     // wxAuiFlatTabArt is non-copyable (private pimpl); clone a fresh one (the app sets no custom art
     // colours, so a fresh instance has the same state) and re-skin its buttons.
     wxAuiTabArt* Clone() override { auto* a = new PinTabArt(m_iconColour); a->UpdateColoursFromSystem(); return a; }
-    // Notepad++'s per-tab colour: after the normal tab is drawn, lay a colour stripe along its bottom edge.
-    void DrawTab(wxDC& dc, wxWindow* wnd, const wxAuiNotebookPage& page, const wxRect& in_rect,
-                 int close_button_state, wxRect* out_tab_rect, wxRect* out_button_rect, int* x_extent) override
+    // Notepad++'s per-tab colour. With pinned tabs the flat art calls DrawPageTab (NOT the legacy DrawTab), so we
+    // hook here: draw the normal tab, then lay a translucent colour wash over its body so the label still reads.
+    int DrawPageTab(wxDC& dc, wxWindow* wnd, wxAuiNotebookPage& page, const wxRect& rect) override
     {
-        wxAuiDefaultTabArt::DrawTab(dc, wnd, page, in_rect, close_button_state, out_tab_rect, out_button_rect, x_extent);
-        auto* ep = static_cast<EditorPage*>(page.window);   // every notebook page is an EditorPage
-        if (ep && ep->tabColour.IsOk() && out_tab_rect)
+        const int extent = wxAuiDefaultTabArt::DrawPageTab(dc, wnd, page, rect);
+        auto* ep = static_cast<EditorPage*>(page.window);   // every editor notebook page is an EditorPage
+        if (ep && ep->tabColour.IsOk())
         {
-            const wxRect r = *out_tab_rect;
-            dc.SetBrush(wxBrush(ep->tabColour)); dc.SetPen(*wxTRANSPARENT_PEN);
-            dc.DrawRectangle(r.x + 1, r.GetBottom() - 3, r.width - 2, 3);   // colour stripe along the tab's bottom
+            if (wxGraphicsContext* gc = wxGraphicsContext::CreateFromUnknownDC(dc))
+            {
+                const wxColour& c = ep->tabColour;
+                gc->SetBrush(wxBrush(wxColour(c.Red(), c.Green(), c.Blue(), 140)));   // ~55% alpha: clearly coloured, label legible
+                gc->SetPen(*wxTRANSPARENT_PEN);
+                const int w = (extent > 0 && extent <= rect.width) ? extent : rect.width;
+                gc->DrawRectangle(rect.x, rect.y + 3, w, rect.height - 3);   // body only - leave the top 3px for the active-tab marker
+                delete gc;
+            }
         }
+        return extent;
     }
 private:
     wxColour m_iconColour;
@@ -2772,8 +2780,8 @@ private:
       return (i >= 0 && i < 5) ? c[i] : wxColour(); }
     static const char* tabPaletteName(int i)
     { static const char* n[] = { "Red", "Orange", "Green", "Blue", "Purple" }; return (i >= 0 && i < 5) ? n[i] : ""; }
-    void applyTabColour(int idx)             // idx -1 = clear; 0..4 = palette entry; redraws the tab strip
-    { if (auto* p = activePage()) { p->tabColour = (idx < 0) ? wxColour() : tabPaletteColour(idx); if (m_tabs) m_tabs->Refresh(); } }
+    void applyTabColour(int idx)             // idx -1 = clear; 0..4 = palette entry; the tint is drawn by PinTabArt::DrawTab
+    { if (auto* p = activePage()) { p->tabColour = (idx < 0) ? wxColour() : tabPaletteColour(idx); if (m_tabs) { m_tabs->Refresh(); m_tabs->Update(); } setStatus(0, idx < 0 ? "Tab colour cleared" : "Tab colour applied"); m_hint = true; } }
     void recordClosed(EditorPage* p)         // remember a closed file's path (deduped, capped)
     {
         if (!p || p->path.empty()) return;
@@ -2975,12 +2983,19 @@ private:
         menu.Append(IDM_VIEW_GOTO_ANOTHER_VIEW,     "Move to Other View");
         menu.Append(IDM_VIEW_CLONE_TO_ANOTHER_VIEW, "Clone to Other View");
         menu.AppendSeparator();
-        auto* cm = new wxMenu;
+        // Tab colours in an "Apply Colour" submenu. We read the pick via GetPopupMenuSelectionFromUser (below),
+        // which returns the chosen id directly - including submenu items - so it sidesteps the MSW quirk where
+        // PopupMenu silently drops submenu-item command events (that was why earlier picks did nothing).
+        wxMenu* cm = new wxMenu;
         cm->Append(IDM_TABCOLOUR_NONE, "None");
         cm->AppendSeparator();
         for (int k = 0; k < 5; ++k) cm->Append(IDM_TABCOLOUR_BASE + k, tabPaletteName(k));
         menu.AppendSubMenu(cm, "Apply Colour");
-        PopupMenu(&menu);
+        const int sel = this->GetPopupMenuSelectionFromUser(menu);
+        if (sel == wxID_NONE) return;
+        if (sel == IDM_TABCOLOUR_NONE) { applyTabColour(-1); return; }
+        if (sel >= IDM_TABCOLOUR_BASE && sel < IDM_TABCOLOUR_BASE + 5) { applyTabColour(sel - IDM_TABCOLOUR_BASE); return; }
+        wxCommandEvent ce(wxEVT_MENU, sel); onCommand(ce);   // Close / Save / Move / Clone via the normal dispatcher
     }
 
     // ----- second view (Notepad++'s MAIN | SUB split) ---------------------------------------------
@@ -5418,12 +5433,7 @@ private:
             case IDM_VIEW_TAB_PREV: m_tabs->AdvanceSelection(false); break;
             case IDM_VIEW_TAB_MOVEFORWARD:  moveTab(true);  break;
             case IDM_VIEW_TAB_MOVEBACKWARD: moveTab(false); break;
-            case IDM_TABCOLOUR_NONE:     applyTabColour(-1); break;
-            case IDM_TABCOLOUR_BASE + 0: applyTabColour(0);  break;
-            case IDM_TABCOLOUR_BASE + 1: applyTabColour(1);  break;
-            case IDM_TABCOLOUR_BASE + 2: applyTabColour(2);  break;
-            case IDM_TABCOLOUR_BASE + 3: applyTabColour(3);  break;
-            case IDM_TABCOLOUR_BASE + 4: applyTabColour(4);  break;
+            // (tab "Apply Colour" picks are dispatched straight to applyTabColour() in onTabContext)
             case IDM_VIEW_TAB_START: if (m_tabs->GetPageCount()) m_tabs->SetSelection(0); break;
             case IDM_VIEW_TAB_END:   if (m_tabs->GetPageCount()) m_tabs->SetSelection(m_tabs->GetPageCount() - 1); break;
             case IDM_VIEW_TAB1: case IDM_VIEW_TAB2: case IDM_VIEW_TAB3: case IDM_VIEW_TAB4: case IDM_VIEW_TAB5:
