@@ -138,6 +138,7 @@ public:
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
+    wxColour tabColour;                    // optional per-tab colour (invalid = none) - drawn as a stripe by PinTabArt
 };
 
 // One editor "view" = a tab strip + ONE persistent wxStyledTextCtrl that hops across its pages (Notepad++'s
@@ -1112,6 +1113,19 @@ public:
     // wxAuiFlatTabArt is non-copyable (private pimpl); clone a fresh one (the app sets no custom art
     // colours, so a fresh instance has the same state) and re-skin its buttons.
     wxAuiTabArt* Clone() override { auto* a = new PinTabArt(m_iconColour); a->UpdateColoursFromSystem(); return a; }
+    // Notepad++'s per-tab colour: after the normal tab is drawn, lay a colour stripe along its bottom edge.
+    void DrawTab(wxDC& dc, wxWindow* wnd, const wxAuiNotebookPage& page, const wxRect& in_rect,
+                 int close_button_state, wxRect* out_tab_rect, wxRect* out_button_rect, int* x_extent) override
+    {
+        wxAuiDefaultTabArt::DrawTab(dc, wnd, page, in_rect, close_button_state, out_tab_rect, out_button_rect, x_extent);
+        auto* ep = static_cast<EditorPage*>(page.window);   // every notebook page is an EditorPage
+        if (ep && ep->tabColour.IsOk() && out_tab_rect)
+        {
+            const wxRect r = *out_tab_rect;
+            dc.SetBrush(wxBrush(ep->tabColour)); dc.SetPen(*wxTRANSPARENT_PEN);
+            dc.DrawRectangle(r.x + 1, r.GetBottom() - 3, r.width - 2, 3);   // colour stripe along the tab's bottom
+        }
+    }
 private:
     wxColour m_iconColour;
     wxBitmapBundle iconBundle(const wxString& name, int px = 16) const   // resources/icons/<name>.svg, recoloured to the button colour
@@ -2597,6 +2611,28 @@ private:
         for (EditorPage* p : m_mru)
             if (p != cur && std::find(live.begin(), live.end(), p) != live.end()) { activatePage(p); return; }
     }
+    void moveTab(bool forward)               // View > Tab: shift the active tab one slot within its strip
+    {
+        if (!m_tabs) return;
+        const int n = (int)m_tabs->GetPageCount(), i = m_tabs->GetSelection();
+        if (i == wxNOT_FOUND || n < 2) return;
+        const int j = forward ? i + 1 : i - 1;
+        if (j < 0 || j >= n) return;         // already at the end - nothing to do
+        EditorPage* p = static_cast<EditorPage*>(m_tabs->GetPage(i));
+        const wxString cap = m_tabs->GetPageText(i);
+        const wxBitmap bmp = m_tabs->GetPageBitmap(i);
+        m_tabs->RemovePage(i);               // detach the tab (NOT delete - the page + its editor survive)
+        m_tabs->InsertPage(j, p, cap, true, bmp);
+        activateBuffer(p);
+    }
+    enum { IDM_TABCOLOUR_NONE = 7100, IDM_TABCOLOUR_BASE = 7101 };   // local ids for the tab "Apply Colour" submenu
+    static wxColour tabPaletteColour(int i)
+    { static const wxColour c[] = { wxColour(0xC8,0x3E,0x3E), wxColour(0xCF,0x8A,0x2E), wxColour(0x3F,0x9C,0x42), wxColour(0x37,0x7D,0xC8), wxColour(0x8A,0x4F,0xBE) };
+      return (i >= 0 && i < 5) ? c[i] : wxColour(); }
+    static const char* tabPaletteName(int i)
+    { static const char* n[] = { "Red", "Orange", "Green", "Blue", "Purple" }; return (i >= 0 && i < 5) ? n[i] : ""; }
+    void applyTabColour(int idx)             // idx -1 = clear; 0..4 = palette entry; redraws the tab strip
+    { if (auto* p = activePage()) { p->tabColour = (idx < 0) ? wxColour() : tabPaletteColour(idx); if (m_tabs) m_tabs->Refresh(); } }
     void recordClosed(EditorPage* p)         // remember a closed file's path (deduped, capped)
     {
         if (!p || p->path.empty()) return;
@@ -2797,6 +2833,12 @@ private:
         menu.AppendSeparator();
         menu.Append(IDM_VIEW_GOTO_ANOTHER_VIEW,     "Move to Other View");
         menu.Append(IDM_VIEW_CLONE_TO_ANOTHER_VIEW, "Clone to Other View");
+        menu.AppendSeparator();
+        auto* cm = new wxMenu;
+        cm->Append(IDM_TABCOLOUR_NONE, "None");
+        cm->AppendSeparator();
+        for (int k = 0; k < 5; ++k) cm->Append(IDM_TABCOLOUR_BASE + k, tabPaletteName(k));
+        menu.AppendSubMenu(cm, "Apply Colour");
         PopupMenu(&menu);
     }
 
@@ -5204,6 +5246,14 @@ private:
             case IDM_VIEW_EOL: sci(SCI_SETVIEWEOL, sci(SCI_GETVIEWEOL) ? 0 : 1); break;
             case IDM_VIEW_TAB_NEXT: mruSwitch(); break;   // Ctrl+Tab -> most-recently-used switch (N++ MRU behaviour)
             case IDM_VIEW_TAB_PREV: m_tabs->AdvanceSelection(false); break;
+            case IDM_VIEW_TAB_MOVEFORWARD:  moveTab(true);  break;
+            case IDM_VIEW_TAB_MOVEBACKWARD: moveTab(false); break;
+            case IDM_TABCOLOUR_NONE:     applyTabColour(-1); break;
+            case IDM_TABCOLOUR_BASE + 0: applyTabColour(0);  break;
+            case IDM_TABCOLOUR_BASE + 1: applyTabColour(1);  break;
+            case IDM_TABCOLOUR_BASE + 2: applyTabColour(2);  break;
+            case IDM_TABCOLOUR_BASE + 3: applyTabColour(3);  break;
+            case IDM_TABCOLOUR_BASE + 4: applyTabColour(4);  break;
             case IDM_VIEW_TAB_START: if (m_tabs->GetPageCount()) m_tabs->SetSelection(0); break;
             case IDM_VIEW_TAB_END:   if (m_tabs->GetPageCount()) m_tabs->SetSelection(m_tabs->GetPageCount() - 1); break;
             case IDM_VIEW_TAB1: case IDM_VIEW_TAB2: case IDM_VIEW_TAB3: case IDM_VIEW_TAB4: case IDM_VIEW_TAB5:
