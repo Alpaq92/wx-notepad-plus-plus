@@ -5215,6 +5215,7 @@ private:
         {
             case 2: onGoTo(); break;                                       // Ln:Col:Pos -> Go To Line
             case 4: showEolMenu(); break;                                  // line-ending -> convert popup
+            case 5: showEncodingMenu(); break;                             // encoding -> re-interpret / convert popup
             case 6: sci(SCI_EDITTOGGLEOVERTYPE); updateStatus(); break;    // INS/OVR -> toggle typing mode
             default: e.Skip(); break;
         }
@@ -5230,6 +5231,34 @@ private:
             case IDM_FORMAT_TODOS:  setEol(SC_EOL_CRLF); break;
             case IDM_FORMAT_TOUNIX: setEol(SC_EOL_LF);   break;
             case IDM_FORMAT_TOMAC:  setEol(SC_EOL_CR);   break;
+        }
+    }
+    void showEncodingMenu()   // status-bar encoding field: re-interpret (fix a misread file) or convert the encoding
+    {
+        wxMenu m;
+        m.Append(IDM_FORMAT_ANSI,      "Encode as ANSI");
+        m.Append(IDM_FORMAT_AS_UTF_8,  "Encode as UTF-8");
+        m.Append(IDM_FORMAT_UTF_8,     "Encode as UTF-8 BOM");
+        m.Append(IDM_FORMAT_UTF_16LE,  "Encode as UTF-16 LE BOM");
+        m.Append(IDM_FORMAT_UTF_16BE,  "Encode as UTF-16 BE BOM");
+        m.AppendSeparator();
+        m.Append(IDM_FORMAT_CONV2_ANSI,     "Convert to ANSI");
+        m.Append(IDM_FORMAT_CONV2_AS_UTF_8, "Convert to UTF-8");
+        m.Append(IDM_FORMAT_CONV2_UTF_8,    "Convert to UTF-8 BOM");
+        m.Append(IDM_FORMAT_CONV2_UTF_16LE, "Convert to UTF-16 LE BOM");
+        m.Append(IDM_FORMAT_CONV2_UTF_16BE, "Convert to UTF-16 BE BOM");
+        switch (this->GetPopupMenuSelectionFromUser(m))
+        {
+            case IDM_FORMAT_ANSI:      interpretAs(ENC_ANSI);     break;
+            case IDM_FORMAT_AS_UTF_8:  interpretAs(ENC_UTF8);     break;
+            case IDM_FORMAT_UTF_8:     interpretAs(ENC_UTF8_BOM); break;
+            case IDM_FORMAT_UTF_16LE:  interpretAs(ENC_UTF16_LE); break;
+            case IDM_FORMAT_UTF_16BE:  interpretAs(ENC_UTF16_BE); break;
+            case IDM_FORMAT_CONV2_ANSI:     convertTo(ENC_ANSI);     break;
+            case IDM_FORMAT_CONV2_AS_UTF_8: convertTo(ENC_UTF8);     break;
+            case IDM_FORMAT_CONV2_UTF_8:    convertTo(ENC_UTF8_BOM); break;
+            case IDM_FORMAT_CONV2_UTF_16LE: convertTo(ENC_UTF16_LE); break;
+            case IDM_FORMAT_CONV2_UTF_16BE: convertTo(ENC_UTF16_BE); break;
         }
     }
     void showAbout()

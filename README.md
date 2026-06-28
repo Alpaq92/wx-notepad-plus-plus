@@ -23,7 +23,7 @@ multi-cursor** (Select All Occurrences / Add Next), Go-to-line, dark mode, auto-
 brace-match / smart-highlight, bookmarks, a **Document Map** (minimap), a **Function List** (symbol
 tree), a **Clipboard History** panel, a **Project Panel** (workspace tree of folders + files, saved as
 `.xml`), pinned tabs, **Restore Recent Closed File** (Ctrl+Shift+T) + MRU
-Ctrl+Tab switching, an **interactive status bar** (double-click to go-to-line, convert EOL, or toggle
+Ctrl+Tab switching, an **interactive status bar** (double-click to go-to-line, convert EOL or encoding, or toggle
 INS/OVR), EOL detection, session restore, and — on Windows — a **Win32 plugin host** (real
 `LoadLibrary` loader, broad `NPPM_*` coverage incl. per-buffer tracking and view/language-aware queries,
 `NPPN_BUFFERACTIVATED` notifications, `NPPM_DMM*` docking panels, and a subclass bridging plugin `SCI_*`
