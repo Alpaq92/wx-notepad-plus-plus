@@ -406,6 +406,8 @@ static void smartHighlight(wxStyledTextCtrl* sci)
 struct FLRule { int kind; std::regex re; int grp; };
 
 class FLItemData : public wxTreeItemData { public: int line; explicit FLItemData(int l) : line(l) {} };
+// Project Panel tree node: a folder (isFile=false) or a file reference (isFile=true, path = full path).
+class ProjItemData : public wxTreeItemData { public: bool isFile; wxString path; ProjItemData(bool f, const wxString& p = "") : isFile(f), path(p) {} };
 
 static const std::vector<FLRule>* flRules(const std::string& lang)
 {
@@ -1859,6 +1861,145 @@ private:
         pi.Show(!pi.IsShown());
         m_aui.Update();
         if (pi.IsShown()) refreshClipList();
+    }
+
+    // ---- Project Panel (Notepad++'s workspace tree: named folders + file refs, saved as .xml) ------
+    void buildProjectPanel()
+    {
+        m_projPanel = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                     wxTR_HAS_BUTTONS | wxTR_FULL_ROW_HIGHLIGHT | wxTR_EDIT_LABELS | wxBORDER_NONE);
+        const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
+        m_projPanel->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));
+        m_projPanel->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
+        m_projPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrameT::onProjActivate, this);
+        m_projPanel->Bind(wxEVT_TREE_ITEM_MENU,      &NppShellFrameT::onProjContext,  this);
+        m_projPanel->AddRoot("Workspace", -1, -1, new ProjItemData(false));
+        m_aui.AddPane(m_projPanel, wxAuiPaneInfo().Name("project").Caption("Project")
+                          .Left().BestSize(220, 400).MinSize(120, 80).CloseButton(true).Hide());
+        m_aui.Update();
+    }
+    void toggleProjectPanel()
+    {
+        if (!m_projPanel) buildProjectPanel();
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_projPanel);
+        if (!pi.IsOk()) return;
+        pi.Show(!pi.IsShown());
+        m_aui.Update();
+    }
+    void onProjActivate(wxTreeEvent& e)   // double-click a file node -> open it (folders fall through to expand/collapse)
+    {
+        auto* d = dynamic_cast<ProjItemData*>(m_projPanel->GetItemData(e.GetItem()));
+        if (d && d->isFile && wxFileExists(d->path)) openPath(d->path); else e.Skip();
+    }
+    void onProjContext(wxTreeEvent& e)
+    {
+        const wxTreeItemId item = e.GetItem();
+        if (item.IsOk()) m_projPanel->SelectItem(item);
+        auto* d = item.IsOk() ? dynamic_cast<ProjItemData*>(m_projPanel->GetItemData(item)) : nullptr;
+        const bool isRoot   = item.IsOk() && item == m_projPanel->GetRootItem();
+        const bool isFolder = isRoot || (d && !d->isFile);
+        wxMenu m;
+        if (isFolder) { m.Append(7200, "Add Files..."); m.Append(7201, "Add Folder"); }
+        if (d && !d->isFile && !isRoot) m.Append(7202, "Rename");
+        if (d && !isRoot) m.Append(7203, "Remove");
+        m.AppendSeparator();
+        m.Append(7210, "New Workspace"); m.Append(7211, "Open Workspace..."); m.Append(7212, "Save Workspace As...");
+        switch (m_projPanel->GetPopupMenuSelectionFromUser(m))
+        {
+            case 7200: projAddFiles(item);           break;
+            case 7201: projAddFolder(item);          break;
+            case 7202: m_projPanel->EditLabel(item); break;
+            case 7203: m_projPanel->Delete(item);    break;
+            case 7210: projNew();  break;
+            case 7211: projOpen(); break;
+            case 7212: projSave(); break;
+        }
+    }
+    void projAddFiles(const wxTreeItemId& parent)
+    {
+        if (!parent.IsOk()) return;
+        wxFileDialog dlg(this, "Add Files", "", "", "All files (*.*)|*.*", wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
+        if (dlg.ShowModal() != wxID_OK) return;
+        wxArrayString paths; dlg.GetPaths(paths);
+        for (const auto& p : paths) m_projPanel->AppendItem(parent, wxFileNameFromPath(p), -1, -1, new ProjItemData(true, p));
+        m_projPanel->Expand(parent);
+    }
+    void projAddFolder(const wxTreeItemId& parent)
+    {
+        if (!parent.IsOk()) return;
+        const wxTreeItemId f = m_projPanel->AppendItem(parent, "New Folder", -1, -1, new ProjItemData(false));
+        m_projPanel->Expand(parent);
+        m_projPanel->EditLabel(f);                 // let the user name it right away
+    }
+    void projNew()
+    {
+        if (!m_projPanel) return;
+        m_projPanel->DeleteAllItems();
+        m_projPanel->AddRoot("Workspace", -1, -1, new ProjItemData(false));
+        m_projWorkspace.clear();
+    }
+    void projOpen()
+    {
+        wxFileDialog dlg(this, "Open Workspace", "", "", "Workspace (*.xml)|*.xml", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (dlg.ShowModal() == wxID_OK) loadProjectXml(dlg.GetPath());
+    }
+    void projSave()
+    {
+        wxString path = m_projWorkspace;
+        if (path.empty())
+        {
+            wxFileDialog dlg(this, "Save Workspace As", "", "workspace.xml", "Workspace (*.xml)|*.xml", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+            if (dlg.ShowModal() != wxID_OK) return;
+            path = dlg.GetPath();
+        }
+        saveProjectXml(path);
+        m_projWorkspace = path;
+        setStatus(0, "Workspace saved"); m_hint = true;
+    }
+    void loadProjectXml(const wxString& path)
+    {
+        wxXmlDocument doc;
+        if (!doc.Load(path) || !doc.GetRoot()) return;
+        wxXmlNode* proj = nullptr;
+        for (wxXmlNode* n = doc.GetRoot()->GetChildren(); n; n = n->GetNext()) if (n->GetName() == "Project") { proj = n; break; }
+        m_projPanel->DeleteAllItems();
+        const wxTreeItemId root = m_projPanel->AddRoot(proj ? proj->GetAttribute("name", "Workspace") : "Workspace", -1, -1, new ProjItemData(false));
+        if (proj) projLoadChildren(proj, root);
+        m_projPanel->ExpandAll();
+        m_projWorkspace = path;
+    }
+    void projLoadChildren(wxXmlNode* xparent, const wxTreeItemId& tparent)
+    {
+        for (wxXmlNode* n = xparent->GetChildren(); n; n = n->GetNext())
+        {
+            if (n->GetName() == "Folder")
+            { const wxTreeItemId f = m_projPanel->AppendItem(tparent, n->GetAttribute("name", "Folder"), -1, -1, new ProjItemData(false)); projLoadChildren(n, f); }
+            else if (n->GetName() == "File")
+            { const wxString p = n->GetAttribute("name"); m_projPanel->AppendItem(tparent, wxFileNameFromPath(p), -1, -1, new ProjItemData(true, p)); }
+        }
+    }
+    void saveProjectXml(const wxString& path)
+    {
+        wxXmlDocument doc;
+        auto* npp = new wxXmlNode(wxXML_ELEMENT_NODE, "NotepadPlus");   // N++-compatible workspace format
+        doc.SetRoot(npp);
+        auto* proj = new wxXmlNode(wxXML_ELEMENT_NODE, "Project");
+        proj->AddAttribute("name", m_projPanel->GetItemText(m_projPanel->GetRootItem()));
+        npp->AddChild(proj);
+        projSaveChildren(m_projPanel->GetRootItem(), proj);
+        doc.Save(path);
+    }
+    void projSaveChildren(const wxTreeItemId& tparent, wxXmlNode* xparent)
+    {
+        wxTreeItemIdValue cookie;
+        for (wxTreeItemId c = m_projPanel->GetFirstChild(tparent, cookie); c.IsOk(); c = m_projPanel->GetNextChild(tparent, cookie))
+        {
+            auto* d = dynamic_cast<ProjItemData*>(m_projPanel->GetItemData(c));
+            if (d && d->isFile)
+            { auto* f = new wxXmlNode(wxXML_ELEMENT_NODE, "File"); f->AddAttribute("name", d->path); xparent->AddChild(f); }
+            else
+            { auto* fo = new wxXmlNode(wxXML_ELEMENT_NODE, "Folder"); fo->AddAttribute("name", m_projPanel->GetItemText(c)); xparent->AddChild(fo); projSaveChildren(c, fo); }
+        }
     }
 
     // ---- Folder as Workspace (a dockable file-system browser rooted at a chosen folder) -----------
@@ -5281,6 +5422,9 @@ private:
             case IDM_VIEW_DOC_MAP: toggleDocMap(); break;
             case IDM_VIEW_FUNC_LIST: toggleFuncList(); break;
             case IDM_VIEW_DOCLIST: toggleDocList(); break;
+            case IDM_VIEW_PROJECT_PANEL_1:
+            case IDM_VIEW_PROJECT_PANEL_2:
+            case IDM_VIEW_PROJECT_PANEL_3: toggleProjectPanel(); break;
             case IDM_EDIT_CLIPBOARDHISTORY_PANEL: toggleClipHistory(); break;
             case IDM_VIEW_FILEBROWSER: toggleFileBrowser(); break;
             case IDM_SEARCH_FINDINCREMENT: showIncBar(); break;
@@ -5530,6 +5674,8 @@ private:
     wxStyledTextCtrl* m_stc = nullptr;   // the cross-platform editor view; its native HWND on Windows == m_sci
     wxStyledTextCtrl* m_docMap = nullptr;   // Document Map (minimap): a second view sharing the active document
     wxTreeCtrl* m_funcList = nullptr;       // Function List: per-file symbol tree (regex-parsed)
+    wxTreeCtrl* m_projPanel = nullptr;      // Project Panel: workspace tree (named folders + file refs)
+    wxString    m_projWorkspace;            // the loaded/saved workspace .xml path ("" = unsaved)
     wxTreeCtrl* m_fifPanel = nullptr;       // Find result: docked Find-in-Files results tree
     wxTimer*    m_flTimer  = nullptr;        // debounce re-parse of the Function List after edits
 #ifdef __WXMSW__
