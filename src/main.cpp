@@ -3258,6 +3258,7 @@ private:
         sb->SetStatusWidths(7, w);
         const int styles[7] = { wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT };
         sb->SetStatusStyles(7, styles);   // flat fields - no per-field sunken background
+        sb->Bind(wxEVT_LEFT_DCLICK, &NppShellFrameT::onStatusDClick, this);   // interactive status bar: double-click a field to act
 #ifdef __WXMSW__
         // our own resize grip, parked in the bottom-right corner and kept there as the bar resizes
         m_grip = new SizeGripWin(sb);
@@ -5019,6 +5020,35 @@ private:
     }
     void notImpl(const wxString& what) { setStatus(0, what + " - not yet implemented in this build"); m_hint = true; }
     void setStatus(int field, const wxString& text) { SetStatusText(" " + text, field); }  // leading space ~ 4px left margin, like Notepad++
+    // Notepad++'s interactive status bar: double-click a field to act on it.
+    void onStatusDClick(wxMouseEvent& e)
+    {
+        wxStatusBar* sb = GetStatusBar();
+        if (!sb) { e.Skip(); return; }
+        int field = -1;
+        for (int i = 0; i < (int)sb->GetFieldsCount(); ++i)
+        { wxRect r; if (sb->GetFieldRect(i, r) && r.Contains(e.GetPosition())) { field = i; break; } }
+        switch (field)
+        {
+            case 2: onGoTo(); break;                                       // Ln:Col:Pos -> Go To Line
+            case 4: showEolMenu(); break;                                  // line-ending -> convert popup
+            case 6: sci(SCI_EDITTOGGLEOVERTYPE); updateStatus(); break;    // INS/OVR -> toggle typing mode
+            default: e.Skip(); break;
+        }
+    }
+    void showEolMenu()   // small popup at the cursor: convert the document's line endings
+    {
+        wxMenu m;
+        m.Append(IDM_FORMAT_TODOS,  "Windows (CR LF)");
+        m.Append(IDM_FORMAT_TOUNIX, "Unix (LF)");
+        m.Append(IDM_FORMAT_TOMAC,  "Macintosh (CR)");
+        switch (this->GetPopupMenuSelectionFromUser(m))
+        {
+            case IDM_FORMAT_TODOS:  setEol(SC_EOL_CRLF); break;
+            case IDM_FORMAT_TOUNIX: setEol(SC_EOL_LF);   break;
+            case IDM_FORMAT_TOMAC:  setEol(SC_EOL_CR);   break;
+        }
+    }
     void showAbout()
     {
         wxDialog dlg(this, wxID_ANY, "About wxNotepad++");
