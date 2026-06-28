@@ -1790,6 +1790,63 @@ private:
         if (pi.IsShown()) refreshDocList();
     }
 
+    // ---- Clipboard History (Notepad++'s panel: a ring of recent cut/copy entries; double-click to paste) ----
+    wxListBox* m_clipList = nullptr;
+    std::vector<wxString> m_clipHist;   // most-recent-first, capped ring of copied/cut text
+    static wxString clipPreview(const wxString& t)   // collapse a (possibly multi-line) entry to a one-line list label
+    {
+        wxString s = t; s.Replace("\r", " "); s.Replace("\n", " "); s.Replace("\t", " ");
+        s.Trim(true).Trim(false);
+        if (s.size() > 60) s = s.Left(57) + "...";
+        return s.empty() ? wxString("(whitespace)") : s;
+    }
+    void recordClip()   // push the latest cut/copy to the front of the history (deduped, capped)
+    {
+        const wxString t = getClipText();
+        if (t.empty()) return;
+        for (size_t i = 0; i < m_clipHist.size(); ++i) if (m_clipHist[i] == t) { m_clipHist.erase(m_clipHist.begin() + i); break; }
+        m_clipHist.insert(m_clipHist.begin(), t);
+        if (m_clipHist.size() > 50) m_clipHist.resize(50);
+        refreshClipList();
+    }
+    void buildClipList()
+    {
+        m_clipList = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE | wxBORDER_NONE);
+        const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
+        m_clipList->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));   // match the editor (Scintilla colours are BGR)
+        m_clipList->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
+        m_clipList->Bind(wxEVT_LISTBOX_DCLICK, [this](wxCommandEvent& ev) { pasteClip(ev.GetSelection()); });   // double-click to paste
+        m_aui.AddPane(m_clipList, wxAuiPaneInfo().Name("cliphistory").Caption("Clipboard History")
+                          .Right().BestSize(210, 400).MinSize(110, 80).CloseButton(true).Hide());
+        m_aui.Update();
+    }
+    void refreshClipList()   // re-fill the panel from the ring (no-op while hidden)
+    {
+        if (!m_clipList) return;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_clipList);
+        if (!pi.IsOk() || !pi.IsShown()) return;
+        m_clipList->Freeze();
+        m_clipList->Clear();
+        for (const wxString& t : m_clipHist) m_clipList->Append(clipPreview(t));
+        m_clipList->Thaw();
+    }
+    void pasteClip(int idx)   // insert a history entry at the caret, replacing any selection
+    {
+        if (idx < 0 || (size_t)idx >= m_clipHist.size()) return;
+        const wxScopedCharBuffer u = m_clipHist[(size_t)idx].utf8_str();
+        sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(u.data()));
+        if (m_stc) m_stc->SetFocus();
+    }
+    void toggleClipHistory()
+    {
+        if (!m_clipList) buildClipList();
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_clipList);
+        if (!pi.IsOk()) return;
+        pi.Show(!pi.IsShown());
+        m_aui.Update();
+        if (pi.IsShown()) refreshClipList();
+    }
+
     // ---- Folder as Workspace (a dockable file-system browser rooted at a chosen folder) -----------
     wxGenericDirCtrl* m_fileBrowser = nullptr;
     void toggleFileBrowser()
@@ -2511,8 +2568,53 @@ private:
     void onPageChanged(wxAuiNotebookEvent& e)
     {
         setActiveView(viewOfEvent(e));   // route by the notebook that fired
-        if (auto* p = activePage()) activateBuffer(p);
+        if (auto* p = activePage()) { activateBuffer(p); noteMru(p); }
         e.Skip();
+    }
+    // ---- Most-recently-used tab order (Ctrl+Tab) + Restore Recent Closed File (Ctrl+Shift+T) ------
+    std::vector<EditorPage*> m_mru;          // live pages, most-recently-active first
+    std::vector<wxString>    m_closedFiles;  // recently-closed file paths (stack; back = most recent)
+    void noteMru(EditorPage* p)              // record an activation; keep the list pruned to live pages
+    {
+        if (!p) return;
+        for (size_t i = 0; i < m_mru.size(); ++i) if (m_mru[i] == p) { m_mru.erase(m_mru.begin() + i); break; }
+        m_mru.insert(m_mru.begin(), p);
+        const std::vector<EditorPage*> live = allPages();
+        for (size_t i = m_mru.size(); i-- > 0;)
+            if (std::find(live.begin(), live.end(), m_mru[i]) == live.end()) m_mru.erase(m_mru.begin() + i);
+    }
+    void activatePage(EditorPage* p)         // select p's tab (fires PAGE_CHANGED -> activateBuffer + noteMru)
+    {
+        ViewPane* v = viewOf(p); if (!v) return;
+        setActiveView(v);
+        const int i = v->tabs->GetPageIndex(p);
+        if (i != wxNOT_FOUND) v->tabs->SetSelection(i);
+    }
+    void mruSwitch()                         // Ctrl+Tab: jump to the most-recently-used other document
+    {
+        const std::vector<EditorPage*> live = allPages();
+        EditorPage* cur = activePage();
+        for (EditorPage* p : m_mru)
+            if (p != cur && std::find(live.begin(), live.end(), p) != live.end()) { activatePage(p); return; }
+    }
+    void recordClosed(EditorPage* p)         // remember a closed file's path (deduped, capped)
+    {
+        if (!p || p->path.empty()) return;
+        for (size_t i = 0; i < m_closedFiles.size(); ++i) if (m_closedFiles[i] == p->path) { m_closedFiles.erase(m_closedFiles.begin() + i); break; }
+        m_closedFiles.push_back(p->path);
+        if (m_closedFiles.size() > 30) m_closedFiles.erase(m_closedFiles.begin());
+    }
+    void restoreLastClosed()                 // Ctrl+Shift+T: reopen the most-recently-closed file (skip vanished/already-open)
+    {
+        while (!m_closedFiles.empty())
+        {
+            const wxString path = m_closedFiles.back();
+            m_closedFiles.pop_back();
+            if (!wxFileExists(path)) continue;
+            for (EditorPage* p : allPages()) if (p->path == path) { activatePage(p); return; }   // already open -> focus it
+            openPath(path);
+            return;
+        }
     }
     // Mount the single view on the active page and swap to its document - Notepad++'s activateBuffer.
     void activateBuffer(EditorPage* p)
@@ -2577,6 +2679,7 @@ private:
         setActiveView(viewOfEvent(e));   // close from the view whose tab fired
         auto* p = static_cast<EditorPage*>(m_tabs->GetPage(e.GetSelection()));
         if (!confirmClose(p)) { e.Veto(); return; }
+        recordClosed(p);                                                                     // remember it for Restore Recent Closed File
         if (totalDocs() <= 1) { e.Veto(); resetActiveDoc(); return; }                        // never zero documents (N++)
         // Remove the page ourselves (after this event) so the collapse check sees the real count - wxAui's
         // own removal races a CallAfter, which would leave an empty pane behind.
@@ -2595,6 +2698,7 @@ private:
     void closeActive()
     {
         if (!confirmClose(activePage())) return;
+        recordClosed(activePage());                                                          // remember it for Restore Recent Closed File
         if (totalDocs() <= 1) { resetActiveDoc(); return; }                                  // last document - keep one empty
         detachViewEditor(m_active, activePage());   // lift the editor off the page before deleting it
         m_tabs->DeletePage(m_tabs->GetSelection());
@@ -2604,6 +2708,7 @@ private:
     {
         for (EditorPage* p : allPages())
             if (!confirmClose(p)) return;                  // prompt across BOTH views; cancel aborts
+        for (EditorPage* p : allPages()) recordClosed(p);  // all become restorable via Ctrl+Shift+T
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
             if (nb)
             {
@@ -2637,6 +2742,7 @@ private:
     {
         for (EditorPage* p : allPages())
             if (p != keep && !confirmClose(p)) return;     // prompt across BOTH views; cancel aborts
+        for (EditorPage* p : allPages()) if (p != keep) recordClosed(p);
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
             if (nb)
             {
@@ -4984,6 +5090,7 @@ private:
             case IDM_FILE_SAVE: case IDM_FILE_SAVEALL: onSave(); break;
             case IDM_FILE_SAVEAS: onSaveAs(); break;
             case IDM_FILE_CLOSE: closeActive(); break;
+            case IDM_FILE_RESTORELASTCLOSEDFILE: restoreLastClosed(); break;
             case IDM_FILE_CLOSEALL: closeAll(); break;
             case IDM_FILE_CLOSEALL_BUT_CURRENT: closeAllBut(activePage()); break;
             case IDM_FILE_EXIT: Close(true); break;
@@ -4993,8 +5100,8 @@ private:
 
             case IDM_EDIT_UNDO: sci(SCI_UNDO); break;
             case IDM_EDIT_REDO: sci(SCI_REDO); break;
-            case IDM_EDIT_CUT: sci(SCI_CUT); break;
-            case IDM_EDIT_COPY: sci(SCI_COPY); break;
+            case IDM_EDIT_CUT: sci(SCI_CUT); recordClip(); break;
+            case IDM_EDIT_COPY: sci(SCI_COPY); recordClip(); break;
             case IDM_EDIT_PASTE: sci(SCI_PASTE); break;
             case IDM_EDIT_DELETE: sci(SCI_CLEAR); break;
             case IDM_EDIT_SELECTALL: sci(SCI_SELECTALL); break;
@@ -5065,7 +5172,7 @@ private:
             case IDM_VIEW_INDENT_GUIDE: toggleGuides(); break;
             case IDM_VIEW_TAB_SPACE: toggleWs(); break;            // "Show Space and Tab"
             case IDM_VIEW_EOL: sci(SCI_SETVIEWEOL, sci(SCI_GETVIEWEOL) ? 0 : 1); break;
-            case IDM_VIEW_TAB_NEXT: m_tabs->AdvanceSelection(true); break;
+            case IDM_VIEW_TAB_NEXT: mruSwitch(); break;   // Ctrl+Tab -> most-recently-used switch (N++ MRU behaviour)
             case IDM_VIEW_TAB_PREV: m_tabs->AdvanceSelection(false); break;
             case IDM_VIEW_TAB_START: if (m_tabs->GetPageCount()) m_tabs->SetSelection(0); break;
             case IDM_VIEW_TAB_END:   if (m_tabs->GetPageCount()) m_tabs->SetSelection(m_tabs->GetPageCount() - 1); break;
@@ -5094,6 +5201,7 @@ private:
             case IDM_VIEW_DOC_MAP: toggleDocMap(); break;
             case IDM_VIEW_FUNC_LIST: toggleFuncList(); break;
             case IDM_VIEW_DOCLIST: toggleDocList(); break;
+            case IDM_EDIT_CLIPBOARDHISTORY_PANEL: toggleClipHistory(); break;
             case IDM_VIEW_FILEBROWSER: toggleFileBrowser(); break;
             case IDM_SEARCH_FINDINCREMENT: showIncBar(); break;
             case IDM_EDIT_COLUMNMODE: columnEditor(); break;

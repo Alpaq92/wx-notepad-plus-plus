@@ -161,6 +161,7 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
             sub->Append(IDM_FILE_CLOSEALL_UNCHANGED, "Close All Unchanged");
             file->AppendSubMenu(sub, "Close &Multiple Documents");
         }
+        file->Append(IDM_FILE_RESTORELASTCLOSEDFILE, "Restore Recent Closed File\tCtrl+Shift+T");
         file->Append(IDM_FILE_DELETE, "Move to Recycle &Bin");
         file->AppendSeparator();
         file->Append(IDM_FILE_LOADSESSION, "Load Sess&ion...");
