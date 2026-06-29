@@ -1,5 +1,5 @@
 # Minimal Notepad++ plugin DLL to verify the wx shell's plugin loader (Windows only).
-# Output: build-spike/bin/plugins/TestPlugin/TestPlugin.dll  -- the layout the loader scans.
+# Output: build/bin/plugins/TestPlugin/TestPlugin.dll  -- the layout the loader scans.
 add_library(npp_test_plugin SHARED TestPlugin.cpp)
 
 set_target_properties(npp_test_plugin PROPERTIES
