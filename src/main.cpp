@@ -1130,7 +1130,7 @@ public:
                 gc->SetBrush(wxBrush(wxColour(c.Red(), c.Green(), c.Blue(), 140)));   // ~55% alpha: clearly coloured, label legible
                 gc->SetPen(*wxTRANSPARENT_PEN);
                 const int w = (extent > 0 && extent <= rect.width) ? extent : rect.width;
-                gc->DrawRectangle(rect.x, rect.y + 3, w, rect.height - 3);   // body only - leave the top 3px for the active-tab marker
+                gc->DrawRectangle(rect.x, rect.y + 2, w, rect.height - 2);   // start just under the active-tab marker - covers the white separator row so no untinted outline shows
                 delete gc;
             }
         }
