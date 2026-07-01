@@ -108,6 +108,8 @@ using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/
 static const int  MARK_BOOKMARK = 2;      // a free Scintilla marker number for bookmarks
 static const int  MARK_INDIC    = 9;      // indicator number for "Mark All" highlights (Find dialog)
 static const int  SMART_INDIC   = 10;     // indicator number for smart-highlight (double-click a word)
+static const int  MARK_STYLE_BASE = 21;   // "Mark All Ext 1-5" style indicators (21..25) - Notepad++'s 5 mark colours
+static const unsigned MARK_STYLE_COLOUR[5] = { 0x1F90FF, 0xE0A020, 0x50B050, 0xC060C0, 0x30B0C0 };  // BGR: orange, blue, green, purple, olive
 enum { myID_TIMER = 60000, myID_DARKMODE, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER };   // fixed ids, above the IDM_* range
 static const int myID_DOCLIST_ITEM = 61000;   // base id for the document-list dropdown entries
 static const int myID_MACRO_ITEM   = 62100;   // base id for saved-macro entries at the bottom of the Macro menu
@@ -737,6 +739,14 @@ public:
         if (!findText.empty() && p->find) p->find->SetValue(findText);
         if (focusReplace && p->repl) p->repl->SetFocus();
         else if (p->find) { p->find->SetFocus(); p->find->SelectAll(); }
+    }
+    // Open the Mark tab with the given text primed into its Find field.
+    void showMarkTab(const wxString& findText)
+    {
+        m_nb->SetSelection(TAB_MARK); SetTitle(tabTitle(TAB_MARK));
+        PageCtrls* p = m_pages[TAB_MARK];
+        if (!findText.empty() && p->find) p->find->SetValue(findText);
+        if (p->find) { p->find->SetFocus(); p->find->SelectAll(); }
     }
     // Show a result message in the dialog (e.g. "Replaced 3 occurrences"), like Notepad++.
     void setResult(const wxString& msg) { if (m_status) m_status->SetLabel(msg); }
@@ -2551,6 +2561,12 @@ private:
         sci(SCI_INDICSETFORE, SMART_INDIC, 0x00C800);
         sci(SCI_INDICSETALPHA, SMART_INDIC, 70);
         sci(SCI_INDICSETOUTLINEALPHA, SMART_INDIC, 160);
+        for (int i = 0; i < 5; ++i) {   // the 5 "Mark All Ext" styles
+            sci(SCI_INDICSETSTYLE, MARK_STYLE_BASE + i, INDIC_ROUNDBOX);
+            sci(SCI_INDICSETFORE, MARK_STYLE_BASE + i, MARK_STYLE_COLOUR[i]);
+            sci(SCI_INDICSETALPHA, MARK_STYLE_BASE + i, 90);
+            sci(SCI_INDICSETOUTLINEALPHA, MARK_STYLE_BASE + i, 180);
+        }
         sci(SCI_STYLESETFONT, STYLE_DEFAULT, reinterpret_cast<sptr_t>("Consolas"));
         sci(SCI_STYLESETSIZE, STYLE_DEFAULT, 11);
         sci(SCI_STYLECLEARALL);
@@ -4432,6 +4448,57 @@ private:
         return count;
     }
     void clearMarks() { sci(SCI_SETINDICATORCURRENT, MARK_INDIC); sci(SCI_INDICATORCLEARRANGE, 0, sci(SCI_GETLENGTH)); }
+    // Notepad++'s multi-style "Mark": highlight the current word/selection in one of 5 persistent colours.
+    // all=true marks every occurrence, all=false just the current one; returns the number marked.
+    int markExt(int style, bool all)
+    {
+        if (style < 0 || style > 4 || !m_stc) return 0;
+        int a = static_cast<int>(sci(SCI_GETSELECTIONSTART)), b = static_cast<int>(sci(SCI_GETSELECTIONEND));
+        bool wholeWord = false;
+        if (a == b) { const int c = static_cast<int>(sci(SCI_GETCURRENTPOS)); a = static_cast<int>(sci(SCI_WORDSTARTPOSITION, c, 1)); b = static_cast<int>(sci(SCI_WORDENDPOSITION, c, 1)); wholeWord = true; }
+        if (b <= a || b - a > 512) return 0;
+        sci(SCI_SETTARGETSTART, a); sci(SCI_SETTARGETEND, b);
+        std::string term(static_cast<size_t>(b - a) + 1, '\0'); sci(SCI_GETTARGETTEXT, 0, reinterpret_cast<sptr_t>(&term[0])); term.resize(b - a);
+        const int indic = MARK_STYLE_BASE + style;
+        sci(SCI_SETINDICATORCURRENT, indic);
+        sci(SCI_INDICATORCLEARRANGE, 0, sci(SCI_GETLENGTH));   // each style re-marks fresh
+        if (!all) { sci(SCI_INDICATORFILLRANGE, a, b - a); return 1; }
+        sci(SCI_SETSEARCHFLAGS, SCFIND_MATCHCASE | (wholeWord ? SCFIND_WHOLEWORD : 0));
+        const int len = static_cast<int>(sci(SCI_GETLENGTH));
+        int start = 0, count = 0;
+        while (start < len)
+        {
+            sci(SCI_SETTARGETSTART, start); sci(SCI_SETTARGETEND, len);
+            if (sci(SCI_SEARCHINTARGET, term.size(), reinterpret_cast<sptr_t>(term.c_str())) < 0) break;
+            const int ms = static_cast<int>(sci(SCI_GETTARGETSTART)), me = static_cast<int>(sci(SCI_GETTARGETEND));
+            if (me <= ms) { start = ms + 1; continue; }
+            sci(SCI_INDICATORFILLRANGE, ms, me - ms);
+            start = me; ++count;
+        }
+        return count;
+    }
+    void unmarkExt(int style) { if (style >= 0 && style <= 4 && m_stc) { sci(SCI_SETINDICATORCURRENT, MARK_STYLE_BASE + style); sci(SCI_INDICATORCLEARRANGE, 0, sci(SCI_GETLENGTH)); } }
+    void clearAllMarks() { clearMarks(); for (int i = 0; i < 5; ++i) unmarkExt(i); }   // Search > Clear all marks
+    // Next / Previous marker: jump between the starts of all marked ranges (MARK_INDIC + the 5 styles).
+    void jumpMark(bool fwd)
+    {
+        if (!m_stc) return;
+        const int len = static_cast<int>(sci(SCI_GETLENGTH));
+        std::vector<int> starts;
+        auto collect = [&](int ind) {
+            int p = 0;
+            while (p < len) { const bool on = sci(SCI_INDICATORVALUEAT, ind, p) != 0; const int nxt = static_cast<int>(sci(SCI_INDICATOREND, ind, p)); if (nxt <= p) break; if (on) starts.push_back(p); p = nxt; }
+        };
+        collect(MARK_INDIC); for (int i = 0; i < 5; ++i) collect(MARK_STYLE_BASE + i);
+        if (starts.empty()) { findResult("No marks to jump to"); return; }
+        std::sort(starts.begin(), starts.end()); starts.erase(std::unique(starts.begin(), starts.end()), starts.end());
+        const int cur = static_cast<int>(sci(SCI_GETCURRENTPOS));
+        int target = -1;
+        if (fwd) { for (int s : starts) if (s > cur) { target = s; break; } if (target < 0) target = starts.front(); }
+        else     { for (auto it = starts.rbegin(); it != starts.rend(); ++it) if (*it < cur) { target = *it; break; } if (target < 0) target = starts.back(); }
+        sci(SCI_GOTOPOS, target); sci(SCI_SCROLLCARET);
+    }
+    void onMarkDlg() { auto* d = ensureFindDlg(); d->showMarkTab(selText()); themeDialog(d); d->Show(); d->Raise(); }
     int doMarkAll(const FindOpts& o)
     {
         clearMarks();
@@ -5600,7 +5667,27 @@ private:
             case IDM_SEARCH_GOTOPREVFOUND: stepFoundResult(false); break;
             case IDM_FOCUS_ON_FOUND_RESULTS: focusFoundResults(); break;
             case IDM_SEARCH_SELECTMATCHINGBRACES: selectBetweenBraces(); break;
-            case IDM_SEARCH_CLEARALLMARKS: clearMarks(); break;
+            case IDM_SEARCH_MARK: onMarkDlg(); break;
+            case IDM_SEARCH_MARKALLEXT1: findResult(wxString::Format("Marked %d - style 1", markExt(0, true))); break;
+            case IDM_SEARCH_MARKALLEXT2: findResult(wxString::Format("Marked %d - style 2", markExt(1, true))); break;
+            case IDM_SEARCH_MARKALLEXT3: findResult(wxString::Format("Marked %d - style 3", markExt(2, true))); break;
+            case IDM_SEARCH_MARKALLEXT4: findResult(wxString::Format("Marked %d - style 4", markExt(3, true))); break;
+            case IDM_SEARCH_MARKALLEXT5: findResult(wxString::Format("Marked %d - style 5", markExt(4, true))); break;
+            case IDM_SEARCH_MARKONEEXT1: markExt(0, false); break;
+            case IDM_SEARCH_MARKONEEXT2: markExt(1, false); break;
+            case IDM_SEARCH_MARKONEEXT3: markExt(2, false); break;
+            case IDM_SEARCH_MARKONEEXT4: markExt(3, false); break;
+            case IDM_SEARCH_MARKONEEXT5: markExt(4, false); break;
+            case IDM_SEARCH_UNMARKALLEXT1: unmarkExt(0); break;
+            case IDM_SEARCH_UNMARKALLEXT2: unmarkExt(1); break;
+            case IDM_SEARCH_UNMARKALLEXT3: unmarkExt(2); break;
+            case IDM_SEARCH_UNMARKALLEXT4: unmarkExt(3); break;
+            case IDM_SEARCH_UNMARKALLEXT5: unmarkExt(4); break;
+            case IDM_SEARCH_CLEARALLMARKS: clearAllMarks(); break;
+            case IDM_SEARCH_GONEXTMARKER1: case IDM_SEARCH_GONEXTMARKER2: case IDM_SEARCH_GONEXTMARKER3:
+            case IDM_SEARCH_GONEXTMARKER4: case IDM_SEARCH_GONEXTMARKER5: case IDM_SEARCH_GONEXTMARKER_DEF: jumpMark(true); break;
+            case IDM_SEARCH_GOPREVMARKER1: case IDM_SEARCH_GOPREVMARKER2: case IDM_SEARCH_GOPREVMARKER3:
+            case IDM_SEARCH_GOPREVMARKER4: case IDM_SEARCH_GOPREVMARKER5: case IDM_SEARCH_GOPREVMARKER_DEF: jumpMark(false); break;
             case IDM_SEARCH_COPYMARKEDLINES: bookmarkLinesOp(0); break;
             case IDM_SEARCH_CUTMARKEDLINES: bookmarkLinesOp(1); break;
             case IDM_SEARCH_DELETEMARKEDLINES: bookmarkLinesOp(2); break;
