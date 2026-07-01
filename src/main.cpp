@@ -2453,17 +2453,8 @@ private:
     }
     void onFifActivate(wxTreeEvent& e)
     {
-        auto* d = m_fifPanel ? dynamic_cast<FifItemData*>(m_fifPanel->GetItemData(e.GetItem())) : nullptr;
-        if (d)
-        {
-            EditorPage* pg = nullptr;
-            for (size_t i = 0; i < m_tabs->GetPageCount(); ++i) { auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i)); if (p->path == d->file) { pg = p; m_tabs->SetSelection(i); break; } }
-            if (!pg) openPath(d->file);
-            sci(SCI_GOTOLINE, d->line - 1);
-            const int half = (int)sci(SCI_LINESONSCREEN) / 2;
-            sci(SCI_SETFIRSTVISIBLELINE, (d->line - 1) > half ? (d->line - 1) - half : 0);
-            m_stc->SetFocus();
-        }
+        if (auto* d = m_fifPanel ? dynamic_cast<FifItemData*>(m_fifPanel->GetItemData(e.GetItem())) : nullptr)
+            gotoResult(d->file, d->line - 1);   // shared jump: dedups the tab and centres the line
         e.Skip();
     }
 
@@ -4473,8 +4464,13 @@ private:
         m_findResults->StyleClearAll();
         m_findResults->Bind(wxEVT_STC_DOUBLECLICK, [this](wxStyledTextEvent&) {
             const int ln = static_cast<int>(m_findResults->GetCurrentLine());
-            if (ln >= 0 && ln < static_cast<int>(m_fifJump.size()) && !m_fifJump[ln].first.empty())
-            { openPath(m_fifJump[ln].first); sci(SCI_GOTOLINE, m_fifJump[ln].second); sci(SCI_SCROLLCARET); m_stc->SetFocus(); }
+            if (ln >= 0 && ln < static_cast<int>(m_fifJump.size()) && !m_fifJump[ln].first.empty()) gotoResult(m_fifJump[ln].first, m_fifJump[ln].second);
+        });
+        m_findResults->Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& e) {   // Enter on a result line jumps to it too
+            if (e.GetKeyCode() == WXK_RETURN || e.GetKeyCode() == WXK_NUMPAD_ENTER) {
+                const int ln = static_cast<int>(m_findResults->GetCurrentLine());
+                if (ln >= 0 && ln < static_cast<int>(m_fifJump.size()) && !m_fifJump[ln].first.empty()) gotoResult(m_fifJump[ln].first, m_fifJump[ln].second);
+            } else e.Skip();
         });
         m_aui.AddPane(m_findResults, wxAuiPaneInfo().Name("findresults").Caption("Search results")
                       .Bottom().Layer(1).BestSize(wxSize(-1, 200)).CloseButton(true).MaximizeButton(false));
@@ -4541,6 +4537,75 @@ private:
         m_findResults->SetReadOnly(true);
         wxAuiPaneInfo& pi = m_aui.GetPane(m_findResults); pi.Show(); m_aui.Update();
         findResult(summary);
+    }
+    // Jump to a search-result location without stacking duplicate tabs: activate the file if it is
+    // already open, otherwise open it, then centre the 0-based line (like onFifActivate).
+    void gotoResult(const wxString& path, int line0)
+    {
+        if (path.empty()) return;
+        const wxFileName target(path);   // normalise: paths from the launch arg vs a directory walk can differ in case/slash
+        bool open = false;
+        for (EditorPage* p : allPages()) if (!p->path.empty() && wxFileName(p->path).SameAs(target)) { activatePage(p); open = true; break; }
+        if (!open) openPath(path);
+        sci(SCI_GOTOLINE, line0);
+        const int half = static_cast<int>(sci(SCI_LINESONSCREEN)) / 2;
+        sci(SCI_SETFIRSTVISIBLELINE, line0 > half ? line0 - half : 0);
+        if (m_stc) m_stc->SetFocus();
+    }
+    // F4 / Shift+F4 step the visible search-results panel (Notepad++'s Next/Previous Search Result).
+    // Two panels can hold results - the Ctrl+Shift+F tree (m_fifPanel, 1-based) and the Find-dialog STC
+    // (m_findResults, 0-based) - so try each in turn; fall back to in-document Find Next when neither has any.
+    bool stepTreeResult(bool fwd)
+    {
+        if (!m_fifPanel) return false;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_fifPanel);
+        if (!pi.IsOk() || !pi.IsShown()) return false;
+        std::vector<wxTreeItemId> leaves;   // only the "Line N:" hits carry FifItemData
+        for (wxTreeItemId it = m_fifPanel->GetFirstVisibleItem(); it.IsOk(); it = m_fifPanel->GetNextVisible(it))
+            if (dynamic_cast<FifItemData*>(m_fifPanel->GetItemData(it))) leaves.push_back(it);
+        if (leaves.empty()) return false;
+        const wxTreeItemId sel = m_fifPanel->GetSelection();
+        int idx = -1; for (int i = 0; i < static_cast<int>(leaves.size()); ++i) if (leaves[i] == sel) { idx = i; break; }
+        idx = (idx < 0) ? (fwd ? 0 : static_cast<int>(leaves.size()) - 1) : idx + (fwd ? 1 : -1);
+        if (idx < 0) idx = static_cast<int>(leaves.size()) - 1; else if (idx >= static_cast<int>(leaves.size())) idx = 0;   // wrap
+        m_fifPanel->SelectItem(leaves[idx]); m_fifPanel->EnsureVisible(leaves[idx]);
+        if (auto* d = dynamic_cast<FifItemData*>(m_fifPanel->GetItemData(leaves[idx]))) gotoResult(d->file, d->line - 1);
+        return true;
+    }
+    bool stepStcResult(bool fwd)
+    {
+        if (!m_findResults || m_fifJump.empty()) return false;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_findResults);
+        if (!pi.IsOk() || !pi.IsShown()) return false;
+        const int n = static_cast<int>(m_fifJump.size());
+        int cur = static_cast<int>(m_findResults->GetCurrentLine()); if (cur < 0) cur = 0; else if (cur >= n) cur = n - 1;
+        for (int i = 0; i < n; ++i)   // walk at most once around the list looking for a jumpable line
+        {
+            cur += fwd ? 1 : -1; if (cur < 0) cur = n - 1; else if (cur >= n) cur = 0;   // wrap
+            if (!m_fifJump[cur].first.empty())
+            {
+                m_findResults->GotoLine(cur);
+                m_findResults->SetSelection(m_findResults->PositionFromLine(cur), m_findResults->GetLineEndPosition(cur));
+                gotoResult(m_fifJump[cur].first, m_fifJump[cur].second);
+                return true;
+            }
+        }
+        return false;
+    }
+    void stepFoundResult(bool fwd)
+    {
+        if (stepTreeResult(fwd)) return;
+        if (stepStcResult(fwd)) return;
+        findNext(fwd);   // nothing in either results panel -> behave like Find Next
+    }
+    // F7: toggle focus between the editor and whichever search-results panel is showing.
+    void focusFoundResults()
+    {
+        wxWindow* panel = nullptr;
+        if (m_fifPanel)    { wxAuiPaneInfo& pi = m_aui.GetPane(m_fifPanel);    if (pi.IsOk() && pi.IsShown()) panel = m_fifPanel; }
+        if (!panel && m_findResults) { wxAuiPaneInfo& pi = m_aui.GetPane(m_findResults); if (pi.IsOk() && pi.IsShown()) panel = m_findResults; }
+        if (!panel) { findResult("No search results yet - run Find in Files or Find All first"); return; }
+        if (panel->HasFocus()) { if (m_stc) m_stc->SetFocus(); } else panel->SetFocus();
     }
     FindReplaceDialog* ensureFindDlg()
     {
@@ -5531,8 +5596,9 @@ private:
             case IDM_SEARCH_SETANDFINDPREV: findSel(false, true); break;
             case IDM_SEARCH_VOLATILE_FINDNEXT: findSel(true, true); break;
             case IDM_SEARCH_VOLATILE_FINDPREV: findSel(false, true); break;
-            case IDM_SEARCH_GOTONEXTFOUND: findNext(true); break;
-            case IDM_SEARCH_GOTOPREVFOUND: findNext(false); break;
+            case IDM_SEARCH_GOTONEXTFOUND: stepFoundResult(true); break;
+            case IDM_SEARCH_GOTOPREVFOUND: stepFoundResult(false); break;
+            case IDM_FOCUS_ON_FOUND_RESULTS: focusFoundResults(); break;
             case IDM_SEARCH_SELECTMATCHINGBRACES: selectBetweenBraces(); break;
             case IDM_SEARCH_CLEARALLMARKS: clearMarks(); break;
             case IDM_SEARCH_COPYMARKEDLINES: bookmarkLinesOp(0); break;
