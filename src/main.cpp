@@ -3048,6 +3048,66 @@ private:
         m_tabs->InsertPage(j, p, cap, true, bmp);
         activateBuffer(p);
     }
+    // Window > Sort By: reorders the active view's tab strip (matches moveTab's detach/reinsert pattern,
+    // repeated selection-sort style - tab counts are small enough that O(n^2) is a non-issue).
+    enum class TabSortKey { Name, Path, Type, Size, Modified };
+    void sortTabs(TabSortKey key, bool ascending)
+    {
+        if (!m_tabs) return;
+        const int n = (int)m_tabs->GetPageCount();
+        if (n < 2) return;
+
+        std::vector<EditorPage*> pages;
+        for (int i = 0; i < n; ++i) pages.push_back(static_cast<EditorPage*>(m_tabs->GetPage(i)));
+
+        // Content Length needs each page's document length, but only one Scintilla editor is shared across
+        // a view's tabs - peek every other document via a raw doc-pointer swap (not activateBuffer's full
+        // reparent/lexer/doc-map refresh) and restore whatever was attached before sorting started.
+        std::map<EditorPage*, int> lengths;
+        if (key == TabSortKey::Size && m_stc)
+        {
+            const sptr_t original = sci(SCI_GETDOCPOINTER);
+            for (EditorPage* p : pages) { sci(SCI_SETDOCPOINTER, 0, p->doc); lengths[p] = (int)sci(SCI_GETLENGTH); }
+            sci(SCI_SETDOCPOINTER, 0, original);
+        }
+
+        std::stable_sort(pages.begin(), pages.end(), [&](EditorPage* a, EditorPage* b) {
+            int cmp = 0;
+            switch (key)
+            {
+                case TabSortKey::Name: cmp = a->title.CmpNoCase(b->title); break;
+                case TabSortKey::Path: cmp = a->path.CmpNoCase(b->path); break;
+                case TabSortKey::Type:
+                    cmp = wxFileName(a->path.empty() ? a->title : a->path).GetExt()
+                              .CmpNoCase(wxFileName(b->path.empty() ? b->title : b->path).GetExt());
+                    break;
+                case TabSortKey::Size: cmp = lengths[a] - lengths[b]; break;
+                case TabSortKey::Modified:
+                {
+                    wxDateTime ta, tb;
+                    const bool ha = !a->path.empty() && wxFileName(a->path).GetTimes(nullptr, &ta, nullptr);
+                    const bool hb = !b->path.empty() && wxFileName(b->path).GetTimes(nullptr, &tb, nullptr);
+                    cmp = !ha && !hb ? 0 : !ha ? -1 : !hb ? 1 : (ta.IsEarlierThan(tb) ? -1 : (tb.IsEarlierThan(ta) ? 1 : 0));
+                    break;
+                }
+            }
+            return ascending ? cmp < 0 : cmp > 0;
+        });
+
+        EditorPage* keepActive = activePage();
+        for (int i = 0; i < n; ++i)
+        {
+            EditorPage* p = pages[i];
+            const int cur = m_tabs->GetPageIndex(p);   // re-queried each pass - prior moves shift everyone else's index
+            if (cur == i) continue;
+            const wxString cap = m_tabs->GetPageText(cur);
+            const wxBitmap bmp = m_tabs->GetPageBitmap(cur);
+            m_tabs->RemovePage(cur);
+            m_tabs->InsertPage(i, p, cap, false, bmp);
+        }
+        if (keepActive) { const int idx = m_tabs->GetPageIndex(keepActive); if (idx != wxNOT_FOUND) m_tabs->SetSelection(idx); }
+        setStatus(0, "Tabs sorted"); m_hint = true;
+    }
     enum { IDM_TABCOLOUR_NONE = 7100, IDM_TABCOLOUR_BASE = 7101 };   // local ids for the tab "Apply Colour" submenu
     static wxColour tabPaletteColour(int i)
     { static const wxColour c[] = { wxColour(0xC8,0x3E,0x3E), wxColour(0xCF,0x8A,0x2E), wxColour(0x3F,0x9C,0x42), wxColour(0x37,0x7D,0xC8), wxColour(0x8A,0x4F,0xBE) };
@@ -6080,6 +6140,16 @@ private:
 
             // ---- Window / Settings / Language: list, folders, normal text ----
             case IDM_WINDOW_WINDOWS: showWindowsList(); break;
+            case IDM_WINDOW_SORT_FN_ASC: sortTabs(TabSortKey::Name, true); break;
+            case IDM_WINDOW_SORT_FN_DSC: sortTabs(TabSortKey::Name, false); break;
+            case IDM_WINDOW_SORT_FP_ASC: sortTabs(TabSortKey::Path, true); break;
+            case IDM_WINDOW_SORT_FP_DSC: sortTabs(TabSortKey::Path, false); break;
+            case IDM_WINDOW_SORT_FT_ASC: sortTabs(TabSortKey::Type, true); break;
+            case IDM_WINDOW_SORT_FT_DSC: sortTabs(TabSortKey::Type, false); break;
+            case IDM_WINDOW_SORT_FS_ASC: sortTabs(TabSortKey::Size, true); break;
+            case IDM_WINDOW_SORT_FS_DSC: sortTabs(TabSortKey::Size, false); break;
+            case IDM_WINDOW_SORT_FD_ASC: sortTabs(TabSortKey::Modified, true); break;
+            case IDM_WINDOW_SORT_FD_DSC: sortTabs(TabSortKey::Modified, false); break;
             case IDM_SETTING_PREFERENCE: onPreferences(); break;
             case IDM_LANGSTYLE_CONFIG_DLG: onStyleConfig(); break;
             case IDM_SETTING_IMPORTSTYLETHEMES: importStyleTheme(); break;
