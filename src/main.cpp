@@ -22,6 +22,7 @@
 #include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
 #include <wx/listctrl.h>       // wxListView - wxListbook's page list (we widen it so labels don't truncate)
 #include <wx/clrpicker.h>      // wxColourPickerCtrl - Style Configurator foreground/background pickers
+#include <wx/graphics.h>       // wxGraphicsContext - translucent per-tab colour tint
 #include <wx/tglbtn.h>         // wxToggleButton - incremental search bar match-case/whole-word/regex toggles
 #include <wx/aui/auibook.h>
 #include <wx/aui/aui.h>          // wxAuiManager - dock host for plugin panels (NPPM_DMM*)
@@ -48,6 +49,10 @@
 #include <wx/dir.h>             // wxDir - scan the plugins/ folder + Find-in-Files traversal
 #include <wx/textfile.h>        // wxTextFile - read files line-by-line for Find in Files
 #include <wx/dirdlg.h>          // wxDirDialog - folder picker for Find in Files
+#include <wx/print.h>           // wxPrinter/wxPrintout - File > Print
+#include <wx/printdlg.h>        // wxPrintDialogData/wxPageSetupDialogData - the Print dialog + page geometry
+#include <wx/paper.h>           // wxThePrintPaperDatabase - resolve a concrete default paper size (A4)
+#include <wx/prntbase.h>        // wxPrintPreview/wxPreviewFrame - File > Print Preview
 
 #ifdef WXNPP_HAS_BORDERLESS
 #include <type_traits>                  // std::is_base_of - detect the borderless base in NppShellFrameT<FB>
@@ -107,7 +112,10 @@ using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/
 static const int  MARK_BOOKMARK = 2;      // a free Scintilla marker number for bookmarks
 static const int  MARK_INDIC    = 9;      // indicator number for "Mark All" highlights (Find dialog)
 static const int  SMART_INDIC   = 10;     // indicator number for smart-highlight (double-click a word)
-enum { myID_TIMER = 60000, myID_DARKMODE, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER };   // fixed ids, above the IDM_* range
+static const int  MARK_STYLE_BASE = 21;   // "Mark All Ext 1-5" style indicators (21..25) - Notepad++'s 5 mark colours
+static const unsigned MARK_STYLE_COLOUR[5] = { 0x1F90FF, 0xE0A020, 0x50B050, 0xC060C0, 0x30B0C0 };  // BGR: orange, blue, green, purple, olive
+static const int  URL_INDIC = 11;         // clickable-URL underline indicator
+enum { myID_TIMER = 60000, myID_DARKMODE, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER, myID_PRINTPREVIEW };   // fixed ids, above the IDM_* range
 static const int myID_DOCLIST_ITEM = 61000;   // base id for the document-list dropdown entries
 static const int myID_MACRO_ITEM   = 62100;   // base id for saved-macro entries at the bottom of the Macro menu
 
@@ -737,6 +745,14 @@ public:
         if (focusReplace && p->repl) p->repl->SetFocus();
         else if (p->find) { p->find->SetFocus(); p->find->SelectAll(); }
     }
+    // Open the Mark tab with the given text primed into its Find field.
+    void showMarkTab(const wxString& findText)
+    {
+        m_nb->SetSelection(TAB_MARK); SetTitle(tabTitle(TAB_MARK));
+        PageCtrls* p = m_pages[TAB_MARK];
+        if (!findText.empty() && p->find) p->find->SetValue(findText);
+        if (p->find) { p->find->SetFocus(); p->find->SelectAll(); }
+    }
     // Show a result message in the dialog (e.g. "Replaced 3 occurrences"), like Notepad++.
     void setResult(const wxString& msg) { if (m_status) m_status->SetLabel(msg); }
 
@@ -1115,18 +1131,25 @@ public:
     // wxAuiFlatTabArt is non-copyable (private pimpl); clone a fresh one (the app sets no custom art
     // colours, so a fresh instance has the same state) and re-skin its buttons.
     wxAuiTabArt* Clone() override { auto* a = new PinTabArt(m_iconColour); a->UpdateColoursFromSystem(); return a; }
-    // Notepad++'s per-tab colour: after the normal tab is drawn, lay a colour stripe along its bottom edge.
-    void DrawTab(wxDC& dc, wxWindow* wnd, const wxAuiNotebookPage& page, const wxRect& in_rect,
-                 int close_button_state, wxRect* out_tab_rect, wxRect* out_button_rect, int* x_extent) override
+    // Notepad++'s per-tab colour. With pinned tabs the flat art calls DrawPageTab (NOT the legacy DrawTab), so we
+    // hook here: draw the normal tab, then lay a translucent colour wash over its body so the label still reads.
+    int DrawPageTab(wxDC& dc, wxWindow* wnd, wxAuiNotebookPage& page, const wxRect& rect) override
     {
-        wxAuiDefaultTabArt::DrawTab(dc, wnd, page, in_rect, close_button_state, out_tab_rect, out_button_rect, x_extent);
-        auto* ep = static_cast<EditorPage*>(page.window);   // every notebook page is an EditorPage
-        if (ep && ep->tabColour.IsOk() && out_tab_rect)
+        const int extent = wxAuiDefaultTabArt::DrawPageTab(dc, wnd, page, rect);
+        auto* ep = static_cast<EditorPage*>(page.window);   // every editor notebook page is an EditorPage
+        if (ep && ep->tabColour.IsOk())
         {
-            const wxRect r = *out_tab_rect;
-            dc.SetBrush(wxBrush(ep->tabColour)); dc.SetPen(*wxTRANSPARENT_PEN);
-            dc.DrawRectangle(r.x + 1, r.GetBottom() - 3, r.width - 2, 3);   // colour stripe along the tab's bottom
+            if (wxGraphicsContext* gc = wxGraphicsContext::CreateFromUnknownDC(dc))
+            {
+                const wxColour& c = ep->tabColour;
+                gc->SetBrush(wxBrush(wxColour(c.Red(), c.Green(), c.Blue(), 140)));   // ~55% alpha: clearly coloured, label legible
+                gc->SetPen(*wxTRANSPARENT_PEN);
+                const int w = (extent > 0 && extent <= rect.width) ? extent : rect.width;
+                gc->DrawRectangle(rect.x, rect.y + 2, w, rect.height - 2);   // start just under the active-tab marker - covers the white separator row so no untinted outline shows
+                delete gc;
+            }
         }
+        return extent;
     }
 private:
     wxColour m_iconColour;
@@ -1146,6 +1169,84 @@ private:
         const wxBitmapBundle cls = iconBundle("close-tab", 12);   // match the tab bar's (smaller) global close button
         if (cls.IsOk()) { m_activeCloseBmp = cls; m_disabledCloseBmp = cls; }
     }
+};
+
+// Notepad++'s File > Print (Ctrl+P) / Print Now: paginate + render the active document through Scintilla's
+// FormatRange (wx's cross-platform wrapper around SCI_FORMATRANGE). Follows the pattern from wxWidgets' own
+// samples/stc/edit.cpp (EditPrint) - measure page breaks with a dry (non-drawing) pass over the whole
+// document, then draw just the one page's range when the print system asks for it.
+class SciPrintout : public wxPrintout
+{
+public:
+    // Takes its own copy of pageSetup (rather than borrowing a pointer): Print Preview's wxPrintPreview owns
+    // two SciPrintouts on a non-modal wxPreviewFrame that can outlive the caller's stack frame.
+    SciPrintout(wxStyledTextCtrl* stc, const wxString& title, const wxPageSetupDialogData& pageSetup)
+        : wxPrintout(title), m_stc(stc), m_pageSetup(pageSetup) {}
+
+    bool OnPrintPage(int page) override
+    {
+        if (page < 1 || page > (int)m_pageEnds.size()) return false;   // out of the range GetPageInfo/HasPage advertised
+        wxDC* dc = GetDC();
+        if (!dc) return false;
+        scaleDC(dc);
+        m_stc->FormatRange(true, page == 1 ? 0 : m_pageEnds[page - 2], m_pageEnds[page - 1], dc, dc, m_printRect, m_pageRect);
+        return true;
+    }
+
+    void GetPageInfo(int* minPage, int* maxPage, int* pageFrom, int* pageTo) override
+    {
+        *minPage = *maxPage = *pageFrom = *pageTo = 0;
+        wxDC* dc = GetDC();
+        if (!dc) return;
+        scaleDC(dc);
+
+        wxSize ppiScr; GetPPIScreen(&ppiScr.x, &ppiScr.y);
+        wxSize page = m_pageSetup.GetPaperSize();
+        page.x = wxRound(page.x * ppiScr.x / 25.4);
+        page.y = wxRound(page.y * ppiScr.y / 25.4);
+        if (m_pageSetup.GetPrintData().GetOrientation() == wxLANDSCAPE) wxSwap(page.x, page.y);
+        m_pageRect = wxRect(0, 0, page.x, page.y);
+
+        const wxPoint tl = m_pageSetup.GetMarginTopLeft(), br = m_pageSetup.GetMarginBottomRight();
+        const int left = wxRound(tl.x * ppiScr.x / 25.4), top = wxRound(tl.y * ppiScr.y / 25.4);
+        const int right = wxRound(br.x * ppiScr.x / 25.4), bottom = wxRound(br.y * ppiScr.y / 25.4);
+        m_printRect = wxRect(left, top, page.x - left - right, page.y - top - bottom);
+
+        m_pageEnds.clear();
+        int pos = 0;
+        const int len = m_stc->GetLength();
+        while (pos < len)
+        {
+            const int next = m_stc->FormatRange(false, pos, len, dc, dc, m_printRect, m_pageRect);
+            if (next <= pos) break;   // safety: a page that fits nothing would loop forever
+            m_pageEnds.push_back(next);
+            pos = next;
+        }
+        *maxPage = (int)m_pageEnds.size();
+        *minPage = *maxPage > 0 ? 1 : 0;
+        *pageFrom = *minPage; *pageTo = *maxPage;
+    }
+
+    bool HasPage(int page) override { return page >= 1 && page <= (int)m_pageEnds.size(); }
+
+private:
+    void scaleDC(wxDC* dc)   // map screen-DPI page geometry onto the target DC (printer or preview) so margins/paper size stay physically correct
+    {
+        wxSize ppiScr; GetPPIScreen(&ppiScr.x, &ppiScr.y);
+        if (ppiScr.x == 0) ppiScr.x = ppiScr.y = 96;
+        wxSize ppiPrt; GetPPIPrinter(&ppiPrt.x, &ppiPrt.y);
+        if (ppiPrt.x == 0) ppiPrt = ppiScr;
+        const wxSize dcSize = dc->GetSize();
+        wxSize pageSize; GetPageSizePixels(&pageSize.x, &pageSize.y);
+        if (pageSize.x <= 0 || pageSize.y <= 0) return;   // guard: a bogus (0,0) page size would divide-by-zero below
+        dc->SetUserScale((double)(ppiPrt.x * dcSize.x) / (double)(ppiScr.x * pageSize.x),
+                          (double)(ppiPrt.y * dcSize.y) / (double)(ppiScr.y * pageSize.y));
+    }
+
+    wxStyledTextCtrl*      m_stc;
+    wxPageSetupDialogData  m_pageSetup;
+    std::vector<int>       m_pageEnds;   // m_pageEnds[i] = the char position where page i+1 ends (exclusive)
+    wxRect                 m_pageRect, m_printRect;
 };
 
 // The shell frame is a template on its chrome base so the same ~3300 lines work whether the base is the
@@ -1201,6 +1302,12 @@ public:
         loadSettings();         // restore preferences incl. the chosen editor theme (before loadTheme reads m_themeName)
         loadTheme();            // parse the active Notepad++ theme XML for exact colours
         { long z = 0; wxConfigBase::Get()->Read("Zoom", &z, 0L); m_zoom = static_cast<int>(z); }   // restore zoom
+        // Seed a concrete paper size/orientation so File > Print's page geometry is never (0,0) before the
+        // user has ever opened the print dialog - a fresh wxPrintData's paper id doesn't resolve to a size
+        // on its own (see wxWidgets samples/stc's identical g_printData setup).
+        if (const wxPrintPaperType* paper = wxThePrintPaperDatabase->FindPaperType(wxPAPER_A4))
+        { m_printData.SetPaperId(paper->GetId()); m_printData.SetPaperSize(paper->GetSize()); }
+        m_printData.SetOrientation(wxPORTRAIT);
         setAppIcon();
         buildEditor();
         buildMenuBar();
@@ -1485,6 +1592,8 @@ private:
     void bindViewEvents(ViewPane& v)
     {
         v.stc->Bind(wxEVT_STC_CHARADDED,        &NppShellFrameT::onStcCharAdded,   this);
+        v.stc->Bind(wxEVT_STC_CALLTIP_CLICK,    &NppShellFrameT::onCallTipClick,   this);
+        v.stc->Bind(wxEVT_STC_INDICATOR_CLICK,  &NppShellFrameT::onUrlClick,       this);
         v.stc->Bind(wxEVT_STC_UPDATEUI,         &NppShellFrameT::onStcUpdateUI,    this);
         v.stc->Bind(wxEVT_STC_DOUBLECLICK,      &NppShellFrameT::onStcDoubleClick, this);
         v.stc->Bind(wxEVT_STC_MARGINCLICK,      &NppShellFrameT::onStcMarginClick, this);
@@ -1521,7 +1630,8 @@ private:
         else
         {
             const bool paired = autoInsertPair(ch);            // insert matching )]}"' or skip over an existing one
-            if (ch == '}') dedentCloseBrace(m_stc);
+            if (ch == '(') funcCallTip();                      // parameter hint for the function being called
+            else if (ch == '}') dedentCloseBrace(m_stc);
             else if (!paired && m_autocomplete && (std::isalnum((unsigned char)ch) || ch == '_'))   // word/keyword completion
             {
                 const int caret = (int)sci(SCI_GETCURRENTPOS);
@@ -1533,6 +1643,8 @@ private:
     void onStcUpdateUI(wxStyledTextEvent& e)
     {
         updateBraceMatch(m_stc);
+        callTipCaretMoved();   // keep the parameter hint in sync / dismiss when the caret leaves the call
+        markVisibleUrls();     // underline URLs on screen (click to open)
         if (g_smartActive && g_smartSci == m_stc && sci(SCI_GETSELECTIONEMPTY)) clearSmart(m_stc);
         updateDocMapViewport();   // keep the minimap's viewport band in sync with scrolling/caret
         if (e.GetUpdated() & SC_UPDATE_SELECTION)   // raise a Nib selection-changed event
@@ -2401,6 +2513,123 @@ private:
         sci(SCI_AUTOCSETIGNORECASE, 0); sci(SCI_AUTOCSETSEPARATOR, ' '); sci(SCI_AUTOCSETMAXHEIGHT, 10); sci(SCI_AUTOCSETORDER, SC_ORDER_PERFORMSORT);
         sci(SCI_AUTOCSHOW, plen, reinterpret_cast<sptr_t>(list.c_str()));
     }
+    // ----- function parameter call tips (Notepad++'s "Function Parameters Hint") ----------------------
+    // No API database is loaded, so signatures are harvested from the open document: each distinct
+    // "name(...)" (plus any preceding return-type / def token) becomes an overload.
+    std::vector<std::string> m_ctSigs; int m_ctIdx = 0; int m_ctOpen = -1;
+    std::vector<std::string> callTipSigs(const std::string& name)
+    {
+        std::vector<std::string> out; std::set<std::string> seen;
+        if (name.empty()) return out;
+        const std::string doc = getDocUtf8();
+        const std::string needle = name + "(";
+        for (size_t pos = 0; (pos = doc.find(needle, pos)) != std::string::npos; )
+        {
+            if (pos && (std::isalnum((unsigned char)doc[pos - 1]) || doc[pos - 1] == '_')) { pos += 1; continue; }   // not a word boundary
+            const size_t op = pos + name.size();   // the '('
+            int depth = 0; size_t i = op;
+            for (; i < doc.size() && i < op + 500; ++i) { const char c = doc[i]; if (c == '(') ++depth; else if (c == ')' && --depth == 0) { ++i; break; } }
+            if (depth != 0) { pos = op; continue; }
+            size_t s = pos;   // include a preceding return-type / 'def' token
+            { size_t k = pos; while (k && (doc[k - 1] == ' ' || doc[k - 1] == '\t')) --k; const size_t we = k; while (k && (std::isalnum((unsigned char)doc[k - 1]) || doc[k - 1] == '_')) --k; if (k < we) s = k; }
+            std::string norm; bool sp = false;   // collapse whitespace runs to single spaces
+            for (size_t j = s; j < i; ++j) { const char c = doc[j]; if (c == '\n' || c == '\r' || c == '\t' || c == ' ') { if (!norm.empty()) sp = true; } else { if (sp) { norm += ' '; sp = false; } norm += c; } }
+            if (norm.size() > 300) norm.resize(300);
+            if (!norm.empty() && seen.insert(norm).second) out.push_back(norm);
+            pos = i;
+            if (out.size() >= 12) break;
+        }
+        return out;
+    }
+    int ctPrefixLen() const { return m_ctSigs.size() > 1 ? (int)(std::string("\001 ") + std::to_string(m_ctIdx + 1) + " of " + std::to_string((int)m_ctSigs.size()) + " \002").size() : 0; }
+    void ctHighlight()   // box the argument the caret is currently in
+    {
+        if (m_ctSigs.empty() || m_ctOpen < 0 || !m_stc) return;
+        const int caret = (int)sci(SCI_GETCURRENTPOS);
+        int d = 0, arg = 0;
+        for (int p = m_ctOpen + 1; p < caret; ++p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == '(' || c == '[') ++d; else if ((c == ']' || c == ')') && d) --d; else if (c == ',' && d == 0) ++arg; }
+        const std::string& sig = m_ctSigs[m_ctIdx];
+        const size_t lp = sig.find('(');
+        if (lp == std::string::npos) return;
+        int cur = 0, dd = 0; size_t ps = lp + 1, hs = std::string::npos, he = std::string::npos;
+        for (size_t i = lp + 1; i < sig.size(); ++i) { const char c = sig[i]; if (c == '(' || c == '[') ++dd; else if (c == ']') { if (dd) --dd; } else if (c == ')') { if (dd == 0) { if (cur == arg) { hs = ps; he = i; } break; } --dd; } else if (c == ',' && dd == 0) { if (cur == arg) { hs = ps; he = i; break; } ++cur; ps = i + 1; } }
+        if (hs == std::string::npos) return;
+        while (hs < he && sig[hs] == ' ') ++hs;
+        const int pre = ctPrefixLen();
+        sci(SCI_CALLTIPSETHLT, pre + (int)hs, pre + (int)he);
+    }
+    void renderCallTip()
+    {
+        if (m_ctSigs.empty()) return;
+        if (m_ctIdx < 0) m_ctIdx = (int)m_ctSigs.size() - 1; else if (m_ctIdx >= (int)m_ctSigs.size()) m_ctIdx = 0;
+        const std::string txt = (m_ctSigs.size() > 1 ? std::string("\001 ") + std::to_string(m_ctIdx + 1) + " of " + std::to_string((int)m_ctSigs.size()) + " \002" : std::string()) + m_ctSigs[m_ctIdx];
+        sci(SCI_CALLTIPSHOW, m_ctOpen, reinterpret_cast<sptr_t>(txt.c_str()));
+        ctHighlight();
+    }
+    void funcCallTip()   // menu / '(' trigger: show the signature of the call enclosing the caret
+    {
+        if (!m_stc) return;
+        const int caret = (int)sci(SCI_GETCURRENTPOS);
+        int depth = 0, open = -1;
+        for (int p = caret - 1; p >= 0 && p > caret - 4000; --p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == ')') ++depth; else if (c == '(') { if (depth == 0) { open = p; break; } --depth; } }
+        if (open < 0) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; }
+        int ne = open; while (ne && std::isspace((unsigned char)sci(SCI_GETCHARAT, ne - 1))) --ne;
+        const int ns = (int)sci(SCI_WORDSTARTPOSITION, ne, 1);
+        if (ns >= ne) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; }
+        m_ctSigs = callTipSigs(rangeText(ns, ne));
+        if (m_ctSigs.empty()) { sci(SCI_CALLTIPCANCEL); return; }
+        m_ctIdx = 0; m_ctOpen = open; renderCallTip();
+    }
+    void callTipCaretMoved()   // keep the highlight in sync, dismiss once the caret leaves the call
+    {
+        if (m_ctSigs.empty() || !m_stc) return;
+        if (!sci(SCI_CALLTIPACTIVE)) { m_ctSigs.clear(); return; }
+        const int caret = (int)sci(SCI_GETCURRENTPOS);
+        if (caret <= m_ctOpen) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; }
+        int d = 0;
+        for (int p = m_ctOpen + 1; p < caret; ++p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == '(') ++d; else if (c == ')') { if (d == 0) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; } --d; } }
+        ctHighlight();
+    }
+    void onCallTipClick(wxStyledTextEvent& e) { const int p = (int)e.GetPosition(); if (p == 1) { --m_ctIdx; renderCallTip(); } else if (p == 2) { ++m_ctIdx; renderCallTip(); } }
+    // ----- clickable URLs -----------------------------------------------------------------------------
+    static bool urlEnd(char c) { return (unsigned char)c <= ' ' || std::strchr("<>\"{}|\\^`", c) != nullptr; }
+    void markVisibleUrls()   // underline http(s)/ftp/www URLs in the on-screen lines
+    {
+        if (!m_stc) return;
+        const int lines = (int)sci(SCI_GETLINECOUNT);
+        const int fv = (int)sci(SCI_GETFIRSTVISIBLELINE), n = (int)sci(SCI_LINESONSCREEN);
+        int a = (int)sci(SCI_DOCLINEFROMVISIBLE, fv), b = (int)sci(SCI_DOCLINEFROMVISIBLE, fv + n + 1);
+        if (a < 0) a = 0; if (b >= lines) b = lines - 1; if (a > b) return;
+        const int s = (int)sci(SCI_POSITIONFROMLINE, a), e = (int)sci(SCI_GETLINEENDPOSITION, b);
+        if (e <= s || e - s > 200000) return;
+        sci(SCI_SETINDICATORCURRENT, URL_INDIC);
+        sci(SCI_INDICATORCLEARRANGE, s, e - s);
+        const std::string t = rangeText(s, e);
+        static const char* const schemes[] = { "https://", "http://", "ftp://", "www." };
+        for (size_t i = 0; i < t.size(); )
+        {
+            size_t sl = 0;
+            for (const char* sc : schemes) { const size_t l = std::strlen(sc); if (i + l <= t.size() && t.compare(i, l, sc) == 0 && (i == 0 || (unsigned char)t[i - 1] <= ' ' || std::strchr("(<\"'=", t[i - 1]))) { sl = l; break; } }
+            if (!sl) { ++i; continue; }
+            size_t j = i + sl;
+            while (j < t.size() && !urlEnd(t[j])) ++j;
+            while (j > i + sl && std::strchr(".,;:!?)]}'\"", t[j - 1])) --j;   // don't swallow trailing punctuation
+            if (j > i + sl) sci(SCI_INDICATORFILLRANGE, s + (int)i, (int)(j - i));
+            i = j;
+        }
+    }
+    void onUrlClick(wxStyledTextEvent& e)   // click a URL -> open in the default browser
+    {
+        const int pos = (int)e.GetPosition();
+        if (pos >= 0 && sci(SCI_INDICATORVALUEAT, URL_INDIC, pos))
+        {
+            const int s = (int)sci(SCI_INDICATORSTART, URL_INDIC, pos), en = (int)sci(SCI_INDICATOREND, URL_INDIC, pos);
+            std::string url = rangeText(s, en);
+            if (url.compare(0, 4, "www.") == 0) url = "http://" + url;
+            if (!url.empty()) wxLaunchDefaultBrowser(wxString::FromUTF8(url.c_str()));
+        }
+        e.Skip();
+    }
     void autoCompletePath()
     {
         if (!m_stc) return;
@@ -2445,17 +2674,8 @@ private:
     }
     void onFifActivate(wxTreeEvent& e)
     {
-        auto* d = m_fifPanel ? dynamic_cast<FifItemData*>(m_fifPanel->GetItemData(e.GetItem())) : nullptr;
-        if (d)
-        {
-            EditorPage* pg = nullptr;
-            for (size_t i = 0; i < m_tabs->GetPageCount(); ++i) { auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i)); if (p->path == d->file) { pg = p; m_tabs->SetSelection(i); break; } }
-            if (!pg) openPath(d->file);
-            sci(SCI_GOTOLINE, d->line - 1);
-            const int half = (int)sci(SCI_LINESONSCREEN) / 2;
-            sci(SCI_SETFIRSTVISIBLELINE, (d->line - 1) > half ? (d->line - 1) - half : 0);
-            m_stc->SetFocus();
-        }
+        if (auto* d = m_fifPanel ? dynamic_cast<FifItemData*>(m_fifPanel->GetItemData(e.GetItem())) : nullptr)
+            gotoResult(d->file, d->line - 1);   // shared jump: dedups the tab and centres the line
         e.Skip();
     }
 
@@ -2552,6 +2772,16 @@ private:
         sci(SCI_INDICSETFORE, SMART_INDIC, 0x00C800);
         sci(SCI_INDICSETALPHA, SMART_INDIC, 70);
         sci(SCI_INDICSETOUTLINEALPHA, SMART_INDIC, 160);
+        for (int i = 0; i < 5; ++i) {   // the 5 "Mark All Ext" styles
+            sci(SCI_INDICSETSTYLE, MARK_STYLE_BASE + i, INDIC_ROUNDBOX);
+            sci(SCI_INDICSETFORE, MARK_STYLE_BASE + i, MARK_STYLE_COLOUR[i]);
+            sci(SCI_INDICSETALPHA, MARK_STYLE_BASE + i, 90);
+            sci(SCI_INDICSETOUTLINEALPHA, MARK_STYLE_BASE + i, 180);
+        }
+        sci(SCI_INDICSETSTYLE, URL_INDIC, INDIC_PLAIN);        // clickable URLs: blue underline, click to open
+        sci(SCI_INDICSETFORE, URL_INDIC, 0xCC6600);
+        sci(SCI_INDICSETHOVERSTYLE, URL_INDIC, INDIC_PLAIN);
+        sci(SCI_INDICSETHOVERFORE, URL_INDIC, 0xEE8822);
         sci(SCI_STYLESETFONT, STYLE_DEFAULT, reinterpret_cast<sptr_t>("Consolas"));
         sci(SCI_STYLESETSIZE, STYLE_DEFAULT, 11);
         sci(SCI_STYLECLEARALL);
@@ -2772,8 +3002,8 @@ private:
       return (i >= 0 && i < 5) ? c[i] : wxColour(); }
     static const char* tabPaletteName(int i)
     { static const char* n[] = { "Red", "Orange", "Green", "Blue", "Purple" }; return (i >= 0 && i < 5) ? n[i] : ""; }
-    void applyTabColour(int idx)             // idx -1 = clear; 0..4 = palette entry; redraws the tab strip
-    { if (auto* p = activePage()) { p->tabColour = (idx < 0) ? wxColour() : tabPaletteColour(idx); if (m_tabs) m_tabs->Refresh(); } }
+    void applyTabColour(int idx)             // idx -1 = clear; 0..4 = palette entry; the tint is drawn by PinTabArt::DrawTab
+    { if (auto* p = activePage()) { p->tabColour = (idx < 0) ? wxColour() : tabPaletteColour(idx); if (m_tabs) { m_tabs->Refresh(); m_tabs->Update(); } setStatus(0, idx < 0 ? "Tab colour cleared" : "Tab colour applied"); m_hint = true; } }
     void recordClosed(EditorPage* p)         // remember a closed file's path (deduped, capped)
     {
         if (!p || p->path.empty()) return;
@@ -2975,12 +3205,19 @@ private:
         menu.Append(IDM_VIEW_GOTO_ANOTHER_VIEW,     "Move to Other View");
         menu.Append(IDM_VIEW_CLONE_TO_ANOTHER_VIEW, "Clone to Other View");
         menu.AppendSeparator();
-        auto* cm = new wxMenu;
+        // Tab colours in an "Apply Colour" submenu. We read the pick via GetPopupMenuSelectionFromUser (below),
+        // which returns the chosen id directly - including submenu items - so it sidesteps the MSW quirk where
+        // PopupMenu silently drops submenu-item command events (that was why earlier picks did nothing).
+        wxMenu* cm = new wxMenu;
         cm->Append(IDM_TABCOLOUR_NONE, "None");
         cm->AppendSeparator();
         for (int k = 0; k < 5; ++k) cm->Append(IDM_TABCOLOUR_BASE + k, tabPaletteName(k));
         menu.AppendSubMenu(cm, "Apply Colour");
-        PopupMenu(&menu);
+        const int sel = this->GetPopupMenuSelectionFromUser(menu);
+        if (sel == wxID_NONE) return;
+        if (sel == IDM_TABCOLOUR_NONE) { applyTabColour(-1); return; }
+        if (sel >= IDM_TABCOLOUR_BASE && sel < IDM_TABCOLOUR_BASE + 5) { applyTabColour(sel - IDM_TABCOLOUR_BASE); return; }
+        wxCommandEvent ce(wxEVT_MENU, sel); onCommand(ce);   // Close / Save / Move / Clone via the normal dispatcher
     }
 
     // ----- second view (Notepad++'s MAIN | SUB split) ---------------------------------------------
@@ -3108,7 +3345,7 @@ private:
     void buildMenuBar()
     {
         auto* mb = new wxMenuBar;
-        buildNppMainMenu(mb, myID_DARKMODE);   // full 1:1 Notepad++ menu tree (see spike/npp_menu.h)
+        buildNppMainMenu(mb, myID_DARKMODE, myID_PRINTPREVIEW);   // full 1:1 Notepad++ menu tree (see spike/npp_menu.h)
         // Recent Files (MRU) submenu near the bottom of the File menu, backed by wxFileHistory.
         if (wxMenu* fileMenu = mb->GetMenu(0))
         {
@@ -4426,6 +4663,57 @@ private:
         return count;
     }
     void clearMarks() { sci(SCI_SETINDICATORCURRENT, MARK_INDIC); sci(SCI_INDICATORCLEARRANGE, 0, sci(SCI_GETLENGTH)); }
+    // Notepad++'s multi-style "Mark": highlight the current word/selection in one of 5 persistent colours.
+    // all=true marks every occurrence, all=false just the current one; returns the number marked.
+    int markExt(int style, bool all)
+    {
+        if (style < 0 || style > 4 || !m_stc) return 0;
+        int a = static_cast<int>(sci(SCI_GETSELECTIONSTART)), b = static_cast<int>(sci(SCI_GETSELECTIONEND));
+        bool wholeWord = false;
+        if (a == b) { const int c = static_cast<int>(sci(SCI_GETCURRENTPOS)); a = static_cast<int>(sci(SCI_WORDSTARTPOSITION, c, 1)); b = static_cast<int>(sci(SCI_WORDENDPOSITION, c, 1)); wholeWord = true; }
+        if (b <= a || b - a > 512) return 0;
+        sci(SCI_SETTARGETSTART, a); sci(SCI_SETTARGETEND, b);
+        std::string term(static_cast<size_t>(b - a) + 1, '\0'); sci(SCI_GETTARGETTEXT, 0, reinterpret_cast<sptr_t>(&term[0])); term.resize(b - a);
+        const int indic = MARK_STYLE_BASE + style;
+        sci(SCI_SETINDICATORCURRENT, indic);
+        sci(SCI_INDICATORCLEARRANGE, 0, sci(SCI_GETLENGTH));   // each style re-marks fresh
+        if (!all) { sci(SCI_INDICATORFILLRANGE, a, b - a); return 1; }
+        sci(SCI_SETSEARCHFLAGS, SCFIND_MATCHCASE | (wholeWord ? SCFIND_WHOLEWORD : 0));
+        const int len = static_cast<int>(sci(SCI_GETLENGTH));
+        int start = 0, count = 0;
+        while (start < len)
+        {
+            sci(SCI_SETTARGETSTART, start); sci(SCI_SETTARGETEND, len);
+            if (sci(SCI_SEARCHINTARGET, term.size(), reinterpret_cast<sptr_t>(term.c_str())) < 0) break;
+            const int ms = static_cast<int>(sci(SCI_GETTARGETSTART)), me = static_cast<int>(sci(SCI_GETTARGETEND));
+            if (me <= ms) { start = ms + 1; continue; }
+            sci(SCI_INDICATORFILLRANGE, ms, me - ms);
+            start = me; ++count;
+        }
+        return count;
+    }
+    void unmarkExt(int style) { if (style >= 0 && style <= 4 && m_stc) { sci(SCI_SETINDICATORCURRENT, MARK_STYLE_BASE + style); sci(SCI_INDICATORCLEARRANGE, 0, sci(SCI_GETLENGTH)); } }
+    void clearAllMarks() { clearMarks(); for (int i = 0; i < 5; ++i) unmarkExt(i); }   // Search > Clear all marks
+    // Next / Previous marker: jump between the starts of all marked ranges (MARK_INDIC + the 5 styles).
+    void jumpMark(bool fwd)
+    {
+        if (!m_stc) return;
+        const int len = static_cast<int>(sci(SCI_GETLENGTH));
+        std::vector<int> starts;
+        auto collect = [&](int ind) {
+            int p = 0;
+            while (p < len) { const bool on = sci(SCI_INDICATORVALUEAT, ind, p) != 0; const int nxt = static_cast<int>(sci(SCI_INDICATOREND, ind, p)); if (nxt <= p) break; if (on) starts.push_back(p); p = nxt; }
+        };
+        collect(MARK_INDIC); for (int i = 0; i < 5; ++i) collect(MARK_STYLE_BASE + i);
+        if (starts.empty()) { findResult("No marks to jump to"); return; }
+        std::sort(starts.begin(), starts.end()); starts.erase(std::unique(starts.begin(), starts.end()), starts.end());
+        const int cur = static_cast<int>(sci(SCI_GETCURRENTPOS));
+        int target = -1;
+        if (fwd) { for (int s : starts) if (s > cur) { target = s; break; } if (target < 0) target = starts.front(); }
+        else     { for (auto it = starts.rbegin(); it != starts.rend(); ++it) if (*it < cur) { target = *it; break; } if (target < 0) target = starts.back(); }
+        sci(SCI_GOTOPOS, target); sci(SCI_SCROLLCARET);
+    }
+    void onMarkDlg() { auto* d = ensureFindDlg(); d->showMarkTab(selText()); themeDialog(d); d->Show(); d->Raise(); }
     int doMarkAll(const FindOpts& o)
     {
         clearMarks();
@@ -4458,8 +4746,13 @@ private:
         m_findResults->StyleClearAll();
         m_findResults->Bind(wxEVT_STC_DOUBLECLICK, [this](wxStyledTextEvent&) {
             const int ln = static_cast<int>(m_findResults->GetCurrentLine());
-            if (ln >= 0 && ln < static_cast<int>(m_fifJump.size()) && !m_fifJump[ln].first.empty())
-            { openPath(m_fifJump[ln].first); sci(SCI_GOTOLINE, m_fifJump[ln].second); sci(SCI_SCROLLCARET); m_stc->SetFocus(); }
+            if (ln >= 0 && ln < static_cast<int>(m_fifJump.size()) && !m_fifJump[ln].first.empty()) gotoResult(m_fifJump[ln].first, m_fifJump[ln].second);
+        });
+        m_findResults->Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& e) {   // Enter on a result line jumps to it too
+            if (e.GetKeyCode() == WXK_RETURN || e.GetKeyCode() == WXK_NUMPAD_ENTER) {
+                const int ln = static_cast<int>(m_findResults->GetCurrentLine());
+                if (ln >= 0 && ln < static_cast<int>(m_fifJump.size()) && !m_fifJump[ln].first.empty()) gotoResult(m_fifJump[ln].first, m_fifJump[ln].second);
+            } else e.Skip();
         });
         m_aui.AddPane(m_findResults, wxAuiPaneInfo().Name("findresults").Caption("Search results")
                       .Bottom().Layer(1).BestSize(wxSize(-1, 200)).CloseButton(true).MaximizeButton(false));
@@ -4527,6 +4820,75 @@ private:
         wxAuiPaneInfo& pi = m_aui.GetPane(m_findResults); pi.Show(); m_aui.Update();
         findResult(summary);
     }
+    // Jump to a search-result location without stacking duplicate tabs: activate the file if it is
+    // already open, otherwise open it, then centre the 0-based line (like onFifActivate).
+    void gotoResult(const wxString& path, int line0)
+    {
+        if (path.empty()) return;
+        const wxFileName target(path);   // normalise: paths from the launch arg vs a directory walk can differ in case/slash
+        bool open = false;
+        for (EditorPage* p : allPages()) if (!p->path.empty() && wxFileName(p->path).SameAs(target)) { activatePage(p); open = true; break; }
+        if (!open) openPath(path);
+        sci(SCI_GOTOLINE, line0);
+        const int half = static_cast<int>(sci(SCI_LINESONSCREEN)) / 2;
+        sci(SCI_SETFIRSTVISIBLELINE, line0 > half ? line0 - half : 0);
+        if (m_stc) m_stc->SetFocus();
+    }
+    // F4 / Shift+F4 step the visible search-results panel (Notepad++'s Next/Previous Search Result).
+    // Two panels can hold results - the Ctrl+Shift+F tree (m_fifPanel, 1-based) and the Find-dialog STC
+    // (m_findResults, 0-based) - so try each in turn; fall back to in-document Find Next when neither has any.
+    bool stepTreeResult(bool fwd)
+    {
+        if (!m_fifPanel) return false;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_fifPanel);
+        if (!pi.IsOk() || !pi.IsShown()) return false;
+        std::vector<wxTreeItemId> leaves;   // only the "Line N:" hits carry FifItemData
+        for (wxTreeItemId it = m_fifPanel->GetFirstVisibleItem(); it.IsOk(); it = m_fifPanel->GetNextVisible(it))
+            if (dynamic_cast<FifItemData*>(m_fifPanel->GetItemData(it))) leaves.push_back(it);
+        if (leaves.empty()) return false;
+        const wxTreeItemId sel = m_fifPanel->GetSelection();
+        int idx = -1; for (int i = 0; i < static_cast<int>(leaves.size()); ++i) if (leaves[i] == sel) { idx = i; break; }
+        idx = (idx < 0) ? (fwd ? 0 : static_cast<int>(leaves.size()) - 1) : idx + (fwd ? 1 : -1);
+        if (idx < 0) idx = static_cast<int>(leaves.size()) - 1; else if (idx >= static_cast<int>(leaves.size())) idx = 0;   // wrap
+        m_fifPanel->SelectItem(leaves[idx]); m_fifPanel->EnsureVisible(leaves[idx]);
+        if (auto* d = dynamic_cast<FifItemData*>(m_fifPanel->GetItemData(leaves[idx]))) gotoResult(d->file, d->line - 1);
+        return true;
+    }
+    bool stepStcResult(bool fwd)
+    {
+        if (!m_findResults || m_fifJump.empty()) return false;
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_findResults);
+        if (!pi.IsOk() || !pi.IsShown()) return false;
+        const int n = static_cast<int>(m_fifJump.size());
+        int cur = static_cast<int>(m_findResults->GetCurrentLine()); if (cur < 0) cur = 0; else if (cur >= n) cur = n - 1;
+        for (int i = 0; i < n; ++i)   // walk at most once around the list looking for a jumpable line
+        {
+            cur += fwd ? 1 : -1; if (cur < 0) cur = n - 1; else if (cur >= n) cur = 0;   // wrap
+            if (!m_fifJump[cur].first.empty())
+            {
+                m_findResults->GotoLine(cur);
+                m_findResults->SetSelection(m_findResults->PositionFromLine(cur), m_findResults->GetLineEndPosition(cur));
+                gotoResult(m_fifJump[cur].first, m_fifJump[cur].second);
+                return true;
+            }
+        }
+        return false;
+    }
+    void stepFoundResult(bool fwd)
+    {
+        if (stepTreeResult(fwd)) return;
+        if (stepStcResult(fwd)) return;
+        findNext(fwd);   // nothing in either results panel -> behave like Find Next
+    }
+    // F7: toggle focus between the editor and whichever search-results panel is showing.
+    void focusFoundResults()
+    {
+        wxWindow* panel = nullptr;
+        if (m_fifPanel)    { wxAuiPaneInfo& pi = m_aui.GetPane(m_fifPanel);    if (pi.IsOk() && pi.IsShown()) panel = m_fifPanel; }
+        if (!panel && m_findResults) { wxAuiPaneInfo& pi = m_aui.GetPane(m_findResults); if (pi.IsOk() && pi.IsShown()) panel = m_findResults; }
+        if (!panel) { findResult("No search results yet - run Find in Files or Find All first"); return; }
+        if (panel->HasFocus()) { if (m_stc) m_stc->SetFocus(); } else panel->SetFocus();
+    }
     FindReplaceDialog* ensureFindDlg()
     {
         if (!m_findDlg)
@@ -4567,7 +4929,7 @@ private:
     // ----- view toggles --------------------------------------------------
     void syncToggle(int id, bool& flag) { flag = !flag; if (menuBar()) menuBar()->Check(id, flag); if (toolBar()) toolBar()->ToggleTool(id, flag); }
     void toggleWrap()  { syncToggle(IDM_VIEW_WRAP, m_wrap); sci(SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE); }
-    void toggleWs()    { syncToggle(IDM_VIEW_ALL_CHARACTERS, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
+    void toggleWs()    { syncToggle(IDM_VIEW_ALL_CHARACTERS, m_ws); if (menuBar()) menuBar()->Check(IDM_VIEW_NPC, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
     void toggleGuides(){ syncToggle(IDM_VIEW_INDENT_GUIDE, m_guides); sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE); }
 
     // ----- persisted preferences (Settings > Preferences) ---------------
@@ -4645,7 +5007,7 @@ private:
             sci(SCI_SETMULTIPLESELECTION, m_multiEdit ? 1 : 0);
             if (m_lineNumbers) updateLineMargin(); else sci(SCI_SETMARGINWIDTHN, 0, 0);
         }
-        if (auto* mb = menuBar()) { mb->Check(IDM_VIEW_WRAP, m_wrap); mb->Check(IDM_VIEW_ALL_CHARACTERS, m_ws); mb->Check(IDM_VIEW_INDENT_GUIDE, m_guides); }
+        if (auto* mb = menuBar()) { mb->Check(IDM_VIEW_WRAP, m_wrap); mb->Check(IDM_VIEW_ALL_CHARACTERS, m_ws); mb->Check(IDM_VIEW_NPC, m_ws); mb->Check(IDM_VIEW_INDENT_GUIDE, m_guides); }
         if (auto* tb = toolBar()) tb->ToggleTool(IDM_VIEW_WRAP, m_wrap);
         showToolBar(m_showToolbar);   // aui-aware: hides the pane in integrated mode, the frame toolbar in native
         if (auto* sb = GetStatusBar()) sb->Show(m_showStatusbar);
@@ -5202,6 +5564,56 @@ private:
         w->Refresh();
     }
     void notImpl(const wxString& what) { setStatus(0, what + " - not yet implemented in this build"); m_hint = true; }
+    // File > Print... (prompt=true, shows the Print dialog) / Print Now (prompt=false, uses the last settings).
+    // Re-entrancy guarded: wxPrinter::Print() pumps a nested modal loop, and a second IDM_FILE_PRINT delivered
+    // while that loop is running (e.g. a held/repeated Ctrl+P) would race two SciPrintout jobs over the same
+    // wxStyledTextCtrl/DC.
+    void doPrint(bool prompt)
+    {
+        if (m_printing || !m_stc) return;
+        m_printing = true;
+        wxPrintDialogData pdd(m_printData);
+        wxPrinter printer(&pdd);
+        wxPageSetupDialogData pageSetup(m_printData);
+        auto* page = activePage();
+        const wxString title = (page && !page->title.empty()) ? page->title : wxString("Untitled");
+        SciPrintout printout(m_stc, title, pageSetup);
+        const bool ok = printer.Print(this, &printout, prompt);
+        m_printing = false;
+        if (!ok)
+        {
+            if (wxPrinter::GetLastError() == wxPRINTER_ERROR)
+                themedInfo("There was a problem printing.\nPerhaps your current printer is not set up correctly.", "Print");
+            return;
+        }
+        m_printData = printer.GetPrintDialogData().GetPrintData();
+        setStatus(0, "Printed " + title); m_hint = true;
+    }
+    // Print Preview: a non-modal wxPreviewFrame hosting two independent SciPrintout jobs (one renders the
+    // on-screen preview bitmap, the other runs if the user clicks Print from inside the preview window) -
+    // both reuse the exact pagination/rendering path doPrint() already exercises against a real printer DC.
+    void onPrintPreview()
+    {
+        if (!m_stc) return;
+        wxPrintDialogData printDialogData(m_printData);
+        wxPageSetupDialogData pageSetup(m_printData);
+        auto* page = activePage();
+        const wxString title = (page && !page->title.empty()) ? page->title : wxString("Untitled");
+        auto* preview = new wxPrintPreview(new SciPrintout(m_stc, title, pageSetup),
+                                            new SciPrintout(m_stc, title, pageSetup),
+                                            &printDialogData);
+        if (!preview->IsOk())
+        {
+            delete preview;
+            themedInfo("There was a problem previewing.\nPerhaps your current printer is not set up correctly.", "Print Preview");
+            return;
+        }
+        auto* frame = new wxPreviewFrame(preview, this, "Print Preview - " + title);
+        frame->SetSize(GetSize());
+        frame->Centre(wxBOTH);
+        frame->Initialize();
+        frame->Show(true);
+    }
     void setStatus(int field, const wxString& text) { SetStatusText(" " + text, field); }  // leading space ~ 4px left margin, like Notepad++
     // Notepad++'s interactive status bar: double-click a field to act on it.
     void onStatusDClick(wxMouseEvent& e)
@@ -5215,6 +5627,7 @@ private:
         {
             case 2: onGoTo(); break;                                       // Ln:Col:Pos -> Go To Line
             case 4: showEolMenu(); break;                                  // line-ending -> convert popup
+            case 5: showEncodingMenu(); break;                             // encoding -> re-interpret / convert popup
             case 6: sci(SCI_EDITTOGGLEOVERTYPE); updateStatus(); break;    // INS/OVR -> toggle typing mode
             default: e.Skip(); break;
         }
@@ -5230,6 +5643,34 @@ private:
             case IDM_FORMAT_TODOS:  setEol(SC_EOL_CRLF); break;
             case IDM_FORMAT_TOUNIX: setEol(SC_EOL_LF);   break;
             case IDM_FORMAT_TOMAC:  setEol(SC_EOL_CR);   break;
+        }
+    }
+    void showEncodingMenu()   // status-bar encoding field: re-interpret (fix a misread file) or convert the encoding
+    {
+        wxMenu m;
+        m.Append(IDM_FORMAT_ANSI,      "Encode as ANSI");
+        m.Append(IDM_FORMAT_AS_UTF_8,  "Encode as UTF-8");
+        m.Append(IDM_FORMAT_UTF_8,     "Encode as UTF-8 BOM");
+        m.Append(IDM_FORMAT_UTF_16LE,  "Encode as UTF-16 LE BOM");
+        m.Append(IDM_FORMAT_UTF_16BE,  "Encode as UTF-16 BE BOM");
+        m.AppendSeparator();
+        m.Append(IDM_FORMAT_CONV2_ANSI,     "Convert to ANSI");
+        m.Append(IDM_FORMAT_CONV2_AS_UTF_8, "Convert to UTF-8");
+        m.Append(IDM_FORMAT_CONV2_UTF_8,    "Convert to UTF-8 BOM");
+        m.Append(IDM_FORMAT_CONV2_UTF_16LE, "Convert to UTF-16 LE BOM");
+        m.Append(IDM_FORMAT_CONV2_UTF_16BE, "Convert to UTF-16 BE BOM");
+        switch (this->GetPopupMenuSelectionFromUser(m))
+        {
+            case IDM_FORMAT_ANSI:      interpretAs(ENC_ANSI);     break;
+            case IDM_FORMAT_AS_UTF_8:  interpretAs(ENC_UTF8);     break;
+            case IDM_FORMAT_UTF_8:     interpretAs(ENC_UTF8_BOM); break;
+            case IDM_FORMAT_UTF_16LE:  interpretAs(ENC_UTF16_LE); break;
+            case IDM_FORMAT_UTF_16BE:  interpretAs(ENC_UTF16_BE); break;
+            case IDM_FORMAT_CONV2_ANSI:     convertTo(ENC_ANSI);     break;
+            case IDM_FORMAT_CONV2_AS_UTF_8: convertTo(ENC_UTF8);     break;
+            case IDM_FORMAT_CONV2_UTF_8:    convertTo(ENC_UTF8_BOM); break;
+            case IDM_FORMAT_CONV2_UTF_16LE: convertTo(ENC_UTF16_LE); break;
+            case IDM_FORMAT_CONV2_UTF_16BE: convertTo(ENC_UTF16_BE); break;
         }
     }
     void showAbout()
@@ -5385,16 +5826,23 @@ private:
             case IDM_VIEW_INDENT_GUIDE: toggleGuides(); break;
             case IDM_VIEW_TAB_SPACE: toggleWs(); break;            // "Show Space and Tab"
             case IDM_VIEW_EOL: sci(SCI_SETVIEWEOL, sci(SCI_GETVIEWEOL) ? 0 : 1); break;
+            case IDM_VIEW_NPC: toggleWs(); break;   // "Show Non-Printing Characters" == show whitespace + EOL
+            case IDM_VIEW_NPC_CCUNIEOL: { const bool on = sci(SCI_GETLINEENDTYPESALLOWED) == 0; sci(SCI_SETLINEENDTYPESALLOWED, on ? SC_LINE_END_TYPE_UNICODE : 0); if (menuBar()) menuBar()->Check(IDM_VIEW_NPC_CCUNIEOL, on); break; }
+            case IDM_VIEW_GOTO_START: sci(SCI_DOCUMENTSTART); break;
+            case IDM_VIEW_GOTO_END:   sci(SCI_DOCUMENTEND);   break;
+            case IDM_VIEW_TAB_COLOUR_1: applyTabColour(0); break;
+            case IDM_VIEW_TAB_COLOUR_2: applyTabColour(1); break;
+            case IDM_VIEW_TAB_COLOUR_3: applyTabColour(2); break;
+            case IDM_VIEW_TAB_COLOUR_4: applyTabColour(3); break;
+            case IDM_VIEW_TAB_COLOUR_5: applyTabColour(4); break;
+            case IDM_VIEW_TAB_COLOUR_NONE: applyTabColour(-1); break;
+            case IDM_EDIT_RTL: if (m_stc) m_stc->SetLayoutDirection(wxLayout_RightToLeft); break;
+            case IDM_EDIT_LTR: if (m_stc) m_stc->SetLayoutDirection(wxLayout_LeftToRight); break;
             case IDM_VIEW_TAB_NEXT: mruSwitch(); break;   // Ctrl+Tab -> most-recently-used switch (N++ MRU behaviour)
             case IDM_VIEW_TAB_PREV: m_tabs->AdvanceSelection(false); break;
             case IDM_VIEW_TAB_MOVEFORWARD:  moveTab(true);  break;
             case IDM_VIEW_TAB_MOVEBACKWARD: moveTab(false); break;
-            case IDM_TABCOLOUR_NONE:     applyTabColour(-1); break;
-            case IDM_TABCOLOUR_BASE + 0: applyTabColour(0);  break;
-            case IDM_TABCOLOUR_BASE + 1: applyTabColour(1);  break;
-            case IDM_TABCOLOUR_BASE + 2: applyTabColour(2);  break;
-            case IDM_TABCOLOUR_BASE + 3: applyTabColour(3);  break;
-            case IDM_TABCOLOUR_BASE + 4: applyTabColour(4);  break;
+            // (tab "Apply Colour" picks are dispatched straight to applyTabColour() in onTabContext)
             case IDM_VIEW_TAB_START: if (m_tabs->GetPageCount()) m_tabs->SetSelection(0); break;
             case IDM_VIEW_TAB_END:   if (m_tabs->GetPageCount()) m_tabs->SetSelection(m_tabs->GetPageCount() - 1); break;
             case IDM_VIEW_TAB1: case IDM_VIEW_TAB2: case IDM_VIEW_TAB3: case IDM_VIEW_TAB4: case IDM_VIEW_TAB5:
@@ -5418,7 +5866,9 @@ private:
 
             case wxID_ABOUT: case IDM_ABOUT: showAbout(); break;
 
-            case IDM_FILE_PRINT: notImpl("Print"); break;
+            case IDM_FILE_PRINT: doPrint(true); break;
+            case IDM_FILE_PRINTNOW: doPrint(false); break;
+            case myID_PRINTPREVIEW: onPrintPreview(); break;
             case IDM_VIEW_DOC_MAP: toggleDocMap(); break;
             case IDM_VIEW_FUNC_LIST: toggleFuncList(); break;
             case IDM_VIEW_DOCLIST: toggleDocList(); break;
@@ -5484,6 +5934,9 @@ private:
             case IDM_EDIT_REDACT_SELECTION: redactSelection(); break;
             case IDM_EDIT_INSERT_DATETIME_CUSTOMIZED: insertDateTime(true); break;
             case IDM_EDIT_AUTOCOMPLETE: autoComplete(true); break;               // Function/keyword completion (Ctrl+Space)
+            case IDM_EDIT_FUNCCALLTIP: funcCallTip(); break;
+            case IDM_EDIT_FUNCCALLTIP_NEXT:     if (!m_ctSigs.empty()) { ++m_ctIdx; renderCallTip(); } else funcCallTip(); break;
+            case IDM_EDIT_FUNCCALLTIP_PREVIOUS: if (!m_ctSigs.empty()) { --m_ctIdx; renderCallTip(); } else funcCallTip(); break;
             case IDM_EDIT_AUTOCOMPLETE_CURRENTFILE: autoComplete(false); break;  // Word completion (document words)
             case IDM_EDIT_AUTOCOMPLETE_PATH: autoCompletePath(); break;          // Path completion
 
@@ -5492,10 +5945,31 @@ private:
             case IDM_SEARCH_SETANDFINDPREV: findSel(false, true); break;
             case IDM_SEARCH_VOLATILE_FINDNEXT: findSel(true, true); break;
             case IDM_SEARCH_VOLATILE_FINDPREV: findSel(false, true); break;
-            case IDM_SEARCH_GOTONEXTFOUND: findNext(true); break;
-            case IDM_SEARCH_GOTOPREVFOUND: findNext(false); break;
+            case IDM_SEARCH_GOTONEXTFOUND: stepFoundResult(true); break;
+            case IDM_SEARCH_GOTOPREVFOUND: stepFoundResult(false); break;
+            case IDM_FOCUS_ON_FOUND_RESULTS: focusFoundResults(); break;
             case IDM_SEARCH_SELECTMATCHINGBRACES: selectBetweenBraces(); break;
-            case IDM_SEARCH_CLEARALLMARKS: clearMarks(); break;
+            case IDM_SEARCH_MARK: onMarkDlg(); break;
+            case IDM_SEARCH_MARKALLEXT1: findResult(wxString::Format("Marked %d - style 1", markExt(0, true))); break;
+            case IDM_SEARCH_MARKALLEXT2: findResult(wxString::Format("Marked %d - style 2", markExt(1, true))); break;
+            case IDM_SEARCH_MARKALLEXT3: findResult(wxString::Format("Marked %d - style 3", markExt(2, true))); break;
+            case IDM_SEARCH_MARKALLEXT4: findResult(wxString::Format("Marked %d - style 4", markExt(3, true))); break;
+            case IDM_SEARCH_MARKALLEXT5: findResult(wxString::Format("Marked %d - style 5", markExt(4, true))); break;
+            case IDM_SEARCH_MARKONEEXT1: markExt(0, false); break;
+            case IDM_SEARCH_MARKONEEXT2: markExt(1, false); break;
+            case IDM_SEARCH_MARKONEEXT3: markExt(2, false); break;
+            case IDM_SEARCH_MARKONEEXT4: markExt(3, false); break;
+            case IDM_SEARCH_MARKONEEXT5: markExt(4, false); break;
+            case IDM_SEARCH_UNMARKALLEXT1: unmarkExt(0); break;
+            case IDM_SEARCH_UNMARKALLEXT2: unmarkExt(1); break;
+            case IDM_SEARCH_UNMARKALLEXT3: unmarkExt(2); break;
+            case IDM_SEARCH_UNMARKALLEXT4: unmarkExt(3); break;
+            case IDM_SEARCH_UNMARKALLEXT5: unmarkExt(4); break;
+            case IDM_SEARCH_CLEARALLMARKS: clearAllMarks(); break;
+            case IDM_SEARCH_GONEXTMARKER1: case IDM_SEARCH_GONEXTMARKER2: case IDM_SEARCH_GONEXTMARKER3:
+            case IDM_SEARCH_GONEXTMARKER4: case IDM_SEARCH_GONEXTMARKER5: case IDM_SEARCH_GONEXTMARKER_DEF: jumpMark(true); break;
+            case IDM_SEARCH_GOPREVMARKER1: case IDM_SEARCH_GOPREVMARKER2: case IDM_SEARCH_GOPREVMARKER3:
+            case IDM_SEARCH_GOPREVMARKER4: case IDM_SEARCH_GOPREVMARKER5: case IDM_SEARCH_GOPREVMARKER_DEF: jumpMark(false); break;
             case IDM_SEARCH_COPYMARKEDLINES: bookmarkLinesOp(0); break;
             case IDM_SEARCH_CUTMARKEDLINES: bookmarkLinesOp(1); break;
             case IDM_SEARCH_DELETEMARKEDLINES: bookmarkLinesOp(2); break;
@@ -5710,6 +6184,8 @@ private:
     int         m_autoCompFrom = 3;                              // auto-completion triggers from the Nth typed character
     bool        m_autoInsertPairs = false;                       // auto-insert matching brackets/quotes while typing
     wxString    m_themeName;                                      // active editor theme (empty = dark/light default); Style Configurator
+    wxPrintData m_printData;                                      // File > Print: remembers the chosen printer/paper for the session
+    bool        m_printing = false;                               // re-entrancy guard around wxPrinter::Print()'s nested modal loop
     std::vector<MacroStep> m_macro;                               // the current recorded macro
     bool        m_recording = false;
     std::vector<std::pair<wxString, std::vector<MacroStep>>> m_savedMacros;   // named macros (Macro menu, this session)
