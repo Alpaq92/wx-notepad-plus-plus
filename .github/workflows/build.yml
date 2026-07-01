@@ -43,7 +43,7 @@ jobs:
 
       # Cache the fetched + built wxWidgets so iterations don't rebuild it from source each run.
       - name: Cache wxWidgets
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: build/_deps
           key: wx331-${{ matrix.name }}-${{ hashFiles('CMakeLists.txt') }}
