@@ -1503,6 +1503,7 @@ private:
     void bindViewEvents(ViewPane& v)
     {
         v.stc->Bind(wxEVT_STC_CHARADDED,        &NppShellFrameT::onStcCharAdded,   this);
+        v.stc->Bind(wxEVT_STC_CALLTIP_CLICK,    &NppShellFrameT::onCallTipClick,   this);
         v.stc->Bind(wxEVT_STC_UPDATEUI,         &NppShellFrameT::onStcUpdateUI,    this);
         v.stc->Bind(wxEVT_STC_DOUBLECLICK,      &NppShellFrameT::onStcDoubleClick, this);
         v.stc->Bind(wxEVT_STC_MARGINCLICK,      &NppShellFrameT::onStcMarginClick, this);
@@ -1539,7 +1540,8 @@ private:
         else
         {
             const bool paired = autoInsertPair(ch);            // insert matching )]}"' or skip over an existing one
-            if (ch == '}') dedentCloseBrace(m_stc);
+            if (ch == '(') funcCallTip();                      // parameter hint for the function being called
+            else if (ch == '}') dedentCloseBrace(m_stc);
             else if (!paired && m_autocomplete && (std::isalnum((unsigned char)ch) || ch == '_'))   // word/keyword completion
             {
                 const int caret = (int)sci(SCI_GETCURRENTPOS);
@@ -1551,6 +1553,7 @@ private:
     void onStcUpdateUI(wxStyledTextEvent& e)
     {
         updateBraceMatch(m_stc);
+        callTipCaretMoved();   // keep the parameter hint in sync / dismiss when the caret leaves the call
         if (g_smartActive && g_smartSci == m_stc && sci(SCI_GETSELECTIONEMPTY)) clearSmart(m_stc);
         updateDocMapViewport();   // keep the minimap's viewport band in sync with scrolling/caret
         if (e.GetUpdated() & SC_UPDATE_SELECTION)   // raise a Nib selection-changed event
@@ -2419,6 +2422,84 @@ private:
         sci(SCI_AUTOCSETIGNORECASE, 0); sci(SCI_AUTOCSETSEPARATOR, ' '); sci(SCI_AUTOCSETMAXHEIGHT, 10); sci(SCI_AUTOCSETORDER, SC_ORDER_PERFORMSORT);
         sci(SCI_AUTOCSHOW, plen, reinterpret_cast<sptr_t>(list.c_str()));
     }
+    // ----- function parameter call tips (Notepad++'s "Function Parameters Hint") ----------------------
+    // No API database is loaded, so signatures are harvested from the open document: each distinct
+    // "name(...)" (plus any preceding return-type / def token) becomes an overload.
+    std::vector<std::string> m_ctSigs; int m_ctIdx = 0; int m_ctOpen = -1;
+    std::vector<std::string> callTipSigs(const std::string& name)
+    {
+        std::vector<std::string> out; std::set<std::string> seen;
+        if (name.empty()) return out;
+        const std::string doc = getDocUtf8();
+        const std::string needle = name + "(";
+        for (size_t pos = 0; (pos = doc.find(needle, pos)) != std::string::npos; )
+        {
+            if (pos && (std::isalnum((unsigned char)doc[pos - 1]) || doc[pos - 1] == '_')) { pos += 1; continue; }   // not a word boundary
+            const size_t op = pos + name.size();   // the '('
+            int depth = 0; size_t i = op;
+            for (; i < doc.size() && i < op + 500; ++i) { const char c = doc[i]; if (c == '(') ++depth; else if (c == ')' && --depth == 0) { ++i; break; } }
+            if (depth != 0) { pos = op; continue; }
+            size_t s = pos;   // include a preceding return-type / 'def' token
+            { size_t k = pos; while (k && (doc[k - 1] == ' ' || doc[k - 1] == '\t')) --k; const size_t we = k; while (k && (std::isalnum((unsigned char)doc[k - 1]) || doc[k - 1] == '_')) --k; if (k < we) s = k; }
+            std::string norm; bool sp = false;   // collapse whitespace runs to single spaces
+            for (size_t j = s; j < i; ++j) { const char c = doc[j]; if (c == '\n' || c == '\r' || c == '\t' || c == ' ') { if (!norm.empty()) sp = true; } else { if (sp) { norm += ' '; sp = false; } norm += c; } }
+            if (norm.size() > 300) norm.resize(300);
+            if (!norm.empty() && seen.insert(norm).second) out.push_back(norm);
+            pos = i;
+            if (out.size() >= 12) break;
+        }
+        return out;
+    }
+    int ctPrefixLen() const { return m_ctSigs.size() > 1 ? (int)(std::string("\001 ") + std::to_string(m_ctIdx + 1) + " of " + std::to_string((int)m_ctSigs.size()) + " \002").size() : 0; }
+    void ctHighlight()   // box the argument the caret is currently in
+    {
+        if (m_ctSigs.empty() || m_ctOpen < 0 || !m_stc) return;
+        const int caret = (int)sci(SCI_GETCURRENTPOS);
+        int d = 0, arg = 0;
+        for (int p = m_ctOpen + 1; p < caret; ++p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == '(' || c == '[') ++d; else if ((c == ']' || c == ')') && d) --d; else if (c == ',' && d == 0) ++arg; }
+        const std::string& sig = m_ctSigs[m_ctIdx];
+        const size_t lp = sig.find('(');
+        if (lp == std::string::npos) return;
+        int cur = 0, dd = 0; size_t ps = lp + 1, hs = std::string::npos, he = std::string::npos;
+        for (size_t i = lp + 1; i < sig.size(); ++i) { const char c = sig[i]; if (c == '(' || c == '[') ++dd; else if (c == ']') { if (dd) --dd; } else if (c == ')') { if (dd == 0) { if (cur == arg) { hs = ps; he = i; } break; } --dd; } else if (c == ',' && dd == 0) { if (cur == arg) { hs = ps; he = i; break; } ++cur; ps = i + 1; } }
+        if (hs == std::string::npos) return;
+        while (hs < he && sig[hs] == ' ') ++hs;
+        const int pre = ctPrefixLen();
+        sci(SCI_CALLTIPSETHLT, pre + (int)hs, pre + (int)he);
+    }
+    void renderCallTip()
+    {
+        if (m_ctSigs.empty()) return;
+        if (m_ctIdx < 0) m_ctIdx = (int)m_ctSigs.size() - 1; else if (m_ctIdx >= (int)m_ctSigs.size()) m_ctIdx = 0;
+        const std::string txt = (m_ctSigs.size() > 1 ? std::string("\001 ") + std::to_string(m_ctIdx + 1) + " of " + std::to_string((int)m_ctSigs.size()) + " \002" : std::string()) + m_ctSigs[m_ctIdx];
+        sci(SCI_CALLTIPSHOW, m_ctOpen, reinterpret_cast<sptr_t>(txt.c_str()));
+        ctHighlight();
+    }
+    void funcCallTip()   // menu / '(' trigger: show the signature of the call enclosing the caret
+    {
+        if (!m_stc) return;
+        const int caret = (int)sci(SCI_GETCURRENTPOS);
+        int depth = 0, open = -1;
+        for (int p = caret - 1; p >= 0 && p > caret - 4000; --p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == ')') ++depth; else if (c == '(') { if (depth == 0) { open = p; break; } --depth; } }
+        if (open < 0) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; }
+        int ne = open; while (ne && std::isspace((unsigned char)sci(SCI_GETCHARAT, ne - 1))) --ne;
+        const int ns = (int)sci(SCI_WORDSTARTPOSITION, ne, 1);
+        if (ns >= ne) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; }
+        m_ctSigs = callTipSigs(rangeText(ns, ne));
+        if (m_ctSigs.empty()) { sci(SCI_CALLTIPCANCEL); return; }
+        m_ctIdx = 0; m_ctOpen = open; renderCallTip();
+    }
+    void callTipCaretMoved()   // keep the highlight in sync, dismiss once the caret leaves the call
+    {
+        if (m_ctSigs.empty() || !m_stc) return;
+        if (!sci(SCI_CALLTIPACTIVE)) { m_ctSigs.clear(); return; }
+        const int caret = (int)sci(SCI_GETCURRENTPOS);
+        if (caret <= m_ctOpen) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; }
+        int d = 0;
+        for (int p = m_ctOpen + 1; p < caret; ++p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == '(') ++d; else if (c == ')') { if (d == 0) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; } --d; } }
+        ctHighlight();
+    }
+    void onCallTipClick(wxStyledTextEvent& e) { const int p = (int)e.GetPosition(); if (p == 1) { --m_ctIdx; renderCallTip(); } else if (p == 2) { ++m_ctIdx; renderCallTip(); } }
     void autoCompletePath()
     {
         if (!m_stc) return;
@@ -5667,6 +5748,9 @@ private:
             case IDM_EDIT_REDACT_SELECTION: redactSelection(); break;
             case IDM_EDIT_INSERT_DATETIME_CUSTOMIZED: insertDateTime(true); break;
             case IDM_EDIT_AUTOCOMPLETE: autoComplete(true); break;               // Function/keyword completion (Ctrl+Space)
+            case IDM_EDIT_FUNCCALLTIP: funcCallTip(); break;
+            case IDM_EDIT_FUNCCALLTIP_NEXT:     if (!m_ctSigs.empty()) { ++m_ctIdx; renderCallTip(); } else funcCallTip(); break;
+            case IDM_EDIT_FUNCCALLTIP_PREVIOUS: if (!m_ctSigs.empty()) { --m_ctIdx; renderCallTip(); } else funcCallTip(); break;
             case IDM_EDIT_AUTOCOMPLETE_CURRENTFILE: autoComplete(false); break;  // Word completion (document words)
             case IDM_EDIT_AUTOCOMPLETE_PATH: autoCompletePath(); break;          // Path completion
 
