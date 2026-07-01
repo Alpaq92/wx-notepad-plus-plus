@@ -5687,8 +5687,7 @@ private:
         auto* frame = new wxPreviewFrame(preview, this, "Print Preview - " + title);
         frame->SetSize(GetSize());
         frame->Centre(wxBOTH);
-        frame->Initialize();     // builds the control bar + canvas - must run before theming them
-        themeDialog(frame);      // match the app's dark/light mode instead of wxPreviewFrame's plain default chrome
+        frame->Initialize();
         frame->Show(true);
     }
     void setStatus(int field, const wxString& text) { SetStatusText(" " + text, field); }  // leading space ~ 4px left margin, like Notepad++
