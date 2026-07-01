@@ -2120,8 +2120,25 @@ private:
     // expands/selects within the tree it was constructed with), so switching workspaces means rebuilding it.
     // Reuses the previous wxAuiPaneInfo (position/size) when one exists, so picking a new folder doesn't reset
     // the panel's docked layout.
+    // Re-skins wxGenericDirCtrl's shared global icon table (wxTheFileIconsTable) with the app's own Tabler
+    // icon set, so the Folder as Workspace tree matches the toolbar instead of wx's native folder/file glyphs.
+    // Patches the table's wxImageList in place at the same indices wxGenericDirCtrl already reads from -
+    // there's only ever the one dir control, so no per-item SetItemImage bookkeeping is needed.
+    void patchFileBrowserIcons()
+    {
+        static bool patched = false;
+        if (patched) return;
+        patched = true;
+        wxImageList* il = wxTheFileIconsTable ? wxTheFileIconsTable->GetSmallImageList() : nullptr;
+        if (!il) return;
+        const wxSize sz = il->GetSize();
+        il->Replace(wxFileIconsTable::folder,      icon("folder").GetBitmap(sz));
+        il->Replace(wxFileIconsTable::folder_open, icon("open").GetBitmap(sz));   // open.svg is already Tabler's folder-open glyph
+        il->Replace(wxFileIconsTable::file,        icon("file").GetBitmap(sz));
+    }
     void createFileBrowser(const wxString& root)
     {
+        patchFileBrowserIcons();
         wxAuiPaneInfo paneInfo;
         bool hadPane = false;
         if (m_fileBrowser)
