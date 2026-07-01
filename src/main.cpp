@@ -49,6 +49,9 @@
 #include <wx/dir.h>             // wxDir - scan the plugins/ folder + Find-in-Files traversal
 #include <wx/textfile.h>        // wxTextFile - read files line-by-line for Find in Files
 #include <wx/dirdlg.h>          // wxDirDialog - folder picker for Find in Files
+#include <wx/print.h>           // wxPrinter/wxPrintout - File > Print
+#include <wx/printdlg.h>        // wxPrintDialogData/wxPageSetupDialogData - the Print dialog + page geometry
+#include <wx/paper.h>           // wxThePrintPaperDatabase - resolve a concrete default paper size (A4)
 
 #ifdef WXNPP_HAS_BORDERLESS
 #include <type_traits>                  // std::is_base_of - detect the borderless base in NppShellFrameT<FB>
@@ -1167,6 +1170,82 @@ private:
     }
 };
 
+// Notepad++'s File > Print (Ctrl+P) / Print Now: paginate + render the active document through Scintilla's
+// FormatRange (wx's cross-platform wrapper around SCI_FORMATRANGE). Follows the pattern from wxWidgets' own
+// samples/stc/edit.cpp (EditPrint) - measure page breaks with a dry (non-drawing) pass over the whole
+// document, then draw just the one page's range when the print system asks for it.
+class SciPrintout : public wxPrintout
+{
+public:
+    SciPrintout(wxStyledTextCtrl* stc, const wxString& title, wxPageSetupDialogData* pageSetup)
+        : wxPrintout(title), m_stc(stc), m_pageSetup(pageSetup) {}
+
+    bool OnPrintPage(int page) override
+    {
+        if (page < 1 || page > (int)m_pageEnds.size()) return false;   // out of the range GetPageInfo/HasPage advertised
+        wxDC* dc = GetDC();
+        if (!dc) return false;
+        scaleDC(dc);
+        m_stc->FormatRange(true, page == 1 ? 0 : m_pageEnds[page - 2], m_pageEnds[page - 1], dc, dc, m_printRect, m_pageRect);
+        return true;
+    }
+
+    void GetPageInfo(int* minPage, int* maxPage, int* pageFrom, int* pageTo) override
+    {
+        *minPage = *maxPage = *pageFrom = *pageTo = 0;
+        wxDC* dc = GetDC();
+        if (!dc) return;
+        scaleDC(dc);
+
+        wxSize ppiScr; GetPPIScreen(&ppiScr.x, &ppiScr.y);
+        wxSize page = m_pageSetup->GetPaperSize();
+        page.x = wxRound(page.x * ppiScr.x / 25.4);
+        page.y = wxRound(page.y * ppiScr.y / 25.4);
+        if (m_pageSetup->GetPrintData().GetOrientation() == wxLANDSCAPE) wxSwap(page.x, page.y);
+        m_pageRect = wxRect(0, 0, page.x, page.y);
+
+        const wxPoint tl = m_pageSetup->GetMarginTopLeft(), br = m_pageSetup->GetMarginBottomRight();
+        const int left = wxRound(tl.x * ppiScr.x / 25.4), top = wxRound(tl.y * ppiScr.y / 25.4);
+        const int right = wxRound(br.x * ppiScr.x / 25.4), bottom = wxRound(br.y * ppiScr.y / 25.4);
+        m_printRect = wxRect(left, top, page.x - left - right, page.y - top - bottom);
+
+        m_pageEnds.clear();
+        int pos = 0;
+        const int len = m_stc->GetLength();
+        while (pos < len)
+        {
+            const int next = m_stc->FormatRange(false, pos, len, dc, dc, m_printRect, m_pageRect);
+            if (next <= pos) break;   // safety: a page that fits nothing would loop forever
+            m_pageEnds.push_back(next);
+            pos = next;
+        }
+        *maxPage = (int)m_pageEnds.size();
+        *minPage = *maxPage > 0 ? 1 : 0;
+        *pageFrom = *minPage; *pageTo = *maxPage;
+    }
+
+    bool HasPage(int page) override { return page >= 1 && page <= (int)m_pageEnds.size(); }
+
+private:
+    void scaleDC(wxDC* dc)   // map screen-DPI page geometry onto the target DC (printer or preview) so margins/paper size stay physically correct
+    {
+        wxSize ppiScr; GetPPIScreen(&ppiScr.x, &ppiScr.y);
+        if (ppiScr.x == 0) ppiScr.x = ppiScr.y = 96;
+        wxSize ppiPrt; GetPPIPrinter(&ppiPrt.x, &ppiPrt.y);
+        if (ppiPrt.x == 0) ppiPrt = ppiScr;
+        const wxSize dcSize = dc->GetSize();
+        wxSize pageSize; GetPageSizePixels(&pageSize.x, &pageSize.y);
+        if (pageSize.x <= 0 || pageSize.y <= 0) return;   // guard: a bogus (0,0) page size would divide-by-zero below
+        dc->SetUserScale((double)(ppiPrt.x * dcSize.x) / (double)(ppiScr.x * pageSize.x),
+                          (double)(ppiPrt.y * dcSize.y) / (double)(ppiScr.y * pageSize.y));
+    }
+
+    wxStyledTextCtrl*      m_stc;
+    wxPageSetupDialogData* m_pageSetup;
+    std::vector<int>       m_pageEnds;   // m_pageEnds[i] = the char position where page i+1 ends (exclusive)
+    wxRect                 m_pageRect, m_printRect;
+};
+
 // The shell frame is a template on its chrome base so the same ~3300 lines work whether the base is the
 // native wxFrame or the borderless wxBorderlessFrame. The base is chosen at startup (restart-to-apply)
 // via the two aliases defined just after the class. (Two-phase lookup: MSVC is permissive, but GCC needs
@@ -1220,6 +1299,12 @@ public:
         loadSettings();         // restore preferences incl. the chosen editor theme (before loadTheme reads m_themeName)
         loadTheme();            // parse the active Notepad++ theme XML for exact colours
         { long z = 0; wxConfigBase::Get()->Read("Zoom", &z, 0L); m_zoom = static_cast<int>(z); }   // restore zoom
+        // Seed a concrete paper size/orientation so File > Print's page geometry is never (0,0) before the
+        // user has ever opened the print dialog - a fresh wxPrintData's paper id doesn't resolve to a size
+        // on its own (see wxWidgets samples/stc's identical g_printData setup).
+        if (const wxPrintPaperType* paper = wxThePrintPaperDatabase->FindPaperType(wxPAPER_A4))
+        { m_printData.SetPaperId(paper->GetId()); m_printData.SetPaperSize(paper->GetSize()); }
+        m_printData.SetOrientation(wxPORTRAIT);
         setAppIcon();
         buildEditor();
         buildMenuBar();
@@ -5476,6 +5561,31 @@ private:
         w->Refresh();
     }
     void notImpl(const wxString& what) { setStatus(0, what + " - not yet implemented in this build"); m_hint = true; }
+    // File > Print... (prompt=true, shows the Print dialog) / Print Now (prompt=false, uses the last settings).
+    // Re-entrancy guarded: wxPrinter::Print() pumps a nested modal loop, and a second IDM_FILE_PRINT delivered
+    // while that loop is running (e.g. a held/repeated Ctrl+P) would race two SciPrintout jobs over the same
+    // wxStyledTextCtrl/DC.
+    void doPrint(bool prompt)
+    {
+        if (m_printing || !m_stc) return;
+        m_printing = true;
+        wxPrintDialogData pdd(m_printData);
+        wxPrinter printer(&pdd);
+        wxPageSetupDialogData pageSetup(m_printData);
+        auto* page = activePage();
+        const wxString title = (page && !page->title.empty()) ? page->title : wxString("Untitled");
+        SciPrintout printout(m_stc, title, &pageSetup);
+        const bool ok = printer.Print(this, &printout, prompt);
+        m_printing = false;
+        if (!ok)
+        {
+            if (wxPrinter::GetLastError() == wxPRINTER_ERROR)
+                themedInfo("There was a problem printing.\nPerhaps your current printer is not set up correctly.", "Print");
+            return;
+        }
+        m_printData = printer.GetPrintDialogData().GetPrintData();
+        setStatus(0, "Printed " + title); m_hint = true;
+    }
     void setStatus(int field, const wxString& text) { SetStatusText(" " + text, field); }  // leading space ~ 4px left margin, like Notepad++
     // Notepad++'s interactive status bar: double-click a field to act on it.
     void onStatusDClick(wxMouseEvent& e)
@@ -5728,7 +5838,8 @@ private:
 
             case wxID_ABOUT: case IDM_ABOUT: showAbout(); break;
 
-            case IDM_FILE_PRINT: notImpl("Print"); break;
+            case IDM_FILE_PRINT: doPrint(true); break;
+            case IDM_FILE_PRINTNOW: doPrint(false); break;
             case IDM_VIEW_DOC_MAP: toggleDocMap(); break;
             case IDM_VIEW_FUNC_LIST: toggleFuncList(); break;
             case IDM_VIEW_DOCLIST: toggleDocList(); break;
@@ -6044,6 +6155,8 @@ private:
     int         m_autoCompFrom = 3;                              // auto-completion triggers from the Nth typed character
     bool        m_autoInsertPairs = false;                       // auto-insert matching brackets/quotes while typing
     wxString    m_themeName;                                      // active editor theme (empty = dark/light default); Style Configurator
+    wxPrintData m_printData;                                      // File > Print: remembers the chosen printer/paper for the session
+    bool        m_printing = false;                               // re-entrancy guard around wxPrinter::Print()'s nested modal loop
     std::vector<MacroStep> m_macro;                               // the current recorded macro
     bool        m_recording = false;
     std::vector<std::pair<wxString, std::vector<MacroStep>>> m_savedMacros;   // named macros (Macro menu, this session)
