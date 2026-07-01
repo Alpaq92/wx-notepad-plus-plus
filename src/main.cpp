@@ -2116,31 +2116,66 @@ private:
 
     // ---- Folder as Workspace (a dockable file-system browser rooted at a chosen folder) -----------
     wxGenericDirCtrl* m_fileBrowser = nullptr;
+    // (Re)creates the file browser rooted at `root` - wxGenericDirCtrl has no "change root" API (SetPath only
+    // expands/selects within the tree it was constructed with), so switching workspaces means rebuilding it.
+    // Reuses the previous wxAuiPaneInfo (position/size) when one exists, so picking a new folder doesn't reset
+    // the panel's docked layout.
+    void createFileBrowser(const wxString& root)
+    {
+        wxAuiPaneInfo paneInfo;
+        bool hadPane = false;
+        if (m_fileBrowser)
+        {
+            wxAuiPaneInfo& pi = m_aui.GetPane(m_fileBrowser);
+            if (pi.IsOk()) { paneInfo = pi; hadPane = true; }
+            m_aui.DetachPane(m_fileBrowser);
+            m_fileBrowser->Destroy();
+        }
+        m_fileBrowser = new wxGenericDirCtrl(this, wxID_ANY, root, wxDefaultPosition, wxDefaultSize,
+                                             wxDIRCTRL_SHOW_FILTERS | wxBORDER_NONE);
+        if (auto* tree = m_fileBrowser->GetTreeCtrl())   // theme the tree to the editor's colours
+        {
+            const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
+            tree->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));
+            tree->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
+        }
+        m_fileBrowser->Bind(wxEVT_DIRCTRL_FILEACTIVATED, [this](wxTreeEvent&) {
+            const wxString f = m_fileBrowser->GetFilePath();
+            if (!f.empty() && wxFileExists(f)) openPath(f);   // double-click a file -> open it
+        });
+        if (hadPane) m_aui.AddPane(m_fileBrowser, paneInfo);
+        else m_aui.AddPane(m_fileBrowser, wxAuiPaneInfo().Name("filebrowser").Caption("Folder as Workspace")
+                                .Left().BestSize(240, 500).MinSize(140, 100).CloseButton(true).Hide());
+    }
     void toggleFileBrowser()
     {
         if (!m_fileBrowser)
         {
             wxString root = curPath().empty() ? wxGetCwd() : wxFileName(curPath()).GetPath();   // start expanded at the current file's folder
             if (root.empty()) root = wxGetCwd();
-            m_fileBrowser = new wxGenericDirCtrl(this, wxID_ANY, root, wxDefaultPosition, wxDefaultSize,
-                                                 wxDIRCTRL_SHOW_FILTERS | wxBORDER_NONE);
-            if (auto* tree = m_fileBrowser->GetTreeCtrl())   // theme the tree to the editor's colours
-            {
-                const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
-                tree->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));
-                tree->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
-            }
-            m_fileBrowser->Bind(wxEVT_DIRCTRL_FILEACTIVATED, [this](wxTreeEvent&) {
-                const wxString f = m_fileBrowser->GetFilePath();
-                if (!f.empty() && wxFileExists(f)) openPath(f);   // double-click a file -> open it
-            });
-            m_aui.AddPane(m_fileBrowser, wxAuiPaneInfo().Name("filebrowser").Caption("Folder as Workspace")
-                              .Left().BestSize(240, 500).MinSize(140, 100).CloseButton(true).Hide());
+            createFileBrowser(root);
         }
         wxAuiPaneInfo& pi = m_aui.GetPane(m_fileBrowser);
         if (!pi.IsOk()) return;
         pi.Show(!pi.IsShown());
         m_aui.Update();
+    }
+    void showFileBrowserRooted(const wxString& root)   // Open Folder as Workspace / Folder as Workspace: (re)root + reveal
+    {
+        createFileBrowser(root);
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_fileBrowser);
+        if (pi.IsOk()) { pi.Show(); m_aui.Update(); }
+        setStatus(0, "Workspace: " + root); m_hint = true;
+    }
+    void openFolderAsWorkspace()   // IDM_FILE_OPENFOLDERASWORKSPACE - pick any folder
+    {
+        wxDirDialog dlg(this, "Select Folder as Workspace", curPath().empty() ? wxString() : wxFileName(curPath()).GetPath());
+        if (dlg.ShowModal() == wxID_OK) showFileBrowserRooted(dlg.GetPath());
+    }
+    void containingFolderAsWorkspace()   // IDM_FILE_CONTAININGFOLDERASWORKSPACE - the active file's own folder
+    {
+        if (curPath().empty()) { notImpl("Folder as Workspace (save the file first)"); return; }
+        showFileBrowserRooted(wxFileName(curPath()).GetPath());
     }
 
     // ---- Incremental Search (Ctrl+Alt+I): find-as-you-type bar; Enter = next, Esc = close ---------
@@ -3161,6 +3196,30 @@ private:
             }
         setActiveView(viewOf(keep));
         collapseIfEmpty();                                 // unsplit whichever view is now empty
+    }
+    // Same three-pass shape as closeAllBut (confirm all first so a Cancel aborts before anything closes; then
+    // record + delete), but keeping every Pinned tab instead of one specific page - so, unlike closeAllBut,
+    // it CAN legitimately empty both views if nothing is pinned, hence the "N++ never has zero" fallback.
+    void closeAllButPinned()
+    {
+        auto unpinned = [](wxAuiNotebook* nb, int i) { return nb->GetPageKind(i) != wxAuiTabKind::Pinned; };
+        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
+            if (nb) for (int i = 0; i < (int)nb->GetPageCount(); ++i)
+                if (unpinned(nb, i) && !confirmClose(static_cast<EditorPage*>(nb->GetPage(i)))) return;   // cancel aborts
+        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
+            if (nb) for (int i = 0; i < (int)nb->GetPageCount(); ++i)
+                if (unpinned(nb, i)) recordClosed(static_cast<EditorPage*>(nb->GetPage(i)));
+        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
+            if (nb)
+            {
+                ViewPane* v = (nb == m_sub.tabs) ? &m_sub : &m_main;
+                if (nb->GetSelection() != wxNOT_FOUND && unpinned(nb, nb->GetSelection()))   // protect the view's editor if its active page is being deleted
+                    detachViewEditor(v, static_cast<EditorPage*>(nb->GetPage(nb->GetSelection())));
+                for (int i = (int)nb->GetPageCount() - 1; i >= 0; --i)
+                    if (unpinned(nb, i)) nb->DeletePage(i);
+            }
+        if (totalDocs() == 0) { setActiveView(&m_main); addDocument("", nextNewName()); }   // leave one empty doc (N++ never has zero)
+        collapseIfEmpty();
     }
     // On window close / app exit, prompt for every modified document; a Cancel aborts the close.
     void onCloseWindow(wxCloseEvent& e)
@@ -5897,6 +5956,9 @@ private:
             case IDM_FILE_OPEN_CMD: openShellHere(false); break;
             case IDM_FILE_OPEN_POWERSHELL: openShellHere(true); break;
             case IDM_FILE_OPEN_DEFAULT_VIEWER: openInDefaultViewer(); break;
+            case IDM_FILE_OPENFOLDERASWORKSPACE: openFolderAsWorkspace(); break;
+            case IDM_FILE_CONTAININGFOLDERASWORKSPACE: containingFolderAsWorkspace(); break;
+            case IDM_FILE_CLOSEALL_BUT_PINNED: closeAllButPinned(); break;
             case IDM_FILE_CLOSEALL_TOLEFT: closeAllSide(false); break;
             case IDM_FILE_CLOSEALL_TORIGHT: closeAllSide(true); break;
             case IDM_FILE_CLOSEALL_UNCHANGED: closeAllUnchanged(); break;
