@@ -4714,7 +4714,7 @@ private:
     // ----- view toggles --------------------------------------------------
     void syncToggle(int id, bool& flag) { flag = !flag; if (menuBar()) menuBar()->Check(id, flag); if (toolBar()) toolBar()->ToggleTool(id, flag); }
     void toggleWrap()  { syncToggle(IDM_VIEW_WRAP, m_wrap); sci(SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE); }
-    void toggleWs()    { syncToggle(IDM_VIEW_ALL_CHARACTERS, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
+    void toggleWs()    { syncToggle(IDM_VIEW_ALL_CHARACTERS, m_ws); if (menuBar()) menuBar()->Check(IDM_VIEW_NPC, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
     void toggleGuides(){ syncToggle(IDM_VIEW_INDENT_GUIDE, m_guides); sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE); }
 
     // ----- persisted preferences (Settings > Preferences) ---------------
@@ -4792,7 +4792,7 @@ private:
             sci(SCI_SETMULTIPLESELECTION, m_multiEdit ? 1 : 0);
             if (m_lineNumbers) updateLineMargin(); else sci(SCI_SETMARGINWIDTHN, 0, 0);
         }
-        if (auto* mb = menuBar()) { mb->Check(IDM_VIEW_WRAP, m_wrap); mb->Check(IDM_VIEW_ALL_CHARACTERS, m_ws); mb->Check(IDM_VIEW_INDENT_GUIDE, m_guides); }
+        if (auto* mb = menuBar()) { mb->Check(IDM_VIEW_WRAP, m_wrap); mb->Check(IDM_VIEW_ALL_CHARACTERS, m_ws); mb->Check(IDM_VIEW_NPC, m_ws); mb->Check(IDM_VIEW_INDENT_GUIDE, m_guides); }
         if (auto* tb = toolBar()) tb->ToggleTool(IDM_VIEW_WRAP, m_wrap);
         showToolBar(m_showToolbar);   // aui-aware: hides the pane in integrated mode, the frame toolbar in native
         if (auto* sb = GetStatusBar()) sb->Show(m_showStatusbar);
@@ -5561,6 +5561,18 @@ private:
             case IDM_VIEW_INDENT_GUIDE: toggleGuides(); break;
             case IDM_VIEW_TAB_SPACE: toggleWs(); break;            // "Show Space and Tab"
             case IDM_VIEW_EOL: sci(SCI_SETVIEWEOL, sci(SCI_GETVIEWEOL) ? 0 : 1); break;
+            case IDM_VIEW_NPC: toggleWs(); break;   // "Show Non-Printing Characters" == show whitespace + EOL
+            case IDM_VIEW_NPC_CCUNIEOL: { const bool on = sci(SCI_GETLINEENDTYPESALLOWED) == 0; sci(SCI_SETLINEENDTYPESALLOWED, on ? SC_LINE_END_TYPE_UNICODE : 0); if (menuBar()) menuBar()->Check(IDM_VIEW_NPC_CCUNIEOL, on); break; }
+            case IDM_VIEW_GOTO_START: sci(SCI_DOCUMENTSTART); break;
+            case IDM_VIEW_GOTO_END:   sci(SCI_DOCUMENTEND);   break;
+            case IDM_VIEW_TAB_COLOUR_1: applyTabColour(0); break;
+            case IDM_VIEW_TAB_COLOUR_2: applyTabColour(1); break;
+            case IDM_VIEW_TAB_COLOUR_3: applyTabColour(2); break;
+            case IDM_VIEW_TAB_COLOUR_4: applyTabColour(3); break;
+            case IDM_VIEW_TAB_COLOUR_5: applyTabColour(4); break;
+            case IDM_VIEW_TAB_COLOUR_NONE: applyTabColour(-1); break;
+            case IDM_EDIT_RTL: if (m_stc) m_stc->SetLayoutDirection(wxLayout_RightToLeft); break;
+            case IDM_EDIT_LTR: if (m_stc) m_stc->SetLayoutDirection(wxLayout_LeftToRight); break;
             case IDM_VIEW_TAB_NEXT: mruSwitch(); break;   // Ctrl+Tab -> most-recently-used switch (N++ MRU behaviour)
             case IDM_VIEW_TAB_PREV: m_tabs->AdvanceSelection(false); break;
             case IDM_VIEW_TAB_MOVEFORWARD:  moveTab(true);  break;
