@@ -52,6 +52,7 @@
 #include <wx/print.h>           // wxPrinter/wxPrintout - File > Print
 #include <wx/printdlg.h>        // wxPrintDialogData/wxPageSetupDialogData - the Print dialog + page geometry
 #include <wx/paper.h>           // wxThePrintPaperDatabase - resolve a concrete default paper size (A4)
+#include <wx/prntbase.h>        // wxPrintPreview/wxPreviewFrame - File > Print Preview
 
 #ifdef WXNPP_HAS_BORDERLESS
 #include <type_traits>                  // std::is_base_of - detect the borderless base in NppShellFrameT<FB>
@@ -114,7 +115,7 @@ static const int  SMART_INDIC   = 10;     // indicator number for smart-highligh
 static const int  MARK_STYLE_BASE = 21;   // "Mark All Ext 1-5" style indicators (21..25) - Notepad++'s 5 mark colours
 static const unsigned MARK_STYLE_COLOUR[5] = { 0x1F90FF, 0xE0A020, 0x50B050, 0xC060C0, 0x30B0C0 };  // BGR: orange, blue, green, purple, olive
 static const int  URL_INDIC = 11;         // clickable-URL underline indicator
-enum { myID_TIMER = 60000, myID_DARKMODE, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER };   // fixed ids, above the IDM_* range
+enum { myID_TIMER = 60000, myID_DARKMODE, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER, myID_PRINTPREVIEW };   // fixed ids, above the IDM_* range
 static const int myID_DOCLIST_ITEM = 61000;   // base id for the document-list dropdown entries
 static const int myID_MACRO_ITEM   = 62100;   // base id for saved-macro entries at the bottom of the Macro menu
 
@@ -1177,7 +1178,9 @@ private:
 class SciPrintout : public wxPrintout
 {
 public:
-    SciPrintout(wxStyledTextCtrl* stc, const wxString& title, wxPageSetupDialogData* pageSetup)
+    // Takes its own copy of pageSetup (rather than borrowing a pointer): Print Preview's wxPrintPreview owns
+    // two SciPrintouts on a non-modal wxPreviewFrame that can outlive the caller's stack frame.
+    SciPrintout(wxStyledTextCtrl* stc, const wxString& title, const wxPageSetupDialogData& pageSetup)
         : wxPrintout(title), m_stc(stc), m_pageSetup(pageSetup) {}
 
     bool OnPrintPage(int page) override
@@ -1198,13 +1201,13 @@ public:
         scaleDC(dc);
 
         wxSize ppiScr; GetPPIScreen(&ppiScr.x, &ppiScr.y);
-        wxSize page = m_pageSetup->GetPaperSize();
+        wxSize page = m_pageSetup.GetPaperSize();
         page.x = wxRound(page.x * ppiScr.x / 25.4);
         page.y = wxRound(page.y * ppiScr.y / 25.4);
-        if (m_pageSetup->GetPrintData().GetOrientation() == wxLANDSCAPE) wxSwap(page.x, page.y);
+        if (m_pageSetup.GetPrintData().GetOrientation() == wxLANDSCAPE) wxSwap(page.x, page.y);
         m_pageRect = wxRect(0, 0, page.x, page.y);
 
-        const wxPoint tl = m_pageSetup->GetMarginTopLeft(), br = m_pageSetup->GetMarginBottomRight();
+        const wxPoint tl = m_pageSetup.GetMarginTopLeft(), br = m_pageSetup.GetMarginBottomRight();
         const int left = wxRound(tl.x * ppiScr.x / 25.4), top = wxRound(tl.y * ppiScr.y / 25.4);
         const int right = wxRound(br.x * ppiScr.x / 25.4), bottom = wxRound(br.y * ppiScr.y / 25.4);
         m_printRect = wxRect(left, top, page.x - left - right, page.y - top - bottom);
@@ -1241,7 +1244,7 @@ private:
     }
 
     wxStyledTextCtrl*      m_stc;
-    wxPageSetupDialogData* m_pageSetup;
+    wxPageSetupDialogData  m_pageSetup;
     std::vector<int>       m_pageEnds;   // m_pageEnds[i] = the char position where page i+1 ends (exclusive)
     wxRect                 m_pageRect, m_printRect;
 };
@@ -3342,7 +3345,7 @@ private:
     void buildMenuBar()
     {
         auto* mb = new wxMenuBar;
-        buildNppMainMenu(mb, myID_DARKMODE);   // full 1:1 Notepad++ menu tree (see spike/npp_menu.h)
+        buildNppMainMenu(mb, myID_DARKMODE, myID_PRINTPREVIEW);   // full 1:1 Notepad++ menu tree (see spike/npp_menu.h)
         // Recent Files (MRU) submenu near the bottom of the File menu, backed by wxFileHistory.
         if (wxMenu* fileMenu = mb->GetMenu(0))
         {
@@ -5574,7 +5577,7 @@ private:
         wxPageSetupDialogData pageSetup(m_printData);
         auto* page = activePage();
         const wxString title = (page && !page->title.empty()) ? page->title : wxString("Untitled");
-        SciPrintout printout(m_stc, title, &pageSetup);
+        SciPrintout printout(m_stc, title, pageSetup);
         const bool ok = printer.Print(this, &printout, prompt);
         m_printing = false;
         if (!ok)
@@ -5585,6 +5588,31 @@ private:
         }
         m_printData = printer.GetPrintDialogData().GetPrintData();
         setStatus(0, "Printed " + title); m_hint = true;
+    }
+    // Print Preview: a non-modal wxPreviewFrame hosting two independent SciPrintout jobs (one renders the
+    // on-screen preview bitmap, the other runs if the user clicks Print from inside the preview window) -
+    // both reuse the exact pagination/rendering path doPrint() already exercises against a real printer DC.
+    void onPrintPreview()
+    {
+        if (!m_stc) return;
+        wxPrintDialogData printDialogData(m_printData);
+        wxPageSetupDialogData pageSetup(m_printData);
+        auto* page = activePage();
+        const wxString title = (page && !page->title.empty()) ? page->title : wxString("Untitled");
+        auto* preview = new wxPrintPreview(new SciPrintout(m_stc, title, pageSetup),
+                                            new SciPrintout(m_stc, title, pageSetup),
+                                            &printDialogData);
+        if (!preview->IsOk())
+        {
+            delete preview;
+            themedInfo("There was a problem previewing.\nPerhaps your current printer is not set up correctly.", "Print Preview");
+            return;
+        }
+        auto* frame = new wxPreviewFrame(preview, this, "Print Preview - " + title);
+        frame->SetSize(GetSize());
+        frame->Centre(wxBOTH);
+        frame->Initialize();
+        frame->Show(true);
     }
     void setStatus(int field, const wxString& text) { SetStatusText(" " + text, field); }  // leading space ~ 4px left margin, like Notepad++
     // Notepad++'s interactive status bar: double-click a field to act on it.
@@ -5840,6 +5868,7 @@ private:
 
             case IDM_FILE_PRINT: doPrint(true); break;
             case IDM_FILE_PRINTNOW: doPrint(false); break;
+            case myID_PRINTPREVIEW: onPrintPreview(); break;
             case IDM_VIEW_DOC_MAP: toggleDocMap(); break;
             case IDM_VIEW_FUNC_LIST: toggleFuncList(); break;
             case IDM_VIEW_DOCLIST: toggleDocList(); break;
