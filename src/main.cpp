@@ -110,6 +110,7 @@ static const int  MARK_INDIC    = 9;      // indicator number for "Mark All" hig
 static const int  SMART_INDIC   = 10;     // indicator number for smart-highlight (double-click a word)
 static const int  MARK_STYLE_BASE = 21;   // "Mark All Ext 1-5" style indicators (21..25) - Notepad++'s 5 mark colours
 static const unsigned MARK_STYLE_COLOUR[5] = { 0x1F90FF, 0xE0A020, 0x50B050, 0xC060C0, 0x30B0C0 };  // BGR: orange, blue, green, purple, olive
+static const int  URL_INDIC = 11;         // clickable-URL underline indicator
 enum { myID_TIMER = 60000, myID_DARKMODE, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER };   // fixed ids, above the IDM_* range
 static const int myID_DOCLIST_ITEM = 61000;   // base id for the document-list dropdown entries
 static const int myID_MACRO_ITEM   = 62100;   // base id for saved-macro entries at the bottom of the Macro menu
@@ -1504,6 +1505,7 @@ private:
     {
         v.stc->Bind(wxEVT_STC_CHARADDED,        &NppShellFrameT::onStcCharAdded,   this);
         v.stc->Bind(wxEVT_STC_CALLTIP_CLICK,    &NppShellFrameT::onCallTipClick,   this);
+        v.stc->Bind(wxEVT_STC_INDICATOR_CLICK,  &NppShellFrameT::onUrlClick,       this);
         v.stc->Bind(wxEVT_STC_UPDATEUI,         &NppShellFrameT::onStcUpdateUI,    this);
         v.stc->Bind(wxEVT_STC_DOUBLECLICK,      &NppShellFrameT::onStcDoubleClick, this);
         v.stc->Bind(wxEVT_STC_MARGINCLICK,      &NppShellFrameT::onStcMarginClick, this);
@@ -1554,6 +1556,7 @@ private:
     {
         updateBraceMatch(m_stc);
         callTipCaretMoved();   // keep the parameter hint in sync / dismiss when the caret leaves the call
+        markVisibleUrls();     // underline URLs on screen (click to open)
         if (g_smartActive && g_smartSci == m_stc && sci(SCI_GETSELECTIONEMPTY)) clearSmart(m_stc);
         updateDocMapViewport();   // keep the minimap's viewport band in sync with scrolling/caret
         if (e.GetUpdated() & SC_UPDATE_SELECTION)   // raise a Nib selection-changed event
@@ -2500,6 +2503,45 @@ private:
         ctHighlight();
     }
     void onCallTipClick(wxStyledTextEvent& e) { const int p = (int)e.GetPosition(); if (p == 1) { --m_ctIdx; renderCallTip(); } else if (p == 2) { ++m_ctIdx; renderCallTip(); } }
+    // ----- clickable URLs -----------------------------------------------------------------------------
+    static bool urlEnd(char c) { return (unsigned char)c <= ' ' || std::strchr("<>\"{}|\\^`", c) != nullptr; }
+    void markVisibleUrls()   // underline http(s)/ftp/www URLs in the on-screen lines
+    {
+        if (!m_stc) return;
+        const int lines = (int)sci(SCI_GETLINECOUNT);
+        const int fv = (int)sci(SCI_GETFIRSTVISIBLELINE), n = (int)sci(SCI_LINESONSCREEN);
+        int a = (int)sci(SCI_DOCLINEFROMVISIBLE, fv), b = (int)sci(SCI_DOCLINEFROMVISIBLE, fv + n + 1);
+        if (a < 0) a = 0; if (b >= lines) b = lines - 1; if (a > b) return;
+        const int s = (int)sci(SCI_POSITIONFROMLINE, a), e = (int)sci(SCI_GETLINEENDPOSITION, b);
+        if (e <= s || e - s > 200000) return;
+        sci(SCI_SETINDICATORCURRENT, URL_INDIC);
+        sci(SCI_INDICATORCLEARRANGE, s, e - s);
+        const std::string t = rangeText(s, e);
+        static const char* const schemes[] = { "https://", "http://", "ftp://", "www." };
+        for (size_t i = 0; i < t.size(); )
+        {
+            size_t sl = 0;
+            for (const char* sc : schemes) { const size_t l = std::strlen(sc); if (i + l <= t.size() && t.compare(i, l, sc) == 0 && (i == 0 || (unsigned char)t[i - 1] <= ' ' || std::strchr("(<\"'=", t[i - 1]))) { sl = l; break; } }
+            if (!sl) { ++i; continue; }
+            size_t j = i + sl;
+            while (j < t.size() && !urlEnd(t[j])) ++j;
+            while (j > i + sl && std::strchr(".,;:!?)]}'\"", t[j - 1])) --j;   // don't swallow trailing punctuation
+            if (j > i + sl) sci(SCI_INDICATORFILLRANGE, s + (int)i, (int)(j - i));
+            i = j;
+        }
+    }
+    void onUrlClick(wxStyledTextEvent& e)   // click a URL -> open in the default browser
+    {
+        const int pos = (int)e.GetPosition();
+        if (pos >= 0 && sci(SCI_INDICATORVALUEAT, URL_INDIC, pos))
+        {
+            const int s = (int)sci(SCI_INDICATORSTART, URL_INDIC, pos), en = (int)sci(SCI_INDICATOREND, URL_INDIC, pos);
+            std::string url = rangeText(s, en);
+            if (url.compare(0, 4, "www.") == 0) url = "http://" + url;
+            if (!url.empty()) wxLaunchDefaultBrowser(wxString::FromUTF8(url.c_str()));
+        }
+        e.Skip();
+    }
     void autoCompletePath()
     {
         if (!m_stc) return;
@@ -2648,6 +2690,10 @@ private:
             sci(SCI_INDICSETALPHA, MARK_STYLE_BASE + i, 90);
             sci(SCI_INDICSETOUTLINEALPHA, MARK_STYLE_BASE + i, 180);
         }
+        sci(SCI_INDICSETSTYLE, URL_INDIC, INDIC_PLAIN);        // clickable URLs: blue underline, click to open
+        sci(SCI_INDICSETFORE, URL_INDIC, 0xCC6600);
+        sci(SCI_INDICSETHOVERSTYLE, URL_INDIC, INDIC_PLAIN);
+        sci(SCI_INDICSETHOVERFORE, URL_INDIC, 0xEE8822);
         sci(SCI_STYLESETFONT, STYLE_DEFAULT, reinterpret_cast<sptr_t>("Consolas"));
         sci(SCI_STYLESETSIZE, STYLE_DEFAULT, 11);
         sci(SCI_STYLECLEARALL);
