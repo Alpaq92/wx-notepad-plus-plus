@@ -1787,3 +1787,24 @@ msgstr "Linia : %d    Kolumna : %d    Pozycja : %d"
 
 msgid "Sel : %d | %d"
 msgstr "Zazn. : %d | %d"
+
+msgid "Red"
+msgstr "Czerwony"
+
+msgid "Orange"
+msgstr "Pomarańczowy"
+
+msgid "Green"
+msgstr "Zielony"
+
+msgid "Blue"
+msgstr "Niebieski"
+
+msgid "Purple"
+msgstr "Fioletowy"
+
+msgid "Tab colour cleared"
+msgstr "Kolor karty usunięty"
+
+msgid "Tab colour applied"
+msgstr "Kolor karty zastosowany"

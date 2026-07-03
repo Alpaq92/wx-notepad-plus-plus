@@ -1787,3 +1787,24 @@ msgstr "Zeile : %d    Spalte : %d    Position : %d"
 
 msgid "Sel : %d | %d"
 msgstr "Ausw. : %d | %d"
+
+msgid "Red"
+msgstr "Rot"
+
+msgid "Orange"
+msgstr "Orange"
+
+msgid "Green"
+msgstr "Grün"
+
+msgid "Blue"
+msgstr "Blau"
+
+msgid "Purple"
+msgstr "Violett"
+
+msgid "Tab colour cleared"
+msgstr "Tabfarbe entfernt"
+
+msgid "Tab colour applied"
+msgstr "Tabfarbe angewendet"

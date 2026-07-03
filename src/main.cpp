@@ -3274,10 +3274,16 @@ private:
     static wxColour tabPaletteColour(int i)
     { static const wxColour c[] = { wxColour(0xC8,0x3E,0x3E), wxColour(0xCF,0x8A,0x2E), wxColour(0x3F,0x9C,0x42), wxColour(0x37,0x7D,0xC8), wxColour(0x8A,0x4F,0xBE) };
       return (i >= 0 && i < 5) ? c[i] : wxColour(); }
-    static const char* tabPaletteName(int i)
-    { static const char* n[] = { "Red", "Orange", "Green", "Blue", "Purple" }; return (i >= 0 && i < 5) ? n[i] : ""; }
+    static wxString tabPaletteName(int i)
+    {
+        switch (i)   // translated at call time (the context menu is rebuilt on every open); literals stay visible to the msgid extractor
+        {
+            case 0: return _("Red"); case 1: return _("Orange"); case 2: return _("Green");
+            case 3: return _("Blue"); case 4: return _("Purple"); default: return wxString();
+        }
+    }
     void applyTabColour(int idx)             // idx -1 = clear; 0..4 = palette entry; the tint is drawn by PinTabArt::DrawTab
-    { if (auto* p = activePage()) { p->tabColour = (idx < 0) ? wxColour() : tabPaletteColour(idx); if (m_tabs) { m_tabs->Refresh(); m_tabs->Update(); } setStatus(0, idx < 0 ? "Tab colour cleared" : "Tab colour applied"); m_hint = true; } }
+    { if (auto* p = activePage()) { p->tabColour = (idx < 0) ? wxColour() : tabPaletteColour(idx); if (m_tabs) { m_tabs->Refresh(); m_tabs->Update(); } setStatus(0, idx < 0 ? _("Tab colour cleared") : _("Tab colour applied")); m_hint = true; } }
     void recordClosed(EditorPage* p)         // remember a closed file's path (deduped, capped)
     {
         if (!p || p->path.empty()) return;

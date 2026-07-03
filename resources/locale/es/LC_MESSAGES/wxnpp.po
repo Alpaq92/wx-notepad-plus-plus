@@ -1787,3 +1787,24 @@ msgstr "Lín : %d    Col : %d    Pos : %d"
 
 msgid "Sel : %d | %d"
 msgstr "Sel : %d | %d"
+
+msgid "Red"
+msgstr "Rojo"
+
+msgid "Orange"
+msgstr "Naranja"
+
+msgid "Green"
+msgstr "Verde"
+
+msgid "Blue"
+msgstr "Azul"
+
+msgid "Purple"
+msgstr "Morado"
+
+msgid "Tab colour cleared"
+msgstr "Color de pestaña quitado"
+
+msgid "Tab colour applied"
+msgstr "Color de pestaña aplicado"

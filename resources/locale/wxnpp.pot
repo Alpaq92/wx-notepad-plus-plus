@@ -1280,6 +1280,9 @@ msgstr ""
 msgid "&About"
 msgstr ""
 
+msgid "System default"
+msgstr ""
+
 msgid "Go to line"
 msgstr ""
 
@@ -1481,6 +1484,30 @@ msgstr ""
 msgid "new %d"
 msgstr ""
 
+msgid "Red"
+msgstr ""
+
+msgid "Orange"
+msgstr ""
+
+msgid "Green"
+msgstr ""
+
+msgid "Blue"
+msgstr ""
+
+msgid "Purple"
+msgstr ""
+
+msgid "Tab colour cleared"
+msgstr ""
+
+msgid "Tab colour applied"
+msgstr ""
+
+msgid "Monitoring stopped (document was edited)"
+msgstr ""
+
 msgid "Save file\n%s ?"
 msgstr ""
 
@@ -1518,9 +1545,6 @@ msgid "Apply Colour"
 msgstr ""
 
 msgid "(more items added incrementally)"
-msgstr ""
-
-msgid "System default"
 msgstr ""
 
 msgid "Locali&zation"
@@ -1602,9 +1626,6 @@ msgid "Monitoring started"
 msgstr ""
 
 msgid "Monitoring stopped"
-msgstr ""
-
-msgid "Monitoring stopped (document was edited)"
 msgstr ""
 
 msgid "Clipboard has no matching content."

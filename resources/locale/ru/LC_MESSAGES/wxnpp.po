@@ -1787,3 +1787,24 @@ msgstr "Стр : %d    Стлб : %d    Поз : %d"
 
 msgid "Sel : %d | %d"
 msgstr "Выдел. : %d | %d"
+
+msgid "Red"
+msgstr "Красный"
+
+msgid "Orange"
+msgstr "Оранжевый"
+
+msgid "Green"
+msgstr "Зелёный"
+
+msgid "Blue"
+msgstr "Синий"
+
+msgid "Purple"
+msgstr "Фиолетовый"
+
+msgid "Tab colour cleared"
+msgstr "Цвет вкладки удалён"
+
+msgid "Tab colour applied"
+msgstr "Цвет вкладки применён"

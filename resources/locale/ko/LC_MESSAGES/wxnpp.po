@@ -1787,3 +1787,24 @@ msgstr "줄 : %d    열 : %d    위치 : %d"
 
 msgid "Sel : %d | %d"
 msgstr "선택 : %d | %d"
+
+msgid "Red"
+msgstr "빨강"
+
+msgid "Orange"
+msgstr "주황"
+
+msgid "Green"
+msgstr "초록"
+
+msgid "Blue"
+msgstr "파랑"
+
+msgid "Purple"
+msgstr "보라"
+
+msgid "Tab colour cleared"
+msgstr "탭 색상 해제됨"
+
+msgid "Tab colour applied"
+msgstr "탭 색상 적용됨"

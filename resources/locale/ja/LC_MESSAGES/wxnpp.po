@@ -1787,3 +1787,24 @@ msgstr "行 : %d    列 : %d    位置 : %d"
 
 msgid "Sel : %d | %d"
 msgstr "選択 : %d | %d"
+
+msgid "Red"
+msgstr "赤"
+
+msgid "Orange"
+msgstr "オレンジ"
+
+msgid "Green"
+msgstr "緑"
+
+msgid "Blue"
+msgstr "青"
+
+msgid "Purple"
+msgstr "紫"
+
+msgid "Tab colour cleared"
+msgstr "タブの色を解除しました"
+
+msgid "Tab colour applied"
+msgstr "タブの色を適用しました"

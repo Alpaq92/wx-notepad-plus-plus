@@ -1787,3 +1787,24 @@ msgstr "Ligne : %d    Col : %d    Pos : %d"
 
 msgid "Sel : %d | %d"
 msgstr "Sél : %d | %d"
+
+msgid "Red"
+msgstr "Rouge"
+
+msgid "Orange"
+msgstr "Orange"
+
+msgid "Green"
+msgstr "Vert"
+
+msgid "Blue"
+msgstr "Bleu"
+
+msgid "Purple"
+msgstr "Violet"
+
+msgid "Tab colour cleared"
+msgstr "Couleur de l'onglet effacée"
+
+msgid "Tab colour applied"
+msgstr "Couleur de l'onglet appliquée"
