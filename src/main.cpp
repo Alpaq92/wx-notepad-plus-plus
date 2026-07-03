@@ -116,6 +116,14 @@ static const int  MARK_STYLE_BASE = 21;   // "Mark All Ext 1-5" style indicators
 static const unsigned MARK_STYLE_COLOUR[5] = { 0x1F90FF, 0xE0A020, 0x50B050, 0xC060C0, 0x30B0C0 };  // BGR: orange, blue, green, purple, olive
 static const int  URL_INDIC = 11;         // clickable-URL underline indicator
 enum { myID_TIMER = 60000, myID_DARKMODE, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER };   // fixed ids, above the IDM_* range
+// UI language selection - shared by the top-level Localization menu and Preferences > General.
+// Endonyms are ALWAYS shown in their own language (never translated); index 0 is "System default".
+static const int myID_UILANG_FIRST = 60100;   // 10 radio items (myID_UILANG_FIRST + 0..9), clear of the 61xxx/62xxx/63xxx bases
+static const int UI_LANG_IDS[] = { wxLANGUAGE_DEFAULT, wxLANGUAGE_ENGLISH, wxLANGUAGE_POLISH,
+    wxLANGUAGE_GERMAN, wxLANGUAGE_FRENCH, wxLANGUAGE_SPANISH, wxLANGUAGE_RUSSIAN, wxLANGUAGE_JAPANESE,
+    wxLANGUAGE_CHINESE_SIMPLIFIED, wxLANGUAGE_KOREAN };
+static const char* const UI_LANG_ENDONYMS[] = { nullptr /*index 0 = "System default", localized at build time*/,
+    "English", "Polski", "Deutsch", "Français", "Español", "Русский", "日本語", "简体中文", "한국어" };
 static const int myID_DOCLIST_ITEM = 61000;   // base id for the document-list dropdown entries
 static const int myID_MACRO_ITEM   = 62100;   // base id for saved-macro entries at the bottom of the Macro menu
 
@@ -3630,6 +3638,19 @@ private:
     {
         auto* mb = new wxMenuBar;
         buildNppMainMenu(mb, myID_DARKMODE);   // full 1:1 Notepad++ menu tree (see spike/npp_menu.h)
+        // Localization: pick the UI language straight from the menu bar (radio group; restart-to-apply,
+        // same flow as the Preferences > General dropdown). Inserted right after Settings (index 6).
+        {
+            auto* loc = new wxMenu;
+            long curUi = wxLANGUAGE_DEFAULT; wxConfigBase::Get()->Read("UILanguage", &curUi, (long)wxLANGUAGE_DEFAULT);
+            for (int i = 0; i < (int)WXSIZEOF(UI_LANG_IDS); ++i)
+            {
+                wxMenuItem* it = loc->AppendRadioItem(myID_UILANG_FIRST + i,
+                    i == 0 ? wxString(_("System default")) : wxString::FromUTF8(UI_LANG_ENDONYMS[i]));
+                if (UI_LANG_IDS[i] == (int)curUi) it->Check();
+            }
+            mb->Insert(7, loc, _("Locali&zation"));
+        }
         // Recent Files (MRU) submenu near the bottom of the File menu, backed by wxFileHistory.
         if (wxMenu* fileMenu = mb->GetMenu(0))
         {
@@ -5519,15 +5540,11 @@ private:
         auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, _("Show integrated top bar"));
         cbIntBar->SetValue(m_integratedBar); row(gs, cbIntBar);
 #endif
-        // Localization: pick the UI language (restart-to-apply, like dark mode). Endonyms are ALWAYS shown in
-        // their own language (never translated); "System default" (wxLANGUAGE_DEFAULT) follows the OS.
-        static const int UI_LANG_IDS[] = { wxLANGUAGE_DEFAULT, wxLANGUAGE_ENGLISH, wxLANGUAGE_POLISH,
-            wxLANGUAGE_GERMAN, wxLANGUAGE_FRENCH, wxLANGUAGE_SPANISH, wxLANGUAGE_RUSSIAN, wxLANGUAGE_JAPANESE,
-            wxLANGUAGE_CHINESE_SIMPLIFIED, wxLANGUAGE_KOREAN };
+        // Localization: pick the UI language (restart-to-apply, like dark mode). Same shared table
+        // (UI_LANG_IDS/UI_LANG_ENDONYMS) as the top-level Localization menu.
         long curUi = wxLANGUAGE_DEFAULT; wxConfigBase::Get()->Read("UILanguage", &curUi, (long)wxLANGUAGE_DEFAULT);
         wxArrayString uiNames; uiNames.Add(_("System default"));
-        for (const char* n : { "English", "Polski", "Deutsch", "Français", "Español", "Русский", "日本語", "简体中文", "한국어" })
-            uiNames.Add(wxString::FromUTF8(n));
+        for (int i = 1; i < (int)WXSIZEOF(UI_LANG_ENDONYMS); ++i) uiNames.Add(wxString::FromUTF8(UI_LANG_ENDONYMS[i]));
         auto* chUiLang = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, uiNames);
         { int sel = 0; for (int i = 0; i < (int)WXSIZEOF(UI_LANG_IDS); ++i) if (UI_LANG_IDS[i] == curUi) { sel = i; break; } chUiLang->SetSelection(sel); }
         auto* uirow = new wxBoxSizer(wxHORIZONTAL);
@@ -6237,6 +6254,13 @@ private:
         {   // Nib plugin command (cross-platform)
             const NibCmd& nc = g_nibCommands[cmd - NIB_CMD_BASE];
             if (nc.fn) nc.fn(reinterpret_cast<NibHost*>(g_view), &nibQuery, nc.user);
+            return;
+        }
+        if (cmd >= myID_UILANG_FIRST && cmd < myID_UILANG_FIRST + (int)WXSIZEOF(UI_LANG_IDS))   // Localization menu: switch the UI language (restart-to-apply)
+        {
+            const long newUi = UI_LANG_IDS[cmd - myID_UILANG_FIRST];
+            long curUi = wxLANGUAGE_DEFAULT; wxConfigBase::Get()->Read("UILanguage", &curUi, (long)wxLANGUAGE_DEFAULT);
+            if (newUi != curUi) { wxConfigBase::Get()->Write("UILanguage", newUi); restartWithTheme(m_dark); }
             return;
         }
         if (cmd >= myID_DOCLIST_ITEM && cmd < myID_DOCLIST_ITEM + 1000)   // document-list dropdown entry

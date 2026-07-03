@@ -1754,3 +1754,6 @@ msgstr "검색 결과"
 
 msgid "new %d"
 msgstr "새 파일 %d"
+
+msgid "Locali&zation"
+msgstr "지역화(&Z)"

@@ -1754,3 +1754,6 @@ msgstr "Resultados de la búsqueda"
 
 msgid "new %d"
 msgstr "nuevo %d"
+
+msgid "Locali&zation"
+msgstr "Locali&zación"

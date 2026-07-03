@@ -1754,3 +1754,6 @@ msgstr "検索結果"
 
 msgid "new %d"
 msgstr "新規 %d"
+
+msgid "Locali&zation"
+msgstr "ローカライズ(&Z)"

@@ -1520,6 +1520,12 @@ msgstr ""
 msgid "(more items added incrementally)"
 msgstr ""
 
+msgid "System default"
+msgstr ""
+
+msgid "Locali&zation"
+msgstr ""
+
 msgid "Recent &Files"
 msgstr ""
 
@@ -1605,9 +1611,6 @@ msgid "Show status bar"
 msgstr ""
 
 msgid "Show integrated top bar"
-msgstr ""
-
-msgid "System default"
 msgstr ""
 
 msgid "Localization:"

@@ -1754,3 +1754,6 @@ msgstr "搜索结果"
 
 msgid "new %d"
 msgstr "新建 %d"
+
+msgid "Locali&zation"
+msgstr "本地化(&Z)"
