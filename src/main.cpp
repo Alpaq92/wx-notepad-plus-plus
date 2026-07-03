@@ -4547,7 +4547,9 @@ private:
     // the latter uses delayed rendering for custom formats and a same-process write-then-read-back never
     // saw the format as available (IsSupported() false immediately after our own SetData()). Also writes
     // CF_UNICODETEXT in the same session, so pasting into another app still gets ordinary text.
+#ifdef __WXMSW__
     static UINT cfBinary() { static UINT cf = ::RegisterClipboardFormatW(L"wxNotepad++Binary"); return cf; }
+#endif
     void copyCutBinary(bool cut)
     {
 #ifdef __WXMSW__
