@@ -77,7 +77,7 @@ endif()
 # ---- the wxNotepad++ executable --------------------------------------------------------------------
 # WIN32 = GUI-subsystem app on Windows; a plain executable elsewhere (GTK on Linux, Cocoa on macOS).
 if(WIN32)
-    add_executable(wxnpp WIN32 src/main.cpp)
+    add_executable(wxnpp WIN32 src/main.cpp resources/app.rc)   # .rc embeds wxNotepad++.ico as the exe's shell icon
 else()
     add_executable(wxnpp src/main.cpp)
 endif()
