@@ -4849,6 +4849,32 @@ private:
         else     { for (auto it = starts.rbegin(); it != starts.rend(); ++it) if (*it < cur) { target = *it; break; } if (target < 0) target = starts.back(); }
         sci(SCI_GOTOPOS, target); sci(SCI_SCROLLCARET);
     }
+    // Search > Copy Styled Text: concatenate every range marked under the given indicator(s) - one per
+    // line, in document order - onto the clipboard. Shares jumpMark's on/off run-walk over SCI_INDICATORVALUEAT.
+    void copyMarkedToClipboard(const std::vector<int>& indicators)
+    {
+        if (!m_stc) return;
+        const int len = static_cast<int>(sci(SCI_GETLENGTH));
+        std::vector<std::pair<int, int>> ranges;
+        for (int ind : indicators)
+        {
+            int p = 0;
+            while (p < len)
+            {
+                const bool on = sci(SCI_INDICATORVALUEAT, ind, p) != 0;
+                const int nxt = static_cast<int>(sci(SCI_INDICATOREND, ind, p));
+                if (nxt <= p) break;
+                if (on) ranges.push_back({ p, nxt });
+                p = nxt;
+            }
+        }
+        if (ranges.empty()) { setStatus(0, "No marked text to copy"); m_hint = true; return; }
+        std::sort(ranges.begin(), ranges.end());
+        wxString out;
+        for (const auto& r : ranges) { out += wxString::FromUTF8(rangeText(r.first, r.second)); out += "\n"; }
+        copyToClip(out);
+        setStatus(0, wxString::Format("Copied %d marked range(s)", (int)ranges.size())); m_hint = true;
+    }
     void onMarkDlg() { auto* d = ensureFindDlg(); d->showMarkTab(selText()); themeDialog(d); d->Show(); d->Raise(); }
     int doMarkAll(const FindOpts& o)
     {
@@ -6109,6 +6135,13 @@ private:
             case IDM_SEARCH_GONEXTMARKER4: case IDM_SEARCH_GONEXTMARKER5: case IDM_SEARCH_GONEXTMARKER_DEF: jumpMark(true); break;
             case IDM_SEARCH_GOPREVMARKER1: case IDM_SEARCH_GOPREVMARKER2: case IDM_SEARCH_GOPREVMARKER3:
             case IDM_SEARCH_GOPREVMARKER4: case IDM_SEARCH_GOPREVMARKER5: case IDM_SEARCH_GOPREVMARKER_DEF: jumpMark(false); break;
+            case IDM_SEARCH_STYLE1TOCLIP: copyMarkedToClipboard({ MARK_STYLE_BASE + 0 }); break;
+            case IDM_SEARCH_STYLE2TOCLIP: copyMarkedToClipboard({ MARK_STYLE_BASE + 1 }); break;
+            case IDM_SEARCH_STYLE3TOCLIP: copyMarkedToClipboard({ MARK_STYLE_BASE + 2 }); break;
+            case IDM_SEARCH_STYLE4TOCLIP: copyMarkedToClipboard({ MARK_STYLE_BASE + 3 }); break;
+            case IDM_SEARCH_STYLE5TOCLIP: copyMarkedToClipboard({ MARK_STYLE_BASE + 4 }); break;
+            case IDM_SEARCH_ALLSTYLESTOCLIP: copyMarkedToClipboard({ MARK_STYLE_BASE, MARK_STYLE_BASE + 1, MARK_STYLE_BASE + 2, MARK_STYLE_BASE + 3, MARK_STYLE_BASE + 4 }); break;
+            case IDM_SEARCH_MARKEDTOCLIP: copyMarkedToClipboard({ MARK_INDIC }); break;
             case IDM_SEARCH_COPYMARKEDLINES: bookmarkLinesOp(0); break;
             case IDM_SEARCH_CUTMARKEDLINES: bookmarkLinesOp(1); break;
             case IDM_SEARCH_DELETEMARKEDLINES: bookmarkLinesOp(2); break;
