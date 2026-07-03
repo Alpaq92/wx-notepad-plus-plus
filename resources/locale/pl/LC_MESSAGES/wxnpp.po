@@ -1751,3 +1751,6 @@ msgstr "Zapisz nagrane makro"
 
 msgid "Search results"
 msgstr "Wyniki wyszukiwania"
+
+msgid "new %d"
+msgstr "nowy %d"

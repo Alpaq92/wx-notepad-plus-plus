@@ -1751,3 +1751,6 @@ msgstr "保存当前录制的宏"
 
 msgid "Search results"
 msgstr "搜索结果"
+
+msgid "new %d"
+msgstr "新建 %d"

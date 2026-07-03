@@ -1751,3 +1751,6 @@ msgstr "현재 기록된 매크로 저장"
 
 msgid "Search results"
 msgstr "검색 결과"
+
+msgid "new %d"
+msgstr "새 파일 %d"

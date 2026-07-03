@@ -1751,3 +1751,6 @@ msgstr "Сохранить записанный макрос"
 
 msgid "Search results"
 msgstr "Результаты поиска"
+
+msgid "new %d"
+msgstr "новый %d"

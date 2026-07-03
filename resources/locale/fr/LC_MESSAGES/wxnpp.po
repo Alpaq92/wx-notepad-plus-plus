@@ -1751,3 +1751,6 @@ msgstr "Enregistrer la macro enregistrée"
 
 msgid "Search results"
 msgstr "Résultats de la recherche"
+
+msgid "new %d"
+msgstr "nouveau %d"

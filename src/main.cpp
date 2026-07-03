@@ -2913,7 +2913,7 @@ private:
         const int s = m_tabs ? m_tabs->GetSelection() : wxNOT_FOUND;
         return s == wxNOT_FOUND ? nullptr : static_cast<EditorPage*>(m_tabs->GetPage(s));
     }
-    wxString nextNewName() { return wxString::Format("new %d", ++m_newCount); }
+    wxString nextNewName() { return wxString::Format(_("new %d"), ++m_newCount); }   // untitled-buffer name, localized like Notepad++ ("nowy N" / "neu N" / ...)
 
     // Create a new document tab (panel + its own native Scintilla) and make it active.
     EditorPage* addDocument(const wxString& path, const wxString& title)

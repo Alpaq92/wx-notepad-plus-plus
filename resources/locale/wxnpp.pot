@@ -1478,6 +1478,9 @@ msgstr ""
 msgid "No session data in this file."
 msgstr ""
 
+msgid "new %d"
+msgstr ""
+
 msgid "Save file\n%s ?"
 msgstr ""
 

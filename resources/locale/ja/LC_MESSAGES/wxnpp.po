@@ -1751,3 +1751,6 @@ msgstr "記録したマクロを保存"
 
 msgid "Search results"
 msgstr "検索結果"
+
+msgid "new %d"
+msgstr "新規 %d"
