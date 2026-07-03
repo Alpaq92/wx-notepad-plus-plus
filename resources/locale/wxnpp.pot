@@ -1277,7 +1277,7 @@ msgstr ""
 msgid "About wxNotepad++\tF1"
 msgstr ""
 
-msgid "&About"
+msgid "?"
 msgstr ""
 
 msgid "Go to line"
@@ -1779,4 +1779,13 @@ msgid "Column (rectangular) selection:\n\n- Alt + drag the mouse\n- Alt + Shift 
 msgstr ""
 
 msgid "Column Mode"
+msgstr ""
+
+msgid "length : %d    lines : %d"
+msgstr ""
+
+msgid "Ln : %d    Col : %d    Pos : %d"
+msgstr ""
+
+msgid "Sel : %d | %d"
 msgstr ""

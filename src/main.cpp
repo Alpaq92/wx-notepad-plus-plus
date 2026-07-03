@@ -1230,6 +1230,13 @@ public:
                 delete gc;
             }
         }
+        if (page.active)   // Notepad++'s signature orange marker along the active tab's top edge
+        {
+            dc.SetPen(*wxTRANSPARENT_PEN);
+            dc.SetBrush(wxBrush(wxColour(250, 170, 60)));
+            const int w = (extent > 0 && extent <= rect.width) ? extent : rect.width;
+            dc.DrawRectangle(rect.x, rect.y, w, 3);
+        }
         return extent;
     }
 private:
@@ -1432,7 +1439,7 @@ public:
             if (m_dark) { stc->StyleSetBackground(wxSTC_STYLE_DEFAULT, wxColour(30, 30, 30)); stc->StyleSetForeground(wxSTC_STYLE_DEFAULT, wxColour(220, 220, 220)); }
             stc->StyleClearAll();
             stc->SetReadOnly(true);
-            wxAuiPaneInfo pi; pi.Name(wxString::FromUTF8(id)).Caption(wxString::FromUTF8(title)).CloseButton(true).MaximizeButton(false);
+            wxAuiPaneInfo pi; pi.Name(wxString::FromUTF8(id)).Caption(wxString::FromUTF8(title)).CloseButton(true).MaximizeButton(false).Hide();   // like N++: plugin panels only appear when invoked
             switch (dock) { case 1: pi.Left().BestSize(240, 320); break; case 2: pi.Right().BestSize(240, 320); break;
                             case 3: pi.Top().BestSize(320, 150);  break; default: pi.Bottom().BestSize(320, 150); }
             m_aui.AddPane(stc, pi); m_aui.Update();
@@ -4186,7 +4193,7 @@ private:
         if (raw.size() >= 2 && (unsigned char)raw[0] == 0xFE && (unsigned char)raw[1] == 0xFF) { enc = ENC_UTF16_BE; return utf16ToUtf8(raw.substr(2), true); }
         bool hi = false; for (unsigned char c : raw) if (c >= 0x80) { hi = true; break; }
         if (hi && isValidUtf8(raw)) { enc = ENC_UTF8; return raw; }                 // UTF-8 without BOM
-        if (!hi) { enc = ENC_ANSI; return raw; }                                    // pure ASCII -> "ANSI" like Notepad++ (bytes identical)
+        if (!hi) { enc = ENC_UTF8; return raw; }                                    // pure ASCII: report UTF-8 like modern Notepad++ (bytes identical either way)
         enc = ENC_ANSI;                                                             // high bytes, not valid UTF-8 -> system code page
         return std::string(wxString(raw.data(), wxCSConv(wxFONTENCODING_SYSTEM), raw.size()).utf8_str());
     }
@@ -5517,7 +5524,7 @@ private:
         c->Read("Editing/LineNumbers", &m_lineNumbers, true);
         c->Read("Editing/Wrap", &m_wrap, false);
         c->Read("Editing/Whitespace", &m_ws, false);
-        c->Read("Editing/IndentGuides", &m_guides, false);
+        c->Read("Editing/IndentGuides", &m_guides, true);
         c->Read("Editing/WrapSymbol", &m_wrapSymbol, false);
         c->Read("View/Toolbar", &m_showToolbar, true);
         c->Read("View/StatusBar", &m_showStatusbar, true);
@@ -6727,9 +6734,9 @@ private:
         const int selLines = sel > 0 ? static_cast<int>(sci(SCI_LINEFROMPOSITION, selB)) - static_cast<int>(sci(SCI_LINEFROMPOSITION, selA)) + 1 : 0;
         const int eol = static_cast<int>(sci(SCI_GETEOLMODE));
         if (!m_hint) setStatus(0, activePage() ? activePage()->lang : "Normal text file");   // language label; hint persists until next command
-        setStatus(1, wxString::Format("length : %d    lines : %d", len, nl));
-        setStatus(2, wxString::Format("Ln : %d    Col : %d    Pos : %d", line, col, pos + 1));
-        setStatus(3, wxString::Format("Sel : %d | %d", sel, selLines));
+        setStatus(1, wxString::Format(_("length : %d    lines : %d"), len, nl));
+        setStatus(2, wxString::Format(_("Ln : %d    Col : %d    Pos : %d"), line, col, pos + 1));
+        setStatus(3, wxString::Format(_("Sel : %d | %d"), sel, selLines));
         setStatus(4, eol == SC_EOL_CRLF ? "Windows (CR LF)" : eol == SC_EOL_LF ? "Unix (LF)" : "Macintosh (CR)");
         setStatus(5, encDisplay(activePage()));
         setStatus(6, sci(SCI_GETOVERTYPE) ? "OVR" : "INS");   // typing mode, toggled by the Insert key
@@ -6814,7 +6821,7 @@ private:
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
-    bool        m_wrap = false, m_ws = false, m_guides = false, m_dark = true;
+    bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON like Notepad++
     int         m_tabWidth = 4;                                   // persisted editor preferences (Settings > Preferences)
     bool        m_useTabs = true, m_lineNumbers = true, m_wrapSymbol = false, m_showToolbar = true, m_showStatusbar = true;
     bool        m_autocomplete = true;                            // auto word/keyword completion while typing

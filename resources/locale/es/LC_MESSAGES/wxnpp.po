@@ -1275,11 +1275,14 @@ msgstr "Información de depuración..."
 msgid "About wxNotepad++\tF1"
 msgstr "Acerca de wxNotepad++\tF1"
 
-msgid "&About"
-msgstr "Acerca &de"
+msgid "?"
+msgstr "?"
 
 msgid "Go to line"
 msgstr "Ir a la línea"
+
+msgid "Line number (1 - %d):"
+msgstr "Número de línea (1 - %d):"
 
 msgid "Column Editor"
 msgstr "Editor de columna"
@@ -1368,6 +1371,33 @@ msgstr "En la sele&cción"
 msgid "Search Mode"
 msgstr "Modo de búsqueda"
 
+msgid "Document Map"
+msgstr "Mapa del documento"
+
+msgid "Function List"
+msgstr "Lista de funciones"
+
+msgid "Document List"
+msgstr "Lista de documentos"
+
+msgid "Clipboard History"
+msgstr "Historial del portapapeles"
+
+msgid "Value"
+msgstr "Valor"
+
+msgid "Hex"
+msgstr "Hex"
+
+msgid "Character"
+msgstr "Carácter"
+
+msgid "Character Panel"
+msgstr "Panel de caracteres"
+
+msgid "Project"
+msgstr "Proyecto"
+
 msgid "Add Files..."
 msgstr "Añadir archivos..."
 
@@ -1397,6 +1427,9 @@ msgstr "Siguiente"
 
 msgid "Close"
 msgstr "Cerrar"
+
+msgid "Find result"
+msgstr "Resultados de la búsqueda"
 
 msgid "Match case"
 msgstr "Coincidir mayúsculas y minúsculas"
@@ -1443,6 +1476,9 @@ msgstr "Cargar sesión"
 msgid "No session data in this file."
 msgstr "Este archivo no contiene datos de sesión."
 
+msgid "new %d"
+msgstr "nuevo %d"
+
 msgid "Save file\n%s ?"
 msgstr "¿Guardar el archivo\n%s ?"
 
@@ -1482,8 +1518,71 @@ msgstr "Aplicar color"
 msgid "(more items added incrementally)"
 msgstr "(más elementos añadidos progresivamente)"
 
+msgid "System default"
+msgstr "Predeterminado del sistema"
+
+msgid "Locali&zation"
+msgstr "Locali&zación"
+
 msgid "Recent &Files"
 msgstr "&Archivos recientes"
+
+msgid "New"
+msgstr "Nuevo"
+
+msgid "Open"
+msgstr "Abrir"
+
+msgid "Save All"
+msgstr "Guardar todo"
+
+msgid "Print"
+msgstr "Impresión"
+
+msgid "Cut"
+msgstr "Cortar"
+
+msgid "Copy"
+msgstr "Copiar"
+
+msgid "Paste"
+msgstr "Pegar"
+
+msgid "Undo"
+msgstr "Deshacer"
+
+msgid "Redo"
+msgstr "Rehacer"
+
+msgid "Zoom In"
+msgstr "Acercar"
+
+msgid "Zoom Out"
+msgstr "Alejar"
+
+msgid "Word Wrap"
+msgstr "Ajuste de línea"
+
+msgid "User-Defined Language Dialogue"
+msgstr "Diálogo de lenguaje definido por el usuario"
+
+msgid "Monitoring (tail -f)"
+msgstr "Supervisión (tail -f)"
+
+msgid "Start Recording"
+msgstr "Iniciar grabación"
+
+msgid "Stop Recording"
+msgstr "Detener grabación"
+
+msgid "Playback"
+msgstr "Reproducir"
+
+msgid "Run a Macro Multiple Times"
+msgstr "Ejecutar una macro varias veces"
+
+msgid "Save Current Recorded Macro"
+msgstr "Guardar la macro grabada"
 
 msgid "Re-interpreting the encoding discards unsaved changes. Continue?"
 msgstr "Reinterpretar la codificación descarta los cambios sin guardar. ¿Continuar?"
@@ -1491,17 +1590,38 @@ msgstr "Reinterpretar la codificación descarta los cambios sin guardar. ¿Conti
 msgid "Encoding"
 msgstr "Codificación"
 
+msgid "Monitoring needs a file on disk - save the document first"
+msgstr "La supervisión necesita un archivo en disco - guarde primero el documento"
+
+msgid "Save or discard the unsaved changes before monitoring"
+msgstr "Guarde o descarte los cambios sin guardar antes de supervisar"
+
+msgid "Monitoring started"
+msgstr "Supervisión iniciada"
+
+msgid "Monitoring stopped"
+msgstr "Supervisión detenida"
+
+msgid "Monitoring stopped (document was edited)"
+msgstr "Supervisión detenida (el documento fue editado)"
+
 msgid "Clipboard has no matching content."
 msgstr "El portapapeles no tiene contenido compatible."
-
-msgid "Paste"
-msgstr "Pegar"
 
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "¿Mover \"%s\" a la Papelera de reciclaje?"
 
 msgid "Enter valid character codes."
 msgstr "Introduzca códigos de carácter válidos."
+
+msgid "Search results"
+msgstr "Resultados de la búsqueda"
+
+msgid "Preferences"
+msgstr "Preferencias"
+
+msgid "General"
+msgstr "General"
 
 msgid "Show toolbar"
 msgstr "Mostrar barra de herramientas"
@@ -1511,6 +1631,12 @@ msgstr "Mostrar barra de estado"
 
 msgid "Show integrated top bar"
 msgstr "Mostrar barra superior integrada"
+
+msgid "Localization:"
+msgstr "Localización:"
+
+msgid "Editing"
+msgstr "Edición"
 
 msgid "Display line number"
 msgstr "Mostrar número de línea"
@@ -1545,6 +1671,9 @@ msgstr "Borde vertical en la columna (0 = desactivado):"
 msgid "Caret blink rate (ms, 0 = steady):"
 msgstr "Velocidad de parpadeo del cursor (ms, 0 = fijo):"
 
+msgid "Indentation"
+msgstr "Sangría"
+
 msgid "Tab size:"
 msgstr "Tamaño de tabulación:"
 
@@ -1553,6 +1682,9 @@ msgstr "Sustituir por espacios"
 
 msgid "Auto-indent new lines"
 msgstr "Sangría automática en líneas nuevas"
+
+msgid "Auto-Completion"
+msgstr "Autocompletar"
 
 msgid "Enable auto-completion on each input"
 msgstr "Habilitar autocompletar en cada entrada"
@@ -1566,8 +1698,14 @@ msgstr "º carácter"
 msgid "Auto-insert matching brackets and quotes"
 msgstr "Insertar automáticamente paréntesis y comillas de cierre"
 
+msgid "Dark Mode"
+msgstr "Modo oscuro"
+
 msgid "Enable Dark Mode   (applied on restart)"
 msgstr "Habilitar modo oscuro   (se aplica al reiniciar)"
+
+msgid "New Document"
+msgstr "Nuevo documento"
 
 msgid "Format (Line ending)"
 msgstr "Formato (fin de línea)"
@@ -1575,8 +1713,14 @@ msgstr "Formato (fin de línea)"
 msgid "Default language:"
 msgstr "Lenguaje predeterminado:"
 
+msgid "Tab Bar"
+msgstr "Barra de pestañas"
+
 msgid "Show close button on each tab   (applied on restart)"
 msgstr "Mostrar botón de cierre en cada pestaña   (se aplica al reiniciar)"
+
+msgid "Recent Files History"
+msgstr "Historial de archivos recientes"
 
 msgid "Max number of entries (applied on restart):"
 msgstr "Número máximo de entradas (se aplica al reiniciar):"
@@ -1635,146 +1779,11 @@ msgstr "Selección de columna (rectangular):\n\n- Alt + arrastrar el ratón\n- A
 msgid "Column Mode"
 msgstr "Modo de columna"
 
-msgid "Localization:"
-msgstr "Localización:"
+msgid "length : %d    lines : %d"
+msgstr "Longitud : %d    Líneas : %d"
 
-msgid "System default"
-msgstr "Predeterminado del sistema"
+msgid "Ln : %d    Col : %d    Pos : %d"
+msgstr "Lín : %d    Col : %d    Pos : %d"
 
-msgid "Preferences"
-msgstr "Preferencias"
-
-msgid "General"
-msgstr "General"
-
-msgid "Editing"
-msgstr "Edición"
-
-msgid "Indentation"
-msgstr "Sangría"
-
-msgid "Auto-Completion"
-msgstr "Autocompletar"
-
-msgid "Dark Mode"
-msgstr "Modo oscuro"
-
-msgid "New Document"
-msgstr "Nuevo documento"
-
-msgid "Tab Bar"
-msgstr "Barra de pestañas"
-
-msgid "Recent Files History"
-msgstr "Historial de archivos recientes"
-
-msgid "Print"
-msgstr "Impresión"
-
-msgid "Value"
-msgstr "Valor"
-
-msgid "Hex"
-msgstr "Hex"
-
-msgid "Character"
-msgstr "Carácter"
-
-msgid "Character Panel"
-msgstr "Panel de caracteres"
-
-msgid "Line number (1 - %d):"
-msgstr "Número de línea (1 - %d):"
-
-msgid "Document Map"
-msgstr "Mapa del documento"
-
-msgid "Function List"
-msgstr "Lista de funciones"
-
-msgid "Document List"
-msgstr "Lista de documentos"
-
-msgid "Clipboard History"
-msgstr "Historial del portapapeles"
-
-msgid "Project"
-msgstr "Proyecto"
-
-msgid "Find result"
-msgstr "Resultados de la búsqueda"
-
-msgid "New"
-msgstr "Nuevo"
-
-msgid "Open"
-msgstr "Abrir"
-
-msgid "Save All"
-msgstr "Guardar todo"
-
-msgid "Cut"
-msgstr "Cortar"
-
-msgid "Copy"
-msgstr "Copiar"
-
-msgid "Undo"
-msgstr "Deshacer"
-
-msgid "Redo"
-msgstr "Rehacer"
-
-msgid "Zoom In"
-msgstr "Acercar"
-
-msgid "Zoom Out"
-msgstr "Alejar"
-
-msgid "User-Defined Language Dialogue"
-msgstr "Diálogo de lenguaje definido por el usuario"
-
-msgid "Start Recording"
-msgstr "Iniciar grabación"
-
-msgid "Stop Recording"
-msgstr "Detener grabación"
-
-msgid "Playback"
-msgstr "Reproducir"
-
-msgid "Run a Macro Multiple Times"
-msgstr "Ejecutar una macro varias veces"
-
-msgid "Save Current Recorded Macro"
-msgstr "Guardar la macro grabada"
-
-msgid "Search results"
-msgstr "Resultados de la búsqueda"
-
-msgid "new %d"
-msgstr "nuevo %d"
-
-msgid "Locali&zation"
-msgstr "Locali&zación"
-
-msgid "Monitoring (tail -f)"
-msgstr "Supervisión (tail -f)"
-
-msgid "Word Wrap"
-msgstr "Ajuste de línea"
-
-msgid "Monitoring needs a file on disk - save the document first"
-msgstr "La supervisión necesita un archivo en disco - guarde primero el documento"
-
-msgid "Save or discard the unsaved changes before monitoring"
-msgstr "Guarde o descarte los cambios sin guardar antes de supervisar"
-
-msgid "Monitoring started"
-msgstr "Supervisión iniciada"
-
-msgid "Monitoring stopped"
-msgstr "Supervisión detenida"
-
-msgid "Monitoring stopped (document was edited)"
-msgstr "Supervisión detenida (el documento fue editado)"
+msgid "Sel : %d | %d"
+msgstr "Sel : %d | %d"

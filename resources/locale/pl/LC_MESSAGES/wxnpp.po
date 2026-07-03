@@ -1099,7 +1099,7 @@ msgid "Convert to UTF-16 LE BOM"
 msgstr "Konwertuj na UTF-16 LE BOM"
 
 msgid "E&ncoding"
-msgstr "&Kodowanie"
+msgstr "F&ormat"
 
 msgid "None (Normal Text)"
 msgstr "Brak (zwykły tekst)"
@@ -1120,7 +1120,7 @@ msgid "User-Defined"
 msgstr "Zdefiniowany przez użytkownika"
 
 msgid "&Language"
-msgstr "&Język"
+msgstr "Skł&adnia"
 
 msgid "Preferences..."
 msgstr "Preferencje..."
@@ -1189,7 +1189,7 @@ msgid "&Run a Macro Multiple Times..."
 msgstr "U&ruchom makro wielokrotnie..."
 
 msgid "&Macro"
-msgstr "&Makro"
+msgstr "M&akra"
 
 msgid "&Run...\tF5"
 msgstr "U&ruchom...\tF5"
@@ -1246,7 +1246,7 @@ msgid "Recent Window"
 msgstr "Ostatnie okno"
 
 msgid "&Window"
-msgstr "&Okno"
+msgstr "&Karty"
 
 msgid "Command Line Arguments..."
 msgstr "Argumenty wiersza poleceń..."
@@ -1275,11 +1275,14 @@ msgstr "Informacje debugowania..."
 msgid "About wxNotepad++\tF1"
 msgstr "O programie wxNotepad++\tF1"
 
-msgid "&About"
-msgstr "&Pomoc"
+msgid "?"
+msgstr "?"
 
 msgid "Go to line"
 msgstr "Idź do wiersza"
+
+msgid "Line number (1 - %d):"
+msgstr "Numer wiersza (1 - %d):"
 
 msgid "Column Editor"
 msgstr "Edytor kolumn"
@@ -1368,6 +1371,33 @@ msgstr "W &zaznaczeniu"
 msgid "Search Mode"
 msgstr "Tryb wyszukiwania"
 
+msgid "Document Map"
+msgstr "Mapa dokumentu"
+
+msgid "Function List"
+msgstr "Lista funkcji"
+
+msgid "Document List"
+msgstr "Lista dokumentów"
+
+msgid "Clipboard History"
+msgstr "Historia schowka"
+
+msgid "Value"
+msgstr "Wartość"
+
+msgid "Hex"
+msgstr "Hex"
+
+msgid "Character"
+msgstr "Znak"
+
+msgid "Character Panel"
+msgstr "Panel znaków"
+
+msgid "Project"
+msgstr "Projekt"
+
 msgid "Add Files..."
 msgstr "Dodaj pliki..."
 
@@ -1397,6 +1427,9 @@ msgstr "Następny"
 
 msgid "Close"
 msgstr "Zamknij"
+
+msgid "Find result"
+msgstr "Wyniki wyszukiwania"
 
 msgid "Match case"
 msgstr "Uwzględnij wielkość liter"
@@ -1443,6 +1476,9 @@ msgstr "Wczytaj sesję"
 msgid "No session data in this file."
 msgstr "Brak danych sesji w tym pliku."
 
+msgid "new %d"
+msgstr "nowy %d"
+
 msgid "Save file\n%s ?"
 msgstr "Zapisz plik\n%s ?"
 
@@ -1482,8 +1518,71 @@ msgstr "Zastosuj kolor"
 msgid "(more items added incrementally)"
 msgstr "(więcej pozycji dodawanych stopniowo)"
 
+msgid "System default"
+msgstr "Domyślny systemowy"
+
+msgid "Locali&zation"
+msgstr "Lokali&zacja"
+
 msgid "Recent &Files"
 msgstr "Ostatnie &pliki"
+
+msgid "New"
+msgstr "Nowy"
+
+msgid "Open"
+msgstr "Otwórz"
+
+msgid "Save All"
+msgstr "Zapisz wszystko"
+
+msgid "Print"
+msgstr "Drukowanie"
+
+msgid "Cut"
+msgstr "Wytnij"
+
+msgid "Copy"
+msgstr "Kopiuj"
+
+msgid "Paste"
+msgstr "Wklej"
+
+msgid "Undo"
+msgstr "Cofnij"
+
+msgid "Redo"
+msgstr "Ponów"
+
+msgid "Zoom In"
+msgstr "Powiększ"
+
+msgid "Zoom Out"
+msgstr "Pomniejsz"
+
+msgid "Word Wrap"
+msgstr "Zawijanie wierszy"
+
+msgid "User-Defined Language Dialogue"
+msgstr "Okno języka użytkownika"
+
+msgid "Monitoring (tail -f)"
+msgstr "Monitorowanie (tail -f)"
+
+msgid "Start Recording"
+msgstr "Rozpocznij nagrywanie"
+
+msgid "Stop Recording"
+msgstr "Zatrzymaj nagrywanie"
+
+msgid "Playback"
+msgstr "Odtwórz"
+
+msgid "Run a Macro Multiple Times"
+msgstr "Uruchom makro wielokrotnie"
+
+msgid "Save Current Recorded Macro"
+msgstr "Zapisz nagrane makro"
 
 msgid "Re-interpreting the encoding discards unsaved changes. Continue?"
 msgstr "Ponowna interpretacja kodowania odrzuci niezapisane zmiany. Kontynuować?"
@@ -1491,17 +1590,38 @@ msgstr "Ponowna interpretacja kodowania odrzuci niezapisane zmiany. Kontynuować
 msgid "Encoding"
 msgstr "Kodowanie"
 
+msgid "Monitoring needs a file on disk - save the document first"
+msgstr "Monitorowanie wymaga pliku na dysku - najpierw zapisz dokument"
+
+msgid "Save or discard the unsaved changes before monitoring"
+msgstr "Zapisz lub odrzuć niezapisane zmiany przed monitorowaniem"
+
+msgid "Monitoring started"
+msgstr "Monitorowanie rozpoczęte"
+
+msgid "Monitoring stopped"
+msgstr "Monitorowanie zatrzymane"
+
+msgid "Monitoring stopped (document was edited)"
+msgstr "Monitorowanie zatrzymane (dokument został zmieniony)"
+
 msgid "Clipboard has no matching content."
 msgstr "Schowek nie zawiera pasującej zawartości."
-
-msgid "Paste"
-msgstr "Wklej"
 
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "Przenieść \"%s\" do kosza?"
 
 msgid "Enter valid character codes."
 msgstr "Wprowadź prawidłowe kody znaków."
+
+msgid "Search results"
+msgstr "Wyniki wyszukiwania"
+
+msgid "Preferences"
+msgstr "Preferencje"
+
+msgid "General"
+msgstr "Ogólne"
 
 msgid "Show toolbar"
 msgstr "Pokaż pasek narzędzi"
@@ -1511,6 +1631,12 @@ msgstr "Pokaż pasek stanu"
 
 msgid "Show integrated top bar"
 msgstr "Pokaż zintegrowany górny pasek"
+
+msgid "Localization:"
+msgstr "Lokalizacja:"
+
+msgid "Editing"
+msgstr "Edycja"
 
 msgid "Display line number"
 msgstr "Wyświetlaj numery wierszy"
@@ -1545,6 +1671,9 @@ msgstr "Pionowa krawędź w kolumnie (0 = wył.):"
 msgid "Caret blink rate (ms, 0 = steady):"
 msgstr "Częstotliwość migania kursora (ms, 0 = stały):"
 
+msgid "Indentation"
+msgstr "Wcięcia"
+
 msgid "Tab size:"
 msgstr "Rozmiar tabulatora:"
 
@@ -1553,6 +1682,9 @@ msgstr "Zamieniaj na spacje"
 
 msgid "Auto-indent new lines"
 msgstr "Automatyczne wcięcia nowych wierszy"
+
+msgid "Auto-Completion"
+msgstr "Autouzupełnianie"
 
 msgid "Enable auto-completion on each input"
 msgstr "Włącz autouzupełnianie przy każdym wprowadzeniu"
@@ -1566,8 +1698,14 @@ msgstr ". znaku"
 msgid "Auto-insert matching brackets and quotes"
 msgstr "Automatycznie wstawiaj pasujące nawiasy i cudzysłowy"
 
+msgid "Dark Mode"
+msgstr "Tryb ciemny"
+
 msgid "Enable Dark Mode   (applied on restart)"
 msgstr "Włącz tryb ciemny   (stosowane po ponownym uruchomieniu)"
+
+msgid "New Document"
+msgstr "Nowy dokument"
 
 msgid "Format (Line ending)"
 msgstr "Format (koniec wiersza)"
@@ -1575,8 +1713,14 @@ msgstr "Format (koniec wiersza)"
 msgid "Default language:"
 msgstr "Domyślny język:"
 
+msgid "Tab Bar"
+msgstr "Pasek kart"
+
 msgid "Show close button on each tab   (applied on restart)"
 msgstr "Pokaż przycisk zamykania na każdej karcie   (stosowane po ponownym uruchomieniu)"
+
+msgid "Recent Files History"
+msgstr "Historia ostatnich plików"
 
 msgid "Max number of entries (applied on restart):"
 msgstr "Maks. liczba pozycji (stosowane po ponownym uruchomieniu):"
@@ -1635,146 +1779,11 @@ msgstr "Zaznaczenie kolumnowe (prostokątne):\n\n- Alt + przeciągnięcie myszą
 msgid "Column Mode"
 msgstr "Tryb kolumnowy"
 
-msgid "Localization:"
-msgstr "Lokalizacja:"
+msgid "length : %d    lines : %d"
+msgstr "Długość : %d    Linie : %d"
 
-msgid "System default"
-msgstr "Domyślny systemowy"
+msgid "Ln : %d    Col : %d    Pos : %d"
+msgstr "Linia : %d    Kolumna : %d    Pozycja : %d"
 
-msgid "Preferences"
-msgstr "Preferencje"
-
-msgid "General"
-msgstr "Ogólne"
-
-msgid "Editing"
-msgstr "Edycja"
-
-msgid "Indentation"
-msgstr "Wcięcia"
-
-msgid "Auto-Completion"
-msgstr "Autouzupełnianie"
-
-msgid "Dark Mode"
-msgstr "Tryb ciemny"
-
-msgid "New Document"
-msgstr "Nowy dokument"
-
-msgid "Tab Bar"
-msgstr "Pasek kart"
-
-msgid "Recent Files History"
-msgstr "Historia ostatnich plików"
-
-msgid "Print"
-msgstr "Drukowanie"
-
-msgid "Value"
-msgstr "Wartość"
-
-msgid "Hex"
-msgstr "Hex"
-
-msgid "Character"
-msgstr "Znak"
-
-msgid "Character Panel"
-msgstr "Panel znaków"
-
-msgid "Line number (1 - %d):"
-msgstr "Numer wiersza (1 - %d):"
-
-msgid "Document Map"
-msgstr "Mapa dokumentu"
-
-msgid "Function List"
-msgstr "Lista funkcji"
-
-msgid "Document List"
-msgstr "Lista dokumentów"
-
-msgid "Clipboard History"
-msgstr "Historia schowka"
-
-msgid "Project"
-msgstr "Projekt"
-
-msgid "Find result"
-msgstr "Wyniki wyszukiwania"
-
-msgid "New"
-msgstr "Nowy"
-
-msgid "Open"
-msgstr "Otwórz"
-
-msgid "Save All"
-msgstr "Zapisz wszystko"
-
-msgid "Cut"
-msgstr "Wytnij"
-
-msgid "Copy"
-msgstr "Kopiuj"
-
-msgid "Undo"
-msgstr "Cofnij"
-
-msgid "Redo"
-msgstr "Ponów"
-
-msgid "Zoom In"
-msgstr "Powiększ"
-
-msgid "Zoom Out"
-msgstr "Pomniejsz"
-
-msgid "User-Defined Language Dialogue"
-msgstr "Okno języka użytkownika"
-
-msgid "Start Recording"
-msgstr "Rozpocznij nagrywanie"
-
-msgid "Stop Recording"
-msgstr "Zatrzymaj nagrywanie"
-
-msgid "Playback"
-msgstr "Odtwórz"
-
-msgid "Run a Macro Multiple Times"
-msgstr "Uruchom makro wielokrotnie"
-
-msgid "Save Current Recorded Macro"
-msgstr "Zapisz nagrane makro"
-
-msgid "Search results"
-msgstr "Wyniki wyszukiwania"
-
-msgid "new %d"
-msgstr "nowy %d"
-
-msgid "Locali&zation"
-msgstr "Lokali&zacja"
-
-msgid "Monitoring (tail -f)"
-msgstr "Monitorowanie (tail -f)"
-
-msgid "Word Wrap"
-msgstr "Zawijanie wierszy"
-
-msgid "Monitoring needs a file on disk - save the document first"
-msgstr "Monitorowanie wymaga pliku na dysku - najpierw zapisz dokument"
-
-msgid "Save or discard the unsaved changes before monitoring"
-msgstr "Zapisz lub odrzuć niezapisane zmiany przed monitorowaniem"
-
-msgid "Monitoring started"
-msgstr "Monitorowanie rozpoczęte"
-
-msgid "Monitoring stopped"
-msgstr "Monitorowanie zatrzymane"
-
-msgid "Monitoring stopped (document was edited)"
-msgstr "Monitorowanie zatrzymane (dokument został zmieniony)"
+msgid "Sel : %d | %d"
+msgstr "Zazn. : %d | %d"

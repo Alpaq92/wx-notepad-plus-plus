@@ -1275,11 +1275,14 @@ msgstr "调试信息..."
 msgid "About wxNotepad++\tF1"
 msgstr "关于 wxNotepad++\tF1"
 
-msgid "&About"
-msgstr "关于(&A)"
+msgid "?"
+msgstr "?"
 
 msgid "Go to line"
 msgstr "转到行"
+
+msgid "Line number (1 - %d):"
+msgstr "行号 (1 - %d):"
 
 msgid "Column Editor"
 msgstr "列块编辑"
@@ -1368,6 +1371,33 @@ msgstr "在选定范围内(&L)"
 msgid "Search Mode"
 msgstr "查找模式"
 
+msgid "Document Map"
+msgstr "文档地图"
+
+msgid "Function List"
+msgstr "函数列表"
+
+msgid "Document List"
+msgstr "文档列表"
+
+msgid "Clipboard History"
+msgstr "剪贴板历史"
+
+msgid "Value"
+msgstr "值"
+
+msgid "Hex"
+msgstr "十六进制"
+
+msgid "Character"
+msgstr "字符"
+
+msgid "Character Panel"
+msgstr "字符面板"
+
+msgid "Project"
+msgstr "项目"
+
 msgid "Add Files..."
 msgstr "添加文件..."
 
@@ -1397,6 +1427,9 @@ msgstr "下一个"
 
 msgid "Close"
 msgstr "关闭"
+
+msgid "Find result"
+msgstr "搜索结果"
 
 msgid "Match case"
 msgstr "区分大小写"
@@ -1443,6 +1476,9 @@ msgstr "载入会话"
 msgid "No session data in this file."
 msgstr "此文件中没有会话数据。"
 
+msgid "new %d"
+msgstr "新建 %d"
+
 msgid "Save file\n%s ?"
 msgstr "是否保存文件\n%s ?"
 
@@ -1482,8 +1518,71 @@ msgstr "应用颜色"
 msgid "(more items added incrementally)"
 msgstr "(更多项目将陆续添加)"
 
+msgid "System default"
+msgstr "系统默认"
+
+msgid "Locali&zation"
+msgstr "本地化(&Z)"
+
 msgid "Recent &Files"
 msgstr "最近的文件(&F)"
+
+msgid "New"
+msgstr "新建"
+
+msgid "Open"
+msgstr "打开"
+
+msgid "Save All"
+msgstr "全部保存"
+
+msgid "Print"
+msgstr "打印"
+
+msgid "Cut"
+msgstr "剪切"
+
+msgid "Copy"
+msgstr "复制"
+
+msgid "Paste"
+msgstr "粘贴"
+
+msgid "Undo"
+msgstr "撤销"
+
+msgid "Redo"
+msgstr "重做"
+
+msgid "Zoom In"
+msgstr "放大"
+
+msgid "Zoom Out"
+msgstr "缩小"
+
+msgid "Word Wrap"
+msgstr "自动换行"
+
+msgid "User-Defined Language Dialogue"
+msgstr "用户自定义语言对话框"
+
+msgid "Monitoring (tail -f)"
+msgstr "监视 (tail -f)"
+
+msgid "Start Recording"
+msgstr "开始录制"
+
+msgid "Stop Recording"
+msgstr "停止录制"
+
+msgid "Playback"
+msgstr "回放"
+
+msgid "Run a Macro Multiple Times"
+msgstr "多次运行宏"
+
+msgid "Save Current Recorded Macro"
+msgstr "保存当前录制的宏"
 
 msgid "Re-interpreting the encoding discards unsaved changes. Continue?"
 msgstr "重新解释编码将丢弃未保存的更改。是否继续？"
@@ -1491,17 +1590,38 @@ msgstr "重新解释编码将丢弃未保存的更改。是否继续？"
 msgid "Encoding"
 msgstr "编码"
 
+msgid "Monitoring needs a file on disk - save the document first"
+msgstr "监视需要磁盘上的文件 - 请先保存文档"
+
+msgid "Save or discard the unsaved changes before monitoring"
+msgstr "监视前请保存或放弃未保存的更改"
+
+msgid "Monitoring started"
+msgstr "监视已开始"
+
+msgid "Monitoring stopped"
+msgstr "监视已停止"
+
+msgid "Monitoring stopped (document was edited)"
+msgstr "监视已停止（文档已被编辑）"
+
 msgid "Clipboard has no matching content."
 msgstr "剪贴板中没有匹配的内容。"
-
-msgid "Paste"
-msgstr "粘贴"
 
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "将 \"%s\" 移动到回收站？"
 
 msgid "Enter valid character codes."
 msgstr "请输入有效的字符编码。"
+
+msgid "Search results"
+msgstr "搜索结果"
+
+msgid "Preferences"
+msgstr "首选项"
+
+msgid "General"
+msgstr "常规"
 
 msgid "Show toolbar"
 msgstr "显示工具栏"
@@ -1511,6 +1631,12 @@ msgstr "显示状态栏"
 
 msgid "Show integrated top bar"
 msgstr "显示集成顶栏"
+
+msgid "Localization:"
+msgstr "本地化:"
+
+msgid "Editing"
+msgstr "编辑"
 
 msgid "Display line number"
 msgstr "显示行号"
@@ -1545,6 +1671,9 @@ msgstr "垂直边线所在列 (0 = 关闭):"
 msgid "Caret blink rate (ms, 0 = steady):"
 msgstr "光标闪烁频率 (毫秒, 0 = 常亮):"
 
+msgid "Indentation"
+msgstr "缩进"
+
 msgid "Tab size:"
 msgstr "制表符宽度:"
 
@@ -1553,6 +1682,9 @@ msgstr "用空格代替"
 
 msgid "Auto-indent new lines"
 msgstr "新行自动缩进"
+
+msgid "Auto-Completion"
+msgstr "自动完成"
 
 msgid "Enable auto-completion on each input"
 msgstr "每次输入时启用自动完成"
@@ -1566,8 +1698,14 @@ msgstr "个字符起"
 msgid "Auto-insert matching brackets and quotes"
 msgstr "自动插入匹配的括号和引号"
 
+msgid "Dark Mode"
+msgstr "深色模式"
+
 msgid "Enable Dark Mode   (applied on restart)"
 msgstr "启用深色模式   (重启后生效)"
+
+msgid "New Document"
+msgstr "新建文档"
 
 msgid "Format (Line ending)"
 msgstr "格式 (行尾符)"
@@ -1575,8 +1713,14 @@ msgstr "格式 (行尾符)"
 msgid "Default language:"
 msgstr "默认语言:"
 
+msgid "Tab Bar"
+msgstr "标签栏"
+
 msgid "Show close button on each tab   (applied on restart)"
 msgstr "在每个标签上显示关闭按钮   (重启后生效)"
+
+msgid "Recent Files History"
+msgstr "最近文件历史"
 
 msgid "Max number of entries (applied on restart):"
 msgstr "最大条目数 (重启后生效):"
@@ -1635,146 +1779,11 @@ msgstr "列(矩形)选择:\n\n- Alt + 拖动鼠标\n- Alt + Shift + 方向键\n-
 msgid "Column Mode"
 msgstr "列块模式"
 
-msgid "Localization:"
-msgstr "本地化:"
+msgid "length : %d    lines : %d"
+msgstr "长度 : %d    行数 : %d"
 
-msgid "System default"
-msgstr "系统默认"
+msgid "Ln : %d    Col : %d    Pos : %d"
+msgstr "行 : %d    列 : %d    位置 : %d"
 
-msgid "Preferences"
-msgstr "首选项"
-
-msgid "General"
-msgstr "常规"
-
-msgid "Editing"
-msgstr "编辑"
-
-msgid "Indentation"
-msgstr "缩进"
-
-msgid "Auto-Completion"
-msgstr "自动完成"
-
-msgid "Dark Mode"
-msgstr "深色模式"
-
-msgid "New Document"
-msgstr "新建文档"
-
-msgid "Tab Bar"
-msgstr "标签栏"
-
-msgid "Recent Files History"
-msgstr "最近文件历史"
-
-msgid "Print"
-msgstr "打印"
-
-msgid "Value"
-msgstr "值"
-
-msgid "Hex"
-msgstr "十六进制"
-
-msgid "Character"
-msgstr "字符"
-
-msgid "Character Panel"
-msgstr "字符面板"
-
-msgid "Line number (1 - %d):"
-msgstr "行号 (1 - %d):"
-
-msgid "Document Map"
-msgstr "文档地图"
-
-msgid "Function List"
-msgstr "函数列表"
-
-msgid "Document List"
-msgstr "文档列表"
-
-msgid "Clipboard History"
-msgstr "剪贴板历史"
-
-msgid "Project"
-msgstr "项目"
-
-msgid "Find result"
-msgstr "搜索结果"
-
-msgid "New"
-msgstr "新建"
-
-msgid "Open"
-msgstr "打开"
-
-msgid "Save All"
-msgstr "全部保存"
-
-msgid "Cut"
-msgstr "剪切"
-
-msgid "Copy"
-msgstr "复制"
-
-msgid "Undo"
-msgstr "撤销"
-
-msgid "Redo"
-msgstr "重做"
-
-msgid "Zoom In"
-msgstr "放大"
-
-msgid "Zoom Out"
-msgstr "缩小"
-
-msgid "User-Defined Language Dialogue"
-msgstr "用户自定义语言对话框"
-
-msgid "Start Recording"
-msgstr "开始录制"
-
-msgid "Stop Recording"
-msgstr "停止录制"
-
-msgid "Playback"
-msgstr "回放"
-
-msgid "Run a Macro Multiple Times"
-msgstr "多次运行宏"
-
-msgid "Save Current Recorded Macro"
-msgstr "保存当前录制的宏"
-
-msgid "Search results"
-msgstr "搜索结果"
-
-msgid "new %d"
-msgstr "新建 %d"
-
-msgid "Locali&zation"
-msgstr "本地化(&Z)"
-
-msgid "Monitoring (tail -f)"
-msgstr "监视 (tail -f)"
-
-msgid "Word Wrap"
-msgstr "自动换行"
-
-msgid "Monitoring needs a file on disk - save the document first"
-msgstr "监视需要磁盘上的文件 - 请先保存文档"
-
-msgid "Save or discard the unsaved changes before monitoring"
-msgstr "监视前请保存或放弃未保存的更改"
-
-msgid "Monitoring started"
-msgstr "监视已开始"
-
-msgid "Monitoring stopped"
-msgstr "监视已停止"
-
-msgid "Monitoring stopped (document was edited)"
-msgstr "监视已停止（文档已被编辑）"
+msgid "Sel : %d | %d"
+msgstr "选择 : %d | %d"
