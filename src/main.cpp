@@ -1179,9 +1179,12 @@ class SciPrintout : public wxPrintout
 {
 public:
     // Takes its own copy of pageSetup (rather than borrowing a pointer): Print Preview's wxPrintPreview owns
-    // two SciPrintouts on a non-modal wxPreviewFrame that can outlive the caller's stack frame.
-    SciPrintout(wxStyledTextCtrl* stc, const wxString& title, const wxPageSetupDialogData& pageSetup)
-        : wxPrintout(title), m_stc(stc), m_pageSetup(pageSetup) {}
+    // two SciPrintouts on a non-modal wxPreviewFrame that can outlive the caller's stack frame. header/footer
+    // are templates with $(CURRENT_PRINTING_PAGE)/$(TOTAL_PRINTING_PAGES) still literal - every other macro
+    // ($(FULL_PATH) etc.) is resolved by the caller first, since those don't depend on pagination.
+    SciPrintout(wxStyledTextCtrl* stc, const wxString& title, const wxPageSetupDialogData& pageSetup,
+                const wxString& header = wxString(), const wxString& footer = wxString())
+        : wxPrintout(title), m_stc(stc), m_pageSetup(pageSetup), m_header(header), m_footer(footer) {}
 
     bool OnPrintPage(int page) override
     {
@@ -1190,6 +1193,14 @@ public:
         if (!dc) return false;
         scaleDC(dc);
         m_stc->FormatRange(true, page == 1 ? 0 : m_pageEnds[page - 2], m_pageEnds[page - 1], dc, dc, m_printRect, m_pageRect);
+        if (!m_header.empty() || !m_footer.empty())
+        {
+            dc->SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
+            dc->SetTextForeground(*wxBLACK);
+            const int total = (int)m_pageEnds.size();
+            if (!m_header.empty()) dc->DrawText(resolvePageMacros(m_header, page, total), m_printRect.x, m_printRect.y - kBandHeight);
+            if (!m_footer.empty()) dc->DrawText(resolvePageMacros(m_footer, page, total), m_printRect.x, m_printRect.y + m_printRect.height);
+        }
         return true;
     }
 
@@ -1210,7 +1221,10 @@ public:
         const wxPoint tl = m_pageSetup.GetMarginTopLeft(), br = m_pageSetup.GetMarginBottomRight();
         const int left = wxRound(tl.x * ppiScr.x / 25.4), top = wxRound(tl.y * ppiScr.y / 25.4);
         const int right = wxRound(br.x * ppiScr.x / 25.4), bottom = wxRound(br.y * ppiScr.y / 25.4);
-        m_printRect = wxRect(left, top, page.x - left - right, page.y - top - bottom);
+        int bodyTop = top, bodyBottom = page.y - bottom;
+        if (!m_header.empty()) bodyTop += kBandHeight;   // reserve a text-height band just inside each margin
+        if (!m_footer.empty()) bodyBottom -= kBandHeight;
+        m_printRect = wxRect(left, bodyTop, page.x - left - right, bodyBottom - bodyTop);
 
         m_pageEnds.clear();
         int pos = 0;
@@ -1230,6 +1244,14 @@ public:
     bool HasPage(int page) override { return page >= 1 && page <= (int)m_pageEnds.size(); }
 
 private:
+    static constexpr int kBandHeight = 24;   // logical px reserved for header/footer text, just inside the page margin
+    static wxString resolvePageMacros(const wxString& s, int page, int total)
+    {
+        wxString r = s;
+        r.Replace("$(CURRENT_PRINTING_PAGE)", wxString::Format("%d", page));
+        r.Replace("$(TOTAL_PRINTING_PAGES)", wxString::Format("%d", total));
+        return r;
+    }
     void scaleDC(wxDC* dc)   // map screen-DPI page geometry onto the target DC (printer or preview) so margins/paper size stay physically correct
     {
         wxSize ppiScr; GetPPIScreen(&ppiScr.x, &ppiScr.y);
@@ -1245,6 +1267,7 @@ private:
 
     wxStyledTextCtrl*      m_stc;
     wxPageSetupDialogData  m_pageSetup;
+    wxString               m_header, m_footer;
     std::vector<int>       m_pageEnds;   // m_pageEnds[i] = the char position where page i+1 ends (exclusive)
     wxRect                 m_pageRect, m_printRect;
 };
@@ -5162,6 +5185,8 @@ private:
         long acf = 3; c->Read("AutoComplete/FromChar", &acf, 3L); m_autoCompFrom = (int)acf;
         c->Read("AutoComplete/InsertPairs", &m_autoInsertPairs, false);
         c->Read("Theme", &m_themeName, wxEmptyString);
+        c->Read("Print/Header", &m_printHeader, wxEmptyString);
+        c->Read("Print/Footer", &m_printFooter, wxEmptyString);
     }
     void saveSettings()
     {
@@ -5180,6 +5205,7 @@ private:
         c->Write("Editing/MultiEdit", m_multiEdit);
         c->Write("AutoComplete/FromChar", (long)m_autoCompFrom); c->Write("AutoComplete/InsertPairs", m_autoInsertPairs);
         c->Write("Theme", m_themeName);
+        c->Write("Print/Header", m_printHeader); c->Write("Print/Footer", m_printFooter);
         c->Flush();
     }
     void applySettings()   // push the current preferences onto the editor view + chrome
@@ -5315,6 +5341,20 @@ private:
         auto* spMaxRec = new wxSpinCtrl(rf, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 50, m_maxRecent);
         rfrow->Add(spMaxRec, 0); rfs->Add(rfrow, 0, wxALL, 10); rf->SetSizer(rfs);
 
+        // ---- Print ------------------------------------------------------------------------
+        auto* pr = pg("Print"); auto* prs = new wxBoxSizer(wxVERTICAL);
+        prs->Add(new wxStaticText(pr, wxID_ANY, "Header:"), 0, wxLEFT | wxRIGHT | wxTOP, 10);
+        auto* txHeader = new wxTextCtrl(pr, wxID_ANY, m_printHeader);
+        prs->Add(txHeader, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 10);
+        prs->Add(new wxStaticText(pr, wxID_ANY, "Footer:"), 0, wxLEFT | wxRIGHT | wxTOP, 10);
+        auto* txFooter = new wxTextCtrl(pr, wxID_ANY, m_printFooter);
+        prs->Add(txFooter, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 10);
+        auto* prHint = new wxStaticText(pr, wxID_ANY,
+            "Leave blank for none. Macros: $(FULL_PATH) $(FILE_NAME) $(DATE) $(TIME)\n$(CURRENT_PRINTING_PAGE) $(TOTAL_PRINTING_PAGES)");
+        prHint->SetForegroundColour(m_dark ? wxColour(150, 150, 150) : wxColour(110, 110, 110));
+        prs->Add(prHint, 0, wxALL, 10);
+        pr->SetSizer(prs);
+
         // wxListbook leaves its single-column page list too narrow, so the longer labels truncate
         // ("Auto-Comp...", "Recent Files ..."). Grow the column to the widest label - which feeds the list's
         // best width, so the whole selector pane widens to fit - and pin a matching min size.
@@ -5345,6 +5385,7 @@ private:
           else { size_t ln; const NppLang* lt = nppLangTable(ln); m_defaultLangId = (s - 1 < (int)ln) ? lt[s - 1].id : -1; } }
         const bool tabRecentChanged = (cbTabClose->GetValue() != m_tabCloseBtn) || (spMaxRec->GetValue() != m_maxRecent);
         m_tabCloseBtn = cbTabClose->GetValue(); m_maxRecent = spMaxRec->GetValue();
+        m_printHeader = txHeader->GetValue(); m_printFooter = txFooter->GetValue();
         applySettings(); saveSettings();
         bool needRestart = (newDark != m_dark) || tabRecentChanged;
 #ifdef WXNPP_HAS_BORDERLESS
@@ -5759,6 +5800,22 @@ private:
         w->Refresh();
     }
     void notImpl(const wxString& what) { setStatus(0, what + " - not yet implemented in this build"); m_hint = true; }
+    // Resolves the File > Print header/footer macros that don't depend on the current page (path/date/time);
+    // $(CURRENT_PRINTING_PAGE)/$(TOTAL_PRINTING_PAGES) are left literal for SciPrintout to fill in per-page.
+    wxString resolvePrintMacros(const wxString& tmpl) const
+    {
+        if (tmpl.empty()) return tmpl;
+        wxString s = tmpl;
+        auto* page = activePage();
+        const wxString path = page ? page->path : wxString();
+        const wxString name = path.empty() ? (page ? page->title : wxString()) : wxFileNameFromPath(path);
+        const wxDateTime now = wxDateTime::Now();
+        s.Replace("$(FULL_PATH)", path.empty() ? name : path);
+        s.Replace("$(FILE_NAME)", name);
+        s.Replace("$(DATE)", now.FormatDate());
+        s.Replace("$(TIME)", now.FormatTime());
+        return s;
+    }
     // File > Print... (prompt=true, shows the Print dialog) / Print Now (prompt=false, uses the last settings).
     // Re-entrancy guarded: wxPrinter::Print() pumps a nested modal loop, and a second IDM_FILE_PRINT delivered
     // while that loop is running (e.g. a held/repeated Ctrl+P) would race two SciPrintout jobs over the same
@@ -5772,7 +5829,7 @@ private:
         wxPageSetupDialogData pageSetup(m_printData);
         auto* page = activePage();
         const wxString title = (page && !page->title.empty()) ? page->title : wxString("Untitled");
-        SciPrintout printout(m_stc, title, pageSetup);
+        SciPrintout printout(m_stc, title, pageSetup, resolvePrintMacros(m_printHeader), resolvePrintMacros(m_printFooter));
         const bool ok = printer.Print(this, &printout, prompt);
         m_printing = false;
         if (!ok)
@@ -5794,8 +5851,9 @@ private:
         wxPageSetupDialogData pageSetup(m_printData);
         auto* page = activePage();
         const wxString title = (page && !page->title.empty()) ? page->title : wxString("Untitled");
-        auto* preview = new wxPrintPreview(new SciPrintout(m_stc, title, pageSetup),
-                                            new SciPrintout(m_stc, title, pageSetup),
+        const wxString header = resolvePrintMacros(m_printHeader), footer = resolvePrintMacros(m_printFooter);
+        auto* preview = new wxPrintPreview(new SciPrintout(m_stc, title, pageSetup, header, footer),
+                                            new SciPrintout(m_stc, title, pageSetup, header, footer),
                                             &printDialogData);
         if (!preview->IsOk())
         {
@@ -6405,6 +6463,7 @@ private:
     wxString    m_themeName;                                      // active editor theme (empty = dark/light default); Style Configurator
     wxPrintData m_printData;                                      // File > Print: remembers the chosen printer/paper for the session
     bool        m_printing = false;                               // re-entrancy guard around wxPrinter::Print()'s nested modal loop
+    wxString    m_printHeader, m_printFooter;                     // Preferences > Print: optional header/footer text (macros resolved at print time)
     std::vector<MacroStep> m_macro;                               // the current recorded macro
     bool        m_recording = false;
     std::vector<std::pair<wxString, std::vector<MacroStep>>> m_savedMacros;   // named macros (Macro menu, this session)
