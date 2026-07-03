@@ -6248,6 +6248,12 @@ private:
             case IDM_SEARCH_NEXT_BOOKMARK: gotoBookmark(true); break;
             case IDM_SEARCH_PREV_BOOKMARK: gotoBookmark(false); break;
             case IDM_SEARCH_CLEAR_BOOKMARKS: sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); break;
+            // Change History: the Scintilla core wx 3.3.1 bundles predates SCI_SETCHANGEHISTORY (added
+            // upstream after wx's vendored copy) - it's not a no-op we can wire around, the message doesn't
+            // exist in this build, so SCI_GETCHANGEHISTORY reports disabled no matter what we send it.
+            case IDM_SEARCH_CHANGED_NEXT:
+            case IDM_SEARCH_CHANGED_PREV:
+            case IDM_SEARCH_CLEAR_CHANGE_HISTORY: notImpl("Change History (needs a newer Scintilla than this wx build carries)"); break;
 
             case IDM_VIEW_ZOOMIN: sci(SCI_ZOOMIN); break;
             case IDM_VIEW_ZOOMOUT: sci(SCI_ZOOMOUT); break;
