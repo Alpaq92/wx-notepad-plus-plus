@@ -4552,27 +4552,60 @@ private:
     }
 
     // ---- Tools: MD5 / SHA digests ----
-    void hashSelection(const wchar_t* algo, const char* name, bool toClip)
-    {
 #ifdef __WXMSW__
-        std::string data = getSelUtf8(); if (data.empty()) data = getDocUtf8();
+    // Hex digest of a raw byte buffer via CNG (BCrypt) - shared by hashSelection (selection/doc text) and
+    // hashFiles (raw file bytes, so non-UTF8 files hash correctly instead of being re-encoded first).
+    wxString hashBytes(const wchar_t* algo, const void* data, size_t size)
+    {
         wxString hex; BCRYPT_ALG_HANDLE alg = nullptr; BCRYPT_HASH_HANDLE h = nullptr; DWORD len = 0, res = 0;
         if (BCryptOpenAlgorithmProvider(&alg, algo, nullptr, 0) == 0)
         {
             BCryptGetProperty(alg, BCRYPT_HASH_LENGTH, reinterpret_cast<PUCHAR>(&len), sizeof(len), &res, 0);
             if (BCryptCreateHash(alg, &h, nullptr, 0, nullptr, 0, 0) == 0)
             {
-                BCryptHashData(h, reinterpret_cast<PUCHAR>(const_cast<char*>(data.data())), (ULONG)data.size(), 0);
+                BCryptHashData(h, reinterpret_cast<PUCHAR>(const_cast<void*>(data)), (ULONG)size, 0);
                 std::vector<unsigned char> dig(len); BCryptFinishHash(h, dig.data(), len, 0);
                 for (unsigned char c : dig) hex += wxString::Format("%02x", c);
                 BCryptDestroyHash(h);
             }
             BCryptCloseAlgorithmProvider(alg, 0);
         }
+        return hex;
+    }
+#endif
+    void hashSelection(const wchar_t* algo, const char* name, bool toClip)
+    {
+#ifdef __WXMSW__
+        std::string data = getSelUtf8(); if (data.empty()) data = getDocUtf8();
+        const wxString hex = hashBytes(algo, data.data(), data.size());
         if (toClip) { copyToClip(hex); setStatus(0, wxString(name) + " copied to clipboard"); }
         else themedInfo(hex, wxString(name) + " digest");
 #else
         (void)algo; (void)toClip; notImpl(wxString(name) + " (Windows only)");
+#endif
+    }
+    // Tools > <algo> > Generate from files...: hash each picked file's raw bytes (not its
+    // wxSTC/UTF-8 text, so this matches externally-computed digests for any file, text or binary).
+    void hashFiles(const wchar_t* algo, const char* name)
+    {
+#ifdef __WXMSW__
+        wxFileDialog dlg(this, wxString(name) + " - generate from files", wxEmptyString, wxEmptyString,
+                          "All files (*.*)|*.*", wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
+        if (dlg.ShowModal() != wxID_OK) return;
+        wxArrayString paths; dlg.GetPaths(paths);
+        wxString out;
+        for (const wxString& p : paths)
+        {
+            wxFile f(p);
+            if (!f.IsOpened()) { out += wxFileNameFromPath(p) + ":  (could not open)\n"; continue; }
+            const wxFileOffset sz = f.Length();
+            std::string buf(static_cast<size_t>(sz > 0 ? sz : 0), '\0');
+            if (sz > 0) f.Read(&buf[0], (size_t)sz);
+            out += wxFileNameFromPath(p) + ":  " + hashBytes(algo, buf.data(), buf.size()) + "\n";
+        }
+        themedInfo(out, wxString(name) + " digest");
+#else
+        (void)algo; notImpl(wxString(name) + " (Windows only)");
 #endif
     }
     // Manually force a language on the active buffer (Language menu). ext "" forces Normal Text. The
@@ -6170,6 +6203,10 @@ private:
             case IDM_TOOL_SHA1_GENERATE: hashSelection(L"SHA1", "SHA-1", false); break;
             case IDM_TOOL_SHA256_GENERATE: hashSelection(L"SHA256", "SHA-256", false); break;
             case IDM_TOOL_SHA512_GENERATE: hashSelection(L"SHA512", "SHA-512", false); break;
+            case IDM_TOOL_MD5_GENERATEFROMFILE: hashFiles(L"MD5", "MD5"); break;
+            case IDM_TOOL_SHA1_GENERATEFROMFILE: hashFiles(L"SHA1", "SHA-1"); break;
+            case IDM_TOOL_SHA256_GENERATEFROMFILE: hashFiles(L"SHA256", "SHA-256"); break;
+            case IDM_TOOL_SHA512_GENERATEFROMFILE: hashFiles(L"SHA512", "SHA-512"); break;
 
             // ---- Window / Settings / Language: list, folders, normal text ----
             case IDM_WINDOW_WINDOWS: showWindowsList(); break;
