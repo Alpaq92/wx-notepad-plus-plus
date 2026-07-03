@@ -1634,3 +1634,39 @@ msgstr "Selección de columna (rectangular):\n\n- Alt + arrastrar el ratón\n- A
 
 msgid "Column Mode"
 msgstr "Modo de columna"
+
+msgid "Localization:"
+msgstr "Localización:"
+
+msgid "System default"
+msgstr "Predeterminado del sistema"
+
+msgid "Preferences"
+msgstr "Preferencias"
+
+msgid "General"
+msgstr "General"
+
+msgid "Editing"
+msgstr "Edición"
+
+msgid "Indentation"
+msgstr "Sangría"
+
+msgid "Auto-Completion"
+msgstr "Autocompletar"
+
+msgid "Dark Mode"
+msgstr "Modo oscuro"
+
+msgid "New Document"
+msgstr "Nuevo documento"
+
+msgid "Tab Bar"
+msgstr "Barra de pestañas"
+
+msgid "Recent Files History"
+msgstr "Historial de archivos recientes"
+
+msgid "Print"
+msgstr "Impresión"

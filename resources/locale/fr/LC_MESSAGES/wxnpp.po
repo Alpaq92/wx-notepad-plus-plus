@@ -1634,3 +1634,39 @@ msgstr "Sélection en colonne (rectangulaire) :\n\n- Alt + glisser la souris\n- 
 
 msgid "Column Mode"
 msgstr "Sélection en mode colonne"
+
+msgid "Localization:"
+msgstr "Localisation :"
+
+msgid "System default"
+msgstr "Par défaut du système"
+
+msgid "Preferences"
+msgstr "Préférences"
+
+msgid "General"
+msgstr "Général"
+
+msgid "Editing"
+msgstr "Édition"
+
+msgid "Indentation"
+msgstr "Indentation"
+
+msgid "Auto-Completion"
+msgstr "Autocomplétion"
+
+msgid "Dark Mode"
+msgstr "Mode sombre"
+
+msgid "New Document"
+msgstr "Nouveau document"
+
+msgid "Tab Bar"
+msgstr "Barre d'onglets"
+
+msgid "Recent Files History"
+msgstr "Historique des fichiers récents"
+
+msgid "Print"
+msgstr "Impression"

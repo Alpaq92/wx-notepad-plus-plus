@@ -1505,6 +1505,12 @@ msgstr ""
 msgid "Enter valid character codes."
 msgstr ""
 
+msgid "Preferences"
+msgstr ""
+
+msgid "General"
+msgstr ""
+
 msgid "Show toolbar"
 msgstr ""
 
@@ -1512,6 +1518,15 @@ msgid "Show status bar"
 msgstr ""
 
 msgid "Show integrated top bar"
+msgstr ""
+
+msgid "System default"
+msgstr ""
+
+msgid "Localization:"
+msgstr ""
+
+msgid "Editing"
 msgstr ""
 
 msgid "Display line number"
@@ -1547,6 +1562,9 @@ msgstr ""
 msgid "Caret blink rate (ms, 0 = steady):"
 msgstr ""
 
+msgid "Indentation"
+msgstr ""
+
 msgid "Tab size:"
 msgstr ""
 
@@ -1554,6 +1572,9 @@ msgid "Replace by space"
 msgstr ""
 
 msgid "Auto-indent new lines"
+msgstr ""
+
+msgid "Auto-Completion"
 msgstr ""
 
 msgid "Enable auto-completion on each input"
@@ -1568,7 +1589,13 @@ msgstr ""
 msgid "Auto-insert matching brackets and quotes"
 msgstr ""
 
+msgid "Dark Mode"
+msgstr ""
+
 msgid "Enable Dark Mode   (applied on restart)"
+msgstr ""
+
+msgid "New Document"
 msgstr ""
 
 msgid "Format (Line ending)"
@@ -1577,10 +1604,19 @@ msgstr ""
 msgid "Default language:"
 msgstr ""
 
+msgid "Tab Bar"
+msgstr ""
+
 msgid "Show close button on each tab   (applied on restart)"
 msgstr ""
 
+msgid "Recent Files History"
+msgstr ""
+
 msgid "Max number of entries (applied on restart):"
+msgstr ""
+
+msgid "Print"
 msgstr ""
 
 msgid "Header:"

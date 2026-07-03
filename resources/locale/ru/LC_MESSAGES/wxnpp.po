@@ -1634,3 +1634,39 @@ msgstr "Колоночное (прямоугольное) выделение:\n\
 
 msgid "Column Mode"
 msgstr "Режим столбцов"
+
+msgid "Localization:"
+msgstr "Локализация:"
+
+msgid "System default"
+msgstr "Системный по умолчанию"
+
+msgid "Preferences"
+msgstr "Настройки"
+
+msgid "General"
+msgstr "Общие"
+
+msgid "Editing"
+msgstr "Редактирование"
+
+msgid "Indentation"
+msgstr "Отступы"
+
+msgid "Auto-Completion"
+msgstr "Автозавершение"
+
+msgid "Dark Mode"
+msgstr "Тёмная тема"
+
+msgid "New Document"
+msgstr "Новый документ"
+
+msgid "Tab Bar"
+msgstr "Панель вкладок"
+
+msgid "Recent Files History"
+msgstr "История недавних файлов"
+
+msgid "Print"
+msgstr "Печать"

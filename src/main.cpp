@@ -5442,13 +5442,13 @@ private:
     {
         // Page layout mirrors Notepad++'s Preferences (General / Editing / Indentation /
         // Auto-Completion / Dark Mode); the labels are Notepad++'s exact wording.
-        wxDialog dlg(this, wxID_ANY, "Preferences", wxDefaultPosition, wxSize(620, 440));
+        wxDialog dlg(this, wxID_ANY, _("Preferences"), wxDefaultPosition, wxSize(620, 440));
         auto* book = new wxListbook(&dlg, wxID_ANY);
         auto pg  = [&](const wxString& name, bool sel = false) { auto* p = new wxPanel(book); book->AddPage(p, name, sel); return p; };
         auto row = [&](wxBoxSizer* s, wxWindow* w) { s->Add(w, 0, wxLEFT | wxRIGHT | wxTOP, 10); };
 
         // ---- General --------------------------------------------------------------------------
-        auto* gen = pg("General", true); auto* gs = new wxBoxSizer(wxVERTICAL);
+        auto* gen = pg(_("General"), true); auto* gs = new wxBoxSizer(wxVERTICAL);
         auto* cbToolbar = new wxCheckBox(gen, wxID_ANY, _("Show toolbar"));    cbToolbar->SetValue(m_showToolbar);
         auto* cbStatus  = new wxCheckBox(gen, wxID_ANY, _("Show status bar")); cbStatus->SetValue(m_showStatusbar);
         row(gs, cbToolbar); row(gs, cbStatus);
@@ -5456,10 +5456,25 @@ private:
         auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, _("Show integrated top bar"));
         cbIntBar->SetValue(m_integratedBar); row(gs, cbIntBar);
 #endif
+        // Localization: pick the UI language (restart-to-apply, like dark mode). Endonyms are ALWAYS shown in
+        // their own language (never translated); "System default" (wxLANGUAGE_DEFAULT) follows the OS.
+        static const int UI_LANG_IDS[] = { wxLANGUAGE_DEFAULT, wxLANGUAGE_ENGLISH, wxLANGUAGE_POLISH,
+            wxLANGUAGE_GERMAN, wxLANGUAGE_FRENCH, wxLANGUAGE_SPANISH, wxLANGUAGE_RUSSIAN, wxLANGUAGE_JAPANESE,
+            wxLANGUAGE_CHINESE_SIMPLIFIED, wxLANGUAGE_KOREAN };
+        long curUi = wxLANGUAGE_DEFAULT; wxConfigBase::Get()->Read("UILanguage", &curUi, (long)wxLANGUAGE_DEFAULT);
+        wxArrayString uiNames; uiNames.Add(_("System default"));
+        for (const char* n : { "English", "Polski", "Deutsch", "Français", "Español", "Русский", "日本語", "简体中文", "한국어" })
+            uiNames.Add(wxString::FromUTF8(n));
+        auto* chUiLang = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, uiNames);
+        { int sel = 0; for (int i = 0; i < (int)WXSIZEOF(UI_LANG_IDS); ++i) if (UI_LANG_IDS[i] == curUi) { sel = i; break; } chUiLang->SetSelection(sel); }
+        auto* uirow = new wxBoxSizer(wxHORIZONTAL);
+        uirow->Add(new wxStaticText(gen, wxID_ANY, _("Localization:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        uirow->Add(chUiLang, 0, wxALIGN_CENTRE_VERTICAL);
+        gs->Add(uirow, 0, wxLEFT | wxRIGHT | wxTOP, 10);
         gen->SetSizer(gs);
 
         // ---- Editing --------------------------------------------------------------------------
-        auto* ed = pg("Editing"); auto* es = new wxBoxSizer(wxVERTICAL);
+        auto* ed = pg(_("Editing")); auto* es = new wxBoxSizer(wxVERTICAL);
         auto* cbLineNum = new wxCheckBox(ed, wxID_ANY, _("Display line number"));      cbLineNum->SetValue(m_lineNumbers);
         auto* cbGuides  = new wxCheckBox(ed, wxID_ANY, _("Show indentation guide"));   cbGuides->SetValue(m_guides);
         auto* cbWs      = new wxCheckBox(ed, wxID_ANY, _("Show white space and TAB")); cbWs->SetValue(m_ws);
@@ -5484,7 +5499,7 @@ private:
         es->Add(brow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10); ed->SetSizer(es);
 
         // ---- Indentation ----------------------------------------------------------------------
-        auto* ind = pg("Indentation"); auto* is = new wxBoxSizer(wxVERTICAL);
+        auto* ind = pg(_("Indentation")); auto* is = new wxBoxSizer(wxVERTICAL);
         auto* trow = new wxBoxSizer(wxHORIZONTAL);
         trow->Add(new wxStaticText(ind, wxID_ANY, _("Tab size:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spTab = new wxSpinCtrl(ind, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 16, m_tabWidth);
@@ -5494,7 +5509,7 @@ private:
         row(is, cbSpace); row(is, cbIndent); ind->SetSizer(is);
 
         // ---- Auto-Completion ------------------------------------------------------------------
-        auto* ac = pg("Auto-Completion"); auto* as = new wxBoxSizer(wxVERTICAL);
+        auto* ac = pg(_("Auto-Completion")); auto* as = new wxBoxSizer(wxVERTICAL);
         auto* cbAuto = new wxCheckBox(ac, wxID_ANY, _("Enable auto-completion on each input")); cbAuto->SetValue(m_autocomplete);
         row(as, cbAuto);
         auto* acrow = new wxBoxSizer(wxHORIZONTAL);
@@ -5507,12 +5522,12 @@ private:
         row(as, cbPairs); ac->SetSizer(as);
 
         // ---- Dark Mode ------------------------------------------------------------------------
-        auto* dm = pg("Dark Mode"); auto* ds = new wxBoxSizer(wxVERTICAL);
+        auto* dm = pg(_("Dark Mode")); auto* ds = new wxBoxSizer(wxVERTICAL);
         auto* cbDark = new wxCheckBox(dm, wxID_ANY, _("Enable Dark Mode   (applied on restart)")); cbDark->SetValue(m_dark);
         row(ds, cbDark); dm->SetSizer(ds);
 
         // ---- New Document ---------------------------------------------------------------------
-        auto* nd = pg("New Document"); auto* nds = new wxBoxSizer(wxVERTICAL);
+        auto* nd = pg(_("New Document")); auto* nds = new wxBoxSizer(wxVERTICAL);
         const wxString eolChoices[3] = { "Windows (CR LF)", "Unix (LF)", "Macintosh (CR)" };
         auto* rbEol = new wxRadioBox(nd, wxID_ANY, _("Format (Line ending)"), wxDefaultPosition, wxDefaultSize,
                                      3, eolChoices, 1, wxRA_SPECIFY_COLS);
@@ -5534,19 +5549,19 @@ private:
         nds->Add(lrow, 0, wxALL, 10); nd->SetSizer(nds);
 
         // ---- Tab Bar --------------------------------------------------------------------------
-        auto* tbp = pg("Tab Bar"); auto* tbs = new wxBoxSizer(wxVERTICAL);
+        auto* tbp = pg(_("Tab Bar")); auto* tbs = new wxBoxSizer(wxVERTICAL);
         auto* cbTabClose = new wxCheckBox(tbp, wxID_ANY, _("Show close button on each tab   (applied on restart)"));
         cbTabClose->SetValue(m_tabCloseBtn); row(tbs, cbTabClose); tbp->SetSizer(tbs);
 
         // ---- Recent Files History -------------------------------------------------------------
-        auto* rf = pg("Recent Files History"); auto* rfs = new wxBoxSizer(wxVERTICAL);
+        auto* rf = pg(_("Recent Files History")); auto* rfs = new wxBoxSizer(wxVERTICAL);
         auto* rfrow = new wxBoxSizer(wxHORIZONTAL);
         rfrow->Add(new wxStaticText(rf, wxID_ANY, _("Max number of entries (applied on restart):")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spMaxRec = new wxSpinCtrl(rf, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 50, m_maxRecent);
         rfrow->Add(spMaxRec, 0); rfs->Add(rfrow, 0, wxALL, 10); rf->SetSizer(rfs);
 
         // ---- Print ------------------------------------------------------------------------
-        auto* pr = pg("Print"); auto* prs = new wxBoxSizer(wxVERTICAL);
+        auto* pr = pg(_("Print")); auto* prs = new wxBoxSizer(wxVERTICAL);
         prs->Add(new wxStaticText(pr, wxID_ANY, _("Header:")), 0, wxLEFT | wxRIGHT | wxTOP, 10);
         auto* txHeader = new wxTextCtrl(pr, wxID_ANY, m_printHeader);
         prs->Add(txHeader, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 10);
@@ -5592,6 +5607,8 @@ private:
         m_printHeader = txHeader->GetValue(); m_printFooter = txFooter->GetValue();
         applySettings(); saveSettings();
         bool needRestart = (newDark != m_dark) || tabRecentChanged;
+        { const int newUi = UI_LANG_IDS[chUiLang->GetSelection()];   // UI language is fixed per process (wxLocale) - relaunch to switch
+          if (newUi != curUi) { wxConfigBase::Get()->Write("UILanguage", (long)newUi); needRestart = true; } }
 #ifdef WXNPP_HAS_BORDERLESS
         if (cbIntBar->GetValue() != m_integratedBar)   // the chrome base is fixed per process - relaunch to switch
         { wxConfigBase::Get()->Write("IntegratedBar", cbIntBar->GetValue()); needRestart = true; }
@@ -6691,10 +6708,13 @@ public:
     {
         SetAppName("wxNotepadPlusPlus_spike");                  // stable key for the persisted theme choice
         // UI localization (gettext): every _()-wrapped string looks itself up in resources/locale/<lang>/
-        // LC_MESSAGES/wxnpp.mo next to the exe. Init() auto-detects the OS language; if no catalog exists
-        // for it (most languages, for now - only the strings this pass wrapped have a Polish translation),
-        // AddCatalog() simply finds nothing and _() falls back to returning its English argument unchanged.
-        m_locale.Init(wxLANGUAGE_DEFAULT);
+        // LC_MESSAGES/wxnpp.mo next to the exe. The language is the user's Preferences > General >
+        // Localization choice (wxLANGUAGE_DEFAULT = follow the OS); if no catalog exists for it (e.g. English,
+        // which has none), AddCatalog finds nothing and _() falls back to returning its English argument.
+        long uiLang = wxLANGUAGE_DEFAULT;
+        wxConfigBase::Get()->Read("UILanguage", &uiLang, (long)wxLANGUAGE_DEFAULT);
+        { wxLogNull noWarn;                                     // a chosen language whose OS locale isn't installed still loads our catalog; hush the C-locale warning
+          if (!m_locale.Init((int)uiLang)) m_locale.Init(wxLANGUAGE_DEFAULT); }
         m_locale.AddCatalogLookupPathPrefix(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\locale");
         m_locale.AddCatalog("wxnpp");
         bool dark = true;                                      // default: dark, matching Notepad++

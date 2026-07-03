@@ -1634,3 +1634,39 @@ msgstr "列(矩形)选择:\n\n- Alt + 拖动鼠标\n- Alt + Shift + 方向键\n-
 
 msgid "Column Mode"
 msgstr "列块模式"
+
+msgid "Localization:"
+msgstr "本地化:"
+
+msgid "System default"
+msgstr "系统默认"
+
+msgid "Preferences"
+msgstr "首选项"
+
+msgid "General"
+msgstr "常规"
+
+msgid "Editing"
+msgstr "编辑"
+
+msgid "Indentation"
+msgstr "缩进"
+
+msgid "Auto-Completion"
+msgstr "自动完成"
+
+msgid "Dark Mode"
+msgstr "深色模式"
+
+msgid "New Document"
+msgstr "新建文档"
+
+msgid "Tab Bar"
+msgstr "标签栏"
+
+msgid "Recent Files History"
+msgstr "最近文件历史"
+
+msgid "Print"
+msgstr "打印"

@@ -1634,3 +1634,39 @@ msgstr "Zaznaczenie kolumnowe (prostokątne):\n\n- Alt + przeciągnięcie myszą
 
 msgid "Column Mode"
 msgstr "Tryb kolumnowy"
+
+msgid "Localization:"
+msgstr "Lokalizacja:"
+
+msgid "System default"
+msgstr "Domyślny systemowy"
+
+msgid "Preferences"
+msgstr "Preferencje"
+
+msgid "General"
+msgstr "Ogólne"
+
+msgid "Editing"
+msgstr "Edycja"
+
+msgid "Indentation"
+msgstr "Wcięcia"
+
+msgid "Auto-Completion"
+msgstr "Autouzupełnianie"
+
+msgid "Dark Mode"
+msgstr "Tryb ciemny"
+
+msgid "New Document"
+msgstr "Nowy dokument"
+
+msgid "Tab Bar"
+msgstr "Pasek kart"
+
+msgid "Recent Files History"
+msgstr "Historia ostatnich plików"
+
+msgid "Print"
+msgstr "Drukowanie"

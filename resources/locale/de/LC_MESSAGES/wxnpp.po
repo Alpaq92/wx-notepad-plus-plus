@@ -1634,3 +1634,39 @@ msgstr "Spaltenauswahl (rechteckig):\n\n- Alt + Maus ziehen\n- Alt + Umschalt + 
 
 msgid "Column Mode"
 msgstr "Spaltenmodus"
+
+msgid "Localization:"
+msgstr "Lokalisierung:"
+
+msgid "System default"
+msgstr "Systemstandard"
+
+msgid "Preferences"
+msgstr "Einstellungen"
+
+msgid "General"
+msgstr "Allgemein"
+
+msgid "Editing"
+msgstr "Bearbeiten"
+
+msgid "Indentation"
+msgstr "Einrückung"
+
+msgid "Auto-Completion"
+msgstr "Autovervollständigung"
+
+msgid "Dark Mode"
+msgstr "Dunkelmodus"
+
+msgid "New Document"
+msgstr "Neues Dokument"
+
+msgid "Tab Bar"
+msgstr "Registerkartenleiste"
+
+msgid "Recent Files History"
+msgstr "Verlauf zuletzt verwendeter Dateien"
+
+msgid "Print"
+msgstr "Drucken"
