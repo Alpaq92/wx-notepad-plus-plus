@@ -126,10 +126,7 @@ inline const NppLang* nppLangFind(int id)
 
 // darkModeId: our extra restart-to-apply "Dark Mode" toggle (myID_DARKMODE),
 // added under Settings (real Notepad++ keeps dark mode under Settings too).
-// printPreviewId: our own Print Preview command (myID_PRINTPREVIEW) - real Notepad++ has no separate
-// Print Preview menu item (its own Print dialog has an embedded preview), but wx's print architecture
-// keeps preview as a distinct command, so it earns a File-menu slot next to Print/Print Now.
-inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId, int printPreviewId)
+inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
 {
     // ----------------------------------------------------------------- File
     {
@@ -172,7 +169,6 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId, int printPreviewId)
         file->AppendSeparator();
         file->Append(IDM_FILE_PRINT, "&Print...\tCtrl+P");
         file->Append(IDM_FILE_PRINTNOW, "Print No&w");
-        file->Append(printPreviewId, "Print Pre&view");
         file->AppendSeparator();
         // The "Recent Files" submenu (wxFileHistory) is inserted here at runtime by buildMenuBar().
         file->Append(IDM_FILE_EXIT, "E&xit\tAlt+F4");
