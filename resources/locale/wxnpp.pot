@@ -1370,6 +1370,18 @@ msgstr ""
 msgid "Search Mode"
 msgstr ""
 
+msgid "Value"
+msgstr ""
+
+msgid "Hex"
+msgstr ""
+
+msgid "Character"
+msgstr ""
+
+msgid "Character Panel"
+msgstr ""
+
 msgid "Add Files..."
 msgstr ""
 

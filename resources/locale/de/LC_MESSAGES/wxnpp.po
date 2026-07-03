@@ -1670,3 +1670,15 @@ msgstr "Verlauf zuletzt verwendeter Dateien"
 
 msgid "Print"
 msgstr "Drucken"
+
+msgid "Value"
+msgstr "Wert"
+
+msgid "Hex"
+msgstr "Hex"
+
+msgid "Character"
+msgstr "Zeichen"
+
+msgid "Character Panel"
+msgstr "Zeichentabelle"

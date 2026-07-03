@@ -1670,3 +1670,15 @@ msgstr "最近文件历史"
 
 msgid "Print"
 msgstr "打印"
+
+msgid "Value"
+msgstr "值"
+
+msgid "Hex"
+msgstr "十六进制"
+
+msgid "Character"
+msgstr "字符"
+
+msgid "Character Panel"
+msgstr "字符面板"

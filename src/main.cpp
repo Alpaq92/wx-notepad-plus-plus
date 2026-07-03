@@ -2059,6 +2059,54 @@ private:
         if (pi.IsShown()) refreshClipList();
     }
 
+    // ---- Character Panel (Notepad++'s ASCII Insertion Panel: 0-255 with value/hex/glyph; double-click inserts) ----
+    wxListView* m_charPanel = nullptr;
+    static wxString charGlyph(int v)   // display text for a code: control-char mnemonic, else the Latin-1 glyph
+    {
+        static const char* CTRL[] = { "NUL","SOH","STX","ETX","EOT","ENQ","ACK","BEL","BS","TAB","LF","VT","FF","CR","SO","SI",
+            "DLE","DC1","DC2","DC3","DC4","NAK","SYN","ETB","CAN","EM","SUB","ESC","FS","GS","RS","US" };
+        if (v < 32) return CTRL[v];
+        if (v == 32) return "(space)";
+        if (v == 127) return "DEL";
+        if (v > 127 && v < 160) return "";                 // C1 control range - no printable glyph
+        return wxString(wxUniChar(v));
+    }
+    void buildCharPanel()
+    {
+        m_charPanel = new wxListView(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL | wxBORDER_NONE);
+        const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
+        m_charPanel->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));   // match the editor (Scintilla colours are BGR)
+        m_charPanel->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
+        m_charPanel->AppendColumn(_("Value"), wxLIST_FORMAT_RIGHT, 46);
+        m_charPanel->AppendColumn(_("Hex"),   wxLIST_FORMAT_RIGHT, 46);
+        m_charPanel->AppendColumn(_("Character"), wxLIST_FORMAT_LEFT, 90);
+        for (int v = 0; v < 256; ++v)
+        {
+            const long r = m_charPanel->InsertItem(v, wxString::Format("%d", v));
+            m_charPanel->SetItem(r, 1, wxString::Format("%02X", v));
+            m_charPanel->SetItem(r, 2, charGlyph(v));
+        }
+        m_charPanel->Bind(wxEVT_LIST_ITEM_ACTIVATED, [this](wxListEvent& ev) { insertCharCode((int)ev.GetIndex()); });   // double-click / Enter
+        m_aui.AddPane(m_charPanel, wxAuiPaneInfo().Name("charpanel").Caption(_("Character Panel"))
+                          .Right().BestSize(200, 400).MinSize(120, 80).CloseButton(true).Hide());
+        m_aui.Update();
+    }
+    void insertCharCode(int v)   // insert the Unicode code point (UTF-8) for value 0-255 at the caret
+    {
+        if (v < 0 || v > 255) return;
+        const wxScopedCharBuffer u = wxString(wxUniChar(v)).utf8_str();
+        sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(u.data()));
+        if (m_stc) m_stc->SetFocus();
+    }
+    void toggleCharPanel()
+    {
+        if (!m_charPanel) buildCharPanel();
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_charPanel);
+        if (!pi.IsOk()) return;
+        pi.Show(!pi.IsShown());
+        m_aui.Update();
+    }
+
     // ---- Project Panel (Notepad++'s workspace tree: named folders + file refs, saved as .xml) ------
     void buildProjectPanel()
     {
@@ -6329,6 +6377,7 @@ private:
             case IDM_VIEW_PROJECT_PANEL_2:
             case IDM_VIEW_PROJECT_PANEL_3: toggleProjectPanel(); break;
             case IDM_EDIT_CLIPBOARDHISTORY_PANEL: toggleClipHistory(); break;
+            case IDM_EDIT_CHAR_PANEL: toggleCharPanel(); break;
             case IDM_VIEW_FILEBROWSER: toggleFileBrowser(); break;
             case IDM_SEARCH_FINDINCREMENT: showIncBar(); break;
             case IDM_EDIT_COLUMNMODE: columnEditor(); break;

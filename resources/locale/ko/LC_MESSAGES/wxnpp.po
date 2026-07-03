@@ -1670,3 +1670,15 @@ msgstr "최근 파일 기록"
 
 msgid "Print"
 msgstr "인쇄"
+
+msgid "Value"
+msgstr "값"
+
+msgid "Hex"
+msgstr "16진수"
+
+msgid "Character"
+msgstr "문자"
+
+msgid "Character Panel"
+msgstr "문자 패널"

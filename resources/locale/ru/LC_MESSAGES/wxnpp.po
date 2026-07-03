@@ -1670,3 +1670,15 @@ msgstr "История недавних файлов"
 
 msgid "Print"
 msgstr "Печать"
+
+msgid "Value"
+msgstr "Значение"
+
+msgid "Hex"
+msgstr "Hex"
+
+msgid "Character"
+msgstr "Символ"
+
+msgid "Character Panel"
+msgstr "Панель символов"
