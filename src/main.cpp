@@ -124,6 +124,12 @@ static const int UI_LANG_IDS[] = { wxLANGUAGE_DEFAULT, wxLANGUAGE_ENGLISH, wxLAN
     wxLANGUAGE_CHINESE_SIMPLIFIED, wxLANGUAGE_KOREAN };
 static const char* const UI_LANG_ENDONYMS[] = { nullptr /*index 0 = "System default", localized at build time*/,
     "English", "Polski", "Deutsch", "Français", "Español", "Русский", "日本語", "简体中文", "한국어" };
+static long readUiLang() { long v = wxLANGUAGE_DEFAULT; wxConfigBase::Get()->Read("UILanguage", &v, (long)wxLANGUAGE_DEFAULT); return v; }
+static int  uiLangIndex(long lang) { for (int i = 0; i < (int)WXSIZEOF(UI_LANG_IDS); ++i) if (UI_LANG_IDS[i] == lang) return i; return 0; }
+static wxString uiLangName(int i) { return i == 0 ? wxString(_("System default")) : wxString::FromUTF8(UI_LANG_ENDONYMS[i]); }
+// One source of truth for the EOL-mode display names (status bar, EOL popup, Preferences > New Document).
+// Deliberately untranslated in the status bar (matches N++); menu items wrap them in _() as literals.
+static const char* eolName(int mode) { return mode == SC_EOL_LF ? "Unix (LF)" : mode == SC_EOL_CR ? "Macintosh (CR)" : "Windows (CR LF)"; }
 static const int myID_DOCLIST_ITEM = 61000;   // base id for the document-list dropdown entries
 static const int myID_MACRO_ITEM   = 62100;   // base id for saved-macro entries at the bottom of the Macro menu
 
@@ -156,8 +162,7 @@ public:
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
     wxColour tabColour;                    // optional per-tab colour (invalid = none) - drawn as a stripe by PinTabArt
     bool     monitored = false;            // View > Monitoring (tail -f): reload on external change, caret to end
-    bool     monStale  = false;            // change detected while this tab was in the background - reload on activation
-    wxLongLong monMtime = 0; wxULongLong monSize = 0;   // last-seen on-disk stats for change detection
+    wxLongLong monMtime = 0; wxULongLong monSize = 0;   // last-seen on-disk stats; background tabs catch up by re-comparing on activation
 };
 
 // One editor "view" = a tab strip + ONE persistent wxStyledTextCtrl that hops across its pages (Notepad++'s
@@ -574,7 +579,7 @@ static wxBitmapBundle glyphIcon(const char* pathData, bool dark, int w = 16, int
 class SpinField : public wxPanel
 {
 public:
-    SpinField(wxWindow* p, int minV, int maxV, int value, bool dark, int width = 70)
+    SpinField(wxWindow* p, int minV, int maxV, int value, bool dark, int width)
         : wxPanel(p, wxID_ANY), m_min(minV), m_max(maxV)
     {
         m_fieldBg   = dark ? wxColour(32, 32, 32)    : *wxWHITE;             // == the DarkMode_CFD edit bg
@@ -1232,8 +1237,9 @@ public:
         }
         if (page.active)   // Notepad++'s signature orange marker along the active tab's top edge
         {
+            static const wxBrush orange(wxColour(250, 170, 60));   // built once - DrawPageTab runs on every paint
             dc.SetPen(*wxTRANSPARENT_PEN);
-            dc.SetBrush(wxBrush(wxColour(250, 170, 60)));
+            dc.SetBrush(orange);
             const int w = (extent > 0 && extent <= rect.width) ? extent : rect.width;
             dc.DrawRectangle(rect.x, rect.y, w, 3);
         }
@@ -1988,24 +1994,33 @@ private:
         }
         e.Skip();
     }
-    void toggleFuncList()
+    // Toggle a docked pane's visibility; returns true when the pane ends up shown (so callers can refresh it).
+    bool togglePane(wxWindow* w)
     {
-        if (!m_funcList) return;
-        wxAuiPaneInfo& pi = m_aui.GetPane(m_funcList);
-        if (!pi.IsOk()) return;
+        if (!w) return false;
+        wxAuiPaneInfo& pi = m_aui.GetPane(w);
+        if (!pi.IsOk()) return false;
         pi.Show(!pi.IsShown());
         m_aui.Update();
-        if (pi.IsShown()) parseFuncList();
+        return pi.IsShown();
+    }
+    void toggleFuncList()
+    {
+        if (togglePane(m_funcList)) parseFuncList();
     }
 
     // ---- Document List (dockable list of the open documents; click an entry to switch to it) -------
+    // Match a side panel's colours to the editor's default style, so docked panes follow the theme.
+    void themeToEditor(wxWindow* w)
+    {
+        w->SetBackgroundColour(bgrToColour((int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT)));
+        w->SetForegroundColour(bgrToColour((int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT)));
+    }
     wxListBox* m_docList = nullptr;
     void buildDocList()
     {
         m_docList = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE | wxBORDER_NONE);
-        const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
-        m_docList->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));   // match the editor (Scintilla colours are BGR)
-        m_docList->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
+        themeToEditor(m_docList);
         m_docList->Bind(wxEVT_LISTBOX, [this](wxCommandEvent& ev) {
             const int s = ev.GetSelection();
             if (m_tabs && s >= 0 && (size_t)s < m_tabs->GetPageCount()) m_tabs->SetSelection((size_t)s);
@@ -2028,11 +2043,7 @@ private:
     void toggleDocList()
     {
         if (!m_docList) buildDocList();
-        wxAuiPaneInfo& pi = m_aui.GetPane(m_docList);
-        if (!pi.IsOk()) return;
-        pi.Show(!pi.IsShown());
-        m_aui.Update();
-        if (pi.IsShown()) refreshDocList();
+        if (togglePane(m_docList)) refreshDocList();
     }
 
     // ---- Clipboard History (Notepad++'s panel: a ring of recent cut/copy entries; double-click to paste) ----
@@ -2057,9 +2068,7 @@ private:
     void buildClipList()
     {
         m_clipList = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE | wxBORDER_NONE);
-        const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
-        m_clipList->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));   // match the editor (Scintilla colours are BGR)
-        m_clipList->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
+        themeToEditor(m_clipList);
         m_clipList->Bind(wxEVT_LISTBOX_DCLICK, [this](wxCommandEvent& ev) { pasteClip(ev.GetSelection()); });   // double-click to paste
         m_aui.AddPane(m_clipList, wxAuiPaneInfo().Name("cliphistory").Caption(_("Clipboard History"))
                           .Right().BestSize(210, 400).MinSize(110, 80).CloseButton(true).Hide());
@@ -2085,11 +2094,7 @@ private:
     void toggleClipHistory()
     {
         if (!m_clipList) buildClipList();
-        wxAuiPaneInfo& pi = m_aui.GetPane(m_clipList);
-        if (!pi.IsOk()) return;
-        pi.Show(!pi.IsShown());
-        m_aui.Update();
-        if (pi.IsShown()) refreshClipList();
+        if (togglePane(m_clipList)) refreshClipList();
     }
 
     // ---- Character Panel (Notepad++'s ASCII Insertion Panel: 0-255 with value/hex/glyph; double-click inserts) ----
@@ -2107,9 +2112,7 @@ private:
     void buildCharPanel()
     {
         m_charPanel = new wxListView(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL | wxBORDER_NONE);
-        const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
-        m_charPanel->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));   // match the editor (Scintilla colours are BGR)
-        m_charPanel->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
+        themeToEditor(m_charPanel);
         m_charPanel->AppendColumn(_("Value"), wxLIST_FORMAT_RIGHT, 46);
         m_charPanel->AppendColumn(_("Hex"),   wxLIST_FORMAT_RIGHT, 46);
         m_charPanel->AppendColumn(_("Character"), wxLIST_FORMAT_LEFT, 90);
@@ -2127,17 +2130,24 @@ private:
     void insertCharCode(int v)   // insert the Unicode code point (UTF-8) for value 0-255 at the caret
     {
         if (v < 0 || v > 255) return;
-        const wxScopedCharBuffer u = wxString(wxUniChar(v)).utf8_str();
-        sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(u.data()));
+        if (v == 0)   // NUL: wxString treats it as a terminator, so insert the byte directly (like N++ does)
+        {
+            const long pos = (long)sci(SCI_GETSELECTIONSTART);
+            sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(""));               // drop any selection first
+            sci(SCI_ADDTEXT, 1, reinterpret_cast<sptr_t>("\0"));
+            sci(SCI_GOTOPOS, pos + 1);
+        }
+        else
+        {
+            const wxScopedCharBuffer u = wxString(wxUniChar(v)).utf8_str();
+            sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(u.data()));
+        }
         if (m_stc) m_stc->SetFocus();
     }
     void toggleCharPanel()
     {
         if (!m_charPanel) buildCharPanel();
-        wxAuiPaneInfo& pi = m_aui.GetPane(m_charPanel);
-        if (!pi.IsOk()) return;
-        pi.Show(!pi.IsShown());
-        m_aui.Update();
+        togglePane(m_charPanel);
     }
 
     // ---- Project Panel (Notepad++'s workspace tree: named folders + file refs, saved as .xml) ------
@@ -2145,9 +2155,7 @@ private:
     {
         m_projPanel = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                      wxTR_HAS_BUTTONS | wxTR_FULL_ROW_HIGHLIGHT | wxTR_EDIT_LABELS | wxBORDER_NONE);
-        const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
-        m_projPanel->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));
-        m_projPanel->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
+        themeToEditor(m_projPanel);
         m_projPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrameT::onProjActivate, this);
         m_projPanel->Bind(wxEVT_TREE_ITEM_MENU,      &NppShellFrameT::onProjContext,  this);
         m_projPanel->AddRoot("Workspace", -1, -1, new ProjItemData(false));
@@ -2158,10 +2166,7 @@ private:
     void toggleProjectPanel()
     {
         if (!m_projPanel) buildProjectPanel();
-        wxAuiPaneInfo& pi = m_aui.GetPane(m_projPanel);
-        if (!pi.IsOk()) return;
-        pi.Show(!pi.IsShown());
-        m_aui.Update();
+        togglePane(m_projPanel);
     }
     void onProjActivate(wxTreeEvent& e)   // double-click a file node -> open it (folders fall through to expand/collapse)
     {
@@ -2315,12 +2320,7 @@ private:
         }
         m_fileBrowser = new wxGenericDirCtrl(this, wxID_ANY, root, wxDefaultPosition, wxDefaultSize,
                                              wxDIRCTRL_SHOW_FILTERS | wxBORDER_NONE);
-        if (auto* tree = m_fileBrowser->GetTreeCtrl())   // theme the tree to the editor's colours
-        {
-            const int bg = (int)sci(SCI_STYLEGETBACK, STYLE_DEFAULT), fg = (int)sci(SCI_STYLEGETFORE, STYLE_DEFAULT);
-            tree->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));
-            tree->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
-        }
+        if (auto* tree = m_fileBrowser->GetTreeCtrl()) themeToEditor(tree);   // theme the tree to the editor's colours
         m_fileBrowser->Bind(wxEVT_DIRCTRL_FILEACTIVATED, [this](wxTreeEvent&) {
             const wxString f = m_fileBrowser->GetFilePath();
             if (!f.empty() && wxFileExists(f)) openPath(f);   // double-click a file -> open it
@@ -2337,10 +2337,7 @@ private:
             if (root.empty()) root = wxGetCwd();
             createFileBrowser(root);
         }
-        wxAuiPaneInfo& pi = m_aui.GetPane(m_fileBrowser);
-        if (!pi.IsOk()) return;
-        pi.Show(!pi.IsShown());
-        m_aui.Update();
+        togglePane(m_fileBrowser);
     }
     void showFileBrowserRooted(const wxString& root)   // Open Folder as Workspace / Folder as Workspace: (re)root + reveal
     {
@@ -3325,8 +3322,19 @@ private:
         updateStatus();
         updateEncodingMenuChecks();   // tick this buffer's encoding in the Encoding menu
         syncMonitoringUi(p);          // the Monitoring check is per-tab state
-        if (p->monitored && p->monStale)   // changed on disk while backgrounded - catch up now
-        { p->monStale = false; loadFile(p->path); sci(SCI_DOCUMENTEND); sci(SCI_SCROLLCARET); }
+        if (p->monitored)   // catch up on external changes that happened while this tab was backgrounded
+        {
+            wxLongLong mt; wxULongLong sz;
+            if (monStat(p->path, mt, sz) && (mt != p->monMtime || sz != p->monSize))
+            {
+                const wxULongLong oldSize = p->monSize;
+                p->monMtime = mt; p->monSize = sz;
+                // Same dirty guard as the live poll: NEVER reload over unsaved edits (a silent reload here
+                // would also hit SCI_SETSAVEPOINT and defeat the close-time save prompt).
+                if (sci(SCI_GETMODIFY)) { p->monitored = false; syncMonitoringUi(p); monStatus(_("Monitoring stopped (document was edited)")); updateMonTimer(); }
+                else monReloadTail(p, oldSize);
+            }
+        }
         m_stc->SetFocus();
         // Notify subscribers (e.g. the N++ bridge -> NPPN_BUFFERACTIVATED) that this document is now active.
         NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_ACTIVATED; ev.struct_size = sizeof(NibEvent);
@@ -3476,6 +3484,9 @@ private:
         saveSettings();    // persist any in-session View-menu toggle changes
         saveSession(wxConfigBase::Get());   // remember the open (saved) files so the next launch reopens them, like Notepad++
         wxConfigBase::Get()->Flush();
+        // stop + free the owned timers so no WM_TIMER can Notify() into the frame while teardown pumps messages
+        for (wxTimer** t : { &m_monTimer, &m_flTimer }) if (*t) { (*t)->Stop(); delete *t; *t = nullptr; }
+        m_timer.Stop();
         m_aui.UnInit();
         unloadNibPlugins();   // deactivate + unload Nib plugins (the GPL bridge removes its frame subclass first)
         e.Skip();
@@ -3652,17 +3663,17 @@ private:
         auto* mb = new wxMenuBar;
         buildNppMainMenu(mb, myID_DARKMODE);   // full 1:1 Notepad++ menu tree (see spike/npp_menu.h)
         // Localization: pick the UI language straight from the menu bar (radio group; restart-to-apply,
-        // same flow as the Preferences > General dropdown). Inserted right after Settings (index 6).
+        // same flow as the Preferences > General dropdown). Inserted right after the Settings menu.
         {
             auto* loc = new wxMenu;
-            long curUi = wxLANGUAGE_DEFAULT; wxConfigBase::Get()->Read("UILanguage", &curUi, (long)wxLANGUAGE_DEFAULT);
+            const int cur = uiLangIndex(readUiLang());
             for (int i = 0; i < (int)WXSIZEOF(UI_LANG_IDS); ++i)
             {
-                wxMenuItem* it = loc->AppendRadioItem(myID_UILANG_FIRST + i,
-                    i == 0 ? wxString(_("System default")) : wxString::FromUTF8(UI_LANG_ENDONYMS[i]));
-                if (UI_LANG_IDS[i] == (int)curUi) it->Check();
+                wxMenuItem* it = loc->AppendRadioItem(myID_UILANG_FIRST + i, uiLangName(i));
+                if (i == cur) it->Check();
             }
-            mb->Insert(7, loc, _("Locali&zation"));
+            const int at = mb->FindMenu(_("Se&ttings"));   // position derived, not hardcoded (FindMenu ignores the '&')
+            mb->Insert(at == wxNOT_FOUND ? (int)mb->GetMenuCount() : at + 1, loc, _("Locali&zation"));
         }
         // Recent Files (MRU) submenu near the bottom of the File menu, backed by wxFileHistory.
         if (wxMenu* fileMenu = mb->GetMenu(0))
@@ -4346,57 +4357,86 @@ private:
     // ---- View > Monitoring (tail -f): poll monitored files for external changes; reload + jump to end ----
     static bool monStat(const wxString& path, wxLongLong& mtime, wxULongLong& size)
     {
+        wxLogNull noLog;   // rotation races / transient AV locks must not pop error dialogs from the poll timer
+#ifdef __WXMSW__
+        WIN32_FILE_ATTRIBUTE_DATA fad{};   // one attributes syscall for existence + mtime + size (per tick, forever)
+        if (!::GetFileAttributesExW(path.ToStdWstring().c_str(), GetFileExInfoStandard, &fad)) return false;
+        if (fad.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) return false;
+        mtime = wxLongLong(fad.ftLastWriteTime.dwHighDateTime, fad.ftLastWriteTime.dwLowDateTime);
+        size  = wxULongLong(fad.nFileSizeHigh, fad.nFileSizeLow);
+#else
         wxFileName fn(path);
         if (!fn.FileExists()) return false;
         const wxDateTime dt = fn.GetModificationTime();
         mtime = dt.IsValid() ? dt.GetValue() : wxLongLong(0);
         size  = fn.GetSize();
+#endif
         return true;
     }
-    void syncMonitoringUi(EditorPage* p)
+    void syncMonitoringUi(EditorPage* p) { setToggleUi(IDM_VIEW_MONITORING, p && p->monitored); }
+    void updateMonTimer()   // the one shared 1s poll timer runs only while at least one tab is monitored
     {
-        const bool on = p && p->monitored;
-        if (auto* mb = menuBar()) mb->Check(IDM_VIEW_MONITORING, on);
-        if (auto* tb = toolBar()) tb->ToggleTool(IDM_VIEW_MONITORING, on);
+        bool any = false; for (EditorPage* q : allPages()) if (q && q->monitored) { any = true; break; }
+        if (any && !m_monTimer) { m_monTimer = new wxTimer(this, myID_MONTIMER); Bind(wxEVT_TIMER, &NppShellFrameT::onMonTimer, this, myID_MONTIMER); }
+        if (m_monTimer) { if (any) { if (!m_monTimer->IsRunning()) m_monTimer->Start(1000); } else m_monTimer->Stop(); }
+    }
+    void monStatus(const wxString& msg) { setStatus(0, msg); m_hint = true; }   // m_hint keeps the 150ms status refresh from wiping it
+    // Reload the (active) monitored page and follow the end. When the file merely GREW and the page is
+    // plain UTF-8, append just the new bytes instead of re-reading + re-lexing the whole file - the
+    // difference between a few KB and the entire log, every second. Any other change -> full reload.
+    void monReloadTail(EditorPage* p, wxULongLong oldSize)
+    {
+        bool appended = false;
+        if (p->encoding == ENC_UTF8 && p->monSize > oldSize)
+        {
+            wxFile f(p->path);
+            if (f.IsOpened() && f.Seek(static_cast<wxFileOffset>(oldSize.GetValue())) != wxInvalidOffset)
+            {
+                const size_t n = static_cast<size_t>((p->monSize - oldSize).GetValue());
+                std::string chunk(n, '\0');
+                const ssize_t got = f.Read(&chunk[0], n);
+                // only take the shortcut when the chunk starts on a UTF-8 boundary (not a continuation byte)
+                if (got == static_cast<ssize_t>(n) && (chunk.empty() || (static_cast<unsigned char>(chunk[0]) & 0xC0) != 0x80))
+                {
+                    sci(SCI_APPENDTEXT, n, reinterpret_cast<sptr_t>(chunk.data()));
+                    sci(SCI_SETSAVEPOINT);   // like loadFile: content mirrors disk, keep the doc "clean"
+                    appended = true;
+                }
+            }
+        }
+        if (!appended) loadFile(p->path);                  // same path as File > Reload from Disk
+        sci(SCI_DOCUMENTEND); sci(SCI_SCROLLCARET);        // tail -f: follow the end
     }
     void toggleMonitoring()
     {
         EditorPage* p = activePage();
         if (!p) return;
-        if (p->path.empty()) { setStatus(0, _("Monitoring needs a file on disk - save the document first")); syncMonitoringUi(p); return; }
-        if (!p->monitored && sci(SCI_GETMODIFY)) { setStatus(0, _("Save or discard the unsaved changes before monitoring")); syncMonitoringUi(p); return; }
+        if (p->path.empty()) { monStatus(_("Monitoring needs a file on disk - save the document first")); syncMonitoringUi(p); return; }
+        if (!p->monitored && sci(SCI_GETMODIFY)) { monStatus(_("Save or discard the unsaved changes before monitoring")); syncMonitoringUi(p); return; }
         p->monitored = !p->monitored;
-        p->monStale = false;
         if (p->monitored)
         {
             monStat(p->path, p->monMtime, p->monSize);
             sci(SCI_DOCUMENTEND); sci(SCI_SCROLLCARET);   // tail: start watching from the end
-            setStatus(0, _("Monitoring started"));
+            monStatus(_("Monitoring started"));
         }
-        else setStatus(0, _("Monitoring stopped"));
+        else monStatus(_("Monitoring stopped"));
         syncMonitoringUi(p);
-        // one shared 1s poll timer, running only while at least one tab is monitored
-        bool any = false; for (EditorPage* q : allPages()) if (q && q->monitored) { any = true; break; }
-        if (any && !m_monTimer) { m_monTimer = new wxTimer(this, myID_MONTIMER); Bind(wxEVT_TIMER, &NppShellFrameT::onMonTimer, this, myID_MONTIMER); }
-        if (m_monTimer) { if (any) { if (!m_monTimer->IsRunning()) m_monTimer->Start(1000); } else m_monTimer->Stop(); }
+        updateMonTimer();
     }
+    // Poll only the ACTIVE page: background monitored tabs catch up with one stat-compare on activation
+    // (see activateBuffer), so they cost nothing per tick and can never clobber an edited buffer.
     void onMonTimer(wxTimerEvent&)
     {
-        bool any = false;
-        for (EditorPage* p : allPages())
-        {
-            if (!p || !p->monitored) continue;
-            any = true;
-            wxLongLong mt; wxULongLong sz;
-            if (!monStat(p->path, mt, sz)) continue;                       // file temporarily gone (rotation) - keep watching
-            if (mt == p->monMtime && sz == p->monSize) continue;           // unchanged
-            p->monMtime = mt; p->monSize = sz;
-            if (p != activePage()) { p->monStale = true; continue; }       // reload when the tab comes back to the front
-            if (sci(SCI_GETMODIFY)) { p->monitored = false; syncMonitoringUi(p); setStatus(0, _("Monitoring stopped (document was edited)")); continue; }
-            loadFile(p->path);                                             // same path as File > Reload from Disk
-            sci(SCI_DOCUMENTEND); sci(SCI_SCROLLCARET);                    // tail -f: follow the end
-        }
-        if (!any && m_monTimer) m_monTimer->Stop();
+        EditorPage* p = activePage();
+        if (!p || !p->monitored) return;
+        wxLongLong mt; wxULongLong sz;
+        if (!monStat(p->path, mt, sz)) return;                         // file temporarily gone (rotation) - keep watching
+        if (mt == p->monMtime && sz == p->monSize) return;             // unchanged
+        const wxULongLong oldSize = p->monSize;
+        p->monMtime = mt; p->monSize = sz;
+        if (sci(SCI_GETMODIFY)) { p->monitored = false; syncMonitoringUi(p); monStatus(_("Monitoring stopped (document was edited)")); updateMonTimer(); return; }
+        monReloadTail(p, oldSize);
     }
     bool writeFile(const wxString& path)
     {
@@ -5502,7 +5542,8 @@ private:
     }
 
     // ----- view toggles --------------------------------------------------
-    void syncToggle(int id, bool& flag) { flag = !flag; if (menuBar()) menuBar()->Check(id, flag); if (toolBar()) toolBar()->ToggleTool(id, flag); }
+    void setToggleUi(int id, bool on) { if (menuBar()) menuBar()->Check(id, on); if (toolBar()) toolBar()->ToggleTool(id, on); }   // keep menu + toolbar checks in step
+    void syncToggle(int id, bool& flag) { flag = !flag; setToggleUi(id, flag); }
     void toggleWrap()  { syncToggle(IDM_VIEW_WRAP, m_wrap); sci(SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE); }
     void toggleWs()    { syncToggle(IDM_VIEW_ALL_CHARACTERS, m_ws); if (menuBar()) menuBar()->Check(IDM_VIEW_NPC, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
     void toggleGuides(){ syncToggle(IDM_VIEW_INDENT_GUIDE, m_guides); sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE); }
@@ -5613,11 +5654,11 @@ private:
 #endif
         // Localization: pick the UI language (restart-to-apply, like dark mode). Same shared table
         // (UI_LANG_IDS/UI_LANG_ENDONYMS) as the top-level Localization menu.
-        long curUi = wxLANGUAGE_DEFAULT; wxConfigBase::Get()->Read("UILanguage", &curUi, (long)wxLANGUAGE_DEFAULT);
-        wxArrayString uiNames; uiNames.Add(_("System default"));
-        for (int i = 1; i < (int)WXSIZEOF(UI_LANG_ENDONYMS); ++i) uiNames.Add(wxString::FromUTF8(UI_LANG_ENDONYMS[i]));
+        const long curUi = readUiLang();
+        wxArrayString uiNames;
+        for (int i = 0; i < (int)WXSIZEOF(UI_LANG_ENDONYMS); ++i) uiNames.Add(uiLangName(i));
         auto* chUiLang = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, uiNames);
-        { int sel = 0; for (int i = 0; i < (int)WXSIZEOF(UI_LANG_IDS); ++i) if (UI_LANG_IDS[i] == curUi) { sel = i; break; } chUiLang->SetSelection(sel); }
+        chUiLang->SetSelection(uiLangIndex(curUi));
         auto* uirow = new wxBoxSizer(wxHORIZONTAL);
         uirow->Add(new wxStaticText(gen, wxID_ANY, _("Localization:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         uirow->Add(chUiLang, 0, wxALIGN_CENTRE_VERTICAL);
@@ -5679,7 +5720,7 @@ private:
 
         // ---- New Document ---------------------------------------------------------------------
         auto* nd = pg(_("New Document")); auto* nds = new wxBoxSizer(wxVERTICAL);
-        const wxString eolChoices[3] = { "Windows (CR LF)", "Unix (LF)", "Macintosh (CR)" };
+        const wxString eolChoices[3] = { eolName(SC_EOL_CRLF), eolName(SC_EOL_LF), eolName(SC_EOL_CR) };
         auto* rbEol = new wxRadioBox(nd, wxID_ANY, _("Format (Line ending)"), wxDefaultPosition, wxDefaultSize,
                                      3, eolChoices, 1, wxRA_SPECIFY_COLS);
         rbEol->SetSelection(m_defaultEol == SC_EOL_LF ? 1 : (m_defaultEol == SC_EOL_CR ? 2 : 0));
@@ -6120,8 +6161,13 @@ private:
     // toolbar bake in their theme at creation (mixing them yields "a horrible mix of light and
     // dark mode elements", per wx's own source). We therefore persist the choice and relaunch:
     // each process is born in ONE consistent mode (light skips MSWEnableDarkMode entirely).
-    void restartWithTheme(bool dark)
+    void restartWithTheme(bool dark, const std::function<void()>& commit = {})
     {
+        // Close(true) below is a FORCED close (no veto), so run the save prompts up front -
+        // otherwise unsaved edits would be silently discarded. Cancel aborts the restart.
+        for (EditorPage* p : allPages())
+            if (!confirmClose(p)) return;
+        if (commit) commit();   // config writes that must NOT land when the user cancels above (e.g. the new UI language)
         auto* cfg = wxConfigBase::Get();
         cfg->Write("DarkMode", dark);
         saveSession(cfg);                     // remember open files so the relaunch restores them
@@ -6330,8 +6376,8 @@ private:
         if (cmd >= myID_UILANG_FIRST && cmd < myID_UILANG_FIRST + (int)WXSIZEOF(UI_LANG_IDS))   // Localization menu: switch the UI language (restart-to-apply)
         {
             const long newUi = UI_LANG_IDS[cmd - myID_UILANG_FIRST];
-            long curUi = wxLANGUAGE_DEFAULT; wxConfigBase::Get()->Read("UILanguage", &curUi, (long)wxLANGUAGE_DEFAULT);
-            if (newUi != curUi) { wxConfigBase::Get()->Write("UILanguage", newUi); restartWithTheme(m_dark); }
+            if (newUi != readUiLang())   // the language write rides the commit callback: a cancelled restart must not switch the config
+                restartWithTheme(m_dark, [newUi] { wxConfigBase::Get()->Write("UILanguage", newUi); });
             return;
         }
         if (cmd >= myID_DOCLIST_ITEM && cmd < myID_DOCLIST_ITEM + 1000)   // document-list dropdown entry
@@ -6733,11 +6779,13 @@ private:
         const int sel = selB - selA;
         const int selLines = sel > 0 ? static_cast<int>(sci(SCI_LINEFROMPOSITION, selB)) - static_cast<int>(sci(SCI_LINEFROMPOSITION, selA)) + 1 : 0;
         const int eol = static_cast<int>(sci(SCI_GETEOLMODE));
+        // translate the formats once, not on every 150ms tick (the UI language is fixed per process)
+        static const wxString fmtLen(_("length : %d    lines : %d")), fmtPos(_("Ln : %d    Col : %d    Pos : %d")), fmtSel(_("Sel : %d | %d"));
         if (!m_hint) setStatus(0, activePage() ? activePage()->lang : "Normal text file");   // language label; hint persists until next command
-        setStatus(1, wxString::Format(_("length : %d    lines : %d"), len, nl));
-        setStatus(2, wxString::Format(_("Ln : %d    Col : %d    Pos : %d"), line, col, pos + 1));
-        setStatus(3, wxString::Format(_("Sel : %d | %d"), sel, selLines));
-        setStatus(4, eol == SC_EOL_CRLF ? "Windows (CR LF)" : eol == SC_EOL_LF ? "Unix (LF)" : "Macintosh (CR)");
+        setStatus(1, wxString::Format(fmtLen, len, nl));
+        setStatus(2, wxString::Format(fmtPos, line, col, pos + 1));
+        setStatus(3, wxString::Format(fmtSel, sel, selLines));
+        setStatus(4, eolName(eol));
         setStatus(5, encDisplay(activePage()));
         setStatus(6, sci(SCI_GETOVERTYPE) ? "OVR" : "INS");   // typing mode, toggled by the Insert key
     }
@@ -6871,10 +6919,8 @@ public:
         // LC_MESSAGES/wxnpp.mo next to the exe. The language is the user's Preferences > General >
         // Localization choice (wxLANGUAGE_DEFAULT = follow the OS); if no catalog exists for it (e.g. English,
         // which has none), AddCatalog finds nothing and _() falls back to returning its English argument.
-        long uiLang = wxLANGUAGE_DEFAULT;
-        wxConfigBase::Get()->Read("UILanguage", &uiLang, (long)wxLANGUAGE_DEFAULT);
         { wxLogNull noWarn;                                     // a chosen language whose OS locale isn't installed still loads our catalog; hush the C-locale warning
-          if (!m_locale.Init((int)uiLang)) m_locale.Init(wxLANGUAGE_DEFAULT); }
+          m_locale.Init((int)readUiLang()); }                          // ignore failure: wx installs the chosen wxTranslations even then, and a second Init() would assert (wx forbids re-Init)
         m_locale.AddCatalogLookupPathPrefix(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\locale");
         m_locale.AddCatalog("wxnpp");
         bool dark = true;                                      // default: dark, matching Notepad++
