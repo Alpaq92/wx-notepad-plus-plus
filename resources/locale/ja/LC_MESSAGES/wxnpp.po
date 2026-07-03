@@ -1682,3 +1682,72 @@ msgstr "文字"
 
 msgid "Character Panel"
 msgstr "文字パネル"
+
+msgid "Line number (1 - %d):"
+msgstr "行番号 (1 - %d):"
+
+msgid "Document Map"
+msgstr "ドキュメントマップ"
+
+msgid "Function List"
+msgstr "関数一覧"
+
+msgid "Document List"
+msgstr "ドキュメント一覧"
+
+msgid "Clipboard History"
+msgstr "クリップボード履歴"
+
+msgid "Project"
+msgstr "プロジェクト"
+
+msgid "Find result"
+msgstr "検索結果"
+
+msgid "New"
+msgstr "新規"
+
+msgid "Open"
+msgstr "開く"
+
+msgid "Save All"
+msgstr "すべて保存"
+
+msgid "Cut"
+msgstr "切り取り"
+
+msgid "Copy"
+msgstr "コピー"
+
+msgid "Undo"
+msgstr "元に戻す"
+
+msgid "Redo"
+msgstr "やり直し"
+
+msgid "Zoom In"
+msgstr "拡大"
+
+msgid "Zoom Out"
+msgstr "縮小"
+
+msgid "User-Defined Language Dialogue"
+msgstr "ユーザー定義言語ダイアログ"
+
+msgid "Start Recording"
+msgstr "記録開始"
+
+msgid "Stop Recording"
+msgstr "記録停止"
+
+msgid "Playback"
+msgstr "再生"
+
+msgid "Run a Macro Multiple Times"
+msgstr "マクロを複数回実行"
+
+msgid "Save Current Recorded Macro"
+msgstr "記録したマクロを保存"
+
+msgid "Search results"
+msgstr "検索結果"

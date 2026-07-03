@@ -1682,3 +1682,72 @@ msgstr "字符"
 
 msgid "Character Panel"
 msgstr "字符面板"
+
+msgid "Line number (1 - %d):"
+msgstr "行号 (1 - %d):"
+
+msgid "Document Map"
+msgstr "文档地图"
+
+msgid "Function List"
+msgstr "函数列表"
+
+msgid "Document List"
+msgstr "文档列表"
+
+msgid "Clipboard History"
+msgstr "剪贴板历史"
+
+msgid "Project"
+msgstr "项目"
+
+msgid "Find result"
+msgstr "搜索结果"
+
+msgid "New"
+msgstr "新建"
+
+msgid "Open"
+msgstr "打开"
+
+msgid "Save All"
+msgstr "全部保存"
+
+msgid "Cut"
+msgstr "剪切"
+
+msgid "Copy"
+msgstr "复制"
+
+msgid "Undo"
+msgstr "撤销"
+
+msgid "Redo"
+msgstr "重做"
+
+msgid "Zoom In"
+msgstr "放大"
+
+msgid "Zoom Out"
+msgstr "缩小"
+
+msgid "User-Defined Language Dialogue"
+msgstr "用户自定义语言对话框"
+
+msgid "Start Recording"
+msgstr "开始录制"
+
+msgid "Stop Recording"
+msgstr "停止录制"
+
+msgid "Playback"
+msgstr "回放"
+
+msgid "Run a Macro Multiple Times"
+msgstr "多次运行宏"
+
+msgid "Save Current Recorded Macro"
+msgstr "保存当前录制的宏"
+
+msgid "Search results"
+msgstr "搜索结果"

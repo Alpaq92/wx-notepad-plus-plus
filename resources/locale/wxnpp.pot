@@ -1283,6 +1283,9 @@ msgstr ""
 msgid "Go to line"
 msgstr ""
 
+msgid "Line number (1 - %d):"
+msgstr ""
+
 msgid "Column Editor"
 msgstr ""
 
@@ -1370,6 +1373,18 @@ msgstr ""
 msgid "Search Mode"
 msgstr ""
 
+msgid "Document Map"
+msgstr ""
+
+msgid "Function List"
+msgstr ""
+
+msgid "Document List"
+msgstr ""
+
+msgid "Clipboard History"
+msgstr ""
+
 msgid "Value"
 msgstr ""
 
@@ -1380,6 +1395,9 @@ msgid "Character"
 msgstr ""
 
 msgid "Character Panel"
+msgstr ""
+
+msgid "Project"
 msgstr ""
 
 msgid "Add Files..."
@@ -1410,6 +1428,9 @@ msgid "Next"
 msgstr ""
 
 msgid "Close"
+msgstr ""
+
+msgid "Find result"
 msgstr ""
 
 msgid "Match case"
@@ -1499,6 +1520,57 @@ msgstr ""
 msgid "Recent &Files"
 msgstr ""
 
+msgid "New"
+msgstr ""
+
+msgid "Open"
+msgstr ""
+
+msgid "Save All"
+msgstr ""
+
+msgid "Print"
+msgstr ""
+
+msgid "Cut"
+msgstr ""
+
+msgid "Copy"
+msgstr ""
+
+msgid "Paste"
+msgstr ""
+
+msgid "Undo"
+msgstr ""
+
+msgid "Redo"
+msgstr ""
+
+msgid "Zoom In"
+msgstr ""
+
+msgid "Zoom Out"
+msgstr ""
+
+msgid "User-Defined Language Dialogue"
+msgstr ""
+
+msgid "Start Recording"
+msgstr ""
+
+msgid "Stop Recording"
+msgstr ""
+
+msgid "Playback"
+msgstr ""
+
+msgid "Run a Macro Multiple Times"
+msgstr ""
+
+msgid "Save Current Recorded Macro"
+msgstr ""
+
 msgid "Re-interpreting the encoding discards unsaved changes. Continue?"
 msgstr ""
 
@@ -1508,13 +1580,13 @@ msgstr ""
 msgid "Clipboard has no matching content."
 msgstr ""
 
-msgid "Paste"
-msgstr ""
-
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr ""
 
 msgid "Enter valid character codes."
+msgstr ""
+
+msgid "Search results"
 msgstr ""
 
 msgid "Preferences"
@@ -1626,9 +1698,6 @@ msgid "Recent Files History"
 msgstr ""
 
 msgid "Max number of entries (applied on restart):"
-msgstr ""
-
-msgid "Print"
 msgstr ""
 
 msgid "Header:"

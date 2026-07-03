@@ -1682,3 +1682,72 @@ msgstr "Символ"
 
 msgid "Character Panel"
 msgstr "Панель символов"
+
+msgid "Line number (1 - %d):"
+msgstr "Номер строки (1 - %d):"
+
+msgid "Document Map"
+msgstr "Карта документа"
+
+msgid "Function List"
+msgstr "Список функций"
+
+msgid "Document List"
+msgstr "Список документов"
+
+msgid "Clipboard History"
+msgstr "История буфера обмена"
+
+msgid "Project"
+msgstr "Проект"
+
+msgid "Find result"
+msgstr "Результаты поиска"
+
+msgid "New"
+msgstr "Новый"
+
+msgid "Open"
+msgstr "Открыть"
+
+msgid "Save All"
+msgstr "Сохранить все"
+
+msgid "Cut"
+msgstr "Вырезать"
+
+msgid "Copy"
+msgstr "Копировать"
+
+msgid "Undo"
+msgstr "Отменить"
+
+msgid "Redo"
+msgstr "Вернуть"
+
+msgid "Zoom In"
+msgstr "Увеличить"
+
+msgid "Zoom Out"
+msgstr "Уменьшить"
+
+msgid "User-Defined Language Dialogue"
+msgstr "Диалог пользовательского языка"
+
+msgid "Start Recording"
+msgstr "Начать запись"
+
+msgid "Stop Recording"
+msgstr "Остановить запись"
+
+msgid "Playback"
+msgstr "Воспроизвести"
+
+msgid "Run a Macro Multiple Times"
+msgstr "Выполнить макрос несколько раз"
+
+msgid "Save Current Recorded Macro"
+msgstr "Сохранить записанный макрос"
+
+msgid "Search results"
+msgstr "Результаты поиска"

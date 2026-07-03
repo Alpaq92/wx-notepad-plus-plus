@@ -1682,3 +1682,72 @@ msgstr "Znak"
 
 msgid "Character Panel"
 msgstr "Panel znaków"
+
+msgid "Line number (1 - %d):"
+msgstr "Numer wiersza (1 - %d):"
+
+msgid "Document Map"
+msgstr "Mapa dokumentu"
+
+msgid "Function List"
+msgstr "Lista funkcji"
+
+msgid "Document List"
+msgstr "Lista dokumentów"
+
+msgid "Clipboard History"
+msgstr "Historia schowka"
+
+msgid "Project"
+msgstr "Projekt"
+
+msgid "Find result"
+msgstr "Wyniki wyszukiwania"
+
+msgid "New"
+msgstr "Nowy"
+
+msgid "Open"
+msgstr "Otwórz"
+
+msgid "Save All"
+msgstr "Zapisz wszystko"
+
+msgid "Cut"
+msgstr "Wytnij"
+
+msgid "Copy"
+msgstr "Kopiuj"
+
+msgid "Undo"
+msgstr "Cofnij"
+
+msgid "Redo"
+msgstr "Ponów"
+
+msgid "Zoom In"
+msgstr "Powiększ"
+
+msgid "Zoom Out"
+msgstr "Pomniejsz"
+
+msgid "User-Defined Language Dialogue"
+msgstr "Okno języka użytkownika"
+
+msgid "Start Recording"
+msgstr "Rozpocznij nagrywanie"
+
+msgid "Stop Recording"
+msgstr "Zatrzymaj nagrywanie"
+
+msgid "Playback"
+msgstr "Odtwórz"
+
+msgid "Run a Macro Multiple Times"
+msgstr "Uruchom makro wielokrotnie"
+
+msgid "Save Current Recorded Macro"
+msgstr "Zapisz nagrane makro"
+
+msgid "Search results"
+msgstr "Wyniki wyszukiwania"

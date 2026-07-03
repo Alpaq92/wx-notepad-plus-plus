@@ -556,57 +556,54 @@ static wxBitmapBundle glyphIcon(const char* pathData, bool dark, int w = 16, int
 // "Go to line" with a spinner whose up/down arrows are integrated INTO the field (borderless), like a
 // styled NumericUpDown. The native wxSpinCtrl up/down (msctls_updown32) can't be dark-themed, so the
 // arrows are drawn directly on a bordered panel that also hosts a borderless edit - one seamless field.
-class GoToLineDialog : public wxDialog
+// A themed numeric up/down field: borderless wxTextCtrl + custom-painted 1px outline and integrated
+// ▲/▼ arrows. Replaces wxSpinCtrl everywhere, because the native msctls_updown32 buddy CANNOT be
+// dark-themed (SetWindowTheme is a no-op on it) so a native spinner always sticks out in dark mode.
+// Extracted from the Go-to-line dialog where this design was first fought out and approved.
+class SpinField : public wxPanel
 {
 public:
-    GoToLineDialog(wxWindow* p, int maxLine, int cur, bool dark)
-        : wxDialog(p, wxID_ANY, _("Go to line")), m_max(maxLine)
+    SpinField(wxWindow* p, int minV, int maxV, int value, bool dark, int width = 70)
+        : wxPanel(p, wxID_ANY), m_min(minV), m_max(maxV)
     {
         m_fieldBg   = dark ? wxColour(32, 32, 32)    : *wxWHITE;             // == the DarkMode_CFD edit bg
         m_fieldFg   = dark ? wxColour(220, 220, 220) : *wxBLACK;
         m_borderCol = dark ? wxColour(82, 82, 82)    : wxColour(122, 122, 122);
 
-        auto* s = new wxBoxSizer(wxVERTICAL);
-        s->Add(new wxStaticText(this, wxID_ANY, wxString::Format("Line number (1 - %d):", maxLine)), 0, wxALL, 10);
-
-        m_fieldPanel = new wxPanel(this, wxID_ANY);
-        m_fieldPanel->SetBackgroundColour(m_fieldBg);
-        m_text = new wxTextCtrl(m_fieldPanel, wxID_ANY, wxString::Format("%d", cur), wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+        SetBackgroundColour(m_fieldBg);
+        m_text = new wxTextCtrl(this, wxID_ANY, wxString::Format("%d", value), wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
         m_text->SetBackgroundColour(m_fieldBg); m_text->SetForegroundColour(m_fieldFg);
         const int fh = m_text->GetBestSize().GetHeight();
         auto* fhs = new wxBoxSizer(wxHORIZONTAL);
         fhs->Add(m_text, 1, wxALIGN_CENTRE_VERTICAL | wxLEFT, 6);
         fhs->AddSpacer(kArrowZone);                          // childless zone on the right; arrows are painted here
-        m_fieldPanel->SetSizer(fhs);
-        m_fieldPanel->SetMinSize(wxSize(130, fh + 6));
+        SetSizer(fhs);
+        SetMinSize(wxSize(width, fh + 6));
 
-        m_fieldPanel->Bind(wxEVT_PAINT, [this](wxPaintEvent&) { paintField(); });
-        m_fieldPanel->Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent& e) {
-            const wxSize sz = m_fieldPanel->GetClientSize();
+        Bind(wxEVT_PAINT, [this](wxPaintEvent&) { paintField(); });
+        Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent& e) {
+            const wxSize sz = GetClientSize();
             if (e.GetX() >= sz.x - kArrowZone) { bump(e.GetY() < sz.y / 2 ? +1 : -1); m_text->SetFocus(); }
             else e.Skip();
         });
-
-        s->Add(m_fieldPanel, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 10);
-        s->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxALL | wxEXPAND, 10);
-        SetSizerAndFit(s);
-        m_text->SetFocus(); m_text->SelectAll();
-
-        // themeDialog (run by the frame before ShowModal) repaints panels in the dialog's grey; put the
-        // field colour back so the spinner stays one seamless box.
-        Bind(wxEVT_SHOW, [this](wxShowEvent& e) {
-            if (e.IsShown()) { m_fieldPanel->SetBackgroundColour(m_fieldBg); m_text->SetBackgroundColour(m_fieldBg); m_text->SetForegroundColour(m_fieldFg); m_fieldPanel->Refresh(); }
-            e.Skip();
-        });
     }
-    int GetLine() const { long v = 0; m_text->GetValue().ToLong(&v); if (v < 1) v = 1; if (v > m_max) v = m_max; return (int)v; }
+    int  GetValue() const { long v = 0; m_text->GetValue().ToLong(&v); if (v < m_min) v = m_min; if (v > m_max) v = m_max; return (int)v; }
+    void SetValue(int v)  { if (v < m_min) v = m_min; if (v > m_max) v = m_max; m_text->SetValue(wxString::Format("%d", v)); }
+    wxTextCtrl* Text() const { return m_text; }
 private:
     static const int kArrowZone = 20;
-    void bump(int d) { int v = GetLine() + d; if (v < 1) v = 1; if (v > m_max) v = m_max; m_text->SetValue(wxString::Format("%d", v)); m_text->SetInsertionPointEnd(); }
+    void bump(int d) { SetValue(GetValue() + d); m_text->SetInsertionPointEnd(); }
     void paintField()
     {
-        wxPaintDC dc(m_fieldPanel);
-        const wxSize sz = m_fieldPanel->GetClientSize();
+        // themeDialog's recursive colour pass (run after construction, before ShowModal) repaints every
+        // panel in the dialog grey; lazily put the field colour back so the spinner stays one seamless box.
+        if (GetBackgroundColour() != m_fieldBg)
+        {
+            SetBackgroundColour(m_fieldBg);
+            m_text->SetBackgroundColour(m_fieldBg); m_text->SetForegroundColour(m_fieldFg); m_text->Refresh();
+        }
+        wxPaintDC dc(this);
+        const wxSize sz = GetClientSize();
         dc.SetBrush(*wxTRANSPARENT_BRUSH); dc.SetPen(wxPen(m_borderCol));
         dc.DrawRectangle(0, 0, sz.x, sz.y);                       // field outline (crisp 1px)
         const int ax = sz.x - kArrowZone;
@@ -621,9 +618,27 @@ private:
         gdc.DrawPolygon(3, up); gdc.DrawPolygon(3, dn);
     }
     wxTextCtrl* m_text = nullptr;
-    wxPanel*    m_fieldPanel = nullptr;
     wxColour    m_fieldBg, m_fieldFg, m_borderCol;
-    int         m_max;
+    int         m_min, m_max;
+};
+
+class GoToLineDialog : public wxDialog
+{
+public:
+    GoToLineDialog(wxWindow* p, int maxLine, int cur, bool dark)
+        : wxDialog(p, wxID_ANY, _("Go to line"))
+    {
+        auto* s = new wxBoxSizer(wxVERTICAL);
+        s->Add(new wxStaticText(this, wxID_ANY, wxString::Format(_("Line number (1 - %d):"), maxLine)), 0, wxALL, 10);
+        m_spin = new SpinField(this, 1, maxLine, cur, dark, 130);
+        s->Add(m_spin, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 10);
+        s->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxALL | wxEXPAND, 10);
+        SetSizerAndFit(s);
+        m_spin->Text()->SetFocus(); m_spin->Text()->SelectAll();
+    }
+    int GetLine() const { return m_spin->GetValue(); }
+private:
+    SpinField* m_spin = nullptr;
 };
 
 // Notepad++-style Column Editor (Alt+C): insert text or an incrementing number down a column /
@@ -1797,7 +1812,7 @@ private:
         applyDocMapTheme();
         m_docMap->Bind(wxEVT_LEFT_DOWN, &NppShellFrameT::onDocMapClick, this);
         m_docMap->Bind(wxEVT_MOTION,    &NppShellFrameT::onDocMapDrag,  this);
-        m_aui.AddPane(m_docMap, wxAuiPaneInfo().Name("docmap").Caption("Document Map")
+        m_aui.AddPane(m_docMap, wxAuiPaneInfo().Name("docmap").Caption(_("Document Map"))
                           .Right().BestSize(150, 400).MinSize(70, 80).CloseButton(true).Hide());
         m_aui.Update();
     }
@@ -1857,7 +1872,7 @@ private:
         m_funcList->Bind(wxEVT_TREE_SEL_CHANGED,     &NppShellFrameT::onFuncListActivate, this);   // single-click jumps too (like N++)
         m_flTimer = new wxTimer(this, myID_FLTIMER);
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) { parseFuncList(); }, myID_FLTIMER);
-        m_aui.AddPane(m_funcList, wxAuiPaneInfo().Name("funclist").Caption("Function List")
+        m_aui.AddPane(m_funcList, wxAuiPaneInfo().Name("funclist").Caption(_("Function List"))
                           .Right().BestSize(210, 400).MinSize(110, 80).CloseButton(true).Hide());
         m_aui.Update();
     }
@@ -1977,7 +1992,7 @@ private:
             const int s = ev.GetSelection();
             if (m_tabs && s >= 0 && (size_t)s < m_tabs->GetPageCount()) m_tabs->SetSelection((size_t)s);
         });
-        m_aui.AddPane(m_docList, wxAuiPaneInfo().Name("doclist").Caption("Document List")
+        m_aui.AddPane(m_docList, wxAuiPaneInfo().Name("doclist").Caption(_("Document List"))
                           .Right().BestSize(210, 400).MinSize(110, 80).CloseButton(true).Hide());
         m_aui.Update();
     }
@@ -2028,7 +2043,7 @@ private:
         m_clipList->SetBackgroundColour(wxColour(bg & 0xFF, (bg >> 8) & 0xFF, (bg >> 16) & 0xFF));   // match the editor (Scintilla colours are BGR)
         m_clipList->SetForegroundColour(wxColour(fg & 0xFF, (fg >> 8) & 0xFF, (fg >> 16) & 0xFF));
         m_clipList->Bind(wxEVT_LISTBOX_DCLICK, [this](wxCommandEvent& ev) { pasteClip(ev.GetSelection()); });   // double-click to paste
-        m_aui.AddPane(m_clipList, wxAuiPaneInfo().Name("cliphistory").Caption("Clipboard History")
+        m_aui.AddPane(m_clipList, wxAuiPaneInfo().Name("cliphistory").Caption(_("Clipboard History"))
                           .Right().BestSize(210, 400).MinSize(110, 80).CloseButton(true).Hide());
         m_aui.Update();
     }
@@ -2118,7 +2133,7 @@ private:
         m_projPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrameT::onProjActivate, this);
         m_projPanel->Bind(wxEVT_TREE_ITEM_MENU,      &NppShellFrameT::onProjContext,  this);
         m_projPanel->AddRoot("Workspace", -1, -1, new ProjItemData(false));
-        m_aui.AddPane(m_projPanel, wxAuiPaneInfo().Name("project").Caption("Project")
+        m_aui.AddPane(m_projPanel, wxAuiPaneInfo().Name("project").Caption(_("Project"))
                           .Left().BestSize(220, 400).MinSize(120, 80).CloseButton(true).Hide());
         m_aui.Update();
     }
@@ -2293,7 +2308,7 @@ private:
             if (!f.empty() && wxFileExists(f)) openPath(f);   // double-click a file -> open it
         });
         if (hadPane) m_aui.AddPane(m_fileBrowser, paneInfo);
-        else m_aui.AddPane(m_fileBrowser, wxAuiPaneInfo().Name("filebrowser").Caption("Folder as Workspace")
+        else m_aui.AddPane(m_fileBrowser, wxAuiPaneInfo().Name("filebrowser").Caption(_("Folder as Workspace"))
                                 .Left().BestSize(240, 500).MinSize(140, 100).CloseButton(true).Hide());
     }
     void toggleFileBrowser()
@@ -2493,7 +2508,7 @@ private:
         m_fifPanel = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                     wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxBORDER_NONE);
         m_fifPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrameT::onFifActivate, this);
-        m_aui.AddPane(m_fifPanel, wxAuiPaneInfo().Name("findresult").Caption("Find result")
+        m_aui.AddPane(m_fifPanel, wxAuiPaneInfo().Name("findresult").Caption(_("Find result"))
                           .Bottom().BestSize(800, 180).MinSize(150, 70).CloseButton(true).Hide());
         m_aui.Update();
     }
@@ -3867,36 +3882,36 @@ private:
         auto T  = [&](int id, const wxString& svg, const wxString& tip) { tb->AddTool(id, tip, icon(svg), tip); };
         auto TC = [&](int id, const wxString& svg, const wxString& tip) { tb->AddCheckTool(id, tip, icon(svg), wxNullBitmap, tip); };
 
-        T(IDM_FILE_NEW, "new", "New");           T(IDM_FILE_OPEN, "open", "Open");
-        T(IDM_FILE_SAVE, "save", "Save");        T(IDM_FILE_SAVEALL, "save-all", "Save All");
-        T(IDM_FILE_CLOSE, "close", "Close");     T(IDM_FILE_CLOSEALL, "close-all", "Close All");
-        T(IDM_FILE_PRINT, "print", "Print");
+        T(IDM_FILE_NEW, "new", _("New"));           T(IDM_FILE_OPEN, "open", _("Open"));
+        T(IDM_FILE_SAVE, "save", _("Save"));        T(IDM_FILE_SAVEALL, "save-all", _("Save All"));
+        T(IDM_FILE_CLOSE, "close", _("Close"));     T(IDM_FILE_CLOSEALL, "close-all", _("Close All"));
+        T(IDM_FILE_PRINT, "print", _("Print"));
         tb->AddSeparator();
-        T(IDM_EDIT_CUT, "cut", "Cut");           T(IDM_EDIT_COPY, "copy", "Copy");           T(IDM_EDIT_PASTE, "paste", "Paste");
+        T(IDM_EDIT_CUT, "cut", _("Cut"));           T(IDM_EDIT_COPY, "copy", _("Copy"));           T(IDM_EDIT_PASTE, "paste", _("Paste"));
         tb->AddSeparator();
-        T(IDM_EDIT_UNDO, "undo", "Undo");        T(IDM_EDIT_REDO, "redo", "Redo");
+        T(IDM_EDIT_UNDO, "undo", _("Undo"));        T(IDM_EDIT_REDO, "redo", _("Redo"));
         tb->AddSeparator();
-        T(IDM_SEARCH_FIND, "find", "Find");      T(IDM_SEARCH_REPLACE, "replace", "Replace");
+        T(IDM_SEARCH_FIND, "find", _("Find"));      T(IDM_SEARCH_REPLACE, "replace", _("Replace"));
         tb->AddSeparator();
-        T(IDM_VIEW_ZOOMIN, "zoom-in", "Zoom In");  T(IDM_VIEW_ZOOMOUT, "zoom-out", "Zoom Out");
+        T(IDM_VIEW_ZOOMIN, "zoom-in", _("Zoom In"));  T(IDM_VIEW_ZOOMOUT, "zoom-out", _("Zoom Out"));
         tb->AddSeparator();
         TC(IDM_VIEW_WRAP, "word-wrap", "Word Wrap");
         TC(IDM_VIEW_ALL_CHARACTERS, "all-chars", "Show All Characters");
         TC(IDM_VIEW_INDENT_GUIDE, "indent-guide", "Show Indent Guide");
         tb->AddSeparator();
-        T(IDM_LANG_USER_DLG, "udl-dlg", "User-Defined Language Dialogue");
-        T(IDM_VIEW_DOC_MAP, "doc-map", "Document Map");
-        T(IDM_VIEW_DOCLIST, "doc-list", "Document List");
-        T(IDM_VIEW_FUNC_LIST, "function-list", "Function List");
-        T(IDM_VIEW_FILEBROWSER, "folder-as-workspace", "Folder as Workspace");
+        T(IDM_LANG_USER_DLG, "udl-dlg", _("User-Defined Language Dialogue"));
+        T(IDM_VIEW_DOC_MAP, "doc-map", _("Document Map"));
+        T(IDM_VIEW_DOCLIST, "doc-list", _("Document List"));
+        T(IDM_VIEW_FUNC_LIST, "function-list", _("Function List"));
+        T(IDM_VIEW_FILEBROWSER, "folder-as-workspace", _("Folder as Workspace"));
         tb->AddSeparator();
         TC(IDM_VIEW_MONITORING, "monitoring", "Monitoring (tail -f)");
         tb->AddSeparator();
-        T(IDM_MACRO_STARTRECORDINGMACRO, "record", "Start Recording");
-        T(IDM_MACRO_STOPRECORDINGMACRO, "stop-record", "Stop Recording");
-        T(IDM_MACRO_PLAYBACKRECORDEDMACRO, "playback", "Playback");
-        T(IDM_MACRO_RUNMULTIMACRODLG, "playback-multiple", "Run a Macro Multiple Times");
-        T(IDM_MACRO_SAVECURRENTMACRO, "save-macro", "Save Current Recorded Macro");
+        T(IDM_MACRO_STARTRECORDINGMACRO, "record", _("Start Recording"));
+        T(IDM_MACRO_STOPRECORDINGMACRO, "stop-record", _("Stop Recording"));
+        T(IDM_MACRO_PLAYBACKRECORDEDMACRO, "playback", _("Playback"));
+        T(IDM_MACRO_RUNMULTIMACRODLG, "playback-multiple", _("Run a Macro Multiple Times"));
+        T(IDM_MACRO_SAVECURRENTMACRO, "save-macro", _("Save Current Recorded Macro"));
         tb->Realize();
         // Macro idle state (nothing recording, no macro stored) - matches Notepad++: only "Start Recording"
         // is enabled; Stop / Playback / Run-Multiple / Save stay greyed until a macro is being/been recorded.
@@ -5222,7 +5237,7 @@ private:
                 if (ln >= 0 && ln < static_cast<int>(m_fifJump.size()) && !m_fifJump[ln].first.empty()) gotoResult(m_fifJump[ln].first, m_fifJump[ln].second);
             } else e.Skip();
         });
-        m_aui.AddPane(m_findResults, wxAuiPaneInfo().Name("findresults").Caption("Search results")
+        m_aui.AddPane(m_findResults, wxAuiPaneInfo().Name("findresults").Caption(_("Search results"))
                       .Bottom().Layer(1).BestSize(wxSize(-1, 200)).CloseButton(true).MaximizeButton(false));
         m_aui.Update();
     }
@@ -5534,15 +5549,15 @@ private:
         for (auto* c : { cbLineNum, cbGuides, cbWs, cbWrapSym, cbWrap, cbCaretLn, cbScroll, cbMulti }) row(es, c);
         auto* erow = new wxBoxSizer(wxHORIZONTAL);
         erow->Add(new wxStaticText(ed, wxID_ANY, _("Caret width:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
-        auto* spCaret = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS, 1, 3, m_caretWidth);
+        auto* spCaret = new SpinField(ed, 1, 3, m_caretWidth, m_dark, 60);
         erow->Add(spCaret, 0, wxRIGHT, 24);
         erow->Add(new wxStaticText(ed, wxID_ANY, _("Vertical edge at column (0 = off):")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
-        auto* spEdge = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 0, 300, m_edgeColumn);
+        auto* spEdge = new SpinField(ed, 0, 300, m_edgeColumn, m_dark, 70);
         erow->Add(spEdge, 0);
         es->Add(erow, 0, wxALL, 10);
         auto* brow = new wxBoxSizer(wxHORIZONTAL);
         brow->Add(new wxStaticText(ed, wxID_ANY, _("Caret blink rate (ms, 0 = steady):")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
-        auto* spBlink = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, 0, 2000, m_caretBlink);
+        auto* spBlink = new SpinField(ed, 0, 2000, m_caretBlink, m_dark, 80);
         brow->Add(spBlink, 0);
         es->Add(brow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10); ed->SetSizer(es);
 
@@ -5550,7 +5565,7 @@ private:
         auto* ind = pg(_("Indentation")); auto* is = new wxBoxSizer(wxVERTICAL);
         auto* trow = new wxBoxSizer(wxHORIZONTAL);
         trow->Add(new wxStaticText(ind, wxID_ANY, _("Tab size:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
-        auto* spTab = new wxSpinCtrl(ind, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 16, m_tabWidth);
+        auto* spTab = new SpinField(ind, 1, 16, m_tabWidth, m_dark, 70);
         trow->Add(spTab, 0); is->Add(trow, 0, wxALL, 10);
         auto* cbSpace  = new wxCheckBox(ind, wxID_ANY, _("Replace by space"));      cbSpace->SetValue(!m_useTabs);
         auto* cbIndent = new wxCheckBox(ind, wxID_ANY, _("Auto-indent new lines")); cbIndent->SetValue(m_autoindent);
@@ -5562,7 +5577,7 @@ private:
         row(as, cbAuto);
         auto* acrow = new wxBoxSizer(wxHORIZONTAL);
         acrow->Add(new wxStaticText(ac, wxID_ANY, _("From the")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6);
-        auto* spFrom = new wxSpinCtrl(ac, wxID_ANY, "", wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS, 1, 10, m_autoCompFrom);
+        auto* spFrom = new SpinField(ac, 1, 10, m_autoCompFrom, m_dark, 60);
         acrow->Add(spFrom, 0, wxRIGHT, 6);
         acrow->Add(new wxStaticText(ac, wxID_ANY, _("th character")), 0, wxALIGN_CENTRE_VERTICAL);
         as->Add(acrow, 0, wxALL, 10);
@@ -5605,7 +5620,7 @@ private:
         auto* rf = pg(_("Recent Files History")); auto* rfs = new wxBoxSizer(wxVERTICAL);
         auto* rfrow = new wxBoxSizer(wxHORIZONTAL);
         rfrow->Add(new wxStaticText(rf, wxID_ANY, _("Max number of entries (applied on restart):")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
-        auto* spMaxRec = new wxSpinCtrl(rf, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 50, m_maxRecent);
+        auto* spMaxRec = new SpinField(rf, 1, 50, m_maxRecent, m_dark, 70);
         rfrow->Add(spMaxRec, 0); rfs->Add(rfrow, 0, wxALL, 10); rf->SetSizer(rfs);
 
         // ---- Print ------------------------------------------------------------------------
@@ -5705,7 +5720,7 @@ private:
         if (m_macro.empty()) return;
         wxDialog dlg(this, wxID_ANY, "Run a Macro Multiple Times");
         auto* rbN   = new wxRadioButton(&dlg, wxID_ANY, _("Run"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-        auto* sp    = new wxSpinCtrl(&dlg, wxID_ANY, "", wxDefaultPosition, wxSize(90, -1), wxSP_ARROW_KEYS, 1, 99999, 1);
+        auto* sp    = new SpinField(&dlg, 1, 99999, 1, m_dark, 90);
         auto* rbEof = new wxRadioButton(&dlg, wxID_ANY, _("Run until the end of file"));
         auto* r1 = new wxBoxSizer(wxHORIZONTAL);
         r1->Add(rbN, 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6); r1->Add(sp, 0, wxRIGHT, 6);

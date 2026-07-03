@@ -1682,3 +1682,72 @@ msgstr "문자"
 
 msgid "Character Panel"
 msgstr "문자 패널"
+
+msgid "Line number (1 - %d):"
+msgstr "줄 번호 (1 - %d):"
+
+msgid "Document Map"
+msgstr "문서 맵"
+
+msgid "Function List"
+msgstr "함수 목록"
+
+msgid "Document List"
+msgstr "문서 목록"
+
+msgid "Clipboard History"
+msgstr "클립보드 기록"
+
+msgid "Project"
+msgstr "프로젝트"
+
+msgid "Find result"
+msgstr "찾기 결과"
+
+msgid "New"
+msgstr "새로 만들기"
+
+msgid "Open"
+msgstr "열기"
+
+msgid "Save All"
+msgstr "모두 저장"
+
+msgid "Cut"
+msgstr "잘라내기"
+
+msgid "Copy"
+msgstr "복사"
+
+msgid "Undo"
+msgstr "실행 취소"
+
+msgid "Redo"
+msgstr "다시 실행"
+
+msgid "Zoom In"
+msgstr "확대"
+
+msgid "Zoom Out"
+msgstr "축소"
+
+msgid "User-Defined Language Dialogue"
+msgstr "사용자 정의 언어 대화 상자"
+
+msgid "Start Recording"
+msgstr "기록 시작"
+
+msgid "Stop Recording"
+msgstr "기록 중지"
+
+msgid "Playback"
+msgstr "재생"
+
+msgid "Run a Macro Multiple Times"
+msgstr "매크로 여러 번 실행"
+
+msgid "Save Current Recorded Macro"
+msgstr "현재 기록된 매크로 저장"
+
+msgid "Search results"
+msgstr "검색 결과"
