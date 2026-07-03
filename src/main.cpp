@@ -673,6 +673,61 @@ private:
     wxCheckBox*    m_leadZero  = nullptr; wxRadioBox* m_format = nullptr;
 };
 
+// Settings > ... Edit > Search on Internet's "Change Search Engine...".
+class SearchEngineDialog : public wxDialog
+{
+public:
+    SearchEngineDialog(wxWindow* p, int current) : wxDialog(p, wxID_ANY, "Change Search Engine")
+    {
+        auto* s = new wxBoxSizer(wxVERTICAL);
+        wxString names[] = { "DuckDuckGo", "Google", "Bing", "Yahoo" };
+        m_choice = new wxRadioBox(this, wxID_ANY, "Search on Internet uses:", wxDefaultPosition, wxDefaultSize, 4, names, 1, wxRA_SPECIFY_COLS);
+        m_choice->SetSelection(current >= 0 && current < 4 ? current : 0);
+        s->Add(m_choice, 0, wxALL | wxEXPAND, 12);
+        s->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxALL | wxEXPAND, 10);
+        SetSizerAndFit(s);
+    }
+    int engine() const { return m_choice->GetSelection(); }
+private:
+    wxRadioBox* m_choice = nullptr;
+};
+
+// Search > "Find characters in range...": selects the next character (by byte value) within [from, to].
+class FindCharRangeDialog : public wxDialog
+{
+public:
+    FindCharRangeDialog(wxWindow* p, bool dark) : wxDialog(p, wxID_ANY, "Find Characters in Range")
+    {
+        const wxColour fbg = dark ? wxColour(32, 32, 32) : *wxWHITE, ffg = dark ? wxColour(220, 220, 220) : *wxBLACK;
+        auto field = [&](const wxString& v) { auto* t = new wxTextCtrl(this, wxID_ANY, v, wxDefaultPosition, wxSize(80, -1)); if (dark) { t->SetBackgroundColour(fbg); t->SetForegroundColour(ffg); } return t; };
+        auto* s = new wxBoxSizer(wxVERTICAL);
+        s->Add(new wxStaticText(this, wxID_ANY, "Finds the next character (from the caret, wrapping)\nwhose code falls within this range."), 0, wxALL, 10);
+        auto* row = new wxBoxSizer(wxHORIZONTAL);
+        row->Add(new wxStaticText(this, wxID_ANY, "From:"), 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 6);
+        m_from = field("00"); row->Add(m_from, 0, wxRIGHT, 14);
+        row->Add(new wxStaticText(this, wxID_ANY, "To:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+        m_to = field("1F"); row->Add(m_to);
+        s->Add(row, 0, wxLEFT | wxRIGHT | wxBOTTOM, 26);
+        m_hex = new wxCheckBox(this, wxID_ANY, "Hexadecimal");
+        m_hex->SetValue(true);
+        s->Add(m_hex, 0, wxLEFT | wxBOTTOM, 26);
+        s->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxALL | wxEXPAND, 10);
+        SetSizerAndFit(s);
+        m_from->SetFocus();
+        if (auto* ok = FindWindow(wxID_OK)) ok->SetLabel("Find Next");
+    }
+    bool range(int& from, int& to) const
+    {
+        long a = 0, b = 0; const int base = m_hex->GetValue() ? 16 : 10;
+        if (!m_from->GetValue().ToLong(&a, base) || !m_to->GetValue().ToLong(&b, base)) return false;
+        from = (int)a; to = (int)b;
+        if (from > to) std::swap(from, to);
+        return true;
+    }
+private:
+    wxTextCtrl* m_from = nullptr; wxTextCtrl* m_to = nullptr; wxCheckBox* m_hex = nullptr;
+};
+
 // Options gathered from the Find/Replace dialog and passed to the editor search engine.
 struct FindOpts { wxString find, repl; bool matchCase = false, wholeWord = false, regex = false, wrap = true, forward = true, inSelection = false; };
 
@@ -1663,6 +1718,14 @@ private:
     }
     void onStcUpdateUI(wxStyledTextEvent& e)
     {
+        if (m_beginEndSelectActive && !m_selExtendGuard)   // Begin/End Select: re-extend from the sticky anchor to wherever the caret just moved
+        {
+            m_selExtendGuard = true;
+            const int caret = (int)sci(SCI_GETCURRENTPOS);
+            if (m_beginEndSelectColumnMode) { sci(SCI_SETSELECTIONMODE, SC_SEL_RECTANGLE); sci(SCI_SETRECTANGULARSELECTIONANCHOR, m_beginEndSelectAnchor); sci(SCI_SETRECTANGULARSELECTIONCARET, caret); }
+            else sci(SCI_SETSEL, m_beginEndSelectAnchor, caret);
+            m_selExtendGuard = false;
+        }
         updateBraceMatch(m_stc);
         callTipCaretMoved();   // keep the parameter hint in sync / dismiss when the caret leaves the call
         markVisibleUrls();     // underline URLs on screen (click to open)
@@ -3160,6 +3223,7 @@ private:
     void activateBuffer(EditorPage* p)
     {
         if (!p) return;
+        m_beginEndSelectActive = false;      // a sticky Begin/End Select anchor doesn't carry across documents
         setActiveView(viewOf(p));            // mount on the view whose tab strip owns this page
         if (!m_stc) return;
         if (m_stc->GetParent() == p && sci(SCI_GETDOCPOINTER) == p->doc)
@@ -4447,6 +4511,33 @@ private:
         notImpl("Read-Only Attribute (Windows only)");
 #endif
     }
+    // Only one Scintilla view is shared across a tab strip's pages (see buildView) - peek every other
+    // document via a raw doc-pointer swap (same technique sortTabs uses for TabSortKey::Size) and restore
+    // whatever was attached before. Read-only lives on the Document itself, so it sticks after the swap back.
+    void setReadOnlyAllDocs(bool ro)
+    {
+        if (!m_stc) return;
+        const sptr_t original = sci(SCI_GETDOCPOINTER);
+        const int savedAnchor = (int)sci(SCI_GETANCHOR), savedCaret = (int)sci(SCI_GETCURRENTPOS);   // caret/selection are per-VIEW, not per-document - SETDOCPOINTER below won't preserve them on its own
+        for (EditorPage* p : allPages()) { sci(SCI_SETDOCPOINTER, 0, p->doc); sci(SCI_SETREADONLY, ro ? 1 : 0); }
+        sci(SCI_SETDOCPOINTER, 0, original);
+        sci(SCI_SETSEL, savedAnchor, savedCaret);
+        setStatus(0, ro ? "Read-Only for All Documents" : "Read/Write for All Documents");
+    }
+    // Edit > Begin/End Select: a sticky selection anchor for keyboard/mouse-driven selection without
+    // holding Shift - re-extended from onStcUpdateUI on every caret move until toggled off again.
+    void toggleBeginEndSelect(bool columnMode)
+    {
+        m_beginEndSelectActive = !m_beginEndSelectActive;
+        if (m_beginEndSelectActive)
+        {
+            m_beginEndSelectColumnMode = columnMode;
+            m_beginEndSelectAnchor = (int)sci(SCI_GETCURRENTPOS);
+            setStatus(0, columnMode ? "Begin/End Select (Column Mode): move the caret, then repeat to finish"
+                                     : "Begin/End Select: move the caret, then repeat to finish");
+        }
+        else { sci(SCI_SETSELECTIONMODE, SC_SEL_STREAM); setStatus(0, "Select finished"); }   // leave no lingering rectangle mode behind
+    }
 
     // ---- comments (C-like): single-line add/remove + stream /* */ ----
     void setLineComment(bool add)
@@ -4490,7 +4581,38 @@ private:
     }
     void removeEmptyLinesBlank() { auto v = docLines(); v.erase(std::remove_if(v.begin(), v.end(), [](const std::string& s){ return s.find_first_not_of(" \t") == std::string::npos; }), v.end()); putLines(v); }
     void redactSelection() { transformSel([](std::string& s){ std::string o; for (size_t i = 0; i < s.size();) { unsigned char c = s[i]; if (c == '\r' || c == '\n') { o += (char)c; ++i; } else { const int n = (c >= 0xF0) ? 4 : (c >= 0xE0) ? 3 : (c >= 0x80) ? 2 : 1; o += "\xE2\x96\x88"; i += n; } } s = o; }); }
-    void searchOnInternet() { wxString q = selText().Trim().Trim(false); if (q.empty()) return; q.Replace(" ", "+"); wxLaunchDefaultBrowser("https://duckduckgo.com/?q=" + q); }
+    void searchOnInternet()
+    {
+        wxString q = selText().Trim().Trim(false); if (q.empty()) return; q.Replace(" ", "+");
+        static const char* urls[] = { "https://duckduckgo.com/?q=", "https://www.google.com/search?q=", "https://www.bing.com/search?q=", "https://search.yahoo.com/search?p=" };
+        wxLaunchDefaultBrowser(urls[m_searchEngine >= 0 && m_searchEngine < 4 ? m_searchEngine : 0] + q);
+    }
+    void changeSearchEngine()
+    {
+        SearchEngineDialog dlg(this, m_searchEngine);
+        themeDialog(&dlg);
+        if (dlg.ShowModal() != wxID_OK) return;
+        m_searchEngine = dlg.engine();
+        saveSettings();
+    }
+    void findCharInRange()
+    {
+        FindCharRangeDialog dlg(this, m_dark);
+        themeDialog(&dlg);
+        if (dlg.ShowModal() != wxID_OK) return;
+        int from = 0, to = 0;
+        if (!dlg.range(from, to)) { wxMessageBox("Enter valid character codes.", "Find Characters in Range", wxOK | wxICON_WARNING, this); return; }
+        const int len = (int)sci(SCI_GETLENGTH);
+        if (len <= 0) return;
+        const int start = (int)sci(SCI_GETCURRENTPOS);
+        for (int steps = 1; steps <= len; ++steps)
+        {
+            const int pos = (start + steps) % len;
+            const int ch = (int)sci(SCI_GETCHARAT, pos) & 0xFF;
+            if (ch >= from && ch <= to) { sci(SCI_SETSEL, pos, pos + 1); sci(SCI_SCROLLCARET); setStatus(0, wxString::Format("Found character 0x%02X at position %d", ch, pos)); return; }
+        }
+        setStatus(0, "No character in that range found");
+    }
     void openSelectedFile() { const wxString f = selText().Trim().Trim(false); if (!f.empty() && wxFileExists(f)) openPath(f); else notImpl("Open File (selection is not an existing path)"); }
 
     // ---- search helpers: select word + find, volatile/next-found ----
@@ -5185,6 +5307,7 @@ private:
         c->Read("Theme", &m_themeName, wxEmptyString);
         c->Read("Print/Header", &m_printHeader, wxEmptyString);
         c->Read("Print/Footer", &m_printFooter, wxEmptyString);
+        long se = 0; c->Read("Editing/SearchEngine", &se, 0L); m_searchEngine = (int)se;
     }
     void saveSettings()
     {
@@ -5204,6 +5327,7 @@ private:
         c->Write("AutoComplete/FromChar", (long)m_autoCompFrom); c->Write("AutoComplete/InsertPairs", m_autoInsertPairs);
         c->Write("Theme", m_themeName);
         c->Write("Print/Header", m_printHeader); c->Write("Print/Footer", m_printFooter);
+        c->Write("Editing/SearchEngine", (long)m_searchEngine);
         c->Flush();
     }
     void applySettings()   // push the current preferences onto the editor view + chrome
@@ -6103,6 +6227,14 @@ private:
             case IDM_VIEW_FILEBROWSER: toggleFileBrowser(); break;
             case IDM_SEARCH_FINDINCREMENT: showIncBar(); break;
             case IDM_EDIT_COLUMNMODE: columnEditor(); break;
+            case IDM_EDIT_COLUMNMODETIP:
+                wxMessageBox("Column (rectangular) selection:\n\n"
+                             "- Alt + drag the mouse\n"
+                             "- Alt + Shift + Arrow keys\n"
+                             "- Alt + Shift + Click\n\n"
+                             "Typing or pasting applies to every line of the block at once.",
+                             "Column Mode", wxOK | wxICON_INFORMATION, this);
+                break;
             case IDM_VIEW_MONITORING: notImpl("File monitoring"); break;
             case IDM_MACRO_STARTRECORDINGMACRO: startMacroRecord(); break;
             case IDM_MACRO_STOPRECORDINGMACRO: stopMacroRecord(); break;
@@ -6143,6 +6275,10 @@ private:
             case IDM_EDIT_BLOCK_UNCOMMENT: setLineComment(false); break;
             case IDM_EDIT_TOGGLEREADONLY: toggleReadOnly(); break;
             case IDM_EDIT_TOGGLESYSTEMREADONLY: toggleSystemReadOnly(); break;
+            case IDM_EDIT_SETREADONLYFORALLDOCS: setReadOnlyAllDocs(true); break;
+            case IDM_EDIT_CLEARREADONLYFORALLDOCS: setReadOnlyAllDocs(false); break;
+            case IDM_EDIT_BEGINENDSELECT: toggleBeginEndSelect(false); break;
+            case IDM_EDIT_BEGINENDSELECT_COLUMNMODE: toggleBeginEndSelect(true); break;
             case IDM_EDIT_SORTLINES_LENGTH_ASCENDING: sortLines(3, false); break;
             case IDM_EDIT_SORTLINES_LENGTH_DESCENDING: sortLines(3, true); break;
             case IDM_EDIT_SORTLINES_DECIMALDOT_ASCENDING: sortLines(4, false); break;
@@ -6158,6 +6294,7 @@ private:
             case IDM_EDIT_OPENSELECTEDFILEFOLDERINEXPLORER: revealInFolder(); break;
             case IDM_EDIT_OPENSELECTEDFILETOEDIT: openSelectedFile(); break;
             case IDM_EDIT_SEARCHONINTERNET: searchOnInternet(); break;
+            case IDM_EDIT_CHANGESEARCHENGINE: changeSearchEngine(); break;
             case IDM_EDIT_REDACT_SELECTION: redactSelection(); break;
             case IDM_EDIT_INSERT_DATETIME_CUSTOMIZED: insertDateTime(true); break;
             case IDM_EDIT_AUTOCOMPLETE: autoComplete(true); break;               // Function/keyword completion (Ctrl+Space)
@@ -6176,6 +6313,7 @@ private:
             case IDM_SEARCH_GOTOPREVFOUND: stepFoundResult(false); break;
             case IDM_FOCUS_ON_FOUND_RESULTS: focusFoundResults(); break;
             case IDM_SEARCH_SELECTMATCHINGBRACES: selectBetweenBraces(); break;
+            case IDM_SEARCH_FINDCHARINRANGE: findCharInRange(); break;
             case IDM_SEARCH_MARK: onMarkDlg(); break;
             case IDM_SEARCH_MARKALLEXT1: findResult(wxString::Format("Marked %d - style 1", markExt(0, true))); break;
             case IDM_SEARCH_MARKALLEXT2: findResult(wxString::Format("Marked %d - style 2", markExt(1, true))); break;
@@ -6445,6 +6583,9 @@ private:
     int         m_newCount = 0;   // counter for "new N" tab titles
     int         m_zoom = 0;       // shared zoom level across all tabs (Ctrl+wheel), persisted
     NppTheme    m_theme;          // exact Notepad++ colours (loaded from theme XML)
+    int         m_searchEngine = 0;                               // Edit > Change Search Engine: 0=DuckDuckGo 1=Google 2=Bing 3=Yahoo
+    bool        m_beginEndSelectActive = false, m_beginEndSelectColumnMode = false, m_selExtendGuard = false;
+    int         m_beginEndSelectAnchor = -1;                      // Edit > Begin/End Select: the sticky selection anchor
 };
 
 // Chrome base, chosen at startup (restart-to-apply): native wxFrame, or - when the "integrated top bar"
