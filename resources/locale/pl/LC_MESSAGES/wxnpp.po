@@ -1757,3 +1757,24 @@ msgstr "nowy %d"
 
 msgid "Locali&zation"
 msgstr "Lokali&zacja"
+
+msgid "Monitoring (tail -f)"
+msgstr "Monitorowanie (tail -f)"
+
+msgid "Word Wrap"
+msgstr "Zawijanie wierszy"
+
+msgid "Monitoring needs a file on disk - save the document first"
+msgstr "Monitorowanie wymaga pliku na dysku - najpierw zapisz dokument"
+
+msgid "Save or discard the unsaved changes before monitoring"
+msgstr "Zapisz lub odrzuć niezapisane zmiany przed monitorowaniem"
+
+msgid "Monitoring started"
+msgstr "Monitorowanie rozpoczęte"
+
+msgid "Monitoring stopped"
+msgstr "Monitorowanie zatrzymane"
+
+msgid "Monitoring stopped (document was edited)"
+msgstr "Monitorowanie zatrzymane (dokument został zmieniony)"

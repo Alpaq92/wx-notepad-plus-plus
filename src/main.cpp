@@ -115,7 +115,7 @@ static const int  SMART_INDIC   = 10;     // indicator number for smart-highligh
 static const int  MARK_STYLE_BASE = 21;   // "Mark All Ext 1-5" style indicators (21..25) - Notepad++'s 5 mark colours
 static const unsigned MARK_STYLE_COLOUR[5] = { 0x1F90FF, 0xE0A020, 0x50B050, 0xC060C0, 0x30B0C0 };  // BGR: orange, blue, green, purple, olive
 static const int  URL_INDIC = 11;         // clickable-URL underline indicator
-enum { myID_TIMER = 60000, myID_DARKMODE, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER };   // fixed ids, above the IDM_* range
+enum { myID_TIMER = 60000, myID_DARKMODE, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER, myID_MONTIMER };   // fixed ids, above the IDM_* range
 // UI language selection - shared by the top-level Localization menu and Preferences > General.
 // Endonyms are ALWAYS shown in their own language (never translated); index 0 is "System default".
 static const int myID_UILANG_FIRST = 60100;   // 10 radio items (myID_UILANG_FIRST + 0..9), clear of the 61xxx/62xxx/63xxx bases
@@ -155,6 +155,9 @@ public:
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
     wxColour tabColour;                    // optional per-tab colour (invalid = none) - drawn as a stripe by PinTabArt
+    bool     monitored = false;            // View > Monitoring (tail -f): reload on external change, caret to end
+    bool     monStale  = false;            // change detected while this tab was in the background - reload on activation
+    wxLongLong monMtime = 0; wxULongLong monSize = 0;   // last-seen on-disk stats for change detection
 };
 
 // One editor "view" = a tab strip + ONE persistent wxStyledTextCtrl that hops across its pages (Notepad++'s
@@ -3314,6 +3317,9 @@ private:
         refreshTab(p);
         updateStatus();
         updateEncodingMenuChecks();   // tick this buffer's encoding in the Encoding menu
+        syncMonitoringUi(p);          // the Monitoring check is per-tab state
+        if (p->monitored && p->monStale)   // changed on disk while backgrounded - catch up now
+        { p->monStale = false; loadFile(p->path); sci(SCI_DOCUMENTEND); sci(SCI_SCROLLCARET); }
         m_stc->SetFocus();
         // Notify subscribers (e.g. the N++ bridge -> NPPN_BUFFERACTIVATED) that this document is now active.
         NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_ACTIVATED; ev.struct_size = sizeof(NibEvent);
@@ -3916,9 +3922,9 @@ private:
         tb->AddSeparator();
         T(IDM_VIEW_ZOOMIN, "zoom-in", _("Zoom In"));  T(IDM_VIEW_ZOOMOUT, "zoom-out", _("Zoom Out"));
         tb->AddSeparator();
-        TC(IDM_VIEW_WRAP, "word-wrap", "Word Wrap");
-        TC(IDM_VIEW_ALL_CHARACTERS, "all-chars", "Show All Characters");
-        TC(IDM_VIEW_INDENT_GUIDE, "indent-guide", "Show Indent Guide");
+        TC(IDM_VIEW_WRAP, "word-wrap", _("Word Wrap"));
+        TC(IDM_VIEW_ALL_CHARACTERS, "all-chars", _("Show All Characters"));
+        TC(IDM_VIEW_INDENT_GUIDE, "indent-guide", _("Show Indent Guide"));
         tb->AddSeparator();
         T(IDM_LANG_USER_DLG, "udl-dlg", _("User-Defined Language Dialogue"));
         T(IDM_VIEW_DOC_MAP, "doc-map", _("Document Map"));
@@ -3926,7 +3932,7 @@ private:
         T(IDM_VIEW_FUNC_LIST, "function-list", _("Function List"));
         T(IDM_VIEW_FILEBROWSER, "folder-as-workspace", _("Folder as Workspace"));
         tb->AddSeparator();
-        TC(IDM_VIEW_MONITORING, "monitoring", "Monitoring (tail -f)");
+        TC(IDM_VIEW_MONITORING, "monitoring", _("Monitoring (tail -f)"));
         tb->AddSeparator();
         T(IDM_MACRO_STARTRECORDINGMACRO, "record", _("Start Recording"));
         T(IDM_MACRO_STOPRECORDINGMACRO, "stop-record", _("Stop Recording"));
@@ -4329,6 +4335,62 @@ private:
     }
     void onOpen() { wxFileDialog d(this, "Open", "", "", "All files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST); if (d.ShowModal() == wxID_OK) addDocument(d.GetPath(), wxFileNameFromPath(d.GetPath())); }
     void onReload() { if (!m_path.empty()) loadFile(m_path); }
+
+    // ---- View > Monitoring (tail -f): poll monitored files for external changes; reload + jump to end ----
+    static bool monStat(const wxString& path, wxLongLong& mtime, wxULongLong& size)
+    {
+        wxFileName fn(path);
+        if (!fn.FileExists()) return false;
+        const wxDateTime dt = fn.GetModificationTime();
+        mtime = dt.IsValid() ? dt.GetValue() : wxLongLong(0);
+        size  = fn.GetSize();
+        return true;
+    }
+    void syncMonitoringUi(EditorPage* p)
+    {
+        const bool on = p && p->monitored;
+        if (auto* mb = menuBar()) mb->Check(IDM_VIEW_MONITORING, on);
+        if (auto* tb = toolBar()) tb->ToggleTool(IDM_VIEW_MONITORING, on);
+    }
+    void toggleMonitoring()
+    {
+        EditorPage* p = activePage();
+        if (!p) return;
+        if (p->path.empty()) { setStatus(0, _("Monitoring needs a file on disk - save the document first")); syncMonitoringUi(p); return; }
+        if (!p->monitored && sci(SCI_GETMODIFY)) { setStatus(0, _("Save or discard the unsaved changes before monitoring")); syncMonitoringUi(p); return; }
+        p->monitored = !p->monitored;
+        p->monStale = false;
+        if (p->monitored)
+        {
+            monStat(p->path, p->monMtime, p->monSize);
+            sci(SCI_DOCUMENTEND); sci(SCI_SCROLLCARET);   // tail: start watching from the end
+            setStatus(0, _("Monitoring started"));
+        }
+        else setStatus(0, _("Monitoring stopped"));
+        syncMonitoringUi(p);
+        // one shared 1s poll timer, running only while at least one tab is monitored
+        bool any = false; for (EditorPage* q : allPages()) if (q && q->monitored) { any = true; break; }
+        if (any && !m_monTimer) { m_monTimer = new wxTimer(this, myID_MONTIMER); Bind(wxEVT_TIMER, &NppShellFrameT::onMonTimer, this, myID_MONTIMER); }
+        if (m_monTimer) { if (any) { if (!m_monTimer->IsRunning()) m_monTimer->Start(1000); } else m_monTimer->Stop(); }
+    }
+    void onMonTimer(wxTimerEvent&)
+    {
+        bool any = false;
+        for (EditorPage* p : allPages())
+        {
+            if (!p || !p->monitored) continue;
+            any = true;
+            wxLongLong mt; wxULongLong sz;
+            if (!monStat(p->path, mt, sz)) continue;                       // file temporarily gone (rotation) - keep watching
+            if (mt == p->monMtime && sz == p->monSize) continue;           // unchanged
+            p->monMtime = mt; p->monSize = sz;
+            if (p != activePage()) { p->monStale = true; continue; }       // reload when the tab comes back to the front
+            if (sci(SCI_GETMODIFY)) { p->monitored = false; syncMonitoringUi(p); setStatus(0, _("Monitoring stopped (document was edited)")); continue; }
+            loadFile(p->path);                                             // same path as File > Reload from Disk
+            sci(SCI_DOCUMENTEND); sci(SCI_SCROLLCARET);                    // tail -f: follow the end
+        }
+        if (!any && m_monTimer) m_monTimer->Stop();
+    }
     bool writeFile(const wxString& path)
     {
         const int len = static_cast<int>(sci(SCI_GETLENGTH));
@@ -6424,7 +6486,7 @@ private:
                 wxMessageBox(_("Column (rectangular) selection:\n\n- Alt + drag the mouse\n- Alt + Shift + Arrow keys\n- Alt + Shift + Click\n\nTyping or pasting applies to every line of the block at once."),
                              _("Column Mode"), wxOK | wxICON_INFORMATION, this);
                 break;
-            case IDM_VIEW_MONITORING: notImpl("File monitoring"); break;
+            case IDM_VIEW_MONITORING: toggleMonitoring(); break;
             case IDM_MACRO_STARTRECORDINGMACRO: startMacroRecord(); break;
             case IDM_MACRO_STOPRECORDINGMACRO: stopMacroRecord(); break;
             case IDM_MACRO_PLAYBACKRECORDEDMACRO: playMacro(m_macro); break;
@@ -6732,6 +6794,7 @@ private:
     wxString    m_projWorkspace;            // the loaded/saved workspace .xml path ("" = unsaved)
     wxTreeCtrl* m_fifPanel = nullptr;       // Find result: docked Find-in-Files results tree
     wxTimer*    m_flTimer  = nullptr;        // debounce re-parse of the Function List after edits
+    wxTimer*    m_monTimer = nullptr;        // View > Monitoring (tail -f): 1s poll while any tab is monitored
 #ifdef __WXMSW__
     HWND        m_sci  = nullptr;
     SizeGripWin* m_grip = nullptr;          // custom dark-themed status-bar resize grip (native one can't theme)

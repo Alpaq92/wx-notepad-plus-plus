@@ -1757,3 +1757,24 @@ msgstr "neu %d"
 
 msgid "Locali&zation"
 msgstr "Lokalisier&ung"
+
+msgid "Monitoring (tail -f)"
+msgstr "Überwachung (tail -f)"
+
+msgid "Word Wrap"
+msgstr "Zeilenumbruch"
+
+msgid "Monitoring needs a file on disk - save the document first"
+msgstr "Überwachung braucht eine Datei auf der Festplatte - Dokument zuerst speichern"
+
+msgid "Save or discard the unsaved changes before monitoring"
+msgstr "Ungespeicherte Änderungen vor der Überwachung speichern oder verwerfen"
+
+msgid "Monitoring started"
+msgstr "Überwachung gestartet"
+
+msgid "Monitoring stopped"
+msgstr "Überwachung beendet"
+
+msgid "Monitoring stopped (document was edited)"
+msgstr "Überwachung beendet (Dokument wurde bearbeitet)"

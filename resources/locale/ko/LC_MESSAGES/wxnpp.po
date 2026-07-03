@@ -1757,3 +1757,24 @@ msgstr "새 파일 %d"
 
 msgid "Locali&zation"
 msgstr "지역화(&Z)"
+
+msgid "Monitoring (tail -f)"
+msgstr "모니터링 (tail -f)"
+
+msgid "Word Wrap"
+msgstr "자동 줄 바꿈"
+
+msgid "Monitoring needs a file on disk - save the document first"
+msgstr "모니터링에는 디스크의 파일이 필요합니다 - 먼저 문서를 저장하세요"
+
+msgid "Save or discard the unsaved changes before monitoring"
+msgstr "모니터링 전에 저장되지 않은 변경 사항을 저장하거나 취소하세요"
+
+msgid "Monitoring started"
+msgstr "모니터링 시작됨"
+
+msgid "Monitoring stopped"
+msgstr "모니터링 중지됨"
+
+msgid "Monitoring stopped (document was edited)"
+msgstr "모니터링 중지됨(문서가 편집됨)"

@@ -1562,7 +1562,13 @@ msgstr ""
 msgid "Zoom Out"
 msgstr ""
 
+msgid "Word Wrap"
+msgstr ""
+
 msgid "User-Defined Language Dialogue"
+msgstr ""
+
+msgid "Monitoring (tail -f)"
 msgstr ""
 
 msgid "Start Recording"
@@ -1584,6 +1590,21 @@ msgid "Re-interpreting the encoding discards unsaved changes. Continue?"
 msgstr ""
 
 msgid "Encoding"
+msgstr ""
+
+msgid "Monitoring needs a file on disk - save the document first"
+msgstr ""
+
+msgid "Save or discard the unsaved changes before monitoring"
+msgstr ""
+
+msgid "Monitoring started"
+msgstr ""
+
+msgid "Monitoring stopped"
+msgstr ""
+
+msgid "Monitoring stopped (document was edited)"
 msgstr ""
 
 msgid "Clipboard has no matching content."

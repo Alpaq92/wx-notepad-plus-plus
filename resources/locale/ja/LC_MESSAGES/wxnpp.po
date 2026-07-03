@@ -1757,3 +1757,24 @@ msgstr "新規 %d"
 
 msgid "Locali&zation"
 msgstr "ローカライズ(&Z)"
+
+msgid "Monitoring (tail -f)"
+msgstr "監視 (tail -f)"
+
+msgid "Word Wrap"
+msgstr "折り返し"
+
+msgid "Monitoring needs a file on disk - save the document first"
+msgstr "監視にはディスク上のファイルが必要です - まずドキュメントを保存してください"
+
+msgid "Save or discard the unsaved changes before monitoring"
+msgstr "監視の前に未保存の変更を保存または破棄してください"
+
+msgid "Monitoring started"
+msgstr "監視を開始しました"
+
+msgid "Monitoring stopped"
+msgstr "監視を停止しました"
+
+msgid "Monitoring stopped (document was edited)"
+msgstr "監視を停止しました（ドキュメントが編集されました）"
