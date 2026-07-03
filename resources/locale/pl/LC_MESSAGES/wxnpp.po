@@ -90,3 +90,19 @@ msgstr "&Drukuj...\tCtrl+P"
 #: src/npp_menu.h
 msgid "E&xit\tAlt+F4"
 msgstr "&Zakończ\tAlt+F4"
+
+#: src/main.cpp
+msgid "Save file\n%s ?"
+msgstr "Zapisz plik\n%s ?"
+
+#: src/main.cpp
+msgid "&Save"
+msgstr "&Zapisz"
+
+#: src/main.cpp
+msgid "Do&n't Save"
+msgstr "&Nie zapisuj"
+
+#: src/main.cpp
+msgid "&Cancel"
+msgstr "&Anuluj"

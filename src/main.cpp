@@ -680,9 +680,9 @@ public:
     SearchEngineDialog(wxWindow* p, int current) : wxDialog(p, wxID_ANY, "Change Search Engine")
     {
         auto* s = new wxBoxSizer(wxVERTICAL);
-        wxString names[] = { "DuckDuckGo", "Google", "Bing", "Yahoo" };
-        m_choice = new wxRadioBox(this, wxID_ANY, "Search on Internet uses:", wxDefaultPosition, wxDefaultSize, 4, names, 1, wxRA_SPECIFY_COLS);
-        m_choice->SetSelection(current >= 0 && current < 4 ? current : 0);
+        wxString names[] = { "DuckDuckGo", "Google", "Bing", "Yahoo", "Brave Search" };
+        m_choice = new wxRadioBox(this, wxID_ANY, "Search on Internet uses:", wxDefaultPosition, wxDefaultSize, 5, names, 1, wxRA_SPECIFY_COLS);
+        m_choice->SetSelection(current >= 0 && current < 5 ? current : 0);
         s->Add(m_choice, 0, wxALL | wxEXPAND, 12);
         s->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxALL | wxEXPAND, 10);
         SetSizerAndFit(s);
@@ -3260,11 +3260,11 @@ private:
 
         wxDialog dlg(this, wxID_ANY, "wxNotepad++");
         auto* s = new wxBoxSizer(wxVERTICAL);
-        s->Add(new wxStaticText(&dlg, wxID_ANY, "Save file\n" + name + " ?"), 0, wxALL, 16);
+        s->Add(new wxStaticText(&dlg, wxID_ANY, wxString::Format(_("Save file\n%s ?"), name)), 0, wxALL, 16);
         auto* row = new wxBoxSizer(wxHORIZONTAL);
-        auto* bSave = new wxButton(&dlg, wxID_YES, "&Save");
-        auto* bNo   = new wxButton(&dlg, wxID_NO, "Do&n't Save");
-        auto* bCan  = new wxButton(&dlg, wxID_CANCEL, "&Cancel");
+        auto* bSave = new wxButton(&dlg, wxID_YES, _("&Save"));
+        auto* bNo   = new wxButton(&dlg, wxID_NO, _("Do&n't Save"));
+        auto* bCan  = new wxButton(&dlg, wxID_CANCEL, _("&Cancel"));
         row->Add(bSave, 0, wxRIGHT, 6); row->Add(bNo, 0, wxRIGHT, 6); row->Add(bCan, 0);
         s->Add(row, 0, wxALIGN_RIGHT | wxLEFT | wxRIGHT | wxBOTTOM, 12);
         bSave->Bind(wxEVT_BUTTON, [&dlg](wxCommandEvent&) { dlg.EndModal(wxID_YES); });
@@ -4584,8 +4584,8 @@ private:
     void searchOnInternet()
     {
         wxString q = selText().Trim().Trim(false); if (q.empty()) return; q.Replace(" ", "+");
-        static const char* urls[] = { "https://duckduckgo.com/?q=", "https://www.google.com/search?q=", "https://www.bing.com/search?q=", "https://search.yahoo.com/search?p=" };
-        wxLaunchDefaultBrowser(urls[m_searchEngine >= 0 && m_searchEngine < 4 ? m_searchEngine : 0] + q);
+        static const char* urls[] = { "https://duckduckgo.com/?q=", "https://www.google.com/search?q=", "https://www.bing.com/search?q=", "https://search.yahoo.com/search?p=", "https://search.brave.com/search?q=" };
+        wxLaunchDefaultBrowser(urls[m_searchEngine >= 0 && m_searchEngine < 5 ? m_searchEngine : 0] + q);
     }
     void changeSearchEngine()
     {

@@ -89,3 +89,19 @@ msgstr ""
 #: src/npp_menu.h
 msgid "E&xit\tAlt+F4"
 msgstr ""
+
+#: src/main.cpp
+msgid "Save file\n%s ?"
+msgstr ""
+
+#: src/main.cpp
+msgid "&Save"
+msgstr ""
+
+#: src/main.cpp
+msgid "Do&n't Save"
+msgstr ""
+
+#: src/main.cpp
+msgid "&Cancel"
+msgstr ""
