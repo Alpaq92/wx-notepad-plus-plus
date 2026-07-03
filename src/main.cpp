@@ -18,6 +18,7 @@
 // Scintilla via wxStyledTextCtrl.
 
 #include <wx/wx.h>
+#include <wx/intl.h>           // wxLocale + the _() gettext macro - UI localization (resources/locale/*)
 #include <wx/notebook.h>
 #include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
 #include <wx/listctrl.h>       // wxListView - wxListbook's page list (we widen it so labels don't truncate)
@@ -6459,6 +6460,13 @@ public:
     bool OnInit() override
     {
         SetAppName("wxNotepadPlusPlus_spike");                  // stable key for the persisted theme choice
+        // UI localization (gettext): every _()-wrapped string looks itself up in resources/locale/<lang>/
+        // LC_MESSAGES/wxnpp.mo next to the exe. Init() auto-detects the OS language; if no catalog exists
+        // for it (most languages, for now - only the strings this pass wrapped have a Polish translation),
+        // AddCatalog() simply finds nothing and _() falls back to returning its English argument unchanged.
+        m_locale.Init(wxLANGUAGE_DEFAULT);
+        m_locale.AddCatalogLookupPathPrefix(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\locale");
+        m_locale.AddCatalog("wxnpp");
         bool dark = true;                                      // default: dark, matching Notepad++
         wxConfigBase::Get()->Read("DarkMode", &dark, true);
 #ifdef __WXMSW__
@@ -6487,6 +6495,9 @@ public:
         for (int i = 1; i < argc; ++i) frame->openPath(argv[i]);   // open any files passed on the command line
         return true;
     }
+
+private:
+    wxLocale m_locale;   // must outlive OnInit() - destroying it would revert the process's locale
 };
 
 wxIMPLEMENT_APP(NppApp);

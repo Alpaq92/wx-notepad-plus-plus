@@ -1,0 +1,92 @@
+# Polish translation of wxNotepad++ (proof-of-concept slice: main menu bar + File menu).
+# This file is distributed under the same GPL v3 license as wxNotepad++ itself.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: wxNotepad++\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-03 00:00+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: pl\n"
+
+#: src/npp_menu.h
+msgid "&File"
+msgstr "&Plik"
+
+#: src/npp_menu.h
+msgid "&Edit"
+msgstr "&Edycja"
+
+#: src/npp_menu.h
+msgid "&Search"
+msgstr "&Szukaj"
+
+#: src/npp_menu.h
+msgid "&View"
+msgstr "&Widok"
+
+#: src/npp_menu.h
+msgid "E&ncoding"
+msgstr "&Kodowanie"
+
+#: src/npp_menu.h
+msgid "&Language"
+msgstr "&Język"
+
+#: src/npp_menu.h
+msgid "Se&ttings"
+msgstr "&Ustawienia"
+
+#: src/npp_menu.h
+msgid "T&ools"
+msgstr "&Narzędzia"
+
+#: src/npp_menu.h
+msgid "&Macro"
+msgstr "&Makro"
+
+#: src/npp_menu.h
+msgid "&Run"
+msgstr "U&ruchom"
+
+#: src/npp_menu.h
+msgid "&Plugins"
+msgstr "Wt&yczki"
+
+#: src/npp_menu.h
+msgid "&Window"
+msgstr "&Okno"
+
+#: src/npp_menu.h
+msgid "&About"
+msgstr "&Pomoc"
+
+#: src/npp_menu.h
+msgid "&New\tCtrl+N"
+msgstr "&Nowy\tCtrl+N"
+
+#: src/npp_menu.h
+msgid "&Open...\tCtrl+O"
+msgstr "&Otwórz...\tCtrl+O"
+
+#: src/npp_menu.h
+msgid "&Save\tCtrl+S"
+msgstr "&Zapisz\tCtrl+S"
+
+#: src/npp_menu.h
+msgid "Save &As...\tCtrl+Alt+S"
+msgstr "Zapisz &jako...\tCtrl+Alt+S"
+
+#: src/npp_menu.h
+msgid "&Close\tCtrl+W"
+msgstr "Za&mknij\tCtrl+W"
+
+#: src/npp_menu.h
+msgid "&Print...\tCtrl+P"
+msgstr "&Drukuj...\tCtrl+P"
+
+#: src/npp_menu.h
+msgid "E&xit\tAlt+F4"
+msgstr "&Zakończ\tAlt+F4"

@@ -131,8 +131,8 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
     // ----------------------------------------------------------------- File
     {
         auto* file = new wxMenu;
-        file->Append(IDM_FILE_NEW, "&New\tCtrl+N");
-        file->Append(IDM_FILE_OPEN, "&Open...\tCtrl+O");
+        file->Append(IDM_FILE_NEW, _("&New\tCtrl+N"));
+        file->Append(IDM_FILE_OPEN, _("&Open...\tCtrl+O"));
         {
             auto* sub = new wxMenu;
             sub->Append(IDM_FILE_OPEN_FOLDER, "Explorer");
@@ -145,12 +145,12 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         file->Append(IDM_FILE_OPEN_DEFAULT_VIEWER, "Open in &Default Viewer");
         file->Append(IDM_FILE_OPENFOLDERASWORKSPACE, "Open Folder as &Workspace...");
         file->Append(IDM_FILE_RELOAD, "Re&load from Disk");
-        file->Append(IDM_FILE_SAVE, "&Save\tCtrl+S");
-        file->Append(IDM_FILE_SAVEAS, "Save &As...\tCtrl+Alt+S");
+        file->Append(IDM_FILE_SAVE, _("&Save\tCtrl+S"));
+        file->Append(IDM_FILE_SAVEAS, _("Save &As...\tCtrl+Alt+S"));
         file->Append(IDM_FILE_SAVECOPYAS, "Save a Cop&y As...");
         file->Append(IDM_FILE_SAVEALL, "Sa&ve All\tCtrl+Shift+S");
         file->Append(IDM_FILE_RENAME, "&Rename...");
-        file->Append(IDM_FILE_CLOSE, "&Close\tCtrl+W");
+        file->Append(IDM_FILE_CLOSE, _("&Close\tCtrl+W"));
         file->Append(IDM_FILE_CLOSEALL, "Clos&e All\tCtrl+Shift+W");
         {
             auto* sub = new wxMenu;
@@ -167,12 +167,12 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         file->Append(IDM_FILE_LOADSESSION, "Load Sess&ion...");
         file->Append(IDM_FILE_SAVESESSION, "Save Sess&ion...");
         file->AppendSeparator();
-        file->Append(IDM_FILE_PRINT, "&Print...\tCtrl+P");
+        file->Append(IDM_FILE_PRINT, _("&Print...\tCtrl+P"));
         file->Append(IDM_FILE_PRINTNOW, "Print No&w");
         file->AppendSeparator();
         // The "Recent Files" submenu (wxFileHistory) is inserted here at runtime by buildMenuBar().
-        file->Append(IDM_FILE_EXIT, "E&xit\tAlt+F4");
-        mb->Append(file, "&File");
+        file->Append(IDM_FILE_EXIT, _("E&xit\tAlt+F4"));
+        mb->Append(file, _("&File"));
     }
 
     // ----------------------------------------------------------------- Edit
@@ -350,7 +350,7 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
             edit->AppendSubMenu(sub, "Read-&Only");
         }
         edit->Append(IDM_EDIT_TOGGLESYSTEMREADONLY, "Read-Only Attribute in Windows");
-        mb->Append(edit, "&Edit");
+        mb->Append(edit, _("&Edit"));
     }
 
     // --------------------------------------------------------------- Search
@@ -458,7 +458,7 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         }
         search->AppendSeparator();
         search->Append(IDM_SEARCH_FINDCHARINRANGE, "Find characters in rang&e...");
-        mb->Append(search, "&Search");
+        mb->Append(search, _("&Search"));
     }
 
     // ----------------------------------------------------------------- View
@@ -587,7 +587,7 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         view->Append(IDM_EDIT_LTR, "Te&xt Direction LTR");
         view->AppendSeparator();
         view->AppendCheckItem(IDM_VIEW_MONITORING, "Monito&ring (tail -f)");
-        mb->Append(view, "&View");
+        mb->Append(view, _("&View"));
     }
 
     // ------------------------------------------------------------- Encoding
@@ -686,7 +686,7 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         enc->Append(IDM_FORMAT_CONV2_UTF_8, "Convert to UTF-8-BOM");
         enc->Append(IDM_FORMAT_CONV2_UTF_16BE, "Convert to UTF-16 BE BOM");
         enc->Append(IDM_FORMAT_CONV2_UTF_16LE, "Convert to UTF-16 LE BOM");
-        mb->Append(enc, "E&ncoding");
+        mb->Append(enc, _("E&ncoding"));
     }
 
     // ------------------------------------------------------------- Language
@@ -717,7 +717,7 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
             lang->AppendSubMenu(sub, "User Defined Language");
         }
         lang->Append(IDM_LANG_USER, "User-Defined");
-        mb->Append(lang, "&Language");
+        mb->Append(lang, _("&Language"));
     }
 
     // ------------------------------------------------------------- Settings
@@ -737,7 +737,7 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         settings->Append(IDM_SETTING_EDITCONTEXTMENU, "Edit Popup ContextMenu");
         settings->AppendSeparator();
         settings->AppendCheckItem(darkModeId, "&Dark Mode");   // our restart-to-apply theme toggle
-        mb->Append(settings, "Se&ttings");
+        mb->Append(settings, _("Se&ttings"));
     }
 
     // ---------------------------------------------------------------- Tools
@@ -763,7 +763,7 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
           sub->Append(IDM_TOOL_SHA512_GENERATEFROMFILE, "Generate from files...");
           sub->Append(IDM_TOOL_SHA512_GENERATEINTOCLIPBOARD, "Generate from selection into clipboard");
           tools->AppendSubMenu(sub, "SHA-512"); }
-        mb->Append(tools, "T&ools");
+        mb->Append(tools, _("T&ools"));
     }
 
     // ---------------------------------------------------------------- Macro
@@ -774,7 +774,7 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         macro->Append(IDM_MACRO_PLAYBACKRECORDEDMACRO, "&Playback");
         macro->Append(IDM_MACRO_SAVECURRENTMACRO, "&Save Current Recorded Macro...");
         macro->Append(IDM_MACRO_RUNMULTIMACRODLG, "&Run a Macro Multiple Times...");
-        mb->Append(macro, "&Macro");
+        mb->Append(macro, _("&Macro"));
     }
 
     // ------------------------------------------------------------------ Run
@@ -783,14 +783,14 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         run->Append(IDM_EXECUTE, "&Run...\tF5");
         run->AppendSeparator();
         run->Append(IDM_EXECUTE_VALIDATE_SHORTCUTSXML, "Validate shortcuts.xml");
-        mb->Append(run, "&Run");
+        mb->Append(run, _("&Run"));
     }
 
     // -------------------------------------------------------------- Plugins
     {
         auto* plugins = new wxMenu;
         plugins->Append(IDM_SETTING_OPENPLUGINSDIR, "Open Plugins Folder...");
-        mb->Append(plugins, "&Plugins");
+        mb->Append(plugins, _("&Plugins"));
     }
 
     // --------------------------------------------------------------- Window
@@ -811,7 +811,7 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         window->Append(IDM_WINDOW_WINDOWS, "&Windows...");
         window->AppendSeparator();
         window->Append(IDM_WINDOW_MRU_FIRST, "Recent Window")->Enable(false);
-        mb->Append(window, "&Window");
+        mb->Append(window, _("&Window"));
     }
 
     // ----------------------------------------------------------- ? (Help)
@@ -829,6 +829,6 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         help->AppendSeparator();
         help->Append(IDM_DEBUGINFO, "Debug Info...");
         help->Append(IDM_ABOUT, "About wxNotepad++\tF1");
-        mb->Append(help, "&About");
+        mb->Append(help, _("&About"));
     }
 }
