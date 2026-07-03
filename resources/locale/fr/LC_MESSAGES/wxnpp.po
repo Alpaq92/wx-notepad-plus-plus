@@ -1,0 +1,1636 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: wxNotepad++\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: fr\n"
+
+msgid "&New\tCtrl+N"
+msgstr "&Nouveau\tCtrl+N"
+
+msgid "&Open...\tCtrl+O"
+msgstr "&Ouvrir...\tCtrl+O"
+
+msgid "Explorer"
+msgstr "Explorer"
+
+msgid "cmd"
+msgstr "cmd"
+
+msgid "PowerShell"
+msgstr "PowerShell"
+
+msgid "Folder as Workspace"
+msgstr "Dossier en tant qu’espace de travail"
+
+msgid "Open Containing &Folder"
+msgstr "Ouvrir le répertoire du &fichier en cours"
+
+msgid "Open in &Default Viewer"
+msgstr "Ouvrir dans l’application par &défaut"
+
+msgid "Open Folder as &Workspace..."
+msgstr "Ouvrir le dossier en tant qu’espace de &travail..."
+
+msgid "Re&load from Disk"
+msgstr "Re&charger depuis le disque"
+
+msgid "&Save\tCtrl+S"
+msgstr "&Enregistrer\tCtrl+S"
+
+msgid "Save &As...\tCtrl+Alt+S"
+msgstr "Enregistrer &sous...\tCtrl+Alt+S"
+
+msgid "Save a Cop&y As..."
+msgstr "Enregistrer une cop&ie..."
+
+msgid "Sa&ve All\tCtrl+Shift+S"
+msgstr "En&registrer tout\tCtrl+Shift+S"
+
+msgid "&Rename..."
+msgstr "&Renommer..."
+
+msgid "&Close\tCtrl+W"
+msgstr "&Fermer\tCtrl+W"
+
+msgid "Clos&e All\tCtrl+Shift+W"
+msgstr "F&ermer tout\tCtrl+Shift+W"
+
+msgid "Close All but Active Document"
+msgstr "Fermer tout sauf le document actuel"
+
+msgid "Close All but Pinned Documents"
+msgstr "Fermer tout sauf les documents épinglés"
+
+msgid "Close All to the Left"
+msgstr "Fermer tout à gauche"
+
+msgid "Close All to the Right"
+msgstr "Fermer tout à droite"
+
+msgid "Close All Unchanged"
+msgstr "Fermer tous les documents non-modifiés"
+
+msgid "Close &Multiple Documents"
+msgstr "Fermer &plusieurs documents"
+
+msgid "Restore Recent Closed File\tCtrl+Shift+T"
+msgstr "Ouvrir le dernier fichier fermé\tCtrl+Shift+T"
+
+msgid "Move to Recycle &Bin"
+msgstr "Mettre à la &corbeille"
+
+msgid "Load Sess&ion..."
+msgstr "Charger une sess&ion..."
+
+msgid "Save Sess&ion..."
+msgstr "Enregistrer la sess&ion..."
+
+msgid "&Print...\tCtrl+P"
+msgstr "Im&primer...\tCtrl+P"
+
+msgid "Print No&w"
+msgstr "Imprimer i&mmédiatement"
+
+msgid "E&xit\tAlt+F4"
+msgstr "&Quitter\tAlt+F4"
+
+msgid "&File"
+msgstr "&Fichier"
+
+msgid "&Undo\tCtrl+Z"
+msgstr "&Annuler\tCtrl+Z"
+
+msgid "&Redo\tCtrl+Y"
+msgstr "&Rétablir\tCtrl+Y"
+
+msgid "Cu&t\tCtrl+X"
+msgstr "Co&uper\tCtrl+X"
+
+msgid "&Copy\tCtrl+C"
+msgstr "&Copier\tCtrl+C"
+
+msgid "&Paste\tCtrl+V"
+msgstr "C&oller\tCtrl+V"
+
+msgid "&Delete\tDel"
+msgstr "&Supprimer\tDel"
+
+msgid "&Select All\tCtrl+A"
+msgstr "Sélectionner t&out\tCtrl+A"
+
+msgid "Begin/End &Select"
+msgstr "Début/fin de &sélection"
+
+msgid "Begin/End Select in Column Mode"
+msgstr "Début/fin de sélection en mode colonne"
+
+msgid "Date Time (short)"
+msgstr "Date && heure (format court)"
+
+msgid "Date Time (long)"
+msgstr "Date && heure (format long)"
+
+msgid "Date Time (customized)"
+msgstr "Date && heure (format personnalisé)"
+
+msgid "Insert"
+msgstr "Insertion"
+
+msgid "Copy Current Full File path"
+msgstr "Copier le chemin complet du document actuel"
+
+msgid "Copy Current Filename"
+msgstr "Copier le nom du document actuel"
+
+msgid "Copy Current Dir. Path"
+msgstr "Copier le dossier du document actuel"
+
+msgid "Copy All Filenames"
+msgstr "Copier tous les noms des documents"
+
+msgid "Copy All File Paths"
+msgstr "Copier tous les chemins des documents"
+
+msgid "Cop&y to Clipboard"
+msgstr "Copier dans le &presse-papiers"
+
+msgid "Increase Line Indent"
+msgstr "Augmenter l’indentation"
+
+msgid "Decrease Line Indent"
+msgstr "Réduire l’indentation"
+
+msgid "&Indent"
+msgstr "&Indentation"
+
+msgid "&UPPERCASE\tCtrl+Shift+U"
+msgstr "EN &MAJUSCULE\tCtrl+Shift+U"
+
+msgid "&lowercase\tCtrl+U"
+msgstr "en &minuscule\tCtrl+U"
+
+msgid "&Proper Case"
+msgstr "Majuscules Dans Les &Titres"
+
+msgid "Proper Case (blend)"
+msgstr "Majuscules Dans Les Titres (moins strict)"
+
+msgid "&Sentence case"
+msgstr "Majuscule en début de &phrase"
+
+msgid "Sentence case (blend)"
+msgstr "Majuscule en début de phrase (moins strict)"
+
+msgid "&iNVERT cASE"
+msgstr "à L’EN&VERS"
+
+msgid "&ranDOm CasE"
+msgstr "a&LÉATOirE"
+
+msgid "Con&vert Case to"
+msgstr "MAJUSCULE/&minuscule"
+
+msgid "Duplicate Current Line\tCtrl+D"
+msgstr "Dupliquer la ligne actuelle\tCtrl+D"
+
+msgid "Remove Duplicate Lines"
+msgstr "Supprimer les lignes en double"
+
+msgid "Remove Consecutive Duplicate Lines"
+msgstr "Supprimer les lignes en double consécutives"
+
+msgid "Split Lines\tCtrl+I"
+msgstr "Séparer en plusieurs lignes\tCtrl+I"
+
+msgid "Join Lines\tCtrl+J"
+msgstr "Joindre plusieurs lignes\tCtrl+J"
+
+msgid "Move Up Current Line\tCtrl+Shift+Up"
+msgstr "Déplacer la ligne actuelle vers le haut\tCtrl+Shift+Up"
+
+msgid "Move Down Current Line\tCtrl+Shift+Down"
+msgstr "Déplacer la ligne actuelle vers le bas\tCtrl+Shift+Down"
+
+msgid "Remove Empty Lines"
+msgstr "Enlever les lignes vides"
+
+msgid "Remove Empty Lines (Containing Blank characters)"
+msgstr "Enlever les lignes vides (contenant les blancs aussi)"
+
+msgid "Insert Blank Line Above Current"
+msgstr "Insérer une ligne vide avant la ligne courante"
+
+msgid "Insert Blank Line Below Current"
+msgstr "Insérer une ligne vide après la ligne courante"
+
+msgid "Reverse Line Order"
+msgstr "Inverser l’ordre des lignes"
+
+msgid "Randomize Line Order"
+msgstr "Trier aléatoirement les lignes"
+
+msgid "Sort Lines Lexicographically Ascending"
+msgstr "Trier les lignes dans l’ordre lexicographique croissant"
+
+msgid "Sort Lines Lex. Ascending Ignoring Case"
+msgstr "Trier les lignes dans l’ordre lexico. croissant en ignorant la casse"
+
+msgid "Sort Lines In Locale Order Ascending"
+msgstr "Trier les lignes dans l’ordre régional croissant"
+
+msgid "Sort Lines As Integers Ascending"
+msgstr "Trier les lignes dans l’ordre d’entier croissant"
+
+msgid "Sort Lines As Decimals (Comma) Ascending"
+msgstr "Trier les lignes dans l’ordre décimal (virgule) croissant"
+
+msgid "Sort Lines As Decimals (Dot) Ascending"
+msgstr "Trier les lignes dans l’ordre décimal (point) croissant"
+
+msgid "Sort Lines By Length Ascending"
+msgstr "Trier les lignes par longueur croissante"
+
+msgid "Sort Lines Lexicographically Descending"
+msgstr "Trier les lignes dans l’ordre lexicographique décroissant"
+
+msgid "Sort Lines Lex. Descending Ignoring Case"
+msgstr "Trier les lignes dans l’ordre lexico. décroissant en ignorant la casse"
+
+msgid "Sort Lines In Locale Order Descending"
+msgstr "Trier les lignes dans l’ordre régional décroissant"
+
+msgid "Sort Lines As Integers Descending"
+msgstr "Trier les lignes dans l’ordre d’entier décroissant"
+
+msgid "Sort Lines As Decimals (Comma) Descending"
+msgstr "Trier les lignes dans l’ordre décimal (virgule) décroissant"
+
+msgid "Sort Lines As Decimals (Dot) Descending"
+msgstr "Trier les lignes dans l’ordre décimal (point) décroissant"
+
+msgid "Sort Lines By Length Descending"
+msgstr "Trier les lignes par longueur décroissante"
+
+msgid "&Line Operations"
+msgstr "&Ligne"
+
+msgid "Toggle Single Line Comment\tCtrl+Q"
+msgstr "Commenter/décommenter (mode ligne)\tCtrl+Q"
+
+msgid "Single Line Comment"
+msgstr "Commenter (mode ligne)"
+
+msgid "Single Line Uncomment"
+msgstr "Décommenter (mode ligne)"
+
+msgid "Block Comment\tCtrl+Shift+Q"
+msgstr "Commenter le bloc sélectionné\tCtrl+Shift+Q"
+
+msgid "Block Uncomment"
+msgstr "Décommenter le bloc sélectionné"
+
+msgid "Co&mment/Uncomment"
+msgstr "Co&mmentaire"
+
+msgid "Function Completion\tCtrl+Space"
+msgstr "Complétion de fonction\tCtrl+Space"
+
+msgid "Word Completion"
+msgstr "Complétion de mot"
+
+msgid "Function Parameters Hint"
+msgstr "Infobulle des paramètres de fonctions"
+
+msgid "Function Parameters Previous Hint"
+msgstr "Infobulle des paramètres de fonctions précédente"
+
+msgid "Function Parameters Next Hint"
+msgstr "Infobulle des paramètres de fonctions suivante"
+
+msgid "Path Completion"
+msgstr "Complétion de chemin d’accès"
+
+msgid "&Auto-Completion"
+msgstr "&Autocomplétion"
+
+msgid "Windows (CR LF)"
+msgstr "Windows (CR LF)"
+
+msgid "Unix (LF)"
+msgstr "Unix (LF)"
+
+msgid "Macintosh (CR)"
+msgstr "Macintosh (CR)"
+
+msgid "&EOL Conversion"
+msgstr "Convertir les sauts de lig&ne"
+
+msgid "Trim Trailing Space"
+msgstr "Enlever les blancs en fin de ligne"
+
+msgid "Trim Leading Space"
+msgstr "Enlever les blancs en début de ligne"
+
+msgid "Trim Leading and Trailing Space"
+msgstr "Enlever les blancs en début et fin de ligne"
+
+msgid "EOL to Space"
+msgstr "Transformer les fins de ligne en espaces"
+
+msgid "Trim both and EOL to Space"
+msgstr "Enlever les blancs et fins de ligne vers Espace"
+
+msgid "TAB to Space"
+msgstr "Transformer les tabulations en espaces"
+
+msgid "Space to TAB (All)"
+msgstr "Transformer tous les espaces en tabulations"
+
+msgid "Space to TAB (Leading)"
+msgstr "Transformer les espaces de début de ligne en tabulations"
+
+msgid "&Blank Operations"
+msgstr "&Traitement des espacements"
+
+msgid "Paste HTML Content"
+msgstr "Coller du contenu HTML"
+
+msgid "Paste RTF Content"
+msgstr "Coller du contenu RTF"
+
+msgid "Copy Binary Content"
+msgstr "Copier du contenu binaire"
+
+msgid "Cut Binary Content"
+msgstr "Couper du contenu binaire"
+
+msgid "Paste Binary Content"
+msgstr "Coller du contenu binaire"
+
+msgid "&Paste Special"
+msgstr "Collage &spécial"
+
+msgid "Open File"
+msgstr "Ouverture du fichier"
+
+msgid "Open Containing Folder in Explorer"
+msgstr "Ouvrir le répertoire dans l’explorateur"
+
+msgid "&Redact Selection █ (Shift: ●)"
+msgstr "&Caviarder la sélection █ (Shift : ●)"
+
+msgid "Search on Internet"
+msgstr "Rechercher sur Internet"
+
+msgid "Change Search Engine..."
+msgstr "Changer le moteur de recherche..."
+
+msgid "&On Selection"
+msgstr "P&our la sélection"
+
+msgid "Ignore Case && Whole Word"
+msgstr "Ignorer la casse && le mot entier"
+
+msgid "Match Case Only"
+msgstr "Respecter la casse seulement"
+
+msgid "Match Whole Word Only"
+msgstr "Respecter le mot entier seulement"
+
+msgid "Match Case && Whole Word"
+msgstr "Respecter la casse && le mot entier"
+
+msgid "Multi-select All"
+msgstr "Multi-sélection TOUS"
+
+msgid "Multi-select Next"
+msgstr "Multi-sélection Suivant"
+
+msgid "Undo the Latest Added Multi-Select"
+msgstr "Annuler le dernier ajout à la multi-sélection"
+
+msgid "Skip Current && Go to Next Multi-select"
+msgstr "Sauter la sélection courante && aller à la prochaine multi-sélection"
+
+msgid "Column Mode..."
+msgstr "Sélection en mode colonne..."
+
+msgid "Colum&n Editor...\tAlt+C"
+msgstr "Éditio&n en mode colonnes...\tAlt+C"
+
+msgid "Character &Panel"
+msgstr "&Panneau des caractères ASCII"
+
+msgid "Clipboard &History"
+msgstr "Panneau &historique du presse-papiers"
+
+msgid "Read-Only on Current Document"
+msgstr "Lecture seule pour le document courant"
+
+msgid "Read-Only for All Documents"
+msgstr "Lecture seule pour tous les documents"
+
+msgid "Clear Read-Only for All Documents"
+msgstr "Enlever la lecture seule pour tous les documents"
+
+msgid "Read-&Only"
+msgstr "Lecture &seule"
+
+msgid "Read-Only Attribute in Windows"
+msgstr "Attribut de lecture seule dans Windows"
+
+msgid "&Edit"
+msgstr "&Édition"
+
+msgid "&Find...\tCtrl+F"
+msgstr "&Rechercher...\tCtrl+F"
+
+msgid "Find in Fi&les...\tCtrl+Shift+F"
+msgstr "Rechercher dans les fich&iers...\tCtrl+Shift+F"
+
+msgid "Find &Next\tF3"
+msgstr "Rechercher le &suivant\tF3"
+
+msgid "Find &Previous\tShift+F3"
+msgstr "Rechercher le &précédent\tShift+F3"
+
+msgid "&Select and Find Next\tCtrl+F3"
+msgstr "&Sélection et recherche suivante\tCtrl+F3"
+
+msgid "&Select and Find Previous\tCtrl+Shift+F3"
+msgstr "&Sélection et recherche précédente\tCtrl+Shift+F3"
+
+msgid "Find (&Volatile) Next"
+msgstr "Recherche &volatile suivante"
+
+msgid "Find (&Volatile) Previous"
+msgstr "Recherche &volatile précédente"
+
+msgid "&Replace...\tCtrl+H"
+msgstr "&Remplacer...\tCtrl+H"
+
+msgid "&Incremental Search\tCtrl+Alt+I"
+msgstr "Recherche &incrémentielle\tCtrl+Alt+I"
+
+msgid "Search Results &Window\tF7"
+msgstr "&Fenêtre des résultats de recherche\tF7"
+
+msgid "Next Search Resul&t\tF4"
+msgstr "Résultat de recherche suivan&t\tF4"
+
+msgid "Previous Search Resul&t\tShift+F4"
+msgstr "Résultat de recherche précéden&t\tShift+F4"
+
+msgid "&Go to...\tCtrl+G"
+msgstr "&Atteindre...\tCtrl+G"
+
+msgid "Go to &Matching Brace\tCtrl+B"
+msgstr "Aller au délimiteur s&ymétrique\tCtrl+B"
+
+msgid "Select All In-betw&een {} [] or ()"
+msgstr "Sélectionner tout &entre {} [] ou ()"
+
+msgid "Mar&k..."
+msgstr "Mar&quer..."
+
+msgid "Go to Next Change"
+msgstr "Aller à la modification suivante"
+
+msgid "Go to Previous Change"
+msgstr "Aller à la modification précédente"
+
+msgid "Clear Change History"
+msgstr "Vider l’historique de modification"
+
+msgid "Change History"
+msgstr "Historique de modification"
+
+msgid "Using 1st Style"
+msgstr "Appliquer le style 1"
+
+msgid "Using 2nd Style"
+msgstr "Appliquer le style 2"
+
+msgid "Using 3rd Style"
+msgstr "Appliquer le style 3"
+
+msgid "Using 4th Style"
+msgstr "Appliquer le style 4"
+
+msgid "Using 5th Style"
+msgstr "Appliquer le style 5"
+
+msgid "Style &All Occurrences of Token"
+msgstr "M&arquer tout"
+
+msgid "Style &One Token"
+msgstr "Marquer uniquement la sélecti&on"
+
+msgid "Clear 1st Style"
+msgstr "Dégager le style 1"
+
+msgid "Clear 2nd Style"
+msgstr "Dégager le style 2"
+
+msgid "Clear 3rd Style"
+msgstr "Dégager le style 3"
+
+msgid "Clear 4th Style"
+msgstr "Dégager le style 4"
+
+msgid "Clear 5th Style"
+msgstr "Dégager le style 5"
+
+msgid "Clear all Styles"
+msgstr "Dégager tous les styles"
+
+msgid "Clear Style"
+msgstr "Dégager le style"
+
+msgid "1st Style"
+msgstr "Style 1"
+
+msgid "2nd Style"
+msgstr "Style 2"
+
+msgid "3rd Style"
+msgstr "Style 3"
+
+msgid "4th Style"
+msgstr "Style 4"
+
+msgid "5th Style"
+msgstr "Style 5"
+
+msgid "Find Mark Style"
+msgstr "Style de recherche"
+
+msgid "&Jump Up"
+msgstr "Aller vers le &haut"
+
+msgid "Jump &Down"
+msgstr "Aller vers le &bas"
+
+msgid "All Styles"
+msgstr "Tous les styles"
+
+msgid "&Copy Styled Text"
+msgstr "&Copier le texte marqué"
+
+msgid "Toggle Bookmark\tCtrl+F2"
+msgstr "Mettre/enlever un signet\tCtrl+F2"
+
+msgid "Next Bookmark\tF2"
+msgstr "Signet suivant\tF2"
+
+msgid "Previous Bookmark\tShift+F2"
+msgstr "Signet précédent\tShift+F2"
+
+msgid "Clear All Bookmarks"
+msgstr "Enlever tous les signets"
+
+msgid "Cut Bookmarked Lines"
+msgstr "Couper les lignes marquées"
+
+msgid "Copy Bookmarked Lines"
+msgstr "Copier les lignes marquées"
+
+msgid "Paste to (Replace) Bookmarked Lines"
+msgstr "Coller pour remplacer les lignes marquées"
+
+msgid "Remove Bookmarked Lines"
+msgstr "Supprimer les lignes marquées"
+
+msgid "Remove Non-Bookmarked Lines"
+msgstr "Supprimer les lignes non marquées"
+
+msgid "Inverse Bookmarks"
+msgstr "Inverser les signets"
+
+msgid "&Bookmark"
+msgstr "&Signet"
+
+msgid "Find characters in rang&e..."
+msgstr "Rechercher des caractères dans une plag&e..."
+
+msgid "&Search"
+msgstr "&Recherche"
+
+msgid "Always on &Top"
+msgstr "&Toujours devant"
+
+msgid "To&ggle Full Screen Mode\tF11"
+msgstr "Activer/désactiver le mode plein é&cran\tF11"
+
+msgid "&Post-It\tF12"
+msgstr "Mode &post-it\tF12"
+
+msgid "D&istraction Free Mode"
+msgstr "Mode sans d&istraction"
+
+msgid "&Firefox"
+msgstr "&Firefox"
+
+msgid "&Chrome"
+msgstr "&Chrome"
+
+msgid "&Edge"
+msgstr "&Edge"
+
+msgid "&IE"
+msgstr "&IE"
+
+msgid "&View Current File in"
+msgstr "&Afficher le fichier dans"
+
+msgid "Show Space and Tab"
+msgstr "Afficher les blancs et les tabulations"
+
+msgid "Show End of Line"
+msgstr "Afficher les symboles de fin de ligne"
+
+msgid "Show Non-Printing Characters"
+msgstr "Afficher les caractères non-imprimables"
+
+msgid "Show Control Characters && Unicode EOL"
+msgstr "Afficher les caractères de contrôle && Unicode EOL"
+
+msgid "Show All Characters"
+msgstr "Afficher tous les caractères"
+
+msgid "Show Indent Guide"
+msgstr "Afficher le guide d’indentation"
+
+msgid "Show Wrap Symbol"
+msgstr "Afficher les marques de coupures de ligne"
+
+msgid "Show S&ymbol"
+msgstr "S&ymboles spéciaux"
+
+msgid "Zoom &In (Ctrl+Mouse Wheel Up)"
+msgstr "Zoom &avant (Ctrl+Molette vers le haut)"
+
+msgid "Zoom &Out (Ctrl+Mouse Wheel Down)"
+msgstr "Zoom a&rrière (Ctrl+Molette vers le bas)"
+
+msgid "&Restore Default Zoom"
+msgstr "&Restaurer le zoom par défaut"
+
+msgid "&Zoom"
+msgstr "&Zoom"
+
+msgid "Move to Other &View"
+msgstr "Déplacer vers l’autre &vue"
+
+msgid "Clone to Other Vie&w"
+msgstr "&Cloner vers l’autre vue"
+
+msgid "Mo&ve to New Instance"
+msgstr "Déplacer &vers une nouvelle fenêtre"
+
+msgid "&Open in New Instance"
+msgstr "&Ouvrir dans une nouvelle fenêtre"
+
+msgid "&Move/Clone Current Document"
+msgstr "&Déplacer/cloner le document actuel"
+
+msgid "1st Tab\tCtrl+1"
+msgstr "Onglet 1\tCtrl+1"
+
+msgid "2nd Tab\tCtrl+2"
+msgstr "Onglet 2\tCtrl+2"
+
+msgid "3rd Tab\tCtrl+3"
+msgstr "Onglet 3\tCtrl+3"
+
+msgid "4th Tab\tCtrl+4"
+msgstr "Onglet 4\tCtrl+4"
+
+msgid "5th Tab\tCtrl+5"
+msgstr "Onglet 5\tCtrl+5"
+
+msgid "6th Tab\tCtrl+6"
+msgstr "Onglet 6\tCtrl+6"
+
+msgid "7th Tab\tCtrl+7"
+msgstr "Onglet 7\tCtrl+7"
+
+msgid "8th Tab\tCtrl+8"
+msgstr "Onglet 8\tCtrl+8"
+
+msgid "9th Tab\tCtrl+9"
+msgstr "Onglet 9\tCtrl+9"
+
+msgid "First Tab"
+msgstr "Premier onglet"
+
+msgid "Last Tab"
+msgstr "Dernier onglet"
+
+msgid "Next Tab\tCtrl+Tab"
+msgstr "Onglet suivant\tCtrl+Tab"
+
+msgid "Previous Tab\tCtrl+Shift+Tab"
+msgstr "Onglet précédent\tCtrl+Shift+Tab"
+
+msgid "Move to Start"
+msgstr "Déplacer au début"
+
+msgid "Move to End"
+msgstr "Déplacer à la fin"
+
+msgid "Move Tab Forward"
+msgstr "Déplacer l’onglet vers l’avant"
+
+msgid "Move Tab Backward"
+msgstr "Déplacer l’onglet vers l’arrière"
+
+msgid "Apply Color 1"
+msgstr "Appliquer la couleur 1"
+
+msgid "Apply Color 2"
+msgstr "Appliquer la couleur 2"
+
+msgid "Apply Color 3"
+msgstr "Appliquer la couleur 3"
+
+msgid "Apply Color 4"
+msgstr "Appliquer la couleur 4"
+
+msgid "Apply Color 5"
+msgstr "Appliquer la couleur 5"
+
+msgid "Remove Color"
+msgstr "Enlever la couleur"
+
+msgid "Ta&b"
+msgstr "O&nglet"
+
+msgid "&Word wrap"
+msgstr "&Retour automatique à la ligne"
+
+msgid "&Hide Lines"
+msgstr "&Masquer les lignes"
+
+msgid "Fold All\tAlt+0"
+msgstr "Replier tous les blocs\tAlt+0"
+
+msgid "Unfold All\tAlt+Shift+0"
+msgstr "Déplier tous les blocs\tAlt+Shift+0"
+
+msgid "Fold Current Level\tCtrl+Alt+F"
+msgstr "Replier le bloc de la ligne actuelle\tCtrl+Alt+F"
+
+msgid "Unfold Current Level\tCtrl+Alt+Shift+F"
+msgstr "Déplier le bloc de la ligne actuelle\tCtrl+Alt+Shift+F"
+
+msgid "1\tAlt+1"
+msgstr "1\tAlt+1"
+
+msgid "2\tAlt+2"
+msgstr "2\tAlt+2"
+
+msgid "3\tAlt+3"
+msgstr "3\tAlt+3"
+
+msgid "4\tAlt+4"
+msgstr "4\tAlt+4"
+
+msgid "5\tAlt+5"
+msgstr "5\tAlt+5"
+
+msgid "6\tAlt+6"
+msgstr "6\tAlt+6"
+
+msgid "7\tAlt+7"
+msgstr "7\tAlt+7"
+
+msgid "8\tAlt+8"
+msgstr "8\tAlt+8"
+
+msgid "Fold Level"
+msgstr "Replier le niveau"
+
+msgid "1\tAlt+Shift+1"
+msgstr "1\tAlt+Shift+1"
+
+msgid "2\tAlt+Shift+2"
+msgstr "2\tAlt+Shift+2"
+
+msgid "3\tAlt+Shift+3"
+msgstr "3\tAlt+Shift+3"
+
+msgid "4\tAlt+Shift+4"
+msgstr "4\tAlt+Shift+4"
+
+msgid "5\tAlt+Shift+5"
+msgstr "5\tAlt+Shift+5"
+
+msgid "6\tAlt+Shift+6"
+msgstr "6\tAlt+Shift+6"
+
+msgid "7\tAlt+Shift+7"
+msgstr "7\tAlt+Shift+7"
+
+msgid "8\tAlt+Shift+8"
+msgstr "8\tAlt+Shift+8"
+
+msgid "Unfold Level"
+msgstr "Déplier le niveau"
+
+msgid "&Summary..."
+msgstr "&Résumé..."
+
+msgid "Project Panel &1"
+msgstr "Panneau de projet &1"
+
+msgid "Project Panel &2"
+msgstr "Panneau de projet &2"
+
+msgid "Project Panel &3"
+msgstr "Panneau de projet &3"
+
+msgid "Pro&ject Panels"
+msgstr "Panneaux de pro&jet"
+
+msgid "Folder as Wor&kspace"
+msgstr "Dossier en tant qu’espace de tra&vail"
+
+msgid "&Document Map"
+msgstr "Plan du &document"
+
+msgid "D&ocument List"
+msgstr "C&ommutateur de documents"
+
+msgid "Function &List"
+msgstr "&Liste des fonctions"
+
+msgid "T&ext Direction RTL"
+msgstr "T&exte de droite à gauche"
+
+msgid "Te&xt Direction LTR"
+msgstr "Te&xte de gauche à droite"
+
+msgid "Monito&ring (tail -f)"
+msgstr "Su&rveillance de Log (tail -f)"
+
+msgid "&View"
+msgstr "&Affichage"
+
+msgid "ANSI"
+msgstr "ANSI"
+
+msgid "UTF-8"
+msgstr "UTF-8"
+
+msgid "UTF-8-BOM"
+msgstr "UTF-8-BOM"
+
+msgid "UTF-16 BE BOM"
+msgstr "UTF-16 BE BOM"
+
+msgid "UTF-16 LE BOM"
+msgstr "UTF-16 LE BOM"
+
+msgid "ISO 8859-6"
+msgstr "ISO 8859-6"
+
+msgid "OEM 720"
+msgstr "OEM 720"
+
+msgid "Windows-1256"
+msgstr "Windows-1256"
+
+msgid "Arabic"
+msgstr "Arabe"
+
+msgid "ISO 8859-4"
+msgstr "ISO 8859-4"
+
+msgid "ISO 8859-13"
+msgstr "ISO 8859-13"
+
+msgid "OEM 775"
+msgstr "OEM 775"
+
+msgid "Windows-1257"
+msgstr "Windows-1257"
+
+msgid "Baltic"
+msgstr "Langues baltes"
+
+msgid "ISO 8859-14"
+msgstr "ISO 8859-14"
+
+msgid "Celtic"
+msgstr "Langues celtiques"
+
+msgid "ISO 8859-5"
+msgstr "ISO 8859-5"
+
+msgid "KOI8-R"
+msgstr "KOI8-R"
+
+msgid "KOI8-U"
+msgstr "KOI8-U"
+
+msgid "Macintosh"
+msgstr "Macintosh"
+
+msgid "OEM 855"
+msgstr "OEM 855"
+
+msgid "OEM 866"
+msgstr "OEM 866"
+
+msgid "Windows-1251"
+msgstr "Windows-1251"
+
+msgid "Cyrillic"
+msgstr "Cyrillique"
+
+msgid "OEM 852"
+msgstr "OEM 852"
+
+msgid "Windows-1250"
+msgstr "Windows-1250"
+
+msgid "Central European"
+msgstr "Langues d’Europe centrale"
+
+msgid "Big5 (Traditional)"
+msgstr "Big5 (traditionnel)"
+
+msgid "GB2312 (Simplified)"
+msgstr "GB2312 (simplifié)"
+
+msgid "Chinese"
+msgstr "Chinois"
+
+msgid "ISO 8859-2"
+msgstr "ISO 8859-2"
+
+msgid "Eastern European"
+msgstr "Langues d’Europe orientale"
+
+msgid "ISO 8859-7"
+msgstr "ISO 8859-7"
+
+msgid "OEM 737"
+msgstr "OEM 737"
+
+msgid "OEM 869"
+msgstr "OEM 869"
+
+msgid "Windows-1253"
+msgstr "Windows-1253"
+
+msgid "Greek"
+msgstr "Grec"
+
+msgid "ISO 8859-8"
+msgstr "ISO 8859-8"
+
+msgid "OEM 862"
+msgstr "OEM 862"
+
+msgid "Windows-1255"
+msgstr "Windows-1255"
+
+msgid "Hebrew"
+msgstr "Hébreu"
+
+msgid "Shift-JIS"
+msgstr "Shift-JIS"
+
+msgid "Japanese"
+msgstr "Japonais"
+
+msgid "Windows 949"
+msgstr "Windows 949"
+
+msgid "EUC-KR"
+msgstr "EUC-KR"
+
+msgid "Korean"
+msgstr "Coréen"
+
+msgid "OEM 861 : Icelandic"
+msgstr "OEM 861 : islandais"
+
+msgid "OEM 865 : Nordic"
+msgstr "OEM 865 : nordique"
+
+msgid "North European"
+msgstr "Langues d’Europe du nord"
+
+msgid "TIS-620"
+msgstr "TIS-620"
+
+msgid "Thai"
+msgstr "Thaï"
+
+msgid "ISO 8859-3"
+msgstr "ISO 8859-3"
+
+msgid "ISO 8859-9"
+msgstr "ISO 8859-9"
+
+msgid "OEM 857"
+msgstr "OEM 857"
+
+msgid "Windows-1254"
+msgstr "Windows-1254"
+
+msgid "Turkish"
+msgstr "Turc"
+
+msgid "ISO 8859-1"
+msgstr "ISO 8859-1"
+
+msgid "ISO 8859-15"
+msgstr "ISO 8859-15"
+
+msgid "OEM 850"
+msgstr "OEM 850"
+
+msgid "OEM 858"
+msgstr "OEM 858"
+
+msgid "OEM 860 : Portuguese"
+msgstr "OEM 860 : portugais"
+
+msgid "OEM 863 : French"
+msgstr "OEM 863 : français"
+
+msgid "OEM-US"
+msgstr "OEM-US"
+
+msgid "Windows-1252"
+msgstr "Windows-1252"
+
+msgid "Western European"
+msgstr "Langues d’Europe occidentale"
+
+msgid "Windows-1258"
+msgstr "Windows-1258"
+
+msgid "Vietnamese"
+msgstr "Vietnamien"
+
+msgid "Character sets"
+msgstr "Codage de caractères"
+
+msgid "Convert to ANSI"
+msgstr "Convertir en ANSI"
+
+msgid "Convert to UTF-8"
+msgstr "Convertir en UTF-8"
+
+msgid "Convert to UTF-8-BOM"
+msgstr "Convertir en UTF-8-BOM"
+
+msgid "Convert to UTF-16 BE BOM"
+msgstr "Convertir en UTF-16 BE BOM"
+
+msgid "Convert to UTF-16 LE BOM"
+msgstr "Convertir en UTF-16 LE BOM"
+
+msgid "E&ncoding"
+msgstr "E&ncodage"
+
+msgid "None (Normal Text)"
+msgstr "Aucun (Texte normal)"
+
+msgid "Define your language..."
+msgstr "Définir votre langage..."
+
+msgid "Open User Defined Language folder..."
+msgstr "Ouvrir le dossier des langages utilisateur..."
+
+msgid "Notepad++ User Defined Languages Collection"
+msgstr "Collection de langages définis par l’utilisateur Notepad++"
+
+msgid "User Defined Language"
+msgstr "Langage utilisateur"
+
+msgid "User-Defined"
+msgstr "Défini par l’utilisateur"
+
+msgid "&Language"
+msgstr "&Langage"
+
+msgid "Preferences..."
+msgstr "Préférences..."
+
+msgid "Style Configurator..."
+msgstr "Configurateur de coloration syntaxique..."
+
+msgid "Shortcut Mapper..."
+msgstr "Raccourcis clavier..."
+
+msgid "Import plugin(s)..."
+msgstr "Importer des modules d’extension..."
+
+msgid "Import style theme(s)..."
+msgstr "Importer un thème..."
+
+msgid "Import"
+msgstr "Importer"
+
+msgid "Edit Popup ContextMenu"
+msgstr "Éditer le menu contextuel"
+
+msgid "&Dark Mode"
+msgstr "Mode &sombre"
+
+msgid "Se&ttings"
+msgstr "Paramè&tres"
+
+msgid "Generate..."
+msgstr "Générer..."
+
+msgid "Generate from files..."
+msgstr "Générer depuis les fichiers..."
+
+msgid "Generate from selection into clipboard"
+msgstr "Générer dans le presse-papiers depuis la sélection"
+
+msgid "MD5"
+msgstr "MD5"
+
+msgid "SHA-1"
+msgstr "SHA-1"
+
+msgid "SHA-256"
+msgstr "SHA-256"
+
+msgid "SHA-512"
+msgstr "SHA-512"
+
+msgid "T&ools"
+msgstr "&Outils"
+
+msgid "Start Re&cording"
+msgstr "Démarrer l’&enregistrement"
+
+msgid "S&top Recording"
+msgstr "Arrê&ter l’enregistrement"
+
+msgid "&Playback"
+msgstr "Re&jouer la macro"
+
+msgid "&Save Current Recorded Macro..."
+msgstr "Enregi&strer la macro actuelle..."
+
+msgid "&Run a Macro Multiple Times..."
+msgstr "Exécuter une macro en &boucle..."
+
+msgid "&Macro"
+msgstr "&Macro"
+
+msgid "&Run...\tF5"
+msgstr "&Exécuter...\tF5"
+
+msgid "Validate shortcuts.xml"
+msgstr "Valider shortcuts.xml"
+
+msgid "&Run"
+msgstr "E&xécution"
+
+msgid "Open Plugins Folder..."
+msgstr "Ouvrir le dossier des modules d’extension..."
+
+msgid "&Plugins"
+msgstr "Modules d’ex&tension"
+
+msgid "Name A to Z"
+msgstr "Nom de A à Z"
+
+msgid "Name Z to A"
+msgstr "Nom de Z à A"
+
+msgid "Path A to Z"
+msgstr "Chemin d’accès de A à Z"
+
+msgid "Path Z to A"
+msgstr "Chemin d’accès de Z à A"
+
+msgid "Type A to Z"
+msgstr "Type de A à Z"
+
+msgid "Type Z to A"
+msgstr "Type de Z à A"
+
+msgid "Content Length Ascending"
+msgstr "Taille de +petite à +grande"
+
+msgid "Content Length Descending"
+msgstr "Taille de +grande à +petite"
+
+msgid "Modified Time Ascending"
+msgstr "Heure de modification de +ancienne à +récente"
+
+msgid "Modified Time Descending"
+msgstr "Heure de modification de +récente à +ancienne"
+
+msgid "Sort By"
+msgstr "Trier par"
+
+msgid "&Windows..."
+msgstr "&Documents..."
+
+msgid "Recent Window"
+msgstr "Fenêtre récente"
+
+msgid "&Window"
+msgstr "&Documents"
+
+msgid "Command Line Arguments..."
+msgstr "Arguments de la ligne de commande..."
+
+msgid "Notepad++ Home"
+msgstr "Site officiel Notepad++"
+
+msgid "Notepad++ Project Page"
+msgstr "Projet de développement de Notepad++"
+
+msgid "Notepad++ Online User Manual"
+msgstr "Manuel en ligne de Notepad++"
+
+msgid "Notepad++ Community (Forum)"
+msgstr "Communauté Notepad++ (Forum)"
+
+msgid "Check for Updates"
+msgstr "Rechercher des mises à jour"
+
+msgid "Set Updater Proxy..."
+msgstr "Paramétrer le proxy de mise à jour..."
+
+msgid "Debug Info..."
+msgstr "Informations de débogage..."
+
+msgid "About wxNotepad++\tF1"
+msgstr "À propos de wxNotepad++\tF1"
+
+msgid "&About"
+msgstr "À &propos"
+
+msgid "Go to line"
+msgstr "Aller à la ligne"
+
+msgid "Column Editor"
+msgstr "Édition en colonnes"
+
+msgid "Text to Insert"
+msgstr "Texte à insérer"
+
+msgid "Number to Insert"
+msgstr "Nombre à insérer"
+
+msgid "Initial:"
+msgstr "Nombre initial :"
+
+msgid "Increase by:"
+msgstr "Augmenter de :"
+
+msgid "Leading zeros"
+msgstr "Zéros en tête"
+
+msgid "Format"
+msgstr "Format"
+
+msgid "Change Search Engine"
+msgstr "Changer le moteur de recherche"
+
+msgid "Search on Internet uses:"
+msgstr "La recherche sur Internet utilise :"
+
+msgid "Find Characters in Range"
+msgstr "Rechercher des caractères dans une plage"
+
+msgid "Finds the next character (from the caret, wrapping)\nwhose code falls within this range."
+msgstr "Recherche le caractère suivant (depuis le curseur, en bouclant)\ndont le code se situe dans cette plage."
+
+msgid "From:"
+msgstr "De :"
+
+msgid "To:"
+msgstr "À :"
+
+msgid "Hexadecimal"
+msgstr "Hexadécimal"
+
+msgid "Find Next"
+msgstr "Rechercher le suivant"
+
+msgid "Replace"
+msgstr "Remplacer"
+
+msgid "Find"
+msgstr "Rechercher"
+
+msgid "Find in Files"
+msgstr "Rechercher dans les fichiers"
+
+msgid "Mark"
+msgstr "Marquer"
+
+msgid "Find what :"
+msgstr "Recherche :"
+
+msgid "Replace with :"
+msgstr "Remplacer par :"
+
+msgid "Filters :"
+msgstr "Filtres :"
+
+msgid "Directory :"
+msgstr "Dossier :"
+
+msgid "Match &whole word only"
+msgstr "Mot entier &uniquement"
+
+msgid "Match &case"
+msgstr "Respecter la &casse"
+
+msgid "Wra&p around"
+msgstr "&Boucler"
+
+msgid "&Backward direction"
+msgstr "Rechercher vers l’&arrière"
+
+msgid "In se&lection"
+msgstr "Dans la sé&lection"
+
+msgid "Search Mode"
+msgstr "Mode de recherche"
+
+msgid "Add Files..."
+msgstr "Ajouter des fichiers..."
+
+msgid "Add Folder"
+msgstr "Ajouter un dossier"
+
+msgid "Rename"
+msgstr "Renommer"
+
+msgid "Remove"
+msgstr "Supprimer"
+
+msgid "New Workspace"
+msgstr "Nouvel espace de travail"
+
+msgid "Open Workspace..."
+msgstr "Ouvrir un espace de travail..."
+
+msgid "Save Workspace As..."
+msgstr "Enregistrer l'espace de travail sous..."
+
+msgid "Find: "
+msgstr "Rechercher : "
+
+msgid "Next"
+msgstr "Suivant"
+
+msgid "Close"
+msgstr "Fermer"
+
+msgid "Match case"
+msgstr "Respecter la casse"
+
+msgid "Whole word only"
+msgstr "Mot entier uniquement"
+
+msgid "Regular expression"
+msgstr "Expression régulière"
+
+msgid "In all sub-folders"
+msgstr "Dans tous les sous-dossiers"
+
+msgid "Find what:"
+msgstr "Recherche :"
+
+msgid "Directory:"
+msgstr "Dossier :"
+
+msgid "Filters:"
+msgstr "Filtres :"
+
+msgid "Find All"
+msgstr "Trouver tout"
+
+msgid "Run"
+msgstr "Exécuter"
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid "The Program to Run   (variables: $(FULL_CURRENT_PATH), $(CURRENT_DIRECTORY),\n$(FILE_NAME), $(CURRENT_WORD), $(CURRENT_LINE) ...)"
+msgstr "Programme à exécuter   (variables : $(FULL_CURRENT_PATH), $(CURRENT_DIRECTORY),\n$(FILE_NAME), $(CURRENT_WORD), $(CURRENT_LINE) ...)"
+
+msgid "Failed to run:\n"
+msgstr "Échec de l’exécution :\n"
+
+msgid "Could not read the session file."
+msgstr "Impossible de lire le fichier de session."
+
+msgid "Load Session"
+msgstr "Charger une session"
+
+msgid "No session data in this file."
+msgstr "Aucune donnée de session dans ce fichier."
+
+msgid "Save file\n%s ?"
+msgstr "Enregistrer le fichier\n%s ?"
+
+msgid "&Save"
+msgstr "&Enregistrer"
+
+msgid "Do&n't Save"
+msgstr "&Ne pas enregistrer"
+
+msgid "&Cancel"
+msgstr "&Annuler"
+
+msgid "Close All BUT This"
+msgstr "Fermer tout sauf celui-ci"
+
+msgid "Close All"
+msgstr "Fermer tout"
+
+msgid "Save"
+msgstr "Enregistrer"
+
+msgid "Save As..."
+msgstr "Enregistrer sous..."
+
+msgid "Move to Other View"
+msgstr "Déplacer vers l'autre vue"
+
+msgid "Clone to Other View"
+msgstr "Cloner vers l'autre vue"
+
+msgid "None"
+msgstr "Aucun"
+
+msgid "Apply Colour"
+msgstr "Appliquer la couleur"
+
+msgid "(more items added incrementally)"
+msgstr "(d’autres éléments ajoutés progressivement)"
+
+msgid "Recent &Files"
+msgstr "&Fichiers récents"
+
+msgid "Re-interpreting the encoding discards unsaved changes. Continue?"
+msgstr "Réinterpréter l’encodage annule les modifications non enregistrées. Continuer ?"
+
+msgid "Encoding"
+msgstr "Encodage"
+
+msgid "Clipboard has no matching content."
+msgstr "Le presse-papiers ne contient aucun contenu correspondant."
+
+msgid "Paste"
+msgstr "Coller"
+
+msgid "Move \"%s\" to the Recycle Bin?"
+msgstr "Déplacer \"%s\" vers la Corbeille ?"
+
+msgid "Enter valid character codes."
+msgstr "Saisissez des codes de caractères valides."
+
+msgid "Show toolbar"
+msgstr "Afficher la barre d’outils"
+
+msgid "Show status bar"
+msgstr "Afficher la barre d’état"
+
+msgid "Show integrated top bar"
+msgstr "Afficher la barre supérieure intégrée"
+
+msgid "Display line number"
+msgstr "Afficher la numérotation des lignes"
+
+msgid "Show indentation guide"
+msgstr "Afficher le guide d’indentation"
+
+msgid "Show white space and TAB"
+msgstr "Afficher les blancs et les tabulations"
+
+msgid "Show wrap symbol"
+msgstr "Afficher les marques de coupures de ligne"
+
+msgid "Word wrap"
+msgstr "Retour automatique à la ligne"
+
+msgid "Highlight current line"
+msgstr "Surligner la ligne actuelle"
+
+msgid "Enable scrolling beyond last line"
+msgstr "Autoriser le défilement au-delà de la dernière ligne"
+
+msgid "Enable multi-editing (multi-selection)"
+msgstr "Activer la multi-édition (multi-sélection)"
+
+msgid "Caret width:"
+msgstr "Largeur du curseur :"
+
+msgid "Vertical edge at column (0 = off):"
+msgstr "Bordure verticale à la colonne (0 = désactivé) :"
+
+msgid "Caret blink rate (ms, 0 = steady):"
+msgstr "Vitesse de clignotement du curseur (ms, 0 = fixe) :"
+
+msgid "Tab size:"
+msgstr "Taille des tabulations :"
+
+msgid "Replace by space"
+msgstr "Remplacer par des espaces"
+
+msgid "Auto-indent new lines"
+msgstr "Indentation automatique des nouvelles lignes"
+
+msgid "Enable auto-completion on each input"
+msgstr "Activer l’autocomplétion à chaque saisie"
+
+msgid "From the"
+msgstr "À partir du"
+
+msgid "th character"
+msgstr "ème caractère"
+
+msgid "Auto-insert matching brackets and quotes"
+msgstr "Insertion automatique des parenthèses et guillemets correspondants"
+
+msgid "Enable Dark Mode   (applied on restart)"
+msgstr "Activer le mode sombre   (appliqué au redémarrage)"
+
+msgid "Format (Line ending)"
+msgstr "Format (fin de ligne)"
+
+msgid "Default language:"
+msgstr "Langage par défaut :"
+
+msgid "Show close button on each tab   (applied on restart)"
+msgstr "Afficher le bouton de fermeture sur chaque onglet   (appliqué au redémarrage)"
+
+msgid "Max number of entries (applied on restart):"
+msgstr "Nombre maximal d’entrées (appliqué au redémarrage) :"
+
+msgid "Header:"
+msgstr "En-tête :"
+
+msgid "Footer:"
+msgstr "Pied de page :"
+
+msgid "Run until the end of file"
+msgstr "Exécuter jusqu’à la fin du fichier"
+
+msgid "times"
+msgstr "fois"
+
+msgid "Select theme:"
+msgstr "Sélectionner le thème :"
+
+msgid "Bold"
+msgstr "Gras"
+
+msgid "Italic"
+msgstr "Italique"
+
+msgid "Foreground colour:"
+msgstr "Couleur de premier plan :"
+
+msgid "Background colour:"
+msgstr "Couleur d’arrière-plan :"
+
+msgid "Save && Close"
+msgstr "Enregistrer && fermer"
+
+msgid "Encode as ANSI"
+msgstr "Encoder en ANSI"
+
+msgid "Encode as UTF-8"
+msgstr "Encoder en UTF-8"
+
+msgid "Encode as UTF-8 BOM"
+msgstr "Encoder en UTF-8 BOM"
+
+msgid "Encode as UTF-16 LE BOM"
+msgstr "Encoder en UTF-16 LE BOM"
+
+msgid "Encode as UTF-16 BE BOM"
+msgstr "Encoder en UTF-16 BE BOM"
+
+msgid "Convert to UTF-8 BOM"
+msgstr "Convertir en UTF-8 BOM"
+
+msgid "Column (rectangular) selection:\n\n- Alt + drag the mouse\n- Alt + Shift + Arrow keys\n- Alt + Shift + Click\n\nTyping or pasting applies to every line of the block at once."
+msgstr "Sélection en colonne (rectangulaire) :\n\n- Alt + glisser la souris\n- Alt + Shift + touches fléchées\n- Alt + Shift + clic\n\nLa saisie ou le collage s’applique à toutes les lignes du bloc à la fois."
+
+msgid "Column Mode"
+msgstr "Sélection en mode colonne"

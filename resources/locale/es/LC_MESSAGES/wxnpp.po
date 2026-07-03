@@ -4,13 +4,13 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: pl\n"
+"Language: es\n"
 
 msgid "&New\tCtrl+N"
-msgstr "&Nowy\tCtrl+N"
+msgstr "&Nuevo\tCtrl+N"
 
 msgid "&Open...\tCtrl+O"
-msgstr "&Otwórz...\tCtrl+O"
+msgstr "&Abrir...\tCtrl+O"
 
 msgid "Explorer"
 msgstr "Explorer"
@@ -22,298 +22,298 @@ msgid "PowerShell"
 msgstr "PowerShell"
 
 msgid "Folder as Workspace"
-msgstr "Folder jako obszar roboczy"
+msgstr "Carpeta como espacio de trabajo"
 
 msgid "Open Containing &Folder"
-msgstr "Otwórz &folder zawierający"
+msgstr "Abrir carp&eta contenedora"
 
 msgid "Open in &Default Viewer"
-msgstr "Otwórz w &domyślnej przeglądarce"
+msgstr "Abrir en &visor predeterminado"
 
 msgid "Open Folder as &Workspace..."
-msgstr "Otwórz folder jako &obszar roboczy..."
+msgstr "Abrir carpeta como espacio de traba&jo..."
 
 msgid "Re&load from Disk"
-msgstr "Wczytaj &ponownie z dysku"
+msgstr "Recargar desde disc&o"
 
 msgid "&Save\tCtrl+S"
-msgstr "&Zapisz\tCtrl+S"
+msgstr "&Guardar\tCtrl+S"
 
 msgid "Save &As...\tCtrl+Alt+S"
-msgstr "Zapisz &jako...\tCtrl+Alt+S"
+msgstr "Guardar co&mo...\tCtrl+Alt+S"
 
 msgid "Save a Cop&y As..."
-msgstr "Zapisz &kopię jako..."
+msgstr "G&uardar una copia como..."
 
 msgid "Sa&ve All\tCtrl+Shift+S"
-msgstr "Zapisz &wszystko\tCtrl+Shift+S"
+msgstr "Guardar &todo\tCtrl+Shift+S"
 
 msgid "&Rename..."
-msgstr "Zmień naz&wę..."
+msgstr "Renom&brar..."
 
 msgid "&Close\tCtrl+W"
-msgstr "Za&mknij\tCtrl+W"
+msgstr "&Cerrar\tCtrl+W"
 
 msgid "Clos&e All\tCtrl+Shift+W"
-msgstr "Zamknij wszystki&e\tCtrl+Shift+W"
+msgstr "C&errar todo\tCtrl+Shift+W"
 
 msgid "Close All but Active Document"
-msgstr "Zamknij wszystkie oprócz aktywnego dokumentu"
+msgstr "Cerrar todo excepto el documento activo"
 
 msgid "Close All but Pinned Documents"
-msgstr "Zamknij wszystkie oprócz przypiętych dokumentów"
+msgstr "Cerrar todo excepto los documentos fijados"
 
 msgid "Close All to the Left"
-msgstr "Zamknij wszystkie po lewej"
+msgstr "Cerrar todo a la izquierda"
 
 msgid "Close All to the Right"
-msgstr "Zamknij wszystkie po prawej"
+msgstr "Cerrar todo a la derecha"
 
 msgid "Close All Unchanged"
-msgstr "Zamknij wszystkie niezmienione"
+msgstr "Cerrar todo sin cambios"
 
 msgid "Close &Multiple Documents"
-msgstr "Zamknij &wiele dokumentów"
+msgstr "Cerrado especia&l"
 
 msgid "Restore Recent Closed File\tCtrl+Shift+T"
-msgstr "Przywróć ostatnio zamknięty plik\tCtrl+Shift+T"
+msgstr "Restaurar archivo cerrado recientemente\tCtrl+Shift+T"
 
 msgid "Move to Recycle &Bin"
-msgstr "Przenieś do &kosza"
+msgstr "Mover a la &Papelera de reciclaje"
 
 msgid "Load Sess&ion..."
-msgstr "Wczytaj &sesję..."
+msgstr "Ca&rgar sesión..."
 
 msgid "Save Sess&ion..."
-msgstr "Zapi&sz sesję..."
+msgstr "Guar&dar sesión..."
 
 msgid "&Print...\tCtrl+P"
-msgstr "&Drukuj...\tCtrl+P"
+msgstr "&Imprimir...\tCtrl+P"
 
 msgid "Print No&w"
-msgstr "Drukuj &teraz"
+msgstr "Imprimir a&hora"
 
 msgid "E&xit\tAlt+F4"
-msgstr "&Zakończ\tAlt+F4"
+msgstr "&Salir\tAlt+F4"
 
 msgid "&File"
-msgstr "&Plik"
+msgstr "&Archivo"
 
 msgid "&Undo\tCtrl+Z"
-msgstr "&Cofnij\tCtrl+Z"
+msgstr "&Deshacer\tCtrl+Z"
 
 msgid "&Redo\tCtrl+Y"
-msgstr "P&onów\tCtrl+Y"
+msgstr "&Rehacer\tCtrl+Y"
 
 msgid "Cu&t\tCtrl+X"
-msgstr "Wy&tnij\tCtrl+X"
+msgstr "Cor&tar\tCtrl+X"
 
 msgid "&Copy\tCtrl+C"
-msgstr "&Kopiuj\tCtrl+C"
+msgstr "&Copiar\tCtrl+C"
 
 msgid "&Paste\tCtrl+V"
-msgstr "Wk&lej\tCtrl+V"
+msgstr "&Pegar\tCtrl+V"
 
 msgid "&Delete\tDel"
-msgstr "&Usuń\tDel"
+msgstr "&Borrar\tDel"
 
 msgid "&Select All\tCtrl+A"
-msgstr "Zaznacz w&szystko\tCtrl+A"
+msgstr "Seleccionar t&odo\tCtrl+A"
 
 msgid "Begin/End &Select"
-msgstr "Początek/koniec &zaznaczenia"
+msgstr "Selección de inicio/&fin"
 
 msgid "Begin/End Select in Column Mode"
-msgstr "Początek/koniec zaznaczenia w trybie kolumnowym"
+msgstr "Selección de inicio/fin en modo columna"
 
 msgid "Date Time (short)"
-msgstr "Data i godzina (format krótki)"
+msgstr "Fecha y hora (corta)"
 
 msgid "Date Time (long)"
-msgstr "Data i godzina (format długi)"
+msgstr "Fecha y hora (larga)"
 
 msgid "Date Time (customized)"
-msgstr "Data i godzina (format niestandardowy)"
+msgstr "Fecha y hora (personalizada)"
 
 msgid "Insert"
-msgstr "Wstaw"
+msgstr "Insertar"
 
 msgid "Copy Current Full File path"
-msgstr "Kopiuj pełną ścieżkę bieżącego pliku"
+msgstr "Copiar la ruta actual del archivo"
 
 msgid "Copy Current Filename"
-msgstr "Kopiuj nazwę bieżącego pliku"
+msgstr "Copiar el nombre actual del archivo"
 
 msgid "Copy Current Dir. Path"
-msgstr "Kopiuj ścieżkę bieżącego katalogu"
+msgstr "Copiar la ruta actual de la carpeta"
 
 msgid "Copy All Filenames"
-msgstr "Kopiuj wszystkie nazwy plików"
+msgstr "Copiar todos los nombres de los archivos"
 
 msgid "Copy All File Paths"
-msgstr "Kopiuj wszystkie ścieżki plików"
+msgstr "Copiar todas las rutas de los archivos"
 
 msgid "Cop&y to Clipboard"
-msgstr "Kopiuj do schowk&a"
+msgstr "C&opiar al portapapeles"
 
 msgid "Increase Line Indent"
-msgstr "Zwiększ wcięcie wiersza"
+msgstr "Aumentar sangría de línea"
 
 msgid "Decrease Line Indent"
-msgstr "Zmniejsz wcięcie wiersza"
+msgstr "Reducir sangría de línea"
 
 msgid "&Indent"
-msgstr "Wcięci&e"
+msgstr "Tabulac&ión"
 
 msgid "&UPPERCASE\tCtrl+Shift+U"
-msgstr "&WIELKIE LITERY\tCtrl+Shift+U"
+msgstr "Convertir a &MAYÚSCULAS\tCtrl+Shift+U"
 
 msgid "&lowercase\tCtrl+U"
-msgstr "&małe litery\tCtrl+U"
+msgstr "Convertir a mi&núsculas\tCtrl+U"
 
 msgid "&Proper Case"
-msgstr "&Pierwsze Litery Wielkie"
+msgstr "&Todas las iniciales a mayúsculas"
 
 msgid "Proper Case (blend)"
-msgstr "Pierwsze Litery Wielkie (mieszane)"
+msgstr "Todas las iniciales a mayúsculas (mezcla)"
 
 msgid "&Sentence case"
-msgstr "&Jak w zdaniu"
+msgstr "&Inicial de frase a mayúscula"
 
 msgid "Sentence case (blend)"
-msgstr "Jak w zdaniu (mieszane)"
+msgstr "Inicial de frase a mayúscula (mezcla)"
 
 msgid "&iNVERT cASE"
-msgstr "&oDWRÓĆ wIELKOŚĆ lITER"
+msgstr "In&vertir mayúsculas y MINÚSCULAS"
 
 msgid "&ranDOm CasE"
-msgstr "&loSOWA wielKOŚĆ liTER"
+msgstr "mAyúsculas y mInÚscuLAs &ALeatoriO"
 
 msgid "Con&vert Case to"
-msgstr "Zmień wielkość li&ter na"
+msgstr "Conversión de ma&yúsculas y minúsculas"
 
 msgid "Duplicate Current Line\tCtrl+D"
-msgstr "Powiel bieżący wiersz\tCtrl+D"
+msgstr "Duplicar línea actual\tCtrl+D"
 
 msgid "Remove Duplicate Lines"
-msgstr "Usuń zduplikowane wiersze"
+msgstr "Eliminar líneas duplicadas"
 
 msgid "Remove Consecutive Duplicate Lines"
-msgstr "Usuń kolejne zduplikowane wiersze"
+msgstr "Eliminar líneas consecutivas duplicadas"
 
 msgid "Split Lines\tCtrl+I"
-msgstr "Podziel wiersze\tCtrl+I"
+msgstr "Dividir líneas\tCtrl+I"
 
 msgid "Join Lines\tCtrl+J"
-msgstr "Połącz wiersze\tCtrl+J"
+msgstr "Unir líneas\tCtrl+J"
 
 msgid "Move Up Current Line\tCtrl+Shift+Up"
-msgstr "Przenieś bieżący wiersz w górę\tCtrl+Shift+Up"
+msgstr "Subir línea actual\tCtrl+Shift+Up"
 
 msgid "Move Down Current Line\tCtrl+Shift+Down"
-msgstr "Przenieś bieżący wiersz w dół\tCtrl+Shift+Down"
+msgstr "Bajar línea actual\tCtrl+Shift+Down"
 
 msgid "Remove Empty Lines"
-msgstr "Usuń puste wiersze"
+msgstr "Eliminar líneas vacías"
 
 msgid "Remove Empty Lines (Containing Blank characters)"
-msgstr "Usuń puste wiersze (zawierające białe znaki)"
+msgstr "Eliminar líneas vacías (y contenido en blanco)"
 
 msgid "Insert Blank Line Above Current"
-msgstr "Wstaw pusty wiersz powyżej bieżącego"
+msgstr "Insertar línea en blanco encima de la actual"
 
 msgid "Insert Blank Line Below Current"
-msgstr "Wstaw pusty wiersz poniżej bieżącego"
+msgstr "Insertar línea en blanco debajo de la actual"
 
 msgid "Reverse Line Order"
-msgstr "Odwróć kolejność wierszy"
+msgstr "Orden de líneas inverso"
 
 msgid "Randomize Line Order"
-msgstr "Losowa kolejność wierszy"
+msgstr "Ordenar líneas al azar"
 
 msgid "Sort Lines Lexicographically Ascending"
-msgstr "Sortuj wiersze leksykograficznie rosnąco"
+msgstr "Ordenar líneas en sentido ascendente"
 
 msgid "Sort Lines Lex. Ascending Ignoring Case"
-msgstr "Sortuj wiersze leks. rosnąco bez uwzgl. wielkości liter"
+msgstr "Ordenar líneas en ascendente ignorando mayúsculas y minúsculas"
 
 msgid "Sort Lines In Locale Order Ascending"
-msgstr "Sortuj wiersze wg ustawień regionalnych rosnąco"
+msgstr "Ordenar líneas en orden ascendente"
 
 msgid "Sort Lines As Integers Ascending"
-msgstr "Sortuj wiersze jako liczby całkowite rosnąco"
+msgstr "Orden de líneas numérico ascendente"
 
 msgid "Sort Lines As Decimals (Comma) Ascending"
-msgstr "Sortuj wiersze jako liczby dziesiętne (przecinek) rosnąco"
+msgstr "Ordenar líneas como decimales (coma) ascendente"
 
 msgid "Sort Lines As Decimals (Dot) Ascending"
-msgstr "Sortuj wiersze jako liczby dziesiętne (kropka) rosnąco"
+msgstr "Ordenar líneas como decimales (punto) ascendente"
 
 msgid "Sort Lines By Length Ascending"
-msgstr "Sortuj wiersze wg długości rosnąco"
+msgstr "Orden de líneas por longitud ascendente"
 
 msgid "Sort Lines Lexicographically Descending"
-msgstr "Sortuj wiersze leksykograficznie malejąco"
+msgstr "Ordenar líneas en sentido descendente"
 
 msgid "Sort Lines Lex. Descending Ignoring Case"
-msgstr "Sortuj wiersze leks. malejąco bez uwzgl. wielkości liter"
+msgstr "Ordenar líneas en descendente ignorando mayúsculas y minúsculas"
 
 msgid "Sort Lines In Locale Order Descending"
-msgstr "Sortuj wiersze wg ustawień regionalnych malejąco"
+msgstr "Ordenar líneas en orden descendente"
 
 msgid "Sort Lines As Integers Descending"
-msgstr "Sortuj wiersze jako liczby całkowite malejąco"
+msgstr "Orden de líneas numérico descendente"
 
 msgid "Sort Lines As Decimals (Comma) Descending"
-msgstr "Sortuj wiersze jako liczby dziesiętne (przecinek) malejąco"
+msgstr "Ordenar líneas como decimales (coma) descendente"
 
 msgid "Sort Lines As Decimals (Dot) Descending"
-msgstr "Sortuj wiersze jako liczby dziesiętne (kropka) malejąco"
+msgstr "Ordenar líneas como decimales (punto) descendente"
 
 msgid "Sort Lines By Length Descending"
-msgstr "Sortuj wiersze wg długości malejąco"
+msgstr "Orden de líneas por longitud descendente"
 
 msgid "&Line Operations"
-msgstr "Operacje na &wierszach"
+msgstr "Operaciones con &líneas"
 
 msgid "Toggle Single Line Comment\tCtrl+Q"
-msgstr "Przełącz komentarz jednowierszowy\tCtrl+Q"
+msgstr "Alternar comentario de líneas\tCtrl+Q"
 
 msgid "Single Line Comment"
-msgstr "Komentarz jednowierszowy"
+msgstr "Comentar una línea"
 
 msgid "Single Line Uncomment"
-msgstr "Usuń komentarz jednowierszowy"
+msgstr "Descomentar una línea"
 
 msgid "Block Comment\tCtrl+Shift+Q"
-msgstr "Komentarz blokowy\tCtrl+Shift+Q"
+msgstr "Comentar bloque seleccionado\tCtrl+Shift+Q"
 
 msgid "Block Uncomment"
-msgstr "Usuń komentarz blokowy"
+msgstr "Descomentar bloque seleccionado"
 
 msgid "Co&mment/Uncomment"
-msgstr "Ko&mentuj/Odkomentuj"
+msgstr "Co&mentar / Descomentar"
 
 msgid "Function Completion\tCtrl+Space"
-msgstr "Uzupełnianie funkcji\tCtrl+Space"
+msgstr "Completar función\tCtrl+Space"
 
 msgid "Word Completion"
-msgstr "Uzupełnianie wyrazów"
+msgstr "Completar palabra"
 
 msgid "Function Parameters Hint"
-msgstr "Podpowiedź parametrów funkcji"
+msgstr "Parámetros de la función \"sugerencia\""
 
 msgid "Function Parameters Previous Hint"
-msgstr "Poprzednia podpowiedź parametrów funkcji"
+msgstr "Parámetros de la función \"sugerencia anterior\""
 
 msgid "Function Parameters Next Hint"
-msgstr "Następna podpowiedź parametrów funkcji"
+msgstr "Parámetros de la función \"sugerencia siguiente\""
 
 msgid "Path Completion"
-msgstr "Uzupełnianie ścieżek"
+msgstr "Finalización de la ruta"
 
 msgid "&Auto-Completion"
-msgstr "&Autouzupełnianie"
+msgstr "A&utocompletar"
 
 msgid "Windows (CR LF)"
 msgstr "Windows (CR LF)"
@@ -325,310 +325,310 @@ msgid "Macintosh (CR)"
 msgstr "Macintosh (CR)"
 
 msgid "&EOL Conversion"
-msgstr "Konwersja znaków &końca wiersza"
+msgstr "Con&versión fin de línea"
 
 msgid "Trim Trailing Space"
-msgstr "Usuń końcowe spacje"
+msgstr "Quitar espacios al final"
 
 msgid "Trim Leading Space"
-msgstr "Usuń początkowe spacje"
+msgstr "Quitar espacios al inicio"
 
 msgid "Trim Leading and Trailing Space"
-msgstr "Usuń początkowe i końcowe spacje"
+msgstr "Quitar espacios al inicio y al final"
 
 msgid "EOL to Space"
-msgstr "Znak końca wiersza na spację"
+msgstr "Convertir los finales de línea en espacios"
 
 msgid "Trim both and EOL to Space"
-msgstr "Usuń oba i zamień znak końca wiersza na spację"
+msgstr "Eliminar espacios en blanco y finales de línea innecesarios"
 
 msgid "TAB to Space"
-msgstr "TAB na spacje"
+msgstr "Espacios por TAB"
 
 msgid "Space to TAB (All)"
-msgstr "Spacje na TAB (wszystkie)"
+msgstr "TAB por espacios (en todo)"
 
 msgid "Space to TAB (Leading)"
-msgstr "Spacje na TAB (początkowe)"
+msgstr "TAB por espacios (al inicio)"
 
 msgid "&Blank Operations"
-msgstr "Operacje na &białych znakach"
+msgstr "Operaciones de limpie&za"
 
 msgid "Paste HTML Content"
-msgstr "Wklej zawartość HTML"
+msgstr "Pegar contenido HTML"
 
 msgid "Paste RTF Content"
-msgstr "Wklej zawartość RTF"
+msgstr "Pegar contenido RTF"
 
 msgid "Copy Binary Content"
-msgstr "Kopiuj zawartość binarną"
+msgstr "Copiar contenido binario"
 
 msgid "Cut Binary Content"
-msgstr "Wytnij zawartość binarną"
+msgstr "Cortar contenido binario"
 
 msgid "Paste Binary Content"
-msgstr "Wklej zawartość binarną"
+msgstr "Pegar contenido binario"
 
 msgid "&Paste Special"
-msgstr "Wklej &specjalnie"
+msgstr "Pe&gado especial"
 
 msgid "Open File"
-msgstr "Otwórz plik"
+msgstr "Abrir archivo"
 
 msgid "Open Containing Folder in Explorer"
-msgstr "Otwórz folder zawierający w Eksploratorze"
+msgstr "Abrir carpeta contenedora en Explorador de archivos"
 
 msgid "&Redact Selection █ (Shift: ●)"
-msgstr "&Ocenzuruj zaznaczenie █ (Shift: ●)"
+msgstr "&Ocultar selección █ (Mayús: ●)"
 
 msgid "Search on Internet"
-msgstr "Szukaj w Internecie"
+msgstr "Buscar en Internet"
 
 msgid "Change Search Engine..."
-msgstr "Zmień wyszukiwarkę..."
+msgstr "Cambiar motor de búsqueda..."
 
 msgid "&On Selection"
-msgstr "&Dla zaznaczenia"
+msgstr "Selecció&n"
 
 msgid "Ignore Case && Whole Word"
-msgstr "Ignoruj wielkość liter && całe wyrazy"
+msgstr "Ignorar mayúsculas y minúsculas && Palabra completa"
 
 msgid "Match Case Only"
-msgstr "Tylko uwzględniając wielkość liter"
+msgstr "Solo mayúsculas y minúsculas"
 
 msgid "Match Whole Word Only"
-msgstr "Tylko całe wyrazy"
+msgstr "Solo palabra completa"
 
 msgid "Match Case && Whole Word"
-msgstr "Uwzględniaj wielkość liter && całe wyrazy"
+msgstr "Coincidir mayúsculas y minúsculas && Palabra completa"
 
 msgid "Multi-select All"
-msgstr "Zaznacz wielokrotnie wszystkie"
+msgstr "Multiselección total"
 
 msgid "Multi-select Next"
-msgstr "Zaznacz wielokrotnie następne"
+msgstr "Siguiente multiselección"
 
 msgid "Undo the Latest Added Multi-Select"
-msgstr "Cofnij ostatnio dodane zaznaczenie wielokrotne"
+msgstr "Deshacer la última selección múltiple añadida"
 
 msgid "Skip Current && Go to Next Multi-select"
-msgstr "Pomiń bieżące && przejdź do następnego zaznaczenia wielokrotnego"
+msgstr "Saltar actual && Ir a siguiente multiselección"
 
 msgid "Column Mode..."
-msgstr "Tryb kolumnowy..."
+msgstr "Modo de columna..."
 
 msgid "Colum&n Editor...\tAlt+C"
-msgstr "Edytor kolum&n...\tAlt+C"
+msgstr "&Editor de columna...\tAlt+C"
 
 msgid "Character &Panel"
-msgstr "&Panel znaków"
+msgstr "Panel de c&aracteres"
 
 msgid "Clipboard &History"
-msgstr "&Historia schowka"
+msgstr "&Historial de portapapeles"
 
 msgid "Read-Only on Current Document"
-msgstr "Tylko do odczytu dla bieżącego dokumentu"
+msgstr "Atributo solo lectura en el documento actual"
 
 msgid "Read-Only for All Documents"
-msgstr "Tylko do odczytu dla wszystkich dokumentów"
+msgstr "Atributo solo lectura para todos los documentos"
 
 msgid "Clear Read-Only for All Documents"
-msgstr "Wyłącz tylko do odczytu dla wszystkich dokumentów"
+msgstr "Quitar atributo solo lectura para todos los documentos"
 
 msgid "Read-&Only"
-msgstr "Tylko do &odczytu"
+msgstr "Solo &lectura"
 
 msgid "Read-Only Attribute in Windows"
-msgstr "Atrybut tylko do odczytu w Windows"
+msgstr "Atributo de solo lectura en Windows"
 
 msgid "&Edit"
-msgstr "&Edycja"
+msgstr "&Editar"
 
 msgid "&Find...\tCtrl+F"
-msgstr "&Znajdź...\tCtrl+F"
+msgstr "&Buscar...\tCtrl+F"
 
 msgid "Find in Fi&les...\tCtrl+Shift+F"
-msgstr "Znajdź w p&likach...\tCtrl+Shift+F"
+msgstr "Buscar en arc&hivos...\tCtrl+Shift+F"
 
 msgid "Find &Next\tF3"
-msgstr "Znajdź &następny\tF3"
+msgstr "Buscar &siguiente\tF3"
 
 msgid "Find &Previous\tShift+F3"
-msgstr "Znajdź &poprzedni\tShift+F3"
+msgstr "Buscar &anterior\tShift+F3"
 
 msgid "&Select and Find Next\tCtrl+F3"
-msgstr "Zaznacz i znajdź na&stępny\tCtrl+F3"
+msgstr "Seleccionar y buscar si&guiente\tCtrl+F3"
 
 msgid "&Select and Find Previous\tCtrl+Shift+F3"
-msgstr "Zaznacz i znajdź poprz&edni\tCtrl+Shift+F3"
+msgstr "Sele&ccionar y buscar anterior\tCtrl+Shift+F3"
 
 msgid "Find (&Volatile) Next"
-msgstr "Znajdź następne (&tymczasowe)"
+msgstr "Bús&queda (volátil) siguiente"
 
 msgid "Find (&Volatile) Previous"
-msgstr "Znajdź poprzednie (t&ymczasowe)"
+msgstr "Búsqueda (&volátil) anterior"
 
 msgid "&Replace...\tCtrl+H"
-msgstr "&Zamień...\tCtrl+H"
+msgstr "Sustitui&r...\tCtrl+H"
 
 msgid "&Incremental Search\tCtrl+Alt+I"
-msgstr "Wyszukiwanie &przyrostowe\tCtrl+Alt+I"
+msgstr "Búsqueda &incremental\tCtrl+Alt+I"
 
 msgid "Search Results &Window\tF7"
-msgstr "Okno &wyników wyszukiwania\tF7"
+msgstr "&Ventana de resultados de búsqueda\tF7"
 
 msgid "Next Search Resul&t\tF4"
-msgstr "Następny wynik wyszukiwani&a\tF4"
+msgstr "Resultados de búsqueda sig&uiente\tF4"
 
 msgid "Previous Search Resul&t\tShift+F4"
-msgstr "Poprzedni wynik wyszukiwani&a\tShift+F4"
+msgstr "Resultados de búsqueda &anterior\tShift+F4"
 
 msgid "&Go to...\tCtrl+G"
-msgstr "&Idź do...\tCtrl+G"
+msgstr "Ir a la &línea...\tCtrl+G"
 
 msgid "Go to &Matching Brace\tCtrl+B"
-msgstr "Idź do pasującego &nawiasu\tCtrl+B"
+msgstr "Ir al corc&hete\tCtrl+B"
 
 msgid "Select All In-betw&een {} [] or ()"
-msgstr "Zaznacz wszystko pomiędz&y {} [] lub ()"
+msgstr "Seleccionar todo lo que ha&ya entre {} [] o ()"
 
 msgid "Mar&k..."
-msgstr "Oznac&z..."
+msgstr "&Marcar..."
 
 msgid "Go to Next Change"
-msgstr "Idź do następnej zmiany"
+msgstr "Ir al siguiente cambio"
 
 msgid "Go to Previous Change"
-msgstr "Idź do poprzedniej zmiany"
+msgstr "Ir al cambio anterior"
 
 msgid "Clear Change History"
-msgstr "Wyczyść historię zmian"
+msgstr "Borrar el historial de cambios"
 
 msgid "Change History"
-msgstr "Historia zmian"
+msgstr "Historial de cambios"
 
 msgid "Using 1st Style"
-msgstr "Używając 1. stylu"
+msgstr "Usar el primer estilo"
 
 msgid "Using 2nd Style"
-msgstr "Używając 2. stylu"
+msgstr "Usar el segundo estilo"
 
 msgid "Using 3rd Style"
-msgstr "Używając 3. stylu"
+msgstr "Usar el tercer estilo"
 
 msgid "Using 4th Style"
-msgstr "Używając 4. stylu"
+msgstr "Usar el cuarto estilo"
 
 msgid "Using 5th Style"
-msgstr "Używając 5. stylu"
+msgstr "Usar el quinto estilo"
 
 msgid "Style &All Occurrences of Token"
-msgstr "Styl &wszystkich wystąpień tokenu"
+msgstr "Resaltar todas las coincid&encias buscadas"
 
 msgid "Style &One Token"
-msgstr "Styl &jednego tokenu"
+msgstr "Resaltar una coinci&dencia"
 
 msgid "Clear 1st Style"
-msgstr "Wyczyść 1. styl"
+msgstr "No aplicar el estilo 1"
 
 msgid "Clear 2nd Style"
-msgstr "Wyczyść 2. styl"
+msgstr "No aplicar el estilo 2"
 
 msgid "Clear 3rd Style"
-msgstr "Wyczyść 3. styl"
+msgstr "No aplicar el estilo 3"
 
 msgid "Clear 4th Style"
-msgstr "Wyczyść 4. styl"
+msgstr "No aplicar el estilo 4"
 
 msgid "Clear 5th Style"
-msgstr "Wyczyść 5. styl"
+msgstr "No aplicar el estilo 5"
 
 msgid "Clear all Styles"
-msgstr "Wyczyść wszystkie style"
+msgstr "No aplicar ningún estilo"
 
 msgid "Clear Style"
-msgstr "Wyczyść styl"
+msgstr "Limpiar estilo"
 
 msgid "1st Style"
-msgstr "1. styl"
+msgstr "Estilo 1"
 
 msgid "2nd Style"
-msgstr "2. styl"
+msgstr "Estilo 2"
 
 msgid "3rd Style"
-msgstr "3. styl"
+msgstr "Estilo 3"
 
 msgid "4th Style"
-msgstr "4. styl"
+msgstr "Estilo 4"
 
 msgid "5th Style"
-msgstr "5. styl"
+msgstr "Estilo 5"
 
 msgid "Find Mark Style"
-msgstr "Styl oznaczeń wyszukiwania"
+msgstr "Estilo de búsqueda"
 
 msgid "&Jump Up"
-msgstr "Skocz w &górę"
+msgstr "&Subir"
 
 msgid "Jump &Down"
-msgstr "Skocz w &dół"
+msgstr "Ba&jar"
 
 msgid "All Styles"
-msgstr "Wszystkie style"
+msgstr "Todos los estilos"
 
 msgid "&Copy Styled Text"
-msgstr "&Kopiuj ostylowany tekst"
+msgstr "Copiar te&xto con estilo"
 
 msgid "Toggle Bookmark\tCtrl+F2"
-msgstr "Przełącz zakładkę\tCtrl+F2"
+msgstr "Activar/Desactivar marcadores\tCtrl+F2"
 
 msgid "Next Bookmark\tF2"
-msgstr "Następna zakładka\tF2"
+msgstr "Marcador siguiente\tF2"
 
 msgid "Previous Bookmark\tShift+F2"
-msgstr "Poprzednia zakładka\tShift+F2"
+msgstr "Marcador anterior\tShift+F2"
 
 msgid "Clear All Bookmarks"
-msgstr "Usuń wszystkie zakładki"
+msgstr "Quitar todos los marcadores"
 
 msgid "Cut Bookmarked Lines"
-msgstr "Wytnij wiersze z zakładkami"
+msgstr "Cortar líneas marcadas"
 
 msgid "Copy Bookmarked Lines"
-msgstr "Kopiuj wiersze z zakładkami"
+msgstr "Copiar líneas marcadas"
 
 msgid "Paste to (Replace) Bookmarked Lines"
-msgstr "Wklej do wierszy z zakładkami (zastąp)"
+msgstr "Pegar (sustituir) líneas marcadas"
 
 msgid "Remove Bookmarked Lines"
-msgstr "Usuń wiersze z zakładkami"
+msgstr "Eliminar líneas marcadas"
 
 msgid "Remove Non-Bookmarked Lines"
-msgstr "Usuń wiersze bez zakładek"
+msgstr "Eliminar líneas no marcadas"
 
 msgid "Inverse Bookmarks"
-msgstr "Odwróć zakładki"
+msgstr "Invertir marcas"
 
 msgid "&Bookmark"
-msgstr "&Zakładka"
+msgstr "Marcad&ores"
 
 msgid "Find characters in rang&e..."
-msgstr "Znajdź znaki z zakr&esu..."
+msgstr "Buscar caracteres en el rang&o..."
 
 msgid "&Search"
-msgstr "&Szukaj"
+msgstr "&Buscar"
 
 msgid "Always on &Top"
-msgstr "Zawsze na &wierzchu"
+msgstr "&Siempre visible"
 
 msgid "To&ggle Full Screen Mode\tF11"
-msgstr "Przełącz tryb &pełnoekranowy\tF11"
+msgstr "Activar modo de pantalla &completa\tF11"
 
 msgid "&Post-It\tF12"
-msgstr "&Post-It\tF12"
+msgstr "Solo documento actual visi&ble\tF12"
 
 msgid "D&istraction Free Mode"
-msgstr "Tryb bez rozpraszan&ia"
+msgstr "Modo \"Sin &distracciones\""
 
 msgid "&Firefox"
 msgstr "&Firefox"
@@ -643,148 +643,148 @@ msgid "&IE"
 msgstr "&IE"
 
 msgid "&View Current File in"
-msgstr "Pokaż bieżący plik &w"
+msgstr "&Ver archivo actual en"
 
 msgid "Show Space and Tab"
-msgstr "Pokaż spacje i tabulatory"
+msgstr "Mostrar espacios y tabulaciones"
 
 msgid "Show End of Line"
-msgstr "Pokaż znaki końca wiersza"
+msgstr "Mostrar fin de línea"
 
 msgid "Show Non-Printing Characters"
-msgstr "Pokaż znaki niedrukowalne"
+msgstr "Mostrar caracteres no imprimibles"
 
 msgid "Show Control Characters && Unicode EOL"
-msgstr "Pokaż znaki sterujące && końce wiersza Unicode"
+msgstr "Mostrar caracteres de control && EOL de Unicode"
 
 msgid "Show All Characters"
-msgstr "Pokaż wszystkie znaki"
+msgstr "Mostrar todos los caracteres"
 
 msgid "Show Indent Guide"
-msgstr "Pokaż prowadnice wcięć"
+msgstr "Mostrar líneas de sangrías"
 
 msgid "Show Wrap Symbol"
-msgstr "Pokaż symbol zawijania"
+msgstr "Mostrar símbolo de ajuste"
 
 msgid "Show S&ymbol"
-msgstr "Pokaż s&ymbole"
+msgstr "Mostrar o&pciones de líneas"
 
 msgid "Zoom &In (Ctrl+Mouse Wheel Up)"
-msgstr "Po&większ (Ctrl+kółko myszy w górę)"
+msgstr "&Aumentar zoom (Ctrl + rueda del ratón adelante)"
 
 msgid "Zoom &Out (Ctrl+Mouse Wheel Down)"
-msgstr "Po&mniejsz (Ctrl+kółko myszy w dół)"
+msgstr "&Disminuir zoom (Ctrl + rueda del ratón atrás)"
 
 msgid "&Restore Default Zoom"
-msgstr "P&rzywróć domyślne powiększenie"
+msgstr "&Restaurar zoom 100%"
 
 msgid "&Zoom"
-msgstr "Powięks&zenie"
+msgstr "&Zoom"
 
 msgid "Move to Other &View"
-msgstr "Przenieś do innego &widoku"
+msgstr "&Mover a otra vista"
 
 msgid "Clone to Other Vie&w"
-msgstr "Sklonuj do innego widok&u"
+msgstr "&Clonar en otra vista"
 
 msgid "Mo&ve to New Instance"
-msgstr "Przenieś do no&wej instancji"
+msgstr "Mo&ver a una ventana nueva"
 
 msgid "&Open in New Instance"
-msgstr "&Otwórz w nowej instancji"
+msgstr "&Abrir en una ventana nueva"
 
 msgid "&Move/Clone Current Document"
-msgstr "Przenieś/sklonuj bieżący doku&ment"
+msgstr "&Mover/Clonar el documento actual"
 
 msgid "1st Tab\tCtrl+1"
-msgstr "1. karta\tCtrl+1"
+msgstr "Pestaña 1\tCtrl+1"
 
 msgid "2nd Tab\tCtrl+2"
-msgstr "2. karta\tCtrl+2"
+msgstr "Pestaña 2\tCtrl+2"
 
 msgid "3rd Tab\tCtrl+3"
-msgstr "3. karta\tCtrl+3"
+msgstr "Pestaña 3\tCtrl+3"
 
 msgid "4th Tab\tCtrl+4"
-msgstr "4. karta\tCtrl+4"
+msgstr "Pestaña 4\tCtrl+4"
 
 msgid "5th Tab\tCtrl+5"
-msgstr "5. karta\tCtrl+5"
+msgstr "Pestaña 5\tCtrl+5"
 
 msgid "6th Tab\tCtrl+6"
-msgstr "6. karta\tCtrl+6"
+msgstr "Pestaña 6\tCtrl+6"
 
 msgid "7th Tab\tCtrl+7"
-msgstr "7. karta\tCtrl+7"
+msgstr "Pestaña 7\tCtrl+7"
 
 msgid "8th Tab\tCtrl+8"
-msgstr "8. karta\tCtrl+8"
+msgstr "Pestaña 8\tCtrl+8"
 
 msgid "9th Tab\tCtrl+9"
-msgstr "9. karta\tCtrl+9"
+msgstr "Pestaña 9\tCtrl+9"
 
 msgid "First Tab"
-msgstr "Pierwsza karta"
+msgstr "Primera pestaña"
 
 msgid "Last Tab"
-msgstr "Ostatnia karta"
+msgstr "Última pestaña"
 
 msgid "Next Tab\tCtrl+Tab"
-msgstr "Następna karta\tCtrl+Tab"
+msgstr "Pestaña siguiente\tCtrl+Tab"
 
 msgid "Previous Tab\tCtrl+Shift+Tab"
-msgstr "Poprzednia karta\tCtrl+Shift+Tab"
+msgstr "Pestaña anterior\tCtrl+Shift+Tab"
 
 msgid "Move to Start"
-msgstr "Przenieś na początek"
+msgstr "Ir al inicio"
 
 msgid "Move to End"
-msgstr "Przenieś na koniec"
+msgstr "Ir al final"
 
 msgid "Move Tab Forward"
-msgstr "Przesuń kartę do przodu"
+msgstr "Mover pestaña adelante"
 
 msgid "Move Tab Backward"
-msgstr "Przesuń kartę do tyłu"
+msgstr "Mover pestaña atrás"
 
 msgid "Apply Color 1"
-msgstr "Zastosuj kolor 1"
+msgstr "Aplicar color 1"
 
 msgid "Apply Color 2"
-msgstr "Zastosuj kolor 2"
+msgstr "Aplicar color 2"
 
 msgid "Apply Color 3"
-msgstr "Zastosuj kolor 3"
+msgstr "Aplicar color 3"
 
 msgid "Apply Color 4"
-msgstr "Zastosuj kolor 4"
+msgstr "Aplicar color 4"
 
 msgid "Apply Color 5"
-msgstr "Zastosuj kolor 5"
+msgstr "Aplicar color 5"
 
 msgid "Remove Color"
-msgstr "Usuń kolor"
+msgstr "Quitar color"
 
 msgid "Ta&b"
-msgstr "Kar&ta"
+msgstr "Pesta&ñas"
 
 msgid "&Word wrap"
-msgstr "&Zawijanie wierszy"
+msgstr "Ajuste del te&xto"
 
 msgid "&Hide Lines"
-msgstr "&Ukryj wiersze"
+msgstr "&Ocultar líneas"
 
 msgid "Fold All\tAlt+0"
-msgstr "Zwiń wszystkie\tAlt+0"
+msgstr "Contraer todo\tAlt+0"
 
 msgid "Unfold All\tAlt+Shift+0"
-msgstr "Rozwiń wszystkie\tAlt+Shift+0"
+msgstr "Expandir todo\tAlt+Shift+0"
 
 msgid "Fold Current Level\tCtrl+Alt+F"
-msgstr "Zwiń bieżący poziom\tCtrl+Alt+F"
+msgstr "Contraer nivel actual\tCtrl+Alt+F"
 
 msgid "Unfold Current Level\tCtrl+Alt+Shift+F"
-msgstr "Rozwiń bieżący poziom\tCtrl+Alt+Shift+F"
+msgstr "Expandir nivel actual\tCtrl+Alt+Shift+F"
 
 msgid "1\tAlt+1"
 msgstr "1\tAlt+1"
@@ -811,7 +811,7 @@ msgid "8\tAlt+8"
 msgstr "8\tAlt+8"
 
 msgid "Fold Level"
-msgstr "Zwiń poziom"
+msgstr "Contraer nivel"
 
 msgid "1\tAlt+Shift+1"
 msgstr "1\tAlt+Shift+1"
@@ -838,46 +838,46 @@ msgid "8\tAlt+Shift+8"
 msgstr "8\tAlt+Shift+8"
 
 msgid "Unfold Level"
-msgstr "Rozwiń poziom"
+msgstr "Expandir nivel"
 
 msgid "&Summary..."
-msgstr "Pod&sumowanie..."
+msgstr "&Resumen..."
 
 msgid "Project Panel &1"
-msgstr "Panel projektu &1"
+msgstr "Panel de proyecto &1"
 
 msgid "Project Panel &2"
-msgstr "Panel projektu &2"
+msgstr "Panel de proyecto &2"
 
 msgid "Project Panel &3"
-msgstr "Panel projektu &3"
+msgstr "Panel de proyecto &3"
 
 msgid "Pro&ject Panels"
-msgstr "Panele pro&jektu"
+msgstr "Pro&yecto"
 
 msgid "Folder as Wor&kspace"
-msgstr "Folder jako obszar robocz&y"
+msgstr "C&arpeta como área de trabajo"
 
 msgid "&Document Map"
-msgstr "Mapa &dokumentu"
+msgstr "Ma&pa del documento"
 
 msgid "D&ocument List"
-msgstr "Lista d&okumentów"
+msgstr "Lista de documen&tos"
 
 msgid "Function &List"
-msgstr "&Lista funkcji"
+msgstr "&Lista de funciones"
 
 msgid "T&ext Direction RTL"
-msgstr "Ki&erunek tekstu RTL"
+msgstr "Texto derecha-iz&quierda"
 
 msgid "Te&xt Direction LTR"
-msgstr "Kierunek &tekstu LTR"
+msgstr "Te&xto izquierda-derecha"
 
 msgid "Monito&ring (tail -f)"
-msgstr "Monito&rowanie (tail -f)"
+msgstr "Monitor&izando (tail -f)"
 
 msgid "&View"
-msgstr "&Widok"
+msgstr "&Vista"
 
 msgid "ANSI"
 msgstr "ANSI"
@@ -904,7 +904,7 @@ msgid "Windows-1256"
 msgstr "Windows-1256"
 
 msgid "Arabic"
-msgstr "Arabski"
+msgstr "Árabe"
 
 msgid "ISO 8859-4"
 msgstr "ISO 8859-4"
@@ -919,13 +919,13 @@ msgid "Windows-1257"
 msgstr "Windows-1257"
 
 msgid "Baltic"
-msgstr "Bałtycki"
+msgstr "Báltico"
 
 msgid "ISO 8859-14"
 msgstr "ISO 8859-14"
 
 msgid "Celtic"
-msgstr "Celtycki"
+msgstr "Celta"
 
 msgid "ISO 8859-5"
 msgstr "ISO 8859-5"
@@ -949,7 +949,7 @@ msgid "Windows-1251"
 msgstr "Windows-1251"
 
 msgid "Cyrillic"
-msgstr "Cyrylica"
+msgstr "Cirílico"
 
 msgid "OEM 852"
 msgstr "OEM 852"
@@ -958,22 +958,22 @@ msgid "Windows-1250"
 msgstr "Windows-1250"
 
 msgid "Central European"
-msgstr "Środkowoeuropejski"
+msgstr "Europeo central"
 
 msgid "Big5 (Traditional)"
-msgstr "Big5 (tradycyjny)"
+msgstr "Big5 (tradicional)"
 
 msgid "GB2312 (Simplified)"
-msgstr "GB2312 (uproszczony)"
+msgstr "GB2312 (simplificado)"
 
 msgid "Chinese"
-msgstr "Chiński"
+msgstr "Chino"
 
 msgid "ISO 8859-2"
 msgstr "ISO 8859-2"
 
 msgid "Eastern European"
-msgstr "Wschodnioeuropejski"
+msgstr "Europeo oriental"
 
 msgid "ISO 8859-7"
 msgstr "ISO 8859-7"
@@ -988,7 +988,7 @@ msgid "Windows-1253"
 msgstr "Windows-1253"
 
 msgid "Greek"
-msgstr "Grecki"
+msgstr "Griego"
 
 msgid "ISO 8859-8"
 msgstr "ISO 8859-8"
@@ -1000,13 +1000,13 @@ msgid "Windows-1255"
 msgstr "Windows-1255"
 
 msgid "Hebrew"
-msgstr "Hebrajski"
+msgstr "Hebreo"
 
 msgid "Shift-JIS"
 msgstr "Shift-JIS"
 
 msgid "Japanese"
-msgstr "Japoński"
+msgstr "Japonés"
 
 msgid "Windows 949"
 msgstr "Windows 949"
@@ -1015,22 +1015,22 @@ msgid "EUC-KR"
 msgstr "EUC-KR"
 
 msgid "Korean"
-msgstr "Koreański"
+msgstr "Coreano"
 
 msgid "OEM 861 : Icelandic"
-msgstr "OEM 861 : islandzki"
+msgstr "OEM 861 : Islandés"
 
 msgid "OEM 865 : Nordic"
-msgstr "OEM 865 : nordycki"
+msgstr "OEM 865 : Nórdico"
 
 msgid "North European"
-msgstr "Północnoeuropejski"
+msgstr "Europeo del norte"
 
 msgid "TIS-620"
 msgstr "TIS-620"
 
 msgid "Thai"
-msgstr "Tajski"
+msgstr "Tailandés"
 
 msgid "ISO 8859-3"
 msgstr "ISO 8859-3"
@@ -1045,7 +1045,7 @@ msgid "Windows-1254"
 msgstr "Windows-1254"
 
 msgid "Turkish"
-msgstr "Turecki"
+msgstr "Turco"
 
 msgid "ISO 8859-1"
 msgstr "ISO 8859-1"
@@ -1060,10 +1060,10 @@ msgid "OEM 858"
 msgstr "OEM 858"
 
 msgid "OEM 860 : Portuguese"
-msgstr "OEM 860 : portugalski"
+msgstr "OEM 860 : Portugués"
 
 msgid "OEM 863 : French"
-msgstr "OEM 863 : francuski"
+msgstr "OEM 863 : Francés"
 
 msgid "OEM-US"
 msgstr "OEM-US"
@@ -1072,91 +1072,91 @@ msgid "Windows-1252"
 msgstr "Windows-1252"
 
 msgid "Western European"
-msgstr "Zachodnioeuropejski"
+msgstr "Europeo occidental"
 
 msgid "Windows-1258"
 msgstr "Windows-1258"
 
 msgid "Vietnamese"
-msgstr "Wietnamski"
+msgstr "Vietnamita"
 
 msgid "Character sets"
-msgstr "Zestawy znaków"
+msgstr "Juego de caracteres"
 
 msgid "Convert to ANSI"
-msgstr "Konwertuj na ANSI"
+msgstr "Convertir a ANSI"
 
 msgid "Convert to UTF-8"
-msgstr "Konwertuj na UTF-8"
+msgstr "Convertir a UTF-8"
 
 msgid "Convert to UTF-8-BOM"
-msgstr "Konwertuj na UTF-8-BOM"
+msgstr "Convertir a UTF-8-BOM"
 
 msgid "Convert to UTF-16 BE BOM"
-msgstr "Konwertuj na UTF-16 BE BOM"
+msgstr "Convertir a UTF-16 BE BOM"
 
 msgid "Convert to UTF-16 LE BOM"
-msgstr "Konwertuj na UTF-16 LE BOM"
+msgstr "Convertir a UTF-16 LE BOM"
 
 msgid "E&ncoding"
-msgstr "&Kodowanie"
+msgstr "Co&dificación"
 
 msgid "None (Normal Text)"
-msgstr "Brak (zwykły tekst)"
+msgstr "Ninguno (texto normal)"
 
 msgid "Define your language..."
-msgstr "Zdefiniuj swój język..."
+msgstr "Defina su lenguaje..."
 
 msgid "Open User Defined Language folder..."
-msgstr "Otwórz folder języków zdefiniowanych przez użytkownika..."
+msgstr "Abrir carpeta de lenguaje definido por el usuario..."
 
 msgid "Notepad++ User Defined Languages Collection"
-msgstr "Kolekcja języków użytkownika Notepad++"
+msgstr "Colección de lenguajes definidos por el usuario de Notepad++"
 
 msgid "User Defined Language"
-msgstr "Język zdefiniowany przez użytkownika"
+msgstr "Lenguaje definido por el usuario"
 
 msgid "User-Defined"
-msgstr "Zdefiniowany przez użytkownika"
+msgstr "Definido por el usuario"
 
 msgid "&Language"
-msgstr "&Język"
+msgstr "&Lenguaje"
 
 msgid "Preferences..."
-msgstr "Preferencje..."
+msgstr "Preferencias..."
 
 msgid "Style Configurator..."
-msgstr "Konfigurator stylów..."
+msgstr "Configurador de estilos..."
 
 msgid "Shortcut Mapper..."
-msgstr "Mapowanie skrótów..."
+msgstr "Configurador de accesos directos..."
 
 msgid "Import plugin(s)..."
-msgstr "Importuj wtyczki..."
+msgstr "Importar complemento(s)..."
 
 msgid "Import style theme(s)..."
-msgstr "Importuj motywy stylów..."
+msgstr "Importar tema(s) de estilo..."
 
 msgid "Import"
-msgstr "Importuj"
+msgstr "Importar"
 
 msgid "Edit Popup ContextMenu"
-msgstr "Edytuj podręczne menu kontekstowe"
+msgstr "Editar menú contextual emergente"
 
 msgid "&Dark Mode"
-msgstr "Tryb &ciemny"
+msgstr "Modo &oscuro"
 
 msgid "Se&ttings"
-msgstr "&Ustawienia"
+msgstr "C&onfiguración"
 
 msgid "Generate..."
-msgstr "Generuj..."
+msgstr "Generar..."
 
 msgid "Generate from files..."
-msgstr "Generuj z plików..."
+msgstr "Generar desde archivos..."
 
 msgid "Generate from selection into clipboard"
-msgstr "Generuj z zaznaczenia do schowka"
+msgstr "Generar desde la selección en el portapapeles"
 
 msgid "MD5"
 msgstr "MD5"
@@ -1171,466 +1171,466 @@ msgid "SHA-512"
 msgstr "SHA-512"
 
 msgid "T&ools"
-msgstr "&Narzędzia"
+msgstr "He&rramientas"
 
 msgid "Start Re&cording"
-msgstr "Rozpo&cznij nagrywanie"
+msgstr "&Inicio de grabación"
 
 msgid "S&top Recording"
-msgstr "Za&kończ nagrywanie"
+msgstr "&Fin de grabación"
 
 msgid "&Playback"
-msgstr "&Odtwórz"
+msgstr "&Reproducir"
 
 msgid "&Save Current Recorded Macro..."
-msgstr "Zapi&sz nagrane makro..."
+msgstr "&Guardar macro actualmente grabada..."
 
 msgid "&Run a Macro Multiple Times..."
-msgstr "U&ruchom makro wielokrotnie..."
+msgstr "E&jecutar macro múltiples veces..."
 
 msgid "&Macro"
-msgstr "&Makro"
+msgstr "&Macro"
 
 msgid "&Run...\tF5"
-msgstr "U&ruchom...\tF5"
+msgstr "E&jecutar...\tF5"
 
 msgid "Validate shortcuts.xml"
-msgstr "Sprawdź poprawność shortcuts.xml"
+msgstr "Validar shortcuts.xml"
 
 msgid "&Run"
-msgstr "U&ruchom"
+msgstr "E&jecutar"
 
 msgid "Open Plugins Folder..."
-msgstr "Otwórz folder wtyczek..."
+msgstr "Abrir carpeta de complementos..."
 
 msgid "&Plugins"
-msgstr "Wt&yczki"
+msgstr "Complemen&tos"
 
 msgid "Name A to Z"
-msgstr "Nazwa od A do Z"
+msgstr "Nombre A a Z"
 
 msgid "Name Z to A"
-msgstr "Nazwa od Z do A"
+msgstr "Nombre Z a A"
 
 msgid "Path A to Z"
-msgstr "Ścieżka od A do Z"
+msgstr "Ruta A a Z"
 
 msgid "Path Z to A"
-msgstr "Ścieżka od Z do A"
+msgstr "Ruta Z a A"
 
 msgid "Type A to Z"
-msgstr "Typ od A do Z"
+msgstr "Tipo A a Z"
 
 msgid "Type Z to A"
-msgstr "Typ od Z do A"
+msgstr "Tipo Z a A"
 
 msgid "Content Length Ascending"
-msgstr "Długość zawartości rosnąco"
+msgstr "Tamaño menor a mayor"
 
 msgid "Content Length Descending"
-msgstr "Długość zawartości malejąco"
+msgstr "Tamaño mayor a menor"
 
 msgid "Modified Time Ascending"
-msgstr "Czas modyfikacji rosnąco"
+msgstr "Hora modificada ascendente"
 
 msgid "Modified Time Descending"
-msgstr "Czas modyfikacji malejąco"
+msgstr "Hora modificada descendente"
 
 msgid "Sort By"
-msgstr "Sortuj według"
+msgstr "Ordenar por"
 
 msgid "&Windows..."
-msgstr "&Okna..."
+msgstr "&Pestañas..."
 
 msgid "Recent Window"
-msgstr "Ostatnie okno"
+msgstr "Pestaña reciente"
 
 msgid "&Window"
-msgstr "&Okno"
+msgstr "&Pestañas"
 
 msgid "Command Line Arguments..."
-msgstr "Argumenty wiersza poleceń..."
+msgstr "Argumentos de línea de comandos..."
 
 msgid "Notepad++ Home"
-msgstr "Strona domowa Notepad++"
+msgstr "Sitio oficial de Notepad++"
 
 msgid "Notepad++ Project Page"
-msgstr "Strona projektu Notepad++"
+msgstr "Página de proyecto Notepad++"
 
 msgid "Notepad++ Online User Manual"
-msgstr "Podręcznik użytkownika Notepad++ online"
+msgstr "Manual de usuario online de Notepad++"
 
 msgid "Notepad++ Community (Forum)"
-msgstr "Społeczność Notepad++ (forum)"
+msgstr "Comunidad Notepad++ (foro)"
 
 msgid "Check for Updates"
-msgstr "Sprawdź dostępność aktualizacji"
+msgstr "Buscar actualizaciones"
 
 msgid "Set Updater Proxy..."
-msgstr "Ustaw proxy aktualizatora..."
+msgstr "Establecer proxy del actualizador..."
 
 msgid "Debug Info..."
-msgstr "Informacje debugowania..."
+msgstr "Información de depuración..."
 
 msgid "About wxNotepad++\tF1"
-msgstr "O programie wxNotepad++\tF1"
+msgstr "Acerca de wxNotepad++\tF1"
 
 msgid "&About"
-msgstr "&Pomoc"
+msgstr "Acerca &de"
 
 msgid "Go to line"
-msgstr "Idź do wiersza"
+msgstr "Ir a la línea"
 
 msgid "Column Editor"
-msgstr "Edytor kolumn"
+msgstr "Editor de columna"
 
 msgid "Text to Insert"
-msgstr "Tekst do wstawienia"
+msgstr "Texto a insertar"
 
 msgid "Number to Insert"
-msgstr "Liczba do wstawienia"
+msgstr "Número a insertar"
 
 msgid "Initial:"
-msgstr "Wartość początkowa:"
+msgstr "Inicial:"
 
 msgid "Increase by:"
-msgstr "Zwiększaj o:"
+msgstr "Incrementar en:"
 
 msgid "Leading zeros"
-msgstr "Zera wiodące"
+msgstr "Ceros a la izquierda"
 
 msgid "Format"
-msgstr "Format"
+msgstr "Formato"
 
 msgid "Change Search Engine"
-msgstr "Zmień wyszukiwarkę"
+msgstr "Cambiar motor de búsqueda"
 
 msgid "Search on Internet uses:"
-msgstr "Wyszukiwanie w Internecie używa:"
+msgstr "\"Buscar en Internet\" utiliza:"
 
 msgid "Find Characters in Range"
-msgstr "Znajdź znaki z zakresu"
+msgstr "Buscar caracteres en el rango"
 
 msgid "Finds the next character (from the caret, wrapping)\nwhose code falls within this range."
-msgstr "Znajduje następny znak (od kursora, z zawijaniem),\nktórego kod mieści się w tym zakresie."
+msgstr "Busca el siguiente carácter (desde el cursor, con vuelta al inicio)\ncuyo código esté dentro de este rango."
 
 msgid "From:"
-msgstr "Od:"
+msgstr "Desde:"
 
 msgid "To:"
-msgstr "Do:"
+msgstr "Hasta:"
 
 msgid "Hexadecimal"
-msgstr "Szesnastkowo"
+msgstr "Hexadecimal"
 
 msgid "Find Next"
-msgstr "Znajdź następny"
+msgstr "Buscar siguiente"
 
 msgid "Replace"
-msgstr "Zamień"
+msgstr "Sustituir"
 
 msgid "Find"
-msgstr "Znajdź"
+msgstr "Buscar"
 
 msgid "Find in Files"
-msgstr "Znajdź w plikach"
+msgstr "Buscar en archivos"
 
 msgid "Mark"
-msgstr "Oznacz"
+msgstr "Marcar"
 
 msgid "Find what :"
-msgstr "Znajdź :"
+msgstr "Qué buscar :"
 
 msgid "Replace with :"
-msgstr "Zamień na :"
+msgstr "Sustituir con :"
 
 msgid "Filters :"
-msgstr "Filtry :"
+msgstr "Filtros :"
 
 msgid "Directory :"
-msgstr "Katalog :"
+msgstr "Carpeta :"
 
 msgid "Match &whole word only"
-msgstr "&Tylko całe wyrazy"
+msgstr "Solo &palabras completas"
 
 msgid "Match &case"
-msgstr "Uwzględnij wielkość &liter"
+msgstr "Coincidir &mayúsculas y minúsculas"
 
 msgid "Wra&p around"
-msgstr "&Zawijaj wyszukiwanie"
+msgstr "Buscar en todo el d&ocumento"
 
 msgid "&Backward direction"
-msgstr "Kierunek &wstecz"
+msgstr "Hacia &atrás"
 
 msgid "In se&lection"
-msgstr "W &zaznaczeniu"
+msgstr "En la sele&cción"
 
 msgid "Search Mode"
-msgstr "Tryb wyszukiwania"
+msgstr "Modo de búsqueda"
 
 msgid "Add Files..."
-msgstr "Dodaj pliki..."
+msgstr "Añadir archivos..."
 
 msgid "Add Folder"
-msgstr "Dodaj folder"
+msgstr "Añadir carpeta"
 
 msgid "Rename"
-msgstr "Zmień nazwę"
+msgstr "Renombrar"
 
 msgid "Remove"
-msgstr "Usuń"
+msgstr "Quitar"
 
 msgid "New Workspace"
-msgstr "Nowy obszar roboczy"
+msgstr "Nuevo espacio de trabajo"
 
 msgid "Open Workspace..."
-msgstr "Otwórz obszar roboczy..."
+msgstr "Abrir espacio de trabajo..."
 
 msgid "Save Workspace As..."
-msgstr "Zapisz obszar roboczy jako..."
+msgstr "Guardar espacio de trabajo como..."
 
 msgid "Find: "
-msgstr "Znajdź: "
+msgstr "Buscar: "
 
 msgid "Next"
-msgstr "Następny"
+msgstr "Siguiente"
 
 msgid "Close"
-msgstr "Zamknij"
+msgstr "Cerrar"
 
 msgid "Match case"
-msgstr "Uwzględnij wielkość liter"
+msgstr "Coincidir mayúsculas y minúsculas"
 
 msgid "Whole word only"
-msgstr "Tylko całe wyrazy"
+msgstr "Solo palabras completas"
 
 msgid "Regular expression"
-msgstr "Wyrażenie regularne"
+msgstr "Expresión regular"
 
 msgid "In all sub-folders"
-msgstr "We wszystkich podfolderach"
+msgstr "En todas las subcarpetas"
 
 msgid "Find what:"
-msgstr "Znajdź:"
+msgstr "Qué buscar:"
 
 msgid "Directory:"
-msgstr "Katalog:"
+msgstr "Carpeta:"
 
 msgid "Filters:"
-msgstr "Filtry:"
+msgstr "Filtros:"
 
 msgid "Find All"
-msgstr "Znajdź wszystkie"
+msgstr "Buscar todo"
 
 msgid "Run"
-msgstr "Uruchom"
+msgstr "Ejecutar"
 
 msgid "Cancel"
-msgstr "Anuluj"
+msgstr "Cancelar"
 
 msgid "The Program to Run   (variables: $(FULL_CURRENT_PATH), $(CURRENT_DIRECTORY),\n$(FILE_NAME), $(CURRENT_WORD), $(CURRENT_LINE) ...)"
-msgstr "Program do uruchomienia   (zmienne: $(FULL_CURRENT_PATH), $(CURRENT_DIRECTORY),\n$(FILE_NAME), $(CURRENT_WORD), $(CURRENT_LINE) ...)"
+msgstr "Programa a ejecutar   (variables: $(FULL_CURRENT_PATH), $(CURRENT_DIRECTORY),\n$(FILE_NAME), $(CURRENT_WORD), $(CURRENT_LINE) ...)"
 
 msgid "Failed to run:\n"
-msgstr "Nie udało się uruchomić:\n"
+msgstr "Error al ejecutar:\n"
 
 msgid "Could not read the session file."
-msgstr "Nie można odczytać pliku sesji."
+msgstr "No se pudo leer el archivo de sesión."
 
 msgid "Load Session"
-msgstr "Wczytaj sesję"
+msgstr "Cargar sesión"
 
 msgid "No session data in this file."
-msgstr "Brak danych sesji w tym pliku."
+msgstr "Este archivo no contiene datos de sesión."
 
 msgid "Save file\n%s ?"
-msgstr "Zapisz plik\n%s ?"
+msgstr "¿Guardar el archivo\n%s ?"
 
 msgid "&Save"
-msgstr "&Zapisz"
+msgstr "&Guardar"
 
 msgid "Do&n't Save"
-msgstr "&Nie zapisuj"
+msgstr "&No guardar"
 
 msgid "&Cancel"
-msgstr "&Anuluj"
+msgstr "&Cancelar"
 
 msgid "Close All BUT This"
-msgstr "Zamknij wszystkie oprócz tego"
+msgstr "Cerrar todo excepto este"
 
 msgid "Close All"
-msgstr "Zamknij wszystkie"
+msgstr "Cerrar todo"
 
 msgid "Save"
-msgstr "Zapisz"
+msgstr "Guardar"
 
 msgid "Save As..."
-msgstr "Zapisz jako..."
+msgstr "Guardar como..."
 
 msgid "Move to Other View"
-msgstr "Przenieś do drugiego widoku"
+msgstr "Mover a la otra vista"
 
 msgid "Clone to Other View"
-msgstr "Klonuj do drugiego widoku"
+msgstr "Clonar a la otra vista"
 
 msgid "None"
-msgstr "Brak"
+msgstr "Ninguno"
 
 msgid "Apply Colour"
-msgstr "Zastosuj kolor"
+msgstr "Aplicar color"
 
 msgid "(more items added incrementally)"
-msgstr "(więcej pozycji dodawanych stopniowo)"
+msgstr "(más elementos añadidos progresivamente)"
 
 msgid "Recent &Files"
-msgstr "Ostatnie &pliki"
+msgstr "&Archivos recientes"
 
 msgid "Re-interpreting the encoding discards unsaved changes. Continue?"
-msgstr "Ponowna interpretacja kodowania odrzuci niezapisane zmiany. Kontynuować?"
+msgstr "Reinterpretar la codificación descarta los cambios sin guardar. ¿Continuar?"
 
 msgid "Encoding"
-msgstr "Kodowanie"
+msgstr "Codificación"
 
 msgid "Clipboard has no matching content."
-msgstr "Schowek nie zawiera pasującej zawartości."
+msgstr "El portapapeles no tiene contenido compatible."
 
 msgid "Paste"
-msgstr "Wklej"
+msgstr "Pegar"
 
 msgid "Move \"%s\" to the Recycle Bin?"
-msgstr "Przenieść \"%s\" do kosza?"
+msgstr "¿Mover \"%s\" a la Papelera de reciclaje?"
 
 msgid "Enter valid character codes."
-msgstr "Wprowadź prawidłowe kody znaków."
+msgstr "Introduzca códigos de carácter válidos."
 
 msgid "Show toolbar"
-msgstr "Pokaż pasek narzędzi"
+msgstr "Mostrar barra de herramientas"
 
 msgid "Show status bar"
-msgstr "Pokaż pasek stanu"
+msgstr "Mostrar barra de estado"
 
 msgid "Show integrated top bar"
-msgstr "Pokaż zintegrowany górny pasek"
+msgstr "Mostrar barra superior integrada"
 
 msgid "Display line number"
-msgstr "Wyświetlaj numery wierszy"
+msgstr "Mostrar número de línea"
 
 msgid "Show indentation guide"
-msgstr "Pokaż prowadnice wcięć"
+msgstr "Mostrar guía de sangría"
 
 msgid "Show white space and TAB"
-msgstr "Pokaż białe znaki i tabulatory"
+msgstr "Mostrar espacios en blanco y tabulaciones"
 
 msgid "Show wrap symbol"
-msgstr "Pokaż symbol zawijania"
+msgstr "Mostrar símbolo de ajuste"
 
 msgid "Word wrap"
-msgstr "Zawijanie wierszy"
+msgstr "Ajuste del texto"
 
 msgid "Highlight current line"
-msgstr "Podświetlaj bieżący wiersz"
+msgstr "Resaltar línea actual"
 
 msgid "Enable scrolling beyond last line"
-msgstr "Zezwalaj na przewijanie poza ostatni wiersz"
+msgstr "Permitir desplazamiento más allá de la última línea"
 
 msgid "Enable multi-editing (multi-selection)"
-msgstr "Włącz edycję wielokrotną (zaznaczenie wielokrotne)"
+msgstr "Habilitar multiedición (multiselección)"
 
 msgid "Caret width:"
-msgstr "Szerokość kursora:"
+msgstr "Ancho del cursor:"
 
 msgid "Vertical edge at column (0 = off):"
-msgstr "Pionowa krawędź w kolumnie (0 = wył.):"
+msgstr "Borde vertical en la columna (0 = desactivado):"
 
 msgid "Caret blink rate (ms, 0 = steady):"
-msgstr "Częstotliwość migania kursora (ms, 0 = stały):"
+msgstr "Velocidad de parpadeo del cursor (ms, 0 = fijo):"
 
 msgid "Tab size:"
-msgstr "Rozmiar tabulatora:"
+msgstr "Tamaño de tabulación:"
 
 msgid "Replace by space"
-msgstr "Zamieniaj na spacje"
+msgstr "Sustituir por espacios"
 
 msgid "Auto-indent new lines"
-msgstr "Automatyczne wcięcia nowych wierszy"
+msgstr "Sangría automática en líneas nuevas"
 
 msgid "Enable auto-completion on each input"
-msgstr "Włącz autouzupełnianie przy każdym wprowadzeniu"
+msgstr "Habilitar autocompletar en cada entrada"
 
 msgid "From the"
-msgstr "Od"
+msgstr "A partir del"
 
 msgid "th character"
-msgstr ". znaku"
+msgstr "º carácter"
 
 msgid "Auto-insert matching brackets and quotes"
-msgstr "Automatycznie wstawiaj pasujące nawiasy i cudzysłowy"
+msgstr "Insertar automáticamente paréntesis y comillas de cierre"
 
 msgid "Enable Dark Mode   (applied on restart)"
-msgstr "Włącz tryb ciemny   (stosowane po ponownym uruchomieniu)"
+msgstr "Habilitar modo oscuro   (se aplica al reiniciar)"
 
 msgid "Format (Line ending)"
-msgstr "Format (koniec wiersza)"
+msgstr "Formato (fin de línea)"
 
 msgid "Default language:"
-msgstr "Domyślny język:"
+msgstr "Lenguaje predeterminado:"
 
 msgid "Show close button on each tab   (applied on restart)"
-msgstr "Pokaż przycisk zamykania na każdej karcie   (stosowane po ponownym uruchomieniu)"
+msgstr "Mostrar botón de cierre en cada pestaña   (se aplica al reiniciar)"
 
 msgid "Max number of entries (applied on restart):"
-msgstr "Maks. liczba pozycji (stosowane po ponownym uruchomieniu):"
+msgstr "Número máximo de entradas (se aplica al reiniciar):"
 
 msgid "Header:"
-msgstr "Nagłówek:"
+msgstr "Encabezado:"
 
 msgid "Footer:"
-msgstr "Stopka:"
+msgstr "Pie de página:"
 
 msgid "Run until the end of file"
-msgstr "Wykonuj do końca pliku"
+msgstr "Ejecutar hasta el final del archivo"
 
 msgid "times"
-msgstr "razy"
+msgstr "veces"
 
 msgid "Select theme:"
-msgstr "Wybierz motyw:"
+msgstr "Seleccionar tema:"
 
 msgid "Bold"
-msgstr "Pogrubienie"
+msgstr "Negrita"
 
 msgid "Italic"
-msgstr "Kursywa"
+msgstr "Cursiva"
 
 msgid "Foreground colour:"
-msgstr "Kolor pierwszego planu:"
+msgstr "Color de primer plano:"
 
 msgid "Background colour:"
-msgstr "Kolor tła:"
+msgstr "Color de fondo:"
 
 msgid "Save && Close"
-msgstr "Zapisz && zamknij"
+msgstr "Guardar && Cerrar"
 
 msgid "Encode as ANSI"
-msgstr "Koduj jako ANSI"
+msgstr "Codificar como ANSI"
 
 msgid "Encode as UTF-8"
-msgstr "Koduj jako UTF-8"
+msgstr "Codificar como UTF-8"
 
 msgid "Encode as UTF-8 BOM"
-msgstr "Koduj jako UTF-8 BOM"
+msgstr "Codificar como UTF-8 BOM"
 
 msgid "Encode as UTF-16 LE BOM"
-msgstr "Koduj jako UTF-16 LE BOM"
+msgstr "Codificar como UTF-16 LE BOM"
 
 msgid "Encode as UTF-16 BE BOM"
-msgstr "Koduj jako UTF-16 BE BOM"
+msgstr "Codificar como UTF-16 BE BOM"
 
 msgid "Convert to UTF-8 BOM"
-msgstr "Konwertuj na UTF-8 BOM"
+msgstr "Convertir a UTF-8 BOM"
 
 msgid "Column (rectangular) selection:\n\n- Alt + drag the mouse\n- Alt + Shift + Arrow keys\n- Alt + Shift + Click\n\nTyping or pasting applies to every line of the block at once."
-msgstr "Zaznaczenie kolumnowe (prostokątne):\n\n- Alt + przeciągnięcie myszą\n- Alt + Shift + klawisze strzałek\n- Alt + Shift + kliknięcie\n\nWpisywanie lub wklejanie dotyczy każdego wiersza bloku jednocześnie."
+msgstr "Selección de columna (rectangular):\n\n- Alt + arrastrar el ratón\n- Alt + Mayús + teclas de flecha\n- Alt + Mayús + clic\n\nEscribir o pegar se aplica a todas las líneas del bloque a la vez."
 
 msgid "Column Mode"
-msgstr "Tryb kolumnowy"
+msgstr "Modo de columna"

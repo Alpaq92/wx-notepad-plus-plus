@@ -560,7 +560,7 @@ class GoToLineDialog : public wxDialog
 {
 public:
     GoToLineDialog(wxWindow* p, int maxLine, int cur, bool dark)
-        : wxDialog(p, wxID_ANY, "Go to line"), m_max(maxLine)
+        : wxDialog(p, wxID_ANY, _("Go to line")), m_max(maxLine)
     {
         m_fieldBg   = dark ? wxColour(32, 32, 32)    : *wxWHITE;             // == the DarkMode_CFD edit bg
         m_fieldFg   = dark ? wxColour(220, 220, 220) : *wxBLACK;
@@ -631,29 +631,29 @@ private:
 class ColumnEditorDialog : public wxDialog
 {
 public:
-    ColumnEditorDialog(wxWindow* p, bool dark) : wxDialog(p, wxID_ANY, "Column Editor")
+    ColumnEditorDialog(wxWindow* p, bool dark) : wxDialog(p, wxID_ANY, _("Column Editor"))
     {
         const wxColour fbg = dark ? wxColour(32, 32, 32) : *wxWHITE, ffg = dark ? wxColour(220, 220, 220) : *wxBLACK;
         auto field = [&](const wxString& v, int w) { auto* t = new wxTextCtrl(this, wxID_ANY, v, wxDefaultPosition, wxSize(w, -1)); if (dark) { t->SetBackgroundColour(fbg); t->SetForegroundColour(ffg); } return t; };
         auto* s = new wxBoxSizer(wxVERTICAL);
 
-        m_radioText = new wxRadioButton(this, wxID_ANY, "Text to Insert", wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+        m_radioText = new wxRadioButton(this, wxID_ANY, _("Text to Insert"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
         m_textField = field("", 250);
         s->Add(m_radioText, 0, wxLEFT | wxTOP | wxRIGHT, 10);
         s->Add(m_textField, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 26);
 
-        m_radioNum = new wxRadioButton(this, wxID_ANY, "Number to Insert");
+        m_radioNum = new wxRadioButton(this, wxID_ANY, _("Number to Insert"));
         s->Add(m_radioNum, 0, wxLEFT | wxRIGHT, 10);
         auto* nrow = new wxBoxSizer(wxHORIZONTAL);
-        nrow->Add(new wxStaticText(this, wxID_ANY, "Initial:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        nrow->Add(new wxStaticText(this, wxID_ANY, _("Initial:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
         m_initial = field("1", 60); nrow->Add(m_initial, 0, wxRIGHT, 14);
-        nrow->Add(new wxStaticText(this, wxID_ANY, "Increase by:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        nrow->Add(new wxStaticText(this, wxID_ANY, _("Increase by:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
         m_increase = field("1", 60); nrow->Add(m_increase);
         s->Add(nrow, 0, wxLEFT | wxRIGHT | wxTOP, 26);
-        m_leadZero = new wxCheckBox(this, wxID_ANY, "Leading zeros");
+        m_leadZero = new wxCheckBox(this, wxID_ANY, _("Leading zeros"));
         s->Add(m_leadZero, 0, wxLEFT | wxTOP | wxBOTTOM, 26);
         wxString fmts[] = { "Dec", "Hex", "Oct", "Bin" };
-        m_format = new wxRadioBox(this, wxID_ANY, "Format", wxDefaultPosition, wxDefaultSize, 4, fmts, 4, wxRA_SPECIFY_COLS);
+        m_format = new wxRadioBox(this, wxID_ANY, _("Format"), wxDefaultPosition, wxDefaultSize, 4, fmts, 4, wxRA_SPECIFY_COLS);
         s->Add(m_format, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 26);
 
         s->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxALL | wxEXPAND, 10);
@@ -677,11 +677,11 @@ private:
 class SearchEngineDialog : public wxDialog
 {
 public:
-    SearchEngineDialog(wxWindow* p, int current) : wxDialog(p, wxID_ANY, "Change Search Engine")
+    SearchEngineDialog(wxWindow* p, int current) : wxDialog(p, wxID_ANY, _("Change Search Engine"))
     {
         auto* s = new wxBoxSizer(wxVERTICAL);
         wxString names[] = { "DuckDuckGo", "Google", "Bing", "Yahoo", "Brave Search" };
-        m_choice = new wxRadioBox(this, wxID_ANY, "Search on Internet uses:", wxDefaultPosition, wxDefaultSize, 5, names, 1, wxRA_SPECIFY_COLS);
+        m_choice = new wxRadioBox(this, wxID_ANY, _("Search on Internet uses:"), wxDefaultPosition, wxDefaultSize, 5, names, 1, wxRA_SPECIFY_COLS);
         m_choice->SetSelection(current >= 0 && current < 5 ? current : 0);
         s->Add(m_choice, 0, wxALL | wxEXPAND, 12);
         s->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxALL | wxEXPAND, 10);
@@ -696,25 +696,25 @@ private:
 class FindCharRangeDialog : public wxDialog
 {
 public:
-    FindCharRangeDialog(wxWindow* p, bool dark) : wxDialog(p, wxID_ANY, "Find Characters in Range")
+    FindCharRangeDialog(wxWindow* p, bool dark) : wxDialog(p, wxID_ANY, _("Find Characters in Range"))
     {
         const wxColour fbg = dark ? wxColour(32, 32, 32) : *wxWHITE, ffg = dark ? wxColour(220, 220, 220) : *wxBLACK;
         auto field = [&](const wxString& v) { auto* t = new wxTextCtrl(this, wxID_ANY, v, wxDefaultPosition, wxSize(80, -1)); if (dark) { t->SetBackgroundColour(fbg); t->SetForegroundColour(ffg); } return t; };
         auto* s = new wxBoxSizer(wxVERTICAL);
-        s->Add(new wxStaticText(this, wxID_ANY, "Finds the next character (from the caret, wrapping)\nwhose code falls within this range."), 0, wxALL, 10);
+        s->Add(new wxStaticText(this, wxID_ANY, _("Finds the next character (from the caret, wrapping)\nwhose code falls within this range.")), 0, wxALL, 10);
         auto* row = new wxBoxSizer(wxHORIZONTAL);
-        row->Add(new wxStaticText(this, wxID_ANY, "From:"), 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 6);
+        row->Add(new wxStaticText(this, wxID_ANY, _("From:")), 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 6);
         m_from = field("00"); row->Add(m_from, 0, wxRIGHT, 14);
-        row->Add(new wxStaticText(this, wxID_ANY, "To:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+        row->Add(new wxStaticText(this, wxID_ANY, _("To:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
         m_to = field("1F"); row->Add(m_to);
         s->Add(row, 0, wxLEFT | wxRIGHT | wxBOTTOM, 26);
-        m_hex = new wxCheckBox(this, wxID_ANY, "Hexadecimal");
+        m_hex = new wxCheckBox(this, wxID_ANY, _("Hexadecimal"));
         m_hex->SetValue(true);
         s->Add(m_hex, 0, wxLEFT | wxBOTTOM, 26);
         s->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxALL | wxEXPAND, 10);
         SetSizerAndFit(s);
         m_from->SetFocus();
-        if (auto* ok = FindWindow(wxID_OK)) ok->SetLabel("Find Next");
+        if (auto* ok = FindWindow(wxID_OK)) ok->SetLabel(_("Find Next"));
     }
     bool range(int& from, int& to) const
     {
@@ -745,14 +745,14 @@ public:
     std::function<void(const wxString&)> infoCb;   // hint for actions the wx shell can't do yet
 
     explicit FindReplaceDialog(wxWindow* parent)
-        : wxDialog(parent, wxID_ANY, "Replace", wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE)
+        : wxDialog(parent, wxID_ANY, _("Replace"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE)
     {
         m_nb = new wxNotebook(this, wxID_ANY);
         for (int t = 0; t < 4; ++t) m_pages[t] = buildPage(t);
-        m_nb->AddPage(m_pages[TAB_FIND]->panel,    "Find");
-        m_nb->AddPage(m_pages[TAB_REPLACE]->panel, "Replace");
-        m_nb->AddPage(m_pages[TAB_FIF]->panel,     "Find in Files");
-        m_nb->AddPage(m_pages[TAB_MARK]->panel,    "Mark");
+        m_nb->AddPage(m_pages[TAB_FIND]->panel,    _("Find"));
+        m_nb->AddPage(m_pages[TAB_REPLACE]->panel, _("Replace"));
+        m_nb->AddPage(m_pages[TAB_FIF]->panel,     _("Find in Files"));
+        m_nb->AddPage(m_pages[TAB_MARK]->panel,    _("Mark"));
 
         auto* top = new wxBoxSizer(wxVERTICAL);
         top->Add(m_nb, 1, wxEXPAND | wxALL, 6);
@@ -867,19 +867,19 @@ private:
         // ---- text fields (Find what / Replace with / FiF filters+directory) ----
         auto* grid = new wxFlexGridSizer(2, 6, 8);
         grid->AddGrowableCol(1);
-        grid->Add(new wxStaticText(panel, wxID_ANY, "Find what :"), 0, wxALIGN_CENTRE_VERTICAL);
+        grid->Add(new wxStaticText(panel, wxID_ANY, _("Find what :")), 0, wxALIGN_CENTRE_VERTICAL);
         pc->find = new wxComboBox(panel, wxID_ANY, "", wxDefaultPosition, wxSize(330, -1));
         grid->Add(pc->find, 1, wxEXPAND);
         if (t == TAB_REPLACE || t == TAB_FIF) {
-            grid->Add(new wxStaticText(panel, wxID_ANY, "Replace with :"), 0, wxALIGN_CENTRE_VERTICAL);
+            grid->Add(new wxStaticText(panel, wxID_ANY, _("Replace with :")), 0, wxALIGN_CENTRE_VERTICAL);
             pc->repl = new wxComboBox(panel, wxID_ANY, "", wxDefaultPosition, wxSize(330, -1));
             grid->Add(pc->repl, 1, wxEXPAND);
         }
         if (t == TAB_FIF) {
-            grid->Add(new wxStaticText(panel, wxID_ANY, "Filters :"), 0, wxALIGN_CENTRE_VERTICAL);
+            grid->Add(new wxStaticText(panel, wxID_ANY, _("Filters :")), 0, wxALIGN_CENTRE_VERTICAL);
             pc->filters = new wxComboBox(panel, wxID_ANY, "*.*", wxDefaultPosition, wxSize(330, -1));
             grid->Add(pc->filters, 1, wxEXPAND);
-            grid->Add(new wxStaticText(panel, wxID_ANY, "Directory :"), 0, wxALIGN_CENTRE_VERTICAL);
+            grid->Add(new wxStaticText(panel, wxID_ANY, _("Directory :")), 0, wxALIGN_CENTRE_VERTICAL);
             pc->dir = new wxComboBox(panel, wxID_ANY, "", wxDefaultPosition, wxSize(330, -1));
             grid->Add(pc->dir, 1, wxEXPAND);
         }
@@ -888,22 +888,22 @@ private:
         // ---- options (left) + action buttons (right) ----
         auto* mid = new wxBoxSizer(wxHORIZONTAL);
         auto* opt = new wxBoxSizer(wxVERTICAL);
-        pc->word  = new wxCheckBox(panel, wxID_ANY, "Match &whole word only");
-        pc->caseC = new wxCheckBox(panel, wxID_ANY, "Match &case");
-        pc->wrap  = new wxCheckBox(panel, wxID_ANY, "Wra&p around"); pc->wrap->SetValue(true);
+        pc->word  = new wxCheckBox(panel, wxID_ANY, _("Match &whole word only"));
+        pc->caseC = new wxCheckBox(panel, wxID_ANY, _("Match &case"));
+        pc->wrap  = new wxCheckBox(panel, wxID_ANY, _("Wra&p around")); pc->wrap->SetValue(true);
         opt->Add(pc->word, 0, wxALL, 3);
         opt->Add(pc->caseC, 0, wxALL, 3);
         if (t == TAB_FIND || t == TAB_REPLACE) {
-            pc->backward = new wxCheckBox(panel, wxID_ANY, "&Backward direction");
+            pc->backward = new wxCheckBox(panel, wxID_ANY, _("&Backward direction"));
             opt->Add(pc->backward, 0, wxALL, 3);
         }
         opt->Add(pc->wrap, 0, wxALL, 3);
         if (t == TAB_REPLACE || t == TAB_MARK) {
-            pc->inSel = new wxCheckBox(panel, wxID_ANY, "In se&lection");
+            pc->inSel = new wxCheckBox(panel, wxID_ANY, _("In se&lection"));
             opt->Add(pc->inSel, 0, wxALL, 3);
         }
         const wxString modes[3] = { "&Normal", "E&xtended (\\n, \\r, \\t, \\0, \\x...)", "Re&gular expression" };
-        pc->mode = new wxRadioBox(panel, wxID_ANY, "Search Mode", wxDefaultPosition, wxDefaultSize, 3, modes, 1, wxRA_SPECIFY_COLS);
+        pc->mode = new wxRadioBox(panel, wxID_ANY, _("Search Mode"), wxDefaultPosition, wxDefaultSize, 3, modes, 1, wxRA_SPECIFY_COLS);
         opt->Add(pc->mode, 0, wxALL | wxEXPAND, 3);
         mid->Add(opt, 1, wxEXPAND | wxRIGHT, 12);
 
@@ -2095,11 +2095,11 @@ private:
         const bool isRoot   = item.IsOk() && item == m_projPanel->GetRootItem();
         const bool isFolder = isRoot || (d && !d->isFile);
         wxMenu m;
-        if (isFolder) { m.Append(7200, "Add Files..."); m.Append(7201, "Add Folder"); }
-        if (d && !d->isFile && !isRoot) m.Append(7202, "Rename");
-        if (d && !isRoot) m.Append(7203, "Remove");
+        if (isFolder) { m.Append(7200, _("Add Files...")); m.Append(7201, _("Add Folder")); }
+        if (d && !d->isFile && !isRoot) m.Append(7202, _("Rename"));
+        if (d && !isRoot) m.Append(7203, _("Remove"));
         m.AppendSeparator();
-        m.Append(7210, "New Workspace"); m.Append(7211, "Open Workspace..."); m.Append(7212, "Save Workspace As...");
+        m.Append(7210, _("New Workspace")); m.Append(7211, _("Open Workspace...")); m.Append(7212, _("Save Workspace As..."));
         switch (m_projPanel->GetPopupMenuSelectionFromUser(m))
         {
             case 7200: projAddFiles(item);           break;
@@ -2298,7 +2298,7 @@ private:
         m_incBar = new wxPanel(this);
         if (m_dark) m_incBar->SetBackgroundColour(wxColour(45, 45, 45));
         auto* sz  = new wxBoxSizer(wxHORIZONTAL);
-        auto* lbl = new wxStaticText(m_incBar, wxID_ANY, "Find: ");
+        auto* lbl = new wxStaticText(m_incBar, wxID_ANY, _("Find: "));
         if (m_dark) lbl->SetForegroundColour(wxColour(220, 220, 220));
         m_incField = new wxTextCtrl(m_incBar, wxID_ANY, "", wxDefaultPosition, wxSize(220, -1), wxTE_PROCESS_ENTER);
         if (m_dark) { m_incField->SetBackgroundColour(wxColour(30, 30, 30)); m_incField->SetForegroundColour(wxColour(220, 220, 220)); }
@@ -2309,8 +2309,8 @@ private:
         m_incRegexBtn = mkToggle(".*",  "Regular expression");
         m_incCount = new wxStaticText(m_incBar, wxID_ANY, "", wxDefaultPosition, wxSize(108, -1));
         if (m_dark) m_incCount->SetForegroundColour(wxColour(170, 170, 170));
-        auto* nextB  = new wxButton(m_incBar, wxID_ANY, "Next",  wxDefaultPosition, wxSize(60, -1));
-        auto* closeB = new wxButton(m_incBar, wxID_ANY, "Close", wxDefaultPosition, wxSize(60, -1));
+        auto* nextB  = new wxButton(m_incBar, wxID_ANY, _("Next"),  wxDefaultPosition, wxSize(60, -1));
+        auto* closeB = new wxButton(m_incBar, wxID_ANY, _("Close"), wxDefaultPosition, wxSize(60, -1));
         sz->Add(lbl, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8);
         sz->Add(m_incField, 0, wxALIGN_CENTER_VERTICAL | wxALL, 4);
         sz->Add(m_incCaseBtn,  0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
@@ -2456,22 +2456,22 @@ private:
         wxString dir; if (auto* p = activePage()) dir = wxPathOnly(p->path); if (dir.empty()) dir = wxGetCwd();
         auto* dirc = new wxTextCtrl(&dlg, wxID_ANY, dir);
         auto* filt = new wxTextCtrl(&dlg, wxID_ANY, "*.*");
-        auto* cc = new wxCheckBox(&dlg, wxID_ANY, "Match case");
-        auto* ww = new wxCheckBox(&dlg, wxID_ANY, "Whole word only");
-        auto* rx = new wxCheckBox(&dlg, wxID_ANY, "Regular expression");
-        auto* sd = new wxCheckBox(&dlg, wxID_ANY, "In all sub-folders"); sd->SetValue(true);
+        auto* cc = new wxCheckBox(&dlg, wxID_ANY, _("Match case"));
+        auto* ww = new wxCheckBox(&dlg, wxID_ANY, _("Whole word only"));
+        auto* rx = new wxCheckBox(&dlg, wxID_ANY, _("Regular expression"));
+        auto* sd = new wxCheckBox(&dlg, wxID_ANY, _("In all sub-folders")); sd->SetValue(true);
         auto* gs = new wxFlexGridSizer(2, 8, 8); gs->AddGrowableCol(1);
-        gs->Add(new wxStaticText(&dlg, wxID_ANY, "Find what:"), 0, wxALIGN_CENTRE_VERTICAL); gs->Add(find, 1, wxEXPAND);
-        gs->Add(new wxStaticText(&dlg, wxID_ANY, "Directory:"), 0, wxALIGN_CENTRE_VERTICAL);
+        gs->Add(new wxStaticText(&dlg, wxID_ANY, _("Find what:")), 0, wxALIGN_CENTRE_VERTICAL); gs->Add(find, 1, wxEXPAND);
+        gs->Add(new wxStaticText(&dlg, wxID_ANY, _("Directory:")), 0, wxALIGN_CENTRE_VERTICAL);
         auto* drow = new wxBoxSizer(wxHORIZONTAL); drow->Add(dirc, 1, wxEXPAND);
         auto* browse = new wxButton(&dlg, wxID_ANY, "...", wxDefaultPosition, wxSize(32, -1)); drow->Add(browse, 0, wxLEFT, 4);
         gs->Add(drow, 1, wxEXPAND);
-        gs->Add(new wxStaticText(&dlg, wxID_ANY, "Filters:"), 0, wxALIGN_CENTRE_VERTICAL); gs->Add(filt, 1, wxEXPAND);
+        gs->Add(new wxStaticText(&dlg, wxID_ANY, _("Filters:")), 0, wxALIGN_CENTRE_VERTICAL); gs->Add(filt, 1, wxEXPAND);
         browse->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) { wxDirDialog dd(&dlg, "Choose folder", dirc->GetValue()); if (dd.ShowModal() == wxID_OK) dirc->SetValue(dd.GetPath()); });
         auto* opt = new wxBoxSizer(wxHORIZONTAL); opt->Add(cc, 0, wxRIGHT, 12); opt->Add(ww, 0, wxRIGHT, 12); opt->Add(rx, 0, wxRIGHT, 12); opt->Add(sd, 0);
         auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
-        auto* findAll = new wxButton(&dlg, wxID_OK, "Find All"); findAll->SetDefault();   // Enter submits
-        btn->Add(findAll, 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, "Close"), 0);
+        auto* findAll = new wxButton(&dlg, wxID_OK, _("Find All")); findAll->SetDefault();   // Enter submits
+        btn->Add(findAll, 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Close")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL);
         top->Add(gs, 0, wxEXPAND | wxALL, 12); top->Add(opt, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
         dlg.SetSizerAndFit(top); dlg.SetSize(wxSize(480, dlg.GetSize().GetHeight()));
@@ -2515,10 +2515,10 @@ private:
         auto* browse = new wxButton(&dlg, wxID_ANY, "...", wxDefaultPosition, wxSize(32, -1));
         auto* row = new wxBoxSizer(wxHORIZONTAL); row->Add(tc, 1, wxEXPAND); row->Add(browse, 0, wxLEFT, 4);
         auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
-        auto* runb = new wxButton(&dlg, wxID_OK, "Run"); runb->SetDefault();
-        btn->Add(runb, 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, "Cancel"), 0);
+        auto* runb = new wxButton(&dlg, wxID_OK, _("Run")); runb->SetDefault();
+        btn->Add(runb, 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL);
-        top->Add(new wxStaticText(&dlg, wxID_ANY, "The Program to Run   (variables: $(FULL_CURRENT_PATH), $(CURRENT_DIRECTORY),\n$(FILE_NAME), $(CURRENT_WORD), $(CURRENT_LINE) ...)"), 0, wxALL, 12);
+        top->Add(new wxStaticText(&dlg, wxID_ANY, _("The Program to Run   (variables: $(FULL_CURRENT_PATH), $(CURRENT_DIRECTORY),\n$(FILE_NAME), $(CURRENT_WORD), $(CURRENT_LINE) ...)")), 0, wxALL, 12);
         top->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT, 12);
         top->Add(btn, 0, wxEXPAND | wxALL, 12);
         dlg.SetSizerAndFit(top); dlg.SetSize(wxSize(540, dlg.GetSize().GetHeight()));
@@ -2529,7 +2529,7 @@ private:
         cmd = tc->GetValue().Trim().Trim(false); if (cmd.empty()) return;
         wxConfigBase::Get()->Write("RunCommand", cmd); wxConfigBase::Get()->Flush();
         const wxString full = substituteRunVars(cmd);
-        if (wxExecute(full, wxEXEC_ASYNC) == 0) wxMessageBox("Failed to run:\n" + full, "Run", wxOK | wxICON_ERROR, this);
+        if (wxExecute(full, wxEXEC_ASYNC) == 0) wxMessageBox(_("Failed to run:\n") + full, _("Run"), wxOK | wxICON_ERROR, this);
     }
 
     // ----- sessions (File > Save / Load Session) ------------------------
@@ -2573,13 +2573,13 @@ private:
         wxFileDialog d(this, "Load Session", "", "", "Session files (*.xml)|*.xml|All files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
         if (d.ShowModal() != wxID_OK) return;
         wxXmlDocument doc;
-        if (!doc.Load(d.GetPath()) || !doc.GetRoot()) { wxMessageBox("Could not read the session file.", "Load Session", wxOK | wxICON_ERROR, this); return; }
+        if (!doc.Load(d.GetPath()) || !doc.GetRoot()) { wxMessageBox(_("Could not read the session file."), _("Load Session"), wxOK | wxICON_ERROR, this); return; }
         wxXmlNode* view = nullptr;
         for (wxXmlNode* a = doc.GetRoot()->GetChildren(); a && !view; a = a->GetNext())
             if (a->GetName() == "Session")
                 for (wxXmlNode* b = a->GetChildren(); b; b = b->GetNext())
                     if (b->GetName() == "mainView") { view = b; break; }
-        if (!view) { wxMessageBox("No session data in this file.", "Load Session", wxOK | wxICON_WARNING, this); return; }
+        if (!view) { wxMessageBox(_("No session data in this file."), _("Load Session"), wxOK | wxICON_WARNING, this); return; }
         const int activeIndex = wxAtoi(view->GetAttribute("activeIndex", "0"));
         std::vector<EditorPage*> opened;
         for (wxXmlNode* f = view->GetChildren(); f; f = f->GetNext())
@@ -3416,24 +3416,24 @@ private:
         setActiveView(viewOfEvent(e));   // the right-clicked tab's view
         if (e.GetSelection() != wxNOT_FOUND) m_tabs->SetSelection(e.GetSelection());
         wxMenu menu;
-        menu.Append(IDM_FILE_CLOSE, "Close");
-        menu.Append(IDM_FILE_CLOSEALL_BUT_CURRENT, "Close All BUT This");
-        menu.Append(IDM_FILE_CLOSEALL, "Close All");
+        menu.Append(IDM_FILE_CLOSE, _("Close"));
+        menu.Append(IDM_FILE_CLOSEALL_BUT_CURRENT, _("Close All BUT This"));
+        menu.Append(IDM_FILE_CLOSEALL, _("Close All"));
         menu.AppendSeparator();
-        menu.Append(IDM_FILE_SAVE, "Save");
-        menu.Append(IDM_FILE_SAVEAS, "Save As...");
+        menu.Append(IDM_FILE_SAVE, _("Save"));
+        menu.Append(IDM_FILE_SAVEAS, _("Save As..."));
         menu.AppendSeparator();
-        menu.Append(IDM_VIEW_GOTO_ANOTHER_VIEW,     "Move to Other View");
-        menu.Append(IDM_VIEW_CLONE_TO_ANOTHER_VIEW, "Clone to Other View");
+        menu.Append(IDM_VIEW_GOTO_ANOTHER_VIEW,     _("Move to Other View"));
+        menu.Append(IDM_VIEW_CLONE_TO_ANOTHER_VIEW, _("Clone to Other View"));
         menu.AppendSeparator();
         // Tab colours in an "Apply Colour" submenu. We read the pick via GetPopupMenuSelectionFromUser (below),
         // which returns the chosen id directly - including submenu items - so it sidesteps the MSW quirk where
         // PopupMenu silently drops submenu-item command events (that was why earlier picks did nothing).
         wxMenu* cm = new wxMenu;
-        cm->Append(IDM_TABCOLOUR_NONE, "None");
+        cm->Append(IDM_TABCOLOUR_NONE, _("None"));
         cm->AppendSeparator();
         for (int k = 0; k < 5; ++k) cm->Append(IDM_TABCOLOUR_BASE + k, tabPaletteName(k));
-        menu.AppendSubMenu(cm, "Apply Colour");
+        menu.AppendSubMenu(cm, _("Apply Colour"));
         const int sel = this->GetPopupMenuSelectionFromUser(menu);
         if (sel == wxID_NONE) return;
         if (sel == IDM_TABCOLOUR_NONE) { applyTabColour(-1); return; }
@@ -3541,7 +3541,7 @@ private:
     }
 
     // ----- menu bar ------------------------------------------------------
-    static void placeholder(wxMenu* m) { wxMenuItem* it = m->Append(wxID_ANY, "(more items added incrementally)"); it->Enable(false); }
+    static void placeholder(wxMenu* m) { wxMenuItem* it = m->Append(wxID_ANY, _("(more items added incrementally)")); it->Enable(false); }
 
     // Menu/tool-bar accessors that work in BOTH chrome modes. Integrated mode has no native menu bar
     // (menus live in m_menuOwner) and its toolbar is an aui pane, not the frame toolbar - so the built-in
@@ -3572,7 +3572,7 @@ private:
         {
             auto* recent = new wxMenu;
             const size_t n = fileMenu->GetMenuItemCount();
-            fileMenu->Insert(n > 0 ? n - 1 : 0, wxID_ANY, "Recent &Files", recent);
+            fileMenu->Insert(n > 0 ? n - 1 : 0, wxID_ANY, _("Recent &Files"), recent);
             m_fileHistory.UseMenu(recent);
             auto* c = wxConfigBase::Get(); c->SetPath("/RecentFiles"); m_fileHistory.Load(*c); c->SetPath("/");
         }
@@ -4166,7 +4166,7 @@ private:
         const wxString p = curPath();
         if (!p.empty())
         {
-            if (sci(SCI_GETMODIFY) && wxMessageBox("Re-interpreting the encoding discards unsaved changes. Continue?", "Encoding", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
+            if (sci(SCI_GETMODIFY) && wxMessageBox(_("Re-interpreting the encoding discards unsaved changes. Continue?"), _("Encoding"), wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
             setDocUtf8(cpToUtf8((UINT)cp, readRawBytes(p))); sci(SCI_EMPTYUNDOBUFFER); sci(SCI_SETSAVEPOINT);
         }
         if (auto* pg = activePage()) { pg->encoding = ENC_CHARSET; pg->codepage = cp; pg->encLabel = name; }
@@ -4201,7 +4201,7 @@ private:
     {
         const wxString p = curPath();
         if (p.empty()) { if (auto* pg = activePage()) pg->encoding = enc; updateStatus(); updateEncodingMenuChecks(); return; }
-        if (sci(SCI_GETMODIFY) && wxMessageBox("Re-interpreting the encoding discards unsaved changes. Continue?", "Encoding", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
+        if (sci(SCI_GETMODIFY) && wxMessageBox(_("Re-interpreting the encoding discards unsaved changes. Continue?"), _("Encoding"), wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
         const std::string raw = readRawBytes(p); std::string u;
         switch (enc)
         {
@@ -4471,7 +4471,7 @@ private:
             sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(""));
             sci(SCI_ADDTEXT, (uptr_t)n, reinterpret_cast<sptr_t>(p));
         }
-        else wxMessageBox("Clipboard has no matching content.", "Paste", wxOK | wxICON_INFORMATION, this);
+        else wxMessageBox(_("Clipboard has no matching content."), _("Paste"), wxOK | wxICON_INFORMATION, this);
         wxTheClipboard->Close();
 #else
         notImpl("Paste " + formatName + " (Windows only)");
@@ -4556,7 +4556,7 @@ private:
     {
         const wxString p = curPath();
         if (p.empty()) { notImpl("Move to Recycle Bin (save the file first)"); return; }
-        if (wxMessageBox("Move \"" + wxFileNameFromPath(p) + "\" to the Recycle Bin?", "wxNotepad++", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
+        if (wxMessageBox(wxString::Format(_("Move \"%s\" to the Recycle Bin?"), wxFileNameFromPath(p)), "wxNotepad++", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
 #ifdef __WXMSW__
         std::wstring from = p.ToStdWstring(); from.push_back(L'\0'); from.push_back(L'\0');   // double-NUL terminated list
         SHFILEOPSTRUCTW op{}; op.wFunc = FO_DELETE; op.pFrom = from.c_str(); op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
@@ -4683,7 +4683,7 @@ private:
         themeDialog(&dlg);
         if (dlg.ShowModal() != wxID_OK) return;
         int from = 0, to = 0;
-        if (!dlg.range(from, to)) { wxMessageBox("Enter valid character codes.", "Find Characters in Range", wxOK | wxICON_WARNING, this); return; }
+        if (!dlg.range(from, to)) { wxMessageBox(_("Enter valid character codes."), _("Find Characters in Range"), wxOK | wxICON_WARNING, this); return; }
         const int len = (int)sci(SCI_GETLENGTH);
         if (len <= 0) return;
         const int start = (int)sci(SCI_GETCURRENTPOS);
@@ -5449,36 +5449,36 @@ private:
 
         // ---- General --------------------------------------------------------------------------
         auto* gen = pg("General", true); auto* gs = new wxBoxSizer(wxVERTICAL);
-        auto* cbToolbar = new wxCheckBox(gen, wxID_ANY, "Show toolbar");    cbToolbar->SetValue(m_showToolbar);
-        auto* cbStatus  = new wxCheckBox(gen, wxID_ANY, "Show status bar"); cbStatus->SetValue(m_showStatusbar);
+        auto* cbToolbar = new wxCheckBox(gen, wxID_ANY, _("Show toolbar"));    cbToolbar->SetValue(m_showToolbar);
+        auto* cbStatus  = new wxCheckBox(gen, wxID_ANY, _("Show status bar")); cbStatus->SetValue(m_showStatusbar);
         row(gs, cbToolbar); row(gs, cbStatus);
 #ifdef WXNPP_HAS_BORDERLESS
-        auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, "Show integrated top bar");
+        auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, _("Show integrated top bar"));
         cbIntBar->SetValue(m_integratedBar); row(gs, cbIntBar);
 #endif
         gen->SetSizer(gs);
 
         // ---- Editing --------------------------------------------------------------------------
         auto* ed = pg("Editing"); auto* es = new wxBoxSizer(wxVERTICAL);
-        auto* cbLineNum = new wxCheckBox(ed, wxID_ANY, "Display line number");      cbLineNum->SetValue(m_lineNumbers);
-        auto* cbGuides  = new wxCheckBox(ed, wxID_ANY, "Show indentation guide");   cbGuides->SetValue(m_guides);
-        auto* cbWs      = new wxCheckBox(ed, wxID_ANY, "Show white space and TAB"); cbWs->SetValue(m_ws);
-        auto* cbWrapSym = new wxCheckBox(ed, wxID_ANY, "Show wrap symbol");         cbWrapSym->SetValue(m_wrapSymbol);
-        auto* cbWrap    = new wxCheckBox(ed, wxID_ANY, "Word wrap");                cbWrap->SetValue(m_wrap);
-        auto* cbCaretLn = new wxCheckBox(ed, wxID_ANY, "Highlight current line");   cbCaretLn->SetValue(m_caretLine);
-        auto* cbScroll  = new wxCheckBox(ed, wxID_ANY, "Enable scrolling beyond last line");      cbScroll->SetValue(m_scrollBeyond);
-        auto* cbMulti   = new wxCheckBox(ed, wxID_ANY, "Enable multi-editing (multi-selection)"); cbMulti->SetValue(m_multiEdit);
+        auto* cbLineNum = new wxCheckBox(ed, wxID_ANY, _("Display line number"));      cbLineNum->SetValue(m_lineNumbers);
+        auto* cbGuides  = new wxCheckBox(ed, wxID_ANY, _("Show indentation guide"));   cbGuides->SetValue(m_guides);
+        auto* cbWs      = new wxCheckBox(ed, wxID_ANY, _("Show white space and TAB")); cbWs->SetValue(m_ws);
+        auto* cbWrapSym = new wxCheckBox(ed, wxID_ANY, _("Show wrap symbol"));         cbWrapSym->SetValue(m_wrapSymbol);
+        auto* cbWrap    = new wxCheckBox(ed, wxID_ANY, _("Word wrap"));                cbWrap->SetValue(m_wrap);
+        auto* cbCaretLn = new wxCheckBox(ed, wxID_ANY, _("Highlight current line"));   cbCaretLn->SetValue(m_caretLine);
+        auto* cbScroll  = new wxCheckBox(ed, wxID_ANY, _("Enable scrolling beyond last line"));      cbScroll->SetValue(m_scrollBeyond);
+        auto* cbMulti   = new wxCheckBox(ed, wxID_ANY, _("Enable multi-editing (multi-selection)")); cbMulti->SetValue(m_multiEdit);
         for (auto* c : { cbLineNum, cbGuides, cbWs, cbWrapSym, cbWrap, cbCaretLn, cbScroll, cbMulti }) row(es, c);
         auto* erow = new wxBoxSizer(wxHORIZONTAL);
-        erow->Add(new wxStaticText(ed, wxID_ANY, "Caret width:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        erow->Add(new wxStaticText(ed, wxID_ANY, _("Caret width:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spCaret = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS, 1, 3, m_caretWidth);
         erow->Add(spCaret, 0, wxRIGHT, 24);
-        erow->Add(new wxStaticText(ed, wxID_ANY, "Vertical edge at column (0 = off):"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        erow->Add(new wxStaticText(ed, wxID_ANY, _("Vertical edge at column (0 = off):")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spEdge = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 0, 300, m_edgeColumn);
         erow->Add(spEdge, 0);
         es->Add(erow, 0, wxALL, 10);
         auto* brow = new wxBoxSizer(wxHORIZONTAL);
-        brow->Add(new wxStaticText(ed, wxID_ANY, "Caret blink rate (ms, 0 = steady):"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        brow->Add(new wxStaticText(ed, wxID_ANY, _("Caret blink rate (ms, 0 = steady):")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spBlink = new wxSpinCtrl(ed, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, 0, 2000, m_caretBlink);
         brow->Add(spBlink, 0);
         es->Add(brow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10); ed->SetSizer(es);
@@ -5486,45 +5486,45 @@ private:
         // ---- Indentation ----------------------------------------------------------------------
         auto* ind = pg("Indentation"); auto* is = new wxBoxSizer(wxVERTICAL);
         auto* trow = new wxBoxSizer(wxHORIZONTAL);
-        trow->Add(new wxStaticText(ind, wxID_ANY, "Tab size:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        trow->Add(new wxStaticText(ind, wxID_ANY, _("Tab size:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spTab = new wxSpinCtrl(ind, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 16, m_tabWidth);
         trow->Add(spTab, 0); is->Add(trow, 0, wxALL, 10);
-        auto* cbSpace  = new wxCheckBox(ind, wxID_ANY, "Replace by space");      cbSpace->SetValue(!m_useTabs);
-        auto* cbIndent = new wxCheckBox(ind, wxID_ANY, "Auto-indent new lines"); cbIndent->SetValue(m_autoindent);
+        auto* cbSpace  = new wxCheckBox(ind, wxID_ANY, _("Replace by space"));      cbSpace->SetValue(!m_useTabs);
+        auto* cbIndent = new wxCheckBox(ind, wxID_ANY, _("Auto-indent new lines")); cbIndent->SetValue(m_autoindent);
         row(is, cbSpace); row(is, cbIndent); ind->SetSizer(is);
 
         // ---- Auto-Completion ------------------------------------------------------------------
         auto* ac = pg("Auto-Completion"); auto* as = new wxBoxSizer(wxVERTICAL);
-        auto* cbAuto = new wxCheckBox(ac, wxID_ANY, "Enable auto-completion on each input"); cbAuto->SetValue(m_autocomplete);
+        auto* cbAuto = new wxCheckBox(ac, wxID_ANY, _("Enable auto-completion on each input")); cbAuto->SetValue(m_autocomplete);
         row(as, cbAuto);
         auto* acrow = new wxBoxSizer(wxHORIZONTAL);
-        acrow->Add(new wxStaticText(ac, wxID_ANY, "From the"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6);
+        acrow->Add(new wxStaticText(ac, wxID_ANY, _("From the")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6);
         auto* spFrom = new wxSpinCtrl(ac, wxID_ANY, "", wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS, 1, 10, m_autoCompFrom);
         acrow->Add(spFrom, 0, wxRIGHT, 6);
-        acrow->Add(new wxStaticText(ac, wxID_ANY, "th character"), 0, wxALIGN_CENTRE_VERTICAL);
+        acrow->Add(new wxStaticText(ac, wxID_ANY, _("th character")), 0, wxALIGN_CENTRE_VERTICAL);
         as->Add(acrow, 0, wxALL, 10);
-        auto* cbPairs = new wxCheckBox(ac, wxID_ANY, "Auto-insert matching brackets and quotes"); cbPairs->SetValue(m_autoInsertPairs);
+        auto* cbPairs = new wxCheckBox(ac, wxID_ANY, _("Auto-insert matching brackets and quotes")); cbPairs->SetValue(m_autoInsertPairs);
         row(as, cbPairs); ac->SetSizer(as);
 
         // ---- Dark Mode ------------------------------------------------------------------------
         auto* dm = pg("Dark Mode"); auto* ds = new wxBoxSizer(wxVERTICAL);
-        auto* cbDark = new wxCheckBox(dm, wxID_ANY, "Enable Dark Mode   (applied on restart)"); cbDark->SetValue(m_dark);
+        auto* cbDark = new wxCheckBox(dm, wxID_ANY, _("Enable Dark Mode   (applied on restart)")); cbDark->SetValue(m_dark);
         row(ds, cbDark); dm->SetSizer(ds);
 
         // ---- New Document ---------------------------------------------------------------------
         auto* nd = pg("New Document"); auto* nds = new wxBoxSizer(wxVERTICAL);
         const wxString eolChoices[3] = { "Windows (CR LF)", "Unix (LF)", "Macintosh (CR)" };
-        auto* rbEol = new wxRadioBox(nd, wxID_ANY, "Format (Line ending)", wxDefaultPosition, wxDefaultSize,
+        auto* rbEol = new wxRadioBox(nd, wxID_ANY, _("Format (Line ending)"), wxDefaultPosition, wxDefaultSize,
                                      3, eolChoices, 1, wxRA_SPECIFY_COLS);
         rbEol->SetSelection(m_defaultEol == SC_EOL_LF ? 1 : (m_defaultEol == SC_EOL_CR ? 2 : 0));
         nds->Add(rbEol, 0, wxALL, 10);
         const wxString encChoices[5] = { "UTF-8", "UTF-8 with BOM", "UTF-16 LE", "UTF-16 BE", "ANSI" };
-        auto* rbEnc = new wxRadioBox(nd, wxID_ANY, "Encoding", wxDefaultPosition, wxDefaultSize,
+        auto* rbEnc = new wxRadioBox(nd, wxID_ANY, _("Encoding"), wxDefaultPosition, wxDefaultSize,
                                      5, encChoices, 1, wxRA_SPECIFY_COLS);
         rbEnc->SetSelection((m_defaultEncoding >= 0 && m_defaultEncoding <= 4) ? m_defaultEncoding : 0);
         nds->Add(rbEnc, 0, wxALL, 10);
         auto* lrow = new wxBoxSizer(wxHORIZONTAL);
-        lrow->Add(new wxStaticText(nd, wxID_ANY, "Default language:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        lrow->Add(new wxStaticText(nd, wxID_ANY, _("Default language:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* chLang = new wxChoice(nd, wxID_ANY);
         chLang->Append("Normal Text");
         { size_t ln; const NppLang* lt = nppLangTable(ln); int sel = 0;
@@ -5535,22 +5535,22 @@ private:
 
         // ---- Tab Bar --------------------------------------------------------------------------
         auto* tbp = pg("Tab Bar"); auto* tbs = new wxBoxSizer(wxVERTICAL);
-        auto* cbTabClose = new wxCheckBox(tbp, wxID_ANY, "Show close button on each tab   (applied on restart)");
+        auto* cbTabClose = new wxCheckBox(tbp, wxID_ANY, _("Show close button on each tab   (applied on restart)"));
         cbTabClose->SetValue(m_tabCloseBtn); row(tbs, cbTabClose); tbp->SetSizer(tbs);
 
         // ---- Recent Files History -------------------------------------------------------------
         auto* rf = pg("Recent Files History"); auto* rfs = new wxBoxSizer(wxVERTICAL);
         auto* rfrow = new wxBoxSizer(wxHORIZONTAL);
-        rfrow->Add(new wxStaticText(rf, wxID_ANY, "Max number of entries (applied on restart):"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        rfrow->Add(new wxStaticText(rf, wxID_ANY, _("Max number of entries (applied on restart):")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spMaxRec = new wxSpinCtrl(rf, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 1, 50, m_maxRecent);
         rfrow->Add(spMaxRec, 0); rfs->Add(rfrow, 0, wxALL, 10); rf->SetSizer(rfs);
 
         // ---- Print ------------------------------------------------------------------------
         auto* pr = pg("Print"); auto* prs = new wxBoxSizer(wxVERTICAL);
-        prs->Add(new wxStaticText(pr, wxID_ANY, "Header:"), 0, wxLEFT | wxRIGHT | wxTOP, 10);
+        prs->Add(new wxStaticText(pr, wxID_ANY, _("Header:")), 0, wxLEFT | wxRIGHT | wxTOP, 10);
         auto* txHeader = new wxTextCtrl(pr, wxID_ANY, m_printHeader);
         prs->Add(txHeader, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 10);
-        prs->Add(new wxStaticText(pr, wxID_ANY, "Footer:"), 0, wxLEFT | wxRIGHT | wxTOP, 10);
+        prs->Add(new wxStaticText(pr, wxID_ANY, _("Footer:")), 0, wxLEFT | wxRIGHT | wxTOP, 10);
         auto* txFooter = new wxTextCtrl(pr, wxID_ANY, m_printFooter);
         prs->Add(txFooter, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 10);
         auto* prHint = new wxStaticText(pr, wxID_ANY,
@@ -5572,7 +5572,7 @@ private:
             lv->InvalidateBestSize();
         }
 
-        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer(); btn->Add(new wxButton(&dlg, wxID_OK, "Close"), 0);
+        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer(); btn->Add(new wxButton(&dlg, wxID_OK, _("Close")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL); top->Add(book, 1, wxEXPAND | wxALL, 8); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
         dlg.SetSizer(top); themeDialog(&dlg);
         dlg.ShowModal();   // Notepad++ Preferences has no Cancel - changes apply on close
@@ -5639,15 +5639,15 @@ private:
     {
         if (m_macro.empty()) return;
         wxDialog dlg(this, wxID_ANY, "Run a Macro Multiple Times");
-        auto* rbN   = new wxRadioButton(&dlg, wxID_ANY, "Run", wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+        auto* rbN   = new wxRadioButton(&dlg, wxID_ANY, _("Run"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
         auto* sp    = new wxSpinCtrl(&dlg, wxID_ANY, "", wxDefaultPosition, wxSize(90, -1), wxSP_ARROW_KEYS, 1, 99999, 1);
-        auto* rbEof = new wxRadioButton(&dlg, wxID_ANY, "Run until the end of file");
+        auto* rbEof = new wxRadioButton(&dlg, wxID_ANY, _("Run until the end of file"));
         auto* r1 = new wxBoxSizer(wxHORIZONTAL);
         r1->Add(rbN, 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6); r1->Add(sp, 0, wxRIGHT, 6);
-        r1->Add(new wxStaticText(&dlg, wxID_ANY, "times"), 0, wxALIGN_CENTRE_VERTICAL);
+        r1->Add(new wxStaticText(&dlg, wxID_ANY, _("times")), 0, wxALIGN_CENTRE_VERTICAL);
         auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
-        auto* ok = new wxButton(&dlg, wxID_OK, "Run"); ok->SetDefault();
-        btn->Add(ok, 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, "Cancel"), 0);
+        auto* ok = new wxButton(&dlg, wxID_OK, _("Run")); ok->SetDefault();
+        btn->Add(ok, 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL);
         top->Add(r1, 0, wxALL, 12); top->Add(rbEof, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12); top->Add(btn, 0, wxEXPAND | wxALL, 12);
         dlg.SetSizerAndFit(top); themeDialog(&dlg);
@@ -5787,7 +5787,7 @@ private:
         const wxString original = m_themeName;
         wxDialog dlg(this, wxID_ANY, "Style Configurator", wxDefaultPosition, wxSize(680, 440));
         auto* themeRow = new wxBoxSizer(wxHORIZONTAL);
-        themeRow->Add(new wxStaticText(&dlg, wxID_ANY, "Select theme:"), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        themeRow->Add(new wxStaticText(&dlg, wxID_ANY, _("Select theme:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* themeCombo = new wxChoice(&dlg, wxID_ANY, wxDefaultPosition, wxSize(220, -1), availableThemes());
         themeCombo->SetStringSelection(m_themeName.empty() ? "Default" : m_themeName);
         themeRow->Add(themeCombo, 0);
@@ -5795,11 +5795,11 @@ private:
         auto* styleList = new wxListBox(&dlg, wxID_ANY, wxDefaultPosition, wxSize(180, 280));
         auto* fgPick   = new wxColourPickerCtrl(&dlg, wxID_ANY);
         auto* bgPick   = new wxColourPickerCtrl(&dlg, wxID_ANY);
-        auto* cbBold   = new wxCheckBox(&dlg, wxID_ANY, "Bold");
-        auto* cbItalic = new wxCheckBox(&dlg, wxID_ANY, "Italic");
+        auto* cbBold   = new wxCheckBox(&dlg, wxID_ANY, _("Bold"));
+        auto* cbItalic = new wxCheckBox(&dlg, wxID_ANY, _("Italic"));
         auto* eg = new wxFlexGridSizer(2, 8, 10);
-        eg->Add(new wxStaticText(&dlg, wxID_ANY, "Foreground colour:"), 0, wxALIGN_CENTRE_VERTICAL); eg->Add(fgPick, 0);
-        eg->Add(new wxStaticText(&dlg, wxID_ANY, "Background colour:"), 0, wxALIGN_CENTRE_VERTICAL); eg->Add(bgPick, 0);
+        eg->Add(new wxStaticText(&dlg, wxID_ANY, _("Foreground colour:")), 0, wxALIGN_CENTRE_VERTICAL); eg->Add(fgPick, 0);
+        eg->Add(new wxStaticText(&dlg, wxID_ANY, _("Background colour:")), 0, wxALIGN_CENTRE_VERTICAL); eg->Add(bgPick, 0);
         eg->Add(cbBold, 0); eg->Add(cbItalic, 0);
         auto* edBox = new wxStaticBoxSizer(wxVERTICAL, &dlg, "Style settings"); edBox->Add(eg, 0, wxALL, 8);
         auto col = [&](const char* cap, wxWindow* w){ auto* s = new wxBoxSizer(wxVERTICAL); s->Add(new wxStaticText(&dlg, wxID_ANY, cap), 0, wxBOTTOM, 4); s->Add(w, 1, wxEXPAND); return s; };
@@ -5808,7 +5808,7 @@ private:
         mid->Add(col("Style:", styleList), 0, wxEXPAND | wxRIGHT, 10);
         mid->Add(edBox, 1, wxEXPAND);
         auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
-        btn->Add(new wxButton(&dlg, wxID_OK, "Save && Close"), 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, "Cancel"), 0);
+        btn->Add(new wxButton(&dlg, wxID_OK, _("Save && Close")), 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL);
         top->Add(themeRow, 0, wxALL, 12); top->Add(mid, 1, wxEXPAND | wxLEFT | wxRIGHT, 12); top->Add(btn, 0, wxEXPAND | wxALL, 12);
         dlg.SetSizer(top);
@@ -6066,9 +6066,9 @@ private:
     void showEolMenu()   // small popup at the cursor: convert the document's line endings
     {
         wxMenu m;
-        m.Append(IDM_FORMAT_TODOS,  "Windows (CR LF)");
-        m.Append(IDM_FORMAT_TOUNIX, "Unix (LF)");
-        m.Append(IDM_FORMAT_TOMAC,  "Macintosh (CR)");
+        m.Append(IDM_FORMAT_TODOS,  _("Windows (CR LF)"));
+        m.Append(IDM_FORMAT_TOUNIX, _("Unix (LF)"));
+        m.Append(IDM_FORMAT_TOMAC,  _("Macintosh (CR)"));
         switch (this->GetPopupMenuSelectionFromUser(m))
         {
             case IDM_FORMAT_TODOS:  setEol(SC_EOL_CRLF); break;
@@ -6079,17 +6079,17 @@ private:
     void showEncodingMenu()   // status-bar encoding field: re-interpret (fix a misread file) or convert the encoding
     {
         wxMenu m;
-        m.Append(IDM_FORMAT_ANSI,      "Encode as ANSI");
-        m.Append(IDM_FORMAT_AS_UTF_8,  "Encode as UTF-8");
-        m.Append(IDM_FORMAT_UTF_8,     "Encode as UTF-8 BOM");
-        m.Append(IDM_FORMAT_UTF_16LE,  "Encode as UTF-16 LE BOM");
-        m.Append(IDM_FORMAT_UTF_16BE,  "Encode as UTF-16 BE BOM");
+        m.Append(IDM_FORMAT_ANSI,      _("Encode as ANSI"));
+        m.Append(IDM_FORMAT_AS_UTF_8,  _("Encode as UTF-8"));
+        m.Append(IDM_FORMAT_UTF_8,     _("Encode as UTF-8 BOM"));
+        m.Append(IDM_FORMAT_UTF_16LE,  _("Encode as UTF-16 LE BOM"));
+        m.Append(IDM_FORMAT_UTF_16BE,  _("Encode as UTF-16 BE BOM"));
         m.AppendSeparator();
-        m.Append(IDM_FORMAT_CONV2_ANSI,     "Convert to ANSI");
-        m.Append(IDM_FORMAT_CONV2_AS_UTF_8, "Convert to UTF-8");
-        m.Append(IDM_FORMAT_CONV2_UTF_8,    "Convert to UTF-8 BOM");
-        m.Append(IDM_FORMAT_CONV2_UTF_16LE, "Convert to UTF-16 LE BOM");
-        m.Append(IDM_FORMAT_CONV2_UTF_16BE, "Convert to UTF-16 BE BOM");
+        m.Append(IDM_FORMAT_CONV2_ANSI,     _("Convert to ANSI"));
+        m.Append(IDM_FORMAT_CONV2_AS_UTF_8, _("Convert to UTF-8"));
+        m.Append(IDM_FORMAT_CONV2_UTF_8,    _("Convert to UTF-8 BOM"));
+        m.Append(IDM_FORMAT_CONV2_UTF_16LE, _("Convert to UTF-16 LE BOM"));
+        m.Append(IDM_FORMAT_CONV2_UTF_16BE, _("Convert to UTF-16 BE BOM"));
         switch (this->GetPopupMenuSelectionFromUser(m))
         {
             case IDM_FORMAT_ANSI:      interpretAs(ENC_ANSI);     break;
@@ -6316,12 +6316,8 @@ private:
             case IDM_SEARCH_FINDINCREMENT: showIncBar(); break;
             case IDM_EDIT_COLUMNMODE: columnEditor(); break;
             case IDM_EDIT_COLUMNMODETIP:
-                wxMessageBox("Column (rectangular) selection:\n\n"
-                             "- Alt + drag the mouse\n"
-                             "- Alt + Shift + Arrow keys\n"
-                             "- Alt + Shift + Click\n\n"
-                             "Typing or pasting applies to every line of the block at once.",
-                             "Column Mode", wxOK | wxICON_INFORMATION, this);
+                wxMessageBox(_("Column (rectangular) selection:\n\n- Alt + drag the mouse\n- Alt + Shift + Arrow keys\n- Alt + Shift + Click\n\nTyping or pasting applies to every line of the block at once."),
+                             _("Column Mode"), wxOK | wxICON_INFORMATION, this);
                 break;
             case IDM_VIEW_MONITORING: notImpl("File monitoring"); break;
             case IDM_MACRO_STARTRECORDINGMACRO: startMacroRecord(); break;
