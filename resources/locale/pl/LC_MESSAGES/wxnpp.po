@@ -1099,7 +1099,7 @@ msgid "Convert to UTF-16 LE BOM"
 msgstr "Konwertuj na UTF-16 LE BOM"
 
 msgid "E&ncoding"
-msgstr "F&ormat"
+msgstr "&Kodowanie"
 
 msgid "None (Normal Text)"
 msgstr "Brak (zwykły tekst)"
@@ -1120,7 +1120,7 @@ msgid "User-Defined"
 msgstr "Zdefiniowany przez użytkownika"
 
 msgid "&Language"
-msgstr "Skł&adnia"
+msgstr "&Język"
 
 msgid "Preferences..."
 msgstr "Preferencje..."
@@ -1189,7 +1189,7 @@ msgid "&Run a Macro Multiple Times..."
 msgstr "U&ruchom makro wielokrotnie..."
 
 msgid "&Macro"
-msgstr "M&akra"
+msgstr "&Makro"
 
 msgid "&Run...\tF5"
 msgstr "U&ruchom...\tF5"
@@ -1246,7 +1246,7 @@ msgid "Recent Window"
 msgstr "Ostatnie okno"
 
 msgid "&Window"
-msgstr "&Karty"
+msgstr "&Okno"
 
 msgid "Command Line Arguments..."
 msgstr "Argumenty wiersza poleceń..."
@@ -1275,8 +1275,8 @@ msgstr "Informacje debugowania..."
 msgid "About wxNotepad++\tF1"
 msgstr "O programie wxNotepad++\tF1"
 
-msgid "?"
-msgstr "?"
+msgid "&About"
+msgstr "&Pomoc"
 
 msgid "Go to line"
 msgstr "Idź do wiersza"

@@ -1275,8 +1275,8 @@ msgstr "调试信息..."
 msgid "About wxNotepad++\tF1"
 msgstr "关于 wxNotepad++\tF1"
 
-msgid "?"
-msgstr "?"
+msgid "&About"
+msgstr "关于(&A)"
 
 msgid "Go to line"
 msgstr "转到行"

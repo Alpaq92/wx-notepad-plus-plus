@@ -1275,8 +1275,8 @@ msgstr "デバッグ情報..."
 msgid "About wxNotepad++\tF1"
 msgstr "wxNotepad++ について\tF1"
 
-msgid "?"
-msgstr "?"
+msgid "&About"
+msgstr "ヘルプ(&A)"
 
 msgid "Go to line"
 msgstr "指定行へ移動"

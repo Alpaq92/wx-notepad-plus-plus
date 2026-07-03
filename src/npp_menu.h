@@ -829,6 +829,6 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         help->AppendSeparator();
         help->Append(IDM_DEBUGINFO, _("Debug Info..."));
         help->Append(IDM_ABOUT, _("About wxNotepad++\tF1"));
-        mb->Append(help, _("?"));   // real Notepad++ titles the help menu just "?"
+        mb->Append(help, _("&About"));
     }
 }

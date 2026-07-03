@@ -1275,8 +1275,8 @@ msgstr "디버그 정보..."
 msgid "About wxNotepad++\tF1"
 msgstr "wxNotepad++ 정보\tF1"
 
-msgid "?"
-msgstr "?"
+msgid "&About"
+msgstr "정보(&A)"
 
 msgid "Go to line"
 msgstr "줄 이동"

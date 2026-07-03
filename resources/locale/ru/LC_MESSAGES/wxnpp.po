@@ -1275,8 +1275,8 @@ msgstr "Отладочная информация..."
 msgid "About wxNotepad++\tF1"
 msgstr "О программе wxNotepad++\tF1"
 
-msgid "?"
-msgstr "?"
+msgid "&About"
+msgstr "&Справка"
 
 msgid "Go to line"
 msgstr "Переход к строке"

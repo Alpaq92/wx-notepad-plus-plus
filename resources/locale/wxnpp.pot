@@ -1277,7 +1277,7 @@ msgstr ""
 msgid "About wxNotepad++\tF1"
 msgstr ""
 
-msgid "?"
+msgid "&About"
 msgstr ""
 
 msgid "Go to line"

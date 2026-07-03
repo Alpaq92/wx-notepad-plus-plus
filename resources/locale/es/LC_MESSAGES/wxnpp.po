@@ -1275,8 +1275,8 @@ msgstr "Información de depuración..."
 msgid "About wxNotepad++\tF1"
 msgstr "Acerca de wxNotepad++\tF1"
 
-msgid "?"
-msgstr "?"
+msgid "&About"
+msgstr "Acerca &de"
 
 msgid "Go to line"
 msgstr "Ir a la línea"
