@@ -4395,6 +4395,88 @@ private:
     wxString curPath() const { auto* p = activePage(); return p ? p->path : wxString(); }
     void copyToClip(const wxString& t) { if (!t.empty() && wxTheClipboard->Open()) { wxTheClipboard->SetData(new wxTextDataObject(t)); wxTheClipboard->Close(); } }
     wxString getClipText() { wxString t; if (wxTheClipboard->Open()) { if (wxTheClipboard->IsSupported(wxDF_UNICODETEXT)) { wxTextDataObject d; wxTheClipboard->GetData(d); t = d.GetText(); } wxTheClipboard->Close(); } return t; }
+    // Paste Special: the selection's raw bytes (embedded nulls and all - getSelUtf8() already preserves
+    // them via a known length, not strlen) round-tripped through a private registered clipboard format.
+    // Plain Win32 SetClipboardData (immediate rendering) instead of wx's wxDataObject/OLE clipboard path -
+    // the latter uses delayed rendering for custom formats and a same-process write-then-read-back never
+    // saw the format as available (IsSupported() false immediately after our own SetData()). Also writes
+    // CF_UNICODETEXT in the same session, so pasting into another app still gets ordinary text.
+    static UINT cfBinary() { static UINT cf = ::RegisterClipboardFormatW(L"wxNotepad++Binary"); return cf; }
+    void copyCutBinary(bool cut)
+    {
+#ifdef __WXMSW__
+        const std::string data = getSelUtf8();
+        if (data.empty()) return;
+        if (::OpenClipboard(GetHwnd()))
+        {
+            ::EmptyClipboard();
+            const std::wstring w = wxString::FromUTF8(data.data(), data.size()).ToStdWstring();
+            if (HGLOBAL ht = ::GlobalAlloc(GMEM_MOVEABLE, (w.size() + 1) * sizeof(wchar_t)))
+            {
+                if (void* p = ::GlobalLock(ht)) { memcpy(p, w.c_str(), (w.size() + 1) * sizeof(wchar_t)); ::GlobalUnlock(ht); }
+                ::SetClipboardData(CF_UNICODETEXT, ht);
+            }
+            if (HGLOBAL hb = ::GlobalAlloc(GMEM_MOVEABLE, sizeof(uint32_t) + data.size()))   // [length][raw bytes] - exact round-trip regardless of GlobalAlloc's own size rounding
+            {
+                if (auto* p = static_cast<unsigned char*>(::GlobalLock(hb)))
+                {
+                    const uint32_t n = (uint32_t)data.size();
+                    memcpy(p, &n, sizeof(n));
+                    memcpy(p + sizeof(n), data.data(), data.size());
+                    ::GlobalUnlock(hb);
+                }
+                ::SetClipboardData(cfBinary(), hb);
+            }
+            ::CloseClipboard();
+        }
+        if (cut) sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(""));
+#else
+        (void)cut; notImpl("Binary Clipboard (Windows only)");
+#endif
+    }
+    void pasteBinary()
+    {
+#ifdef __WXMSW__
+        if (!::IsClipboardFormatAvailable(cfBinary())) { notImpl("Paste Binary Content (clipboard has no matching content)"); return; }
+        if (!::OpenClipboard(GetHwnd())) return;
+        if (HANDLE h = ::GetClipboardData(cfBinary()))
+        {
+            if (const auto* p = static_cast<const unsigned char*>(::GlobalLock(h)))
+            {
+                uint32_t n = 0; memcpy(&n, p, sizeof(n));
+                sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(""));
+                sci(SCI_ADDTEXT, (uptr_t)n, reinterpret_cast<sptr_t>(p + sizeof(n)));
+                ::GlobalUnlock(h);
+            }
+        }
+        ::CloseClipboard();
+#else
+        notImpl("Paste Binary Content (Windows only)");
+#endif
+    }
+    // Paste HTML/RTF Content: the raw markup source apps register when copying rich content ("HTML Format" /
+    // "Rich Text Format" are real Windows clipboard format NAMES, e.g. what a browser or Word puts there) -
+    // inserted as literal text, not rendered. Both are conventionally null-terminated, unlike our own binary format.
+    void pasteRichFormat(const wxString& formatName)
+    {
+#ifdef __WXMSW__
+        wxDataFormat fmt(formatName);
+        if (!wxTheClipboard->Open()) return;
+        if (wxTheClipboard->IsSupported(fmt))
+        {
+            wxCustomDataObject obj(fmt);
+            wxTheClipboard->GetData(obj);
+            const char* p = static_cast<const char*>(obj.GetData());
+            const size_t n = strnlen(p, obj.GetSize());
+            sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(""));
+            sci(SCI_ADDTEXT, (uptr_t)n, reinterpret_cast<sptr_t>(p));
+        }
+        else wxMessageBox("Clipboard has no matching content.", "Paste", wxOK | wxICON_INFORMATION, this);
+        wxTheClipboard->Close();
+#else
+        notImpl("Paste " + formatName + " (Windows only)");
+#endif
+    }
     wxString allOpenPaths(bool namesOnly)
     {
         wxString out;
@@ -6266,6 +6348,11 @@ private:
             case IDM_EDIT_CURRENTDIRTOCLIP: copyToClip(wxFileName(curPath()).GetPath()); break;
             case IDM_EDIT_COPY_ALL_NAMES: copyToClip(allOpenPaths(true)); break;
             case IDM_EDIT_COPY_ALL_PATHS: copyToClip(allOpenPaths(false)); break;
+            case IDM_EDIT_COPY_BINARY: copyCutBinary(false); break;
+            case IDM_EDIT_CUT_BINARY: copyCutBinary(true); break;
+            case IDM_EDIT_PASTE_BINARY: pasteBinary(); break;
+            case IDM_EDIT_PASTE_AS_HTML: pasteRichFormat("HTML Format"); break;
+            case IDM_EDIT_PASTE_AS_RTF: pasteRichFormat("Rich Text Format"); break;
             case IDM_EDIT_RANDOMCASE: transformSel([](std::string& s){ std::mt19937 g{ std::random_device{}() }; for (char& c : s) if (std::isalpha((unsigned char)c)) c = (char)((g() & 1) ? std::toupper((unsigned char)c) : std::tolower((unsigned char)c)); }); break;
             case IDM_EDIT_PROPERCASE_BLEND: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ if (st) c = (char)std::toupper((unsigned char)c); st = false; } else st = true; } }); break;
             case IDM_EDIT_SENTENCECASE_BLEND: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ if (st) c = (char)std::toupper((unsigned char)c); st = false; } else if (c=='.'||c=='!'||c=='?') st = true; } }); break;
