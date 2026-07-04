@@ -110,6 +110,7 @@ using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/
 #include "nib.h"               // our own permissive, cross-platform plugin API (Nib)
 #include "npp_menu.h"          // faithful 1:1 Notepad++ main-menu builder
 #include "udl.h"               // User-Defined Language data model + userDefineLang.xml (de)serialization
+#include "udl_lexer.h"         // User-Defined Language: live container-lexer styling/folding engine
 
 static const int  MARK_BOOKMARK = 2;      // a free Scintilla marker number for bookmarks
 static const int  MARK_INDIC    = 9;      // indicator number for "Mark All" highlights (Find dialog)
