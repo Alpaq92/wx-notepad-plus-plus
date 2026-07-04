@@ -2084,3 +2084,9 @@ msgstr "Контурные значки (по умолчанию)"
 
 msgid "Colored icons"
 msgstr "Цветные значки"
+
+msgid "Fatcow icons"
+msgstr "Значки Fatcow"
+
+msgid "Fugue icons"
+msgstr "Значки Fugue"

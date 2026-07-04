@@ -2084,3 +2084,9 @@ msgstr "Ikony liniowe (domyślne)"
 
 msgid "Colored icons"
 msgstr "Ikony kolorowe"
+
+msgid "Fatcow icons"
+msgstr "Ikony Fatcow"
+
+msgid "Fugue icons"
+msgstr "Ikony Fugue"

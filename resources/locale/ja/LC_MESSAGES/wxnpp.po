@@ -2084,3 +2084,9 @@ msgstr "ラインアイコン（既定）"
 
 msgid "Colored icons"
 msgstr "カラーアイコン"
+
+msgid "Fatcow icons"
+msgstr "Fatcow アイコン"
+
+msgid "Fugue icons"
+msgstr "Fugue アイコン"

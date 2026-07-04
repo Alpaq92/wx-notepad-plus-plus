@@ -2084,3 +2084,9 @@ msgstr "선 아이콘(기본값)"
 
 msgid "Colored icons"
 msgstr "컬러 아이콘"
+
+msgid "Fatcow icons"
+msgstr "Fatcow 아이콘"
+
+msgid "Fugue icons"
+msgstr "Fugue 아이콘"

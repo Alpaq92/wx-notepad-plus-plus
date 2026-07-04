@@ -2084,3 +2084,9 @@ msgstr "Icônes filaires (par défaut)"
 
 msgid "Colored icons"
 msgstr "Icônes colorées"
+
+msgid "Fatcow icons"
+msgstr "Icônes Fatcow"
+
+msgid "Fugue icons"
+msgstr "Icônes Fugue"

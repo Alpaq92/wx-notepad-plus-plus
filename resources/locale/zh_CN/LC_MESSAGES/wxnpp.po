@@ -2084,3 +2084,9 @@ msgstr "线条图标（默认）"
 
 msgid "Colored icons"
 msgstr "彩色图标"
+
+msgid "Fatcow icons"
+msgstr "Fatcow 图标"
+
+msgid "Fugue icons"
+msgstr "Fugue 图标"

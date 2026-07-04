@@ -3871,13 +3871,13 @@ private:
     }
 
     // ----- toolbar (Notepad++ icon pack, native order) -------------------
-    // Colored icon set (Settings > Preferences > General > Toolbar icon style): fixed multi-colour PNGs
-    // (Fatcow Farm-Fresh + Fugue, both CC BY 3.0 - see resources/icons-colored/CREDITS.md) rather than
-    // the default currentColor-tokenized SVGs, so they do NOT auto-adapt to dark/light theme - that's
+    // Colored icon sets (Settings > Preferences > General > Toolbar icon style): fixed multi-colour PNGs
+    // (Fatcow Farm-Fresh or Fugue, both CC BY 3.0 - see resources/icons-fatcow|fugue/CREDITS.md) rather
+    // than the default currentColor-tokenized SVGs, so they do NOT auto-adapt to dark/light theme - that's
     // an accepted tradeoff of this style (matches real Notepad++'s classic toolbar, which is the same way).
-    wxBitmapBundle iconColored(const wxString& name)
+    wxBitmapBundle iconColored(const wxString& name, const wxString& packDir)
     {
-        static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons-colored\\";
+        const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\" + packDir + "\\";
         const wxString path = dir + name + ".png";
         if (!wxFileExists(path)) return wxBitmapBundle();   // caller falls back to the line-icon SVG for anything the colored set doesn't cover
         wxImage img(path, wxBITMAP_TYPE_PNG);
@@ -3890,7 +3890,9 @@ private:
     }
     wxBitmapBundle icon(const wxString& name)
     {
-        if (m_iconStyle == 1) { wxBitmapBundle c = iconColored(name); if (c.IsOk()) return c; }
+        // m_iconStyle: 0 = line icons (default), 1 = Fatcow colored, 2 = Fugue colored
+        if (m_iconStyle == 1) { wxBitmapBundle c = iconColored(name, "icons-fatcow"); if (c.IsOk()) return c; }
+        else if (m_iconStyle == 2) { wxBitmapBundle c = iconColored(name, "icons-fugue"); if (c.IsOk()) return c; }
         static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\";
         // Permissive toolbar icons (Tabler x Open Color, MIT) - monochrome by default, with a meaning-accent
         // on 8 of the 32 (gold New "+", blue Save/Save-All, red Record/Stop, green Playback/-multiple). Neutral
@@ -5583,7 +5585,7 @@ private:
     {
         auto* c = wxConfigBase::Get();
         c->Read("IntegratedBar", &m_integratedBar, false);
-        long is = 0; c->Read("ToolbarIconStyle", &is, 0L); m_iconStyle = (int)is;   // 0 = line icons, 1 = colored (Fatcow/Fugue)
+        long is = 0; c->Read("ToolbarIconStyle", &is, 0L); m_iconStyle = (int)is;   // 0 = line icons, 1 = Fatcow, 2 = Fugue
         long mr = 10; c->Read("RecentFiles/Max", &mr, 10L); m_maxRecent = (int)mr;
         c->Read("TabBar/CloseButton", &m_tabCloseBtn, true);   // integrated top bar on/off (also read in OnInit; here for the Preferences checkbox)
         long tw = 4; c->Read("Editing/TabWidth", &tw, 4L); m_tabWidth = (int)tw;
@@ -5690,8 +5692,9 @@ private:
         uirow->Add(chUiLang, 0, wxALIGN_CENTRE_VERTICAL);
         gs->Add(uirow, 0, wxLEFT | wxRIGHT | wxTOP, 10);
         // Toolbar icon style (restart-to-apply, like Localization above): the default line-icon set
-        // (theme-adaptive) vs. a fixed-colour set (Fatcow/Fugue, CC BY 3.0 - see iconColored()).
-        wxArrayString iconStyleNames; iconStyleNames.Add(_("Line icons (default)")); iconStyleNames.Add(_("Colored icons"));
+        // (theme-adaptive) vs. two fixed-colour sets, Fatcow and Fugue (both CC BY 3.0 - see iconColored()).
+        wxArrayString iconStyleNames;
+        iconStyleNames.Add(_("Line icons (default)")); iconStyleNames.Add(_("Fatcow icons")); iconStyleNames.Add(_("Fugue icons"));
         auto* chIconStyle = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, iconStyleNames);
         chIconStyle->SetSelection(m_iconStyle);
         auto* icrow = new wxBoxSizer(wxHORIZONTAL);
@@ -6967,7 +6970,7 @@ private:
 #endif
     wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
-    int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = colored icons (restart-to-apply)
+    int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Fatcow, 2 = Fugue (restart-to-apply)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
     bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON like Notepad++

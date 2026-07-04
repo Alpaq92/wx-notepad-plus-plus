@@ -2084,3 +2084,9 @@ msgstr "Iconos de línea (predeterminado)"
 
 msgid "Colored icons"
 msgstr "Iconos de color"
+
+msgid "Fatcow icons"
+msgstr "Iconos Fatcow"
+
+msgid "Fugue icons"
+msgstr "Iconos Fugue"
