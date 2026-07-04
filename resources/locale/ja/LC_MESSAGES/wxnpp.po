@@ -2102,3 +2102,6 @@ msgstr "ラインアイコン（Tabler）"
 
 msgid "IconPark Bold icons (teal/lime)"
 msgstr "IconPark 太字アイコン（ティール/ライム）"
+
+msgid "Tabler icons (line)"
+msgstr "Tabler アイコン（ライン）"

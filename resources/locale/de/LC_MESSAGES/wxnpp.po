@@ -2102,3 +2102,6 @@ msgstr "Linien-Icons (Tabler)"
 
 msgid "IconPark Bold icons (teal/lime)"
 msgstr "IconPark-Icons fett (Türkis/Limette)"
+
+msgid "Tabler icons (line)"
+msgstr "Tabler-Icons (Linien)"

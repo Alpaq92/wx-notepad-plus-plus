@@ -2102,3 +2102,6 @@ msgstr "선 아이콘(Tabler)"
 
 msgid "IconPark Bold icons (teal/lime)"
 msgstr "IconPark 굵은 아이콘(틸/라임)"
+
+msgid "Tabler icons (line)"
+msgstr "Tabler 아이콘(선)"

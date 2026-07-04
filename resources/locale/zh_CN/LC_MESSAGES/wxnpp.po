@@ -2102,3 +2102,6 @@ msgstr "线条图标（Tabler）"
 
 msgid "IconPark Bold icons (teal/lime)"
 msgstr "IconPark 粗体图标（青绿/青柠）"
+
+msgid "Tabler icons (line)"
+msgstr "Tabler 图标（线条）"

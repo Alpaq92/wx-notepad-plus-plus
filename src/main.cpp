@@ -5747,7 +5747,7 @@ private:
         // "IconPark Bold" stroke-width variant existed briefly - dropped after feedback that dark mode
         // made it indistinguishable from this one; icon() still maps any stale saved index >= 2 here.)
         wxArrayString iconStyleNames;
-        iconStyleNames.Add(_("Line icons (Tabler)")); iconStyleNames.Add(_("Solar icons (green)"));
+        iconStyleNames.Add(_("Tabler icons (line)")); iconStyleNames.Add(_("Solar icons (green)"));
         iconStyleNames.Add(_("IconPark icons (teal/lime)"));
         auto* chIconStyle = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, iconStyleNames);
         chIconStyle->SetSelection(m_iconStyle);
@@ -6505,6 +6505,26 @@ private:
             wxCommandEvent ce(wxEVT_MENU, LOWORD(wParam));
             onCommand(ce);
             return 0;
+        }
+        // Recolour the toolbar's hover/hot-track highlight from the Windows theme default (a pale system-
+        // accent blue, independent of anything we choose - confirmed by disabling all our own icon/colour
+        // code and still seeing it) to an Open Color green, via NM_CUSTOMDRAW. TBCDRF_HILITEHOTTRACK tells
+        // comctl32 to draw the hot button with a solid clrHighlightHotTrack fill instead of the themed hot
+        // appearance - themed (UxTheme) toolbars otherwise ignore clrHighlightHotTrack entirely.
+        if (message == WM_NOTIFY && lParam && m_toolBarPtr)
+        {
+            auto* hdr = reinterpret_cast<NMHDR*>(lParam);
+            if (hdr->code == NM_CUSTOMDRAW && hdr->hwndFrom == (HWND)m_toolBarPtr->GetHandle())
+            {
+                auto* cd = reinterpret_cast<NMTBCUSTOMDRAW*>(lParam);
+                switch (cd->nmcd.dwDrawStage)
+                {
+                    case CDDS_PREPAINT: return CDRF_NOTIFYITEMDRAW;
+                    case CDDS_ITEMPREPAINT:
+                        cd->clrHighlightHotTrack = RGB(0xb2, 0xf2, 0xbb);   // Open Color green-2
+                        return CDRF_DODEFAULT | TBCDRF_HILITEHOTTRACK;
+                }
+            }
         }
         return FB::MSWWindowProc(message, wParam, lParam);
     }
