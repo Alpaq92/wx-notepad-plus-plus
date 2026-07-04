@@ -2099,3 +2099,6 @@ msgstr "IconPark 图标（青绿/青柠）"
 
 msgid "Line icons (Tabler)"
 msgstr "线条图标（Tabler）"
+
+msgid "IconPark Bold icons (teal/lime)"
+msgstr "IconPark 粗体图标（青绿/青柠）"

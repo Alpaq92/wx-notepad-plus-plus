@@ -1850,6 +1850,9 @@ msgstr ""
 msgid "IconPark icons (teal/lime)"
 msgstr ""
 
+msgid "IconPark Bold icons (teal/lime)"
+msgstr ""
+
 msgid "Toolbar icon style:"
 msgstr ""
 

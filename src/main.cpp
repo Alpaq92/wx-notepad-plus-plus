@@ -3880,7 +3880,7 @@ private:
     {
         const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\" + packDir + "\\" + name + ".svg";
         if (!wxFileExists(path)) return wxBitmapBundle();   // caller falls back to the line-icon SVG for anything the colored set doesn't cover
-        if (packDir == "icons-iconpark" && m_dark)
+        if ((packDir == "icons-iconpark" || packDir == "icons-iconpark-bold") && m_dark)
         {
             // IconPark's signature black outline stroke (its accent fills are already baked to a fixed
             // teal/lime at generation time - see resources/icons-iconpark/CREDITS.md) reads fine on the
@@ -3898,9 +3898,10 @@ private:
     }
     wxBitmapBundle icon(const wxString& name)
     {
-        // m_iconStyle: 0 = line icons (default), 1 = Solar (green), 2 = IconPark (teal/lime)
+        // m_iconStyle: 0 = line icons (default), 1 = Solar (green), 2 = IconPark thin (teal/lime), 3 = IconPark bold
         if (m_iconStyle == 1) { wxBitmapBundle c = iconColored(name, "icons-solar"); if (c.IsOk()) return c; }
         else if (m_iconStyle == 2) { wxBitmapBundle c = iconColored(name, "icons-iconpark"); if (c.IsOk()) return c; }
+        else if (m_iconStyle == 3) { wxBitmapBundle c = iconColored(name, "icons-iconpark-bold"); if (c.IsOk()) return c; }
         static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\";
         // Permissive toolbar icons (Tabler x Open Color, MIT) - monochrome by default, with a meaning-accent
         // on 8 of the 32 (gold New "+", blue Save/Save-All, red Record/Stop, green Playback/-multiple). Neutral
@@ -5593,7 +5594,7 @@ private:
     {
         auto* c = wxConfigBase::Get();
         c->Read("IntegratedBar", &m_integratedBar, false);
-        long is = 0; c->Read("ToolbarIconStyle", &is, 0L); m_iconStyle = (int)is;   // 0 = line icons, 1 = Solar, 2 = IconPark
+        long is = 0; c->Read("ToolbarIconStyle", &is, 0L); m_iconStyle = (int)is;   // 0 = line icons, 1 = Solar, 2 = IconPark thin, 3 = IconPark bold
         long mr = 10; c->Read("RecentFiles/Max", &mr, 10L); m_maxRecent = (int)mr;
         c->Read("TabBar/CloseButton", &m_tabCloseBtn, true);   // integrated top bar on/off (also read in OnInit; here for the Preferences checkbox)
         long tw = 4; c->Read("Editing/TabWidth", &tw, 4L); m_tabWidth = (int)tw;
@@ -5700,9 +5701,10 @@ private:
         uirow->Add(chUiLang, 0, wxALIGN_CENTRE_VERTICAL);
         gs->Add(uirow, 0, wxLEFT | wxRIGHT | wxTOP, 10);
         // Toolbar icon style (restart-to-apply, like Localization above): the default line-icon set
-        // (theme-adaptive) vs. two fixed-colour sets, Solar and IconPark (see iconColored()).
+        // (theme-adaptive) vs. three fixed-colour sets, Solar and IconPark thin/bold (see iconColored()).
         wxArrayString iconStyleNames;
-        iconStyleNames.Add(_("Line icons (Tabler)")); iconStyleNames.Add(_("Solar icons (green)")); iconStyleNames.Add(_("IconPark icons (teal/lime)"));
+        iconStyleNames.Add(_("Line icons (Tabler)")); iconStyleNames.Add(_("Solar icons (green)"));
+        iconStyleNames.Add(_("IconPark icons (teal/lime)")); iconStyleNames.Add(_("IconPark Bold icons (teal/lime)"));
         auto* chIconStyle = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, iconStyleNames);
         chIconStyle->SetSelection(m_iconStyle);
         auto* icrow = new wxBoxSizer(wxHORIZONTAL);
@@ -6978,7 +6980,7 @@ private:
 #endif
     wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
-    int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Solar, 2 = IconPark (restart-to-apply)
+    int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Solar, 2 = IconPark thin, 3 = IconPark bold (restart-to-apply)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
     bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON like Notepad++

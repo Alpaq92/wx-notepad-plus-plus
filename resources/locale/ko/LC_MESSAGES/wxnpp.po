@@ -2099,3 +2099,6 @@ msgstr "IconPark 아이콘(틸/라임)"
 
 msgid "Line icons (Tabler)"
 msgstr "선 아이콘(Tabler)"
+
+msgid "IconPark Bold icons (teal/lime)"
+msgstr "IconPark 굵은 아이콘(틸/라임)"

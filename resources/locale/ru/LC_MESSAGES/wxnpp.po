@@ -2099,3 +2099,6 @@ msgstr "Значки IconPark (бирюзово-лаймовые)"
 
 msgid "Line icons (Tabler)"
 msgstr "Контурные значки (Tabler)"
+
+msgid "IconPark Bold icons (teal/lime)"
+msgstr "Жирные значки IconPark (бирюзово-лаймовые)"

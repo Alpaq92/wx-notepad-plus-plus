@@ -2099,3 +2099,6 @@ msgstr "Ikony IconPark (turkusowo-limonkowe)"
 
 msgid "Line icons (Tabler)"
 msgstr "Ikony liniowe (Tabler)"
+
+msgid "IconPark Bold icons (teal/lime)"
+msgstr "Ikony IconPark pogrubione (turkusowo-limonkowe)"
