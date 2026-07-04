@@ -1,0 +1,2107 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: wxNotepad++\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: ru\n"
+
+msgid "&New\tCtrl+N"
+msgstr "&Новый\tCtrl+N"
+
+msgid "&Open...\tCtrl+O"
+msgstr "&Открыть...\tCtrl+O"
+
+msgid "Explorer"
+msgstr "Explorer"
+
+msgid "cmd"
+msgstr "cmd"
+
+msgid "PowerShell"
+msgstr "PowerShell"
+
+msgid "Folder as Workspace"
+msgstr "Папка как рабочая область"
+
+msgid "Open Containing &Folder"
+msgstr "Открыть содержащую &папку"
+
+msgid "Open in &Default Viewer"
+msgstr "Открыть в про&грамме по умолчанию"
+
+msgid "Open Folder as &Workspace..."
+msgstr "Открыть папку как &рабочую область..."
+
+msgid "Re&load from Disk"
+msgstr "Перезагрузить с дис&ка"
+
+msgid "&Save\tCtrl+S"
+msgstr "&Сохранить\tCtrl+S"
+
+msgid "Save &As...\tCtrl+Alt+S"
+msgstr "Сохранить &как...\tCtrl+Alt+S"
+
+msgid "Save a Cop&y As..."
+msgstr "Сохранить копи&ю как..."
+
+msgid "Sa&ve All\tCtrl+Shift+S"
+msgstr "Сохранить &все\tCtrl+Shift+S"
+
+msgid "&Rename..."
+msgstr "Пере&именовать..."
+
+msgid "&Close\tCtrl+W"
+msgstr "&Закрыть\tCtrl+W"
+
+msgid "Clos&e All\tCtrl+Shift+W"
+msgstr "Закрыть вс&е\tCtrl+Shift+W"
+
+msgid "Close All but Active Document"
+msgstr "Закрыть все, кроме активного документа"
+
+msgid "Close All but Pinned Documents"
+msgstr "Закрыть все, кроме закреплённых документов"
+
+msgid "Close All to the Left"
+msgstr "Закрыть все слева"
+
+msgid "Close All to the Right"
+msgstr "Закрыть все справа"
+
+msgid "Close All Unchanged"
+msgstr "Закрыть все неизменённые"
+
+msgid "Close &Multiple Documents"
+msgstr "Закрыть &несколько документов"
+
+msgid "Restore Recent Closed File\tCtrl+Shift+T"
+msgstr "Восстановить последний закрытый файл\tCtrl+Shift+T"
+
+msgid "Move to Recycle &Bin"
+msgstr "Удалить в &корзину"
+
+msgid "Load Sess&ion..."
+msgstr "Загрузить сесс&ию..."
+
+msgid "Save Sess&ion..."
+msgstr "Сохранить сесс&ию..."
+
+msgid "&Print...\tCtrl+P"
+msgstr "&Печать...\tCtrl+P"
+
+msgid "Print No&w"
+msgstr "Напечатать &сейчас"
+
+msgid "E&xit\tAlt+F4"
+msgstr "В&ыход\tAlt+F4"
+
+msgid "&File"
+msgstr "&Файл"
+
+msgid "&Undo\tCtrl+Z"
+msgstr "&Отменить\tCtrl+Z"
+
+msgid "&Redo\tCtrl+Y"
+msgstr "&Вернуть\tCtrl+Y"
+
+msgid "Cu&t\tCtrl+X"
+msgstr "Вырез&ать\tCtrl+X"
+
+msgid "&Copy\tCtrl+C"
+msgstr "&Копировать\tCtrl+C"
+
+msgid "&Paste\tCtrl+V"
+msgstr "Вст&авить\tCtrl+V"
+
+msgid "&Delete\tDel"
+msgstr "&Удалить\tDel"
+
+msgid "&Select All\tCtrl+A"
+msgstr "В&ыделить всё\tCtrl+A"
+
+msgid "Begin/End &Select"
+msgstr "Начало/конец в&ыделения"
+
+msgid "Begin/End Select in Column Mode"
+msgstr "Начало/конец выделения в режиме столбцов"
+
+msgid "Date Time (short)"
+msgstr "Дата и время (краткий формат)"
+
+msgid "Date Time (long)"
+msgstr "Дата и время (полный формат)"
+
+msgid "Date Time (customized)"
+msgstr "Дата и время (настраиваемый формат)"
+
+msgid "Insert"
+msgstr "Вставка"
+
+msgid "Copy Current Full File path"
+msgstr "Копировать полный путь к файлу"
+
+msgid "Copy Current Filename"
+msgstr "Копировать имя файла"
+
+msgid "Copy Current Dir. Path"
+msgstr "Копировать путь к каталогу"
+
+msgid "Copy All Filenames"
+msgstr "Копировать все имена файлов"
+
+msgid "Copy All File Paths"
+msgstr "Копировать все пути к файлам"
+
+msgid "Cop&y to Clipboard"
+msgstr "Копировать в &буфер обмена"
+
+msgid "Increase Line Indent"
+msgstr "Увеличить отступ строки"
+
+msgid "Decrease Line Indent"
+msgstr "Уменьшить отступ строки"
+
+msgid "&Indent"
+msgstr "&Отступ"
+
+msgid "&UPPERCASE\tCtrl+Shift+U"
+msgstr "&ВЕРХНИЙ РЕГИСТР\tCtrl+Shift+U"
+
+msgid "&lowercase\tCtrl+U"
+msgstr "&нижний регистр\tCtrl+U"
+
+msgid "&Proper Case"
+msgstr "Каждое Слово С &Прописной"
+
+msgid "Proper Case (blend)"
+msgstr "Каждое Слово С Прописной (смешанно)"
+
+msgid "&Sentence case"
+msgstr "Как в &предложении"
+
+msgid "Sentence case (blend)"
+msgstr "Как в предложении (смешанно)"
+
+msgid "&iNVERT cASE"
+msgstr "&иНВЕРТИРОВАТЬ рЕГИСТР"
+
+msgid "&ranDOm CasE"
+msgstr "&слуЧАЙный РегИстр"
+
+msgid "Con&vert Case to"
+msgstr "Изменить &регистр"
+
+msgid "Duplicate Current Line\tCtrl+D"
+msgstr "Дублировать текущую строку\tCtrl+D"
+
+msgid "Remove Duplicate Lines"
+msgstr "Удалить повторяющиеся строки"
+
+msgid "Remove Consecutive Duplicate Lines"
+msgstr "Удалить идущие подряд повторяющиеся строки"
+
+msgid "Split Lines\tCtrl+I"
+msgstr "Разделить строки\tCtrl+I"
+
+msgid "Join Lines\tCtrl+J"
+msgstr "Объединить строки\tCtrl+J"
+
+msgid "Move Up Current Line\tCtrl+Shift+Up"
+msgstr "Переместить строку вверх\tCtrl+Shift+Up"
+
+msgid "Move Down Current Line\tCtrl+Shift+Down"
+msgstr "Переместить строку вниз\tCtrl+Shift+Down"
+
+msgid "Remove Empty Lines"
+msgstr "Удалить пустые строки"
+
+msgid "Remove Empty Lines (Containing Blank characters)"
+msgstr "Удалить пустые строки (содержащие пробельные символы)"
+
+msgid "Insert Blank Line Above Current"
+msgstr "Вставить пустую строку выше текущей"
+
+msgid "Insert Blank Line Below Current"
+msgstr "Вставить пустую строку ниже текущей"
+
+msgid "Reverse Line Order"
+msgstr "Обратить порядок строк"
+
+msgid "Randomize Line Order"
+msgstr "Перемешать строки случайным образом"
+
+msgid "Sort Lines Lexicographically Ascending"
+msgstr "Сортировать строки лексикографически по возрастанию"
+
+msgid "Sort Lines Lex. Ascending Ignoring Case"
+msgstr "Сортировать строки лекс. по возрастанию без учёта регистра"
+
+msgid "Sort Lines In Locale Order Ascending"
+msgstr "Сортировать строки по локали по возрастанию"
+
+msgid "Sort Lines As Integers Ascending"
+msgstr "Сортировать строки как целые числа по возрастанию"
+
+msgid "Sort Lines As Decimals (Comma) Ascending"
+msgstr "Сортировать строки как десятичные дроби (запятая) по возрастанию"
+
+msgid "Sort Lines As Decimals (Dot) Ascending"
+msgstr "Сортировать строки как десятичные дроби (точка) по возрастанию"
+
+msgid "Sort Lines By Length Ascending"
+msgstr "Сортировать строки по длине по возрастанию"
+
+msgid "Sort Lines Lexicographically Descending"
+msgstr "Сортировать строки лексикографически по убыванию"
+
+msgid "Sort Lines Lex. Descending Ignoring Case"
+msgstr "Сортировать строки лекс. по убыванию без учёта регистра"
+
+msgid "Sort Lines In Locale Order Descending"
+msgstr "Сортировать строки по локали по убыванию"
+
+msgid "Sort Lines As Integers Descending"
+msgstr "Сортировать строки как целые числа по убыванию"
+
+msgid "Sort Lines As Decimals (Comma) Descending"
+msgstr "Сортировать строки как десятичные дроби (запятая) по убыванию"
+
+msgid "Sort Lines As Decimals (Dot) Descending"
+msgstr "Сортировать строки как десятичные дроби (точка) по убыванию"
+
+msgid "Sort Lines By Length Descending"
+msgstr "Сортировать строки по длине по убыванию"
+
+msgid "&Line Operations"
+msgstr "Операции со стро&ками"
+
+msgid "Toggle Single Line Comment\tCtrl+Q"
+msgstr "Переключить однострочный комментарий\tCtrl+Q"
+
+msgid "Single Line Comment"
+msgstr "Закомментировать строку"
+
+msgid "Single Line Uncomment"
+msgstr "Раскомментировать строку"
+
+msgid "Block Comment\tCtrl+Shift+Q"
+msgstr "Закомментировать блок\tCtrl+Shift+Q"
+
+msgid "Block Uncomment"
+msgstr "Раскомментировать блок"
+
+msgid "Co&mment/Uncomment"
+msgstr "Ко&мментирование"
+
+msgid "Function Completion\tCtrl+Space"
+msgstr "Автозавершение функций\tCtrl+Space"
+
+msgid "Word Completion"
+msgstr "Автозавершение слов"
+
+msgid "Function Parameters Hint"
+msgstr "Подсказка параметров функции"
+
+msgid "Function Parameters Previous Hint"
+msgstr "Предыдущая подсказка параметров функции"
+
+msgid "Function Parameters Next Hint"
+msgstr "Следующая подсказка параметров функции"
+
+msgid "Path Completion"
+msgstr "Автозавершение путей"
+
+msgid "&Auto-Completion"
+msgstr "&Автозавершение"
+
+msgid "Windows (CR LF)"
+msgstr "Windows (CR LF)"
+
+msgid "Unix (LF)"
+msgstr "Unix (LF)"
+
+msgid "Macintosh (CR)"
+msgstr "Macintosh (CR)"
+
+msgid "&EOL Conversion"
+msgstr "Формат ко&нца строк"
+
+msgid "Trim Trailing Space"
+msgstr "Убрать конечные пробелы"
+
+msgid "Trim Leading Space"
+msgstr "Убрать начальные пробелы"
+
+msgid "Trim Leading and Trailing Space"
+msgstr "Убрать начальные и конечные пробелы"
+
+msgid "EOL to Space"
+msgstr "Конец строки в пробел"
+
+msgid "Trim both and EOL to Space"
+msgstr "Убрать оба и конец строки в пробел"
+
+msgid "TAB to Space"
+msgstr "Табуляцию в пробелы"
+
+msgid "Space to TAB (All)"
+msgstr "Пробелы в табуляцию (все)"
+
+msgid "Space to TAB (Leading)"
+msgstr "Пробелы в табуляцию (начальные)"
+
+msgid "&Blank Operations"
+msgstr "Операции с про&белами"
+
+msgid "Paste HTML Content"
+msgstr "Вставить HTML-содержимое"
+
+msgid "Paste RTF Content"
+msgstr "Вставить RTF-содержимое"
+
+msgid "Copy Binary Content"
+msgstr "Копировать двоичное содержимое"
+
+msgid "Cut Binary Content"
+msgstr "Вырезать двоичное содержимое"
+
+msgid "Paste Binary Content"
+msgstr "Вставить двоичное содержимое"
+
+msgid "&Paste Special"
+msgstr "Специальная &вставка"
+
+msgid "Open File"
+msgstr "Открыть файл"
+
+msgid "Open Containing Folder in Explorer"
+msgstr "Открыть содержащую папку в Проводнике"
+
+msgid "&Redact Selection █ (Shift: ●)"
+msgstr "&Закрасить выделенное █ (Shift: ●)"
+
+msgid "Search on Internet"
+msgstr "Искать в Интернете"
+
+msgid "Change Search Engine..."
+msgstr "Изменить поисковую систему..."
+
+msgid "&On Selection"
+msgstr "Для &выделенного"
+
+msgid "Ignore Case && Whole Word"
+msgstr "Без учёта регистра && слово целиком"
+
+msgid "Match Case Only"
+msgstr "Только с учётом регистра"
+
+msgid "Match Whole Word Only"
+msgstr "Только слово целиком"
+
+msgid "Match Case && Whole Word"
+msgstr "С учётом регистра && слово целиком"
+
+msgid "Multi-select All"
+msgstr "Мультивыделить все"
+
+msgid "Multi-select Next"
+msgstr "Мультивыделить следующее"
+
+msgid "Undo the Latest Added Multi-Select"
+msgstr "Отменить последнее добавленное мультивыделение"
+
+msgid "Skip Current && Go to Next Multi-select"
+msgstr "Пропустить текущее && перейти к следующему мультивыделению"
+
+msgid "Column Mode..."
+msgstr "Режим столбцов..."
+
+msgid "Colum&n Editor...\tAlt+C"
+msgstr "Редактор столб&цов...\tAlt+C"
+
+msgid "Character &Panel"
+msgstr "Панель &символов"
+
+msgid "Clipboard &History"
+msgstr "&История буфера обмена"
+
+msgid "Read-Only on Current Document"
+msgstr "Только чтение для текущего документа"
+
+msgid "Read-Only for All Documents"
+msgstr "Только чтение для всех документов"
+
+msgid "Clear Read-Only for All Documents"
+msgstr "Снять «только чтение» со всех документов"
+
+msgid "Read-&Only"
+msgstr "Только &чтение"
+
+msgid "Read-Only Attribute in Windows"
+msgstr "Атрибут «только чтение» в Windows"
+
+msgid "&Edit"
+msgstr "&Правка"
+
+msgid "&Find...\tCtrl+F"
+msgstr "&Найти...\tCtrl+F"
+
+msgid "Find in Fi&les...\tCtrl+Shift+F"
+msgstr "Найти в &файлах...\tCtrl+Shift+F"
+
+msgid "Find &Next\tF3"
+msgstr "Найти &далее\tF3"
+
+msgid "Find &Previous\tShift+F3"
+msgstr "Найти &предыдущее\tShift+F3"
+
+msgid "&Select and Find Next\tCtrl+F3"
+msgstr "&Выделить и найти далее\tCtrl+F3"
+
+msgid "&Select and Find Previous\tCtrl+Shift+F3"
+msgstr "&Выделить и найти предыдущее\tCtrl+Shift+F3"
+
+msgid "Find (&Volatile) Next"
+msgstr "Найти (&без диалога) далее"
+
+msgid "Find (&Volatile) Previous"
+msgstr "Найти (&без диалога) предыдущее"
+
+msgid "&Replace...\tCtrl+H"
+msgstr "&Заменить...\tCtrl+H"
+
+msgid "&Incremental Search\tCtrl+Alt+I"
+msgstr "&Последовательный поиск\tCtrl+Alt+I"
+
+msgid "Search Results &Window\tF7"
+msgstr "&Окно результатов поиска\tF7"
+
+msgid "Next Search Resul&t\tF4"
+msgstr "Следующий резуль&тат поиска\tF4"
+
+msgid "Previous Search Resul&t\tShift+F4"
+msgstr "Предыдущий резуль&тат поиска\tShift+F4"
+
+msgid "&Go to...\tCtrl+G"
+msgstr "&Перейти...\tCtrl+G"
+
+msgid "Go to &Matching Brace\tCtrl+B"
+msgstr "Перейти к парной &скобке\tCtrl+B"
+
+msgid "Select All In-betw&een {} [] or ()"
+msgstr "Выделить всё &между {} [] или ()"
+
+msgid "Mar&k..."
+msgstr "Помет&ить..."
+
+msgid "Go to Next Change"
+msgstr "Перейти к следующему изменению"
+
+msgid "Go to Previous Change"
+msgstr "Перейти к предыдущему изменению"
+
+msgid "Clear Change History"
+msgstr "Очистить историю изменений"
+
+msgid "Change History"
+msgstr "История изменений"
+
+msgid "Using 1st Style"
+msgstr "Используя 1-й стиль"
+
+msgid "Using 2nd Style"
+msgstr "Используя 2-й стиль"
+
+msgid "Using 3rd Style"
+msgstr "Используя 3-й стиль"
+
+msgid "Using 4th Style"
+msgstr "Используя 4-й стиль"
+
+msgid "Using 5th Style"
+msgstr "Используя 5-й стиль"
+
+msgid "Style &All Occurrences of Token"
+msgstr "Пометить &все вхождения токена"
+
+msgid "Style &One Token"
+msgstr "Пометить &один токен"
+
+msgid "Clear 1st Style"
+msgstr "Очистить 1-й стиль"
+
+msgid "Clear 2nd Style"
+msgstr "Очистить 2-й стиль"
+
+msgid "Clear 3rd Style"
+msgstr "Очистить 3-й стиль"
+
+msgid "Clear 4th Style"
+msgstr "Очистить 4-й стиль"
+
+msgid "Clear 5th Style"
+msgstr "Очистить 5-й стиль"
+
+msgid "Clear all Styles"
+msgstr "Очистить все стили"
+
+msgid "Clear Style"
+msgstr "Очистить стиль"
+
+msgid "1st Style"
+msgstr "1-й стиль"
+
+msgid "2nd Style"
+msgstr "2-й стиль"
+
+msgid "3rd Style"
+msgstr "3-й стиль"
+
+msgid "4th Style"
+msgstr "4-й стиль"
+
+msgid "5th Style"
+msgstr "5-й стиль"
+
+msgid "Find Mark Style"
+msgstr "Стиль пометки поиска"
+
+msgid "&Jump Up"
+msgstr "Перейти &вверх"
+
+msgid "Jump &Down"
+msgstr "Перейти в&низ"
+
+msgid "All Styles"
+msgstr "Все стили"
+
+msgid "&Copy Styled Text"
+msgstr "&Копировать стилизованный текст"
+
+msgid "Toggle Bookmark\tCtrl+F2"
+msgstr "Переключить закладку\tCtrl+F2"
+
+msgid "Next Bookmark\tF2"
+msgstr "Следующая закладка\tF2"
+
+msgid "Previous Bookmark\tShift+F2"
+msgstr "Предыдущая закладка\tShift+F2"
+
+msgid "Clear All Bookmarks"
+msgstr "Убрать все закладки"
+
+msgid "Cut Bookmarked Lines"
+msgstr "Вырезать строки с закладками"
+
+msgid "Copy Bookmarked Lines"
+msgstr "Копировать строки с закладками"
+
+msgid "Paste to (Replace) Bookmarked Lines"
+msgstr "Вставить в строки с закладками (с заменой)"
+
+msgid "Remove Bookmarked Lines"
+msgstr "Удалить строки с закладками"
+
+msgid "Remove Non-Bookmarked Lines"
+msgstr "Удалить строки без закладок"
+
+msgid "Inverse Bookmarks"
+msgstr "Инвертировать закладки"
+
+msgid "&Bookmark"
+msgstr "&Закладки"
+
+msgid "Find characters in rang&e..."
+msgstr "Найти символы в &диапазоне..."
+
+msgid "&Search"
+msgstr "&Поиск"
+
+msgid "Always on &Top"
+msgstr "Поверх &всех окон"
+
+msgid "To&ggle Full Screen Mode\tF11"
+msgstr "Полно&экранный режим\tF11"
+
+msgid "&Post-It\tF12"
+msgstr "Режим «&Заметки»\tF12"
+
+msgid "D&istraction Free Mode"
+msgstr "Режим без отвлечен&ий"
+
+msgid "&Firefox"
+msgstr "&Firefox"
+
+msgid "&Chrome"
+msgstr "&Chrome"
+
+msgid "&Edge"
+msgstr "&Edge"
+
+msgid "&IE"
+msgstr "&IE"
+
+msgid "&View Current File in"
+msgstr "Открыть текущий файл &в"
+
+msgid "Show Space and Tab"
+msgstr "Показывать пробелы и табуляцию"
+
+msgid "Show End of Line"
+msgstr "Показывать концы строк"
+
+msgid "Show Non-Printing Characters"
+msgstr "Показывать непечатаемые символы"
+
+msgid "Show Control Characters && Unicode EOL"
+msgstr "Показывать управляющие символы && концы строк Юникода"
+
+msgid "Show All Characters"
+msgstr "Показывать все символы"
+
+msgid "Show Indent Guide"
+msgstr "Показывать направляющие отступов"
+
+msgid "Show Wrap Symbol"
+msgstr "Показывать символ переноса"
+
+msgid "Show S&ymbol"
+msgstr "Отображение симво&лов"
+
+msgid "Zoom &In (Ctrl+Mouse Wheel Up)"
+msgstr "У&величить (Ctrl+колесо мыши вверх)"
+
+msgid "Zoom &Out (Ctrl+Mouse Wheel Down)"
+msgstr "У&меньшить (Ctrl+колесо мыши вниз)"
+
+msgid "&Restore Default Zoom"
+msgstr "&Восстановить масштаб по умолчанию"
+
+msgid "&Zoom"
+msgstr "&Масштаб"
+
+msgid "Move to Other &View"
+msgstr "Переместить в другое &окно"
+
+msgid "Clone to Other Vie&w"
+msgstr "Клонировать в другое ок&но"
+
+msgid "Mo&ve to New Instance"
+msgstr "Переместить в новый &экземпляр"
+
+msgid "&Open in New Instance"
+msgstr "&Открыть в новом экземпляре"
+
+msgid "&Move/Clone Current Document"
+msgstr "Пере&местить/клонировать текущий документ"
+
+msgid "1st Tab\tCtrl+1"
+msgstr "1-я вкладка\tCtrl+1"
+
+msgid "2nd Tab\tCtrl+2"
+msgstr "2-я вкладка\tCtrl+2"
+
+msgid "3rd Tab\tCtrl+3"
+msgstr "3-я вкладка\tCtrl+3"
+
+msgid "4th Tab\tCtrl+4"
+msgstr "4-я вкладка\tCtrl+4"
+
+msgid "5th Tab\tCtrl+5"
+msgstr "5-я вкладка\tCtrl+5"
+
+msgid "6th Tab\tCtrl+6"
+msgstr "6-я вкладка\tCtrl+6"
+
+msgid "7th Tab\tCtrl+7"
+msgstr "7-я вкладка\tCtrl+7"
+
+msgid "8th Tab\tCtrl+8"
+msgstr "8-я вкладка\tCtrl+8"
+
+msgid "9th Tab\tCtrl+9"
+msgstr "9-я вкладка\tCtrl+9"
+
+msgid "First Tab"
+msgstr "Первая вкладка"
+
+msgid "Last Tab"
+msgstr "Последняя вкладка"
+
+msgid "Next Tab\tCtrl+Tab"
+msgstr "Следующая вкладка\tCtrl+Tab"
+
+msgid "Previous Tab\tCtrl+Shift+Tab"
+msgstr "Предыдущая вкладка\tCtrl+Shift+Tab"
+
+msgid "Move to Start"
+msgstr "Переместить в начало"
+
+msgid "Move to End"
+msgstr "Переместить в конец"
+
+msgid "Move Tab Forward"
+msgstr "Переместить вкладку вперёд"
+
+msgid "Move Tab Backward"
+msgstr "Переместить вкладку назад"
+
+msgid "Apply Color 1"
+msgstr "Применить цвет 1"
+
+msgid "Apply Color 2"
+msgstr "Применить цвет 2"
+
+msgid "Apply Color 3"
+msgstr "Применить цвет 3"
+
+msgid "Apply Color 4"
+msgstr "Применить цвет 4"
+
+msgid "Apply Color 5"
+msgstr "Применить цвет 5"
+
+msgid "Remove Color"
+msgstr "Убрать цвет"
+
+msgid "Ta&b"
+msgstr "&Вкладки"
+
+msgid "&Word wrap"
+msgstr "&Перенос строк"
+
+msgid "&Hide Lines"
+msgstr "&Скрыть строки"
+
+msgid "Fold All\tAlt+0"
+msgstr "Свернуть все\tAlt+0"
+
+msgid "Unfold All\tAlt+Shift+0"
+msgstr "Развернуть все\tAlt+Shift+0"
+
+msgid "Fold Current Level\tCtrl+Alt+F"
+msgstr "Свернуть текущий уровень\tCtrl+Alt+F"
+
+msgid "Unfold Current Level\tCtrl+Alt+Shift+F"
+msgstr "Развернуть текущий уровень\tCtrl+Alt+Shift+F"
+
+msgid "1\tAlt+1"
+msgstr "1\tAlt+1"
+
+msgid "2\tAlt+2"
+msgstr "2\tAlt+2"
+
+msgid "3\tAlt+3"
+msgstr "3\tAlt+3"
+
+msgid "4\tAlt+4"
+msgstr "4\tAlt+4"
+
+msgid "5\tAlt+5"
+msgstr "5\tAlt+5"
+
+msgid "6\tAlt+6"
+msgstr "6\tAlt+6"
+
+msgid "7\tAlt+7"
+msgstr "7\tAlt+7"
+
+msgid "8\tAlt+8"
+msgstr "8\tAlt+8"
+
+msgid "Fold Level"
+msgstr "Свернуть уровень"
+
+msgid "1\tAlt+Shift+1"
+msgstr "1\tAlt+Shift+1"
+
+msgid "2\tAlt+Shift+2"
+msgstr "2\tAlt+Shift+2"
+
+msgid "3\tAlt+Shift+3"
+msgstr "3\tAlt+Shift+3"
+
+msgid "4\tAlt+Shift+4"
+msgstr "4\tAlt+Shift+4"
+
+msgid "5\tAlt+Shift+5"
+msgstr "5\tAlt+Shift+5"
+
+msgid "6\tAlt+Shift+6"
+msgstr "6\tAlt+Shift+6"
+
+msgid "7\tAlt+Shift+7"
+msgstr "7\tAlt+Shift+7"
+
+msgid "8\tAlt+Shift+8"
+msgstr "8\tAlt+Shift+8"
+
+msgid "Unfold Level"
+msgstr "Развернуть уровень"
+
+msgid "&Summary..."
+msgstr "&Сводка..."
+
+msgid "Project Panel &1"
+msgstr "Панель проекта &1"
+
+msgid "Project Panel &2"
+msgstr "Панель проекта &2"
+
+msgid "Project Panel &3"
+msgstr "Панель проекта &3"
+
+msgid "Pro&ject Panels"
+msgstr "Панели прое&ктов"
+
+msgid "Folder as Wor&kspace"
+msgstr "Папка как &рабочая область"
+
+msgid "&Document Map"
+msgstr "Карта &документа"
+
+msgid "D&ocument List"
+msgstr "Список д&окументов"
+
+msgid "Function &List"
+msgstr "Список &функций"
+
+msgid "T&ext Direction RTL"
+msgstr "Направление т&екста справа налево"
+
+msgid "Te&xt Direction LTR"
+msgstr "Направление те&кста слева направо"
+
+msgid "Monito&ring (tail -f)"
+msgstr "Монито&ринг (tail -f)"
+
+msgid "&View"
+msgstr "&Вид"
+
+msgid "ANSI"
+msgstr "ANSI"
+
+msgid "UTF-8"
+msgstr "UTF-8"
+
+msgid "UTF-8-BOM"
+msgstr "UTF-8-BOM"
+
+msgid "UTF-16 BE BOM"
+msgstr "UTF-16 BE BOM"
+
+msgid "UTF-16 LE BOM"
+msgstr "UTF-16 LE BOM"
+
+msgid "ISO 8859-6"
+msgstr "ISO 8859-6"
+
+msgid "OEM 720"
+msgstr "OEM 720"
+
+msgid "Windows-1256"
+msgstr "Windows-1256"
+
+msgid "Arabic"
+msgstr "Арабская"
+
+msgid "ISO 8859-4"
+msgstr "ISO 8859-4"
+
+msgid "ISO 8859-13"
+msgstr "ISO 8859-13"
+
+msgid "OEM 775"
+msgstr "OEM 775"
+
+msgid "Windows-1257"
+msgstr "Windows-1257"
+
+msgid "Baltic"
+msgstr "Балтийская"
+
+msgid "ISO 8859-14"
+msgstr "ISO 8859-14"
+
+msgid "Celtic"
+msgstr "Кельтская"
+
+msgid "ISO 8859-5"
+msgstr "ISO 8859-5"
+
+msgid "KOI8-R"
+msgstr "KOI8-R"
+
+msgid "KOI8-U"
+msgstr "KOI8-U"
+
+msgid "Macintosh"
+msgstr "Macintosh"
+
+msgid "OEM 855"
+msgstr "OEM 855"
+
+msgid "OEM 866"
+msgstr "OEM 866"
+
+msgid "Windows-1251"
+msgstr "Windows-1251"
+
+msgid "Cyrillic"
+msgstr "Кириллица"
+
+msgid "OEM 852"
+msgstr "OEM 852"
+
+msgid "Windows-1250"
+msgstr "Windows-1250"
+
+msgid "Central European"
+msgstr "Центральноевропейская"
+
+msgid "Big5 (Traditional)"
+msgstr "Big5 (традиционная)"
+
+msgid "GB2312 (Simplified)"
+msgstr "GB2312 (упрощённая)"
+
+msgid "Chinese"
+msgstr "Китайская"
+
+msgid "ISO 8859-2"
+msgstr "ISO 8859-2"
+
+msgid "Eastern European"
+msgstr "Восточноевропейская"
+
+msgid "ISO 8859-7"
+msgstr "ISO 8859-7"
+
+msgid "OEM 737"
+msgstr "OEM 737"
+
+msgid "OEM 869"
+msgstr "OEM 869"
+
+msgid "Windows-1253"
+msgstr "Windows-1253"
+
+msgid "Greek"
+msgstr "Греческая"
+
+msgid "ISO 8859-8"
+msgstr "ISO 8859-8"
+
+msgid "OEM 862"
+msgstr "OEM 862"
+
+msgid "Windows-1255"
+msgstr "Windows-1255"
+
+msgid "Hebrew"
+msgstr "Иврит"
+
+msgid "Shift-JIS"
+msgstr "Shift-JIS"
+
+msgid "Japanese"
+msgstr "Японская"
+
+msgid "Windows 949"
+msgstr "Windows 949"
+
+msgid "EUC-KR"
+msgstr "EUC-KR"
+
+msgid "Korean"
+msgstr "Корейская"
+
+msgid "OEM 861 : Icelandic"
+msgstr "OEM 861 : Исландская"
+
+msgid "OEM 865 : Nordic"
+msgstr "OEM 865 : Скандинавская"
+
+msgid "North European"
+msgstr "Североевропейская"
+
+msgid "TIS-620"
+msgstr "TIS-620"
+
+msgid "Thai"
+msgstr "Тайская"
+
+msgid "ISO 8859-3"
+msgstr "ISO 8859-3"
+
+msgid "ISO 8859-9"
+msgstr "ISO 8859-9"
+
+msgid "OEM 857"
+msgstr "OEM 857"
+
+msgid "Windows-1254"
+msgstr "Windows-1254"
+
+msgid "Turkish"
+msgstr "Турецкая"
+
+msgid "ISO 8859-1"
+msgstr "ISO 8859-1"
+
+msgid "ISO 8859-15"
+msgstr "ISO 8859-15"
+
+msgid "OEM 850"
+msgstr "OEM 850"
+
+msgid "OEM 858"
+msgstr "OEM 858"
+
+msgid "OEM 860 : Portuguese"
+msgstr "OEM 860 : Португальская"
+
+msgid "OEM 863 : French"
+msgstr "OEM 863 : Французская"
+
+msgid "OEM-US"
+msgstr "OEM-US"
+
+msgid "Windows-1252"
+msgstr "Windows-1252"
+
+msgid "Western European"
+msgstr "Западноевропейская"
+
+msgid "Windows-1258"
+msgstr "Windows-1258"
+
+msgid "Vietnamese"
+msgstr "Вьетнамская"
+
+msgid "Character sets"
+msgstr "Наборы символов"
+
+msgid "Convert to ANSI"
+msgstr "Преобразовать в ANSI"
+
+msgid "Convert to UTF-8"
+msgstr "Преобразовать в UTF-8"
+
+msgid "Convert to UTF-8-BOM"
+msgstr "Преобразовать в UTF-8-BOM"
+
+msgid "Convert to UTF-16 BE BOM"
+msgstr "Преобразовать в UTF-16 BE BOM"
+
+msgid "Convert to UTF-16 LE BOM"
+msgstr "Преобразовать в UTF-16 LE BOM"
+
+msgid "E&ncoding"
+msgstr "&Кодировки"
+
+msgid "None (Normal Text)"
+msgstr "Нет (обычный текст)"
+
+msgid "Define your language..."
+msgstr "Задать свой язык..."
+
+msgid "Open User Defined Language folder..."
+msgstr "Открыть папку пользовательских языков..."
+
+msgid "Notepad++ User Defined Languages Collection"
+msgstr "Коллекция пользовательских языков Notepad++"
+
+msgid "User Defined Language"
+msgstr "Пользовательский язык"
+
+msgid "User-Defined"
+msgstr "Пользовательский"
+
+msgid "&Language"
+msgstr "&Синтаксисы"
+
+msgid "Preferences..."
+msgstr "Настройки..."
+
+msgid "Style Configurator..."
+msgstr "Определение стилей..."
+
+msgid "Shortcut Mapper..."
+msgstr "Горячие клавиши..."
+
+msgid "Import plugin(s)..."
+msgstr "Импорт плагинов..."
+
+msgid "Import style theme(s)..."
+msgstr "Импорт тем оформления..."
+
+msgid "Import"
+msgstr "Импорт"
+
+msgid "Edit Popup ContextMenu"
+msgstr "Правка контекстного меню"
+
+msgid "&Dark Mode"
+msgstr "&Тёмный режим"
+
+msgid "Se&ttings"
+msgstr "О&пции"
+
+msgid "Generate..."
+msgstr "Сгенерировать..."
+
+msgid "Generate from files..."
+msgstr "Сгенерировать из файлов..."
+
+msgid "Generate from selection into clipboard"
+msgstr "Сгенерировать из выделенного в буфер обмена"
+
+msgid "MD5"
+msgstr "MD5"
+
+msgid "SHA-1"
+msgstr "SHA-1"
+
+msgid "SHA-256"
+msgstr "SHA-256"
+
+msgid "SHA-512"
+msgstr "SHA-512"
+
+msgid "T&ools"
+msgstr "&Инструменты"
+
+msgid "Start Re&cording"
+msgstr "Начать &запись"
+
+msgid "S&top Recording"
+msgstr "&Остановить запись"
+
+msgid "&Playback"
+msgstr "&Воспроизвести"
+
+msgid "&Save Current Recorded Macro..."
+msgstr "&Сохранить записанный макрос..."
+
+msgid "&Run a Macro Multiple Times..."
+msgstr "Запустить &макрос несколько раз..."
+
+msgid "&Macro"
+msgstr "&Макросы"
+
+msgid "&Run...\tF5"
+msgstr "&Выполнить...\tF5"
+
+msgid "Validate shortcuts.xml"
+msgstr "Проверить shortcuts.xml"
+
+msgid "&Run"
+msgstr "&Запуск"
+
+msgid "Open Plugins Folder..."
+msgstr "Открыть папку плагинов..."
+
+msgid "&Plugins"
+msgstr "&Плагины"
+
+msgid "Name A to Z"
+msgstr "Имя от A до Z"
+
+msgid "Name Z to A"
+msgstr "Имя от Z до A"
+
+msgid "Path A to Z"
+msgstr "Путь от A до Z"
+
+msgid "Path Z to A"
+msgstr "Путь от Z до A"
+
+msgid "Type A to Z"
+msgstr "Тип от A до Z"
+
+msgid "Type Z to A"
+msgstr "Тип от Z до A"
+
+msgid "Content Length Ascending"
+msgstr "Размер содержимого по возрастанию"
+
+msgid "Content Length Descending"
+msgstr "Размер содержимого по убыванию"
+
+msgid "Modified Time Ascending"
+msgstr "Время изменения по возрастанию"
+
+msgid "Modified Time Descending"
+msgstr "Время изменения по убыванию"
+
+msgid "Sort By"
+msgstr "Сортировать по"
+
+msgid "&Windows..."
+msgstr "&Окна..."
+
+msgid "Recent Window"
+msgstr "Недавнее окно"
+
+msgid "&Window"
+msgstr "О&кна"
+
+msgid "Command Line Arguments..."
+msgstr "Аргументы командной строки..."
+
+msgid "Notepad++ Home"
+msgstr "Домашняя страница Notepad++"
+
+msgid "Notepad++ Project Page"
+msgstr "Страница проекта Notepad++"
+
+msgid "Notepad++ Online User Manual"
+msgstr "Онлайн-руководство пользователя Notepad++"
+
+msgid "Notepad++ Community (Forum)"
+msgstr "Сообщество Notepad++ (форум)"
+
+msgid "Check for Updates"
+msgstr "Проверить обновления"
+
+msgid "Set Updater Proxy..."
+msgstr "Настроить прокси для обновлений..."
+
+msgid "Debug Info..."
+msgstr "Отладочная информация..."
+
+msgid "About wxNotepad++\tF1"
+msgstr "О программе wxNotepad++\tF1"
+
+msgid "&About"
+msgstr "&Справка"
+
+msgid "Go to line"
+msgstr "Переход к строке"
+
+msgid "Line number (1 - %d):"
+msgstr "Номер строки (1 - %d):"
+
+msgid "Column Editor"
+msgstr "Редактор столбцов"
+
+msgid "Text to Insert"
+msgstr "Текст для вставки"
+
+msgid "Number to Insert"
+msgstr "Число для вставки"
+
+msgid "Initial:"
+msgstr "Начальное значение:"
+
+msgid "Increase by:"
+msgstr "Увеличивать на:"
+
+msgid "Leading zeros"
+msgstr "Ведущие нули"
+
+msgid "Format"
+msgstr "Формат"
+
+msgid "Change Search Engine"
+msgstr "Изменить поисковую систему"
+
+msgid "Search on Internet uses:"
+msgstr "Поиск в Интернете использует:"
+
+msgid "Find Characters in Range"
+msgstr "Поиск символов в диапазоне"
+
+msgid "Finds the next character (from the caret, wrapping)\nwhose code falls within this range."
+msgstr "Ищет следующий символ (от курсора, по кругу),\nкод которого попадает в этот диапазон."
+
+msgid "From:"
+msgstr "От:"
+
+msgid "To:"
+msgstr "До:"
+
+msgid "Hexadecimal"
+msgstr "Шестнадцатеричный"
+
+msgid "Find Next"
+msgstr "Найти далее"
+
+msgid "Replace"
+msgstr "Заменить"
+
+msgid "Find"
+msgstr "Найти"
+
+msgid "Find in Files"
+msgstr "Найти в файлах"
+
+msgid "Mark"
+msgstr "Пометить"
+
+msgid "Find what :"
+msgstr "Найти :"
+
+msgid "Replace with :"
+msgstr "Заменить на :"
+
+msgid "Filters :"
+msgstr "Фильтры :"
+
+msgid "Directory :"
+msgstr "Папка :"
+
+msgid "Match &whole word only"
+msgstr "Только слово &целиком"
+
+msgid "Match &case"
+msgstr "Учитывать &регистр"
+
+msgid "Wra&p around"
+msgstr "Искать по &кругу"
+
+msgid "&Backward direction"
+msgstr "В &обратном направлении"
+
+msgid "In se&lection"
+msgstr "В в&ыделенном"
+
+msgid "Search Mode"
+msgstr "Режим поиска"
+
+msgid "Document Map"
+msgstr "Карта документа"
+
+msgid "Function List"
+msgstr "Список функций"
+
+msgid "Document List"
+msgstr "Список документов"
+
+msgid "Clipboard History"
+msgstr "История буфера обмена"
+
+msgid "Value"
+msgstr "Значение"
+
+msgid "Hex"
+msgstr "Hex"
+
+msgid "Character"
+msgstr "Символ"
+
+msgid "Character Panel"
+msgstr "Панель символов"
+
+msgid "Project"
+msgstr "Проект"
+
+msgid "Add Files..."
+msgstr "Добавить файлы..."
+
+msgid "Add Folder"
+msgstr "Добавить папку"
+
+msgid "Rename"
+msgstr "Переименовать"
+
+msgid "Remove"
+msgstr "Удалить"
+
+msgid "New Workspace"
+msgstr "Новое рабочее пространство"
+
+msgid "Open Workspace..."
+msgstr "Открыть рабочее пространство..."
+
+msgid "Save Workspace As..."
+msgstr "Сохранить рабочее пространство как..."
+
+msgid "Find: "
+msgstr "Найти: "
+
+msgid "Next"
+msgstr "Далее"
+
+msgid "Close"
+msgstr "Закрыть"
+
+msgid "Find result"
+msgstr "Результаты поиска"
+
+msgid "Match case"
+msgstr "Учитывать регистр"
+
+msgid "Whole word only"
+msgstr "Только слово целиком"
+
+msgid "Regular expression"
+msgstr "Регулярное выражение"
+
+msgid "In all sub-folders"
+msgstr "Во всех подпапках"
+
+msgid "Find what:"
+msgstr "Найти:"
+
+msgid "Directory:"
+msgstr "Папка:"
+
+msgid "Filters:"
+msgstr "Фильтры:"
+
+msgid "Find All"
+msgstr "Найти все"
+
+msgid "Run"
+msgstr "Выполнить"
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "The Program to Run   (variables: $(FULL_CURRENT_PATH), $(CURRENT_DIRECTORY),\n$(FILE_NAME), $(CURRENT_WORD), $(CURRENT_LINE) ...)"
+msgstr "Программа для запуска   (переменные: $(FULL_CURRENT_PATH), $(CURRENT_DIRECTORY),\n$(FILE_NAME), $(CURRENT_WORD), $(CURRENT_LINE) ...)"
+
+msgid "Failed to run:\n"
+msgstr "Не удалось запустить:\n"
+
+msgid "Could not read the session file."
+msgstr "Не удалось прочитать файл сессии."
+
+msgid "Load Session"
+msgstr "Загрузка сессии"
+
+msgid "No session data in this file."
+msgstr "В этом файле нет данных сессии."
+
+msgid "new %d"
+msgstr "новый %d"
+
+msgid "Save file\n%s ?"
+msgstr "Сохранить файл\n%s ?"
+
+msgid "&Save"
+msgstr "&Сохранить"
+
+msgid "Do&n't Save"
+msgstr "&Не сохранять"
+
+msgid "&Cancel"
+msgstr "О&тмена"
+
+msgid "Close All BUT This"
+msgstr "Закрыть все, кроме этого"
+
+msgid "Close All"
+msgstr "Закрыть все"
+
+msgid "Save"
+msgstr "Сохранить"
+
+msgid "Save As..."
+msgstr "Сохранить как..."
+
+msgid "Move to Other View"
+msgstr "Переместить в другую панель"
+
+msgid "Clone to Other View"
+msgstr "Клонировать в другую панель"
+
+msgid "None"
+msgstr "Нет"
+
+msgid "Apply Colour"
+msgstr "Применить цвет"
+
+msgid "(more items added incrementally)"
+msgstr "(остальные пункты добавляются постепенно)"
+
+msgid "System default"
+msgstr "Системный по умолчанию"
+
+msgid "Locali&zation"
+msgstr "Локали&зация"
+
+msgid "Recent &Files"
+msgstr "Недавние &файлы"
+
+msgid "New"
+msgstr "Новый"
+
+msgid "Open"
+msgstr "Открыть"
+
+msgid "Save All"
+msgstr "Сохранить все"
+
+msgid "Print"
+msgstr "Печать"
+
+msgid "Cut"
+msgstr "Вырезать"
+
+msgid "Copy"
+msgstr "Копировать"
+
+msgid "Paste"
+msgstr "Вставить"
+
+msgid "Undo"
+msgstr "Отменить"
+
+msgid "Redo"
+msgstr "Вернуть"
+
+msgid "Zoom In"
+msgstr "Увеличить"
+
+msgid "Zoom Out"
+msgstr "Уменьшить"
+
+msgid "Word Wrap"
+msgstr "Перенос строк"
+
+msgid "User-Defined Language Dialogue"
+msgstr "Диалог пользовательского языка"
+
+msgid "Monitoring (tail -f)"
+msgstr "Мониторинг (tail -f)"
+
+msgid "Start Recording"
+msgstr "Начать запись"
+
+msgid "Stop Recording"
+msgstr "Остановить запись"
+
+msgid "Playback"
+msgstr "Воспроизвести"
+
+msgid "Run a Macro Multiple Times"
+msgstr "Выполнить макрос несколько раз"
+
+msgid "Save Current Recorded Macro"
+msgstr "Сохранить записанный макрос"
+
+msgid "Re-interpreting the encoding discards unsaved changes. Continue?"
+msgstr "Повторная интерпретация кодировки отменит несохранённые изменения. Продолжить?"
+
+msgid "Encoding"
+msgstr "Кодировка"
+
+msgid "Monitoring needs a file on disk - save the document first"
+msgstr "Для мониторинга нужен файл на диске - сначала сохраните документ"
+
+msgid "Save or discard the unsaved changes before monitoring"
+msgstr "Сохраните или отмените несохранённые изменения перед мониторингом"
+
+msgid "Monitoring started"
+msgstr "Мониторинг запущен"
+
+msgid "Monitoring stopped"
+msgstr "Мониторинг остановлен"
+
+msgid "Monitoring stopped (document was edited)"
+msgstr "Мониторинг остановлен (документ был изменён)"
+
+msgid "Clipboard has no matching content."
+msgstr "В буфере обмена нет подходящего содержимого."
+
+msgid "Move \"%s\" to the Recycle Bin?"
+msgstr "Переместить \"%s\" в Корзину?"
+
+msgid "Enter valid character codes."
+msgstr "Введите корректные коды символов."
+
+msgid "Search results"
+msgstr "Результаты поиска"
+
+msgid "Preferences"
+msgstr "Настройки"
+
+msgid "General"
+msgstr "Общие"
+
+msgid "Show toolbar"
+msgstr "Показывать панель инструментов"
+
+msgid "Show status bar"
+msgstr "Показывать строку состояния"
+
+msgid "Show integrated top bar"
+msgstr "Показывать встроенную верхнюю панель"
+
+msgid "Localization:"
+msgstr "Локализация:"
+
+msgid "Editing"
+msgstr "Редактирование"
+
+msgid "Display line number"
+msgstr "Показывать номера строк"
+
+msgid "Show indentation guide"
+msgstr "Показывать направляющие отступов"
+
+msgid "Show white space and TAB"
+msgstr "Показывать пробелы и табуляцию"
+
+msgid "Show wrap symbol"
+msgstr "Показывать символ переноса"
+
+msgid "Word wrap"
+msgstr "Перенос строк"
+
+msgid "Highlight current line"
+msgstr "Подсвечивать текущую строку"
+
+msgid "Enable scrolling beyond last line"
+msgstr "Разрешить прокрутку за последнюю строку"
+
+msgid "Enable multi-editing (multi-selection)"
+msgstr "Включить мультиредактирование (мультивыделение)"
+
+msgid "Caret width:"
+msgstr "Ширина каретки:"
+
+msgid "Vertical edge at column (0 = off):"
+msgstr "Вертикальная граница в столбце (0 = выкл.):"
+
+msgid "Caret blink rate (ms, 0 = steady):"
+msgstr "Частота мигания каретки (мс, 0 = не мигает):"
+
+msgid "Indentation"
+msgstr "Отступы"
+
+msgid "Tab size:"
+msgstr "Размер табуляции:"
+
+msgid "Replace by space"
+msgstr "Заменять пробелами"
+
+msgid "Auto-indent new lines"
+msgstr "Автоотступ новых строк"
+
+msgid "Auto-Completion"
+msgstr "Автозавершение"
+
+msgid "Enable auto-completion on each input"
+msgstr "Включить автозавершение при каждом вводе"
+
+msgid "From the"
+msgstr "Начиная с"
+
+msgid "th character"
+msgstr "-го символа"
+
+msgid "Auto-insert matching brackets and quotes"
+msgstr "Автовставка парных скобок и кавычек"
+
+msgid "Dark Mode"
+msgstr "Тёмная тема"
+
+msgid "Enable Dark Mode   (applied on restart)"
+msgstr "Включить тёмный режим   (применяется после перезапуска)"
+
+msgid "New Document"
+msgstr "Новый документ"
+
+msgid "Format (Line ending)"
+msgstr "Формат (конец строки)"
+
+msgid "Default language:"
+msgstr "Синтаксис по умолчанию:"
+
+msgid "Tab Bar"
+msgstr "Панель вкладок"
+
+msgid "Show close button on each tab   (applied on restart)"
+msgstr "Кнопка закрытия на каждой вкладке   (применяется после перезапуска)"
+
+msgid "Recent Files History"
+msgstr "История недавних файлов"
+
+msgid "Max number of entries (applied on restart):"
+msgstr "Макс. число элементов (применяется после перезапуска):"
+
+msgid "Header:"
+msgstr "Верхний колонтитул:"
+
+msgid "Footer:"
+msgstr "Нижний колонтитул:"
+
+msgid "Run until the end of file"
+msgstr "Выполнять до конца файла"
+
+msgid "times"
+msgstr "раз"
+
+msgid "Select theme:"
+msgstr "Выберите тему:"
+
+msgid "Bold"
+msgstr "Жирный"
+
+msgid "Italic"
+msgstr "Курсив"
+
+msgid "Foreground colour:"
+msgstr "Цвет текста:"
+
+msgid "Background colour:"
+msgstr "Цвет фона:"
+
+msgid "Save && Close"
+msgstr "Сохранить && закрыть"
+
+msgid "Encode as ANSI"
+msgstr "Кодировать как ANSI"
+
+msgid "Encode as UTF-8"
+msgstr "Кодировать как UTF-8"
+
+msgid "Encode as UTF-8 BOM"
+msgstr "Кодировать как UTF-8 BOM"
+
+msgid "Encode as UTF-16 LE BOM"
+msgstr "Кодировать как UTF-16 LE BOM"
+
+msgid "Encode as UTF-16 BE BOM"
+msgstr "Кодировать как UTF-16 BE BOM"
+
+msgid "Convert to UTF-8 BOM"
+msgstr "Преобразовать в UTF-8 BOM"
+
+msgid "Column (rectangular) selection:\n\n- Alt + drag the mouse\n- Alt + Shift + Arrow keys\n- Alt + Shift + Click\n\nTyping or pasting applies to every line of the block at once."
+msgstr "Колоночное (прямоугольное) выделение:\n\n- Alt + перетаскивание мышью\n- Alt + Shift + клавиши со стрелками\n- Alt + Shift + щелчок\n\nВвод или вставка применяется сразу ко всем строкам блока."
+
+msgid "Column Mode"
+msgstr "Режим столбцов"
+
+msgid "length : %d    lines : %d"
+msgstr "Длина : %d    Строк : %d"
+
+msgid "Ln : %d    Col : %d    Pos : %d"
+msgstr "Стр : %d    Стлб : %d    Поз : %d"
+
+msgid "Sel : %d | %d"
+msgstr "Выдел. : %d | %d"
+
+msgid "Red"
+msgstr "Красный"
+
+msgid "Orange"
+msgstr "Оранжевый"
+
+msgid "Green"
+msgstr "Зелёный"
+
+msgid "Blue"
+msgstr "Синий"
+
+msgid "Purple"
+msgstr "Фиолетовый"
+
+msgid "Tab colour cleared"
+msgstr "Цвет вкладки удалён"
+
+msgid "Tab colour applied"
+msgstr "Цвет вкладки применён"
+
+msgid "Normal text file"
+msgstr "Обычный текстовый файл"
+
+msgid "Add Files"
+msgstr "Добавить файлы"
+
+msgid "Open Workspace"
+msgstr "Открыть рабочую область"
+
+msgid "Save Workspace As"
+msgstr "Сохранить рабочую область как"
+
+msgid "Workspace saved"
+msgstr "Рабочая область сохранена"
+
+msgid "Workspace: %s"
+msgstr "Рабочая область: %s"
+
+msgid "Select Folder as Workspace"
+msgstr "Выбрать папку как рабочую область"
+
+msgid "Folder as Workspace (save the file first)"
+msgstr "Папка как рабочая область (сначала сохраните файл)"
+
+msgid "Save Session"
+msgstr "Сохранить сессию"
+
+msgid "Session saved - %d file(s)"
+msgstr "Сессия сохранена - %d файл(ов)"
+
+msgid "Session loaded - %d file(s)"
+msgstr "Сессия загружена - %d файл(ов)"
+
+msgid "Tabs sorted"
+msgstr "Вкладки отсортированы"
+
+msgid "%s (Windows only)"
+msgstr "%s (только Windows)"
+
+msgid "Encoding: %s (save to apply)"
+msgstr "Кодировка: %s (сохраните, чтобы применить)"
+
+msgid "Save As"
+msgstr "Сохранить как"
+
+msgid "Binary Clipboard (Windows only)"
+msgstr "Двоичный буфер обмена (только Windows)"
+
+msgid "Paste Binary Content (clipboard has no matching content)"
+msgstr "Вставить двоичное содержимое (в буфере обмена нет подходящего содержимого)"
+
+msgid "Paste Binary Content (Windows only)"
+msgstr "Вставить двоичное содержимое (только Windows)"
+
+msgid "Paste %s (Windows only)"
+msgstr "Вставить %s (только Windows)"
+
+msgid "Open Containing Folder (save the file first)"
+msgstr "Открыть содержащую папку (сначала сохраните файл)"
+
+msgid "Open in Default Viewer (save the file first)"
+msgstr "Открыть в программе просмотра по умолчанию (сначала сохраните файл)"
+
+msgid "Save a Copy As"
+msgstr "Сохранить копию как"
+
+msgid "Copy saved: %s"
+msgstr "Копия сохранена: %s"
+
+msgid "Rename (save the file first)"
+msgstr "Переименовать (сначала сохраните файл)"
+
+msgid "Move to Recycle Bin (save the file first)"
+msgstr "Переместить в корзину (сначала сохраните файл)"
+
+msgid "Read/Write"
+msgstr "Чтение/запись"
+
+msgid "Read-Only"
+msgstr "Только для чтения"
+
+msgid "Read-Only Attribute (save the file first)"
+msgstr "Атрибут «только для чтения» (сначала сохраните файл)"
+
+msgid "File attribute: Read-Only"
+msgstr "Атрибут файла: только для чтения"
+
+msgid "File attribute: Read/Write"
+msgstr "Атрибут файла: чтение/запись"
+
+msgid "Read-Only Attribute (Windows only)"
+msgstr "Атрибут «только для чтения» (только Windows)"
+
+msgid "Read/Write for All Documents"
+msgstr "Чтение/запись для всех документов"
+
+msgid "Begin/End Select (Column Mode): move the caret, then repeat to finish"
+msgstr "Выделение Начало/Конец (столбцовый режим): переместите курсор, затем повторите, чтобы завершить"
+
+msgid "Begin/End Select: move the caret, then repeat to finish"
+msgstr "Выделение Начало/Конец: переместите курсор, затем повторите, чтобы завершить"
+
+msgid "Select finished"
+msgstr "Выделение завершено"
+
+msgid "Found character 0x%02X at position %d"
+msgstr "Найден символ 0x%02X в позиции %d"
+
+msgid "No character in that range found"
+msgstr "Символ в этом диапазоне не найден"
+
+msgid "Open File (selection is not an existing path)"
+msgstr "Открыть файл (выделение не является существующим путём)"
+
+msgid "Always on Top: ON"
+msgstr "Поверх всех окон: ВКЛ"
+
+msgid "Always on Top: OFF"
+msgstr "Поверх всех окон: ВЫКЛ"
+
+msgid "Always on Top (Windows only)"
+msgstr "Поверх всех окон (только Windows)"
+
+msgid "File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d"
+msgstr "Файл: %s\n\nСимволы: %ld\nСлова: %ld\nСтроки: %d"
+
+msgid "Summary"
+msgstr "Сводка"
+
+msgid "Activate document:"
+msgstr "Активировать документ:"
+
+msgid "Windows"
+msgstr "Окна"
+
+msgid "%s copied to clipboard"
+msgstr "%s скопировано в буфер обмена"
+
+msgid "%s digest"
+msgstr "Хеш %s"
+
+msgid "%s - generate from files"
+msgstr "%s - создать из файлов"
+
+msgid "Found: %s"
+msgstr "Найдено: %s"
+
+msgid "Can't find: %s"
+msgstr "Не найдено: %s"
+
+msgid "No marks to jump to"
+msgstr "Нет меток для перехода"
+
+msgid "No marked text to copy"
+msgstr "Нет отмеченного текста для копирования"
+
+msgid "Copied %d marked range(s)"
+msgstr "Скопировано %d отмеченный(х) диапазон(ов)"
+
+msgid "Find in Files: nothing to search for"
+msgstr "Поиск в файлах: нечего искать"
+
+msgid "Find in Files: no such directory - %s"
+msgstr "Поиск в файлах: такого каталога нет - %s"
+
+msgid "Replace in Files: %d occurrence(s) in %d file(s)"
+msgstr "Замена в файлах: %d вхождение(й) в %d файле(ах)"
+
+msgid "Find in Files: %d hit(s) in %d / %d file(s)"
+msgstr "Поиск в файлах: %d совпадений в %d / %d файлах"
+
+msgid "No search results yet - run Find in Files or Find All first"
+msgstr "Пока нет результатов поиска - сначала выполните «Поиск в файлах» или «Найти всё»"
+
+msgid "Count: %d match(es)"
+msgstr "Количество: %d совпадений"
+
+msgid "Replaced %d occurrence(s)"
+msgstr "Заменено %d вхождение(й)"
+
+msgid "Marked %d match(es)"
+msgstr "Отмечено %d совпадений"
+
+msgid "Recording macro..."
+msgstr "Запись макроса..."
+
+msgid "Macro recorded - %d step(s)"
+msgstr "Макрос записан - %d шаг(ов)"
+
+msgid "Macro name:"
+msgstr "Имя макроса:"
+
+msgid "Macro updated: %s"
+msgstr "Макрос обновлён: %s"
+
+msgid "Macro saved: %s"
+msgstr "Макрос сохранён: %s"
+
+msgid "Theme styles saved"
+msgstr "Стили темы сохранены"
+
+msgid "Import style theme(s)"
+msgstr "Импортировать тему(ы) стилей"
+
+msgid "Imported %d theme(s) - choose them in Style Configurator"
+msgstr "Импортировано %d тем(ы) - выберите их в конфигураторе стилей"
+
+msgid "Import plugin(s)"
+msgstr "Импортировать плагин(ы)"
+
+msgid "Plugin files (*.dll)|*.dll"
+msgstr "Файлы плагинов (*.dll)|*.dll"
+
+msgid "Plugin files (*.dylib)|*.dylib"
+msgstr "Файлы плагинов (*.dylib)|*.dylib"
+
+msgid "Plugin files (*.so)|*.so"
+msgstr "Файлы плагинов (*.so)|*.so"
+
+msgid "%d plugin(s) imported. Restart wxNotepad++ now to load them?"
+msgstr "Импортировано %d плагин(ов). Перезапустить wxNotepad++ сейчас, чтобы загрузить их?"
+
+msgid "Imported %d plugin(s) - restart to load them"
+msgstr "Импортировано %d плагин(ов) - перезапустите, чтобы загрузить их"
+
+msgid "%s - not yet implemented in this build"
+msgstr "%s - пока не реализовано в этой сборке"
+
+msgid "There was a problem printing.\nPerhaps your current printer is not set up correctly."
+msgstr "Возникла проблема при печати.\nВозможно, ваш текущий принтер настроен неверно."
+
+msgid "Printed %s"
+msgstr "Напечатано: %s"
+
+msgid "Change History (needs a newer Scintilla than this wx build carries)"
+msgstr "История изменений (требуется более новая Scintilla, чем в этой сборке wx)"
+
+msgid "User-Defined Language dialog"
+msgstr "Диалог языка, определённого пользователем"
+
+msgid "Marked %d - style 1"
+msgstr "Отмечено %d - стиль 1"
+
+msgid "Marked %d - style 2"
+msgstr "Отмечено %d - стиль 2"
+
+msgid "Marked %d - style 3"
+msgstr "Отмечено %d - стиль 3"
+
+msgid "Marked %d - style 4"
+msgstr "Отмечено %d - стиль 4"
+
+msgid "Marked %d - style 5"
+msgstr "Отмечено %d - стиль 5"
+
+msgid "wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgstr "wxNotepad++ (экспериментальный форк wxWidgets)\n\nwxWidgets %d.%d.%d\n%s\n\nИсполняемый файл:\n%s"
+
+msgid "Debug Info"
+msgstr "Отладочная информация"
+
+msgid "Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs."
+msgstr "Использование: wxnpp [файлы...]\n\nФайлы, указанные в командной строке, открываются во вкладках."
+
+msgid "Command Line Arguments"
+msgstr "Аргументы командной строки"
+
+msgid "Toolbar icon style:"
+msgstr "Стиль значков панели инструментов:"
+
+msgid "Line icons (default)"
+msgstr "Контурные значки (по умолчанию)"
+
+msgid "Colored icons"
+msgstr "Цветные значки"
+
+msgid "Fatcow icons"
+msgstr "Значки Fatcow"
+
+msgid "Fugue icons"
+msgstr "Значки Fugue"
+
+msgid "Solar icons (green)"
+msgstr "Значки Solar (зелёные)"
+
+msgid "IconPark icons (teal/lime)"
+msgstr "Значки IconPark (бирюзово-лаймовые)"
+
+msgid "Line icons (Tabler)"
+msgstr "Контурные значки (Tabler)"
+
+msgid "IconPark Bold icons (teal/lime)"
+msgstr "Жирные значки IconPark (бирюзово-лаймовые)"
+
+msgid "Tabler icons (line)"
+msgstr "Значки Tabler (контурные)"

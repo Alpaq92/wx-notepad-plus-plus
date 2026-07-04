@@ -55,3 +55,4 @@ $RECYCLE.BIN/
 *.DS_Store
 *~
 *.swp
+__pycache__/

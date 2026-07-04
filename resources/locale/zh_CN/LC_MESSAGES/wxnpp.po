@@ -1,0 +1,2107 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: wxNotepad++\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_CN\n"
+
+msgid "&New\tCtrl+N"
+msgstr "新建(&N)\tCtrl+N"
+
+msgid "&Open...\tCtrl+O"
+msgstr "打开(&O)...\tCtrl+O"
+
+msgid "Explorer"
+msgstr "Explorer"
+
+msgid "cmd"
+msgstr "cmd"
+
+msgid "PowerShell"
+msgstr "PowerShell"
+
+msgid "Folder as Workspace"
+msgstr "文件夹作为工作区"
+
+msgid "Open Containing &Folder"
+msgstr "打开所在文件夹(&F)"
+
+msgid "Open in &Default Viewer"
+msgstr "用默认查看器打开(&D)"
+
+msgid "Open Folder as &Workspace..."
+msgstr "打开文件夹作为工作区(&W)..."
+
+msgid "Re&load from Disk"
+msgstr "从磁盘重新载入(&L)"
+
+msgid "&Save\tCtrl+S"
+msgstr "保存(&S)\tCtrl+S"
+
+msgid "Save &As...\tCtrl+Alt+S"
+msgstr "另存为(&A)...\tCtrl+Alt+S"
+
+msgid "Save a Cop&y As..."
+msgstr "另存副本为(&Y)..."
+
+msgid "Sa&ve All\tCtrl+Shift+S"
+msgstr "全部保存(&V)\tCtrl+Shift+S"
+
+msgid "&Rename..."
+msgstr "重命名(&R)..."
+
+msgid "&Close\tCtrl+W"
+msgstr "关闭(&C)\tCtrl+W"
+
+msgid "Clos&e All\tCtrl+Shift+W"
+msgstr "全部关闭(&E)\tCtrl+Shift+W"
+
+msgid "Close All but Active Document"
+msgstr "关闭除当前文档外的所有文档"
+
+msgid "Close All but Pinned Documents"
+msgstr "关闭除固定文档外的所有文档"
+
+msgid "Close All to the Left"
+msgstr "关闭左侧所有文档"
+
+msgid "Close All to the Right"
+msgstr "关闭右侧所有文档"
+
+msgid "Close All Unchanged"
+msgstr "关闭所有未更改的文档"
+
+msgid "Close &Multiple Documents"
+msgstr "关闭多个文档(&M)"
+
+msgid "Restore Recent Closed File\tCtrl+Shift+T"
+msgstr "恢复最近关闭的文件\tCtrl+Shift+T"
+
+msgid "Move to Recycle &Bin"
+msgstr "移至回收站(&B)"
+
+msgid "Load Sess&ion..."
+msgstr "载入会话(&I)..."
+
+msgid "Save Sess&ion..."
+msgstr "保存会话(&I)..."
+
+msgid "&Print...\tCtrl+P"
+msgstr "打印(&P)...\tCtrl+P"
+
+msgid "Print No&w"
+msgstr "立即打印(&W)"
+
+msgid "E&xit\tAlt+F4"
+msgstr "退出(&X)\tAlt+F4"
+
+msgid "&File"
+msgstr "文件(&F)"
+
+msgid "&Undo\tCtrl+Z"
+msgstr "撤销(&U)\tCtrl+Z"
+
+msgid "&Redo\tCtrl+Y"
+msgstr "重做(&R)\tCtrl+Y"
+
+msgid "Cu&t\tCtrl+X"
+msgstr "剪切(&T)\tCtrl+X"
+
+msgid "&Copy\tCtrl+C"
+msgstr "复制(&C)\tCtrl+C"
+
+msgid "&Paste\tCtrl+V"
+msgstr "粘贴(&P)\tCtrl+V"
+
+msgid "&Delete\tDel"
+msgstr "删除(&D)\tDel"
+
+msgid "&Select All\tCtrl+A"
+msgstr "全选(&S)\tCtrl+A"
+
+msgid "Begin/End &Select"
+msgstr "开始/结束选择(&S)"
+
+msgid "Begin/End Select in Column Mode"
+msgstr "列模式下开始/结束选择"
+
+msgid "Date Time (short)"
+msgstr "日期时间(短格式)"
+
+msgid "Date Time (long)"
+msgstr "日期时间(长格式)"
+
+msgid "Date Time (customized)"
+msgstr "日期时间(自定义格式)"
+
+msgid "Insert"
+msgstr "插入"
+
+msgid "Copy Current Full File path"
+msgstr "复制当前文件完整路径"
+
+msgid "Copy Current Filename"
+msgstr "复制当前文件名"
+
+msgid "Copy Current Dir. Path"
+msgstr "复制当前目录路径"
+
+msgid "Copy All Filenames"
+msgstr "复制所有文件名"
+
+msgid "Copy All File Paths"
+msgstr "复制所有文件路径"
+
+msgid "Cop&y to Clipboard"
+msgstr "复制到剪贴板(&Y)"
+
+msgid "Increase Line Indent"
+msgstr "增加行缩进"
+
+msgid "Decrease Line Indent"
+msgstr "减少行缩进"
+
+msgid "&Indent"
+msgstr "缩进(&I)"
+
+msgid "&UPPERCASE\tCtrl+Shift+U"
+msgstr "转换为大写(&U)\tCtrl+Shift+U"
+
+msgid "&lowercase\tCtrl+U"
+msgstr "转换为小写(&L)\tCtrl+U"
+
+msgid "&Proper Case"
+msgstr "单词首字母大写(&P)"
+
+msgid "Proper Case (blend)"
+msgstr "单词首字母大写(混合)"
+
+msgid "&Sentence case"
+msgstr "句首字母大写(&S)"
+
+msgid "Sentence case (blend)"
+msgstr "句首字母大写(混合)"
+
+msgid "&iNVERT cASE"
+msgstr "反转大小写(&I)"
+
+msgid "&ranDOm CasE"
+msgstr "随机大小写(&R)"
+
+msgid "Con&vert Case to"
+msgstr "转换大小写(&V)"
+
+msgid "Duplicate Current Line\tCtrl+D"
+msgstr "复制当前行\tCtrl+D"
+
+msgid "Remove Duplicate Lines"
+msgstr "删除重复行"
+
+msgid "Remove Consecutive Duplicate Lines"
+msgstr "删除连续重复行"
+
+msgid "Split Lines\tCtrl+I"
+msgstr "拆分行\tCtrl+I"
+
+msgid "Join Lines\tCtrl+J"
+msgstr "合并行\tCtrl+J"
+
+msgid "Move Up Current Line\tCtrl+Shift+Up"
+msgstr "上移当前行\tCtrl+Shift+Up"
+
+msgid "Move Down Current Line\tCtrl+Shift+Down"
+msgstr "下移当前行\tCtrl+Shift+Down"
+
+msgid "Remove Empty Lines"
+msgstr "删除空行"
+
+msgid "Remove Empty Lines (Containing Blank characters)"
+msgstr "删除空行(含空白字符)"
+
+msgid "Insert Blank Line Above Current"
+msgstr "在当前行上方插入空行"
+
+msgid "Insert Blank Line Below Current"
+msgstr "在当前行下方插入空行"
+
+msgid "Reverse Line Order"
+msgstr "反转行顺序"
+
+msgid "Randomize Line Order"
+msgstr "随机打乱行顺序"
+
+msgid "Sort Lines Lexicographically Ascending"
+msgstr "按字典顺序升序排序行"
+
+msgid "Sort Lines Lex. Ascending Ignoring Case"
+msgstr "按字典顺序升序排序行(忽略大小写)"
+
+msgid "Sort Lines In Locale Order Ascending"
+msgstr "按区域设置顺序升序排序行"
+
+msgid "Sort Lines As Integers Ascending"
+msgstr "按整数升序排序行"
+
+msgid "Sort Lines As Decimals (Comma) Ascending"
+msgstr "按小数(逗号)升序排序行"
+
+msgid "Sort Lines As Decimals (Dot) Ascending"
+msgstr "按小数(点)升序排序行"
+
+msgid "Sort Lines By Length Ascending"
+msgstr "按长度升序排序行"
+
+msgid "Sort Lines Lexicographically Descending"
+msgstr "按字典顺序降序排序行"
+
+msgid "Sort Lines Lex. Descending Ignoring Case"
+msgstr "按字典顺序降序排序行(忽略大小写)"
+
+msgid "Sort Lines In Locale Order Descending"
+msgstr "按区域设置顺序降序排序行"
+
+msgid "Sort Lines As Integers Descending"
+msgstr "按整数降序排序行"
+
+msgid "Sort Lines As Decimals (Comma) Descending"
+msgstr "按小数(逗号)降序排序行"
+
+msgid "Sort Lines As Decimals (Dot) Descending"
+msgstr "按小数(点)降序排序行"
+
+msgid "Sort Lines By Length Descending"
+msgstr "按长度降序排序行"
+
+msgid "&Line Operations"
+msgstr "行操作(&L)"
+
+msgid "Toggle Single Line Comment\tCtrl+Q"
+msgstr "切换单行注释\tCtrl+Q"
+
+msgid "Single Line Comment"
+msgstr "添加单行注释"
+
+msgid "Single Line Uncomment"
+msgstr "取消单行注释"
+
+msgid "Block Comment\tCtrl+Shift+Q"
+msgstr "区块注释\tCtrl+Shift+Q"
+
+msgid "Block Uncomment"
+msgstr "取消区块注释"
+
+msgid "Co&mment/Uncomment"
+msgstr "注释/取消注释(&M)"
+
+msgid "Function Completion\tCtrl+Space"
+msgstr "函数自动完成\tCtrl+Space"
+
+msgid "Word Completion"
+msgstr "单词自动完成"
+
+msgid "Function Parameters Hint"
+msgstr "函数参数提示"
+
+msgid "Function Parameters Previous Hint"
+msgstr "上一个函数参数提示"
+
+msgid "Function Parameters Next Hint"
+msgstr "下一个函数参数提示"
+
+msgid "Path Completion"
+msgstr "路径自动完成"
+
+msgid "&Auto-Completion"
+msgstr "自动完成(&A)"
+
+msgid "Windows (CR LF)"
+msgstr "Windows (CR LF)"
+
+msgid "Unix (LF)"
+msgstr "Unix (LF)"
+
+msgid "Macintosh (CR)"
+msgstr "Macintosh (CR)"
+
+msgid "&EOL Conversion"
+msgstr "行尾格式转换(&E)"
+
+msgid "Trim Trailing Space"
+msgstr "删除行尾空格"
+
+msgid "Trim Leading Space"
+msgstr "删除行首空格"
+
+msgid "Trim Leading and Trailing Space"
+msgstr "删除行首和行尾空格"
+
+msgid "EOL to Space"
+msgstr "行尾符转为空格"
+
+msgid "Trim both and EOL to Space"
+msgstr "删除首尾空格并将行尾符转为空格"
+
+msgid "TAB to Space"
+msgstr "TAB 转为空格"
+
+msgid "Space to TAB (All)"
+msgstr "空格转为 TAB (全部)"
+
+msgid "Space to TAB (Leading)"
+msgstr "空格转为 TAB (行首)"
+
+msgid "&Blank Operations"
+msgstr "空白字符操作(&B)"
+
+msgid "Paste HTML Content"
+msgstr "粘贴 HTML 内容"
+
+msgid "Paste RTF Content"
+msgstr "粘贴 RTF 内容"
+
+msgid "Copy Binary Content"
+msgstr "复制二进制内容"
+
+msgid "Cut Binary Content"
+msgstr "剪切二进制内容"
+
+msgid "Paste Binary Content"
+msgstr "粘贴二进制内容"
+
+msgid "&Paste Special"
+msgstr "选择性粘贴(&P)"
+
+msgid "Open File"
+msgstr "打开文件"
+
+msgid "Open Containing Folder in Explorer"
+msgstr "在资源管理器中打开所在文件夹"
+
+msgid "&Redact Selection █ (Shift: ●)"
+msgstr "涂黑所选内容(&R) █ (Shift: ●)"
+
+msgid "Search on Internet"
+msgstr "在互联网上搜索"
+
+msgid "Change Search Engine..."
+msgstr "更改搜索引擎..."
+
+msgid "&On Selection"
+msgstr "选中内容(&O)"
+
+msgid "Ignore Case && Whole Word"
+msgstr "忽略大小写 && 全词匹配"
+
+msgid "Match Case Only"
+msgstr "仅区分大小写"
+
+msgid "Match Whole Word Only"
+msgstr "仅全词匹配"
+
+msgid "Match Case && Whole Word"
+msgstr "区分大小写 && 全词匹配"
+
+msgid "Multi-select All"
+msgstr "多选全部"
+
+msgid "Multi-select Next"
+msgstr "多选下一个"
+
+msgid "Undo the Latest Added Multi-Select"
+msgstr "撤销最近添加的多选"
+
+msgid "Skip Current && Go to Next Multi-select"
+msgstr "跳过当前 && 转到下一个多选"
+
+msgid "Column Mode..."
+msgstr "列块模式..."
+
+msgid "Colum&n Editor...\tAlt+C"
+msgstr "列块编辑(&N)...\tAlt+C"
+
+msgid "Character &Panel"
+msgstr "字符面板(&P)"
+
+msgid "Clipboard &History"
+msgstr "剪贴板历史(&H)"
+
+msgid "Read-Only on Current Document"
+msgstr "当前文档只读"
+
+msgid "Read-Only for All Documents"
+msgstr "所有文档只读"
+
+msgid "Clear Read-Only for All Documents"
+msgstr "清除所有文档的只读状态"
+
+msgid "Read-&Only"
+msgstr "只读(&O)"
+
+msgid "Read-Only Attribute in Windows"
+msgstr "Windows 中的只读属性"
+
+msgid "&Edit"
+msgstr "编辑(&E)"
+
+msgid "&Find...\tCtrl+F"
+msgstr "查找(&F)...\tCtrl+F"
+
+msgid "Find in Fi&les...\tCtrl+Shift+F"
+msgstr "在文件中查找(&L)...\tCtrl+Shift+F"
+
+msgid "Find &Next\tF3"
+msgstr "查找下一个(&N)\tF3"
+
+msgid "Find &Previous\tShift+F3"
+msgstr "查找上一个(&P)\tShift+F3"
+
+msgid "&Select and Find Next\tCtrl+F3"
+msgstr "选定并查找下一个(&S)\tCtrl+F3"
+
+msgid "&Select and Find Previous\tCtrl+Shift+F3"
+msgstr "选定并查找上一个(&S)\tCtrl+Shift+F3"
+
+msgid "Find (&Volatile) Next"
+msgstr "快速查找下一个(&V)"
+
+msgid "Find (&Volatile) Previous"
+msgstr "快速查找上一个(&V)"
+
+msgid "&Replace...\tCtrl+H"
+msgstr "替换(&R)...\tCtrl+H"
+
+msgid "&Incremental Search\tCtrl+Alt+I"
+msgstr "增量查找(&I)\tCtrl+Alt+I"
+
+msgid "Search Results &Window\tF7"
+msgstr "搜索结果窗口(&W)\tF7"
+
+msgid "Next Search Resul&t\tF4"
+msgstr "下一个搜索结果(&T)\tF4"
+
+msgid "Previous Search Resul&t\tShift+F4"
+msgstr "上一个搜索结果(&T)\tShift+F4"
+
+msgid "&Go to...\tCtrl+G"
+msgstr "转到(&G)...\tCtrl+G"
+
+msgid "Go to &Matching Brace\tCtrl+B"
+msgstr "转到匹配的括号(&M)\tCtrl+B"
+
+msgid "Select All In-betw&een {} [] or ()"
+msgstr "选择 {} [] 或 () 之间的全部内容(&E)"
+
+msgid "Mar&k..."
+msgstr "标记(&K)..."
+
+msgid "Go to Next Change"
+msgstr "转到下一处更改"
+
+msgid "Go to Previous Change"
+msgstr "转到上一处更改"
+
+msgid "Clear Change History"
+msgstr "清除更改历史"
+
+msgid "Change History"
+msgstr "更改历史"
+
+msgid "Using 1st Style"
+msgstr "使用第 1 种样式"
+
+msgid "Using 2nd Style"
+msgstr "使用第 2 种样式"
+
+msgid "Using 3rd Style"
+msgstr "使用第 3 种样式"
+
+msgid "Using 4th Style"
+msgstr "使用第 4 种样式"
+
+msgid "Using 5th Style"
+msgstr "使用第 5 种样式"
+
+msgid "Style &All Occurrences of Token"
+msgstr "标记所有匹配字词(&A)"
+
+msgid "Style &One Token"
+msgstr "标记单个字词(&O)"
+
+msgid "Clear 1st Style"
+msgstr "清除第 1 种样式"
+
+msgid "Clear 2nd Style"
+msgstr "清除第 2 种样式"
+
+msgid "Clear 3rd Style"
+msgstr "清除第 3 种样式"
+
+msgid "Clear 4th Style"
+msgstr "清除第 4 种样式"
+
+msgid "Clear 5th Style"
+msgstr "清除第 5 种样式"
+
+msgid "Clear all Styles"
+msgstr "清除所有样式"
+
+msgid "Clear Style"
+msgstr "清除样式"
+
+msgid "1st Style"
+msgstr "第 1 种样式"
+
+msgid "2nd Style"
+msgstr "第 2 种样式"
+
+msgid "3rd Style"
+msgstr "第 3 种样式"
+
+msgid "4th Style"
+msgstr "第 4 种样式"
+
+msgid "5th Style"
+msgstr "第 5 种样式"
+
+msgid "Find Mark Style"
+msgstr "查找标记样式"
+
+msgid "&Jump Up"
+msgstr "向上跳转(&J)"
+
+msgid "Jump &Down"
+msgstr "向下跳转(&D)"
+
+msgid "All Styles"
+msgstr "所有样式"
+
+msgid "&Copy Styled Text"
+msgstr "复制带样式的文本(&C)"
+
+msgid "Toggle Bookmark\tCtrl+F2"
+msgstr "切换书签\tCtrl+F2"
+
+msgid "Next Bookmark\tF2"
+msgstr "下一个书签\tF2"
+
+msgid "Previous Bookmark\tShift+F2"
+msgstr "上一个书签\tShift+F2"
+
+msgid "Clear All Bookmarks"
+msgstr "清除所有书签"
+
+msgid "Cut Bookmarked Lines"
+msgstr "剪切书签行"
+
+msgid "Copy Bookmarked Lines"
+msgstr "复制书签行"
+
+msgid "Paste to (Replace) Bookmarked Lines"
+msgstr "粘贴以替换书签行"
+
+msgid "Remove Bookmarked Lines"
+msgstr "删除书签行"
+
+msgid "Remove Non-Bookmarked Lines"
+msgstr "删除非书签行"
+
+msgid "Inverse Bookmarks"
+msgstr "反转书签"
+
+msgid "&Bookmark"
+msgstr "书签(&B)"
+
+msgid "Find characters in rang&e..."
+msgstr "查找范围内的字符(&E)..."
+
+msgid "&Search"
+msgstr "搜索(&S)"
+
+msgid "Always on &Top"
+msgstr "总在最前(&T)"
+
+msgid "To&ggle Full Screen Mode\tF11"
+msgstr "切换全屏模式(&G)\tF11"
+
+msgid "&Post-It\tF12"
+msgstr "便签模式(&P)\tF12"
+
+msgid "D&istraction Free Mode"
+msgstr "专注模式(&I)"
+
+msgid "&Firefox"
+msgstr "Firefox(&F)"
+
+msgid "&Chrome"
+msgstr "Chrome(&C)"
+
+msgid "&Edge"
+msgstr "Edge(&E)"
+
+msgid "&IE"
+msgstr "IE(&I)"
+
+msgid "&View Current File in"
+msgstr "用其他程序查看当前文件(&V)"
+
+msgid "Show Space and Tab"
+msgstr "显示空格和制表符"
+
+msgid "Show End of Line"
+msgstr "显示行尾符"
+
+msgid "Show Non-Printing Characters"
+msgstr "显示非打印字符"
+
+msgid "Show Control Characters && Unicode EOL"
+msgstr "显示控制字符 && Unicode 行尾符"
+
+msgid "Show All Characters"
+msgstr "显示所有字符"
+
+msgid "Show Indent Guide"
+msgstr "显示缩进参考线"
+
+msgid "Show Wrap Symbol"
+msgstr "显示自动换行符号"
+
+msgid "Show S&ymbol"
+msgstr "显示符号(&Y)"
+
+msgid "Zoom &In (Ctrl+Mouse Wheel Up)"
+msgstr "放大(&I) (Ctrl+鼠标滚轮向上)"
+
+msgid "Zoom &Out (Ctrl+Mouse Wheel Down)"
+msgstr "缩小(&O) (Ctrl+鼠标滚轮向下)"
+
+msgid "&Restore Default Zoom"
+msgstr "恢复默认缩放(&R)"
+
+msgid "&Zoom"
+msgstr "缩放(&Z)"
+
+msgid "Move to Other &View"
+msgstr "移动到另一视图(&V)"
+
+msgid "Clone to Other Vie&w"
+msgstr "克隆到另一视图(&W)"
+
+msgid "Mo&ve to New Instance"
+msgstr "移动到新实例(&V)"
+
+msgid "&Open in New Instance"
+msgstr "在新实例中打开(&O)"
+
+msgid "&Move/Clone Current Document"
+msgstr "移动/克隆当前文档(&M)"
+
+msgid "1st Tab\tCtrl+1"
+msgstr "第 1 个标签\tCtrl+1"
+
+msgid "2nd Tab\tCtrl+2"
+msgstr "第 2 个标签\tCtrl+2"
+
+msgid "3rd Tab\tCtrl+3"
+msgstr "第 3 个标签\tCtrl+3"
+
+msgid "4th Tab\tCtrl+4"
+msgstr "第 4 个标签\tCtrl+4"
+
+msgid "5th Tab\tCtrl+5"
+msgstr "第 5 个标签\tCtrl+5"
+
+msgid "6th Tab\tCtrl+6"
+msgstr "第 6 个标签\tCtrl+6"
+
+msgid "7th Tab\tCtrl+7"
+msgstr "第 7 个标签\tCtrl+7"
+
+msgid "8th Tab\tCtrl+8"
+msgstr "第 8 个标签\tCtrl+8"
+
+msgid "9th Tab\tCtrl+9"
+msgstr "第 9 个标签\tCtrl+9"
+
+msgid "First Tab"
+msgstr "第一个标签"
+
+msgid "Last Tab"
+msgstr "最后一个标签"
+
+msgid "Next Tab\tCtrl+Tab"
+msgstr "下一个标签\tCtrl+Tab"
+
+msgid "Previous Tab\tCtrl+Shift+Tab"
+msgstr "上一个标签\tCtrl+Shift+Tab"
+
+msgid "Move to Start"
+msgstr "移到开头"
+
+msgid "Move to End"
+msgstr "移到末尾"
+
+msgid "Move Tab Forward"
+msgstr "标签前移"
+
+msgid "Move Tab Backward"
+msgstr "标签后移"
+
+msgid "Apply Color 1"
+msgstr "应用颜色 1"
+
+msgid "Apply Color 2"
+msgstr "应用颜色 2"
+
+msgid "Apply Color 3"
+msgstr "应用颜色 3"
+
+msgid "Apply Color 4"
+msgstr "应用颜色 4"
+
+msgid "Apply Color 5"
+msgstr "应用颜色 5"
+
+msgid "Remove Color"
+msgstr "移除颜色"
+
+msgid "Ta&b"
+msgstr "标签(&B)"
+
+msgid "&Word wrap"
+msgstr "自动换行(&W)"
+
+msgid "&Hide Lines"
+msgstr "隐藏行(&H)"
+
+msgid "Fold All\tAlt+0"
+msgstr "全部折叠\tAlt+0"
+
+msgid "Unfold All\tAlt+Shift+0"
+msgstr "全部展开\tAlt+Shift+0"
+
+msgid "Fold Current Level\tCtrl+Alt+F"
+msgstr "折叠当前层级\tCtrl+Alt+F"
+
+msgid "Unfold Current Level\tCtrl+Alt+Shift+F"
+msgstr "展开当前层级\tCtrl+Alt+Shift+F"
+
+msgid "1\tAlt+1"
+msgstr "1\tAlt+1"
+
+msgid "2\tAlt+2"
+msgstr "2\tAlt+2"
+
+msgid "3\tAlt+3"
+msgstr "3\tAlt+3"
+
+msgid "4\tAlt+4"
+msgstr "4\tAlt+4"
+
+msgid "5\tAlt+5"
+msgstr "5\tAlt+5"
+
+msgid "6\tAlt+6"
+msgstr "6\tAlt+6"
+
+msgid "7\tAlt+7"
+msgstr "7\tAlt+7"
+
+msgid "8\tAlt+8"
+msgstr "8\tAlt+8"
+
+msgid "Fold Level"
+msgstr "折叠层级"
+
+msgid "1\tAlt+Shift+1"
+msgstr "1\tAlt+Shift+1"
+
+msgid "2\tAlt+Shift+2"
+msgstr "2\tAlt+Shift+2"
+
+msgid "3\tAlt+Shift+3"
+msgstr "3\tAlt+Shift+3"
+
+msgid "4\tAlt+Shift+4"
+msgstr "4\tAlt+Shift+4"
+
+msgid "5\tAlt+Shift+5"
+msgstr "5\tAlt+Shift+5"
+
+msgid "6\tAlt+Shift+6"
+msgstr "6\tAlt+Shift+6"
+
+msgid "7\tAlt+Shift+7"
+msgstr "7\tAlt+Shift+7"
+
+msgid "8\tAlt+Shift+8"
+msgstr "8\tAlt+Shift+8"
+
+msgid "Unfold Level"
+msgstr "展开层级"
+
+msgid "&Summary..."
+msgstr "摘要(&S)..."
+
+msgid "Project Panel &1"
+msgstr "项目面板 &1"
+
+msgid "Project Panel &2"
+msgstr "项目面板 &2"
+
+msgid "Project Panel &3"
+msgstr "项目面板 &3"
+
+msgid "Pro&ject Panels"
+msgstr "项目面板(&J)"
+
+msgid "Folder as Wor&kspace"
+msgstr "文件夹作为工作区(&K)"
+
+msgid "&Document Map"
+msgstr "文档缩略图(&D)"
+
+msgid "D&ocument List"
+msgstr "文档列表(&O)"
+
+msgid "Function &List"
+msgstr "函数列表(&L)"
+
+msgid "T&ext Direction RTL"
+msgstr "文字方向从右到左(&E)"
+
+msgid "Te&xt Direction LTR"
+msgstr "文字方向从左到右(&X)"
+
+msgid "Monito&ring (tail -f)"
+msgstr "监视(&R) (tail -f)"
+
+msgid "&View"
+msgstr "视图(&V)"
+
+msgid "ANSI"
+msgstr "ANSI"
+
+msgid "UTF-8"
+msgstr "UTF-8"
+
+msgid "UTF-8-BOM"
+msgstr "UTF-8-BOM"
+
+msgid "UTF-16 BE BOM"
+msgstr "UTF-16 BE BOM"
+
+msgid "UTF-16 LE BOM"
+msgstr "UTF-16 LE BOM"
+
+msgid "ISO 8859-6"
+msgstr "ISO 8859-6"
+
+msgid "OEM 720"
+msgstr "OEM 720"
+
+msgid "Windows-1256"
+msgstr "Windows-1256"
+
+msgid "Arabic"
+msgstr "阿拉伯语"
+
+msgid "ISO 8859-4"
+msgstr "ISO 8859-4"
+
+msgid "ISO 8859-13"
+msgstr "ISO 8859-13"
+
+msgid "OEM 775"
+msgstr "OEM 775"
+
+msgid "Windows-1257"
+msgstr "Windows-1257"
+
+msgid "Baltic"
+msgstr "波罗的海语"
+
+msgid "ISO 8859-14"
+msgstr "ISO 8859-14"
+
+msgid "Celtic"
+msgstr "凯尔特语"
+
+msgid "ISO 8859-5"
+msgstr "ISO 8859-5"
+
+msgid "KOI8-R"
+msgstr "KOI8-R"
+
+msgid "KOI8-U"
+msgstr "KOI8-U"
+
+msgid "Macintosh"
+msgstr "Macintosh"
+
+msgid "OEM 855"
+msgstr "OEM 855"
+
+msgid "OEM 866"
+msgstr "OEM 866"
+
+msgid "Windows-1251"
+msgstr "Windows-1251"
+
+msgid "Cyrillic"
+msgstr "西里尔语"
+
+msgid "OEM 852"
+msgstr "OEM 852"
+
+msgid "Windows-1250"
+msgstr "Windows-1250"
+
+msgid "Central European"
+msgstr "中欧"
+
+msgid "Big5 (Traditional)"
+msgstr "Big5 (繁体)"
+
+msgid "GB2312 (Simplified)"
+msgstr "GB2312 (简体)"
+
+msgid "Chinese"
+msgstr "中文"
+
+msgid "ISO 8859-2"
+msgstr "ISO 8859-2"
+
+msgid "Eastern European"
+msgstr "东欧"
+
+msgid "ISO 8859-7"
+msgstr "ISO 8859-7"
+
+msgid "OEM 737"
+msgstr "OEM 737"
+
+msgid "OEM 869"
+msgstr "OEM 869"
+
+msgid "Windows-1253"
+msgstr "Windows-1253"
+
+msgid "Greek"
+msgstr "希腊语"
+
+msgid "ISO 8859-8"
+msgstr "ISO 8859-8"
+
+msgid "OEM 862"
+msgstr "OEM 862"
+
+msgid "Windows-1255"
+msgstr "Windows-1255"
+
+msgid "Hebrew"
+msgstr "希伯来语"
+
+msgid "Shift-JIS"
+msgstr "Shift-JIS"
+
+msgid "Japanese"
+msgstr "日语"
+
+msgid "Windows 949"
+msgstr "Windows 949"
+
+msgid "EUC-KR"
+msgstr "EUC-KR"
+
+msgid "Korean"
+msgstr "韩语"
+
+msgid "OEM 861 : Icelandic"
+msgstr "OEM 861 : 冰岛语"
+
+msgid "OEM 865 : Nordic"
+msgstr "OEM 865 : 北欧"
+
+msgid "North European"
+msgstr "北欧"
+
+msgid "TIS-620"
+msgstr "TIS-620"
+
+msgid "Thai"
+msgstr "泰语"
+
+msgid "ISO 8859-3"
+msgstr "ISO 8859-3"
+
+msgid "ISO 8859-9"
+msgstr "ISO 8859-9"
+
+msgid "OEM 857"
+msgstr "OEM 857"
+
+msgid "Windows-1254"
+msgstr "Windows-1254"
+
+msgid "Turkish"
+msgstr "土耳其语"
+
+msgid "ISO 8859-1"
+msgstr "ISO 8859-1"
+
+msgid "ISO 8859-15"
+msgstr "ISO 8859-15"
+
+msgid "OEM 850"
+msgstr "OEM 850"
+
+msgid "OEM 858"
+msgstr "OEM 858"
+
+msgid "OEM 860 : Portuguese"
+msgstr "OEM 860 : 葡萄牙语"
+
+msgid "OEM 863 : French"
+msgstr "OEM 863 : 法语"
+
+msgid "OEM-US"
+msgstr "OEM-US"
+
+msgid "Windows-1252"
+msgstr "Windows-1252"
+
+msgid "Western European"
+msgstr "西欧"
+
+msgid "Windows-1258"
+msgstr "Windows-1258"
+
+msgid "Vietnamese"
+msgstr "越南语"
+
+msgid "Character sets"
+msgstr "字符集"
+
+msgid "Convert to ANSI"
+msgstr "转为 ANSI 编码"
+
+msgid "Convert to UTF-8"
+msgstr "转为 UTF-8 编码"
+
+msgid "Convert to UTF-8-BOM"
+msgstr "转为 UTF-8-BOM 编码"
+
+msgid "Convert to UTF-16 BE BOM"
+msgstr "转为 UTF-16 BE BOM 编码"
+
+msgid "Convert to UTF-16 LE BOM"
+msgstr "转为 UTF-16 LE BOM 编码"
+
+msgid "E&ncoding"
+msgstr "编码(&N)"
+
+msgid "None (Normal Text)"
+msgstr "无 (普通文本)"
+
+msgid "Define your language..."
+msgstr "自定义语言格式..."
+
+msgid "Open User Defined Language folder..."
+msgstr "打开用户自定义语言文件夹..."
+
+msgid "Notepad++ User Defined Languages Collection"
+msgstr "Notepad++ 用户自定义语言合集"
+
+msgid "User Defined Language"
+msgstr "用户自定义语言"
+
+msgid "User-Defined"
+msgstr "用户自定义"
+
+msgid "&Language"
+msgstr "语言(&L)"
+
+msgid "Preferences..."
+msgstr "首选项..."
+
+msgid "Style Configurator..."
+msgstr "语言格式设置..."
+
+msgid "Shortcut Mapper..."
+msgstr "管理快捷键..."
+
+msgid "Import plugin(s)..."
+msgstr "导入插件..."
+
+msgid "Import style theme(s)..."
+msgstr "导入样式主题..."
+
+msgid "Import"
+msgstr "导入"
+
+msgid "Edit Popup ContextMenu"
+msgstr "编辑右键菜单"
+
+msgid "&Dark Mode"
+msgstr "深色模式(&D)"
+
+msgid "Se&ttings"
+msgstr "设置(&T)"
+
+msgid "Generate..."
+msgstr "生成..."
+
+msgid "Generate from files..."
+msgstr "从文件生成..."
+
+msgid "Generate from selection into clipboard"
+msgstr "从所选内容生成到剪贴板"
+
+msgid "MD5"
+msgstr "MD5"
+
+msgid "SHA-1"
+msgstr "SHA-1"
+
+msgid "SHA-256"
+msgstr "SHA-256"
+
+msgid "SHA-512"
+msgstr "SHA-512"
+
+msgid "T&ools"
+msgstr "工具(&O)"
+
+msgid "Start Re&cording"
+msgstr "开始录制(&C)"
+
+msgid "S&top Recording"
+msgstr "停止录制(&T)"
+
+msgid "&Playback"
+msgstr "回放(&P)"
+
+msgid "&Save Current Recorded Macro..."
+msgstr "保存当前录制的宏(&S)..."
+
+msgid "&Run a Macro Multiple Times..."
+msgstr "多次运行宏(&R)..."
+
+msgid "&Macro"
+msgstr "宏(&M)"
+
+msgid "&Run...\tF5"
+msgstr "运行(&R)...\tF5"
+
+msgid "Validate shortcuts.xml"
+msgstr "验证 shortcuts.xml"
+
+msgid "&Run"
+msgstr "运行(&R)"
+
+msgid "Open Plugins Folder..."
+msgstr "打开插件文件夹..."
+
+msgid "&Plugins"
+msgstr "插件(&P)"
+
+msgid "Name A to Z"
+msgstr "名称 A 到 Z"
+
+msgid "Name Z to A"
+msgstr "名称 Z 到 A"
+
+msgid "Path A to Z"
+msgstr "路径 A 到 Z"
+
+msgid "Path Z to A"
+msgstr "路径 Z 到 A"
+
+msgid "Type A to Z"
+msgstr "类型 A 到 Z"
+
+msgid "Type Z to A"
+msgstr "类型 Z 到 A"
+
+msgid "Content Length Ascending"
+msgstr "内容长度升序"
+
+msgid "Content Length Descending"
+msgstr "内容长度降序"
+
+msgid "Modified Time Ascending"
+msgstr "修改时间升序"
+
+msgid "Modified Time Descending"
+msgstr "修改时间降序"
+
+msgid "Sort By"
+msgstr "排序方式"
+
+msgid "&Windows..."
+msgstr "窗口(&W)..."
+
+msgid "Recent Window"
+msgstr "最近的窗口"
+
+msgid "&Window"
+msgstr "窗口(&W)"
+
+msgid "Command Line Arguments..."
+msgstr "命令行参数..."
+
+msgid "Notepad++ Home"
+msgstr "Notepad++ 主页"
+
+msgid "Notepad++ Project Page"
+msgstr "Notepad++ 项目页面"
+
+msgid "Notepad++ Online User Manual"
+msgstr "Notepad++ 在线用户手册"
+
+msgid "Notepad++ Community (Forum)"
+msgstr "Notepad++ 社区 (论坛)"
+
+msgid "Check for Updates"
+msgstr "检查更新"
+
+msgid "Set Updater Proxy..."
+msgstr "设置更新代理..."
+
+msgid "Debug Info..."
+msgstr "调试信息..."
+
+msgid "About wxNotepad++\tF1"
+msgstr "关于 wxNotepad++\tF1"
+
+msgid "&About"
+msgstr "关于(&A)"
+
+msgid "Go to line"
+msgstr "转到行"
+
+msgid "Line number (1 - %d):"
+msgstr "行号 (1 - %d):"
+
+msgid "Column Editor"
+msgstr "列块编辑"
+
+msgid "Text to Insert"
+msgstr "要插入的文本"
+
+msgid "Number to Insert"
+msgstr "要插入的数字"
+
+msgid "Initial:"
+msgstr "初始值:"
+
+msgid "Increase by:"
+msgstr "增量:"
+
+msgid "Leading zeros"
+msgstr "前导零"
+
+msgid "Format"
+msgstr "格式"
+
+msgid "Change Search Engine"
+msgstr "更改搜索引擎"
+
+msgid "Search on Internet uses:"
+msgstr "在互联网上搜索使用:"
+
+msgid "Find Characters in Range"
+msgstr "查找范围内的字符"
+
+msgid "Finds the next character (from the caret, wrapping)\nwhose code falls within this range."
+msgstr "从光标处开始(循环环绕)查找\n编码位于此范围内的下一个字符。"
+
+msgid "From:"
+msgstr "从:"
+
+msgid "To:"
+msgstr "到:"
+
+msgid "Hexadecimal"
+msgstr "十六进制"
+
+msgid "Find Next"
+msgstr "查找下一个"
+
+msgid "Replace"
+msgstr "替换"
+
+msgid "Find"
+msgstr "查找"
+
+msgid "Find in Files"
+msgstr "在文件中查找"
+
+msgid "Mark"
+msgstr "标记"
+
+msgid "Find what :"
+msgstr "查找目标 :"
+
+msgid "Replace with :"
+msgstr "替换为 :"
+
+msgid "Filters :"
+msgstr "筛选器 :"
+
+msgid "Directory :"
+msgstr "目录 :"
+
+msgid "Match &whole word only"
+msgstr "全词匹配(&W)"
+
+msgid "Match &case"
+msgstr "区分大小写(&C)"
+
+msgid "Wra&p around"
+msgstr "循环查找(&P)"
+
+msgid "&Backward direction"
+msgstr "反向查找(&B)"
+
+msgid "In se&lection"
+msgstr "在选定范围内(&L)"
+
+msgid "Search Mode"
+msgstr "查找模式"
+
+msgid "Document Map"
+msgstr "文档地图"
+
+msgid "Function List"
+msgstr "函数列表"
+
+msgid "Document List"
+msgstr "文档列表"
+
+msgid "Clipboard History"
+msgstr "剪贴板历史"
+
+msgid "Value"
+msgstr "值"
+
+msgid "Hex"
+msgstr "十六进制"
+
+msgid "Character"
+msgstr "字符"
+
+msgid "Character Panel"
+msgstr "字符面板"
+
+msgid "Project"
+msgstr "项目"
+
+msgid "Add Files..."
+msgstr "添加文件..."
+
+msgid "Add Folder"
+msgstr "添加文件夹"
+
+msgid "Rename"
+msgstr "重命名"
+
+msgid "Remove"
+msgstr "移除"
+
+msgid "New Workspace"
+msgstr "新建工作区"
+
+msgid "Open Workspace..."
+msgstr "打开工作区..."
+
+msgid "Save Workspace As..."
+msgstr "工作区另存为..."
+
+msgid "Find: "
+msgstr "查找: "
+
+msgid "Next"
+msgstr "下一个"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Find result"
+msgstr "搜索结果"
+
+msgid "Match case"
+msgstr "区分大小写"
+
+msgid "Whole word only"
+msgstr "全词匹配"
+
+msgid "Regular expression"
+msgstr "正则表达式"
+
+msgid "In all sub-folders"
+msgstr "包含所有子文件夹"
+
+msgid "Find what:"
+msgstr "查找目标:"
+
+msgid "Directory:"
+msgstr "目录:"
+
+msgid "Filters:"
+msgstr "筛选器:"
+
+msgid "Find All"
+msgstr "全部查找"
+
+msgid "Run"
+msgstr "运行"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "The Program to Run   (variables: $(FULL_CURRENT_PATH), $(CURRENT_DIRECTORY),\n$(FILE_NAME), $(CURRENT_WORD), $(CURRENT_LINE) ...)"
+msgstr "要运行的程序   (变量: $(FULL_CURRENT_PATH), $(CURRENT_DIRECTORY),\n$(FILE_NAME), $(CURRENT_WORD), $(CURRENT_LINE) ...)"
+
+msgid "Failed to run:\n"
+msgstr "运行失败:\n"
+
+msgid "Could not read the session file."
+msgstr "无法读取会话文件。"
+
+msgid "Load Session"
+msgstr "载入会话"
+
+msgid "No session data in this file."
+msgstr "此文件中没有会话数据。"
+
+msgid "new %d"
+msgstr "新建 %d"
+
+msgid "Save file\n%s ?"
+msgstr "是否保存文件\n%s ?"
+
+msgid "&Save"
+msgstr "保存(&S)"
+
+msgid "Do&n't Save"
+msgstr "不保存(&N)"
+
+msgid "&Cancel"
+msgstr "取消(&C)"
+
+msgid "Close All BUT This"
+msgstr "关闭除此之外的所有"
+
+msgid "Close All"
+msgstr "关闭所有"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Save As..."
+msgstr "另存为..."
+
+msgid "Move to Other View"
+msgstr "移动到其他视图"
+
+msgid "Clone to Other View"
+msgstr "克隆到其他视图"
+
+msgid "None"
+msgstr "无"
+
+msgid "Apply Colour"
+msgstr "应用颜色"
+
+msgid "(more items added incrementally)"
+msgstr "(更多项目将陆续添加)"
+
+msgid "System default"
+msgstr "系统默认"
+
+msgid "Locali&zation"
+msgstr "本地化(&Z)"
+
+msgid "Recent &Files"
+msgstr "最近的文件(&F)"
+
+msgid "New"
+msgstr "新建"
+
+msgid "Open"
+msgstr "打开"
+
+msgid "Save All"
+msgstr "全部保存"
+
+msgid "Print"
+msgstr "打印"
+
+msgid "Cut"
+msgstr "剪切"
+
+msgid "Copy"
+msgstr "复制"
+
+msgid "Paste"
+msgstr "粘贴"
+
+msgid "Undo"
+msgstr "撤销"
+
+msgid "Redo"
+msgstr "重做"
+
+msgid "Zoom In"
+msgstr "放大"
+
+msgid "Zoom Out"
+msgstr "缩小"
+
+msgid "Word Wrap"
+msgstr "自动换行"
+
+msgid "User-Defined Language Dialogue"
+msgstr "用户自定义语言对话框"
+
+msgid "Monitoring (tail -f)"
+msgstr "监视 (tail -f)"
+
+msgid "Start Recording"
+msgstr "开始录制"
+
+msgid "Stop Recording"
+msgstr "停止录制"
+
+msgid "Playback"
+msgstr "回放"
+
+msgid "Run a Macro Multiple Times"
+msgstr "多次运行宏"
+
+msgid "Save Current Recorded Macro"
+msgstr "保存当前录制的宏"
+
+msgid "Re-interpreting the encoding discards unsaved changes. Continue?"
+msgstr "重新解释编码将丢弃未保存的更改。是否继续？"
+
+msgid "Encoding"
+msgstr "编码"
+
+msgid "Monitoring needs a file on disk - save the document first"
+msgstr "监视需要磁盘上的文件 - 请先保存文档"
+
+msgid "Save or discard the unsaved changes before monitoring"
+msgstr "监视前请保存或放弃未保存的更改"
+
+msgid "Monitoring started"
+msgstr "监视已开始"
+
+msgid "Monitoring stopped"
+msgstr "监视已停止"
+
+msgid "Monitoring stopped (document was edited)"
+msgstr "监视已停止（文档已被编辑）"
+
+msgid "Clipboard has no matching content."
+msgstr "剪贴板中没有匹配的内容。"
+
+msgid "Move \"%s\" to the Recycle Bin?"
+msgstr "将 \"%s\" 移动到回收站？"
+
+msgid "Enter valid character codes."
+msgstr "请输入有效的字符编码。"
+
+msgid "Search results"
+msgstr "搜索结果"
+
+msgid "Preferences"
+msgstr "首选项"
+
+msgid "General"
+msgstr "常规"
+
+msgid "Show toolbar"
+msgstr "显示工具栏"
+
+msgid "Show status bar"
+msgstr "显示状态栏"
+
+msgid "Show integrated top bar"
+msgstr "显示集成顶栏"
+
+msgid "Localization:"
+msgstr "本地化:"
+
+msgid "Editing"
+msgstr "编辑"
+
+msgid "Display line number"
+msgstr "显示行号"
+
+msgid "Show indentation guide"
+msgstr "显示缩进参考线"
+
+msgid "Show white space and TAB"
+msgstr "显示空格和 TAB"
+
+msgid "Show wrap symbol"
+msgstr "显示自动换行符号"
+
+msgid "Word wrap"
+msgstr "自动换行"
+
+msgid "Highlight current line"
+msgstr "高亮显示当前行"
+
+msgid "Enable scrolling beyond last line"
+msgstr "允许滚动到最后一行之后"
+
+msgid "Enable multi-editing (multi-selection)"
+msgstr "启用多重编辑 (多重选择)"
+
+msgid "Caret width:"
+msgstr "光标宽度:"
+
+msgid "Vertical edge at column (0 = off):"
+msgstr "垂直边线所在列 (0 = 关闭):"
+
+msgid "Caret blink rate (ms, 0 = steady):"
+msgstr "光标闪烁频率 (毫秒, 0 = 常亮):"
+
+msgid "Indentation"
+msgstr "缩进"
+
+msgid "Tab size:"
+msgstr "制表符宽度:"
+
+msgid "Replace by space"
+msgstr "用空格代替"
+
+msgid "Auto-indent new lines"
+msgstr "新行自动缩进"
+
+msgid "Auto-Completion"
+msgstr "自动完成"
+
+msgid "Enable auto-completion on each input"
+msgstr "每次输入时启用自动完成"
+
+msgid "From the"
+msgstr "从第"
+
+msgid "th character"
+msgstr "个字符起"
+
+msgid "Auto-insert matching brackets and quotes"
+msgstr "自动插入匹配的括号和引号"
+
+msgid "Dark Mode"
+msgstr "深色模式"
+
+msgid "Enable Dark Mode   (applied on restart)"
+msgstr "启用深色模式   (重启后生效)"
+
+msgid "New Document"
+msgstr "新建文档"
+
+msgid "Format (Line ending)"
+msgstr "格式 (行尾符)"
+
+msgid "Default language:"
+msgstr "默认语言:"
+
+msgid "Tab Bar"
+msgstr "标签栏"
+
+msgid "Show close button on each tab   (applied on restart)"
+msgstr "在每个标签上显示关闭按钮   (重启后生效)"
+
+msgid "Recent Files History"
+msgstr "最近文件历史"
+
+msgid "Max number of entries (applied on restart):"
+msgstr "最大条目数 (重启后生效):"
+
+msgid "Header:"
+msgstr "页眉:"
+
+msgid "Footer:"
+msgstr "页脚:"
+
+msgid "Run until the end of file"
+msgstr "运行至文件末尾"
+
+msgid "times"
+msgstr "次"
+
+msgid "Select theme:"
+msgstr "选择主题:"
+
+msgid "Bold"
+msgstr "粗体"
+
+msgid "Italic"
+msgstr "斜体"
+
+msgid "Foreground colour:"
+msgstr "前景色:"
+
+msgid "Background colour:"
+msgstr "背景色:"
+
+msgid "Save && Close"
+msgstr "保存 && 关闭"
+
+msgid "Encode as ANSI"
+msgstr "编码为 ANSI"
+
+msgid "Encode as UTF-8"
+msgstr "编码为 UTF-8"
+
+msgid "Encode as UTF-8 BOM"
+msgstr "编码为 UTF-8 BOM"
+
+msgid "Encode as UTF-16 LE BOM"
+msgstr "编码为 UTF-16 LE BOM"
+
+msgid "Encode as UTF-16 BE BOM"
+msgstr "编码为 UTF-16 BE BOM"
+
+msgid "Convert to UTF-8 BOM"
+msgstr "转换为 UTF-8 BOM"
+
+msgid "Column (rectangular) selection:\n\n- Alt + drag the mouse\n- Alt + Shift + Arrow keys\n- Alt + Shift + Click\n\nTyping or pasting applies to every line of the block at once."
+msgstr "列(矩形)选择:\n\n- Alt + 拖动鼠标\n- Alt + Shift + 方向键\n- Alt + Shift + 单击\n\n输入或粘贴会同时应用于块中的每一行。"
+
+msgid "Column Mode"
+msgstr "列块模式"
+
+msgid "length : %d    lines : %d"
+msgstr "长度 : %d    行数 : %d"
+
+msgid "Ln : %d    Col : %d    Pos : %d"
+msgstr "行 : %d    列 : %d    位置 : %d"
+
+msgid "Sel : %d | %d"
+msgstr "选择 : %d | %d"
+
+msgid "Red"
+msgstr "红色"
+
+msgid "Orange"
+msgstr "橙色"
+
+msgid "Green"
+msgstr "绿色"
+
+msgid "Blue"
+msgstr "蓝色"
+
+msgid "Purple"
+msgstr "紫色"
+
+msgid "Tab colour cleared"
+msgstr "已清除标签颜色"
+
+msgid "Tab colour applied"
+msgstr "已应用标签颜色"
+
+msgid "Normal text file"
+msgstr "普通文本文件"
+
+msgid "Add Files"
+msgstr "添加文件"
+
+msgid "Open Workspace"
+msgstr "打开工作区"
+
+msgid "Save Workspace As"
+msgstr "工作区另存为"
+
+msgid "Workspace saved"
+msgstr "工作区已保存"
+
+msgid "Workspace: %s"
+msgstr "工作区：%s"
+
+msgid "Select Folder as Workspace"
+msgstr "选择文件夹作为工作区"
+
+msgid "Folder as Workspace (save the file first)"
+msgstr "文件夹作为工作区（请先保存文件）"
+
+msgid "Save Session"
+msgstr "保存会话"
+
+msgid "Session saved - %d file(s)"
+msgstr "会话已保存 - %d 个文件"
+
+msgid "Session loaded - %d file(s)"
+msgstr "会话已加载 - %d 个文件"
+
+msgid "Tabs sorted"
+msgstr "标签已排序"
+
+msgid "%s (Windows only)"
+msgstr "%s（仅限 Windows）"
+
+msgid "Encoding: %s (save to apply)"
+msgstr "编码：%s（保存以应用）"
+
+msgid "Save As"
+msgstr "另存为"
+
+msgid "Binary Clipboard (Windows only)"
+msgstr "二进制剪贴板（仅限 Windows）"
+
+msgid "Paste Binary Content (clipboard has no matching content)"
+msgstr "粘贴二进制内容（剪贴板中没有匹配的内容）"
+
+msgid "Paste Binary Content (Windows only)"
+msgstr "粘贴二进制内容（仅限 Windows）"
+
+msgid "Paste %s (Windows only)"
+msgstr "粘贴 %s（仅限 Windows）"
+
+msgid "Open Containing Folder (save the file first)"
+msgstr "打开所在文件夹（请先保存文件）"
+
+msgid "Open in Default Viewer (save the file first)"
+msgstr "在默认查看器中打开（请先保存文件）"
+
+msgid "Save a Copy As"
+msgstr "将副本另存为"
+
+msgid "Copy saved: %s"
+msgstr "副本已保存：%s"
+
+msgid "Rename (save the file first)"
+msgstr "重命名（请先保存文件）"
+
+msgid "Move to Recycle Bin (save the file first)"
+msgstr "移到回收站（请先保存文件）"
+
+msgid "Read/Write"
+msgstr "读写"
+
+msgid "Read-Only"
+msgstr "只读"
+
+msgid "Read-Only Attribute (save the file first)"
+msgstr "只读属性（请先保存文件）"
+
+msgid "File attribute: Read-Only"
+msgstr "文件属性：只读"
+
+msgid "File attribute: Read/Write"
+msgstr "文件属性：读写"
+
+msgid "Read-Only Attribute (Windows only)"
+msgstr "只读属性（仅限 Windows）"
+
+msgid "Read/Write for All Documents"
+msgstr "所有文档读写"
+
+msgid "Begin/End Select (Column Mode): move the caret, then repeat to finish"
+msgstr "开始/结束选择（列模式）：移动光标，然后再次执行以完成"
+
+msgid "Begin/End Select: move the caret, then repeat to finish"
+msgstr "开始/结束选择：移动光标，然后再次执行以完成"
+
+msgid "Select finished"
+msgstr "选择已完成"
+
+msgid "Found character 0x%02X at position %d"
+msgstr "在位置 %d 找到字符 0x%02X"
+
+msgid "No character in that range found"
+msgstr "在该范围内未找到字符"
+
+msgid "Open File (selection is not an existing path)"
+msgstr "打开文件（所选内容不是现有路径）"
+
+msgid "Always on Top: ON"
+msgstr "总在最前：开"
+
+msgid "Always on Top: OFF"
+msgstr "总在最前：关"
+
+msgid "Always on Top (Windows only)"
+msgstr "总在最前（仅限 Windows）"
+
+msgid "File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d"
+msgstr "文件：%s\n\n字符数：%ld\n字数：%ld\n行数：%d"
+
+msgid "Summary"
+msgstr "摘要"
+
+msgid "Activate document:"
+msgstr "激活文档："
+
+msgid "Windows"
+msgstr "窗口"
+
+msgid "%s copied to clipboard"
+msgstr "%s 已复制到剪贴板"
+
+msgid "%s digest"
+msgstr "%s 摘要"
+
+msgid "%s - generate from files"
+msgstr "%s - 从文件生成"
+
+msgid "Found: %s"
+msgstr "已找到：%s"
+
+msgid "Can't find: %s"
+msgstr "未找到：%s"
+
+msgid "No marks to jump to"
+msgstr "没有可跳转的标记"
+
+msgid "No marked text to copy"
+msgstr "没有可复制的标记文本"
+
+msgid "Copied %d marked range(s)"
+msgstr "已复制 %d 个标记范围"
+
+msgid "Find in Files: nothing to search for"
+msgstr "在文件中查找：没有要搜索的内容"
+
+msgid "Find in Files: no such directory - %s"
+msgstr "在文件中查找：没有此目录 - %s"
+
+msgid "Replace in Files: %d occurrence(s) in %d file(s)"
+msgstr "文件内替换：%d 个文件中 %d 处匹配"
+
+msgid "Find in Files: %d hit(s) in %d / %d file(s)"
+msgstr "在文件中查找：%d / %d 个文件中 %d 处匹配"
+
+msgid "No search results yet - run Find in Files or Find All first"
+msgstr "尚无搜索结果 - 请先运行“在文件中查找”或“查找全部”"
+
+msgid "Count: %d match(es)"
+msgstr "计数：%d 处匹配"
+
+msgid "Replaced %d occurrence(s)"
+msgstr "已替换 %d 处"
+
+msgid "Marked %d match(es)"
+msgstr "已标记 %d 处匹配"
+
+msgid "Recording macro..."
+msgstr "正在录制宏..."
+
+msgid "Macro recorded - %d step(s)"
+msgstr "宏已录制 - %d 个步骤"
+
+msgid "Macro name:"
+msgstr "宏名称："
+
+msgid "Macro updated: %s"
+msgstr "宏已更新：%s"
+
+msgid "Macro saved: %s"
+msgstr "宏已保存：%s"
+
+msgid "Theme styles saved"
+msgstr "主题样式已保存"
+
+msgid "Import style theme(s)"
+msgstr "导入样式主题"
+
+msgid "Imported %d theme(s) - choose them in Style Configurator"
+msgstr "已导入 %d 个主题 - 请在样式配置器中选择"
+
+msgid "Import plugin(s)"
+msgstr "导入插件"
+
+msgid "Plugin files (*.dll)|*.dll"
+msgstr "插件文件 (*.dll)|*.dll"
+
+msgid "Plugin files (*.dylib)|*.dylib"
+msgstr "插件文件 (*.dylib)|*.dylib"
+
+msgid "Plugin files (*.so)|*.so"
+msgstr "插件文件 (*.so)|*.so"
+
+msgid "%d plugin(s) imported. Restart wxNotepad++ now to load them?"
+msgstr "已导入 %d 个插件。是否立即重启 wxNotepad++ 以加载它们？"
+
+msgid "Imported %d plugin(s) - restart to load them"
+msgstr "已导入 %d 个插件 - 重启后加载"
+
+msgid "%s - not yet implemented in this build"
+msgstr "%s - 此版本尚未实现"
+
+msgid "There was a problem printing.\nPerhaps your current printer is not set up correctly."
+msgstr "打印时出现问题。\n您当前的打印机可能未正确设置。"
+
+msgid "Printed %s"
+msgstr "已打印 %s"
+
+msgid "Change History (needs a newer Scintilla than this wx build carries)"
+msgstr "更改历史（需要比此 wx 版本更新的 Scintilla）"
+
+msgid "User-Defined Language dialog"
+msgstr "用户自定义语言对话框"
+
+msgid "Marked %d - style 1"
+msgstr "已标记 %d - 样式1"
+
+msgid "Marked %d - style 2"
+msgstr "已标记 %d - 样式2"
+
+msgid "Marked %d - style 3"
+msgstr "已标记 %d - 样式3"
+
+msgid "Marked %d - style 4"
+msgstr "已标记 %d - 样式4"
+
+msgid "Marked %d - style 5"
+msgstr "已标记 %d - 样式5"
+
+msgid "wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgstr "wxNotepad++（wxWidgets 实验性分支）\n\nwxWidgets %d.%d.%d\n%s\n\n可执行文件：\n%s"
+
+msgid "Debug Info"
+msgstr "调试信息"
+
+msgid "Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs."
+msgstr "用法：wxnpp [文件...]\n\n命令行中给出的文件将在标签页中打开。"
+
+msgid "Command Line Arguments"
+msgstr "命令行参数"
+
+msgid "Toolbar icon style:"
+msgstr "工具栏图标样式："
+
+msgid "Line icons (default)"
+msgstr "线条图标（默认）"
+
+msgid "Colored icons"
+msgstr "彩色图标"
+
+msgid "Fatcow icons"
+msgstr "Fatcow 图标"
+
+msgid "Fugue icons"
+msgstr "Fugue 图标"
+
+msgid "Solar icons (green)"
+msgstr "Solar 图标（绿色）"
+
+msgid "IconPark icons (teal/lime)"
+msgstr "IconPark 图标（青绿/青柠）"
+
+msgid "Line icons (Tabler)"
+msgstr "线条图标（Tabler）"
+
+msgid "IconPark Bold icons (teal/lime)"
+msgstr "IconPark 粗体图标（青绿/青柠）"
+
+msgid "Tabler icons (line)"
+msgstr "Tabler 图标（线条）"

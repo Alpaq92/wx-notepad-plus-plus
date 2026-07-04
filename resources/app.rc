@@ -1,0 +1,4 @@
+// Embeds wxNotepad++.ico as the .exe's Win32 icon resource, so Windows Explorer /
+// the taskbar / shortcuts show it for the file itself (separate from the SVG-based
+// icon app_icon_svg.h sets on the running wxTopLevelWindow).
+IDI_APPICON ICON "wxNotepad++.ico"

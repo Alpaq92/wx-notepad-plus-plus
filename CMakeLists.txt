@@ -77,7 +77,7 @@ endif()
 # ---- the wxNotepad++ executable --------------------------------------------------------------------
 # WIN32 = GUI-subsystem app on Windows; a plain executable elsewhere (GTK on Linux, Cocoa on macOS).
 if(WIN32)
-    add_executable(wxnpp WIN32 src/main.cpp)
+    add_executable(wxnpp WIN32 src/main.cpp resources/app.rc)   # .rc embeds wxNotepad++.ico as the exe's shell icon
 else()
     add_executable(wxnpp src/main.cpp)
 endif()
@@ -117,9 +117,15 @@ add_custom_command(TARGET wxnpp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/icons"  "$<TARGET_FILE_DIR:wxnpp>/icons"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/icons-solar" "$<TARGET_FILE_DIR:wxnpp>/icons-solar"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/icons-iconpark" "$<TARGET_FILE_DIR:wxnpp>/icons-iconpark"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/themes" "$<TARGET_FILE_DIR:wxnpp>/themes"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_SOURCE_DIR}/resources/stylers.model.xml" "$<TARGET_FILE_DIR:wxnpp>/stylers.model.xml"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/locale" "$<TARGET_FILE_DIR:wxnpp>/locale"
     VERBATIM)
 
 # ---- Windows-only Notepad++-ABI test plugin (exercises the Win32 plugin loader) --------------------
