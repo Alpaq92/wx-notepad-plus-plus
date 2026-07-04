@@ -1,10 +1,10 @@
 # "IconPark" colored toolbar icon set — attribution
 
-This is one of four "Colored icons" options for the toolbar (Settings > Preferences >
-General > Toolbar icon style), alongside the default line-icon set in `resources/icons/`,
-the sibling "Solar" colored set in `resources/icons-solar/`, and the bolder-stroke sibling
-`resources/icons-iconpark-bold/` (same colours, thicker outline — see its own CREDITS.md).
-This directory is the thin-stroke (`stroke-width="2.5"`) variant.
+This is one of three "Colored icons" options for the toolbar (Settings > Preferences >
+General > Toolbar icon style), alongside the default line-icon set in `resources/icons/`
+and the sibling "Solar" colored set in `resources/icons-solar/`. (A separate bolder-stroke
+`icons-iconpark-bold/` variant existed briefly and was dropped - it read as visually
+identical to this one in dark mode, so it wasn't worth the extra selectable option.)
 
 **IconPark** — © ByteDance, <https://github.com/bytedance/IconPark>.
 Licensed under [Apache-2.0](https://github.com/bytedance/IconPark/blob/master/LICENSE)
@@ -18,10 +18,11 @@ structural outline strokes. Both accents were replaced here with **Open Color te
 on both light and dark toolbar backgrounds. 9 of the 37 icons chosen for this toolbar are
 pure line-art in IconPark's own set (no fill accent at all, structural stroke only) - for
 those, the black stroke itself was tinted teal instead, so every icon carries the accent
-colour consistently; the remaining black/white outline strokes on the two-tone icons were
-left untouched (dark mode additionally lightens plain black outlines at runtime - see
-`iconColored()` in `src/main.cpp`). Outline weight was also thinned from the upstream
-default (`stroke-width="4"`, kept as-is in the `-bold` sibling) to `2.5`, which reads more
+colour consistently; the remaining black/white outline strokes on the two-tone icons are
+left as upstream (black) on light chrome, and lightened to Open Color teal-3 at runtime in
+dark mode only - see `iconColored()` in `src/main.cpp` (a same-hue-family tint reads better
+there than the plain black, which nearly disappears on dark chrome). Outline weight was
+also thinned from the upstream default (`stroke-width="4"`) to `2.5`, which reads more
 clearly at 16px. No other modifications were made beyond selecting icons and these changes.
 
 Source data: `icon-park.json` from <https://github.com/iconify/icon-sets> (Iconify's

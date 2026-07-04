@@ -3916,19 +3916,18 @@ private:
                 return wxBitmapBundle::FromSVG(u.data(), wxSize(16, 16));
             }
         }
-        if (packDir == "icons-iconpark" || packDir == "icons-iconpark-bold")
+        if (packDir == "icons-iconpark" && m_dark)
         {
             // IconPark's signature black outline stroke (its accent fills are already baked to a fixed
-            // teal/lime at generation time - see resources/icons-iconpark/CREDITS.md) nearly vanished on
-            // dark chrome. A first fix lightened it to a NEUTRAL grey (Open Color gray-4) only in dark
-            // mode, which fixed visibility but not the "still looks off" complaint that followed: gray-4
-            // has noticeably HIGHER contrast against dark chrome than the teal fill itself does, so the
-            // outline visually dominated and the icon read as "a grey outline with a teal patch" rather
-            // than one coherent coloured object - the same hue-cohesion problem the Solar duotone fix
-            // solved by keeping both tones in the green family. Switched to a lighter shade of the SAME
-            // accent (Open Color teal-3) - and, per follow-up feedback, apply it in BOTH themes rather
-            // than dark-only, since the unified single-hue look (teal fill + teal-3 outline) reads better
-            // than the original light-mode black outline too; the white highlight stroke is unaffected.
+            // teal/lime at generation time - see resources/icons-iconpark/CREDITS.md) reads fine on the
+            // light chrome it was designed for, but nearly vanishes on dark chrome. A first dark-mode fix
+            // lightened it to a NEUTRAL grey (Open Color gray-4), which fixed visibility but read as "a
+            // grey outline with a teal patch" rather than one coherent object (gray-4 has noticeably
+            // HIGHER contrast against dark chrome than the teal fill itself). Switched to a lighter shade
+            // of the SAME accent (Open Color teal-3) instead - a trial of applying that same teal-3 tint
+            // in LIGHT mode too (for hue consistency across themes) was tried and reverted: side by side,
+            // the original black outline on light chrome read better than the unified teal-everywhere
+            // look, so this stays dark-mode-only. The white highlight stroke needs no change either way.
             wxFile f(path); wxString svg;
             if (f.IsOpened() && f.ReadAll(&svg))
             {
@@ -3941,10 +3940,9 @@ private:
     }
     wxBitmapBundle icon(const wxString& name)
     {
-        // m_iconStyle: 0 = line icons (default), 1 = Solar (green), 2 = IconPark thin (teal/lime), 3 = IconPark bold
+        // m_iconStyle: 0 = line icons (default), 1 = Solar (green), 2 = IconPark (teal/lime)
         if (m_iconStyle == 1) { wxBitmapBundle c = iconColored(name, "icons-solar"); if (c.IsOk()) return c; }
-        else if (m_iconStyle == 2) { wxBitmapBundle c = iconColored(name, "icons-iconpark"); if (c.IsOk()) return c; }
-        else if (m_iconStyle == 3) { wxBitmapBundle c = iconColored(name, "icons-iconpark-bold"); if (c.IsOk()) return c; }
+        else if (m_iconStyle >= 2) { wxBitmapBundle c = iconColored(name, "icons-iconpark"); if (c.IsOk()) return c; }   // >= 2: also catches a stale ToolbarIconStyle=3 ("Bold", removed - looked identical to this in dark mode) from an older config
         static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\";
         // Permissive toolbar icons (Tabler x Open Color, MIT) - monochrome by default, with a meaning-accent
         // on 8 of the 32 (gold New "+", blue Save/Save-All, red Record/Stop, green Playback/-multiple). Neutral
@@ -5637,7 +5635,8 @@ private:
     {
         auto* c = wxConfigBase::Get();
         c->Read("IntegratedBar", &m_integratedBar, false);
-        long is = 0; c->Read("ToolbarIconStyle", &is, 0L); m_iconStyle = (int)is;   // 0 = line icons, 1 = Solar, 2 = IconPark thin, 3 = IconPark bold
+        long is = 0; c->Read("ToolbarIconStyle", &is, 0L);
+        m_iconStyle = (is < 0 || is > 2) ? 2 : (int)is;   // 0 = line icons, 1 = Solar, 2 = IconPark; clamp a stale "3 = Bold" (removed) into IconPark
         long mr = 10; c->Read("RecentFiles/Max", &mr, 10L); m_maxRecent = (int)mr;
         c->Read("TabBar/CloseButton", &m_tabCloseBtn, true);   // integrated top bar on/off (also read in OnInit; here for the Preferences checkbox)
         long tw = 4; c->Read("Editing/TabWidth", &tw, 4L); m_tabWidth = (int)tw;
@@ -5744,10 +5743,12 @@ private:
         uirow->Add(chUiLang, 0, wxALIGN_CENTRE_VERTICAL);
         gs->Add(uirow, 0, wxLEFT | wxRIGHT | wxTOP, 10);
         // Toolbar icon style (restart-to-apply, like Localization above): the default line-icon set
-        // (theme-adaptive) vs. three fixed-colour sets, Solar and IconPark thin/bold (see iconColored()).
+        // (theme-adaptive) vs. two fixed-colour sets, Solar and IconPark (see iconColored()). (A separate
+        // "IconPark Bold" stroke-width variant existed briefly - dropped after feedback that dark mode
+        // made it indistinguishable from this one; icon() still maps any stale saved index >= 2 here.)
         wxArrayString iconStyleNames;
         iconStyleNames.Add(_("Line icons (Tabler)")); iconStyleNames.Add(_("Solar icons (green)"));
-        iconStyleNames.Add(_("IconPark icons (teal/lime)")); iconStyleNames.Add(_("IconPark Bold icons (teal/lime)"));
+        iconStyleNames.Add(_("IconPark icons (teal/lime)"));
         auto* chIconStyle = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, iconStyleNames);
         chIconStyle->SetSelection(m_iconStyle);
         auto* icrow = new wxBoxSizer(wxHORIZONTAL);
@@ -7023,7 +7024,7 @@ private:
 #endif
     wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
-    int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Solar, 2 = IconPark thin, 3 = IconPark bold (restart-to-apply)
+    int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Solar, 2 = IconPark (restart-to-apply)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
     bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON like Notepad++
