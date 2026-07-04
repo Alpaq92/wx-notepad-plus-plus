@@ -2075,3 +2075,12 @@ msgstr "Uso: wxnpp [archivos...]\n\nLos archivos indicados en la línea de coman
 
 msgid "Command Line Arguments"
 msgstr "Argumentos de línea de comandos"
+
+msgid "Toolbar icon style:"
+msgstr "Estilo de iconos de la barra de herramientas:"
+
+msgid "Line icons (default)"
+msgstr "Iconos de línea (predeterminado)"
+
+msgid "Colored icons"
+msgstr "Iconos de color"

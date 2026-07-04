@@ -2075,3 +2075,12 @@ msgstr "用法：wxnpp [文件...]\n\n命令行中给出的文件将在标签页
 
 msgid "Command Line Arguments"
 msgstr "命令行参数"
+
+msgid "Toolbar icon style:"
+msgstr "工具栏图标样式："
+
+msgid "Line icons (default)"
+msgstr "线条图标（默认）"
+
+msgid "Colored icons"
+msgstr "彩色图标"

@@ -2075,3 +2075,12 @@ msgstr "Użycie: wxnpp [pliki...]\n\nPliki podane w wierszu poleceń są otwiera
 
 msgid "Command Line Arguments"
 msgstr "Argumenty wiersza poleceń"
+
+msgid "Toolbar icon style:"
+msgstr "Styl ikon paska narzędzi:"
+
+msgid "Line icons (default)"
+msgstr "Ikony liniowe (domyślne)"
+
+msgid "Colored icons"
+msgstr "Ikony kolorowe"

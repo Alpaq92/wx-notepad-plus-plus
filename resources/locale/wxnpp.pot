@@ -1841,6 +1841,15 @@ msgstr ""
 msgid "Localization:"
 msgstr ""
 
+msgid "Line icons (default)"
+msgstr ""
+
+msgid "Colored icons"
+msgstr ""
+
+msgid "Toolbar icon style:"
+msgstr ""
+
 msgid "Editing"
 msgstr ""
 

@@ -2075,3 +2075,12 @@ msgstr "Verwendung: wxnpp [Dateien...]\n\nÜber die Befehlszeile angegebene Date
 
 msgid "Command Line Arguments"
 msgstr "Befehlszeilenargumente"
+
+msgid "Toolbar icon style:"
+msgstr "Symbolleisten-Icon-Stil:"
+
+msgid "Line icons (default)"
+msgstr "Linien-Icons (Standard)"
+
+msgid "Colored icons"
+msgstr "Farbige Icons"

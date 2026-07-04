@@ -19,6 +19,7 @@
 
 #include <wx/wx.h>
 #include <wx/intl.h>           // wxLocale + the _() gettext macro - UI localization (resources/locale/*)
+#include <wx/imagpng.h>        // wxPNGHandler - loading raster PNG icons (the colored toolbar icon set)
 #include <wx/notebook.h>
 #include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
 #include <wx/listctrl.h>       // wxListView - wxListbook's page list (we widen it so labels don't truncate)
@@ -3870,8 +3871,26 @@ private:
     }
 
     // ----- toolbar (Notepad++ icon pack, native order) -------------------
+    // Colored icon set (Settings > Preferences > General > Toolbar icon style): fixed multi-colour PNGs
+    // (Fatcow Farm-Fresh + Fugue, both CC BY 3.0 - see resources/icons-colored/CREDITS.md) rather than
+    // the default currentColor-tokenized SVGs, so they do NOT auto-adapt to dark/light theme - that's
+    // an accepted tradeoff of this style (matches real Notepad++'s classic toolbar, which is the same way).
+    wxBitmapBundle iconColored(const wxString& name)
+    {
+        static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons-colored\\";
+        const wxString path = dir + name + ".png";
+        if (!wxFileExists(path)) return wxBitmapBundle();   // caller falls back to the line-icon SVG for anything the colored set doesn't cover
+        wxImage img(path, wxBITMAP_TYPE_PNG);
+        if (!img.IsOk()) return wxBitmapBundle();
+        // Source PNGs are 32x32; rescale explicitly to the toolbar's fixed 16x16 rather than leaving a
+        // size-mismatched bitmap for wxBitmapBundle's DPI-aware scaling to resolve on demand - a bundle
+        // built from a single oversized bitmap crashed on the first repaint triggered by a modal dialog.
+        if (img.GetWidth() != 16 || img.GetHeight() != 16) img.Rescale(16, 16, wxIMAGE_QUALITY_HIGH);
+        return wxBitmapBundle::FromBitmap(wxBitmap(img));
+    }
     wxBitmapBundle icon(const wxString& name)
     {
+        if (m_iconStyle == 1) { wxBitmapBundle c = iconColored(name); if (c.IsOk()) return c; }
         static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\";
         // Permissive toolbar icons (Tabler x Open Color, MIT) - monochrome by default, with a meaning-accent
         // on 8 of the 32 (gold New "+", blue Save/Save-All, red Record/Stop, green Playback/-multiple). Neutral
@@ -5564,6 +5583,7 @@ private:
     {
         auto* c = wxConfigBase::Get();
         c->Read("IntegratedBar", &m_integratedBar, false);
+        long is = 0; c->Read("ToolbarIconStyle", &is, 0L); m_iconStyle = (int)is;   // 0 = line icons, 1 = colored (Fatcow/Fugue)
         long mr = 10; c->Read("RecentFiles/Max", &mr, 10L); m_maxRecent = (int)mr;
         c->Read("TabBar/CloseButton", &m_tabCloseBtn, true);   // integrated top bar on/off (also read in OnInit; here for the Preferences checkbox)
         long tw = 4; c->Read("Editing/TabWidth", &tw, 4L); m_tabWidth = (int)tw;
@@ -5669,6 +5689,15 @@ private:
         uirow->Add(new wxStaticText(gen, wxID_ANY, _("Localization:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         uirow->Add(chUiLang, 0, wxALIGN_CENTRE_VERTICAL);
         gs->Add(uirow, 0, wxLEFT | wxRIGHT | wxTOP, 10);
+        // Toolbar icon style (restart-to-apply, like Localization above): the default line-icon set
+        // (theme-adaptive) vs. a fixed-colour set (Fatcow/Fugue, CC BY 3.0 - see iconColored()).
+        wxArrayString iconStyleNames; iconStyleNames.Add(_("Line icons (default)")); iconStyleNames.Add(_("Colored icons"));
+        auto* chIconStyle = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, iconStyleNames);
+        chIconStyle->SetSelection(m_iconStyle);
+        auto* icrow = new wxBoxSizer(wxHORIZONTAL);
+        icrow->Add(new wxStaticText(gen, wxID_ANY, _("Toolbar icon style:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        icrow->Add(chIconStyle, 0, wxALIGN_CENTRE_VERTICAL);
+        gs->Add(icrow, 0, wxALL, 10);
         gen->SetSizer(gs);
 
         // ---- Editing --------------------------------------------------------------------------
@@ -5804,14 +5833,28 @@ private:
         m_tabCloseBtn = cbTabClose->GetValue(); m_maxRecent = spMaxRec->GetValue();
         m_printHeader = txHeader->GetValue(); m_printFooter = txFooter->GetValue();
         applySettings(); saveSettings();
-        bool needRestart = (newDark != m_dark) || tabRecentChanged;
-        { const int newUi = UI_LANG_IDS[chUiLang->GetSelection()];   // UI language is fixed per process (wxLocale) - relaunch to switch
-          if (newUi != curUi) { wxConfigBase::Get()->Write("UILanguage", (long)newUi); needRestart = true; } }
+        // Chrome settings fixed per process (locale/toolbar-toggle/icon-set all need a relaunch to take effect).
+        // The config writes ride restartWithTheme's commit callback, which only runs once the save-prompt loop
+        // has actually confirmed the restart - writing them here unconditionally would apply the new value
+        // even if the user then cancels a "save changes?" prompt during the attempted restart.
+        const int newUi = UI_LANG_IDS[chUiLang->GetSelection()];
 #ifdef WXNPP_HAS_BORDERLESS
-        if (cbIntBar->GetValue() != m_integratedBar)   // the chrome base is fixed per process - relaunch to switch
-        { wxConfigBase::Get()->Write("IntegratedBar", cbIntBar->GetValue()); needRestart = true; }
+        const bool newIntBar = cbIntBar->GetValue();
 #endif
-        if (needRestart) restartWithTheme(newDark);   // a chrome change (dark mode / integrated bar) needs a relaunch
+        const int newIconStyle = chIconStyle->GetSelection();
+        bool needRestart = (newDark != m_dark) || tabRecentChanged || (newUi != curUi) || (newIconStyle != m_iconStyle);
+#ifdef WXNPP_HAS_BORDERLESS
+        needRestart = needRestart || (newIntBar != m_integratedBar);
+#endif
+        if (needRestart)
+            restartWithTheme(newDark, [=] {
+                auto* cfg = wxConfigBase::Get();
+                if (newUi != curUi) cfg->Write("UILanguage", (long)newUi);
+#ifdef WXNPP_HAS_BORDERLESS
+                if (newIntBar != m_integratedBar) cfg->Write("IntegratedBar", newIntBar);
+#endif
+                if (newIconStyle != m_iconStyle) cfg->Write("ToolbarIconStyle", (long)newIconStyle);
+            });
     }
 
     // ----- macros (record / playback / run multiple / save) -------------
@@ -6924,6 +6967,7 @@ private:
 #endif
     wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
+    int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = colored icons (restart-to-apply)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
     bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON like Notepad++
@@ -6972,6 +7016,7 @@ public:
     bool OnInit() override
     {
         SetAppName("wxNotepadPlusPlus_spike");                  // stable key for the persisted theme choice
+        wxImage::AddHandler(new wxPNGHandler());                // needed to load raster icons (iconColored) - SVG icons go through NanoSVG instead and don't need this
         // UI localization (gettext): every _()-wrapped string looks itself up in resources/locale/<lang>/
         // LC_MESSAGES/wxnpp.mo next to the exe. The language is the user's Preferences > General >
         // Localization choice (wxLANGUAGE_DEFAULT = follow the OS); if no catalog exists for it (e.g. English,

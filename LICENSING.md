@@ -41,6 +41,7 @@ we are confident — permissively-licensed files composing into a GPL aggregate 
 |---|---|---|
 | `src/` (the editor) | under the project's **GPL v3** | original reimplementation |
 | Toolbar icons — `resources/icons/` | **MIT** | Tabler © Paweł Kuna, Open Color © Heeyeun Jeong |
+| Colored toolbar icon option — `resources/icons-colored/` | **CC BY 3.0** | Fatcow Farm-Fresh Web Icons © FatCow Web Hosting (fatcow.com/free-icons); Fugue Icons © Yusuke Kamiyamane (p.yusukekamiyamane.com), 2x-upscaled by chrisjbillington/fugue-2x-icons (upscaling code itself MIT) |
 | Plugin ABI headers — `include/npp-compat/` | Apache-2.0 *expression*, but they **functionally reproduce N++'s GPL ABI** (gate #1) | to be replaced by the permissive Nib API |
 | Regenerated themes + `stylers.model.xml` | **Apache-2.0** | our data: factual Lexilla structure + permissive palettes |
 | Kept third-party themes — `resources/themes/` | **MIT** / upstream-permissive | © Fabio Zendhi Nagao, Oren Farhi, … |
