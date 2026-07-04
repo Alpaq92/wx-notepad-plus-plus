@@ -5754,10 +5754,6 @@ private:
         for (int i = 0; i < (int)WXSIZEOF(UI_LANG_ENDONYMS); ++i) uiNames.Add(uiLangName(i));
         auto* chUiLang = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, uiNames);
         chUiLang->SetSelection(uiLangIndex(curUi));
-        auto* uirow = new wxBoxSizer(wxHORIZONTAL);
-        uirow->Add(new wxStaticText(gen, wxID_ANY, _("Localization:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
-        uirow->Add(chUiLang, 0, wxALIGN_CENTRE_VERTICAL);
-        gs->Add(uirow, 0, wxLEFT | wxRIGHT | wxTOP, 10);
         // Toolbar icon style (restart-to-apply, like Localization above): the default line-icon set
         // (theme-adaptive) vs. two fixed-colour sets, Solar and IconPark (see iconColored()). (A separate
         // "IconPark Bold" stroke-width variant existed briefly - dropped after feedback that dark mode
@@ -5767,10 +5763,15 @@ private:
         iconStyleNames.Add(_("IconPark icons (teal/lime)"));
         auto* chIconStyle = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, iconStyleNames);
         chIconStyle->SetSelection(m_iconStyle);
-        auto* icrow = new wxBoxSizer(wxHORIZONTAL);
-        icrow->Add(new wxStaticText(gen, wxID_ANY, _("Toolbar icon style:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
-        icrow->Add(chIconStyle, 0, wxALIGN_CENTRE_VERTICAL);
-        gs->Add(icrow, 0, wxALL, 10);
+        // A 2-column grid (not two independent row sizers) so both combo boxes line up under each other
+        // regardless of their label's length - "Localization:" and "Toolbar icon style:" differ enough in
+        // width that separate row sizers left the two combos visibly staggered.
+        auto* locGrid = new wxFlexGridSizer(2, 2, 8, 8);
+        locGrid->Add(new wxStaticText(gen, wxID_ANY, _("Localization:")), 0, wxALIGN_CENTRE_VERTICAL);
+        locGrid->Add(chUiLang, 0, wxALIGN_CENTRE_VERTICAL);
+        locGrid->Add(new wxStaticText(gen, wxID_ANY, _("Toolbar icon style:")), 0, wxALIGN_CENTRE_VERTICAL);
+        locGrid->Add(chIconStyle, 0, wxALIGN_CENTRE_VERTICAL);
+        gs->Add(locGrid, 0, wxLEFT | wxRIGHT | wxTOP, 10);
         gen->SetSizer(gs);
 
         // ---- Editing --------------------------------------------------------------------------
