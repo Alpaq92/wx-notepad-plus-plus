@@ -3898,18 +3898,19 @@ private:
                 return wxBitmapBundle::FromSVG(u.data(), wxSize(16, 16));
             }
         }
-        if ((packDir == "icons-iconpark" || packDir == "icons-iconpark-bold") && m_dark)
+        if (packDir == "icons-iconpark" || packDir == "icons-iconpark-bold")
         {
             // IconPark's signature black outline stroke (its accent fills are already baked to a fixed
-            // teal/lime at generation time - see resources/icons-iconpark/CREDITS.md) reads fine on the
-            // light chrome it was designed for, but nearly vanishes on dark chrome. A first fix lightened
-            // it to a NEUTRAL grey (Open Color gray-4), which fixed visibility but not the "still looks
-            // off" complaint that followed: gray-4 has noticeably HIGHER contrast against dark chrome than
-            // the teal fill itself does, so the outline visually dominates and the icon reads as "a gray
-            // outline with a teal patch" rather than one coherent coloured object - the same
-            // hue-cohesion problem the Solar duotone fix solved by keeping both tones in the green family.
-            // Use a lighter shade of the SAME accent (Open Color teal-3) instead of a neutral grey, so the
-            // outline and fill sit in one hue family; the white highlight stroke needs no change either way.
+            // teal/lime at generation time - see resources/icons-iconpark/CREDITS.md) nearly vanished on
+            // dark chrome. A first fix lightened it to a NEUTRAL grey (Open Color gray-4) only in dark
+            // mode, which fixed visibility but not the "still looks off" complaint that followed: gray-4
+            // has noticeably HIGHER contrast against dark chrome than the teal fill itself does, so the
+            // outline visually dominated and the icon read as "a grey outline with a teal patch" rather
+            // than one coherent coloured object - the same hue-cohesion problem the Solar duotone fix
+            // solved by keeping both tones in the green family. Switched to a lighter shade of the SAME
+            // accent (Open Color teal-3) - and, per follow-up feedback, apply it in BOTH themes rather
+            // than dark-only, since the unified single-hue look (teal fill + teal-3 outline) reads better
+            // than the original light-mode black outline too; the white highlight stroke is unaffected.
             wxFile f(path); wxString svg;
             if (f.IsOpened() && f.ReadAll(&svg))
             {
