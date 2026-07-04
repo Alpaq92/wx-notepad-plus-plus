@@ -2105,3 +2105,15 @@ msgstr "Жирные значки IconPark (бирюзово-лаймовые)"
 
 msgid "Tabler icons (line)"
 msgstr "Значки Tabler (контурные)"
+
+msgid "No matches"
+msgstr "Нет совпадений"
+
+msgid "%d+ matches"
+msgstr "%d+ совпадений"
+
+msgid "%d of %d"
+msgstr "%d из %d"
+
+msgid "%d matches"
+msgstr "%d совпадений"

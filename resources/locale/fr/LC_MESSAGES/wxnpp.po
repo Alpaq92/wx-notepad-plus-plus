@@ -2105,3 +2105,15 @@ msgstr "Icônes IconPark grasses (sarcelle/citron vert)"
 
 msgid "Tabler icons (line)"
 msgstr "Icônes Tabler (filaires)"
+
+msgid "No matches"
+msgstr "Aucune correspondance"
+
+msgid "%d+ matches"
+msgstr "%d+ correspondances"
+
+msgid "%d of %d"
+msgstr "%d sur %d"
+
+msgid "%d matches"
+msgstr "%d correspondances"

@@ -2461,10 +2461,10 @@ private:
             if (adv >= len) break;
             sci(SCI_SETTARGETSTART, adv); sci(SCI_SETTARGETEND, len);
         }
-        m_incCount->SetLabel(!total      ? wxString("No matches")
-                             : total >= CAP ? wxString::Format("%d+ matches", CAP)
-                             : current    ? wxString::Format("%d of %d", current, total)
-                                          : wxString::Format("%d matches", total));
+        m_incCount->SetLabel(!total      ? wxString(_("No matches"))
+                             : total >= CAP ? wxString::Format(_("%d+ matches"), CAP)
+                             : current    ? wxString::Format(_("%d of %d"), current, total)
+                                          : wxString::Format(_("%d matches"), total));
     }
     void showIncBar()
     {
@@ -5833,7 +5833,12 @@ private:
 
         // ---- New Document ---------------------------------------------------------------------
         auto* nd = pg(_("New Document")); auto* nds = new wxBoxSizer(wxVERTICAL);
-        const wxString eolChoices[3] = { eolName(SC_EOL_CRLF), eolName(SC_EOL_LF), eolName(SC_EOL_CR) };
+        // Reuses the same 3 msgids as the Edit > EOL Conversion menu (IDM_FORMAT_TODOS/TOUNIX/TOMAC) -
+        // eolName() itself stays untranslated (the status bar's own use of it deliberately matches N++'s
+        // English-always EOL indicator), so translate it here rather than in the shared helper. Calling
+        // wxGetTranslation() directly (not the _() macro) because _() requires a compile-time string
+        // literal for its static extraction check - eolName() returns one at runtime, not a literal.
+        const wxString eolChoices[3] = { wxGetTranslation(eolName(SC_EOL_CRLF)), wxGetTranslation(eolName(SC_EOL_LF)), wxGetTranslation(eolName(SC_EOL_CR)) };
         auto* rbEol = new wxRadioBox(nd, wxID_ANY, _("Format (Line ending)"), wxDefaultPosition, wxDefaultSize,
                                      3, eolChoices, 1, wxRA_SPECIFY_COLS);
         rbEol->SetSelection(m_defaultEol == SC_EOL_LF ? 1 : (m_defaultEol == SC_EOL_CR ? 2 : 0));

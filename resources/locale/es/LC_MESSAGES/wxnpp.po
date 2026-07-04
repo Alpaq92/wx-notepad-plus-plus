@@ -2105,3 +2105,15 @@ msgstr "Iconos IconPark en negrita (verde azulado/lima)"
 
 msgid "Tabler icons (line)"
 msgstr "Iconos Tabler (línea)"
+
+msgid "No matches"
+msgstr "Sin coincidencias"
+
+msgid "%d+ matches"
+msgstr "%d+ coincidencias"
+
+msgid "%d of %d"
+msgstr "%d de %d"
+
+msgid "%d matches"
+msgstr "%d coincidencias"

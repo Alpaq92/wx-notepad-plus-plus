@@ -2105,3 +2105,15 @@ msgstr "IconPark 굵은 아이콘(틸/라임)"
 
 msgid "Tabler icons (line)"
 msgstr "Tabler 아이콘(선)"
+
+msgid "No matches"
+msgstr "일치 항목 없음"
+
+msgid "%d+ matches"
+msgstr "%d+ 개 일치"
+
+msgid "%d of %d"
+msgstr "%d / %d"
+
+msgid "%d matches"
+msgstr "%d 개 일치"

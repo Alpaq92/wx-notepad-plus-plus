@@ -2105,3 +2105,15 @@ msgstr "IconPark 粗体图标（青绿/青柠）"
 
 msgid "Tabler icons (line)"
 msgstr "Tabler 图标（线条）"
+
+msgid "No matches"
+msgstr "无匹配项"
+
+msgid "%d+ matches"
+msgstr "%d+ 个匹配项"
+
+msgid "%d of %d"
+msgstr "%d / %d"
+
+msgid "%d matches"
+msgstr "%d 个匹配项"
