@@ -1808,3 +1808,270 @@ msgstr "탭 색상 해제됨"
 
 msgid "Tab colour applied"
 msgstr "탭 색상 적용됨"
+
+msgid "Normal text file"
+msgstr "일반 텍스트 파일"
+
+msgid "Add Files"
+msgstr "파일 추가"
+
+msgid "Open Workspace"
+msgstr "작업 영역 열기"
+
+msgid "Save Workspace As"
+msgstr "작업 영역 다른 이름으로 저장"
+
+msgid "Workspace saved"
+msgstr "작업 영역 저장됨"
+
+msgid "Workspace: %s"
+msgstr "작업 영역: %s"
+
+msgid "Select Folder as Workspace"
+msgstr "폴더를 작업 영역으로 선택"
+
+msgid "Folder as Workspace (save the file first)"
+msgstr "폴더를 작업 영역으로 사용(먼저 파일을 저장하세요)"
+
+msgid "Save Session"
+msgstr "세션 저장"
+
+msgid "Session saved - %d file(s)"
+msgstr "세션 저장됨 - %d개 파일"
+
+msgid "Session loaded - %d file(s)"
+msgstr "세션 로드됨 - %d개 파일"
+
+msgid "Tabs sorted"
+msgstr "탭 정렬됨"
+
+msgid "%s (Windows only)"
+msgstr "%s(Windows 전용)"
+
+msgid "Encoding: %s (save to apply)"
+msgstr "인코딩: %s(적용하려면 저장하세요)"
+
+msgid "Save As"
+msgstr "다른 이름으로 저장"
+
+msgid "Binary Clipboard (Windows only)"
+msgstr "이진 클립보드(Windows 전용)"
+
+msgid "Paste Binary Content (clipboard has no matching content)"
+msgstr "이진 콘텐츠 붙여넣기(클립보드에 일치하는 내용이 없음)"
+
+msgid "Paste Binary Content (Windows only)"
+msgstr "이진 콘텐츠 붙여넣기(Windows 전용)"
+
+msgid "Paste %s (Windows only)"
+msgstr "%s 붙여넣기(Windows 전용)"
+
+msgid "Open Containing Folder (save the file first)"
+msgstr "포함 폴더 열기(먼저 파일을 저장하세요)"
+
+msgid "Open in Default Viewer (save the file first)"
+msgstr "기본 뷰어로 열기(먼저 파일을 저장하세요)"
+
+msgid "Save a Copy As"
+msgstr "사본을 다른 이름으로 저장"
+
+msgid "Copy saved: %s"
+msgstr "사본 저장됨: %s"
+
+msgid "Rename (save the file first)"
+msgstr "이름 바꾸기(먼저 파일을 저장하세요)"
+
+msgid "Move to Recycle Bin (save the file first)"
+msgstr "휴지통으로 이동(먼저 파일을 저장하세요)"
+
+msgid "Read/Write"
+msgstr "읽기/쓰기"
+
+msgid "Read-Only"
+msgstr "읽기 전용"
+
+msgid "Read-Only Attribute (save the file first)"
+msgstr "읽기 전용 속성(먼저 파일을 저장하세요)"
+
+msgid "File attribute: Read-Only"
+msgstr "파일 속성: 읽기 전용"
+
+msgid "File attribute: Read/Write"
+msgstr "파일 속성: 읽기/쓰기"
+
+msgid "Read-Only Attribute (Windows only)"
+msgstr "읽기 전용 속성(Windows 전용)"
+
+msgid "Read/Write for All Documents"
+msgstr "모든 문서 읽기/쓰기"
+
+msgid "Begin/End Select (Column Mode): move the caret, then repeat to finish"
+msgstr "선택 시작/끝(열 모드): 캐럿을 이동한 다음 다시 실행하면 완료됩니다"
+
+msgid "Begin/End Select: move the caret, then repeat to finish"
+msgstr "선택 시작/끝: 캐럿을 이동한 다음 다시 실행하면 완료됩니다"
+
+msgid "Select finished"
+msgstr "선택 완료됨"
+
+msgid "Found character 0x%02X at position %d"
+msgstr "위치 %d에서 문자 0x%02X 찾음"
+
+msgid "No character in that range found"
+msgstr "해당 범위에서 문자를 찾을 수 없음"
+
+msgid "Open File (selection is not an existing path)"
+msgstr "파일 열기(선택 항목이 존재하는 경로가 아님)"
+
+msgid "Always on Top: ON"
+msgstr "항상 위: 켜짐"
+
+msgid "Always on Top: OFF"
+msgstr "항상 위: 꺼짐"
+
+msgid "Always on Top (Windows only)"
+msgstr "항상 위(Windows 전용)"
+
+msgid "File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d"
+msgstr "파일: %s\n\n문자 수: %ld\n단어 수: %ld\n줄 수: %d"
+
+msgid "Summary"
+msgstr "요약"
+
+msgid "Activate document:"
+msgstr "문서 활성화:"
+
+msgid "Windows"
+msgstr "창"
+
+msgid "%s copied to clipboard"
+msgstr "%s이(가) 클립보드에 복사됨"
+
+msgid "%s digest"
+msgstr "%s 다이제스트"
+
+msgid "%s - generate from files"
+msgstr "%s - 파일에서 생성"
+
+msgid "Found: %s"
+msgstr "찾음: %s"
+
+msgid "Can't find: %s"
+msgstr "찾을 수 없음: %s"
+
+msgid "No marks to jump to"
+msgstr "이동할 표시가 없음"
+
+msgid "No marked text to copy"
+msgstr "복사할 표시된 텍스트가 없음"
+
+msgid "Copied %d marked range(s)"
+msgstr "표시된 범위 %d개 복사됨"
+
+msgid "Find in Files: nothing to search for"
+msgstr "파일에서 찾기: 검색할 내용 없음"
+
+msgid "Find in Files: no such directory - %s"
+msgstr "파일에서 찾기: 해당 디렉터리 없음 - %s"
+
+msgid "Replace in Files: %d occurrence(s) in %d file(s)"
+msgstr "파일에서 바꾸기: %d개 파일에서 %d개 일치"
+
+msgid "Find in Files: %d hit(s) in %d / %d file(s)"
+msgstr "파일에서 찾기: %d / %d개 파일에서 %d개 일치"
+
+msgid "No search results yet - run Find in Files or Find All first"
+msgstr "아직 검색 결과가 없습니다 - 먼저 파일에서 찾기 또는 모두 찾기를 실행하세요"
+
+msgid "Count: %d match(es)"
+msgstr "개수: %d개 일치"
+
+msgid "Replaced %d occurrence(s)"
+msgstr "%d개 항목 바뀜"
+
+msgid "Marked %d match(es)"
+msgstr "%d개 일치 표시됨"
+
+msgid "Recording macro..."
+msgstr "매크로 녹화 중..."
+
+msgid "Macro recorded - %d step(s)"
+msgstr "매크로 녹화됨 - %d단계"
+
+msgid "Macro name:"
+msgstr "매크로 이름:"
+
+msgid "Macro updated: %s"
+msgstr "매크로 업데이트됨: %s"
+
+msgid "Macro saved: %s"
+msgstr "매크로 저장됨: %s"
+
+msgid "Theme styles saved"
+msgstr "테마 스타일 저장됨"
+
+msgid "Import style theme(s)"
+msgstr "스타일 테마 가져오기"
+
+msgid "Imported %d theme(s) - choose them in Style Configurator"
+msgstr "%d개 테마 가져옴 - 스타일 구성기에서 선택하세요"
+
+msgid "Import plugin(s)"
+msgstr "플러그인 가져오기"
+
+msgid "Plugin files (*.dll)|*.dll"
+msgstr "플러그인 파일 (*.dll)|*.dll"
+
+msgid "Plugin files (*.dylib)|*.dylib"
+msgstr "플러그인 파일 (*.dylib)|*.dylib"
+
+msgid "Plugin files (*.so)|*.so"
+msgstr "플러그인 파일 (*.so)|*.so"
+
+msgid "%d plugin(s) imported. Restart wxNotepad++ now to load them?"
+msgstr "%d개 플러그인을 가져왔습니다. 지금 wxNotepad++를 다시 시작하여 불러오시겠습니까?"
+
+msgid "Imported %d plugin(s) - restart to load them"
+msgstr "%d개 플러그인을 가져왔습니다 - 불러오려면 다시 시작하세요"
+
+msgid "%s - not yet implemented in this build"
+msgstr "%s - 이 빌드에서는 아직 구현되지 않음"
+
+msgid "There was a problem printing.\nPerhaps your current printer is not set up correctly."
+msgstr "인쇄 중 문제가 발생했습니다.\n현재 프린터가 올바르게 설정되지 않았을 수 있습니다."
+
+msgid "Printed %s"
+msgstr "%s 인쇄됨"
+
+msgid "Change History (needs a newer Scintilla than this wx build carries)"
+msgstr "변경 기록(이 wx 빌드보다 더 새로운 Scintilla가 필요함)"
+
+msgid "User-Defined Language dialog"
+msgstr "사용자 정의 언어 대화 상자"
+
+msgid "Marked %d - style 1"
+msgstr "%d개 표시됨 - 스타일 1"
+
+msgid "Marked %d - style 2"
+msgstr "%d개 표시됨 - 스타일 2"
+
+msgid "Marked %d - style 3"
+msgstr "%d개 표시됨 - 스타일 3"
+
+msgid "Marked %d - style 4"
+msgstr "%d개 표시됨 - 스타일 4"
+
+msgid "Marked %d - style 5"
+msgstr "%d개 표시됨 - 스타일 5"
+
+msgid "wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgstr "wxNotepad++(실험적 wxWidgets 포크)\n\nwxWidgets %d.%d.%d\n%s\n\n실행 파일:\n%s"
+
+msgid "Debug Info"
+msgstr "디버그 정보"
+
+msgid "Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs."
+msgstr "사용법: wxnpp [파일...]\n\n명령줄에 지정된 파일은 탭으로 열립니다."
+
+msgid "Command Line Arguments"
+msgstr "명령줄 인수"

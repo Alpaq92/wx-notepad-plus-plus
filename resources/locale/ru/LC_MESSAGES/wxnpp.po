@@ -1808,3 +1808,270 @@ msgstr "Цвет вкладки удалён"
 
 msgid "Tab colour applied"
 msgstr "Цвет вкладки применён"
+
+msgid "Normal text file"
+msgstr "Обычный текстовый файл"
+
+msgid "Add Files"
+msgstr "Добавить файлы"
+
+msgid "Open Workspace"
+msgstr "Открыть рабочую область"
+
+msgid "Save Workspace As"
+msgstr "Сохранить рабочую область как"
+
+msgid "Workspace saved"
+msgstr "Рабочая область сохранена"
+
+msgid "Workspace: %s"
+msgstr "Рабочая область: %s"
+
+msgid "Select Folder as Workspace"
+msgstr "Выбрать папку как рабочую область"
+
+msgid "Folder as Workspace (save the file first)"
+msgstr "Папка как рабочая область (сначала сохраните файл)"
+
+msgid "Save Session"
+msgstr "Сохранить сессию"
+
+msgid "Session saved - %d file(s)"
+msgstr "Сессия сохранена - %d файл(ов)"
+
+msgid "Session loaded - %d file(s)"
+msgstr "Сессия загружена - %d файл(ов)"
+
+msgid "Tabs sorted"
+msgstr "Вкладки отсортированы"
+
+msgid "%s (Windows only)"
+msgstr "%s (только Windows)"
+
+msgid "Encoding: %s (save to apply)"
+msgstr "Кодировка: %s (сохраните, чтобы применить)"
+
+msgid "Save As"
+msgstr "Сохранить как"
+
+msgid "Binary Clipboard (Windows only)"
+msgstr "Двоичный буфер обмена (только Windows)"
+
+msgid "Paste Binary Content (clipboard has no matching content)"
+msgstr "Вставить двоичное содержимое (в буфере обмена нет подходящего содержимого)"
+
+msgid "Paste Binary Content (Windows only)"
+msgstr "Вставить двоичное содержимое (только Windows)"
+
+msgid "Paste %s (Windows only)"
+msgstr "Вставить %s (только Windows)"
+
+msgid "Open Containing Folder (save the file first)"
+msgstr "Открыть содержащую папку (сначала сохраните файл)"
+
+msgid "Open in Default Viewer (save the file first)"
+msgstr "Открыть в программе просмотра по умолчанию (сначала сохраните файл)"
+
+msgid "Save a Copy As"
+msgstr "Сохранить копию как"
+
+msgid "Copy saved: %s"
+msgstr "Копия сохранена: %s"
+
+msgid "Rename (save the file first)"
+msgstr "Переименовать (сначала сохраните файл)"
+
+msgid "Move to Recycle Bin (save the file first)"
+msgstr "Переместить в корзину (сначала сохраните файл)"
+
+msgid "Read/Write"
+msgstr "Чтение/запись"
+
+msgid "Read-Only"
+msgstr "Только для чтения"
+
+msgid "Read-Only Attribute (save the file first)"
+msgstr "Атрибут «только для чтения» (сначала сохраните файл)"
+
+msgid "File attribute: Read-Only"
+msgstr "Атрибут файла: только для чтения"
+
+msgid "File attribute: Read/Write"
+msgstr "Атрибут файла: чтение/запись"
+
+msgid "Read-Only Attribute (Windows only)"
+msgstr "Атрибут «только для чтения» (только Windows)"
+
+msgid "Read/Write for All Documents"
+msgstr "Чтение/запись для всех документов"
+
+msgid "Begin/End Select (Column Mode): move the caret, then repeat to finish"
+msgstr "Выделение Начало/Конец (столбцовый режим): переместите курсор, затем повторите, чтобы завершить"
+
+msgid "Begin/End Select: move the caret, then repeat to finish"
+msgstr "Выделение Начало/Конец: переместите курсор, затем повторите, чтобы завершить"
+
+msgid "Select finished"
+msgstr "Выделение завершено"
+
+msgid "Found character 0x%02X at position %d"
+msgstr "Найден символ 0x%02X в позиции %d"
+
+msgid "No character in that range found"
+msgstr "Символ в этом диапазоне не найден"
+
+msgid "Open File (selection is not an existing path)"
+msgstr "Открыть файл (выделение не является существующим путём)"
+
+msgid "Always on Top: ON"
+msgstr "Поверх всех окон: ВКЛ"
+
+msgid "Always on Top: OFF"
+msgstr "Поверх всех окон: ВЫКЛ"
+
+msgid "Always on Top (Windows only)"
+msgstr "Поверх всех окон (только Windows)"
+
+msgid "File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d"
+msgstr "Файл: %s\n\nСимволы: %ld\nСлова: %ld\nСтроки: %d"
+
+msgid "Summary"
+msgstr "Сводка"
+
+msgid "Activate document:"
+msgstr "Активировать документ:"
+
+msgid "Windows"
+msgstr "Окна"
+
+msgid "%s copied to clipboard"
+msgstr "%s скопировано в буфер обмена"
+
+msgid "%s digest"
+msgstr "Хеш %s"
+
+msgid "%s - generate from files"
+msgstr "%s - создать из файлов"
+
+msgid "Found: %s"
+msgstr "Найдено: %s"
+
+msgid "Can't find: %s"
+msgstr "Не найдено: %s"
+
+msgid "No marks to jump to"
+msgstr "Нет меток для перехода"
+
+msgid "No marked text to copy"
+msgstr "Нет отмеченного текста для копирования"
+
+msgid "Copied %d marked range(s)"
+msgstr "Скопировано %d отмеченный(х) диапазон(ов)"
+
+msgid "Find in Files: nothing to search for"
+msgstr "Поиск в файлах: нечего искать"
+
+msgid "Find in Files: no such directory - %s"
+msgstr "Поиск в файлах: такого каталога нет - %s"
+
+msgid "Replace in Files: %d occurrence(s) in %d file(s)"
+msgstr "Замена в файлах: %d вхождение(й) в %d файле(ах)"
+
+msgid "Find in Files: %d hit(s) in %d / %d file(s)"
+msgstr "Поиск в файлах: %d совпадений в %d / %d файлах"
+
+msgid "No search results yet - run Find in Files or Find All first"
+msgstr "Пока нет результатов поиска - сначала выполните «Поиск в файлах» или «Найти всё»"
+
+msgid "Count: %d match(es)"
+msgstr "Количество: %d совпадений"
+
+msgid "Replaced %d occurrence(s)"
+msgstr "Заменено %d вхождение(й)"
+
+msgid "Marked %d match(es)"
+msgstr "Отмечено %d совпадений"
+
+msgid "Recording macro..."
+msgstr "Запись макроса..."
+
+msgid "Macro recorded - %d step(s)"
+msgstr "Макрос записан - %d шаг(ов)"
+
+msgid "Macro name:"
+msgstr "Имя макроса:"
+
+msgid "Macro updated: %s"
+msgstr "Макрос обновлён: %s"
+
+msgid "Macro saved: %s"
+msgstr "Макрос сохранён: %s"
+
+msgid "Theme styles saved"
+msgstr "Стили темы сохранены"
+
+msgid "Import style theme(s)"
+msgstr "Импортировать тему(ы) стилей"
+
+msgid "Imported %d theme(s) - choose them in Style Configurator"
+msgstr "Импортировано %d тем(ы) - выберите их в конфигураторе стилей"
+
+msgid "Import plugin(s)"
+msgstr "Импортировать плагин(ы)"
+
+msgid "Plugin files (*.dll)|*.dll"
+msgstr "Файлы плагинов (*.dll)|*.dll"
+
+msgid "Plugin files (*.dylib)|*.dylib"
+msgstr "Файлы плагинов (*.dylib)|*.dylib"
+
+msgid "Plugin files (*.so)|*.so"
+msgstr "Файлы плагинов (*.so)|*.so"
+
+msgid "%d plugin(s) imported. Restart wxNotepad++ now to load them?"
+msgstr "Импортировано %d плагин(ов). Перезапустить wxNotepad++ сейчас, чтобы загрузить их?"
+
+msgid "Imported %d plugin(s) - restart to load them"
+msgstr "Импортировано %d плагин(ов) - перезапустите, чтобы загрузить их"
+
+msgid "%s - not yet implemented in this build"
+msgstr "%s - пока не реализовано в этой сборке"
+
+msgid "There was a problem printing.\nPerhaps your current printer is not set up correctly."
+msgstr "Возникла проблема при печати.\nВозможно, ваш текущий принтер настроен неверно."
+
+msgid "Printed %s"
+msgstr "Напечатано: %s"
+
+msgid "Change History (needs a newer Scintilla than this wx build carries)"
+msgstr "История изменений (требуется более новая Scintilla, чем в этой сборке wx)"
+
+msgid "User-Defined Language dialog"
+msgstr "Диалог языка, определённого пользователем"
+
+msgid "Marked %d - style 1"
+msgstr "Отмечено %d - стиль 1"
+
+msgid "Marked %d - style 2"
+msgstr "Отмечено %d - стиль 2"
+
+msgid "Marked %d - style 3"
+msgstr "Отмечено %d - стиль 3"
+
+msgid "Marked %d - style 4"
+msgstr "Отмечено %d - стиль 4"
+
+msgid "Marked %d - style 5"
+msgstr "Отмечено %d - стиль 5"
+
+msgid "wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgstr "wxNotepad++ (экспериментальный форк wxWidgets)\n\nwxWidgets %d.%d.%d\n%s\n\nИсполняемый файл:\n%s"
+
+msgid "Debug Info"
+msgstr "Отладочная информация"
+
+msgid "Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs."
+msgstr "Использование: wxnpp [файлы...]\n\nФайлы, указанные в командной строке, открываются во вкладках."
+
+msgid "Command Line Arguments"
+msgstr "Аргументы командной строки"

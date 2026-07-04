@@ -1808,3 +1808,270 @@ msgstr "Kolor karty usunięty"
 
 msgid "Tab colour applied"
 msgstr "Kolor karty zastosowany"
+
+msgid "Normal text file"
+msgstr "Zwykły plik tekstowy"
+
+msgid "Add Files"
+msgstr "Dodaj pliki"
+
+msgid "Open Workspace"
+msgstr "Otwórz obszar roboczy"
+
+msgid "Save Workspace As"
+msgstr "Zapisz obszar roboczy jako"
+
+msgid "Workspace saved"
+msgstr "Obszar roboczy zapisany"
+
+msgid "Workspace: %s"
+msgstr "Obszar roboczy: %s"
+
+msgid "Select Folder as Workspace"
+msgstr "Wybierz folder jako obszar roboczy"
+
+msgid "Folder as Workspace (save the file first)"
+msgstr "Folder jako obszar roboczy (najpierw zapisz plik)"
+
+msgid "Save Session"
+msgstr "Zapisz sesję"
+
+msgid "Session saved - %d file(s)"
+msgstr "Sesja zapisana - %d plik(ów)"
+
+msgid "Session loaded - %d file(s)"
+msgstr "Sesja wczytana - %d plik(ów)"
+
+msgid "Tabs sorted"
+msgstr "Karty posortowane"
+
+msgid "%s (Windows only)"
+msgstr "%s (tylko Windows)"
+
+msgid "Encoding: %s (save to apply)"
+msgstr "Kodowanie: %s (zapisz, aby zastosować)"
+
+msgid "Save As"
+msgstr "Zapisz jako"
+
+msgid "Binary Clipboard (Windows only)"
+msgstr "Schowek binarny (tylko Windows)"
+
+msgid "Paste Binary Content (clipboard has no matching content)"
+msgstr "Wklej zawartość binarną (schowek nie zawiera pasującej zawartości)"
+
+msgid "Paste Binary Content (Windows only)"
+msgstr "Wklej zawartość binarną (tylko Windows)"
+
+msgid "Paste %s (Windows only)"
+msgstr "Wklej %s (tylko Windows)"
+
+msgid "Open Containing Folder (save the file first)"
+msgstr "Otwórz folder zawierający (najpierw zapisz plik)"
+
+msgid "Open in Default Viewer (save the file first)"
+msgstr "Otwórz w domyślnej przeglądarce (najpierw zapisz plik)"
+
+msgid "Save a Copy As"
+msgstr "Zapisz kopię jako"
+
+msgid "Copy saved: %s"
+msgstr "Kopia zapisana: %s"
+
+msgid "Rename (save the file first)"
+msgstr "Zmień nazwę (najpierw zapisz plik)"
+
+msgid "Move to Recycle Bin (save the file first)"
+msgstr "Przenieś do Kosza (najpierw zapisz plik)"
+
+msgid "Read/Write"
+msgstr "Odczyt/zapis"
+
+msgid "Read-Only"
+msgstr "Tylko do odczytu"
+
+msgid "Read-Only Attribute (save the file first)"
+msgstr "Atrybut tylko do odczytu (najpierw zapisz plik)"
+
+msgid "File attribute: Read-Only"
+msgstr "Atrybut pliku: tylko do odczytu"
+
+msgid "File attribute: Read/Write"
+msgstr "Atrybut pliku: odczyt/zapis"
+
+msgid "Read-Only Attribute (Windows only)"
+msgstr "Atrybut tylko do odczytu (tylko Windows)"
+
+msgid "Read/Write for All Documents"
+msgstr "Odczyt/zapis dla wszystkich dokumentów"
+
+msgid "Begin/End Select (Column Mode): move the caret, then repeat to finish"
+msgstr "Zaznaczanie Początek/Koniec (tryb kolumnowy): przesuń kursor, a następnie powtórz, aby zakończyć"
+
+msgid "Begin/End Select: move the caret, then repeat to finish"
+msgstr "Zaznaczanie Początek/Koniec: przesuń kursor, a następnie powtórz, aby zakończyć"
+
+msgid "Select finished"
+msgstr "Zaznaczanie zakończone"
+
+msgid "Found character 0x%02X at position %d"
+msgstr "Znaleziono znak 0x%02X na pozycji %d"
+
+msgid "No character in that range found"
+msgstr "Nie znaleziono znaku w tym zakresie"
+
+msgid "Open File (selection is not an existing path)"
+msgstr "Otwórz plik (zaznaczenie nie jest istniejącą ścieżką)"
+
+msgid "Always on Top: ON"
+msgstr "Zawsze na wierzchu: WŁ."
+
+msgid "Always on Top: OFF"
+msgstr "Zawsze na wierzchu: WYŁ."
+
+msgid "Always on Top (Windows only)"
+msgstr "Zawsze na wierzchu (tylko Windows)"
+
+msgid "File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d"
+msgstr "Plik: %s\n\nZnaki: %ld\nSłowa: %ld\nWiersze: %d"
+
+msgid "Summary"
+msgstr "Podsumowanie"
+
+msgid "Activate document:"
+msgstr "Aktywuj dokument:"
+
+msgid "Windows"
+msgstr "Okna"
+
+msgid "%s copied to clipboard"
+msgstr "%s skopiowano do schowka"
+
+msgid "%s digest"
+msgstr "Suma %s"
+
+msgid "%s - generate from files"
+msgstr "%s - generuj z plików"
+
+msgid "Found: %s"
+msgstr "Znaleziono: %s"
+
+msgid "Can't find: %s"
+msgstr "Nie znaleziono: %s"
+
+msgid "No marks to jump to"
+msgstr "Brak znaczników do przejścia"
+
+msgid "No marked text to copy"
+msgstr "Brak zaznaczonego tekstu do skopiowania"
+
+msgid "Copied %d marked range(s)"
+msgstr "Skopiowano %d zaznaczony(ch) zakres(ów)"
+
+msgid "Find in Files: nothing to search for"
+msgstr "Znajdź w plikach: brak tekstu do wyszukania"
+
+msgid "Find in Files: no such directory - %s"
+msgstr "Znajdź w plikach: brak takiego katalogu - %s"
+
+msgid "Replace in Files: %d occurrence(s) in %d file(s)"
+msgstr "Zamień w plikach: %d wystąpień w %d pliku(ach)"
+
+msgid "Find in Files: %d hit(s) in %d / %d file(s)"
+msgstr "Znajdź w plikach: %d trafień w %d / %d plikach"
+
+msgid "No search results yet - run Find in Files or Find All first"
+msgstr "Brak wyników wyszukiwania - najpierw uruchom Znajdź w plikach lub Znajdź wszystko"
+
+msgid "Count: %d match(es)"
+msgstr "Liczba: %d dopasowań"
+
+msgid "Replaced %d occurrence(s)"
+msgstr "Zamieniono %d wystąpień"
+
+msgid "Marked %d match(es)"
+msgstr "Zaznaczono %d dopasowań"
+
+msgid "Recording macro..."
+msgstr "Nagrywanie makra..."
+
+msgid "Macro recorded - %d step(s)"
+msgstr "Makro nagrane - %d krok(ów)"
+
+msgid "Macro name:"
+msgstr "Nazwa makra:"
+
+msgid "Macro updated: %s"
+msgstr "Makro zaktualizowane: %s"
+
+msgid "Macro saved: %s"
+msgstr "Makro zapisane: %s"
+
+msgid "Theme styles saved"
+msgstr "Style motywu zapisane"
+
+msgid "Import style theme(s)"
+msgstr "Importuj motyw(y) stylu"
+
+msgid "Imported %d theme(s) - choose them in Style Configurator"
+msgstr "Zaimportowano %d motyw(ów) - wybierz je w Konfiguratorze stylów"
+
+msgid "Import plugin(s)"
+msgstr "Importuj wtyczkę(i)"
+
+msgid "Plugin files (*.dll)|*.dll"
+msgstr "Pliki wtyczek (*.dll)|*.dll"
+
+msgid "Plugin files (*.dylib)|*.dylib"
+msgstr "Pliki wtyczek (*.dylib)|*.dylib"
+
+msgid "Plugin files (*.so)|*.so"
+msgstr "Pliki wtyczek (*.so)|*.so"
+
+msgid "%d plugin(s) imported. Restart wxNotepad++ now to load them?"
+msgstr "Zaimportowano %d wtyczek(i). Zrestartować wxNotepad++ teraz, aby je wczytać?"
+
+msgid "Imported %d plugin(s) - restart to load them"
+msgstr "Zaimportowano %d wtyczek(i) - zrestartuj, aby je wczytać"
+
+msgid "%s - not yet implemented in this build"
+msgstr "%s - jeszcze niezaimplementowane w tej wersji"
+
+msgid "There was a problem printing.\nPerhaps your current printer is not set up correctly."
+msgstr "Wystąpił problem podczas drukowania.\nMoże obecna drukarka nie jest poprawnie skonfigurowana."
+
+msgid "Printed %s"
+msgstr "Wydrukowano %s"
+
+msgid "Change History (needs a newer Scintilla than this wx build carries)"
+msgstr "Historia zmian (wymaga nowszej Scintilli niż ta wersja wx)"
+
+msgid "User-Defined Language dialog"
+msgstr "Okno dialogowe języka zdefiniowanego przez użytkownika"
+
+msgid "Marked %d - style 1"
+msgstr "Zaznaczono %d - styl 1"
+
+msgid "Marked %d - style 2"
+msgstr "Zaznaczono %d - styl 2"
+
+msgid "Marked %d - style 3"
+msgstr "Zaznaczono %d - styl 3"
+
+msgid "Marked %d - style 4"
+msgstr "Zaznaczono %d - styl 4"
+
+msgid "Marked %d - style 5"
+msgstr "Zaznaczono %d - styl 5"
+
+msgid "wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgstr "wxNotepad++ (eksperymentalny fork wxWidgets)\n\nwxWidgets %d.%d.%d\n%s\n\nPlik wykonywalny:\n%s"
+
+msgid "Debug Info"
+msgstr "Informacje debugowania"
+
+msgid "Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs."
+msgstr "Użycie: wxnpp [pliki...]\n\nPliki podane w wierszu poleceń są otwierane w kartach."
+
+msgid "Command Line Arguments"
+msgstr "Argumenty wiersza poleceń"

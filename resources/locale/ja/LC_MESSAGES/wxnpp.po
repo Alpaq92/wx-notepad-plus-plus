@@ -1808,3 +1808,270 @@ msgstr "タブの色を解除しました"
 
 msgid "Tab colour applied"
 msgstr "タブの色を適用しました"
+
+msgid "Normal text file"
+msgstr "標準テキストファイル"
+
+msgid "Add Files"
+msgstr "ファイルを追加"
+
+msgid "Open Workspace"
+msgstr "ワークスペースを開く"
+
+msgid "Save Workspace As"
+msgstr "ワークスペースに名前を付けて保存"
+
+msgid "Workspace saved"
+msgstr "ワークスペースを保存しました"
+
+msgid "Workspace: %s"
+msgstr "ワークスペース: %s"
+
+msgid "Select Folder as Workspace"
+msgstr "フォルダーをワークスペースとして選択"
+
+msgid "Folder as Workspace (save the file first)"
+msgstr "フォルダーをワークスペースとして使用（先にファイルを保存してください）"
+
+msgid "Save Session"
+msgstr "セッションを保存"
+
+msgid "Session saved - %d file(s)"
+msgstr "セッションを保存しました - %d 個のファイル"
+
+msgid "Session loaded - %d file(s)"
+msgstr "セッションを読み込みました - %d 個のファイル"
+
+msgid "Tabs sorted"
+msgstr "タブを並べ替えました"
+
+msgid "%s (Windows only)"
+msgstr "%s（Windows のみ）"
+
+msgid "Encoding: %s (save to apply)"
+msgstr "エンコード: %s（適用するには保存してください）"
+
+msgid "Save As"
+msgstr "名前を付けて保存"
+
+msgid "Binary Clipboard (Windows only)"
+msgstr "バイナリクリップボード（Windows のみ）"
+
+msgid "Paste Binary Content (clipboard has no matching content)"
+msgstr "バイナリコンテンツを貼り付け（クリップボードに一致する内容がありません）"
+
+msgid "Paste Binary Content (Windows only)"
+msgstr "バイナリコンテンツを貼り付け（Windows のみ）"
+
+msgid "Paste %s (Windows only)"
+msgstr "%s を貼り付け（Windows のみ）"
+
+msgid "Open Containing Folder (save the file first)"
+msgstr "格納フォルダーを開く（先にファイルを保存してください）"
+
+msgid "Open in Default Viewer (save the file first)"
+msgstr "既定のビューアーで開く（先にファイルを保存してください）"
+
+msgid "Save a Copy As"
+msgstr "コピーを名前を付けて保存"
+
+msgid "Copy saved: %s"
+msgstr "コピーを保存しました: %s"
+
+msgid "Rename (save the file first)"
+msgstr "名前の変更（先にファイルを保存してください）"
+
+msgid "Move to Recycle Bin (save the file first)"
+msgstr "ごみ箱に移動（先にファイルを保存してください）"
+
+msgid "Read/Write"
+msgstr "読み書き可能"
+
+msgid "Read-Only"
+msgstr "読み取り専用"
+
+msgid "Read-Only Attribute (save the file first)"
+msgstr "読み取り専用属性（先にファイルを保存してください）"
+
+msgid "File attribute: Read-Only"
+msgstr "ファイル属性: 読み取り専用"
+
+msgid "File attribute: Read/Write"
+msgstr "ファイル属性: 読み書き可能"
+
+msgid "Read-Only Attribute (Windows only)"
+msgstr "読み取り専用属性（Windows のみ）"
+
+msgid "Read/Write for All Documents"
+msgstr "すべてのドキュメントを読み書き可能に"
+
+msgid "Begin/End Select (Column Mode): move the caret, then repeat to finish"
+msgstr "選択の開始/終了（列モード）: カーソルを移動し、もう一度実行すると完了します"
+
+msgid "Begin/End Select: move the caret, then repeat to finish"
+msgstr "選択の開始/終了: カーソルを移動し、もう一度実行すると完了します"
+
+msgid "Select finished"
+msgstr "選択が完了しました"
+
+msgid "Found character 0x%02X at position %d"
+msgstr "文字 0x%02X が位置 %d で見つかりました"
+
+msgid "No character in that range found"
+msgstr "その範囲に文字が見つかりませんでした"
+
+msgid "Open File (selection is not an existing path)"
+msgstr "ファイルを開く（選択範囲は既存のパスではありません）"
+
+msgid "Always on Top: ON"
+msgstr "常に最前面に表示: オン"
+
+msgid "Always on Top: OFF"
+msgstr "常に最前面に表示: オフ"
+
+msgid "Always on Top (Windows only)"
+msgstr "常に最前面に表示（Windows のみ）"
+
+msgid "File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d"
+msgstr "ファイル: %s\n\n文字数: %ld\n単語数: %ld\n行数: %d"
+
+msgid "Summary"
+msgstr "概要"
+
+msgid "Activate document:"
+msgstr "ドキュメントを有効化:"
+
+msgid "Windows"
+msgstr "ウィンドウ"
+
+msgid "%s copied to clipboard"
+msgstr "%s をクリップボードにコピーしました"
+
+msgid "%s digest"
+msgstr "%s ダイジェスト"
+
+msgid "%s - generate from files"
+msgstr "%s - ファイルから生成"
+
+msgid "Found: %s"
+msgstr "見つかりました: %s"
+
+msgid "Can't find: %s"
+msgstr "見つかりません: %s"
+
+msgid "No marks to jump to"
+msgstr "移動できるマークがありません"
+
+msgid "No marked text to copy"
+msgstr "コピーするマーク付きテキストがありません"
+
+msgid "Copied %d marked range(s)"
+msgstr "%d 件のマーク範囲をコピーしました"
+
+msgid "Find in Files: nothing to search for"
+msgstr "ファイル内検索: 検索する内容がありません"
+
+msgid "Find in Files: no such directory - %s"
+msgstr "ファイル内検索: そのようなフォルダーはありません - %s"
+
+msgid "Replace in Files: %d occurrence(s) in %d file(s)"
+msgstr "ファイル内置換: %d 個の一致（%d 個のファイル内）"
+
+msgid "Find in Files: %d hit(s) in %d / %d file(s)"
+msgstr "ファイル内検索: %d / %d 個のファイル中 %d 件ヒット"
+
+msgid "No search results yet - run Find in Files or Find All first"
+msgstr "検索結果がまだありません - 先に「ファイル内検索」または「すべて検索」を実行してください"
+
+msgid "Count: %d match(es)"
+msgstr "件数: %d 件一致"
+
+msgid "Replaced %d occurrence(s)"
+msgstr "%d 件を置換しました"
+
+msgid "Marked %d match(es)"
+msgstr "%d 件をマークしました"
+
+msgid "Recording macro..."
+msgstr "マクロを記録中..."
+
+msgid "Macro recorded - %d step(s)"
+msgstr "マクロを記録しました - %d ステップ"
+
+msgid "Macro name:"
+msgstr "マクロ名:"
+
+msgid "Macro updated: %s"
+msgstr "マクロを更新しました: %s"
+
+msgid "Macro saved: %s"
+msgstr "マクロを保存しました: %s"
+
+msgid "Theme styles saved"
+msgstr "テーマスタイルを保存しました"
+
+msgid "Import style theme(s)"
+msgstr "スタイルテーマをインポート"
+
+msgid "Imported %d theme(s) - choose them in Style Configurator"
+msgstr "%d 個のテーマをインポートしました - スタイル構成で選択してください"
+
+msgid "Import plugin(s)"
+msgstr "プラグインをインポート"
+
+msgid "Plugin files (*.dll)|*.dll"
+msgstr "プラグインファイル (*.dll)|*.dll"
+
+msgid "Plugin files (*.dylib)|*.dylib"
+msgstr "プラグインファイル (*.dylib)|*.dylib"
+
+msgid "Plugin files (*.so)|*.so"
+msgstr "プラグインファイル (*.so)|*.so"
+
+msgid "%d plugin(s) imported. Restart wxNotepad++ now to load them?"
+msgstr "%d 個のプラグインをインポートしました。読み込むには今すぐ wxNotepad++ を再起動しますか？"
+
+msgid "Imported %d plugin(s) - restart to load them"
+msgstr "%d 個のプラグインをインポートしました - 読み込むには再起動してください"
+
+msgid "%s - not yet implemented in this build"
+msgstr "%s - このビルドではまだ実装されていません"
+
+msgid "There was a problem printing.\nPerhaps your current printer is not set up correctly."
+msgstr "印刷中に問題が発生しました。\n現在のプリンターが正しく設定されていない可能性があります。"
+
+msgid "Printed %s"
+msgstr "%s を印刷しました"
+
+msgid "Change History (needs a newer Scintilla than this wx build carries)"
+msgstr "変更履歴（この wx ビルドが持つものより新しい Scintilla が必要です）"
+
+msgid "User-Defined Language dialog"
+msgstr "ユーザー定義言語ダイアログ"
+
+msgid "Marked %d - style 1"
+msgstr "%d 件マーク - スタイル1"
+
+msgid "Marked %d - style 2"
+msgstr "%d 件マーク - スタイル2"
+
+msgid "Marked %d - style 3"
+msgstr "%d 件マーク - スタイル3"
+
+msgid "Marked %d - style 4"
+msgstr "%d 件マーク - スタイル4"
+
+msgid "Marked %d - style 5"
+msgstr "%d 件マーク - スタイル5"
+
+msgid "wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgstr "wxNotepad++（wxWidgets の実験的フォーク）\n\nwxWidgets %d.%d.%d\n%s\n\n実行ファイル:\n%s"
+
+msgid "Debug Info"
+msgstr "デバッグ情報"
+
+msgid "Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs."
+msgstr "使い方: wxnpp [ファイル...]\n\nコマンドラインで指定したファイルはタブで開かれます。"
+
+msgid "Command Line Arguments"
+msgstr "コマンドライン引数"

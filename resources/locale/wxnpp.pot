@@ -1283,6 +1283,9 @@ msgstr ""
 msgid "System default"
 msgstr ""
 
+msgid "Normal text file"
+msgstr ""
+
 msgid "Go to line"
 msgstr ""
 
@@ -1424,6 +1427,27 @@ msgstr ""
 msgid "Save Workspace As..."
 msgstr ""
 
+msgid "Add Files"
+msgstr ""
+
+msgid "Open Workspace"
+msgstr ""
+
+msgid "Save Workspace As"
+msgstr ""
+
+msgid "Workspace saved"
+msgstr ""
+
+msgid "Workspace: %s"
+msgstr ""
+
+msgid "Select Folder as Workspace"
+msgstr ""
+
+msgid "Folder as Workspace (save the file first)"
+msgstr ""
+
 msgid "Find: "
 msgstr ""
 
@@ -1472,16 +1496,28 @@ msgstr ""
 msgid "Failed to run:\n"
 msgstr ""
 
-msgid "Could not read the session file."
+msgid "Save Session"
+msgstr ""
+
+msgid "Session saved - %d file(s)"
 msgstr ""
 
 msgid "Load Session"
 msgstr ""
 
+msgid "Could not read the session file."
+msgstr ""
+
 msgid "No session data in this file."
 msgstr ""
 
+msgid "Session loaded - %d file(s)"
+msgstr ""
+
 msgid "new %d"
+msgstr ""
+
+msgid "Tabs sorted"
 msgstr ""
 
 msgid "Red"
@@ -1616,6 +1652,12 @@ msgstr ""
 msgid "Encoding"
 msgstr ""
 
+msgid "%s (Windows only)"
+msgstr ""
+
+msgid "Encoding: %s (save to apply)"
+msgstr ""
+
 msgid "Monitoring needs a file on disk - save the document first"
 msgstr ""
 
@@ -1628,16 +1670,157 @@ msgstr ""
 msgid "Monitoring stopped"
 msgstr ""
 
+msgid "Save As"
+msgstr ""
+
+msgid "Binary Clipboard (Windows only)"
+msgstr ""
+
+msgid "Paste Binary Content (clipboard has no matching content)"
+msgstr ""
+
+msgid "Paste Binary Content (Windows only)"
+msgstr ""
+
 msgid "Clipboard has no matching content."
+msgstr ""
+
+msgid "Paste %s (Windows only)"
+msgstr ""
+
+msgid "Open Containing Folder (save the file first)"
+msgstr ""
+
+msgid "Open in Default Viewer (save the file first)"
+msgstr ""
+
+msgid "Save a Copy As"
+msgstr ""
+
+msgid "Copy saved: %s"
+msgstr ""
+
+msgid "Rename (save the file first)"
+msgstr ""
+
+msgid "Move to Recycle Bin (save the file first)"
 msgstr ""
 
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr ""
 
+msgid "Read/Write"
+msgstr ""
+
+msgid "Read-Only"
+msgstr ""
+
+msgid "Read-Only Attribute (save the file first)"
+msgstr ""
+
+msgid "File attribute: Read-Only"
+msgstr ""
+
+msgid "File attribute: Read/Write"
+msgstr ""
+
+msgid "Read-Only Attribute (Windows only)"
+msgstr ""
+
+msgid "Read/Write for All Documents"
+msgstr ""
+
+msgid "Begin/End Select (Column Mode): move the caret, then repeat to finish"
+msgstr ""
+
+msgid "Begin/End Select: move the caret, then repeat to finish"
+msgstr ""
+
+msgid "Select finished"
+msgstr ""
+
 msgid "Enter valid character codes."
 msgstr ""
 
+msgid "Found character 0x%02X at position %d"
+msgstr ""
+
+msgid "No character in that range found"
+msgstr ""
+
+msgid "Open File (selection is not an existing path)"
+msgstr ""
+
+msgid "Always on Top: ON"
+msgstr ""
+
+msgid "Always on Top: OFF"
+msgstr ""
+
+msgid "Always on Top (Windows only)"
+msgstr ""
+
+msgid "File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d"
+msgstr ""
+
+msgid "Summary"
+msgstr ""
+
+msgid "Activate document:"
+msgstr ""
+
+msgid "Windows"
+msgstr ""
+
+msgid "%s copied to clipboard"
+msgstr ""
+
+msgid "%s digest"
+msgstr ""
+
+msgid "%s - generate from files"
+msgstr ""
+
+msgid "Found: %s"
+msgstr ""
+
+msgid "Can't find: %s"
+msgstr ""
+
+msgid "No marks to jump to"
+msgstr ""
+
+msgid "No marked text to copy"
+msgstr ""
+
+msgid "Copied %d marked range(s)"
+msgstr ""
+
 msgid "Search results"
+msgstr ""
+
+msgid "Find in Files: nothing to search for"
+msgstr ""
+
+msgid "Find in Files: no such directory - %s"
+msgstr ""
+
+msgid "Replace in Files: %d occurrence(s) in %d file(s)"
+msgstr ""
+
+msgid "Find in Files: %d hit(s) in %d / %d file(s)"
+msgstr ""
+
+msgid "No search results yet - run Find in Files or Find All first"
+msgstr ""
+
+msgid "Count: %d match(es)"
+msgstr ""
+
+msgid "Replaced %d occurrence(s)"
+msgstr ""
+
+msgid "Marked %d match(es)"
 msgstr ""
 
 msgid "Preferences"
@@ -1754,10 +1937,25 @@ msgstr ""
 msgid "Footer:"
 msgstr ""
 
+msgid "Recording macro..."
+msgstr ""
+
+msgid "Macro recorded - %d step(s)"
+msgstr ""
+
 msgid "Run until the end of file"
 msgstr ""
 
 msgid "times"
+msgstr ""
+
+msgid "Macro name:"
+msgstr ""
+
+msgid "Macro updated: %s"
+msgstr ""
+
+msgid "Macro saved: %s"
 msgstr ""
 
 msgid "Select theme:"
@@ -1778,6 +1976,42 @@ msgstr ""
 msgid "Save && Close"
 msgstr ""
 
+msgid "Theme styles saved"
+msgstr ""
+
+msgid "Import style theme(s)"
+msgstr ""
+
+msgid "Imported %d theme(s) - choose them in Style Configurator"
+msgstr ""
+
+msgid "Import plugin(s)"
+msgstr ""
+
+msgid "Plugin files (*.dll)|*.dll"
+msgstr ""
+
+msgid "Plugin files (*.dylib)|*.dylib"
+msgstr ""
+
+msgid "Plugin files (*.so)|*.so"
+msgstr ""
+
+msgid "%d plugin(s) imported. Restart wxNotepad++ now to load them?"
+msgstr ""
+
+msgid "Imported %d plugin(s) - restart to load them"
+msgstr ""
+
+msgid "%s - not yet implemented in this build"
+msgstr ""
+
+msgid "There was a problem printing.\nPerhaps your current printer is not set up correctly."
+msgstr ""
+
+msgid "Printed %s"
+msgstr ""
+
 msgid "Encode as ANSI"
 msgstr ""
 
@@ -1796,10 +2030,43 @@ msgstr ""
 msgid "Convert to UTF-8 BOM"
 msgstr ""
 
+msgid "Change History (needs a newer Scintilla than this wx build carries)"
+msgstr ""
+
 msgid "Column (rectangular) selection:\n\n- Alt + drag the mouse\n- Alt + Shift + Arrow keys\n- Alt + Shift + Click\n\nTyping or pasting applies to every line of the block at once."
 msgstr ""
 
 msgid "Column Mode"
+msgstr ""
+
+msgid "User-Defined Language dialog"
+msgstr ""
+
+msgid "Marked %d - style 1"
+msgstr ""
+
+msgid "Marked %d - style 2"
+msgstr ""
+
+msgid "Marked %d - style 3"
+msgstr ""
+
+msgid "Marked %d - style 4"
+msgstr ""
+
+msgid "Marked %d - style 5"
+msgstr ""
+
+msgid "wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgstr ""
+
+msgid "Debug Info"
+msgstr ""
+
+msgid "Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs."
+msgstr ""
+
+msgid "Command Line Arguments"
 msgstr ""
 
 msgid "length : %d    lines : %d"
