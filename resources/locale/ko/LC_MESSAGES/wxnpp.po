@@ -2117,3 +2117,264 @@ msgstr "%d / %d"
 
 msgid "%d matches"
 msgstr "%d 개 일치"
+
+msgid "Font name (blank = inherit):"
+msgstr "글꼴 이름(비워두면 상속):"
+
+msgid "Font size (0 = inherit):"
+msgstr "글꼴 크기(0=상속):"
+
+msgid "Underline"
+msgstr "밑줄"
+
+msgid "Nesting: also colour these inside this style"
+msgstr "중첩: 이 스타일 안에서도 다음 항목에 색상 적용"
+
+msgid "OK"
+msgstr "확인"
+
+msgid "Existing:"
+msgstr "기존:"
+
+msgid "Name:"
+msgstr "이름:"
+
+msgid "Ext:"
+msgstr "확장자:"
+
+msgid "Folder && Default"
+msgstr "폴딩과 기본값"
+
+msgid "Comment && Number"
+msgstr "주석과 숫자"
+
+msgid "Operator && Delimiter"
+msgstr "연산자와 구분자"
+
+msgid "Keywords"
+msgstr "키워드"
+
+msgid "Ignore case"
+msgstr "대소문자 무시"
+
+msgid "Allow folding of comments"
+msgstr "주석 폴딩 허용"
+
+msgid "Fold compact"
+msgstr "압축 폴딩"
+
+msgid "Style Default..."
+msgstr "기본 스타일..."
+
+msgid "Folder in code1:"
+msgstr "코드1 폴딩:"
+
+msgid "Folder in code2:"
+msgstr "코드2 폴딩:"
+
+msgid "Folder in comment:"
+msgstr "주석 폴딩:"
+
+msgid "Open:"
+msgstr "여는 태그:"
+
+msgid "Middle:"
+msgstr "중간:"
+
+msgid "Close:"
+msgstr "닫는 태그:"
+
+msgid "Style..."
+msgstr "스타일..."
+
+msgid "Line comment open:"
+msgstr "줄 주석 시작:"
+
+msgid "Block comment open:"
+msgstr "블록 주석 시작:"
+
+msgid "Block comment close:"
+msgstr "블록 주석 끝:"
+
+msgid "Style Line Comment..."
+msgstr "줄 주석 스타일..."
+
+msgid "Style Comment..."
+msgstr "주석 스타일..."
+
+msgid "Prefix 1:"
+msgstr "접두사 1:"
+
+msgid "Prefix 2:"
+msgstr "접두사 2:"
+
+msgid "Extras 1:"
+msgstr "추가 1:"
+
+msgid "Extras 2:"
+msgstr "추가 2:"
+
+msgid "Suffix 1:"
+msgstr "접미사 1:"
+
+msgid "Suffix 2:"
+msgstr "접미사 2:"
+
+msgid "Range:"
+msgstr "범위:"
+
+msgid "Style Number..."
+msgstr "숫자 스타일..."
+
+msgid ". (dot)"
+msgstr ". (마침표)"
+
+msgid ", (comma)"
+msgstr ", (쉼표)"
+
+msgid "both"
+msgstr "둘 다"
+
+msgid "Decimal separator"
+msgstr "소수점 구분 기호"
+
+msgid "Off"
+msgstr "끄기"
+
+msgid "Force lowercase before matching"
+msgstr "매칭 전 소문자로 강제 변환"
+
+msgid "Force lowercase in keyword lists too"
+msgstr "키워드 목록에서도 소문자로 강제 변환"
+
+msgid "Force pure LC"
+msgstr "순수 소문자 강제"
+
+msgid "Operators 1:"
+msgstr "연산자 1:"
+
+msgid "Operators 2:"
+msgstr "연산자 2:"
+
+msgid "Style Operators..."
+msgstr "연산자 스타일..."
+
+msgid "Delimiters (8 sets)"
+msgstr "구분자 (8세트)"
+
+msgid "Set"
+msgstr "세트"
+
+msgid "Escape"
+msgstr "이스케이프"
+
+msgid "Keywords %d:"
+msgstr "키워드 %d:"
+
+msgid "Prefix mode"
+msgstr "접두사 모드"
+
+msgid "Please give the language a name."
+msgstr "언어 이름을 입력하세요."
+
+msgid "Remove user-defined language \"%s\"?"
+msgstr "사용자 정의 언어 \"%s\"를(을) 제거하시겠습니까?"
+
+msgid "User-Defined Language \"%s\" saved"
+msgstr "사용자 정의 언어 \"%s\" 저장됨"
+
+msgid "Keyword1"
+msgstr "키워드1"
+
+msgid "Delimiter1"
+msgstr "구분자1"
+
+msgid "Keyword2"
+msgstr "키워드2"
+
+msgid "Delimiter2"
+msgstr "구분자2"
+
+msgid "Keyword3"
+msgstr "키워드3"
+
+msgid "Delimiter3"
+msgstr "구분자3"
+
+msgid "Keyword4"
+msgstr "키워드4"
+
+msgid "Delimiter4"
+msgstr "구분자4"
+
+msgid "Keyword5"
+msgstr "키워드5"
+
+msgid "Delimiter5"
+msgstr "구분자5"
+
+msgid "Keyword6"
+msgstr "키워드6"
+
+msgid "Delimiter6"
+msgstr "구분자6"
+
+msgid "Keyword7"
+msgstr "키워드7"
+
+msgid "Delimiter7"
+msgstr "구분자7"
+
+msgid "Keyword8"
+msgstr "키워드8"
+
+msgid "Delimiter8"
+msgstr "구분자8"
+
+msgid "Operator1"
+msgstr "연산자1"
+
+msgid "Operator2"
+msgstr "연산자2"
+
+msgid "Comment"
+msgstr "주석"
+
+msgid "Line comment"
+msgstr "줄 주석"
+
+msgid "Number"
+msgstr "숫자"
+
+msgid "Style: Default"
+msgstr "스타일: 기본값"
+
+msgid "Style: Folder in code1"
+msgstr "스타일: 코드1 폴딩"
+
+msgid "Style: Folder in code2"
+msgstr "스타일: 코드2 폴딩"
+
+msgid "Style: Folder in comment"
+msgstr "스타일: 주석 폴딩"
+
+msgid "Style: Line Comment"
+msgstr "스타일: 줄 주석"
+
+msgid "Style: Comment"
+msgstr "스타일: 주석"
+
+msgid "Style: Number"
+msgstr "스타일: 숫자"
+
+msgid "Style: Operators"
+msgstr "스타일: 연산자"
+
+msgid "Style: Delimiter %d"
+msgstr "스타일: 구분자 %d"
+
+msgid "Style: Keywords %d"
+msgstr "스타일: 키워드 %d"
+
+msgid "Operators"
+msgstr "연산자"

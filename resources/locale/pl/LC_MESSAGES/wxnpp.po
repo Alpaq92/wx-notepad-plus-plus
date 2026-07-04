@@ -2117,3 +2117,264 @@ msgstr "%d z %d"
 
 msgid "%d matches"
 msgstr "%d dopasowań"
+
+msgid "Font name (blank = inherit):"
+msgstr "Nazwa czcionki (puste = dziedziczone):"
+
+msgid "Font size (0 = inherit):"
+msgstr "Rozmiar czcionki (0 = dziedziczony):"
+
+msgid "Underline"
+msgstr "Podkreślenie"
+
+msgid "Nesting: also colour these inside this style"
+msgstr "Zagnieżdżanie: koloruj też te elementy wewnątrz tego stylu"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Existing:"
+msgstr "Istniejący:"
+
+msgid "Name:"
+msgstr "Nazwa:"
+
+msgid "Ext:"
+msgstr "Rozsz.:"
+
+msgid "Folder && Default"
+msgstr "Zwijanie i domyślne"
+
+msgid "Comment && Number"
+msgstr "Komentarz i liczby"
+
+msgid "Operator && Delimiter"
+msgstr "Operator i ogranicznik"
+
+msgid "Keywords"
+msgstr "Słowa kluczowe"
+
+msgid "Ignore case"
+msgstr "Ignoruj wielkość liter"
+
+msgid "Allow folding of comments"
+msgstr "Zezwól na zwijanie komentarzy"
+
+msgid "Fold compact"
+msgstr "Zwijanie kompaktowe"
+
+msgid "Style Default..."
+msgstr "Styl domyślny..."
+
+msgid "Folder in code1:"
+msgstr "Zwijanie w kodzie1:"
+
+msgid "Folder in code2:"
+msgstr "Zwijanie w kodzie2:"
+
+msgid "Folder in comment:"
+msgstr "Zwijanie w komentarzu:"
+
+msgid "Open:"
+msgstr "Otwórz:"
+
+msgid "Middle:"
+msgstr "Środek:"
+
+msgid "Close:"
+msgstr "Zamknij:"
+
+msgid "Style..."
+msgstr "Styl..."
+
+msgid "Line comment open:"
+msgstr "Początek komentarza liniowego:"
+
+msgid "Block comment open:"
+msgstr "Początek komentarza blokowego:"
+
+msgid "Block comment close:"
+msgstr "Koniec komentarza blokowego:"
+
+msgid "Style Line Comment..."
+msgstr "Styl komentarza liniowego..."
+
+msgid "Style Comment..."
+msgstr "Styl komentarza..."
+
+msgid "Prefix 1:"
+msgstr "Prefiks 1:"
+
+msgid "Prefix 2:"
+msgstr "Prefiks 2:"
+
+msgid "Extras 1:"
+msgstr "Dodatkowe 1:"
+
+msgid "Extras 2:"
+msgstr "Dodatkowe 2:"
+
+msgid "Suffix 1:"
+msgstr "Sufiks 1:"
+
+msgid "Suffix 2:"
+msgstr "Sufiks 2:"
+
+msgid "Range:"
+msgstr "Zakres:"
+
+msgid "Style Number..."
+msgstr "Styl liczb..."
+
+msgid ". (dot)"
+msgstr ". (kropka)"
+
+msgid ", (comma)"
+msgstr ", (przecinek)"
+
+msgid "both"
+msgstr "oba"
+
+msgid "Decimal separator"
+msgstr "Separator dziesiętny"
+
+msgid "Off"
+msgstr "Wyłączone"
+
+msgid "Force lowercase before matching"
+msgstr "Wymuś małe litery przed dopasowaniem"
+
+msgid "Force lowercase in keyword lists too"
+msgstr "Wymuś małe litery też na listach słów kluczowych"
+
+msgid "Force pure LC"
+msgstr "Wymuś czyste małe litery"
+
+msgid "Operators 1:"
+msgstr "Operatory 1:"
+
+msgid "Operators 2:"
+msgstr "Operatory 2:"
+
+msgid "Style Operators..."
+msgstr "Styl operatorów..."
+
+msgid "Delimiters (8 sets)"
+msgstr "Ograniczniki (8 zestawów)"
+
+msgid "Set"
+msgstr "Zestaw"
+
+msgid "Escape"
+msgstr "Znak ucieczki"
+
+msgid "Keywords %d:"
+msgstr "Słowa kluczowe %d:"
+
+msgid "Prefix mode"
+msgstr "Tryb prefiksu"
+
+msgid "Please give the language a name."
+msgstr "Nadaj nazwę temu językowi."
+
+msgid "Remove user-defined language \"%s\"?"
+msgstr "Usunąć zdefiniowany przez użytkownika język \"%s\"?"
+
+msgid "User-Defined Language \"%s\" saved"
+msgstr "Zapisano zdefiniowany przez użytkownika język \"%s\""
+
+msgid "Keyword1"
+msgstr "Słowo kl. 1"
+
+msgid "Delimiter1"
+msgstr "Ogranicznik 1"
+
+msgid "Keyword2"
+msgstr "Słowo kl. 2"
+
+msgid "Delimiter2"
+msgstr "Ogranicznik 2"
+
+msgid "Keyword3"
+msgstr "Słowo kl. 3"
+
+msgid "Delimiter3"
+msgstr "Ogranicznik 3"
+
+msgid "Keyword4"
+msgstr "Słowo kl. 4"
+
+msgid "Delimiter4"
+msgstr "Ogranicznik 4"
+
+msgid "Keyword5"
+msgstr "Słowo kl. 5"
+
+msgid "Delimiter5"
+msgstr "Ogranicznik 5"
+
+msgid "Keyword6"
+msgstr "Słowo kl. 6"
+
+msgid "Delimiter6"
+msgstr "Ogranicznik 6"
+
+msgid "Keyword7"
+msgstr "Słowo kl. 7"
+
+msgid "Delimiter7"
+msgstr "Ogranicznik 7"
+
+msgid "Keyword8"
+msgstr "Słowo kl. 8"
+
+msgid "Delimiter8"
+msgstr "Ogranicznik 8"
+
+msgid "Operator1"
+msgstr "Operator 1"
+
+msgid "Operator2"
+msgstr "Operator 2"
+
+msgid "Comment"
+msgstr "Komentarz"
+
+msgid "Line comment"
+msgstr "Komentarz liniowy"
+
+msgid "Number"
+msgstr "Liczba"
+
+msgid "Style: Default"
+msgstr "Styl: Domyślny"
+
+msgid "Style: Folder in code1"
+msgstr "Styl: Zwijanie w kodzie1"
+
+msgid "Style: Folder in code2"
+msgstr "Styl: Zwijanie w kodzie2"
+
+msgid "Style: Folder in comment"
+msgstr "Styl: Zwijanie w komentarzu"
+
+msgid "Style: Line Comment"
+msgstr "Styl: Komentarz liniowy"
+
+msgid "Style: Comment"
+msgstr "Styl: Komentarz"
+
+msgid "Style: Number"
+msgstr "Styl: Liczba"
+
+msgid "Style: Operators"
+msgstr "Styl: Operatory"
+
+msgid "Style: Delimiter %d"
+msgstr "Styl: Ogranicznik %d"
+
+msgid "Style: Keywords %d"
+msgstr "Styl: Słowa kluczowe %d"
+
+msgid "Operators"
+msgstr "Operatory"
