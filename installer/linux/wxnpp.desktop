@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=wxNotepad++
+GenericName=Text Editor
+Comment=Experimental cross-platform Notepad++-faithful editor
+Exec=wxnpp %F
+Icon=wxnpp
+Terminal=false
+Categories=Utility;TextEditor;Development;
+MimeType=text/plain;

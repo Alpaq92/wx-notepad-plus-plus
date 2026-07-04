@@ -10,7 +10,7 @@
 #   ./build/bin/wxnpp            (wxnpp.exe on Windows)
 
 cmake_minimum_required(VERSION 3.20)
-project(wxNotepadPlusPlus LANGUAGES CXX)
+project(wxNotepadPlusPlus VERSION 0.1.0 LANGUAGES CXX)
 
 include(FetchContent)
 

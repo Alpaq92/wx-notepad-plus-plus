@@ -9,10 +9,11 @@ name: build
 on:
   push:
     branches: [ wx-migration, master ]
-    paths: [ 'src/**', 'include/**', 'third_party/**', 'resources/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
+    paths: [ 'src/**', 'include/**', 'third_party/**', 'resources/**', 'installer/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
   pull_request:
-    paths: [ 'src/**', 'include/**', 'third_party/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
+    paths: [ 'src/**', 'include/**', 'third_party/**', 'installer/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
   workflow_dispatch:
+  workflow_call:   # release.yml calls this on a version tag push, then publishes the 3 packaging artifacts
 
 # A newer push to a branch cancels that branch's still-queued/running build, so the matrix doesn't
 # pile up (each macOS run counts 10x against private-repo Actions minutes). Only the latest commit
@@ -42,18 +43,72 @@ jobs:
           sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config libgtk-3-dev
 
       # Cache the fetched + built wxWidgets so iterations don't rebuild it from source each run.
+      # "v2" (was unversioned): the cached build/_deps holds a CMakeCache.txt stamped with whichever
+      # generator configured it - bumping the key forces a clean rebuild under the now-forced Ninja
+      # generator below instead of erroring with "generator does not match the one used previously".
       - name: Cache wxWidgets
         uses: actions/cache@v6
         with:
           path: build/_deps
-          key: wx331-${{ matrix.name }}-${{ hashFiles('CMakeLists.txt') }}
-          restore-keys: wx331-${{ matrix.name }}-
+          key: wx331-v2-${{ matrix.name }}-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: wx331-v2-${{ matrix.name }}-
 
+      # msvc-dev-cmd: puts cl.exe (not the runner's incidental MinGW g++) first on PATH, which
+      # plain Ninja needs since - unlike the Visual Studio generator - it has no built-in MSVC
+      # discovery of its own.
+      - name: Set up MSVC (Windows)
+        if: matrix.name == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # -G Ninja: without it, Windows' default generator is the multi-config "Visual Studio" one,
+      # which ignores RUNTIME_OUTPUT_DIRECTORY's plain (non-per-config) setting and puts the exe in
+      # build/bin/Release/ instead of build/bin/ - breaking every packaging script below that reads
+      # from build/bin/wxnpp.exe directly. Ninja is single-config and preinstalled on all 3 hosted
+      # runner images; this also matches the build command documented at the top of CMakeLists.txt.
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       # Cap parallelism to 2: one cc1plus per core compiling wxWidgets + the large single-TU main.cpp
       # at -O2 all at once OOM-kills cc1plus on the hosted runners (esp. the 7 GB macOS M1). Two at a
       # time fits, at the cost of a slower (but reliable) build.
       - name: Build wxnpp
         run: cmake --build build --config Release --target wxnpp --parallel 2
+
+      - name: Package AppImage (Linux)
+        if: matrix.name == 'linux'
+        run: bash installer/linux/build-appimage.sh
+
+      - name: Package .deb (Linux)
+        if: matrix.name == 'linux'
+        run: bash installer/linux/build-deb.sh
+
+      - name: Upload Linux packages
+        if: matrix.name == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wxnpp-linux-packages
+          path: build/installer/*
+
+      - name: Package .dmg (macOS)
+        if: matrix.name == 'macos'
+        run: bash installer/macos/build-dmg.sh
+
+      - name: Upload macOS package
+        if: matrix.name == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wxnpp-macos-package
+          path: build/installer/*
+
+      # GitHub's windows-latest runner ships Inno Setup 6 preinstalled at this path.
+      - name: Package installer (Windows)
+        if: matrix.name == 'windows'
+        shell: cmd
+        run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\windows\wxnpp.iss'
+
+      - name: Upload Windows installer
+        if: matrix.name == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wxnpp-windows-installer
+          path: build/installer/*
