@@ -3502,7 +3502,19 @@ private:
         for (wxTimer** t : { &m_monTimer, &m_flTimer }) if (*t) { (*t)->Stop(); delete *t; *t = nullptr; }
         m_timer.Stop();
         m_aui.UnInit();
-        unloadNibPlugins();   // deactivate + unload Nib plugins (the GPL bridge removes its frame subclass first)
+        // Defer the actual unload past this call stack (CallAfter -> next idle event), not a synchronous
+        // call here: onCloseWindow runs NESTED inside the native WM_CLOSE dispatch, and for a Nib plugin
+        // like the N++ bridge that subclasses this same frame (SetWindowSubclass/bridge_frame_proc),
+        // RemoveWindowSubclass called reentrantly from within that same window's message dispatch only
+        // DEFERS the removal (documented comctl32 behaviour) rather than completing it immediately. If
+        // FreeLibrary then runs (as unloadNibPlugins() does) before the deferred removal finalizes, and
+        // e.Skip() goes on to destroy the window SYNCHRONOUSLY in the same nested call - as it does here -
+        // the still-technically-attached subclass gets one more WM_DESTROY/WM_NCDESTROY dispatched through
+        // it, jumping into the now-unmapped DLL and crashing (0xc0000005, consistently at the same offset -
+        // this is what showed up as npp_bridge.dll_unloaded crashes on exit). Running the unload from
+        // CallAfter guarantees it happens after the whole WM_CLOSE/WM_DESTROY chain has fully unwound back
+        // to the event loop, by which point the subclass is already gone and the window already destroyed.
+        CallAfter([this] { unloadNibPlugins(); });
         e.Skip();
     }
     // Show "*" on the active tab + title bar while the document has unsaved changes (like Notepad++).

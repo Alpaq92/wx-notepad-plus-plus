@@ -303,6 +303,12 @@ static void activate(NibHost* host, NibQueryFn query)
 
 static void deactivate(NibHost*)
 {
+    // RemoveWindowSubclass here relies on the host calling deactivate()/unload OUTSIDE the frame's own
+    // WM_CLOSE/WM_DESTROY dispatch (see the host's onCloseWindow: it defers unloadNibPlugins() via
+    // CallAfter). Calling this reentrantly - from a handler still nested inside that same window's
+    // message dispatch, since this proc IS subclassed onto it - only DEFERS the removal (documented
+    // comctl32 behaviour), and if FreeLibrary then runs before the deferred removal finalizes, a
+    // later WM_DESTROY/WM_NCDESTROY on the same call chain jumps straight into the now-unmapped DLL.
     if (g_npp._nppHandle) ::RemoveWindowSubclass(g_npp._nppHandle, bridge_frame_proc, 1);   // unhook before we unload
     // The loaded N++ plugin DLLs + any docked windows are reclaimed at process exit.
 }
