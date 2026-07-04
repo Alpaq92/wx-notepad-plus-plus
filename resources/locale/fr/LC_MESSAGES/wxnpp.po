@@ -2096,3 +2096,6 @@ msgstr "Icônes Solar (vert)"
 
 msgid "IconPark icons (teal/lime)"
 msgstr "Icônes IconPark (sarcelle/citron vert)"
+
+msgid "Line icons (Tabler)"
+msgstr "Icônes filaires (Tabler)"

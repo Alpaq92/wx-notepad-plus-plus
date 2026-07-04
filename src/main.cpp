@@ -5702,7 +5702,7 @@ private:
         // Toolbar icon style (restart-to-apply, like Localization above): the default line-icon set
         // (theme-adaptive) vs. two fixed-colour sets, Solar and IconPark (see iconColored()).
         wxArrayString iconStyleNames;
-        iconStyleNames.Add(_("Line icons (default)")); iconStyleNames.Add(_("Solar icons (green)")); iconStyleNames.Add(_("IconPark icons (teal/lime)"));
+        iconStyleNames.Add(_("Line icons (Tabler)")); iconStyleNames.Add(_("Solar icons (green)")); iconStyleNames.Add(_("IconPark icons (teal/lime)"));
         auto* chIconStyle = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, iconStyleNames);
         chIconStyle->SetSelection(m_iconStyle);
         auto* icrow = new wxBoxSizer(wxHORIZONTAL);

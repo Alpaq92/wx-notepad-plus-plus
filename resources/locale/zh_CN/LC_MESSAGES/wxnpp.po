@@ -2096,3 +2096,6 @@ msgstr "Solar 图标（绿色）"
 
 msgid "IconPark icons (teal/lime)"
 msgstr "IconPark 图标（青绿/青柠）"
+
+msgid "Line icons (Tabler)"
+msgstr "线条图标（Tabler）"

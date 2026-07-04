@@ -2096,3 +2096,6 @@ msgstr "Solar 아이콘(녹색)"
 
 msgid "IconPark icons (teal/lime)"
 msgstr "IconPark 아이콘(틸/라임)"
+
+msgid "Line icons (Tabler)"
+msgstr "선 아이콘(Tabler)"

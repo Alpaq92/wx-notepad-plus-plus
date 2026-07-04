@@ -1841,7 +1841,7 @@ msgstr ""
 msgid "Localization:"
 msgstr ""
 
-msgid "Line icons (default)"
+msgid "Line icons (Tabler)"
 msgstr ""
 
 msgid "Solar icons (green)"
