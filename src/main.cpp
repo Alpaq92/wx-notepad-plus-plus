@@ -3964,6 +3964,22 @@ private:
         }
         return wxArtProvider::GetBitmapBundle(wxART_QUESTION, wxART_TOOLBAR, wxSize(16, 16));
     }
+    // A clearly-disabled version of a toolbar icon: fade the alpha channel down to ~30% instead of
+    // wxToolBar's automatic "shadow" (wxImage::ConvertToDisabled blends every pixel towards a fixed
+    // brightness of 255, i.e. white) - on light chrome that only lightens a dark icon a little (not a
+    // strong enough break from the enabled look), and on dark chrome, where icons already paint light-
+    // on-dark, blending further towards white barely changes them at all, so disabled and enabled tools
+    // can look nearly identical. Scaling alpha instead works the same way regardless of chrome colour or
+    // icon hue: the icon becomes see-through, letting the toolbar background show through it.
+    wxBitmapBundle iconDisabled(const wxBitmapBundle& enabled, int px = 16)
+    {
+        wxImage img = enabled.GetBitmap(wxSize(px, px)).ConvertToImage();
+        if (!img.HasAlpha()) img.InitAlpha();
+        unsigned char* alpha = img.GetAlpha();
+        const int n = img.GetWidth() * img.GetHeight();
+        for (int i = 0; i < n; ++i) alpha[i] = static_cast<unsigned char>(alpha[i] * 0.3);
+        return wxBitmapBundle::FromBitmap(wxBitmap(img));
+    }
     // Small monochrome caption-button glyph (the +/v/x), themed to the current mode.
     wxBitmapBundle captionIcon(const char* pathData)
     {
@@ -4001,7 +4017,7 @@ private:
 #endif
         m_toolBarPtr = tb;                 // so toolBar() works in both modes (frame toolbar / aui pane)
         tb->SetToolBitmapSize(wxSize(16, 16));
-        auto T  = [&](int id, const wxString& svg, const wxString& tip) { tb->AddTool(id, tip, icon(svg), tip); };
+        auto T  = [&](int id, const wxString& svg, const wxString& tip) { const wxBitmapBundle bmp = icon(svg); tb->AddTool(id, tip, bmp, iconDisabled(bmp), wxITEM_NORMAL, tip); };
         auto TC = [&](int id, const wxString& svg, const wxString& tip) { tb->AddCheckTool(id, tip, icon(svg), wxNullBitmap, tip); };
 
         T(IDM_FILE_NEW, "new", _("New"));           T(IDM_FILE_OPEN, "open", _("Open"));
