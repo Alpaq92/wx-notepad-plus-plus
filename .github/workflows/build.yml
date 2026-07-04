@@ -13,6 +13,7 @@ on:
   pull_request:
     paths: [ 'src/**', 'include/**', 'third_party/**', 'installer/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
   workflow_dispatch:
+  workflow_call:   # release.yml calls this on a version tag push, then publishes the 3 packaging artifacts
 
 # A newer push to a branch cancels that branch's still-queued/running build, so the matrix doesn't
 # pile up (each macOS run counts 10x against private-repo Actions minutes). Only the latest commit
@@ -82,4 +83,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wxnpp-macos-package
+          path: build/installer/*
+
+      # GitHub's windows-latest runner ships Inno Setup 6 preinstalled at this path.
+      - name: Package installer (Windows)
+        if: matrix.name == 'windows'
+        shell: cmd
+        run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\windows\wxnpp.iss'
+
+      - name: Upload Windows installer
+        if: matrix.name == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wxnpp-windows-installer
           path: build/installer/*

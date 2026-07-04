@@ -1,0 +1,36 @@
+name: release
+
+# Cuts a GitHub Release with all 3 platform packages attached whenever a version tag (v*) is
+# pushed. Reuses build.yml (via workflow_call) so the release artifacts are built exactly the
+# same way as every regular push - no separate packaging logic to drift out of sync.
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all platform packages
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            artifacts/wxnpp-windows-installer/* \
+            artifacts/wxnpp-linux-packages/* \
+            artifacts/wxnpp-macos-package/* \
+            --repo "${{ github.repository }}" \
+            --title "wxNotepad++ ${{ github.ref_name }}" \
+            --generate-notes
