@@ -1198,6 +1198,12 @@ static void loadNibPlugins()
 // Tear down Nib plugins in reverse load order: deactivate (the GPL bridge removes its frame subclass), then unload.
 static void unloadNibPlugins()
 {
+    // Drop callbacks into the DLLs we're about to unload first: g_nibSubs/g_nibCommands hold raw function
+    // pointers (and, for commands, user-data pointers) that live inside each plugin's mapped image. Editor
+    // events (text/selection/savepoint/doc-activated) can still fire while the frame's children are torn
+    // down after this call returns, and nibFireEvent() would otherwise call straight into unmapped memory.
+    g_nibSubs.clear();
+    g_nibCommands.clear();
     for (auto it = g_nibLibs.rbegin(); it != g_nibLibs.rend(); ++it)
     {
         if (it->api && it->api->deactivate) it->api->deactivate(reinterpret_cast<NibHost*>(g_view));
