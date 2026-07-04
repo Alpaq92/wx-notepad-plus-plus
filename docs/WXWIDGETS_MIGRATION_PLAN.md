@@ -1,21 +1,35 @@
+> # ⛔ ARCHIVED — this plan (Path A) was NOT adopted. Historical record only.
+>
+> **Everything below this banner describes an approach the project evaluated and rejected.** It proposes
+> a **Windows-only**, HWND-shim-based migration that keeps the plugin ABI's Win32 message architecture and
+> Scintilla as a native HWND control. **That is not what wxNotepad++ is or does.** Do not read this
+> document as a description of the current codebase, and do not resume or partially adopt Path A without
+> a fresh, explicit decision — the two approaches are not compatible half-measures; picking one forecloses
+> the other's assumptions (native-HWND Scintilla vs. `wxStyledTextCtrl`, Windows-only vs. cross-platform,
+> ABI-preserving shim vs. reimplemented Nib API).
+>
+> **What was actually built instead** (see [`docs/FUTURE_PLANS.md`](FUTURE_PLANS.md) and
+> [`docs/PLUGIN_API_PLAN.md`](PLUGIN_API_PLAN.md) for the live plan): a **cross-platform rewrite** - a
+> wxWidgets UI + `wxStyledTextCtrl` for the editor (reusing only the portable **Scintilla + Lexilla**),
+> with Notepad++'s features reimplemented in portable C++, building and running on **Windows, Linux, and
+> macOS** in CI. The plugin story is a **new, permissive "Nib" API** (`include/nib/nib.h`) plus an
+> **optional, separate, GPL "npp-bridge" plugin** (`packages/npp-bridge/`) that reproduces enough of the
+> real Notepad++ ABI to host real N++ plugin DLLs on Windows - not the "re-implement the entire Win32
+> message ABI as the core's own foundation" shim this document recommends in §15. This keeps the core
+> permissively licensable (§1.2's "plugin-ABI reality" below was the correct diagnosis of the *problem* -
+> the project just solved it differently than this document proposes).
+>
+> Kept here (unedited below this banner) because the problem analysis - the plugin-ABI internals, the
+> `SendMessage`/`PostMessage` coupling audit, the DPI/rendering-fidelity risk catalogue - is still
+> accurate and occasionally useful reference material, not because the recommended approach (§15) is
+> still under consideration.
+
 # Notepad++ → wxWidgets Migration Plan
 
 **Document owner:** Lead Architect
 **Date:** 2026-06-20
-**Status:** Final — for funding decision
+**Status:** ARCHIVED — superseded by the cross-platform Nib rewrite (see banner above); originally "Final — for funding decision"
 **Scope:** 1:1 visual/behavioral migration of Notepad++ (~182K LOC native Win32 C++) to wxWidgets, preserving the HWND-based plugin ABI
-
-> **⚠️ Update (2026-06-24) — direction chosen and under active implementation.** This document captured
-> the research/evaluation phase. The committed approach is a **cross-platform rewrite**: a wxWidgets UI +
-> `wxStyledTextCtrl` for the editor (reusing only the portable **Scintilla + Lexilla**), with Notepad++'s
-> features reimplemented in portable C++ — **not** booting or linking the Win32 Notepad++ backend (which
-> would be Windows-only forever). The repo has since been restructured (the original Notepad++ app source
-> removed; the editor moved to `src/`, deps to `third_party/`, assets to `resources/`). A working
-> experimental editor lives in [`src/`](../src/): tabbed
-> editor with per-tab Scintilla documents, syntax highlighting, find/replace, dark mode, a **Win32 plugin
-> host** (real `LoadLibrary` loader, broad `NPPM_*` coverage, an `NPPM_DMM*` docking-panel shim, and a
-> subclass that bridges plugin `SCI_*` messages into wxSTC), and the cross-platform `wxStyledTextCtrl`
-> swap validated by a Linux/GTK CI workflow. See the repository README for build instructions.
 
 > **What changed since the draft (read this first).** This revision corrects four verified factual errors in the prior draft, fills the single largest scoping gap, and hardens the risk/effort sections:
 > 1. **DPI model corrected.** The app is **System-DPI-aware with an *unaware* fallback** (manifest: `dpiAware=true`, `dpiAwareness="system, unaware"`), **not** per-monitor. wxWidgets 3.2/3.3 default to **per-monitor-v2** awareness, so adopting wx *changes* the DPI model rather than merely "reconciling an owner." This is now treated as a behavioral-change risk (§9, §13 R5).

@@ -14,6 +14,7 @@
 #include "nib.h"
 #include "PluginInterface.h"   // NppData, FuncItem, PFUNC* - the Notepad++ ABI this bridge targets
 #include "Docking.h"           // tTbData / DWS_DF_* / CONT_* - the N++ docking-registration ABI
+#include "abi_layout_asserts.h"  // compile-time guard: catches accidental ABI struct-layout drift
 #include <windows.h>
 #include <commctrl.h>          // SetWindowSubclass / DefSubclassProc - the bridge owns the NPPM_* router
 #include <string>
