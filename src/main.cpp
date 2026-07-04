@@ -3886,7 +3886,31 @@ private:
         // size-mismatched bitmap for wxBitmapBundle's DPI-aware scaling to resolve on demand - a bundle
         // built from a single oversized bitmap crashed on the first repaint triggered by a modal dialog.
         if (img.GetWidth() != 16 || img.GetHeight() != 16) img.Rescale(16, 16, wxIMAGE_QUALITY_HIGH);
-        return wxBitmapBundle::FromBitmap(wxBitmap(img));
+        if (!m_dark) return wxBitmapBundle::FromBitmap(wxBitmap(img));
+
+        // Both packs were drawn for a light toolbar (circa 2008-2012 icon sets); on dark chrome their
+        // low-saturation icons (e.g. Fatcow's grey playback-control circles) nearly vanish and any
+        // baked-in light/white shapes clash. Composite onto a small light rounded backdrop so every icon
+        // reads consistently regardless of its own palette, instead of hand-curating replacements one by
+        // one. Stays exactly 16x16 (matching the toolbar's fixed bitmap size - see the rescale above and
+        // its crash note: never hand wxBitmapBundle a size-mismatched bitmap).
+        wxBitmap canvas(16, 16, 32);
+        canvas.UseAlpha();
+        {
+            wxMemoryDC mdc(canvas);
+            mdc.SetBackground(*wxTRANSPARENT_BRUSH);
+            mdc.Clear();
+            if (wxGraphicsContext* gc = wxGraphicsContext::Create(mdc))
+            {
+                gc->SetBrush(wxColour(232, 232, 236, 235));
+                gc->SetPen(*wxTRANSPARENT_PEN);
+                gc->DrawRoundedRectangle(0, 0, 16, 16, 3);
+                gc->DrawBitmap(wxBitmap(img), 0, 0, 16, 16);   // alpha-composited via the same context
+                delete gc;
+            }
+            mdc.SelectObject(wxNullBitmap);   // release the DC's hold before canvas is read back
+        }
+        return wxBitmapBundle::FromBitmap(canvas);
     }
     wxBitmapBundle icon(const wxString& name)
     {
