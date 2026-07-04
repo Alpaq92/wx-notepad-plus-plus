@@ -2117,3 +2117,264 @@ msgstr "%d von %d"
 
 msgid "%d matches"
 msgstr "%d Treffer"
+
+msgid "Font name (blank = inherit):"
+msgstr "Schriftname (leer = geerbt):"
+
+msgid "Font size (0 = inherit):"
+msgstr "Schriftgröße (0 = geerbt):"
+
+msgid "Underline"
+msgstr "Unterstrichen"
+
+msgid "Nesting: also colour these inside this style"
+msgstr "Verschachtelung: diese Elemente auch innerhalb dieses Stils einfärben"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Existing:"
+msgstr "Vorhanden:"
+
+msgid "Name:"
+msgstr "Name:"
+
+msgid "Ext:"
+msgstr "Erw.:"
+
+msgid "Folder && Default"
+msgstr "Faltung und Standard"
+
+msgid "Comment && Number"
+msgstr "Kommentar und Zahl"
+
+msgid "Operator && Delimiter"
+msgstr "Operator und Trennzeichen"
+
+msgid "Keywords"
+msgstr "Schlüsselwörter"
+
+msgid "Ignore case"
+msgstr "Groß-/Kleinschreibung ignorieren"
+
+msgid "Allow folding of comments"
+msgstr "Falten von Kommentaren zulassen"
+
+msgid "Fold compact"
+msgstr "Kompaktes Falten"
+
+msgid "Style Default..."
+msgstr "Standardstil..."
+
+msgid "Folder in code1:"
+msgstr "Faltung in Code1:"
+
+msgid "Folder in code2:"
+msgstr "Faltung in Code2:"
+
+msgid "Folder in comment:"
+msgstr "Faltung in Kommentar:"
+
+msgid "Open:"
+msgstr "Öffnen:"
+
+msgid "Middle:"
+msgstr "Mitte:"
+
+msgid "Close:"
+msgstr "Schließen:"
+
+msgid "Style..."
+msgstr "Stil..."
+
+msgid "Line comment open:"
+msgstr "Zeilenkommentar Anfang:"
+
+msgid "Block comment open:"
+msgstr "Blockkommentar Anfang:"
+
+msgid "Block comment close:"
+msgstr "Blockkommentar Ende:"
+
+msgid "Style Line Comment..."
+msgstr "Zeilenkommentarstil..."
+
+msgid "Style Comment..."
+msgstr "Kommentarstil..."
+
+msgid "Prefix 1:"
+msgstr "Präfix 1:"
+
+msgid "Prefix 2:"
+msgstr "Präfix 2:"
+
+msgid "Extras 1:"
+msgstr "Extra 1:"
+
+msgid "Extras 2:"
+msgstr "Extra 2:"
+
+msgid "Suffix 1:"
+msgstr "Suffix 1:"
+
+msgid "Suffix 2:"
+msgstr "Suffix 2:"
+
+msgid "Range:"
+msgstr "Bereich:"
+
+msgid "Style Number..."
+msgstr "Zahlenstil..."
+
+msgid ". (dot)"
+msgstr ". (Punkt)"
+
+msgid ", (comma)"
+msgstr ", (Komma)"
+
+msgid "both"
+msgstr "beide"
+
+msgid "Decimal separator"
+msgstr "Dezimaltrennzeichen"
+
+msgid "Off"
+msgstr "Aus"
+
+msgid "Force lowercase before matching"
+msgstr "Vor Abgleich in Kleinbuchstaben umwandeln"
+
+msgid "Force lowercase in keyword lists too"
+msgstr "Auch in Schlüsselwortlisten in Kleinbuchstaben umwandeln"
+
+msgid "Force pure LC"
+msgstr "Reine Kleinschreibung erzwingen"
+
+msgid "Operators 1:"
+msgstr "Operatoren 1:"
+
+msgid "Operators 2:"
+msgstr "Operatoren 2:"
+
+msgid "Style Operators..."
+msgstr "Operatorenstil..."
+
+msgid "Delimiters (8 sets)"
+msgstr "Trennzeichen (8 Sätze)"
+
+msgid "Set"
+msgstr "Satz"
+
+msgid "Escape"
+msgstr "Escape"
+
+msgid "Keywords %d:"
+msgstr "Schlüsselwörter %d:"
+
+msgid "Prefix mode"
+msgstr "Präfixmodus"
+
+msgid "Please give the language a name."
+msgstr "Bitte gib der Sprache einen Namen."
+
+msgid "Remove user-defined language \"%s\"?"
+msgstr "Benutzerdefinierte Sprache \"%s\" entfernen?"
+
+msgid "User-Defined Language \"%s\" saved"
+msgstr "Benutzerdefinierte Sprache \"%s\" gespeichert"
+
+msgid "Keyword1"
+msgstr "Schlüsselwort1"
+
+msgid "Delimiter1"
+msgstr "Trennzeichen 1"
+
+msgid "Keyword2"
+msgstr "Schlüsselwort2"
+
+msgid "Delimiter2"
+msgstr "Trennzeichen 2"
+
+msgid "Keyword3"
+msgstr "Schlüsselwort3"
+
+msgid "Delimiter3"
+msgstr "Trennzeichen 3"
+
+msgid "Keyword4"
+msgstr "Schlüsselwort4"
+
+msgid "Delimiter4"
+msgstr "Trennzeichen 4"
+
+msgid "Keyword5"
+msgstr "Schlüsselwort5"
+
+msgid "Delimiter5"
+msgstr "Trennzeichen 5"
+
+msgid "Keyword6"
+msgstr "Schlüsselwort6"
+
+msgid "Delimiter6"
+msgstr "Trennzeichen 6"
+
+msgid "Keyword7"
+msgstr "Schlüsselwort7"
+
+msgid "Delimiter7"
+msgstr "Trennzeichen 7"
+
+msgid "Keyword8"
+msgstr "Schlüsselwort8"
+
+msgid "Delimiter8"
+msgstr "Trennzeichen 8"
+
+msgid "Operator1"
+msgstr "Operator 1"
+
+msgid "Operator2"
+msgstr "Operator 2"
+
+msgid "Comment"
+msgstr "Kommentar"
+
+msgid "Line comment"
+msgstr "Zeilenkommentar"
+
+msgid "Number"
+msgstr "Zahl"
+
+msgid "Style: Default"
+msgstr "Stil: Standard"
+
+msgid "Style: Folder in code1"
+msgstr "Stil: Faltung in Code1"
+
+msgid "Style: Folder in code2"
+msgstr "Stil: Faltung in Code2"
+
+msgid "Style: Folder in comment"
+msgstr "Stil: Faltung in Kommentar"
+
+msgid "Style: Line Comment"
+msgstr "Stil: Zeilenkommentar"
+
+msgid "Style: Comment"
+msgstr "Stil: Kommentar"
+
+msgid "Style: Number"
+msgstr "Stil: Zahl"
+
+msgid "Style: Operators"
+msgstr "Stil: Operatoren"
+
+msgid "Style: Delimiter %d"
+msgstr "Stil: Trennzeichen %d"
+
+msgid "Style: Keywords %d"
+msgstr "Stil: Schlüsselwörter %d"
+
+msgid "Operators"
+msgstr "Operatoren"

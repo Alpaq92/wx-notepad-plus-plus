@@ -109,6 +109,8 @@ using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/
 #include "app_icon_svg.h"
 #include "nib.h"               // our own permissive, cross-platform plugin API (Nib)
 #include "npp_menu.h"          // faithful 1:1 Notepad++ main-menu builder
+#include "udl.h"               // User-Defined Language data model + userDefineLang.xml (de)serialization
+#include "udl_lexer.h"         // User-Defined Language: live container-lexer styling/folding engine
 
 static const int  MARK_BOOKMARK = 2;      // a free Scintilla marker number for bookmarks
 static const int  MARK_INDIC    = 9;      // indicator number for "Mark All" highlights (Find dialog)
@@ -158,6 +160,7 @@ public:
     bool     langForced = false;           // true once the user picks a language from the Language menu
     wxString forcedLexer;                  // that pick's Lexilla lexer name ("" = forced Normal Text)
     wxString forcedName;                   // that pick's display label for the status bar, e.g. "C++"
+    int      udlIndex = -1;                // index into MainFrame::m_udls when a User-Defined Language is active (-1 = none)
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
@@ -1424,6 +1427,7 @@ public:
         m_dark = dark;          // chrome darkness is fixed for this process (restart-to-apply)
         loadSettings();         // restore preferences incl. the chosen editor theme (before loadTheme reads m_themeName)
         loadTheme();            // parse the active Notepad++ theme XML for exact colours
+        loadAllUdls();          // parse any saved User-Defined Languages (Language > User Defined Language)
         { long z = 0; wxConfigBase::Get()->Read("Zoom", &z, 0L); m_zoom = static_cast<int>(z); }   // restore zoom
         // Seed a concrete paper size/orientation so File > Print's page geometry is never (0,0) before the
         // user has ever opened the print dialog - a fresh wxPrintData's paper id doesn't resolve to a size
@@ -1434,6 +1438,7 @@ public:
         setAppIcon();
         buildEditor();
         buildMenuBar();
+        rebuildUserLangMenu();   // populate the Language menu's per-UDL section from what loadAllUdls() found
         buildToolBar();
         buildStatusBar();
 
@@ -1723,6 +1728,7 @@ private:
         v.stc->Bind(wxEVT_STC_ZOOM,             &NppShellFrameT::onStcZoom,        this);
         v.stc->Bind(wxEVT_STC_MODIFIED,         &NppShellFrameT::onStcModified,    this);
         v.stc->Bind(wxEVT_STC_MACRORECORD,      &NppShellFrameT::onMacroRecord,    this);   // capture commands while recording a macro
+        v.stc->Bind(wxEVT_STC_STYLENEEDED,      &NppShellFrameT::onStcStyleNeeded, this);   // container-lexed User-Defined Language buffers only (see udl_lexer.h)
         v.stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev); e.Skip(); });
         v.stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrameT::onStcContextMenu, this);
         v.stc->Bind(wxEVT_SET_FOCUS, [this, vp = &v](wxFocusEvent& e) { onViewFocus(vp); e.Skip(); });   // focus -> this view becomes active
@@ -4168,6 +4174,26 @@ private:
     {
         applyEditorTheme(m_dark);          // reset every style to the theme base (incl. line numbers)
         auto* page = activePage();
+        if (page && !page->langForced && page->udlIndex < 0)   // auto-detect: a UDL's ext list wins over the built-in lexerForExt table
+        {
+            const wxString ext = path.AfterLast('.').Lower();
+            for (size_t i = 0; !ext.empty() && i < m_udls.size(); ++i)
+            {
+                wxStringTokenizer tk(m_udls[i].ext, " ", wxTOKEN_STRTOK);
+                bool matched = false;
+                while (tk.HasMoreTokens()) if (tk.GetNextToken().Lower() == ext) { matched = true; break; }
+                if (matched) { page->udlIndex = (int)i; break; }
+            }
+        }
+        if (page && page->udlIndex >= 0 && page->udlIndex < (int)m_udls.size())   // User-Defined Language: container-lexed, not Lexilla
+        {
+            const UdlLanguage& lang = m_udls[page->udlIndex];
+            udlApplyStyles(m_stc, lang);
+            page->lang = lang.name;
+            m_stc->Colourise(0, -1);
+            udlFoldRange(m_stc, lang, 0, m_stc->GetLineCount() - 1);
+            return;
+        }
         // A manual Language pick forces its lexer directly; otherwise auto-detect from the file extension.
         wxString lexer, themeKey, disp, ext;
         if (page && page->langForced) { lexer = page->forcedLexer; themeKey = page->forcedLexer; disp = page->forcedName; }
@@ -5127,10 +5153,37 @@ private:
     void setForcedLang(const wxString& lexer, const wxString& name)
     {
         auto* p = activePage(); if (!p) return;
-        p->langForced = true; p->forcedLexer = lexer; p->forcedName = name;
+        p->langForced = true; p->forcedLexer = lexer; p->forcedName = name; p->udlIndex = -1;
         setLexerForFile(p->path);
         updateStatus();
         if (m_stc) m_stc->Refresh();
+    }
+    // Manually force a User-Defined Language on the active buffer (the Language menu's dynamic UDL
+    // section - see rebuildUserLangMenu). Mirrors setForcedLang's "sticks across tab switches" contract.
+    void applyUdlToActiveBuffer(int udlIndex)
+    {
+        auto* p = activePage(); if (!p) return;
+        if (udlIndex < 0 || udlIndex >= (int)m_udls.size()) return;
+        p->langForced = true; p->udlIndex = udlIndex;
+        setLexerForFile(p->path);
+        updateStatus();
+        if (m_stc) m_stc->Refresh();
+    }
+    // Rebuild the Language menu's dynamic per-UDL section from m_udls (ids IDM_LANG_USER..IDM_LANG_USER_LIMIT-1,
+    // the exact range real Notepad++ reserves - see menuCmdID.h). Called once at startup (after loadAllUdls) and
+    // again whenever the UDL dialog adds/renames/removes a language, so the menu never needs a restart to catch up.
+    void rebuildUserLangMenu()
+    {
+        auto* mb = menuBar(); if (!mb) return;
+        wxMenu* lang = nullptr;
+        mb->FindItem(IDM_LANG_TEXT, &lang);   // IDM_LANG_TEXT ("Normal text file") lives directly on the top-level Language menu
+        if (!lang) return;
+        for (int id = IDM_LANG_USER; id < IDM_LANG_USER_LIMIT; ++id)
+            if (wxMenuItem* it = lang->FindItem(id)) lang->Destroy(it);
+        const size_t insertPos = lang->GetMenuItemCount();
+        const size_t limit = wxMin(m_udls.size(), (size_t)(IDM_LANG_USER_LIMIT - IDM_LANG_USER));
+        for (size_t i = 0; i < limit; ++i)
+            lang->Insert(insertPos + i, IDM_LANG_USER + (int)i, m_udls[i].name);
     }
 
     // ----- search engine (drives the Find/Replace dialog) ----------------
@@ -5961,6 +6014,19 @@ private:
         { const char* t = reinterpret_cast<const char*>(lp); s.text = (msg == SCI_ADDTEXT) ? std::string(t, (size_t)wp) : std::string(t); s.hasText = true; }
         m_macro.push_back(s);
     }
+    // Fires only for a buffer whose lexer is wxSTC_LEX_CONTAINER (a User-Defined Language - see
+    // udlApplyStyles); a real Lexilla lexer (SCI_SETILEXER) styles itself and never triggers this.
+    void onStcStyleNeeded(wxStyledTextEvent& e)
+    {
+        wxStyledTextCtrl* stc = wxDynamicCast(e.GetEventObject(), wxStyledTextCtrl);
+        auto* p = activePage();
+        if (!stc || !p || p->udlIndex < 0 || p->udlIndex >= (int)m_udls.size()) { e.Skip(); return; }
+        const UdlLanguage& lang = m_udls[p->udlIndex];
+        const int startPos = stc->GetEndStyled();
+        const int endPos = static_cast<int>(e.GetPosition());
+        udlStyleRange(stc, lang, startPos, endPos);
+        udlFoldRange(stc, lang, stc->LineFromPosition(startPos), stc->LineFromPosition(endPos));
+    }
     void macroToolStates()
     {
         const bool has = !m_macro.empty();
@@ -6026,6 +6092,24 @@ private:
         const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath());
         if (name.empty() || name == "Default") return dir + "\\stylers.model.xml";
         return dir + "\\themes\\" + name + ".xml";
+    }
+    // ----- User-Defined Language (UDL) persistence -------------------------------------------
+    // One <name>.xml (a bare <UserLang> root, the same shape N++'s own Export writes) per language
+    // in <exe>/userDefineLangs/ - the folder IDM_LANG_OPENUDLDIR already opens, and the layout real
+    // N++'s "UDL Collection" shares files in (see IDM_LANG_UDLCOLLECTION_PROJECT_SITE).
+    wxString udlDir() { return wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "userDefineLangs"; }
+    void loadAllUdls()
+    {
+        m_udls.clear();
+        wxDir d(udlDir());
+        if (!d.IsOpened()) return;
+        wxString f; bool more = d.GetFirst(&f, "*.xml", wxDIR_FILES);
+        while (more) { for (auto& u : loadUdlFile(udlDir() + wxFILE_SEP_PATH + f)) m_udls.push_back(std::move(u)); more = d.GetNext(&f); }
+    }
+    void saveUdlToDisk(const UdlLanguage& u)
+    {
+        if (!wxDirExists(udlDir())) wxFileName::Mkdir(udlDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        saveUdlFile(udlDir() + wxFILE_SEP_PATH + u.name + ".xml", { u });
     }
     wxArrayString availableThemes()   // "Default" + every themes/*.xml (the 22 Notepad++ themes)
     {
@@ -6191,6 +6275,351 @@ private:
         const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\themes";
         int n = 0; for (const auto& p : paths) if (wxCopyFile(p, dir + "\\" + wxFileNameFromPath(p))) ++n;
         setStatus(0, wxString::Format(_("Imported %d theme(s) - choose them in Style Configurator"), n)); m_hint = true;
+    }
+    // Reused by every "Style..." button in the UDL dialog below: fg/bg colour, font/size,
+    // bold/italic/underline, and the Nesting checkboxes (which other token categories still get
+    // coloured while this style's region is active - see UdlNestBit). Edits `style` in place;
+    // returns false (leaving it untouched) if the user cancels.
+    bool showUdlStylerDialog(const wxString& title, UdlStyle& style)
+    {
+        wxDialog dlg(this, wxID_ANY, title, wxDefaultPosition, wxSize(460, 480));
+        auto* fgPick = new wxColourPickerCtrl(&dlg, wxID_ANY, style.fgColor);
+        auto* bgPick = new wxColourPickerCtrl(&dlg, wxID_ANY, style.bgColor);
+        auto* fontPick = new wxTextCtrl(&dlg, wxID_ANY, style.fontName);
+        auto* sizePick = new wxSpinCtrl(&dlg, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 0, 72, style.fontSize);
+        auto* cbBold = new wxCheckBox(&dlg, wxID_ANY, _("Bold")); cbBold->SetValue(style.bold);
+        auto* cbItalic = new wxCheckBox(&dlg, wxID_ANY, _("Italic")); cbItalic->SetValue(style.italic);
+        auto* cbUnderline = new wxCheckBox(&dlg, wxID_ANY, _("Underline")); cbUnderline->SetValue(style.underline);
+
+        auto* grid = new wxFlexGridSizer(2, 8, 10);
+        grid->Add(new wxStaticText(&dlg, wxID_ANY, _("Foreground colour:")), 0, wxALIGN_CENTRE_VERTICAL); grid->Add(fgPick);
+        grid->Add(new wxStaticText(&dlg, wxID_ANY, _("Background colour:")), 0, wxALIGN_CENTRE_VERTICAL); grid->Add(bgPick);
+        grid->Add(new wxStaticText(&dlg, wxID_ANY, _("Font name (blank = inherit):")), 0, wxALIGN_CENTRE_VERTICAL); grid->Add(fontPick, 0, wxEXPAND);
+        grid->Add(new wxStaticText(&dlg, wxID_ANY, _("Font size (0 = inherit):")), 0, wxALIGN_CENTRE_VERTICAL); grid->Add(sizePick);
+        auto* fontRow = new wxBoxSizer(wxHORIZONTAL);
+        fontRow->Add(cbBold, 0, wxRIGHT, 12); fontRow->Add(cbItalic, 0, wxRIGHT, 12); fontRow->Add(cbUnderline);
+
+        static const std::pair<uint32_t, const char*> kNestBits[] = {
+            { NEST_KEYWORD1, "Keyword1" }, { NEST_KEYWORD2, "Keyword2" }, { NEST_KEYWORD3, "Keyword3" }, { NEST_KEYWORD4, "Keyword4" },
+            { NEST_KEYWORD5, "Keyword5" }, { NEST_KEYWORD6, "Keyword6" }, { NEST_KEYWORD7, "Keyword7" }, { NEST_KEYWORD8, "Keyword8" },
+            { NEST_COMMENT, "Comment" }, { NEST_COMMENT_LINE, "Line comment" }, { NEST_NUMBER, "Number" },
+            { NEST_OPERATOR1, "Operator1" }, { NEST_OPERATOR2, "Operator2" },
+            { NEST_DELIM1, "Delimiter1" }, { NEST_DELIM2, "Delimiter2" }, { NEST_DELIM3, "Delimiter3" }, { NEST_DELIM4, "Delimiter4" },
+            { NEST_DELIM5, "Delimiter5" }, { NEST_DELIM6, "Delimiter6" }, { NEST_DELIM7, "Delimiter7" }, { NEST_DELIM8, "Delimiter8" },
+        };
+        std::vector<wxCheckBox*> nestBoxes;
+        auto* nestGrid = new wxGridSizer(0, 4, 4, 4);
+        for (auto& nb : kNestBits)
+        {
+            auto* cb = new wxCheckBox(&dlg, wxID_ANY, wxGetTranslation(nb.second));
+            cb->SetValue((style.nesting & nb.first) != 0);
+            nestGrid->Add(cb);
+            nestBoxes.push_back(cb);
+        }
+        auto* nestBox = new wxStaticBoxSizer(wxVERTICAL, &dlg, _("Nesting: also colour these inside this style"));
+        nestBox->Add(nestGrid, 0, wxALL, 6);
+
+        auto* btnRow = new wxBoxSizer(wxHORIZONTAL); btnRow->AddStretchSpacer();
+        btnRow->Add(new wxButton(&dlg, wxID_OK, _("OK")), 0, wxRIGHT, 6);
+        btnRow->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")));
+
+        auto* top = new wxBoxSizer(wxVERTICAL);
+        top->Add(grid, 0, wxALL, 12);
+        top->Add(fontRow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
+        top->Add(nestBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+        top->Add(btnRow, 0, wxEXPAND | wxALL, 12);
+        dlg.SetSizerAndFit(top);
+        themeDialog(&dlg);
+        if (dlg.ShowModal() != wxID_OK) return false;
+        style.fgColor = fgPick->GetColour(); style.bgColor = bgPick->GetColour();
+        style.fontName = fontPick->GetValue(); style.fontSize = sizePick->GetValue();
+        style.bold = cbBold->GetValue(); style.italic = cbItalic->GetValue(); style.underline = cbUnderline->GetValue();
+        style.nesting = 0;
+        for (size_t i = 0; i < nestBoxes.size(); ++i) if (nestBoxes[i]->GetValue()) style.nesting |= kNestBits[i].first;
+        return true;
+    }
+    // Language > User Defined Language > Define your language...: full parity with Notepad++'s UDL
+    // dialog - Folder & Default / Comment & Number / Operator & Delimiter / Keywords tabs, each field
+    // pairable with a Style... button (see showUdlStylerDialog) for the 24 style slots (UdlStyleIndex).
+    // Edits a UdlLanguage in memory; Save commits it into m_udls and to disk (saveUdlToDisk) so it
+    // survives a restart and can be shared as a plain XML file, like real N++'s UDL exports.
+    void onUserDefineLang()
+    {
+        int curIndex = m_udls.empty() ? -1 : 0;
+        UdlLanguage cur = m_udls.empty() ? UdlLanguage{} : m_udls[0];
+        if (m_udls.empty()) cur.name = _("NewLanguage");
+
+        wxDialog dlg(this, wxID_ANY, _("User Defined Language"), wxDefaultPosition, wxSize(780, 680));
+
+        // ---- language picker + name/ext rows -------------------------------------------------
+        auto* langCombo = new wxChoice(&dlg, wxID_ANY, wxDefaultPosition, wxSize(220, -1));
+        auto* btnNew    = new wxButton(&dlg, wxID_ANY, _("New"));
+        auto* btnRemove = new wxButton(&dlg, wxID_ANY, _("Remove"));
+        auto* nameField = new wxTextCtrl(&dlg, wxID_ANY);
+        auto* extField  = new wxTextCtrl(&dlg, wxID_ANY);
+        auto* pickRow = new wxBoxSizer(wxHORIZONTAL);
+        pickRow->Add(new wxStaticText(&dlg, wxID_ANY, _("Existing:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6);
+        pickRow->Add(langCombo, 0, wxRIGHT, 6);
+        pickRow->Add(btnNew, 0, wxRIGHT, 6); pickRow->Add(btnRemove, 0);
+        auto* nameRow = new wxBoxSizer(wxHORIZONTAL);
+        nameRow->Add(new wxStaticText(&dlg, wxID_ANY, _("Name:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6);
+        nameRow->Add(nameField, 1, wxRIGHT, 16);
+        nameRow->Add(new wxStaticText(&dlg, wxID_ANY, _("Ext:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6);
+        nameRow->Add(extField, 1);
+
+        auto* nb = new wxNotebook(&dlg, wxID_ANY);
+
+        // ---- Tab 1: Folder & Default ----------------------------------------------------------
+        auto* pgFolder = new wxPanel(nb); nb->AddPage(pgFolder, _("Folder && Default"));
+        auto* cbCaseIgnored  = new wxCheckBox(pgFolder, wxID_ANY, _("Ignore case"));
+        auto* cbFoldComments = new wxCheckBox(pgFolder, wxID_ANY, _("Allow folding of comments"));
+        auto* cbFoldCompact  = new wxCheckBox(pgFolder, wxID_ANY, _("Fold compact"));
+        auto* btnDefaultStyle = new wxButton(pgFolder, wxID_ANY, _("Style Default..."));
+        auto foldRow = [&](const wxString& caption, wxTextCtrl*& open_, wxTextCtrl*& mid_, wxTextCtrl*& close_, wxButton*& styleBtn) {
+            auto* box = new wxStaticBoxSizer(wxHORIZONTAL, pgFolder, caption);
+            open_  = new wxTextCtrl(pgFolder, wxID_ANY, "", wxDefaultPosition, wxSize(90, -1));
+            mid_   = new wxTextCtrl(pgFolder, wxID_ANY, "", wxDefaultPosition, wxSize(90, -1));
+            close_ = new wxTextCtrl(pgFolder, wxID_ANY, "", wxDefaultPosition, wxSize(90, -1));
+            styleBtn = new wxButton(pgFolder, wxID_ANY, _("Style..."));
+            box->Add(new wxStaticText(pgFolder, wxID_ANY, _("Open:")), 0, wxALIGN_CENTRE_VERTICAL | wxLEFT, 6); box->Add(open_, 0, wxLEFT, 4);
+            box->Add(new wxStaticText(pgFolder, wxID_ANY, _("Middle:")), 0, wxALIGN_CENTRE_VERTICAL | wxLEFT, 10); box->Add(mid_, 0, wxLEFT, 4);
+            box->Add(new wxStaticText(pgFolder, wxID_ANY, _("Close:")), 0, wxALIGN_CENTRE_VERTICAL | wxLEFT, 10); box->Add(close_, 0, wxLEFT, 4);
+            box->AddStretchSpacer();
+            box->Add(styleBtn, 0, wxALL, 4);
+            return box;
+        };
+        wxTextCtrl *fc1o, *fc1m, *fc1c, *fc2o, *fc2m, *fc2c, *fco, *fcm, *fcc;
+        wxButton *btnFc1Style, *btnFc2Style, *btnFcStyle;
+        auto* fc1Box = foldRow(_("Folder in code1:"), fc1o, fc1m, fc1c, btnFc1Style);
+        auto* fc2Box = foldRow(_("Folder in code2:"), fc2o, fc2m, fc2c, btnFc2Style);
+        auto* fcBox  = foldRow(_("Folder in comment:"), fco, fcm, fcc, btnFcStyle);
+        auto* checkRow = new wxBoxSizer(wxHORIZONTAL);
+        checkRow->Add(cbCaseIgnored, 0, wxRIGHT, 16); checkRow->Add(cbFoldComments, 0, wxRIGHT, 16); checkRow->Add(cbFoldCompact, 0, wxRIGHT, 16);
+        checkRow->AddStretchSpacer(); checkRow->Add(btnDefaultStyle);
+        auto* folderTop = new wxBoxSizer(wxVERTICAL);
+        folderTop->Add(checkRow, 0, wxEXPAND | wxALL, 10);
+        folderTop->Add(fc1Box, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        folderTop->Add(fc2Box, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        folderTop->Add(fcBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        pgFolder->SetSizer(folderTop);
+
+        // ---- Tab 2: Comment & Number -----------------------------------------------------------
+        auto* pgComment = new wxPanel(nb); nb->AddPage(pgComment, _("Comment && Number"));
+        auto* cmtBox = new wxStaticBoxSizer(wxVERTICAL, pgComment, _("Comment"));
+        auto* cmtGrid = new wxFlexGridSizer(2, 8, 8);
+        auto* cmtLineOpen = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(120, -1));
+        auto* cmtOpen  = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(120, -1));
+        auto* cmtClose = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(120, -1));
+        cmtGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Line comment open:")), 0, wxALIGN_CENTRE_VERTICAL); cmtGrid->Add(cmtLineOpen);
+        cmtGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Block comment open:")), 0, wxALIGN_CENTRE_VERTICAL); cmtGrid->Add(cmtOpen);
+        cmtGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Block comment close:")), 0, wxALIGN_CENTRE_VERTICAL); cmtGrid->Add(cmtClose);
+        auto* btnStyleLineComment = new wxButton(pgComment, wxID_ANY, _("Style Line Comment..."));
+        auto* btnStyleComment = new wxButton(pgComment, wxID_ANY, _("Style Comment..."));
+        auto* cmtBtnRow = new wxBoxSizer(wxHORIZONTAL); cmtBtnRow->Add(btnStyleLineComment, 0, wxRIGHT, 8); cmtBtnRow->Add(btnStyleComment);
+        cmtBox->Add(cmtGrid, 0, wxALL, 8); cmtBox->Add(cmtBtnRow, 0, wxALL, 8);
+
+        auto* numBox = new wxStaticBoxSizer(wxVERTICAL, pgComment, _("Number"));
+        auto* numGrid = new wxFlexGridSizer(4, 8, 8);   // 4 cols (label,field) x2 per row - keeps the box short enough to fit the tab
+        auto* numPrefix1 = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
+        auto* numPrefix2 = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
+        auto* numExtras1 = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
+        auto* numExtras2 = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
+        auto* numSuffix1 = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
+        auto* numSuffix2 = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
+        auto* numRange   = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
+        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Prefix 1:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numPrefix1);
+        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Prefix 2:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numPrefix2);
+        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Extras 1:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numExtras1);
+        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Extras 2:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numExtras2);
+        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Suffix 1:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numSuffix1);
+        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Suffix 2:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numSuffix2);
+        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Range:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numRange);
+        auto* btnStyleNumber = new wxButton(pgComment, wxID_ANY, _("Style Number..."));
+        numBox->Add(numGrid, 0, wxALL, 8); numBox->Add(btnStyleNumber, 0, wxALL, 8);
+
+        wxString decOpts[3] = { _(". (dot)"), _(", (comma)"), _("both") };
+        auto* decimalChoice = new wxRadioBox(pgComment, wxID_ANY, _("Decimal separator"), wxDefaultPosition, wxDefaultSize, 3, decOpts, 1, wxRA_SPECIFY_COLS);
+        wxString lcOpts[3] = { _("Off"), _("Force lowercase before matching"), _("Force lowercase in keyword lists too") };
+        auto* forcePureLCChoice = new wxRadioBox(pgComment, wxID_ANY, _("Force pure LC"), wxDefaultPosition, wxDefaultSize, 3, lcOpts, 1, wxRA_SPECIFY_COLS);
+        auto* radioRow = new wxBoxSizer(wxHORIZONTAL); radioRow->Add(decimalChoice, 0, wxRIGHT, 10); radioRow->Add(forcePureLCChoice, 0);
+
+        auto* commentTop = new wxBoxSizer(wxVERTICAL);
+        commentTop->Add(cmtBox, 0, wxEXPAND | wxALL, 10);
+        commentTop->Add(numBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        commentTop->Add(radioRow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        pgComment->SetSizer(commentTop);
+
+        // ---- Tab 3: Operator & Delimiter -------------------------------------------------------
+        auto* pgOpDelim = new wxPanel(nb); nb->AddPage(pgOpDelim, _("Operator && Delimiter"));
+        auto* opBox = new wxStaticBoxSizer(wxVERTICAL, pgOpDelim, _("Operators"));
+        auto* op1 = new wxTextCtrl(pgOpDelim, wxID_ANY);
+        auto* op2 = new wxTextCtrl(pgOpDelim, wxID_ANY);
+        auto* opGrid = new wxFlexGridSizer(2, 8, 8);
+        opGrid->AddGrowableCol(1, 1);
+        opGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, _("Operators 1:")), 0, wxALIGN_CENTRE_VERTICAL); opGrid->Add(op1, 1, wxEXPAND);
+        opGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, _("Operators 2:")), 0, wxALIGN_CENTRE_VERTICAL); opGrid->Add(op2, 1, wxEXPAND);
+        auto* btnStyleOperators = new wxButton(pgOpDelim, wxID_ANY, _("Style Operators..."));
+        opBox->Add(opGrid, 0, wxEXPAND | wxALL, 8); opBox->Add(btnStyleOperators, 0, wxALL, 8);
+
+        auto* delimBox = new wxStaticBoxSizer(wxVERTICAL, pgOpDelim, _("Delimiters (8 sets)"));
+        auto* delimGrid = new wxFlexGridSizer(5, 6, 6);
+        std::array<wxTextCtrl*, 8> delimOpenCtl{}, delimEscCtl{}, delimCloseCtl{};
+        std::array<wxButton*, 8> delimStyleBtn{};
+        delimGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, _("Set")));
+        delimGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, _("Open")));
+        delimGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, _("Escape")));
+        delimGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, _("Close")));
+        delimGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, ""));
+        for (int i = 0; i < 8; ++i)
+        {
+            delimGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, wxString::Format("%d", i + 1)), 0, wxALIGN_CENTRE_VERTICAL);
+            delimOpenCtl[i]  = new wxTextCtrl(pgOpDelim, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1));
+            delimEscCtl[i]   = new wxTextCtrl(pgOpDelim, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1));
+            delimCloseCtl[i] = new wxTextCtrl(pgOpDelim, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1));
+            delimStyleBtn[i] = new wxButton(pgOpDelim, wxID_ANY, _("Style..."));
+            delimGrid->Add(delimOpenCtl[i]); delimGrid->Add(delimEscCtl[i]); delimGrid->Add(delimCloseCtl[i]); delimGrid->Add(delimStyleBtn[i]);
+        }
+        delimBox->Add(delimGrid, 0, wxALL, 8);
+        auto* opDelimTop = new wxBoxSizer(wxVERTICAL);
+        opDelimTop->Add(opBox, 0, wxEXPAND | wxALL, 10);
+        opDelimTop->Add(delimBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        pgOpDelim->SetSizer(opDelimTop);
+
+        // ---- Tab 4: Keywords --------------------------------------------------------------------
+        auto* pgKeywords = new wxPanel(nb); nb->AddPage(pgKeywords, _("Keywords"));
+        auto* kwGrid = new wxFlexGridSizer(2, 8, 8);
+        kwGrid->AddGrowableCol(1, 1);
+        std::array<wxTextCtrl*, 8> kwCtl{};
+        std::array<wxCheckBox*, 8> kwPrefixCtl{};
+        std::array<wxButton*, 8> kwStyleBtn{};
+        for (int i = 0; i < 8; ++i)
+        {
+            auto* row = new wxBoxSizer(wxHORIZONTAL);
+            kwCtl[i] = new wxTextCtrl(pgKeywords, wxID_ANY);
+            kwPrefixCtl[i] = new wxCheckBox(pgKeywords, wxID_ANY, _("Prefix mode"));
+            kwStyleBtn[i] = new wxButton(pgKeywords, wxID_ANY, _("Style..."));
+            row->Add(kwCtl[i], 1, wxEXPAND | wxRIGHT, 8);
+            row->Add(kwPrefixCtl[i], 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+            row->Add(kwStyleBtn[i], 0);
+            kwGrid->Add(new wxStaticText(pgKeywords, wxID_ANY, wxString::Format(_("Keywords %d:"), i + 1)), 0, wxALIGN_CENTRE_VERTICAL);
+            kwGrid->Add(row, 1, wxEXPAND);
+        }
+        auto* kwTop = new wxBoxSizer(wxVERTICAL); kwTop->Add(kwGrid, 1, wxEXPAND | wxALL, 10);
+        pgKeywords->SetSizer(kwTop);
+
+        // ---- bottom buttons + overall layout ----------------------------------------------------
+        auto* btnSave  = new wxButton(&dlg, wxID_ANY, _("Save"));
+        auto* btnClose = new wxButton(&dlg, wxID_CANCEL, _("Close"));
+        auto* bottomRow = new wxBoxSizer(wxHORIZONTAL); bottomRow->AddStretchSpacer(); bottomRow->Add(btnSave, 0, wxRIGHT, 8); bottomRow->Add(btnClose);
+        auto* top = new wxBoxSizer(wxVERTICAL);
+        top->Add(pickRow, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 10);
+        top->Add(nameRow, 0, wxEXPAND | wxALL, 10);
+        top->Add(nb, 1, wxEXPAND | wxLEFT | wxRIGHT, 10);
+        top->Add(bottomRow, 0, wxEXPAND | wxALL, 10);
+        dlg.SetSizer(top);
+
+        // ---- data binding -----------------------------------------------------------------------
+        auto pushToControls = [&]{
+            nameField->SetValue(cur.name); extField->SetValue(cur.ext);
+            cbCaseIgnored->SetValue(cur.caseIgnored); cbFoldComments->SetValue(cur.allowFoldOfComments); cbFoldCompact->SetValue(cur.foldCompact);
+            fc1o->SetValue(cur.foldCode1.open); fc1m->SetValue(cur.foldCode1.middle); fc1c->SetValue(cur.foldCode1.close);
+            fc2o->SetValue(cur.foldCode2.open); fc2m->SetValue(cur.foldCode2.middle); fc2c->SetValue(cur.foldCode2.close);
+            fco->SetValue(cur.foldComment.open); fcm->SetValue(cur.foldComment.middle); fcc->SetValue(cur.foldComment.close);
+            cmtLineOpen->SetValue(cur.commentLineOpen); cmtOpen->SetValue(cur.commentOpen); cmtClose->SetValue(cur.commentClose);
+            numPrefix1->SetValue(cur.numPrefix1); numPrefix2->SetValue(cur.numPrefix2);
+            numExtras1->SetValue(cur.numExtras1); numExtras2->SetValue(cur.numExtras2);
+            numSuffix1->SetValue(cur.numSuffix1); numSuffix2->SetValue(cur.numSuffix2);
+            numRange->SetValue(cur.numRange);
+            decimalChoice->SetSelection(cur.decimalSeparator); forcePureLCChoice->SetSelection(cur.forcePureLC);
+            op1->SetValue(cur.operators1); op2->SetValue(cur.operators2);
+            for (int i = 0; i < 8; ++i)
+            {
+                delimOpenCtl[i]->SetValue(cur.delimiters[i].open);
+                delimEscCtl[i]->SetValue(cur.delimiters[i].escape);
+                delimCloseCtl[i]->SetValue(cur.delimiters[i].close);
+                kwCtl[i]->SetValue(cur.keywords[i]);
+                kwPrefixCtl[i]->SetValue(cur.prefixMode[i]);
+            }
+        };
+        auto pullFromControls = [&]{
+            cur.name = nameField->GetValue(); cur.ext = extField->GetValue();
+            cur.caseIgnored = cbCaseIgnored->GetValue(); cur.allowFoldOfComments = cbFoldComments->GetValue(); cur.foldCompact = cbFoldCompact->GetValue();
+            cur.foldCode1 = { fc1o->GetValue(), fc1m->GetValue(), fc1c->GetValue() };
+            cur.foldCode2 = { fc2o->GetValue(), fc2m->GetValue(), fc2c->GetValue() };
+            cur.foldComment = { fco->GetValue(), fcm->GetValue(), fcc->GetValue() };
+            cur.commentLineOpen = cmtLineOpen->GetValue(); cur.commentOpen = cmtOpen->GetValue(); cur.commentClose = cmtClose->GetValue();
+            cur.numPrefix1 = numPrefix1->GetValue(); cur.numPrefix2 = numPrefix2->GetValue();
+            cur.numExtras1 = numExtras1->GetValue(); cur.numExtras2 = numExtras2->GetValue();
+            cur.numSuffix1 = numSuffix1->GetValue(); cur.numSuffix2 = numSuffix2->GetValue();
+            cur.numRange = numRange->GetValue();
+            cur.decimalSeparator = decimalChoice->GetSelection(); cur.forcePureLC = forcePureLCChoice->GetSelection();
+            cur.operators1 = op1->GetValue(); cur.operators2 = op2->GetValue();
+            for (int i = 0; i < 8; ++i)
+            {
+                cur.delimiters[i] = { delimOpenCtl[i]->GetValue(), delimEscCtl[i]->GetValue(), delimCloseCtl[i]->GetValue() };
+                cur.keywords[i] = kwCtl[i]->GetValue();
+                cur.prefixMode[i] = kwPrefixCtl[i]->GetValue();
+            }
+        };
+        auto refreshLangCombo = [&]{
+            langCombo->Clear();
+            for (auto& u : m_udls) langCombo->Append(u.name);
+            if (curIndex >= 0 && curIndex < (int)m_udls.size()) langCombo->SetSelection(curIndex);
+        };
+        refreshLangCombo();
+        pushToControls();
+
+        langCombo->Bind(wxEVT_CHOICE, [&](wxCommandEvent&){
+            curIndex = langCombo->GetSelection();
+            if (curIndex >= 0 && curIndex < (int)m_udls.size()) { cur = m_udls[curIndex]; pushToControls(); }
+        });
+        btnNew->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            curIndex = -1; cur = UdlLanguage{}; cur.name = _("NewLanguage");
+            langCombo->SetSelection(wxNOT_FOUND);
+            pushToControls();
+        });
+        btnRemove->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            if (curIndex < 0 || curIndex >= (int)m_udls.size()) return;
+            if (wxMessageBox(wxString::Format(_("Remove user-defined language \"%s\"?"), m_udls[curIndex].name),
+                              "wxNotepad++", wxYES_NO | wxICON_QUESTION, &dlg) != wxYES) return;
+            wxRemoveFile(udlDir() + wxFILE_SEP_PATH + m_udls[curIndex].name + ".xml");
+            m_udls.erase(m_udls.begin() + curIndex);
+            curIndex = m_udls.empty() ? -1 : 0;
+            cur = curIndex >= 0 ? m_udls[curIndex] : UdlLanguage{};
+            refreshLangCombo(); pushToControls();
+            rebuildUserLangMenu();
+        });
+
+        auto styleBtnHandler = [&](wxButton* btn, int styleIdx, const wxString& title) {
+            btn->Bind(wxEVT_BUTTON, [this, &cur, styleIdx, title](wxCommandEvent&){ showUdlStylerDialog(title, cur.styles[styleIdx]); });
+        };
+        styleBtnHandler(btnDefaultStyle, UDL_STYLE_DEFAULT, _("Style: Default"));
+        styleBtnHandler(btnFc1Style, UDL_STYLE_FOLDER_IN_CODE1, _("Style: Folder in code1"));
+        styleBtnHandler(btnFc2Style, UDL_STYLE_FOLDER_IN_CODE2, _("Style: Folder in code2"));
+        styleBtnHandler(btnFcStyle, UDL_STYLE_FOLDER_IN_COMMENT, _("Style: Folder in comment"));
+        styleBtnHandler(btnStyleLineComment, UDL_STYLE_LINE_COMMENTS, _("Style: Line Comment"));
+        styleBtnHandler(btnStyleComment, UDL_STYLE_COMMENTS, _("Style: Comment"));
+        styleBtnHandler(btnStyleNumber, UDL_STYLE_NUMBERS, _("Style: Number"));
+        styleBtnHandler(btnStyleOperators, UDL_STYLE_OPERATORS, _("Style: Operators"));
+        for (int i = 0; i < 8; ++i) styleBtnHandler(delimStyleBtn[i], UDL_STYLE_DELIMITERS1 + i, wxString::Format(_("Style: Delimiter %d"), i + 1));
+        for (int i = 0; i < 8; ++i) styleBtnHandler(kwStyleBtn[i], UDL_STYLE_KEYWORDS1 + i, wxString::Format(_("Style: Keywords %d"), i + 1));
+
+        btnSave->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            const wxString oldName = (curIndex >= 0 && curIndex < (int)m_udls.size()) ? m_udls[curIndex].name : wxString();
+            pullFromControls();
+            if (cur.name.empty()) { wxMessageBox(_("Please give the language a name."), "wxNotepad++", wxOK | wxICON_WARNING, &dlg); return; }
+            if (curIndex < 0) { m_udls.push_back(cur); curIndex = (int)m_udls.size() - 1; }
+            else m_udls[curIndex] = cur;
+            if (!oldName.empty() && oldName != cur.name) wxRemoveFile(udlDir() + wxFILE_SEP_PATH + oldName + ".xml");
+            saveUdlToDisk(m_udls[curIndex]);
+            refreshLangCombo();
+            rebuildUserLangMenu();
+            if (auto* p = activePage(); p && p->udlIndex == curIndex) setLexerForFile(p->path);   // live-refresh if this UDL is on screen right now
+            setStatus(0, wxString::Format(_("User-Defined Language \"%s\" saved"), cur.name)); m_hint = true;
+        });
+
+        themeDialog(&dlg);
+        dlg.ShowModal();
     }
     // Settings > Import > Import plugin(s)...: on Windows, .dll can be EITHER a real Notepad++-ABI plugin
     // (the GPL npp-bridge scans <exe>/plugins/<Name>/<Name>.dll - see packages/npp-bridge) or one of our own
@@ -6585,6 +7014,8 @@ private:
         if (cmd >= myID_DOCLIST_ITEM && cmd < myID_DOCLIST_ITEM + 1000)   // document-list dropdown entry
         { const size_t n = (size_t)(cmd - myID_DOCLIST_ITEM); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); return; }
         if (const NppLang* L = nppLangFind(cmd)) { setForcedLang(L->lexer, L->name); return; }   // Language menu: force that lexer on the active buffer
+        if (cmd >= IDM_LANG_USER && cmd < IDM_LANG_USER_LIMIT)   // Language menu: a user-defined language's dynamic entry (rebuildUserLangMenu)
+        { applyUdlToActiveBuffer(cmd - IDM_LANG_USER); return; }
         if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + 200)        // a saved macro from the Macro menu
         { const size_t n = (size_t)(cmd - myID_MACRO_ITEM); if (n < m_savedMacros.size()) playMacro(m_savedMacros[n].second); return; }
         // Win32 WM_COMMAND carries only a 16-bit id and wx sign-extends it, so command ids
@@ -6752,7 +7183,7 @@ private:
             case IDM_MACRO_PLAYBACKRECORDEDMACRO: playMacro(m_macro); break;
             case IDM_MACRO_RUNMULTIMACRODLG: runMultiple(); break;
             case IDM_MACRO_SAVECURRENTMACRO: saveMacro(); break;
-            case IDM_LANG_USER_DLG: notImpl(_("User-Defined Language dialog")); break;
+            case IDM_LANG_USER_DLG: onUserDefineLang(); break;
 
             // ---- File: shell integration + file ops ----
             case IDM_FILE_SAVECOPYAS: saveCopyAs(); break;
@@ -7091,6 +7522,7 @@ private:
     int         m_autoCompFrom = 3;                              // auto-completion triggers from the Nth typed character
     bool        m_autoInsertPairs = false;                       // auto-insert matching brackets/quotes while typing
     wxString    m_themeName;                                      // active editor theme (empty = dark/light default); Style Configurator
+    std::vector<UdlLanguage> m_udls;                              // loaded User-Defined Languages (see loadAllUdls / onUserDefineLang)
     wxPrintData m_printData;                                      // File > Print: remembers the chosen printer/paper for the session
     bool        m_printing = false;                               // re-entrancy guard around wxPrinter::Print()'s nested modal loop
     wxString    m_printHeader, m_printFooter;                     // Preferences > Print: optional header/footer text (macros resolved at print time)

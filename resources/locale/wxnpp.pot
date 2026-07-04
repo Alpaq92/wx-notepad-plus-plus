@@ -2101,3 +2101,264 @@ msgstr ""
 
 msgid "Sel : %d | %d"
 msgstr ""
+
+msgid "Font name (blank = inherit):"
+msgstr ""
+
+msgid "Font size (0 = inherit):"
+msgstr ""
+
+msgid "Underline"
+msgstr ""
+
+msgid "Nesting: also colour these inside this style"
+msgstr ""
+
+msgid "OK"
+msgstr ""
+
+msgid "Existing:"
+msgstr ""
+
+msgid "Name:"
+msgstr ""
+
+msgid "Ext:"
+msgstr ""
+
+msgid "Folder && Default"
+msgstr ""
+
+msgid "Comment && Number"
+msgstr ""
+
+msgid "Operator && Delimiter"
+msgstr ""
+
+msgid "Keywords"
+msgstr ""
+
+msgid "Ignore case"
+msgstr ""
+
+msgid "Allow folding of comments"
+msgstr ""
+
+msgid "Fold compact"
+msgstr ""
+
+msgid "Style Default..."
+msgstr ""
+
+msgid "Folder in code1:"
+msgstr ""
+
+msgid "Folder in code2:"
+msgstr ""
+
+msgid "Folder in comment:"
+msgstr ""
+
+msgid "Open:"
+msgstr ""
+
+msgid "Middle:"
+msgstr ""
+
+msgid "Close:"
+msgstr ""
+
+msgid "Style..."
+msgstr ""
+
+msgid "Line comment open:"
+msgstr ""
+
+msgid "Block comment open:"
+msgstr ""
+
+msgid "Block comment close:"
+msgstr ""
+
+msgid "Style Line Comment..."
+msgstr ""
+
+msgid "Style Comment..."
+msgstr ""
+
+msgid "Prefix 1:"
+msgstr ""
+
+msgid "Prefix 2:"
+msgstr ""
+
+msgid "Extras 1:"
+msgstr ""
+
+msgid "Extras 2:"
+msgstr ""
+
+msgid "Suffix 1:"
+msgstr ""
+
+msgid "Suffix 2:"
+msgstr ""
+
+msgid "Range:"
+msgstr ""
+
+msgid "Style Number..."
+msgstr ""
+
+msgid ". (dot)"
+msgstr ""
+
+msgid ", (comma)"
+msgstr ""
+
+msgid "both"
+msgstr ""
+
+msgid "Decimal separator"
+msgstr ""
+
+msgid "Off"
+msgstr ""
+
+msgid "Force lowercase before matching"
+msgstr ""
+
+msgid "Force lowercase in keyword lists too"
+msgstr ""
+
+msgid "Force pure LC"
+msgstr ""
+
+msgid "Operators 1:"
+msgstr ""
+
+msgid "Operators 2:"
+msgstr ""
+
+msgid "Style Operators..."
+msgstr ""
+
+msgid "Delimiters (8 sets)"
+msgstr ""
+
+msgid "Set"
+msgstr ""
+
+msgid "Escape"
+msgstr ""
+
+msgid "Keywords %d:"
+msgstr ""
+
+msgid "Prefix mode"
+msgstr ""
+
+msgid "Please give the language a name."
+msgstr ""
+
+msgid "Remove user-defined language \"%s\"?"
+msgstr ""
+
+msgid "User-Defined Language \"%s\" saved"
+msgstr ""
+
+msgid "Keyword1"
+msgstr ""
+
+msgid "Delimiter1"
+msgstr ""
+
+msgid "Keyword2"
+msgstr ""
+
+msgid "Delimiter2"
+msgstr ""
+
+msgid "Keyword3"
+msgstr ""
+
+msgid "Delimiter3"
+msgstr ""
+
+msgid "Keyword4"
+msgstr ""
+
+msgid "Delimiter4"
+msgstr ""
+
+msgid "Keyword5"
+msgstr ""
+
+msgid "Delimiter5"
+msgstr ""
+
+msgid "Keyword6"
+msgstr ""
+
+msgid "Delimiter6"
+msgstr ""
+
+msgid "Keyword7"
+msgstr ""
+
+msgid "Delimiter7"
+msgstr ""
+
+msgid "Keyword8"
+msgstr ""
+
+msgid "Delimiter8"
+msgstr ""
+
+msgid "Operator1"
+msgstr ""
+
+msgid "Operator2"
+msgstr ""
+
+msgid "Comment"
+msgstr ""
+
+msgid "Line comment"
+msgstr ""
+
+msgid "Number"
+msgstr ""
+
+msgid "Style: Default"
+msgstr ""
+
+msgid "Style: Folder in code1"
+msgstr ""
+
+msgid "Style: Folder in code2"
+msgstr ""
+
+msgid "Style: Folder in comment"
+msgstr ""
+
+msgid "Style: Line Comment"
+msgstr ""
+
+msgid "Style: Comment"
+msgstr ""
+
+msgid "Style: Number"
+msgstr ""
+
+msgid "Style: Operators"
+msgstr ""
+
+msgid "Style: Delimiter %d"
+msgstr ""
+
+msgid "Style: Keywords %d"
+msgstr ""
+
+msgid "Operators"
+msgstr ""

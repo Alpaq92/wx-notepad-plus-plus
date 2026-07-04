@@ -2117,3 +2117,264 @@ msgstr "%d из %d"
 
 msgid "%d matches"
 msgstr "%d совпадений"
+
+msgid "Font name (blank = inherit):"
+msgstr "Название шрифта (пусто = наследуется):"
+
+msgid "Font size (0 = inherit):"
+msgstr "Размер шрифта (0 = наследуется):"
+
+msgid "Underline"
+msgstr "Подчёркнутый"
+
+msgid "Nesting: also colour these inside this style"
+msgstr "Вложенность: также раскрашивать эти категории внутри этого стиля"
+
+msgid "OK"
+msgstr "ОК"
+
+msgid "Existing:"
+msgstr "Существующий:"
+
+msgid "Name:"
+msgstr "Имя:"
+
+msgid "Ext:"
+msgstr "Расш.:"
+
+msgid "Folder && Default"
+msgstr "Свёртывание и по умолчанию"
+
+msgid "Comment && Number"
+msgstr "Комментарий и число"
+
+msgid "Operator && Delimiter"
+msgstr "Оператор и разделитель"
+
+msgid "Keywords"
+msgstr "Ключевые слова"
+
+msgid "Ignore case"
+msgstr "Игнорировать регистр"
+
+msgid "Allow folding of comments"
+msgstr "Разрешить свёртывание комментариев"
+
+msgid "Fold compact"
+msgstr "Компактное свёртывание"
+
+msgid "Style Default..."
+msgstr "Стиль по умолчанию..."
+
+msgid "Folder in code1:"
+msgstr "Свёртывание в коде1:"
+
+msgid "Folder in code2:"
+msgstr "Свёртывание в коде2:"
+
+msgid "Folder in comment:"
+msgstr "Свёртывание в комментарии:"
+
+msgid "Open:"
+msgstr "Открыть:"
+
+msgid "Middle:"
+msgstr "Средний:"
+
+msgid "Close:"
+msgstr "Закрыть:"
+
+msgid "Style..."
+msgstr "Стиль..."
+
+msgid "Line comment open:"
+msgstr "Начало строчного комментария:"
+
+msgid "Block comment open:"
+msgstr "Начало блочного комментария:"
+
+msgid "Block comment close:"
+msgstr "Конец блочного комментария:"
+
+msgid "Style Line Comment..."
+msgstr "Стиль строчного комментария..."
+
+msgid "Style Comment..."
+msgstr "Стиль комментария..."
+
+msgid "Prefix 1:"
+msgstr "Префикс 1:"
+
+msgid "Prefix 2:"
+msgstr "Префикс 2:"
+
+msgid "Extras 1:"
+msgstr "Доп. символы 1:"
+
+msgid "Extras 2:"
+msgstr "Доп. символы 2:"
+
+msgid "Suffix 1:"
+msgstr "Суффикс 1:"
+
+msgid "Suffix 2:"
+msgstr "Суффикс 2:"
+
+msgid "Range:"
+msgstr "Диапазон:"
+
+msgid "Style Number..."
+msgstr "Стиль чисел..."
+
+msgid ". (dot)"
+msgstr ". (точка)"
+
+msgid ", (comma)"
+msgstr ", (запятая)"
+
+msgid "both"
+msgstr "оба"
+
+msgid "Decimal separator"
+msgstr "Десятичный разделитель"
+
+msgid "Off"
+msgstr "Выкл."
+
+msgid "Force lowercase before matching"
+msgstr "Приводить к нижнему регистру перед сравнением"
+
+msgid "Force lowercase in keyword lists too"
+msgstr "Приводить к нижнему регистру также в списках ключевых слов"
+
+msgid "Force pure LC"
+msgstr "Принудительный нижний регистр"
+
+msgid "Operators 1:"
+msgstr "Операторы 1:"
+
+msgid "Operators 2:"
+msgstr "Операторы 2:"
+
+msgid "Style Operators..."
+msgstr "Стиль операторов..."
+
+msgid "Delimiters (8 sets)"
+msgstr "Разделители (8 наборов)"
+
+msgid "Set"
+msgstr "Набор"
+
+msgid "Escape"
+msgstr "Экранирование"
+
+msgid "Keywords %d:"
+msgstr "Ключевые слова %d:"
+
+msgid "Prefix mode"
+msgstr "Режим префикса"
+
+msgid "Please give the language a name."
+msgstr "Укажите имя языка."
+
+msgid "Remove user-defined language \"%s\"?"
+msgstr "Удалить пользовательский язык \"%s\"?"
+
+msgid "User-Defined Language \"%s\" saved"
+msgstr "Пользовательский язык \"%s\" сохранён"
+
+msgid "Keyword1"
+msgstr "Ключевое слово 1"
+
+msgid "Delimiter1"
+msgstr "Разделитель 1"
+
+msgid "Keyword2"
+msgstr "Ключевое слово 2"
+
+msgid "Delimiter2"
+msgstr "Разделитель 2"
+
+msgid "Keyword3"
+msgstr "Ключевое слово 3"
+
+msgid "Delimiter3"
+msgstr "Разделитель 3"
+
+msgid "Keyword4"
+msgstr "Ключевое слово 4"
+
+msgid "Delimiter4"
+msgstr "Разделитель 4"
+
+msgid "Keyword5"
+msgstr "Ключевое слово 5"
+
+msgid "Delimiter5"
+msgstr "Разделитель 5"
+
+msgid "Keyword6"
+msgstr "Ключевое слово 6"
+
+msgid "Delimiter6"
+msgstr "Разделитель 6"
+
+msgid "Keyword7"
+msgstr "Ключевое слово 7"
+
+msgid "Delimiter7"
+msgstr "Разделитель 7"
+
+msgid "Keyword8"
+msgstr "Ключевое слово 8"
+
+msgid "Delimiter8"
+msgstr "Разделитель 8"
+
+msgid "Operator1"
+msgstr "Оператор 1"
+
+msgid "Operator2"
+msgstr "Оператор 2"
+
+msgid "Comment"
+msgstr "Комментарий"
+
+msgid "Line comment"
+msgstr "Строчный комментарий"
+
+msgid "Number"
+msgstr "Число"
+
+msgid "Style: Default"
+msgstr "Стиль: По умолчанию"
+
+msgid "Style: Folder in code1"
+msgstr "Стиль: Свёртывание в коде1"
+
+msgid "Style: Folder in code2"
+msgstr "Стиль: Свёртывание в коде2"
+
+msgid "Style: Folder in comment"
+msgstr "Стиль: Свёртывание в комментарии"
+
+msgid "Style: Line Comment"
+msgstr "Стиль: Строчный комментарий"
+
+msgid "Style: Comment"
+msgstr "Стиль: Комментарий"
+
+msgid "Style: Number"
+msgstr "Стиль: Число"
+
+msgid "Style: Operators"
+msgstr "Стиль: Операторы"
+
+msgid "Style: Delimiter %d"
+msgstr "Стиль: Разделитель %d"
+
+msgid "Style: Keywords %d"
+msgstr "Стиль: Ключевые слова %d"
+
+msgid "Operators"
+msgstr "Операторы"
