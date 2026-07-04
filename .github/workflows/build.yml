@@ -43,12 +43,22 @@ jobs:
           sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config libgtk-3-dev
 
       # Cache the fetched + built wxWidgets so iterations don't rebuild it from source each run.
+      # "v2" (was unversioned): the cached build/_deps holds a CMakeCache.txt stamped with whichever
+      # generator configured it - bumping the key forces a clean rebuild under the now-forced Ninja
+      # generator below instead of erroring with "generator does not match the one used previously".
       - name: Cache wxWidgets
         uses: actions/cache@v4
         with:
           path: build/_deps
-          key: wx331-${{ matrix.name }}-${{ hashFiles('CMakeLists.txt') }}
-          restore-keys: wx331-${{ matrix.name }}-
+          key: wx331-v2-${{ matrix.name }}-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: wx331-v2-${{ matrix.name }}-
+
+      # msvc-dev-cmd: puts cl.exe (not the runner's incidental MinGW g++) first on PATH, which
+      # plain Ninja needs since - unlike the Visual Studio generator - it has no built-in MSVC
+      # discovery of its own.
+      - name: Set up MSVC (Windows)
+        if: matrix.name == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
 
       # -G Ninja: without it, Windows' default generator is the multi-config "Visual Studio" one,
       # which ignores RUNTIME_OUTPUT_DIRECTORY's plain (non-per-config) setting and puts the exe in
