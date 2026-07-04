@@ -2105,3 +2105,15 @@ msgstr "IconPark 太字アイコン（ティール/ライム）"
 
 msgid "Tabler icons (line)"
 msgstr "Tabler アイコン（ライン）"
+
+msgid "No matches"
+msgstr "一致なし"
+
+msgid "%d+ matches"
+msgstr "%d+ 件"
+
+msgid "%d of %d"
+msgstr "%d / %d"
+
+msgid "%d matches"
+msgstr "%d 件"

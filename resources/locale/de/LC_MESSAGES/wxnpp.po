@@ -2105,3 +2105,15 @@ msgstr "IconPark-Icons fett (Türkis/Limette)"
 
 msgid "Tabler icons (line)"
 msgstr "Tabler-Icons (Linien)"
+
+msgid "No matches"
+msgstr "Keine Treffer"
+
+msgid "%d+ matches"
+msgstr "%d+ Treffer"
+
+msgid "%d of %d"
+msgstr "%d von %d"
+
+msgid "%d matches"
+msgstr "%d Treffer"

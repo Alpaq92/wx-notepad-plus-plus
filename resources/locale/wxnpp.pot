@@ -1457,6 +1457,18 @@ msgstr ""
 msgid "Close"
 msgstr ""
 
+msgid "No matches"
+msgstr ""
+
+msgid "%d+ matches"
+msgstr ""
+
+msgid "%d of %d"
+msgstr ""
+
+msgid "%d matches"
+msgstr ""
+
 msgid "Find result"
 msgstr ""
 
@@ -1838,9 +1850,6 @@ msgstr ""
 msgid "Show integrated top bar"
 msgstr ""
 
-msgid "Localization:"
-msgstr ""
-
 msgid "Tabler icons (line)"
 msgstr ""
 
@@ -1848,6 +1857,9 @@ msgid "Solar icons (green)"
 msgstr ""
 
 msgid "IconPark icons (teal/lime)"
+msgstr ""
+
+msgid "Localization:"
 msgstr ""
 
 msgid "Toolbar icon style:"

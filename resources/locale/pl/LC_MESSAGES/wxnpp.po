@@ -2105,3 +2105,15 @@ msgstr "Ikony IconPark pogrubione (turkusowo-limonkowe)"
 
 msgid "Tabler icons (line)"
 msgstr "Ikony Tabler (liniowe)"
+
+msgid "No matches"
+msgstr "Brak dopasowań"
+
+msgid "%d+ matches"
+msgstr "%d+ dopasowań"
+
+msgid "%d of %d"
+msgstr "%d z %d"
+
+msgid "%d matches"
+msgstr "%d dopasowań"

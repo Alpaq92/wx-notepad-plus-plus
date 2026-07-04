@@ -33,11 +33,13 @@ the optional `packages/npp-bridge` plugin; the application core is N++-ABI-free.
 
 **Conclusion: "rewrite the ABI headers, compatible but not the same" is complete.** Follow-up
 hygiene items:
-- [ ] add a one-page `include/npp-compat/README.md` stating the clean-room methodology and
+- [x] add a one-page `include/npp-compat/README.md` stating the clean-room methodology and
       what a reviewer should check (no textual overlap, layout equivalence tests);
-- [ ] add a compile-time `static_assert` suite (`sizeof`/`offsetof` for `NppData`, `FuncItem`,
+- [x] add a compile-time `static_assert` suite (`sizeof`/`offsetof` for `NppData`, `FuncItem`,
       `tTbData`, `CommunicationInfo`) so any accidental layout drift breaks the build rather
-      than plugins at runtime.
+      than plugins at runtime. (`include/npp-compat/abi_layout_asserts.h`, included from
+      `packages/npp-bridge/npp_bridge.cpp` - asserts each field's offset relative to the one
+      before it, so it catches drift without needing a hardcoded byte-offset table.)
 
 ---
 

@@ -2461,10 +2461,10 @@ private:
             if (adv >= len) break;
             sci(SCI_SETTARGETSTART, adv); sci(SCI_SETTARGETEND, len);
         }
-        m_incCount->SetLabel(!total      ? wxString("No matches")
-                             : total >= CAP ? wxString::Format("%d+ matches", CAP)
-                             : current    ? wxString::Format("%d of %d", current, total)
-                                          : wxString::Format("%d matches", total));
+        m_incCount->SetLabel(!total      ? wxString(_("No matches"))
+                             : total >= CAP ? wxString::Format(_("%d+ matches"), CAP)
+                             : current    ? wxString::Format(_("%d of %d"), current, total)
+                                          : wxString::Format(_("%d matches"), total));
     }
     void showIncBar()
     {
@@ -5833,7 +5833,12 @@ private:
 
         // ---- New Document ---------------------------------------------------------------------
         auto* nd = pg(_("New Document")); auto* nds = new wxBoxSizer(wxVERTICAL);
-        const wxString eolChoices[3] = { eolName(SC_EOL_CRLF), eolName(SC_EOL_LF), eolName(SC_EOL_CR) };
+        // Reuses the same 3 msgids as the Edit > EOL Conversion menu (IDM_FORMAT_TODOS/TOUNIX/TOMAC) -
+        // eolName() itself stays untranslated (the status bar's own use of it deliberately matches N++'s
+        // English-always EOL indicator), so translate it here rather than in the shared helper. Calling
+        // wxGetTranslation() directly (not the _() macro) because _() requires a compile-time string
+        // literal for its static extraction check - eolName() returns one at runtime, not a literal.
+        const wxString eolChoices[3] = { wxGetTranslation(eolName(SC_EOL_CRLF)), wxGetTranslation(eolName(SC_EOL_LF)), wxGetTranslation(eolName(SC_EOL_CR)) };
         auto* rbEol = new wxRadioBox(nd, wxID_ANY, _("Format (Line ending)"), wxDefaultPosition, wxDefaultSize,
                                      3, eolChoices, 1, wxRA_SPECIFY_COLS);
         rbEol->SetSelection(m_defaultEol == SC_EOL_LF ? 1 : (m_defaultEol == SC_EOL_CR ? 2 : 0));
@@ -6666,9 +6671,12 @@ private:
             case IDM_SEARCH_NEXT_BOOKMARK: gotoBookmark(true); break;
             case IDM_SEARCH_PREV_BOOKMARK: gotoBookmark(false); break;
             case IDM_SEARCH_CLEAR_BOOKMARKS: sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); break;
-            // Change History: the Scintilla core wx 3.3.1 bundles predates SCI_SETCHANGEHISTORY (added
-            // upstream after wx's vendored copy) - it's not a no-op we can wire around, the message doesn't
-            // exist in this build, so SCI_GETCHANGEHISTORY reports disabled no matter what we send it.
+            // Change History: SCI_SETCHANGEHISTORY was added in upstream Scintilla 5.3.0; wx vendors its
+            // own Scintilla fork (github.com/wxWidgets/scintilla, "wx" branch) at 5.0.0 - confirmed still
+            // true as of the latest wx release (3.3.2, 2026-03) by checking that fork's pinned commit
+            // directly, not just our own currently-built 3.3.1. This isn't a "bump our pinned version"
+            // fix - there is currently no wxWidgets release whose vendored Scintilla is new enough, so
+            // there's nothing to bump TO. Revisit if/when wx's own Scintilla fork catches up upstream.
             case IDM_SEARCH_CHANGED_NEXT:
             case IDM_SEARCH_CHANGED_PREV:
             case IDM_SEARCH_CLEAR_CHANGE_HISTORY: notImpl(_("Change History (needs a newer Scintilla than this wx build carries)")); break;
