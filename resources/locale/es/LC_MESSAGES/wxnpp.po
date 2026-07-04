@@ -2090,3 +2090,9 @@ msgstr "Iconos Fatcow"
 
 msgid "Fugue icons"
 msgstr "Iconos Fugue"
+
+msgid "Solar icons (green)"
+msgstr "Iconos Solar (verde)"
+
+msgid "IconPark icons (teal/lime)"
+msgstr "Iconos IconPark (verde azulado/lima)"

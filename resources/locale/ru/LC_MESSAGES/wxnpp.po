@@ -2090,3 +2090,9 @@ msgstr "Значки Fatcow"
 
 msgid "Fugue icons"
 msgstr "Значки Fugue"
+
+msgid "Solar icons (green)"
+msgstr "Значки Solar (зелёные)"
+
+msgid "IconPark icons (teal/lime)"
+msgstr "Значки IconPark (бирюзово-лаймовые)"

@@ -1844,10 +1844,10 @@ msgstr ""
 msgid "Line icons (default)"
 msgstr ""
 
-msgid "Fatcow icons"
+msgid "Solar icons (green)"
 msgstr ""
 
-msgid "Fugue icons"
+msgid "IconPark icons (teal/lime)"
 msgstr ""
 
 msgid "Toolbar icon style:"

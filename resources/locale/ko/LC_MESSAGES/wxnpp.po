@@ -2090,3 +2090,9 @@ msgstr "Fatcow 아이콘"
 
 msgid "Fugue icons"
 msgstr "Fugue 아이콘"
+
+msgid "Solar icons (green)"
+msgstr "Solar 아이콘(녹색)"
+
+msgid "IconPark icons (teal/lime)"
+msgstr "IconPark 아이콘(틸/라임)"

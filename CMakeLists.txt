@@ -117,9 +117,9 @@ add_custom_command(TARGET wxnpp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/icons"  "$<TARGET_FILE_DIR:wxnpp>/icons"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/icons-fatcow" "$<TARGET_FILE_DIR:wxnpp>/icons-fatcow"
+        "${CMAKE_SOURCE_DIR}/resources/icons-solar" "$<TARGET_FILE_DIR:wxnpp>/icons-solar"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/icons-fugue" "$<TARGET_FILE_DIR:wxnpp>/icons-fugue"
+        "${CMAKE_SOURCE_DIR}/resources/icons-iconpark" "$<TARGET_FILE_DIR:wxnpp>/icons-iconpark"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/themes" "$<TARGET_FILE_DIR:wxnpp>/themes"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different

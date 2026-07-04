@@ -3871,52 +3871,36 @@ private:
     }
 
     // ----- toolbar (Notepad++ icon pack, native order) -------------------
-    // Colored icon sets (Settings > Preferences > General > Toolbar icon style): fixed multi-colour PNGs
-    // (Fatcow Farm-Fresh or Fugue, both CC BY 3.0 - see resources/icons-fatcow|fugue/CREDITS.md) rather
-    // than the default currentColor-tokenized SVGs, so they do NOT auto-adapt to dark/light theme - that's
-    // an accepted tradeoff of this style (matches real Notepad++'s classic toolbar, which is the same way).
+    // Colored icon sets (Settings > Preferences > General > Toolbar icon style): Solar (Bold Duotone,
+    // CC BY 4.0) tinted Open Color green-8, and IconPark (Apache-2.0) tinted Open Color teal-7/lime-5 -
+    // see resources/icons-solar|iconpark/CREDITS.md. Unlike the default set these bake a FIXED colour in
+    // at generation time rather than a currentColor token, since the point is one accent that reads on
+    // both light and dark chrome - so loading is a plain SVG file read, no runtime colour substitution.
     wxBitmapBundle iconColored(const wxString& name, const wxString& packDir)
     {
-        const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\" + packDir + "\\";
-        const wxString path = dir + name + ".png";
+        const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\" + packDir + "\\" + name + ".svg";
         if (!wxFileExists(path)) return wxBitmapBundle();   // caller falls back to the line-icon SVG for anything the colored set doesn't cover
-        wxImage img(path, wxBITMAP_TYPE_PNG);
-        if (!img.IsOk()) return wxBitmapBundle();
-        // Source PNGs are 32x32; rescale explicitly to the toolbar's fixed 16x16 rather than leaving a
-        // size-mismatched bitmap for wxBitmapBundle's DPI-aware scaling to resolve on demand - a bundle
-        // built from a single oversized bitmap crashed on the first repaint triggered by a modal dialog.
-        if (img.GetWidth() != 16 || img.GetHeight() != 16) img.Rescale(16, 16, wxIMAGE_QUALITY_HIGH);
-        if (!m_dark) return wxBitmapBundle::FromBitmap(wxBitmap(img));
-
-        // Both packs were drawn for a light toolbar (circa 2008-2012 icon sets); on dark chrome their
-        // low-saturation icons (e.g. Fatcow's grey playback-control circles) nearly vanish and any
-        // baked-in light/white shapes clash. Composite onto a small light rounded backdrop so every icon
-        // reads consistently regardless of its own palette, instead of hand-curating replacements one by
-        // one. Stays exactly 16x16 (matching the toolbar's fixed bitmap size - see the rescale above and
-        // its crash note: never hand wxBitmapBundle a size-mismatched bitmap).
-        wxBitmap canvas(16, 16, 32);
-        canvas.UseAlpha();
+        if (packDir == "icons-iconpark" && m_dark)
         {
-            wxMemoryDC mdc(canvas);
-            mdc.SetBackground(*wxTRANSPARENT_BRUSH);
-            mdc.Clear();
-            if (wxGraphicsContext* gc = wxGraphicsContext::Create(mdc))
+            // IconPark's signature black outline stroke (its accent fills are already baked to a fixed
+            // teal/lime at generation time - see resources/icons-iconpark/CREDITS.md) reads fine on the
+            // light chrome it was designed for, but nearly vanishes on dark chrome. Lighten just that
+            // stroke for dark mode; the white highlight stroke already has plenty of contrast either way.
+            wxFile f(path); wxString svg;
+            if (f.IsOpened() && f.ReadAll(&svg))
             {
-                gc->SetBrush(wxColour(232, 232, 236, 235));
-                gc->SetPen(*wxTRANSPARENT_PEN);
-                gc->DrawRoundedRectangle(0, 0, 16, 16, 3);
-                gc->DrawBitmap(wxBitmap(img), 0, 0, 16, 16);   // alpha-composited via the same context
-                delete gc;
+                svg.Replace("stroke=\"#000\"", "stroke=\"#ced4da\"");   // Open Color gray-4
+                const wxScopedCharBuffer u = svg.utf8_str();
+                return wxBitmapBundle::FromSVG(u.data(), wxSize(16, 16));
             }
-            mdc.SelectObject(wxNullBitmap);   // release the DC's hold before canvas is read back
         }
-        return wxBitmapBundle::FromBitmap(canvas);
+        return wxBitmapBundle::FromSVGFile(path, wxSize(16, 16));
     }
     wxBitmapBundle icon(const wxString& name)
     {
-        // m_iconStyle: 0 = line icons (default), 1 = Fatcow colored, 2 = Fugue colored
-        if (m_iconStyle == 1) { wxBitmapBundle c = iconColored(name, "icons-fatcow"); if (c.IsOk()) return c; }
-        else if (m_iconStyle == 2) { wxBitmapBundle c = iconColored(name, "icons-fugue"); if (c.IsOk()) return c; }
+        // m_iconStyle: 0 = line icons (default), 1 = Solar (green), 2 = IconPark (teal/lime)
+        if (m_iconStyle == 1) { wxBitmapBundle c = iconColored(name, "icons-solar"); if (c.IsOk()) return c; }
+        else if (m_iconStyle == 2) { wxBitmapBundle c = iconColored(name, "icons-iconpark"); if (c.IsOk()) return c; }
         static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\";
         // Permissive toolbar icons (Tabler x Open Color, MIT) - monochrome by default, with a meaning-accent
         // on 8 of the 32 (gold New "+", blue Save/Save-All, red Record/Stop, green Playback/-multiple). Neutral
@@ -5609,7 +5593,7 @@ private:
     {
         auto* c = wxConfigBase::Get();
         c->Read("IntegratedBar", &m_integratedBar, false);
-        long is = 0; c->Read("ToolbarIconStyle", &is, 0L); m_iconStyle = (int)is;   // 0 = line icons, 1 = Fatcow, 2 = Fugue
+        long is = 0; c->Read("ToolbarIconStyle", &is, 0L); m_iconStyle = (int)is;   // 0 = line icons, 1 = Solar, 2 = IconPark
         long mr = 10; c->Read("RecentFiles/Max", &mr, 10L); m_maxRecent = (int)mr;
         c->Read("TabBar/CloseButton", &m_tabCloseBtn, true);   // integrated top bar on/off (also read in OnInit; here for the Preferences checkbox)
         long tw = 4; c->Read("Editing/TabWidth", &tw, 4L); m_tabWidth = (int)tw;
@@ -5716,9 +5700,9 @@ private:
         uirow->Add(chUiLang, 0, wxALIGN_CENTRE_VERTICAL);
         gs->Add(uirow, 0, wxLEFT | wxRIGHT | wxTOP, 10);
         // Toolbar icon style (restart-to-apply, like Localization above): the default line-icon set
-        // (theme-adaptive) vs. two fixed-colour sets, Fatcow and Fugue (both CC BY 3.0 - see iconColored()).
+        // (theme-adaptive) vs. two fixed-colour sets, Solar and IconPark (see iconColored()).
         wxArrayString iconStyleNames;
-        iconStyleNames.Add(_("Line icons (default)")); iconStyleNames.Add(_("Fatcow icons")); iconStyleNames.Add(_("Fugue icons"));
+        iconStyleNames.Add(_("Line icons (default)")); iconStyleNames.Add(_("Solar icons (green)")); iconStyleNames.Add(_("IconPark icons (teal/lime)"));
         auto* chIconStyle = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, iconStyleNames);
         chIconStyle->SetSelection(m_iconStyle);
         auto* icrow = new wxBoxSizer(wxHORIZONTAL);
@@ -6994,7 +6978,7 @@ private:
 #endif
     wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
-    int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Fatcow, 2 = Fugue (restart-to-apply)
+    int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Solar, 2 = IconPark (restart-to-apply)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
     bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON like Notepad++
