@@ -1399,7 +1399,7 @@ public:
     using FB::ShowFullScreen; using FB::IsFullScreen; using FB::Freeze; using FB::Thaw; using FB::IsFrozen;
     using FB::GetHandle; using FB::SetTransparent; using FB::Raise; using FB::SetDropTarget;
     using FB::SetAcceleratorTable; using FB::GetClientAreaOrigin; using FB::GetParent; using FB::GetFont;
-    using FB::SetExtraStyle; using FB::GetContentScaleFactor; using FB::ProcessWindowEvent;
+    using FB::SetExtraStyle; using FB::GetContentScaleFactor; using FB::ProcessWindowEvent; using FB::CallAfter;
 
     // True when the chrome base is the borderless frame (integrated top bar), false for native wxFrame.
     // Compile-time, so the borderless-only branches below are `if constexpr` and never instantiated for
