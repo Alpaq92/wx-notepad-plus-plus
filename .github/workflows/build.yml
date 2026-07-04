@@ -50,8 +50,13 @@ jobs:
           key: wx331-${{ matrix.name }}-${{ hashFiles('CMakeLists.txt') }}
           restore-keys: wx331-${{ matrix.name }}-
 
+      # -G Ninja: without it, Windows' default generator is the multi-config "Visual Studio" one,
+      # which ignores RUNTIME_OUTPUT_DIRECTORY's plain (non-per-config) setting and puts the exe in
+      # build/bin/Release/ instead of build/bin/ - breaking every packaging script below that reads
+      # from build/bin/wxnpp.exe directly. Ninja is single-config and preinstalled on all 3 hosted
+      # runner images; this also matches the build command documented at the top of CMakeLists.txt.
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       # Cap parallelism to 2: one cc1plus per core compiling wxWidgets + the large single-TU main.cpp
       # at -O2 all at once OOM-kills cc1plus on the hosted runners (esp. the 7 GB macOS M1). Two at a
