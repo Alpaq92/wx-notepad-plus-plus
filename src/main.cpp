@@ -160,6 +160,7 @@ public:
     bool     langForced = false;           // true once the user picks a language from the Language menu
     wxString forcedLexer;                  // that pick's Lexilla lexer name ("" = forced Normal Text)
     wxString forcedName;                   // that pick's display label for the status bar, e.g. "C++"
+    int      udlIndex = -1;                // index into MainFrame::m_udls when a User-Defined Language is active (-1 = none)
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
@@ -1437,6 +1438,7 @@ public:
         setAppIcon();
         buildEditor();
         buildMenuBar();
+        rebuildUserLangMenu();   // populate the Language menu's per-UDL section from what loadAllUdls() found
         buildToolBar();
         buildStatusBar();
 
@@ -1726,6 +1728,7 @@ private:
         v.stc->Bind(wxEVT_STC_ZOOM,             &NppShellFrameT::onStcZoom,        this);
         v.stc->Bind(wxEVT_STC_MODIFIED,         &NppShellFrameT::onStcModified,    this);
         v.stc->Bind(wxEVT_STC_MACRORECORD,      &NppShellFrameT::onMacroRecord,    this);   // capture commands while recording a macro
+        v.stc->Bind(wxEVT_STC_STYLENEEDED,      &NppShellFrameT::onStcStyleNeeded, this);   // container-lexed User-Defined Language buffers only (see udl_lexer.h)
         v.stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev); e.Skip(); });
         v.stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrameT::onStcContextMenu, this);
         v.stc->Bind(wxEVT_SET_FOCUS, [this, vp = &v](wxFocusEvent& e) { onViewFocus(vp); e.Skip(); });   // focus -> this view becomes active
@@ -4171,6 +4174,26 @@ private:
     {
         applyEditorTheme(m_dark);          // reset every style to the theme base (incl. line numbers)
         auto* page = activePage();
+        if (page && !page->langForced && page->udlIndex < 0)   // auto-detect: a UDL's ext list wins over the built-in lexerForExt table
+        {
+            const wxString ext = path.AfterLast('.').Lower();
+            for (size_t i = 0; !ext.empty() && i < m_udls.size(); ++i)
+            {
+                wxStringTokenizer tk(m_udls[i].ext, " ", wxTOKEN_STRTOK);
+                bool matched = false;
+                while (tk.HasMoreTokens()) if (tk.GetNextToken().Lower() == ext) { matched = true; break; }
+                if (matched) { page->udlIndex = (int)i; break; }
+            }
+        }
+        if (page && page->udlIndex >= 0 && page->udlIndex < (int)m_udls.size())   // User-Defined Language: container-lexed, not Lexilla
+        {
+            const UdlLanguage& lang = m_udls[page->udlIndex];
+            udlApplyStyles(m_stc, lang);
+            page->lang = lang.name;
+            m_stc->Colourise(0, -1);
+            udlFoldRange(m_stc, lang, 0, m_stc->GetLineCount() - 1);
+            return;
+        }
         // A manual Language pick forces its lexer directly; otherwise auto-detect from the file extension.
         wxString lexer, themeKey, disp, ext;
         if (page && page->langForced) { lexer = page->forcedLexer; themeKey = page->forcedLexer; disp = page->forcedName; }
@@ -5130,10 +5153,37 @@ private:
     void setForcedLang(const wxString& lexer, const wxString& name)
     {
         auto* p = activePage(); if (!p) return;
-        p->langForced = true; p->forcedLexer = lexer; p->forcedName = name;
+        p->langForced = true; p->forcedLexer = lexer; p->forcedName = name; p->udlIndex = -1;
         setLexerForFile(p->path);
         updateStatus();
         if (m_stc) m_stc->Refresh();
+    }
+    // Manually force a User-Defined Language on the active buffer (the Language menu's dynamic UDL
+    // section - see rebuildUserLangMenu). Mirrors setForcedLang's "sticks across tab switches" contract.
+    void applyUdlToActiveBuffer(int udlIndex)
+    {
+        auto* p = activePage(); if (!p) return;
+        if (udlIndex < 0 || udlIndex >= (int)m_udls.size()) return;
+        p->langForced = true; p->udlIndex = udlIndex;
+        setLexerForFile(p->path);
+        updateStatus();
+        if (m_stc) m_stc->Refresh();
+    }
+    // Rebuild the Language menu's dynamic per-UDL section from m_udls (ids IDM_LANG_USER..IDM_LANG_USER_LIMIT-1,
+    // the exact range real Notepad++ reserves - see menuCmdID.h). Called once at startup (after loadAllUdls) and
+    // again whenever the UDL dialog adds/renames/removes a language, so the menu never needs a restart to catch up.
+    void rebuildUserLangMenu()
+    {
+        auto* mb = menuBar(); if (!mb) return;
+        wxMenu* lang = nullptr;
+        mb->FindItem(IDM_LANG_TEXT, &lang);   // IDM_LANG_TEXT ("Normal text file") lives directly on the top-level Language menu
+        if (!lang) return;
+        for (int id = IDM_LANG_USER; id < IDM_LANG_USER_LIMIT; ++id)
+            if (wxMenuItem* it = lang->FindItem(id)) lang->Destroy(it);
+        const size_t insertPos = lang->GetMenuItemCount();
+        const size_t limit = wxMin(m_udls.size(), (size_t)(IDM_LANG_USER_LIMIT - IDM_LANG_USER));
+        for (size_t i = 0; i < limit; ++i)
+            lang->Insert(insertPos + i, IDM_LANG_USER + (int)i, m_udls[i].name);
     }
 
     // ----- search engine (drives the Find/Replace dialog) ----------------
@@ -5964,6 +6014,19 @@ private:
         { const char* t = reinterpret_cast<const char*>(lp); s.text = (msg == SCI_ADDTEXT) ? std::string(t, (size_t)wp) : std::string(t); s.hasText = true; }
         m_macro.push_back(s);
     }
+    // Fires only for a buffer whose lexer is wxSTC_LEX_CONTAINER (a User-Defined Language - see
+    // udlApplyStyles); a real Lexilla lexer (SCI_SETILEXER) styles itself and never triggers this.
+    void onStcStyleNeeded(wxStyledTextEvent& e)
+    {
+        wxStyledTextCtrl* stc = wxDynamicCast(e.GetEventObject(), wxStyledTextCtrl);
+        auto* p = activePage();
+        if (!stc || !p || p->udlIndex < 0 || p->udlIndex >= (int)m_udls.size()) { e.Skip(); return; }
+        const UdlLanguage& lang = m_udls[p->udlIndex];
+        const int startPos = stc->GetEndStyled();
+        const int endPos = static_cast<int>(e.GetPosition());
+        udlStyleRange(stc, lang, startPos, endPos);
+        udlFoldRange(stc, lang, stc->LineFromPosition(startPos), stc->LineFromPosition(endPos));
+    }
     void macroToolStates()
     {
         const bool has = !m_macro.empty();
@@ -6524,6 +6587,7 @@ private:
             curIndex = m_udls.empty() ? -1 : 0;
             cur = curIndex >= 0 ? m_udls[curIndex] : UdlLanguage{};
             refreshLangCombo(); pushToControls();
+            rebuildUserLangMenu();
         });
 
         auto styleBtnHandler = [&](wxButton* btn, int styleIdx, const wxString& title) {
@@ -6549,6 +6613,8 @@ private:
             if (!oldName.empty() && oldName != cur.name) wxRemoveFile(udlDir() + wxFILE_SEP_PATH + oldName + ".xml");
             saveUdlToDisk(m_udls[curIndex]);
             refreshLangCombo();
+            rebuildUserLangMenu();
+            if (auto* p = activePage(); p && p->udlIndex == curIndex) setLexerForFile(p->path);   // live-refresh if this UDL is on screen right now
             setStatus(0, wxString::Format(_("User-Defined Language \"%s\" saved"), cur.name)); m_hint = true;
         });
 
@@ -6948,6 +7014,8 @@ private:
         if (cmd >= myID_DOCLIST_ITEM && cmd < myID_DOCLIST_ITEM + 1000)   // document-list dropdown entry
         { const size_t n = (size_t)(cmd - myID_DOCLIST_ITEM); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); return; }
         if (const NppLang* L = nppLangFind(cmd)) { setForcedLang(L->lexer, L->name); return; }   // Language menu: force that lexer on the active buffer
+        if (cmd >= IDM_LANG_USER && cmd < IDM_LANG_USER_LIMIT)   // Language menu: a user-defined language's dynamic entry (rebuildUserLangMenu)
+        { applyUdlToActiveBuffer(cmd - IDM_LANG_USER); return; }
         if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + 200)        // a saved macro from the Macro menu
         { const size_t n = (size_t)(cmd - myID_MACRO_ITEM); if (n < m_savedMacros.size()) playMacro(m_savedMacros[n].second); return; }
         // Win32 WM_COMMAND carries only a 16-bit id and wx sign-extends it, so command ids
