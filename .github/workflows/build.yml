@@ -9,9 +9,9 @@ name: build
 on:
   push:
     branches: [ wx-migration, master ]
-    paths: [ 'src/**', 'include/**', 'third_party/**', 'resources/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
+    paths: [ 'src/**', 'include/**', 'third_party/**', 'resources/**', 'installer/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
   pull_request:
-    paths: [ 'src/**', 'include/**', 'third_party/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
+    paths: [ 'src/**', 'include/**', 'third_party/**', 'installer/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
   workflow_dispatch:
 
 # A newer push to a branch cancels that branch's still-queued/running build, so the matrix doesn't
@@ -57,3 +57,18 @@ jobs:
       # time fits, at the cost of a slower (but reliable) build.
       - name: Build wxnpp
         run: cmake --build build --config Release --target wxnpp --parallel 2
+
+      - name: Package AppImage (Linux)
+        if: matrix.name == 'linux'
+        run: bash installer/linux/build-appimage.sh
+
+      - name: Package .deb (Linux)
+        if: matrix.name == 'linux'
+        run: bash installer/linux/build-deb.sh
+
+      - name: Upload Linux packages
+        if: matrix.name == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wxnpp-linux-packages
+          path: build/installer/*

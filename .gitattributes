@@ -1,0 +1,3 @@
+# Shell scripts run on Linux/macOS CI runners - force LF regardless of the checkout platform's
+# core.autocrlf setting (a CRLF shebang/heredoc line silently breaks bash).
+*.sh text eol=lf
