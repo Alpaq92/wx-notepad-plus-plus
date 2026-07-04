@@ -5765,12 +5765,16 @@ private:
         chIconStyle->SetSelection(m_iconStyle);
         // A 2-column grid (not two independent row sizers) so both combo boxes line up under each other
         // regardless of their label's length - "Localization:" and "Toolbar icon style:" differ enough in
-        // width that separate row sizers left the two combos visibly staggered.
+        // width that separate row sizers left the two combos visibly staggered. wxEXPAND on the control
+        // column additionally stretches each wxChoice to the column's full (uniform) width - without it,
+        // a FlexGridSizer still gives both cells the same width, but a narrower control (e.g. "Polski")
+        // just sits left-aligned inside its cell rather than filling it, so the two still looked
+        // different widths even once their left edges lined up.
         auto* locGrid = new wxFlexGridSizer(2, 2, 8, 8);
         locGrid->Add(new wxStaticText(gen, wxID_ANY, _("Localization:")), 0, wxALIGN_CENTRE_VERTICAL);
-        locGrid->Add(chUiLang, 0, wxALIGN_CENTRE_VERTICAL);
+        locGrid->Add(chUiLang, 0, wxEXPAND | wxALIGN_CENTRE_VERTICAL);
         locGrid->Add(new wxStaticText(gen, wxID_ANY, _("Toolbar icon style:")), 0, wxALIGN_CENTRE_VERTICAL);
-        locGrid->Add(chIconStyle, 0, wxALIGN_CENTRE_VERTICAL);
+        locGrid->Add(chIconStyle, 0, wxEXPAND | wxALIGN_CENTRE_VERTICAL);
         gs->Add(locGrid, 0, wxLEFT | wxRIGHT | wxTOP, 10);
         gen->SetSizer(gs);
 
