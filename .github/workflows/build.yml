@@ -72,3 +72,14 @@ jobs:
         with:
           name: wxnpp-linux-packages
           path: build/installer/*
+
+      - name: Package .dmg (macOS)
+        if: matrix.name == 'macos'
+        run: bash installer/macos/build-dmg.sh
+
+      - name: Upload macOS package
+        if: matrix.name == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wxnpp-macos-package
+          path: build/installer/*
