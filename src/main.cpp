@@ -1236,11 +1236,12 @@ public:
                 delete gc;
             }
         }
-        if (page.active)   // Notepad++'s signature orange marker along the active tab's top edge
+        if (page.active)   // active tab's top-edge marker (Notepad++'s own is orange; recoloured to this
+                            // project's accent green, Open Color green-8, to match the toolbar palette)
         {
-            static const wxBrush orange(wxColour(250, 170, 60));   // built once - DrawPageTab runs on every paint
+            static const wxBrush accent(wxColour(47, 158, 68));   // built once - DrawPageTab runs on every paint
             dc.SetPen(*wxTRANSPARENT_PEN);
-            dc.SetBrush(orange);
+            dc.SetBrush(accent);
             const int w = (extent > 0 && extent <= rect.width) ? extent : rect.width;
             dc.DrawRectangle(rect.x, rect.y, w, 3);
         }
@@ -3872,24 +3873,47 @@ private:
 
     // ----- toolbar (Notepad++ icon pack, native order) -------------------
     // Colored icon sets (Settings > Preferences > General > Toolbar icon style): Solar (Bold Duotone,
-    // CC BY 4.0) tinted Open Color green-8, and IconPark (Apache-2.0) tinted Open Color teal-7/lime-5 -
+    // CC BY 4.0) tinted Open Color green, and IconPark (Apache-2.0) tinted Open Color teal-7/lime-5 -
     // see resources/icons-solar|iconpark/CREDITS.md. Unlike the default set these bake a FIXED colour in
-    // at generation time rather than a currentColor token, since the point is one accent that reads on
-    // both light and dark chrome - so loading is a plain SVG file read, no runtime colour substitution.
+    // at generation time rather than a currentColor token. Both packs also need a small THEME-specific
+    // runtime retint (below): the single baked colour that reads best on dark chrome isn't always the one
+    // that reads best on light chrome (or vice versa), so `iconColored()` does a cheap string substitution
+    // on top of the baked file rather than shipping four colour variants per pack.
     wxBitmapBundle iconColored(const wxString& name, const wxString& packDir)
     {
         const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\" + packDir + "\\" + name + ".svg";
         if (!wxFileExists(path)) return wxBitmapBundle();   // caller falls back to the line-icon SVG for anything the colored set doesn't cover
+        if (packDir == "icons-solar" && !m_dark)
+        {
+            // The baked colours (green-8 fill / green-3 secondary) are tuned for DARK chrome - green-3 is
+            // deliberately pale so the duotone's second tone pops against a dark background instead of
+            // alpha-blending into it (see the dark-mode duotone fix). On light chrome that same pale
+            // secondary reads as washed-out/faint. Darken both tones for light mode specifically.
+            wxFile f(path); wxString svg;
+            if (f.IsOpened() && f.ReadAll(&svg))
+            {
+                svg.Replace("#2f9e44", "#2b8a3e");   // Open Color green-9 (primary, darker for light chrome)
+                svg.Replace("#8ce99a", "#40c057");   // Open Color green-6 (secondary, darker for light chrome)
+                const wxScopedCharBuffer u = svg.utf8_str();
+                return wxBitmapBundle::FromSVG(u.data(), wxSize(16, 16));
+            }
+        }
         if ((packDir == "icons-iconpark" || packDir == "icons-iconpark-bold") && m_dark)
         {
             // IconPark's signature black outline stroke (its accent fills are already baked to a fixed
             // teal/lime at generation time - see resources/icons-iconpark/CREDITS.md) reads fine on the
-            // light chrome it was designed for, but nearly vanishes on dark chrome. Lighten just that
-            // stroke for dark mode; the white highlight stroke already has plenty of contrast either way.
+            // light chrome it was designed for, but nearly vanishes on dark chrome. A first fix lightened
+            // it to a NEUTRAL grey (Open Color gray-4), which fixed visibility but not the "still looks
+            // off" complaint that followed: gray-4 has noticeably HIGHER contrast against dark chrome than
+            // the teal fill itself does, so the outline visually dominates and the icon reads as "a gray
+            // outline with a teal patch" rather than one coherent coloured object - the same
+            // hue-cohesion problem the Solar duotone fix solved by keeping both tones in the green family.
+            // Use a lighter shade of the SAME accent (Open Color teal-3) instead of a neutral grey, so the
+            // outline and fill sit in one hue family; the white highlight stroke needs no change either way.
             wxFile f(path); wxString svg;
             if (f.IsOpened() && f.ReadAll(&svg))
             {
-                svg.Replace("stroke=\"#000\"", "stroke=\"#ced4da\"");   // Open Color gray-4
+                svg.Replace("stroke=\"#000\"", "stroke=\"#63e6be\"");   // Open Color teal-3
                 const wxScopedCharBuffer u = svg.utf8_str();
                 return wxBitmapBundle::FromSVG(u.data(), wxSize(16, 16));
             }
