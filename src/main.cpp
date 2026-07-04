@@ -6085,8 +6085,11 @@ private:
     }
 
     // ----- dark / light theme -------------------------------------------
-    // Parse Notepad++'s real theme XML (dark = themes/DarkModeDefault.xml, light = stylers.model.xml)
-    // deployed next to the exe, so the editor uses Notepad++'s exact colours.
+    // Parse Notepad++'s theme XML *format* (dark = themes/DarkModeDefault.xml, light =
+    // stylers.model.xml) deployed next to the exe - the schema this parses is N++'s own, so a real
+    // N++ theme file works here unmodified, but the two shipped-by-default files are wxNotepad++'s
+    // own regenerated, permissively-licensed replacements, not copied N++ theme data (see
+    // resources/themes/DarkModeDefault.xml's header and NOTICE for the license/provenance detail).
     wxString themeFilePath(const wxString& name)   // resolve a theme name to its XML on disk
     {
         const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath());
