@@ -6671,9 +6671,12 @@ private:
             case IDM_SEARCH_NEXT_BOOKMARK: gotoBookmark(true); break;
             case IDM_SEARCH_PREV_BOOKMARK: gotoBookmark(false); break;
             case IDM_SEARCH_CLEAR_BOOKMARKS: sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); break;
-            // Change History: the Scintilla core wx 3.3.1 bundles predates SCI_SETCHANGEHISTORY (added
-            // upstream after wx's vendored copy) - it's not a no-op we can wire around, the message doesn't
-            // exist in this build, so SCI_GETCHANGEHISTORY reports disabled no matter what we send it.
+            // Change History: SCI_SETCHANGEHISTORY was added in upstream Scintilla 5.3.0; wx vendors its
+            // own Scintilla fork (github.com/wxWidgets/scintilla, "wx" branch) at 5.0.0 - confirmed still
+            // true as of the latest wx release (3.3.2, 2026-03) by checking that fork's pinned commit
+            // directly, not just our own currently-built 3.3.1. This isn't a "bump our pinned version"
+            // fix - there is currently no wxWidgets release whose vendored Scintilla is new enough, so
+            // there's nothing to bump TO. Revisit if/when wx's own Scintilla fork catches up upstream.
             case IDM_SEARCH_CHANGED_NEXT:
             case IDM_SEARCH_CHANGED_PREV:
             case IDM_SEARCH_CLEAR_CHANGE_HISTORY: notImpl(_("Change History (needs a newer Scintilla than this wx build carries)")); break;
