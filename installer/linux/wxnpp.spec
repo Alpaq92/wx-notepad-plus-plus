@@ -43,5 +43,9 @@ install -m 644 "%{_srcdir}/resources/wxNotepad++.svg" %{buildroot}/usr/share/ico
 /usr/share/icons/hicolor/scalable/apps/wxnpp.svg
 
 %changelog
+* Sun Jul 05 2026 wxNotepad++ Project <noreply@wx-notepad-plus-plus.invalid> - 0.2.0-1
+- Edit Popup ContextMenu now opens a real, user-editable context menu
+- Linux packaging fixes (flatpak icon/debuginfo/remote-add CI issues)
+
 * Sun Jul 05 2026 wxNotepad++ Project <noreply@wx-notepad-plus-plus.invalid> - 0.1.0-1
 - Initial packaged release
