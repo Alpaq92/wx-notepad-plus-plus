@@ -126,7 +126,7 @@ jobs:
 
       - name: Upload Linux packages
         if: matrix.name == 'linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wxnpp-linux-packages
           path: build/installer/*
@@ -137,7 +137,7 @@ jobs:
 
       - name: Upload macOS package
         if: matrix.name == 'macos'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wxnpp-macos-package
           path: build/installer/*
@@ -168,7 +168,7 @@ jobs:
 
       - name: Upload Windows installer
         if: matrix.name == 'windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wxnpp-windows-installer
           path: build/installer/*
