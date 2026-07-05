@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."   # repo root
 
 APP_ID="io.github.Alpaq92.WxNotepadPlusPlus"
-VERSION="0.1.0"
+VERSION="0.2.0"
 OUTDIR="build/installer"
 BUILDDIR="build/flatpak-build"
 REPODIR="build/flatpak-repo"
