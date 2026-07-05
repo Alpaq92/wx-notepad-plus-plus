@@ -1,16 +1,31 @@
 #pragma once
 // =====================================================================
-// Notepad++ main menu - faithful 1:1 reproduction of IDR_M30_MENU from
-// PowerEditor/src/Notepad_plus.rc (every top-level popup, item, submenu,
-// separator and mnemonic). Built data-style into a wxMenuBar.
+// The main menu: Notepad++'s command hierarchy, rebuilt data-style into a
+// wxMenuBar. The MENU CONTENT deliberately matches real Notepad++ - same
+// popups, item order, separators, labels and mnemonics - for two reasons
+// that are both interoperability, not expression:
 //
-// The .rc menu text carries no shortcuts (Notepad++ injects them at runtime
-// from its accelerator table); we add the standard defaults to the common
-// commands here, so the keyboard shortcuts both WORK and SHOW in the menu,
-// mirroring the real app. Items needing the full app are still listed (they
-// report themselves via the dispatcher's default case when invoked).
+//  1. The command IDs (IDM_*, from the clean-room include/npp-compat
+//     headers) are the plugin ABI: real N++ plugins invoke menu commands
+//     by posting these exact numeric ids, so the id-to-command mapping is
+//     a wire-protocol fact this app must reproduce to stay compatible.
+//  2. The hierarchy and wording are the app's METHOD OF OPERATION - what
+//     a Notepad++ user's muscle memory expects. A command tree of
+//     functional labels ("Save As...", "Convert to UTF-8") is the kind of
+//     operational structure long treated as outside copyright's scope
+//     (menu hierarchies specifically so - Lotus v. Borland), same rubric
+//     as the ABI constants above. No Notepad++ CODE is used here: the
+//     builder below is this project's own, and upstream's .rc resource
+//     script was consulted only as the reference for what the menus
+//     contain. See LICENSING.md's compatibility-surface section.
 //
-// "&&" in a label is a literal ampersand (wx escaping), matching the .rc "&&".
+// The reference .rc menu text carries no shortcut hints (Notepad++ injects
+// them at runtime from its accelerator table); we add the standard defaults
+// to the common commands here, so the keyboard shortcuts both WORK and SHOW
+// in the menu, mirroring the real app. Items needing the full app are still
+// listed (they report themselves via the dispatcher's default case).
+//
+// "&&" in a label is a literal ampersand (wx escaping).
 // =====================================================================
 #include <wx/menu.h>
 #include <cstddef>
