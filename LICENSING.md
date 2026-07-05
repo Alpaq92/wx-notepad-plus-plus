@@ -44,10 +44,32 @@ we are confident — permissively-licensed files composing into a GPL aggregate 
 | Colored toolbar icon option — `resources/icons-solar/` | **CC BY 4.0** | Solar Icons (Bold Duotone) © 480 Design, recoloured to Open Color green-8 / green-3 |
 | Colored toolbar icon option — `resources/icons-iconpark/` | **Apache-2.0** | IconPark © ByteDance, recoloured to Open Color teal-7 / lime-5 |
 | Plugin ABI headers — `include/npp-compat/` | Apache-2.0 *expression*, but they **functionally reproduce N++'s GPL ABI** (gate #1) | to be replaced by the permissive Nib API |
+| Menu structure — `src/npp_menu.h` | under the project's **GPL v3** (original builder code) | the menu *content* reproduces N++'s command hierarchy — see "Compatibility surfaces" below |
 | Regenerated themes + `stylers.model.xml` | **Apache-2.0** | our data: factual Lexilla structure + permissive palettes |
 | Kept third-party themes — `resources/themes/` | **MIT** / upstream-permissive | © Fabio Zendhi Nagao, Oren Farhi, … |
 | Scintilla / Lexilla — `third_party/` | **HPND** (permissive) | the editing/highlighting engine |
+| wxBorderlessFrame (wxbf) — `third_party/wxbf/` | wxWindows Licence (LGPL + static-link exception) | vendored; Windows/Linux only (no macOS backend) |
 | wxWidgets | wxWindows Licence (LGPL + static-link exception) | fetched at build, not vendored |
+
+## Compatibility surfaces (ABI + menu structure)
+
+Two parts of this project intentionally reproduce *facts about how Notepad++ operates* — as distinct
+from reproducing its code:
+
+- **The plugin ABI** (`include/npp-compat/`): numeric message/command ids, struct layouts, and exported
+  symbol names. These are the wire protocol a compiled N++ plugin speaks; a compatible host has no
+  choice about their values. Covered by gate #1 above.
+- **The menu structure** (`src/npp_menu.h`): the same popups, item order, labels, and mnemonics as real
+  Notepad++. The `IDM_*` command ids double as plugin ABI (plugins invoke menu commands by posting these
+  ids), and the hierarchy of functional command labels is the application's *method of operation* — the
+  thing a user's muscle memory navigates — which is the category U.S. courts have treated as outside
+  copyright's scope for menu trees specifically (*Lotus v. Borland*). The C++ that builds the menu is
+  this project's own; upstream's `.rc` resource script was consulted only as the reference for what the
+  menus contain.
+
+Neither surface involves copying Notepad++ implementation code. Both are documented here so the
+"independent reimplementation" claim above is precise about what *is* deliberately kept identical and
+why.
 
 ## Scintilla / Lexilla license (permissive)
 

@@ -100,11 +100,24 @@ jobs:
           name: wxnpp-macos-package
           path: build/installer/*
 
-      # GitHub's windows-latest runner ships Inno Setup 6 preinstalled at this path.
+      # GitHub's windows-latest runner has shipped NSIS (zlib-licensed) with makensis on PATH on every
+      # image observed so far, but runner-image rollout is staggered and NSIS's presence on the next
+      # generation isn't guaranteed - `choco install` is a cheap, idempotent no-op if it's already
+      # there (Chocolatey itself IS guaranteed present on every hosted Windows runner), so this is
+      # insurance rather than a real extra dependency.
+      - name: Ensure NSIS (Windows)
+        if: matrix.name == 'windows'
+        shell: cmd
+        run: |
+          where makensis >nul 2>nul || choco install nsis -y --no-progress
+
+      # NSIS's OutFile doesn't create its output directory, so make it first.
       - name: Package installer (Windows)
         if: matrix.name == 'windows'
         shell: cmd
-        run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\windows\wxnpp.iss'
+        run: |
+          if not exist build\installer mkdir build\installer
+          makensis installer\windows\wxnpp.nsi
 
       - name: Upload Windows installer
         if: matrix.name == 'windows'

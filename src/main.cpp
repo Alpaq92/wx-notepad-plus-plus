@@ -426,11 +426,19 @@ static void smartHighlight(wxStyledTextCtrl* sci)
 }
 
 // ---- Function List symbol parsing -----------------------------------------------------------------
-// Notepad++'s Function List is regex-driven (PowerEditor/installer/functionList/*.xml). The two Qt
-// N++-likes (NotepadNext, notepadqq) have NO equivalent feature, so these rules are distilled from
-// N++'s XML and simplified to portable std::regex (ECMAScript) - N++'s patterns use PCRE/Boost
-// recursion + \K which std::regex/wxRegEx can't run. Each rule = {kind 0=function/1=class, regex,
-// name capture-group}. Patterns anchor on (?:^|\n) (start-of-line) and the name's position gives the line.
+// A regex-per-language symbol extractor. Each rule below is derived directly from the language's own
+// published definition syntax (the "how do you write a function/type definition in this language"
+// production), written for portable std::regex (ECMAScript grammar). Each rule = {kind 0=function /
+// 1=container(type), regex, name capture-group}. Patterns anchor on (?:^|\n) (start of a line) and the
+// captured name's byte position gives the symbol's line. Per-rule derivation notes are inline; the
+// shared design constraints are:
+//  - match DEFINITIONS, not declarations or calls: a definition introduces a body, so most rules
+//    require the opening `{` (or `:` + indent for Python, `=>` for C#'s expression bodies);
+//  - a name followed by `(...)` also matches control-flow statements (`if (...)`, `while (...)`) and
+//    calls, so function rules carry an explicit keyword-exclusion lookahead;
+//  - std::regex has no recursion, so parameter lists are approximated as "no `;`/`{`/`}` (and where
+//    noted no `)`) between the parens" - nested-paren default arguments are the accepted false
+//    negative of that trade-off.
 struct FLRule { int kind; std::regex re; int grp; };
 
 class FLItemData : public wxTreeItemData { public: int line; explicit FLItemData(int l) : line(l) {} };
@@ -447,22 +455,97 @@ static const std::vector<FLRule>* flRules(const std::string& lang)
         auto add = [&](const char* l, int kind, const char* pat, int grp) {
             try { tbl[l].push_back({ kind, std::regex(pat, std::regex::ECMAScript | std::regex::optimize), grp }); } catch (...) {}
         };
-        // C / C++ (class/struct, then free functions & methods)
-        add("cpp", 1, R"((?:^|\n)[ \t]*(?:template[ \t]*<[^>]*>[ \t\n]*)?(?:class|struct)[ \t]+(?:[A-Za-z_]\w*[ \t]+)*([A-Za-z_]\w*)\b(?:[ \t]+final)?[ \t\n]*(?::[^{]*)?\{)", 1);
-        add("cpp", 0, R"((?:^|\n)[ \t]*(?:(?:inline|static|virtual|explicit|friend|constexpr)[ \t]+)*[A-Za-z_][\w:<>,\*& \t]*?[\*& \t](?!(?:if|while|for|switch|catch|return|sizeof|do|else)\b)(~?[A-Za-z_]\w*)[ \t]*\([^;{}]*\)[ \t\n]*(?:const|noexcept|override|final|[ \t\n])*\{)", 1);
-        // Python
-        add("python", 1, R"((?:^|\n)[ \t]*class[ \t]+([A-Za-z_]\w*)[ \t]*[\(:])", 1);
-        add("python", 0, R"((?:^|\n)[ \t]*(?:async[ \t]+)?def[ \t]+([A-Za-z_]\w*)[ \t]*\()", 1);
-        // JavaScript / TypeScript
-        add("js", 1, R"((?:^|\n)[ \t]*(?:export[ \t]+)?(?:default[ \t]+)?(?:abstract[ \t]+)?class[ \t]+([A-Za-z_$][\w$]*))", 1);
-        add("js", 0, R"((?:^|\n)[ \t]*(?:export[ \t]+)?(?:default[ \t]+)?(?:async[ \t]+)?function\*?[ \t]+([A-Za-z_$][\w$]*)[ \t]*\()", 1);
-        add("js", 0, R"((?:^|\n)[ \t]*(?:export[ \t]+)?(?:const|let|var)[ \t]+([A-Za-z_$][\w$]*)[ \t]*=[ \t]*(?:async[ \t]+)?\([^)]*\)[ \t]*=>)", 1);
-        // Java
-        add("java", 1, R"((?:^|\n)[ \t]*(?:(?:public|private|protected|abstract|final|static|sealed)[ \t]+)*(?:class|interface|enum)[ \t]+([A-Za-z_]\w*))", 1);
-        add("java", 0, R"((?:^|\n)[ \t]*(?:(?:public|private|protected|static|final|abstract|synchronized|native|default)[ \t]+)+(?:<[^>]+>[ \t]*)?[A-Za-z_][\w<>\[\], \t.]*?[ \t]([A-Za-z_]\w*)[ \t]*\([^;{=]*\)[ \t\n]*(?:throws[^{]*)?\{)", 1);
-        // C#
-        add("cs", 1, R"((?:^|\n)[ \t]*(?:(?:public|private|protected|internal|static|sealed|abstract|partial)[ \t]+)*(?:class|struct|interface|enum|record)[ \t]+([A-Za-z_]\w*))", 1);
-        add("cs", 0, R"((?:^|\n)[ \t]*(?:(?:public|private|protected|internal|static|virtual|override|sealed|abstract|extern|async|new)[ \t]+)+(?!return|if|else|while|for|switch|using)[A-Za-z_][\w<>\[\], \t.]*?[ \t]([A-Za-z_]\w*)[ \t]*(?:<[^>]+>)?[ \t]*\([^;{]*\)[ \t\n]*(?:where[^{]*)?\{)", 1);
+        // ---- C / C++ ----
+        // Class-key declarations per [class.pre]: `class|struct|union`, optional leading template<>,
+        // tolerated attribute/export macro words before the name, optional `final`, optional base-clause,
+        // and the body's `{` (requiring the brace is also what excludes forward declarations). `{` may
+        // sit on its own line (Allman style) - `[ \t\r\n]*` before it, not just `[ \t]*`.
+        add("cpp", 1, R"((?:^|\n)[ \t]*(?:template[ \t]*<[^>]*>[ \t\r\n]*)?(?:class|struct|union)[ \t]+(?:[A-Za-z_]\w*[ \t]+)*([A-Za-z_]\w*)[ \t]*(?:final[ \t]*)?(?::[^{;]*)?[ \t\r\n]*\{)", 1);
+        // Function definition: decl-specifiers, then a return type (>=1 type token ending in `*`/`&`/space),
+        // then a possibly-qualified name - `ns::Class::fn`, destructor `~fn`, or `operator @` where @ is one
+        // of the standard's overloadable operator tokens - then params and the body `{` (trailing
+        // const/noexcept/override/final/-> tolerated between `)` and `{`). The lookahead keeps control-flow
+        // statements from parsing as "type + name(...)".
+        add("cpp", 0, R"((?:^|\n)[ \t]*(?:(?:inline|static|virtual|explicit|friend|constexpr|extern)[ \t]+)*[A-Za-z_][\w:<>,\*& \t]*?[\*& \t](?!(?:if|while|for|switch|catch|return|sizeof|do|else|new|delete|throw)\b)((?:[A-Za-z_]\w*::)*(?:~?[A-Za-z_]\w*|operator[ \t]*(?:\(\)|\[\]|(?:new|delete)(?:\[\])?|[-+*\/%^&|~!=<>,]+)))[ \t]*\([^;{}]*\)[ \t\r\n]*(?:const|noexcept|override|final|->[^;{]*|[ \t\r\n])*\{)", 1);
+        // Constructors/destructors have no return type, so the rule above can't see them. Out-of-line
+        // ones are unambiguous via the mandatory `Class::` qualifier - but a bare `Class::name(...)  {`
+        // shape is indistinguishable by regex from a namespace-qualified CALL with a trailing lambda
+        // argument (`std::sort(a, b, [](...) {`), which is common and would otherwise flood the list
+        // with phantoms. A backreference (`\1`) requiring the post-`::` name to equal the qualifier
+        // itself is what makes this unambiguous: `Foo::Foo(...)  {` can only be a constructor
+        // definition in valid C++ (a call can't repeat its own qualifier as its name), never a call.
+        add("cpp", 0, R"((?:^|\n)[ \t]*(?:[A-Za-z_]\w*::)*([A-Za-z_]\w*)::\1[ \t]*\([^;{}]*\)[ \t\r\n]*(?::[^{;]*)?\{)", 1);
+        // Out-of-line destructor: same backreference trick, name must equal the qualifier with a `~`.
+        add("cpp", 0, R"((?:^|\n)[ \t]*(?:[A-Za-z_]\w*::)*([A-Za-z_]\w*)::(~\1)[ \t]*\([^;{}]*\)[ \t\r\n]*\{)", 2);
+        add("cpp", 0, R"((?:^|\n)[ \t]*(~[A-Za-z_]\w*)[ \t]*\([ \t]*\)[ \t\r\n]*\{)", 1);
+        // ---- Python ----
+        // Only two definition forms exist (compound statements `classdef` / `funcdef`): keyword, name,
+        // optional PEP 695 type-parameter list `[...]`, then `(` (bases/params) or `:`. `async def` is
+        // the one prefix the grammar allows.
+        add("python", 1, R"((?:^|\n)[ \t]*class[ \t]+([A-Za-z_]\w*)[ \t]*(?:\[[^\]]*\][ \t]*)?[\(:])", 1);
+        add("python", 0, R"((?:^|\n)[ \t]*(?:async[ \t]+)?def[ \t]+([A-Za-z_]\w*)[ \t]*(?:\[[^\]]*\][ \t]*)?\()", 1);
+        // ---- JavaScript / TypeScript ----
+        // Containers: class declarations (+ TS `interface`), with the export/default/abstract prefixes
+        // the grammar permits.
+        add("js", 1, R"((?:^|\n)[ \t]*(?:export[ \t]+)?(?:default[ \t]+)?(?:abstract[ \t]+)?(?:class|interface)[ \t]+([A-Za-z_$][\w$]*))", 1);
+        // Named function declarations (incl. async and generator `function*`).
+        add("js", 0, R"((?:^|\n)[ \t]*(?:export[ \t]+)?(?:default[ \t]+)?(?:async[ \t]+)?function[ \t]*\*?[ \t]*([A-Za-z_$][\w$]*)[ \t]*\()", 1);
+        // Bindings initialized with a function value - `= function`, `= (params) =>` (optionally with a
+        // TS return annotation before the arrow), or the single-parameter no-paren arrow `= x =>`.
+        add("js", 0, R"((?:^|\n)[ \t]*(?:export[ \t]+)?(?:const|let|var)[ \t]+([A-Za-z_$][\w$]*)[ \t]*=[ \t]*(?:async[ \t]+)?(?:function\b|\([^)]*\)[ \t]*(?::[^={]*)?=>|[A-Za-z_$][\w$]*[ \t]*=>))", 1);
+        // Class methods: indented `name(params) {`, with the member-modifier prefixes TS allows. The
+        // param-content restriction excludes quotes/backtick (rejects the call-plus-string-callback
+        // idiom, `describe('x', () => {`) AND parens/braces (rejects the call-plus-bare-callback idiom,
+        // `setTimeout(function() {` / `request(opts, function(err, res) {` - both have an inner `(`
+        // that would otherwise let the outer call's own closing `)` complete the "params" match). A
+        // real method's parameter list never needs a nested call or function expression to parse as
+        // one, so this is a one-sided trade-off: default values that call a function (`f(x = g()) {`)
+        // become a false negative, same category as the already-documented quoted-default one.
+        // (Custom raw-string delimiter: the pattern itself contains the plain )" terminator sequence.)
+        add("js", 0, R"FL((?:^|\n)[ \t]+(?:(?:public|private|protected|static|readonly|async|get|set|override)[ \t]+)*(?!(?:if|for|while|switch|catch|function|return|else|do|new|typeof)\b)([A-Za-z_$][\w$]*)[ \t]*\([^(){}"'`]*\)[ \t\r\n]*(?::[^{;]*)?\{)FL", 1);
+        // ---- Java ----
+        // Type declarations (JLS: normal class, interface, enum, record) with their modifier set.
+        add("java", 1, R"((?:^|\n)[ \t]*(?:(?:public|private|protected|abstract|final|static|sealed|non-sealed|strictfp)[ \t]+)*(?:class|interface|enum|record)[ \t]+([A-Za-z_]\w*))", 1);
+        // Method definition: optional modifiers (optional, so package-private methods match too),
+        // optional generic `<T>`, a return type, the name, params, optional throws, and the body `{`.
+        // The return-type token itself must not be `new` (Java has no `new` modifier, so it can only
+        // mean this is `new Type() { ... }` - an anonymous-class body, not a method) - without this,
+        // `new` gets consumed as if it were the return type and the anonymous class's own type name
+        // gets captured as a phantom method.
+        add("java", 0, R"((?:^|\n)[ \t]*(?:(?:public|private|protected|static|final|abstract|synchronized|native|default|strictfp)[ \t]+)*(?:<[^>]+>[ \t]*)?(?!new\b)[A-Za-z_][\w<>\[\],. \t]*?[ \t](?!(?:if|while|for|switch|catch|return|new|else|do)\b)([A-Za-z_]\w*)[ \t]*\([^;{}]*\)[ \t\r\n]*(?:throws[^{;]*)?\{)", 1);
+        // ---- C# ----
+        // Type declarations incl. `record class` / `record struct` forms.
+        add("cs", 1, R"((?:^|\n)[ \t]*(?:(?:public|private|protected|internal|static|sealed|abstract|partial|readonly|ref)[ \t]+)*(?:class|struct|interface|enum|record(?:[ \t]+(?:class|struct))?)[ \t]+([A-Za-z_]\w*))", 1);
+        // Methods: like Java's rule, plus C#'s expression-bodied member form - the body is either a
+        // block `{` or `=>`. Unlike Java, `new` IS a legitimate C# modifier (member-hiding), so it
+        // can't be excluded as a return-type start the way Java's rule excludes it - `new Handler() {`
+        // (an object-creation expression opening an initializer block) is an accepted residual
+        // false-positive of that ambiguity, not fixable by regex alone.
+        add("cs", 0, R"((?:^|\n)[ \t]*(?:(?:public|private|protected|internal|static|virtual|override|sealed|abstract|extern|async|new|partial|unsafe)[ \t]+)*[A-Za-z_][\w<>\[\],.? \t]*?[ \t](?!(?:if|while|for|foreach|switch|catch|return|new|else|do|using|lock)\b)([A-Za-z_]\w*)(?:<[^>]+>)?[ \t]*\([^;{}]*\)[ \t\r\n]*(?:where[^{=;]*)?(?:\{|=>))", 1);
+        // ---- Go ----
+        // The spec puts all declarations at column 0 (FunctionDecl/MethodDecl/TypeDecl are top-level
+        // only), which conveniently also excludes function literals. Methods carry a receiver in parens
+        // between `func` and the name. Optional `[T any]` type-parameter list (Go 1.18+ generics)
+        // between the name and the parameter list / type keyword.
+        add("go", 0, R"((?:^|\n)func[ \t]+(?:\([^)]*\)[ \t]*)?([A-Za-z_]\w*)[ \t]*(?:\[[^\]]*\][ \t]*)?\()", 1);
+        add("go", 1, R"((?:^|\n)type[ \t]+([A-Za-z_]\w*)(?:\[[^\]]*\])?[ \t]+(?:struct|interface)[ \t]*\{)", 1);
+        // ---- Rust ----
+        // fn items with their qualifier prefixes (pub(...), async/unsafe/const, extern "abi").
+        add("rust", 0, R"((?:^|\n)[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?(?:(?:async|unsafe|const)[ \t]+)*(?:extern[ \t]+"[^"]*"[ \t]+)?fn[ \t]+([A-Za-z_]\w*))", 1);
+        // Type items; unit/tuple structs (`struct Foo;`) match too and are handled as leaf containers
+        // by the range scan below (a `;` before any `{` ends the item).
+        add("rust", 1, R"((?:^|\n)[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?(?:struct|enum|trait|union)[ \t]+([A-Za-z_]\w*))", 1);
+        // impl blocks group their fns under the implemented type's name (the identifier after `for`,
+        // or directly after `impl` for inherent impls). The trait name before `for` can itself carry
+        // generic arguments - `impl From<u32> for MyType`, `impl Deref<Target = T> for MyType` - so the
+        // character class spanning up to `for` must tolerate `<>`, `=`, and `,`, or the pattern can't
+        // find "for" at all past the `<...>` and mis-captures the TRAIT name as if it were inherent.
+        add("rust", 1, R"((?:^|\n)[ \t]*impl(?:[ \t]*<[^>]*>)?[ \t]+(?:[\w:&'<>=, \t]+[ \t]for[ \t]+)?([A-Za-z_]\w*))", 1);
+        // ---- Lua ----
+        // Both spellings of a named function: the `function Name` statement (with `.` field and `:`
+        // method sugar) and the `Name = function(...)` assignment form.
+        add("lua", 0, R"((?:^|\n)[ \t]*(?:local[ \t]+)?function[ \t]+([A-Za-z_]\w*(?:[.:][A-Za-z_]\w*)*)[ \t]*\()", 1);
+        add("lua", 0, R"((?:^|\n)[ \t]*(?:local[ \t]+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)[ \t]*=[ \t]*function[ \t]*\()", 1);
     }
     auto it = tbl.find(lang);
     return it == tbl.end() ? nullptr : &it->second;
@@ -478,12 +561,114 @@ static const std::regex* flCommentRe(const std::string& lang)
         built = true;
         try {
             const char* cfam = R"(/\*[\s\S]*?\*/|//[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')";
-            tbl["cpp"] = std::regex(cfam); tbl["js"] = std::regex(cfam); tbl["java"] = std::regex(cfam); tbl["cs"] = std::regex(cfam);
+            tbl["cpp"] = std::regex(cfam); tbl["java"] = std::regex(cfam); tbl["cs"] = std::regex(cfam);
+            // JS adds template literals (backtick strings can span lines and contain braces, which
+            // would otherwise corrupt the container range scan).
+            tbl["js"] = std::regex(R"(/\*[\s\S]*?\*/|//[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)");
             tbl["python"] = std::regex(R"(#[^\n]*|'''[\s\S]*?'''|"""[\s\S]*?"""|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
+            // Go adds back-quoted raw string literals.
+            tbl["go"] = std::regex(R"(/\*[\s\S]*?\*/|//[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`[^`]*`)");
+            // Rust: single quotes are lifetimes ('a) far more often than char literals, so only the
+            // exactly-one-char literal form is masked - masking 'a...' spans would swallow real code.
+            tbl["rust"] = std::regex(R"(/\*[\s\S]*?\*/|//[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\])')");
+            // Lua: long comments/strings --[=[ ]=] / [=[ ]=] use a backreference to match the same
+            // number of `=` signs on both ends; the line-comment alternative must come after the long
+            // form so `--[[` prefers the block reading.
+            tbl["lua"] = std::regex(R"(--\[(=*)\[[\s\S]*?\]\1\]|--[^\n]*|\[(=*)\[[\s\S]*?\]\2\]|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
         } catch (...) {}
     }
     auto it = tbl.find(lang);
     return it == tbl.end() ? nullptr : &it->second;
+}
+
+// One extracted symbol: byte positions in the scanned UTF-8 text. For containers (kind 1), rangeEnd
+// is one past the body's closing brace (or dedent, for Python) so later symbols inside [pos, rangeEnd)
+// nest under it in the tree.
+struct FLSym { wxString name; int kind; size_t pos, end, rangeEnd; };
+
+// Run flRules(lang) over `text` (UTF-8), mask comment/string zones, and compute container body ranges.
+// Free function (rather than living inside the frame's parseFuncList) so it is directly testable
+// against plain sample strings without a live editor.
+static std::vector<FLSym> flCollect(const std::string& text, const std::string& lang)
+{
+    std::vector<FLSym> syms;
+    const auto* rules = flRules(lang);
+    if (!rules) return syms;
+    // std::regex's backtracking engine can throw std::regex_error(error_stack/error_complexity) on a
+    // sufficiently large or pathological span (observed around a ~300 KB block comment) rather than
+    // just running slowly - this is a matcher-implementation limit, not a malformed pattern (the
+    // add() lambda's own try/catch only guards construction). Uncaught, it would propagate out of the
+    // wxTimer-driven parseFuncList() and take the whole app down over a single oversized file, so
+    // every matching pass here is wrapped: on failure the Function List just ends up incomplete for
+    // that language/rule instead of crashing.
+    std::vector<std::pair<size_t, size_t>> zones;          // comment/string spans to skip
+    if (const std::regex* cre = flCommentRe(lang))
+    {
+        try { for (std::sregex_iterator it(text.begin(), text.end(), *cre), e; it != e; ++it)
+            zones.push_back({ (size_t)it->position(0), (size_t)(it->position(0) + it->length(0)) }); } catch (const std::regex_error&) {}
+    }
+    auto inZone = [&](size_t p) { for (auto& z : zones) if (p >= z.first && p < z.second) return true; return false; };
+    for (const auto& r : *rules)
+    {
+        try {
+            for (std::sregex_iterator it(text.begin(), text.end(), r.re), e; it != e; ++it)
+            {
+                const auto& m = *it;
+                if (m.position(r.grp) < 0) continue;
+                const size_t np = (size_t)m.position(r.grp);
+                if (inZone(np)) continue;
+                syms.push_back({ wxString::FromUTF8(m.str(r.grp).c_str()), r.kind, np, (size_t)(m.position(0) + m.length(0)), 0 });
+            }
+        } catch (const std::regex_error&) {}
+    }
+    for (auto& s : syms)                                   // compute each container's body range (for nesting)
+    {
+        if (s.kind != 1) { s.rangeEnd = s.end; continue; }
+        if (lang == "python")                              // block extent = lines indented deeper than the class line
+        {
+            size_t ls = text.rfind('\n', s.pos); ls = (ls == std::string::npos) ? 0 : ls + 1;
+            size_t ind = 0; while (ls + ind < text.size() && (text[ls + ind] == ' ' || text[ls + ind] == '\t')) ind++;
+            size_t i = s.pos; s.rangeEnd = text.size();
+            while ((i = text.find('\n', i)) != std::string::npos)
+            {
+                size_t l = i + 1, k = 0; while (l + k < text.size() && (text[l + k] == ' ' || text[l + k] == '\t')) k++;
+                if (l + k < text.size() && text[l + k] != '\n' && text[l + k] != '\r' && k <= ind) { s.rangeEnd = l; break; }
+                i = l;
+            }
+        }
+        else
+        {
+            // Not every container rule consumes the body's `{` (e.g. `class Name` rules stop at the
+            // name so they can share one pattern with brace-on-next-line styles) - so first find the
+            // opening brace, starting the depth count THERE. A `;` before any `{` means the match was
+            // a declaration-only item (`struct Foo;` in Rust): keep it as a leaf with an empty range.
+            size_t open = 0; bool haveOpen = false;
+            if (s.end > 0 && text[s.end - 1] == '{') { open = s.end; haveOpen = true; }
+            else
+                for (size_t i = s.end; i < text.size(); ++i)
+                {
+                    if (inZone(i)) continue;
+                    if (text[i] == '{') { open = i + 1; haveOpen = true; break; }
+                    if (text[i] == ';') break;
+                }
+            if (!haveOpen) { s.rangeEnd = s.end; continue; }
+            int depth = 1; s.rangeEnd = text.size();
+            for (size_t i = open; i < text.size(); ++i)
+            {
+                if (inZone(i)) continue;
+                if (text[i] == '{') depth++;
+                else if (text[i] == '}' && --depth == 0) { s.rangeEnd = i; break; }
+            }
+        }
+    }
+    // Two rules can legitimately capture the same name at the same spot (e.g. Java/C#'s
+    // `record Point(...)` reads as both a type declaration and a "type + name + parens + brace"
+    // method) - sort containers first at equal positions, then drop the duplicate.
+    std::sort(syms.begin(), syms.end(), [](const FLSym& a, const FLSym& b)
+              { return a.pos != b.pos ? a.pos < b.pos : a.kind > b.kind; });
+    syms.erase(std::unique(syms.begin(), syms.end(), [](const FLSym& a, const FLSym& b)
+               { return a.pos == b.pos && a.name == b.name; }), syms.end());
+    return syms;
 }
 
 // ---- Find in Files --------------------------------------------------------------------------------
@@ -1922,6 +2107,9 @@ private:
         if (ext=="js"||ext=="jsx"||ext=="mjs"||ext=="ts"||ext=="tsx") return "js";
         if (ext=="java") return "java";
         if (ext=="cs") return "cs";
+        if (ext=="go") return "go";
+        if (ext=="rs") return "rust";
+        if (ext=="lua") return "lua";
         return "";
     }
     void parseFuncList()
@@ -1933,57 +2121,14 @@ private:
         m_funcList->DeleteAllItems();
         const wxTreeItemId root = m_funcList->AddRoot("");
         const std::string lang = flLangKey();
-        const auto* rules = flRules(lang);
-        if (rules)
+        if (!lang.empty())
         {
             const wxCharBuffer cb = m_stc->GetTextRaw();          // UTF-8 bytes - offsets line up with Scintilla
             const std::string text(cb.data(), cb.length());
-            std::vector<std::pair<size_t, size_t>> zones;          // comment/string spans to skip
-            if (const std::regex* cre = flCommentRe(lang))
-                for (std::sregex_iterator it(text.begin(), text.end(), *cre), e; it != e; ++it)
-                    zones.push_back({ (size_t)it->position(0), (size_t)(it->position(0) + it->length(0)) });
-            auto inZone = [&](size_t p) { for (auto& z : zones) if (p >= z.first && p < z.second) return true; return false; };
-            struct Sym { wxString name; int kind; size_t pos, end, rangeEnd; };
-            std::vector<Sym> syms;
-            for (const auto& r : *rules)
-                for (std::sregex_iterator it(text.begin(), text.end(), r.re), e; it != e; ++it)
-                {
-                    const auto& m = *it;
-                    if (m.position(r.grp) < 0) continue;
-                    const size_t np = (size_t)m.position(r.grp);
-                    if (inZone(np)) continue;
-                    syms.push_back({ wxString::FromUTF8(m.str(r.grp).c_str()), r.kind, np, (size_t)(m.position(0) + m.length(0)), 0 });
-                }
-            for (auto& s : syms)                                   // compute each class's range (for nesting methods)
-            {
-                if (s.kind != 1) { s.rangeEnd = s.end; continue; }
-                if (lang == "python")
-                {
-                    size_t ls = text.rfind('\n', s.pos); ls = (ls == std::string::npos) ? 0 : ls + 1;
-                    size_t ind = 0; while (ls + ind < text.size() && (text[ls + ind] == ' ' || text[ls + ind] == '\t')) ind++;
-                    size_t i = s.pos; s.rangeEnd = text.size();
-                    while ((i = text.find('\n', i)) != std::string::npos)
-                    {
-                        size_t l = i + 1, k = 0; while (l + k < text.size() && (text[l + k] == ' ' || text[l + k] == '\t')) k++;
-                        if (l + k < text.size() && text[l + k] != '\n' && text[l + k] != '\r' && k <= ind) { s.rangeEnd = l; break; }
-                        i = l;
-                    }
-                }
-                else
-                {
-                    int depth = 1; s.rangeEnd = text.size();
-                    for (size_t i = s.end; i < text.size(); ++i)
-                    {
-                        if (inZone(i)) continue;
-                        if (text[i] == '{') depth++;
-                        else if (text[i] == '}' && --depth == 0) { s.rangeEnd = i; break; }
-                    }
-                }
-            }
-            std::sort(syms.begin(), syms.end(), [](const Sym& a, const Sym& b) { return a.pos < b.pos; });
+            const std::vector<FLSym> syms = flCollect(text, lang);   // extraction + nesting ranges (testable free fn)
             struct Open { size_t rangeEnd; wxTreeItemId item; };
             std::vector<Open> stack;
-            for (auto& s : syms)
+            for (const auto& s : syms)
             {
                 while (!stack.empty() && s.pos >= stack.back().rangeEnd) stack.pop_back();
                 const wxTreeItemId parent = stack.empty() ? root : stack.back().item;
@@ -2626,7 +2771,8 @@ private:
 
     // ----- sessions (File > Save / Load Session) ------------------------
     // Notepad++-style session XML: <NotepadPlus><Session><mainView><File .../></mainView></Session>.
-    // The active buffer also stores caret position, first-visible line, and bookmarks (the structure NotepadNext uses).
+    // Beyond the file list, each entry persists what's needed to restore the *editing position*, not
+    // just the document set: caret position, first-visible line (scroll), and bookmark lines.
     void saveSession()
     {
         if (!m_tabs) return;
@@ -2692,8 +2838,9 @@ private:
     }
 
     // ----- auto-completion (word / keyword / path) ----------------------
-    // Word completion adapted from NotepadNext (scan the document for words sharing the prefix);
-    // keyword completion adapted from notepad-- (merge the language keyword list). Path completion is ours.
+    // Three candidate sources, merged into one sorted SCI_AUTOCSHOW list: words already present in the
+    // document that share the typed prefix (a linear scan - the document itself is the best dictionary
+    // for its own identifiers), the active language's keyword list, and filesystem paths.
     std::string rangeText(int a, int b) { if (b <= a) return {}; sci(SCI_SETTARGETSTART, a); sci(SCI_SETTARGETEND, b); std::string s((size_t)(b - a) + 1, '\0'); sci(SCI_GETTARGETTEXT, 0, reinterpret_cast<sptr_t>(&s[0])); s.resize(b - a); return s; }
     static const char* keywordsForExt(const wxString& ext)
     {
@@ -5999,8 +6146,10 @@ private:
     {
         if (!m_recording) return;
         const int msg = (int)e.GetMessage(); const uptr_t wp = (uptr_t)e.GetWParam(); const sptr_t lp = (sptr_t)e.GetLParam();
-        // Merge char-by-char typing into one step (NotepadNext does this): consecutive ReplaceSel concatenate,
-        // and a Backspace right after typing trims the last character instead of adding a separate step.
+        // Merge char-by-char typing into one step - raw SCI_MACRORECORD traffic is one ReplaceSel per
+        // keystroke, which would balloon every macro and replay slowly: consecutive ReplaceSel
+        // concatenate, and a Backspace right after typing trims the last character instead of adding
+        // a separate step.
         if (msg == SCI_REPLACESEL && lp && !m_macro.empty() && m_macro.back().msg == SCI_REPLACESEL)
         { m_macro.back().text += reinterpret_cast<const char*>(lp); return; }
         if (msg == SCI_DELETEBACK && !m_macro.empty() && m_macro.back().msg == SCI_REPLACESEL && !m_macro.back().text.empty())
@@ -6085,8 +6234,11 @@ private:
     }
 
     // ----- dark / light theme -------------------------------------------
-    // Parse Notepad++'s real theme XML (dark = themes/DarkModeDefault.xml, light = stylers.model.xml)
-    // deployed next to the exe, so the editor uses Notepad++'s exact colours.
+    // Parse Notepad++'s theme XML *format* (dark = themes/DarkModeDefault.xml, light =
+    // stylers.model.xml) deployed next to the exe - the schema this parses is N++'s own, so a real
+    // N++ theme file works here unmodified, but the two shipped-by-default files are wxNotepad++'s
+    // own regenerated, permissively-licensed replacements, not copied N++ theme data (see
+    // resources/themes/DarkModeDefault.xml's header and NOTICE for the license/provenance detail).
     wxString themeFilePath(const wxString& name)   // resolve a theme name to its XML on disk
     {
         const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath());

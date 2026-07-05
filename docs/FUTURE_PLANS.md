@@ -54,8 +54,8 @@ until the maintainer makes the deliberate call; claiming permissive prematurely 
 1. **Ship our own original plugin API (codename "Nib").** — ✅ **done.** A clean-sheet, cross-platform,
    permissive API (`include/nib/nib.h`) that borrows nothing from N++ (no `NPPM_*`, `FuncItem`, `NppData`,
    `SCNotification`, `WM_USER`, or `HWND` in the contract). Interface-query + typed-vtable model with a
-   manifest, typed events, and capabilities. Interfaces shipped: nib.host / nib.editor / nib.commands /
-   nib.events / nib.panels, plus a Windows-only native-handle capability (`nib.win32`).
+   manifest, typed events, and capabilities. Interfaces shipped: nib.host / nib.editor / nib.documents /
+   nib.commands / nib.events / nib.panels, plus a Windows-only native-handle capability (`nib.win32`).
 2. **Isolate the N++ ABI into a separate, optional GPL "bridge" plugin.** — ✅ **done.** The N++-ABI
    reproduction (`include/npp-compat/`) plus the host's loader + `NPPM_*` router + `beNotified` now live
    in the GPL `packages/npp-bridge` (itself a Nib plugin) that reaches the core only through `nib.win32`
@@ -74,7 +74,7 @@ Engineering already completed toward the goal (kept here for the record):
 
 | Notepad++-derived item | Replaced with | Status |
 |---|---|---|
-| Toolbar icons | Tabler × Open Color SVG set (MIT) | ✅ done |
+| Toolbar icons | Tabler × Open Color SVG set (MIT), default; two optional colored sets added since — Solar (CC BY 4.0, attribution-required) and IconPark (Apache-2.0), user-selectable in Preferences | ✅ done |
 | Command ids (`menuCmdID.h`) | our own command-id header | ✅ done (clean-room) |
 | Own permissive plugin API ("Nib", `include/nib/`) | new clean-sheet API — host/editor/commands/events/panels/win32 | ✅ done |
 | Plugin-ABI reproduction (`NPPM_*`/`FuncItem`/`NppData` + the host) | moved OUT of the core into the GPL `packages/npp-bridge`; core has none | ✅ done (gate #1 resolved by construction) |
