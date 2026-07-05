@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+    wxNotepad++'s editor popup (right-click) context menu, hand-editable.
+
+    Reorder, remove, or add <Item id="..."/> entries to change what shows up on right-click.
+    - "id" is the numeric command id from include/npp-compat/menuCmdID.h (e.g. IDM_EDIT_UNDO = 42003).
+    - MenuEntryName/MenuItemName are informational only (not read by the app) - they just help you
+      find the right id in menuCmdID.h without cross-referencing every time.
+    - <Item type="Separator"/> inserts a separator line.
+    - An id that doesn't resolve to a real, currently-visible menu command is silently skipped, so a
+      typo here can't break the menu - it just won't show that entry.
+    Open this file again any time via Settings > Edit Popup ContextMenu.
+-->
+<NotepadPlus>
+    <ScintillaContextMenu>
+        <Item id="42003" MenuEntryName="Edit" MenuItemName="Undo" />
+        <Item id="42004" MenuEntryName="Edit" MenuItemName="Redo" />
+        <Item type="Separator" />
+        <Item id="42001" MenuEntryName="Edit" MenuItemName="Cut" />
+        <Item id="42002" MenuEntryName="Edit" MenuItemName="Copy" />
+        <Item id="42005" MenuEntryName="Edit" MenuItemName="Paste" />
+        <Item id="42006" MenuEntryName="Edit" MenuItemName="Delete" />
+        <Item type="Separator" />
+        <Item id="42007" MenuEntryName="Edit" MenuItemName="Select All" />
+        <Item type="Separator" />
+        <Item id="43005" MenuEntryName="Search" MenuItemName="Toggle Bookmark" />
+    </ScintillaContextMenu>
+</NotepadPlus>
