@@ -43,10 +43,14 @@ jobs:
           sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config libgtk-3-dev
 
       # rpm: provides rpmbuild for build-rpm.sh. flatpak/flatpak-builder: for build-flatpak.sh.
+      # elfutils: provides eu-strip, which flatpak-builder always shells out to for its automatic
+      # debuginfo-extraction step (no manifest option was found to skip this step on this
+      # flatpak-builder version - it doesn't recognize no-debuginfo at either the manifest or
+      # module level), even though we stage an already-built Release binary with nothing to split.
       - name: Install packaging tools (Linux)
         if: matrix.name == 'linux'
         run: |
-          sudo apt-get install -y --no-install-recommends rpm flatpak flatpak-builder
+          sudo apt-get install -y --no-install-recommends rpm flatpak flatpak-builder elfutils
           flatpak remote-add --if-not-exists --user flathub https://flathub.org/repo/flathub.flatpakrepo
 
       # Ubuntu 24.04+ restricts unprivileged user namespaces by default (AppArmor), which breaks
