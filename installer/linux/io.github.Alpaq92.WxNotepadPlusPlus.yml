@@ -1,0 +1,60 @@
+# Flatpak manifest for wxNotepad++. Unlike a typical Flatpak module, this does NOT compile from
+# source inside the build sandbox - it stages the already-built wxnpp binary (from
+# `cmake --build build --target wxnpp`, run before installer/linux/build-flatpak.sh) via
+# `buildsystem: simple`, matching the same "package what's already built" approach as
+# build-appimage.sh/build-deb.sh/build-rpm.sh, all of which exist because this project has no
+# Linux machine to verify a from-scratch-in-sandbox build against, only CI.
+#
+# Resources stay co-located with the binary under /app/bin (same reasoning as the other three
+# Linux/macOS packages): the app resolves every resource path relative to its own executable, so
+# this layout needs zero runtime code changes, even though /app/bin isn't the conventional
+# Flatpak location for non-executable data (that would be /app/share) - nothing requires that
+# convention, it's just a convention, and violating it costs nothing here since nothing else reads
+# /app/bin looking only for executables.
+
+app-id: io.github.Alpaq92.WxNotepadPlusPlus
+runtime: org.gnome.Platform
+runtime-version: '46'
+sdk: org.gnome.Sdk
+command: wxnpp
+
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --filesystem=host    # a text editor needs to open/save arbitrary user files
+  - --device=dri
+
+modules:
+  - name: wxnpp
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 build-bin/wxnpp /app/bin/wxnpp
+      - cp -r build-bin/icons /app/bin/icons
+      - cp -r build-bin/icons-solar /app/bin/icons-solar
+      - cp -r build-bin/icons-iconpark /app/bin/icons-iconpark
+      - cp -r build-bin/themes /app/bin/themes
+      - mkdir -p /app/bin/locale
+      - cp -r build-bin/locale/. /app/bin/locale/
+      - find /app/bin/locale -name '*.po' -delete
+      - find /app/bin/locale -name '*.pot' -delete
+      - find /app/bin/locale -name 'po2mo.py' -delete
+      - find /app/bin/locale -depth -type d -name '__pycache__' -exec rm -rf {} +
+      - install -Dm644 build-bin/stylers.model.xml /app/bin/stylers.model.xml
+      - install -Dm644 wxnpp.desktop /app/share/applications/io.github.Alpaq92.WxNotepadPlusPlus.desktop
+      - install -Dm644 wxnpp.svg /app/share/icons/hicolor/scalable/apps/io.github.Alpaq92.WxNotepadPlusPlus.svg
+      - install -Dm644 wxnpp.metainfo.xml /app/share/metainfo/io.github.Alpaq92.WxNotepadPlusPlus.metainfo.xml
+    sources:
+      - type: dir
+        path: ../../build/bin
+        dest: build-bin
+      - type: file
+        path: io.github.Alpaq92.WxNotepadPlusPlus.desktop
+        dest-filename: wxnpp.desktop
+      - type: file
+        path: ../../resources/wxNotepad++.svg
+        dest-filename: wxnpp.svg
+      - type: file
+        path: io.github.Alpaq92.WxNotepadPlusPlus.metainfo.xml
+        dest-filename: wxnpp.metainfo.xml
