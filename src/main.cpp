@@ -3791,25 +3791,61 @@ private:
         if (auto* p = activePage()) { activateBuffer(p); if (m_stc) m_stc->SetSize(p->GetClientSize()); }
     }
 
-    // Editor right-click menu (Notepad++'s default editor context menu, themed). Item ids are the
-    // same IDM_* the main menu uses, so onCommand handles them; enable state mirrors the editor.
+    // Popup (right-click) context menu, user-editable via Settings > Edit Popup ContextMenu ->
+    // contextMenu.xml next to the exe (see contextMenuFilePath()/loadPopupContextMenu()). Item ids
+    // are the same IDM_* the main menu uses, so onCommand handles them unchanged; labels are pulled
+    // live from the real menu bar entry so they follow the current UI language, and enable state
+    // mirrors the editor for the handful of ids that need it (undo/redo/paste/selection-dependent).
+    struct PopupMenuEntry { int id = 0; bool separator = false; };
+    wxString contextMenuFilePath() { return wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\contextMenu.xml"; }
+    std::vector<PopupMenuEntry> loadPopupContextMenu()
+    {
+        std::vector<PopupMenuEntry> out;
+        wxXmlDocument doc;
+        if (doc.Load(contextMenuFilePath()) && doc.GetRoot())
+        {
+            for (wxXmlNode* sec = doc.GetRoot()->GetChildren(); sec; sec = sec->GetNext())
+            {
+                if (sec->GetName() != "ScintillaContextMenu") continue;
+                for (wxXmlNode* it = sec->GetChildren(); it; it = it->GetNext())
+                {
+                    if (it->GetName() != "Item") continue;
+                    if (it->GetAttribute("type") == "Separator") { out.push_back({ 0, true }); continue; }
+                    long id = 0;
+                    if (it->GetAttribute("id", "0").ToLong(&id) && id != 0) out.push_back({ (int)id, false });
+                }
+            }
+        }
+        if (!out.empty()) return out;
+        // contextMenu.xml missing/unparsable - built-in fallback, kept in sync with the bundled
+        // resources/contextMenu.xml default, so a bad hand-edit can't leave the menu empty.
+        return { { IDM_EDIT_UNDO, false }, { IDM_EDIT_REDO, false }, { 0, true },
+                 { IDM_EDIT_CUT, false }, { IDM_EDIT_COPY, false }, { IDM_EDIT_PASTE, false }, { IDM_EDIT_DELETE, false }, { 0, true },
+                 { IDM_EDIT_SELECTALL, false }, { 0, true },
+                 { IDM_SEARCH_TOGGLE_BOOKMARK, false } };
+    }
     void showEditorContext(int screenX, int screenY)
     {
         if (!m_stc) return;
         const bool hasSel = sci(SCI_GETSELECTIONEMPTY) == 0;
         wxMenu menu;
-        auto add = [&](int id, const wxString& label, bool enabled) { menu.Append(id, label)->Enable(enabled); };
-        add(IDM_EDIT_UNDO, "Undo\tCtrl+Z", sci(SCI_CANUNDO) != 0);
-        add(IDM_EDIT_REDO, "Redo\tCtrl+Y", sci(SCI_CANREDO) != 0);
-        menu.AppendSeparator();
-        add(IDM_EDIT_CUT,    "Cut\tCtrl+X",  hasSel);
-        add(IDM_EDIT_COPY,   "Copy\tCtrl+C", hasSel);
-        add(IDM_EDIT_PASTE,  "Paste\tCtrl+V", sci(SCI_CANPASTE) != 0);
-        add(IDM_EDIT_DELETE, "Delete\tDel",  hasSel);
-        menu.AppendSeparator();
-        add(IDM_EDIT_SELECTALL, "Select All\tCtrl+A", true);
-        menu.AppendSeparator();
-        add(IDM_SEARCH_TOGGLE_BOOKMARK, "Toggle Bookmark", true);
+        for (const auto& entry : loadPopupContextMenu())
+        {
+            if (entry.separator) { if (menu.GetMenuItemCount() > 0) menu.AppendSeparator(); continue; }
+            wxMenuItem* src = menuBar() ? menuBar()->FindItem(entry.id) : nullptr;
+            if (!src) continue;   // unknown/stale id from a hand-edit - skip rather than show a blank entry
+            bool enabled = true;
+            switch (entry.id)
+            {
+                case IDM_EDIT_UNDO: enabled = sci(SCI_CANUNDO) != 0; break;
+                case IDM_EDIT_REDO: enabled = sci(SCI_CANREDO) != 0; break;
+                case IDM_EDIT_PASTE: enabled = sci(SCI_CANPASTE) != 0; break;
+                case IDM_EDIT_CUT: case IDM_EDIT_COPY: case IDM_EDIT_DELETE: enabled = hasSel; break;
+                default: break;
+            }
+            menu.Append(entry.id, src->GetItemLabel())->Enable(enabled);
+        }
+        if (menu.GetMenuItemCount() == 0) return;
         const wxPoint pos = (screenX == -1 && screenY == -1) ? wxDefaultPosition : ScreenToClient(wxPoint(screenX, screenY));
         PopupMenu(&menu, pos);
     }
@@ -7491,6 +7527,7 @@ private:
             case IDM_SETTING_IMPORTPLUGIN: importPlugin(); break;
             case IDM_SETTING_IMPORTSTYLETHEMES: importStyleTheme(); break;
             case IDM_SETTING_OPENPLUGINSDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "plugins"); break;
+            case IDM_SETTING_EDITCONTEXTMENU: openPath(contextMenuFilePath()); break;
             case IDM_LANG_TEXT: setForcedLang("", _("Normal text file")); break;   // force Normal Text (a manual pick, like the languages)
             case IDM_LANG_OPENUDLDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "userDefineLangs"); break;
 

@@ -124,6 +124,8 @@ add_custom_command(TARGET wxnpp POST_BUILD
         "${CMAKE_SOURCE_DIR}/resources/themes" "$<TARGET_FILE_DIR:wxnpp>/themes"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_SOURCE_DIR}/resources/stylers.model.xml" "$<TARGET_FILE_DIR:wxnpp>/stylers.model.xml"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/resources/contextMenu.xml" "$<TARGET_FILE_DIR:wxnpp>/contextMenu.xml"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/locale" "$<TARGET_FILE_DIR:wxnpp>/locale"
     VERBATIM)
