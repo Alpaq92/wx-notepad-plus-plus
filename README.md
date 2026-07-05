@@ -97,6 +97,7 @@ Grab the latest build from [Releases](https://github.com/Alpaq92/wx-notepad-plus
 Every push also builds all of these as CI artifacts (see `.github/workflows/build.yml` and
 `installer/{windows,linux,macos}/`); pushing a version tag (`v*`) runs
 `.github/workflows/release.yml`, which rebuilds everything and attaches it to a new GitHub Release.
+See [`CHANGELOG.md`](CHANGELOG.md) for release history.
 
 ## License
 
