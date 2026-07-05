@@ -100,16 +100,21 @@ jobs:
           name: wxnpp-macos-package
           path: build/installer/*
 
-      # GitHub's windows-latest runner has shipped NSIS (zlib-licensed) with makensis on PATH on every
-      # image observed so far, but runner-image rollout is staggered and NSIS's presence on the next
-      # generation isn't guaranteed - `choco install` is a cheap, idempotent no-op if it's already
-      # there (Chocolatey itself IS guaranteed present on every hosted Windows runner), so this is
-      # insurance rather than a real extra dependency.
+      # windows-latest does NOT ship makensis preinstalled (confirmed by an actual CI failure - an
+      # earlier version of this step assumed it did) - install via Chocolatey (guaranteed present on
+      # every hosted Windows runner) and explicitly add its install directory to $GITHUB_PATH, since
+      # a Chocolatey install updates the machine PATH but each workflow step is a fresh process that
+      # only sees $GITHUB_PATH's accumulated entries, not a live-refreshed system PATH.
       - name: Ensure NSIS (Windows)
         if: matrix.name == 'windows'
-        shell: cmd
+        shell: pwsh
         run: |
-          where makensis >nul 2>nul || choco install nsis -y --no-progress
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress
+          }
+          $nsisDir = @("${env:ProgramFiles(x86)}\NSIS", "$env:ProgramFiles\NSIS") | Where-Object { Test-Path "$_\makensis.exe" } | Select-Object -First 1
+          if ($nsisDir) { Add-Content -Path $env:GITHUB_PATH -Value $nsisDir }
+          else { throw "makensis.exe not found after installing NSIS" }
 
       # NSIS's OutFile doesn't create its output directory, so make it first.
       - name: Package installer (Windows)
