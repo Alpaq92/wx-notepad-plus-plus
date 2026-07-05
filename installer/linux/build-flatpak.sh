@@ -17,6 +17,13 @@ REPODIR="build/flatpak-repo"
 mkdir -p "$OUTDIR"
 rm -rf "$BUILDDIR" "$REPODIR"
 
+# flatpak-builder's cleanup phase runs `appstreamcli compose` to validate/rasterize the installed
+# icon, and the Ubuntu-packaged appstreamcli is commonly built without librsvg support - it can't
+# decode our SVG icon at all, failing with an opaque "file-read-error"/"filters-but-no-output"
+# rather than a clear "no SVG support" message. Rasterize to PNG ourselves so icon processing
+# never depends on that optional (and here, absent) library.
+rsvg-convert -w 256 -h 256 "resources/wxNotepad++.svg" -o "build/flatpak-icon-256.png"
+
 flatpak-builder --force-clean --user --repo="$REPODIR" "$BUILDDIR" "installer/linux/${APP_ID}.yml"
 flatpak build-bundle "$REPODIR" "$OUTDIR/wxNotepadPlusPlus-${VERSION}.flatpak" "$APP_ID"
 echo "Built $OUTDIR/wxNotepadPlusPlus-${VERSION}.flatpak"

@@ -43,7 +43,7 @@ modules:
       - find /app/bin/locale -depth -type d -name '__pycache__' -exec rm -rf {} +
       - install -Dm644 build-bin/stylers.model.xml /app/bin/stylers.model.xml
       - install -Dm644 wxnpp.desktop /app/share/applications/io.github.Alpaq92.WxNotepadPlusPlus.desktop
-      - install -Dm644 wxnpp.svg /app/share/icons/hicolor/scalable/apps/io.github.Alpaq92.WxNotepadPlusPlus.svg
+      - install -Dm644 wxnpp.png /app/share/icons/hicolor/256x256/apps/io.github.Alpaq92.WxNotepadPlusPlus.png
       - install -Dm644 wxnpp.metainfo.xml /app/share/metainfo/io.github.Alpaq92.WxNotepadPlusPlus.metainfo.xml
     sources:
       - type: dir
@@ -53,8 +53,12 @@ modules:
         path: io.github.Alpaq92.WxNotepadPlusPlus.desktop
         dest-filename: wxnpp.desktop
       - type: file
-        path: ../../resources/wxNotepad++.svg
-        dest-filename: wxnpp.svg
+        # Rasterized by build-flatpak.sh from resources/wxNotepad++.svg immediately before this
+        # runs - appstreamcli compose (invoked by flatpak-builder's cleanup phase) needs to decode
+        # the installed icon, and the Ubuntu-packaged appstreamcli commonly lacks librsvg support,
+        # so an SVG source here fails with an opaque file-read-error. PNG has no such dependency.
+        path: ../../build/flatpak-icon-256.png
+        dest-filename: wxnpp.png
       - type: file
         path: io.github.Alpaq92.WxNotepadPlusPlus.metainfo.xml
         dest-filename: wxnpp.metainfo.xml
