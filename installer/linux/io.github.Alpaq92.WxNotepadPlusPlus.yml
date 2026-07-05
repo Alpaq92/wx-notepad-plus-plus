@@ -18,11 +18,6 @@ runtime-version: '46'
 sdk: org.gnome.Sdk
 command: wxnpp
 
-# We stage an already-built Release binary rather than compiling in-sandbox (see above), so there's
-# no build-time debug info to split out - and the runner doesn't have elfutils' eu-strip installed
-# for flatpak-builder's automatic debuginfo extraction step to use anyway.
-no-debuginfo: true
-
 finish-args:
   - --share=ipc
   - --socket=x11
@@ -34,6 +29,10 @@ finish-args:
 modules:
   - name: wxnpp
     buildsystem: simple
+    # We stage an already-built Release binary rather than compiling in-sandbox (see above), so
+    # there's no build-time debug info to split out - and the runner doesn't have elfutils'
+    # eu-strip installed for flatpak-builder's automatic debuginfo extraction step to use anyway.
+    no-debuginfo: true
     build-commands:
       - install -Dm755 build-bin/wxnpp /app/bin/wxnpp
       - cp -r build-bin/icons /app/bin/icons
