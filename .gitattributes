@@ -1,3 +1,9 @@
 # Shell scripts run on Linux/macOS CI runners - force LF regardless of the checkout platform's
 # core.autocrlf setting (a CRLF shebang/heredoc line silently breaks bash).
 *.sh text eol=lf
+
+# Linux packaging config consumed by rpmbuild/flatpak-builder/desktop-file tools on the CI runner -
+# same reasoning as *.sh above.
+installer/linux/*.spec text eol=lf
+installer/linux/*.desktop text eol=lf
+installer/linux/*.yml text eol=lf

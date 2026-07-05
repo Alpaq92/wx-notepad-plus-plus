@@ -81,18 +81,22 @@ include/npp-compat/  clean-room, permissive Notepad++-ABI headers (consumed only
 resources/           toolbar icons (icons/ = Tabler default, icons-solar/, icons-iconpark/), themes,
                      default styler, locale/ (8-language i18n catalogs)
 third_party/         scintilla + lexilla (both permissive, HPND), wxbf (wxBorderlessFrame, wxWindows Licence)
-installer/           packaging scripts: windows/ (NSIS), linux/ (AppImage + .deb), macos/ (.dmg)
+installer/           packaging scripts: windows/ (NSIS), linux/ (AppImage, .deb, .rpm, Flatpak), macos/ (.dmg)
 docs/                CROSS_PLATFORM_PLAN.md, FUTURE_PLANS.md (licensing roadmap), LICENSE_AUDIT.md,
                      PLUGIN_API_PLAN.md, WXWIDGETS_MIGRATION_PLAN.md
 ```
 
 ## Installing
 
-Every push builds all three platform packages as CI artifacts (see `.github/workflows/build.yml`):
-an NSIS installer for Windows (`installer/windows/wxnpp.nsi`), an AppImage + `.deb` for Linux
-(`installer/linux/`), and a `.dmg` for macOS (`installer/macos/`). Pushing a version tag (`v*`) runs
-`.github/workflows/release.yml`, which rebuilds all three and attaches them to a new GitHub Release —
-no tagged release has been cut yet.
+Grab the latest build from [Releases](https://github.com/Alpaq92/wx-notepad-plus-plus/releases):
+
+- **Windows** — the NSIS installer (`wxNotepadPlusPlus-<version>-Setup.exe`)
+- **Linux** — an AppImage, `.deb`, `.rpm`, or `.flatpak` (`flatpak install wxNotepadPlusPlus-<version>.flatpak`)
+- **macOS** — a `.dmg`
+
+Every push also builds all of these as CI artifacts (see `.github/workflows/build.yml` and
+`installer/{windows,linux,macos}/`); pushing a version tag (`v*`) runs
+`.github/workflows/release.yml`, which rebuilds everything and attaches it to a new GitHub Release.
 
 ## License
 
