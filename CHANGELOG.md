@@ -34,6 +34,10 @@ All notable changes to wxNotepad++ are documented here. Format loosely follows
   source, so those languages were showing the wrong count next to each label.
 - The tab pin icon no longer forces an accent-green tint; it uses the same theme-aware color as
   other toolbar icons.
+- Building from source on Linux/macOS failed with undefined references from the single-instance
+  IPC code above: those platforms route it through wxWidgets' TCP-based `wxTCPServer`/`wxTCPClient`
+  classes (Windows uses DDE instead, bundled into the core library already), which live in a
+  separate `net` component that `CMakeLists.txt` wasn't linking.
 
 ## [0.3.0] - 2026-07-06
 
