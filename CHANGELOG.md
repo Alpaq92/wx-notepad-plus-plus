@@ -3,6 +3,30 @@
 All notable changes to wxNotepad++ are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-07-06
+
+### Added
+- Preferences > General: a "Theme" combobox (System / Dark / Light) replaces the old "Dark Mode"
+  menu checkbox.
+- Preferences > Editing: a "Font" combobox — JetBrains Mono first, then every installed system
+  font — lets you change the editor font; falls back to JetBrains Mono automatically if a
+  previously-chosen font is later uninstalled.
+- The default editor font is now JetBrains Mono (SIL Open Font License 1.1, bundled) instead of
+  the proprietary, Windows-only Consolas, so every platform gets the same font out of the box.
+- Preferences > Editing: an optional custom colour for the line-number/bookmark/fold gutter.
+- Preferences > General: "Ask before closing unsaved changes" (off by default, matching
+  Notepad++). When off, closing an unsaved document without prompting now backs it up
+  automatically and offers it back as a recovered, unsaved tab the next time wxNotepad++ launches.
+- Help menu links now point to this project's own GitHub repo instead of Notepad++'s.
+
+### Fixed
+- The toolbar's hover highlight and the editor's selected-text colour looked wrong in dark mode.
+- Preferences > General "Theme: System" wasn't actually detecting the OS's dark/light setting and
+  always rendered light regardless of it.
+- Closing a single unsaved tab (as opposed to exiting the whole app) no longer leaves behind a
+  permanent "ghost" recovery entry that keeps resurfacing on every future launch.
+- The tab pin icon now uses the app's accent green instead of a flat grey, matching the toolbar.
+
 ## [0.2.0] - 2026-07-05
 
 ### Added
@@ -49,5 +73,6 @@ original permissive plugin API with optional Notepad++-ABI plugin compatibility 
 - Packaging for all 3 platforms: an NSIS installer (Windows), AppImage + `.deb` (Linux), and a
   `.dmg` (macOS), wired into CI on every push.
 
+[0.3.0]: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/tag/v0.1.0

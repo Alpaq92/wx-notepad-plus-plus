@@ -119,4 +119,5 @@ and [`LICENSING.md`](LICENSING.md) for the per-component record.
   - [Tabler Icons](https://tabler.io/icons) (MIT) + [Open Color](https://yeun.github.io/open-color/) (MIT) — the default line-icon set (`resources/icons/CREDITS.md`).
   - [Solar Icons](https://icon-sets.iconify.design/solar/) (Bold Duotone) — © 480 Design (CC BY 4.0, attribution required; `resources/icons-solar/CREDITS.md`).
   - [IconPark](https://github.com/bytedance/IconPark) — © ByteDance (Apache-2.0; `resources/icons-iconpark/CREDITS.md`).
+- [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) (SIL OFL 1.1) — the default editor font, bundled in place of the proprietary Consolas (`resources/fonts/CREDITS.md`).
 - Color themes: kept third-party themes are MIT (© Fabio Zendhi Nagao; Bespin © Oren Farhi); regenerated themes + the default styler use permissive palettes (GitHub Primer, Atom One, Nord, Dracula, VS Code — all MIT; canonical Zenburn/Obsidian colors). [Markdown Preview Enhanced](https://github.com/shd101wyy/vscode-markdown-preview-enhanced) (NCSA) was reviewed as a permissive palette source.

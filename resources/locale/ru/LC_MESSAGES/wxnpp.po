@@ -2378,3 +2378,24 @@ msgstr "Стиль: Ключевые слова %d"
 
 msgid "Operators"
 msgstr "Операторы"
+
+msgid "Theme:"
+msgstr "Тема:"
+
+msgid "System"
+msgstr "Системная"
+
+msgid "Dark"
+msgstr "Тёмная"
+
+msgid "Light"
+msgstr "Светлая"
+
+msgid "Ask before closing unsaved changes"
+msgstr "Спрашивать перед закрытием несохранённых изменений"
+
+msgid "Use a custom line-number margin colour"
+msgstr "Использовать собственный цвет поля номеров строк"
+
+msgid "Font:"
+msgstr "Шрифт:"

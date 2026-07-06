@@ -10,7 +10,7 @@
 #   ./build/bin/wxnpp            (wxnpp.exe on Windows)
 
 cmake_minimum_required(VERSION 3.20)
-project(wxNotepadPlusPlus VERSION 0.2.0 LANGUAGES CXX)
+project(wxNotepadPlusPlus VERSION 0.3.0 LANGUAGES CXX)
 
 include(FetchContent)
 
@@ -122,6 +122,8 @@ add_custom_command(TARGET wxnpp POST_BUILD
         "${CMAKE_SOURCE_DIR}/resources/icons-iconpark" "$<TARGET_FILE_DIR:wxnpp>/icons-iconpark"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/themes" "$<TARGET_FILE_DIR:wxnpp>/themes"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/fonts" "$<TARGET_FILE_DIR:wxnpp>/fonts"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_SOURCE_DIR}/resources/stylers.model.xml" "$<TARGET_FILE_DIR:wxnpp>/stylers.model.xml"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different

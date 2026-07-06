@@ -2378,3 +2378,24 @@ msgstr "스타일: 키워드 %d"
 
 msgid "Operators"
 msgstr "연산자"
+
+msgid "Theme:"
+msgstr "테마:"
+
+msgid "System"
+msgstr "시스템"
+
+msgid "Dark"
+msgstr "다크"
+
+msgid "Light"
+msgstr "라이트"
+
+msgid "Ask before closing unsaved changes"
+msgstr "저장하지 않은 변경 사항을 닫기 전에 확인"
+
+msgid "Use a custom line-number margin colour"
+msgstr "줄 번호 여백에 사용자 지정 색상 사용"
+
+msgid "Font:"
+msgstr "글꼴:"

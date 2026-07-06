@@ -1983,21 +1983,21 @@
         <WidgetStyle name="Bad brace colour" styleID="35" fgColor="F0A0A0" bgColor="404044" fontName="" fontStyle="0" fontSize=""></WidgetStyle>
         <WidgetStyle name="Current line background colour" styleID="0" bgColor="101014"></WidgetStyle>
         <!-- In below rule 'fgColor' attribute for 'Selected text colour' can be unlocked with a enableSelectFgColor.xml file -->
-        <WidgetStyle name="Selected text colour" styleID="0" bgColor="58585C" fgColor="000004"></WidgetStyle>
+        <WidgetStyle name="Selected text colour" styleID="0" bgColor="264F78" fgColor="FFFFFF"></WidgetStyle>
         <WidgetStyle name="Multi-selected text color" styleID="0" bgColor="C0C0C4"></WidgetStyle>
         <WidgetStyle name="Caret colour" styleID="2069" fgColor="90B0A0"></WidgetStyle>
         <WidgetStyle name="Multi-edit carets color" styleID="0" fgColor="808044"></WidgetStyle>
         <WidgetStyle name="Edge colour" styleID="0" fgColor="506060"></WidgetStyle>
-        <WidgetStyle name="Line number margin" styleID="33" fgColor="888888" bgColor="0C0C10" fontName="" fontStyle="0" fontSize=""></WidgetStyle>
-        <WidgetStyle name="Bookmark margin" styleID="0" bgColor="0C0C10"></WidgetStyle>
-        <WidgetStyle name="Change History margin" styleID="0" bgColor="0C0C10"></WidgetStyle>
+        <WidgetStyle name="Line number margin" styleID="33" fgColor="888888" bgColor="303034" fontName="" fontStyle="0" fontSize=""></WidgetStyle>
+        <WidgetStyle name="Bookmark margin" styleID="0" bgColor="303034"></WidgetStyle>
+        <WidgetStyle name="Change History margin" styleID="0" bgColor="303034"></WidgetStyle>
         <WidgetStyle name="Change History modified" styleID="0" fgColor="FC8000" bgColor="FC8000"></WidgetStyle>
         <WidgetStyle name="Change History revert modified" styleID="0" fgColor="A0C004" bgColor="A0C004"></WidgetStyle>
         <WidgetStyle name="Change History revert origin" styleID="0" fgColor="40A0C0" bgColor="40A0C0"></WidgetStyle>
         <WidgetStyle name="Change History saved" styleID="0" fgColor="00A004" bgColor="00A004"></WidgetStyle>
         <WidgetStyle name="Fold" styleID="0" fgColor="707074" bgColor="101014"></WidgetStyle>
         <WidgetStyle name="Fold active" styleID="0" fgColor="80A080"></WidgetStyle>
-        <WidgetStyle name="Fold margin" styleID="0" fgColor="18181C" bgColor="101014"></WidgetStyle>
+        <WidgetStyle name="Fold margin" styleID="0" fgColor="18181C" bgColor="303034"></WidgetStyle>
         <WidgetStyle name="White space symbol" styleID="0" fgColor="606064"></WidgetStyle>
         <WidgetStyle name="Smart Highlighting" styleID="29" bgColor="348834"></WidgetStyle>
         <WidgetStyle name="Find Mark Style" styleID="31" bgColor="FC0080"></WidgetStyle>

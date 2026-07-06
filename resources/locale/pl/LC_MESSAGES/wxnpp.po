@@ -2378,3 +2378,24 @@ msgstr "Styl: Słowa kluczowe %d"
 
 msgid "Operators"
 msgstr "Operatory"
+
+msgid "Theme:"
+msgstr "Motyw:"
+
+msgid "System"
+msgstr "Systemowy"
+
+msgid "Dark"
+msgstr "Ciemny"
+
+msgid "Light"
+msgstr "Jasny"
+
+msgid "Ask before closing unsaved changes"
+msgstr "Pytaj przed zamknięciem niezapisanych zmian"
+
+msgid "Use a custom line-number margin colour"
+msgstr "Użyj niestandardowego koloru marginesu numerów linii"
+
+msgid "Font:"
+msgstr "Czcionka:"

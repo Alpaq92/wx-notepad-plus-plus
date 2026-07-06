@@ -2378,3 +2378,24 @@ msgstr "Style : Mots-clés %d"
 
 msgid "Operators"
 msgstr "Opérateurs"
+
+msgid "Theme:"
+msgstr "Thème :"
+
+msgid "System"
+msgstr "Système"
+
+msgid "Dark"
+msgstr "Sombre"
+
+msgid "Light"
+msgstr "Clair"
+
+msgid "Ask before closing unsaved changes"
+msgstr "Demander avant de fermer les modifications non enregistrées"
+
+msgid "Use a custom line-number margin colour"
+msgstr "Utiliser une couleur personnalisée pour la marge des numéros de ligne"
+
+msgid "Font:"
+msgstr "Police :"

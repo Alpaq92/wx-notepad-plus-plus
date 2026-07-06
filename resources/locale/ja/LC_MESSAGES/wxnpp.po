@@ -2378,3 +2378,24 @@ msgstr "スタイル: キーワード%d"
 
 msgid "Operators"
 msgstr "演算子"
+
+msgid "Theme:"
+msgstr "テーマ:"
+
+msgid "System"
+msgstr "システム"
+
+msgid "Dark"
+msgstr "ダーク"
+
+msgid "Light"
+msgstr "ライト"
+
+msgid "Ask before closing unsaved changes"
+msgstr "未保存の変更を閉じる前に確認する"
+
+msgid "Use a custom line-number margin colour"
+msgstr "行番号マージンにカスタムカラーを使用する"
+
+msgid "Font:"
+msgstr "フォント:"
