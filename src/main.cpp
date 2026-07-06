@@ -55,6 +55,11 @@
 #include <wx/print.h>           // wxPrinter/wxPrintout - File > Print
 #include <wx/printdlg.h>        // wxPrintDialogData/wxPageSetupDialogData - the Print dialog + page geometry
 #include <wx/paper.h>           // wxThePrintPaperDatabase - resolve a concrete default paper size (A4)
+#include <wx/cmdline.h>         // wxCmdLineParser - -g/-e/-n/-r switches (see NppApp::OnInit)
+#include <wx/snglinst.h>        // wxSingleInstanceChecker - "reuse an existing window" (Preferences > General)
+#include <wx/ipc.h>             // wxServer/wxClient/wxConnection - hand file args to the already-running instance
+#include <wx/tokenzr.h>         // wxStringTokenizer - splits the IPC payload back into paths/goto/encoding
+#include <cerrno>               // errno/EACCES - detect permission-denied saves (see tryElevatedWrite)
 
 #ifdef WXNPP_HAS_BORDERLESS
 #include <type_traits>                  // std::is_base_of - detect the borderless base in NppShellFrameT<FB>
@@ -109,7 +114,7 @@ using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/
 #include "menuCmdID.h"
 #include "app_icon_svg.h"
 #include "nib.h"               // our own permissive, cross-platform plugin API (Nib)
-#include "npp_menu.h"          // faithful 1:1 Notepad++ main-menu builder
+#include "menu_builder.h"      // data-driven menu bar builder (menu_model.h/menu_data_*.h) - replaces npp_menu.h
 #include "udl.h"               // User-Defined Language data model + userDefineLang.xml (de)serialization
 #include "udl_lexer.h"         // User-Defined Language: live container-lexer styling/folding engine
 
@@ -161,6 +166,18 @@ static wxStyledTextCtrl* g_view = nullptr;
 // One editor tab: a wxPanel that owns a Scintilla Document (the single shared view swaps to it).
 // On-disk text encoding of a buffer; the Scintilla document itself always holds UTF-8.
 enum Enc { ENC_UTF8 = 0, ENC_UTF8_BOM, ENC_UTF16_LE, ENC_UTF16_BE, ENC_ANSI, ENC_CHARSET };
+
+// -e/--encoding CLI switch: name -> Enc (or -1 if unrecognized, so the caller can ignore it).
+static int encodingFromName(const wxString& name)
+{
+    const wxString n = name.Lower();
+    if (n == "ansi") return ENC_ANSI;
+    if (n == "utf8" || n == "utf-8") return ENC_UTF8;
+    if (n == "utf8bom" || n == "utf-8-bom") return ENC_UTF8_BOM;
+    if (n == "utf16le" || n == "utf-16le") return ENC_UTF16_LE;
+    if (n == "utf16be" || n == "utf-16be") return ENC_UTF16_BE;
+    return -1;
+}
 
 // One recorded Scintilla command in a macro (Macro menu: record / playback / run multiple).
 struct MacroStep { int msg; uptr_t wparam; sptr_t lparam; bool hasText = false; std::string text; };
@@ -352,6 +369,54 @@ static std::function<void(const wxString&)> g_openDropped;
 
 // Set by the frame: a zoom change (Ctrl+wheel etc.) in one editor syncs all tabs + persists.
 static std::function<void(int)> g_onZoom;
+
+// Set by the frame: a second wxnpp launch handed its file args (+ optional -g/-e) to us over IPC
+// (see NppIpcConnection below) because "reuse an existing window" is active. gotoLine/gotoCol/forceEnc
+// are -1 when not requested by the sending launch.
+static std::function<void(const wxArrayString&, int, int, int)> g_ipcOpenRequest;
+
+// ---- single-instance "reuse window" IPC (Preferences > General; off by default) ------------------
+// A second wxnpp process, on finding one already running (wxSingleInstanceChecker), connects here as a
+// wxClient and Executes() a small payload instead of opening its own window - one path per line, with
+// an optional trailing "\x01GOTO=line,col" / "\x01ENC=n" line carrying -g/-e. Standard wx pattern for
+// pairing wxSingleInstanceChecker with wxServer/wxClient; DDE on Windows, a loopback TCP port elsewhere.
+static const wxChar* const kIpcServiceName = wxT("31415");   // arbitrary but fixed "port" (Unix) / DDE service (Windows)
+static const wxChar* const kIpcTopic = wxT("wxnpp-open");
+
+class NppIpcConnection : public wxConnection
+{
+public:
+    // The modern OnExec(topic, wxString) override (not the deprecated raw OnExecute(data,size,format)):
+    // wx's DDE client transcodes the UTF-8 payload to UTF-16 for the DDEML wire transfer on Windows, so
+    // decoding the raw bytes here as UTF-8 (matching what Execute(wxString) sent) silently mis-parses it -
+    // GetTextFromData() (used internally by the base OnExecute(), which this bypasses) is what actually
+    // knows to undo that. Overriding OnExec() instead sidesteps the whole issue: wx hands us an already-
+    // decoded wxString regardless of which wire format the transport chose.
+    bool OnExec(const wxString&, const wxString& payload) override
+    {
+        wxArrayString paths; int gotoLine = -1, gotoCol = -1, forceEnc = -1;
+        wxStringTokenizer tok(payload, "\n");
+        while (tok.HasMoreTokens())
+        {
+            const wxString line = tok.GetNextToken();
+            if (line.StartsWith("\x01GOTO=")) {
+                const wxString v = line.Mid(6); long l = -1, c = -1;
+                v.BeforeFirst(',').ToLong(&l); if (v.Contains(",")) v.AfterFirst(',').ToLong(&c);
+                gotoLine = (int)l; gotoCol = (int)c;
+            } else if (line.StartsWith("\x01ENC=")) {
+                long e = -1; line.Mid(5).ToLong(&e); forceEnc = (int)e;
+            } else if (!line.empty()) paths.Add(line);
+        }
+        if (g_ipcOpenRequest) g_ipcOpenRequest(paths, gotoLine, gotoCol, forceEnc);
+        return true;
+    }
+};
+class NppIpcServer : public wxServer
+{
+public:
+    wxConnectionBase* OnAcceptConnection(const wxString& topic) override
+    { return topic == kIpcTopic ? new NppIpcConnection() : nullptr; }
+};
 
 // ---- editor behaviours driven by Scintilla notifications (auto-indent, brace match, smart-hilite) ----
 static sptr_t sciSend(wxStyledTextCtrl* s, UINT m, uptr_t w = 0, sptr_t l = 0)
@@ -891,7 +956,7 @@ public:
         s->Add(nrow, 0, wxLEFT | wxRIGHT | wxTOP, 26);
         m_leadZero = new wxCheckBox(this, wxID_ANY, _("Leading zeros"));
         s->Add(m_leadZero, 0, wxLEFT | wxTOP | wxBOTTOM, 26);
-        wxString fmts[] = { "Dec", "Hex", "Oct", "Bin" };
+        wxString fmts[] = { _("Dec"), _("Hex"), _("Oct"), _("Bin") };
         m_format = new wxRadioBox(this, wxID_ANY, _("Format"), wxDefaultPosition, wxDefaultSize, 4, fmts, 4, wxRA_SPECIFY_COLS);
         s->Add(m_format, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 26);
 
@@ -1060,7 +1125,7 @@ private:
 
     static const wxString& tabTitle(int t)
     {
-        static const wxString n[4] = { "Find", "Replace", "Find in Files", "Mark" };
+        static const wxString n[4] = { _("Find"), _("Replace"), _("Find in Files"), _("Mark") };
         return n[(t >= 0 && t < 4) ? t : 0];
     }
 
@@ -1141,7 +1206,7 @@ private:
             pc->inSel = new wxCheckBox(panel, wxID_ANY, _("In se&lection"));
             opt->Add(pc->inSel, 0, wxALL, 3);
         }
-        const wxString modes[3] = { "&Normal", "E&xtended (\\n, \\r, \\t, \\0, \\x...)", "Re&gular expression" };
+        const wxString modes[3] = { _("&Normal"), _("E&xtended (\\n, \\r, \\t, \\0, \\x...)"), _("Re&gular expression") };
         pc->mode = new wxRadioBox(panel, wxID_ANY, _("Search Mode"), wxDefaultPosition, wxDefaultSize, 3, modes, 1, wxRA_SPECIFY_COLS);
         opt->Add(pc->mode, 0, wxALL | wxEXPAND, 3);
         mid->Add(opt, 1, wxEXPAND | wxRIGHT, 12);
@@ -1153,21 +1218,21 @@ private:
             col->Add(b, 0, wxEXPAND | wxBOTTOM, 5);
         };
         if (t == TAB_FIND) {
-            mk("Find Next", [this] { pushHistory(); if (findNextCb) findNextCb(opts()); });
-            mk("Count",     [this] { pushHistory(); if (countCb)    countCb(opts()); });
-            mk("Find All",  [this] { pushHistory(); if (markAllCb)  markAllCb(opts()); });
+            mk(_("Find Next"), [this] { pushHistory(); if (findNextCb) findNextCb(opts()); });
+            mk(_("Count"),     [this] { pushHistory(); if (countCb)    countCb(opts()); });
+            mk(_("Find All"),  [this] { pushHistory(); if (markAllCb)  markAllCb(opts()); });
         } else if (t == TAB_REPLACE) {
-            mk("Find Next",   [this] { pushHistory(); if (findNextCb)   findNextCb(opts()); });
-            mk("Replace",     [this] { pushHistory(); if (replaceCb)    replaceCb(opts()); });
-            mk("Replace All", [this] { pushHistory(); if (replaceAllCb) replaceAllCb(opts()); });
+            mk(_("Find Next"),   [this] { pushHistory(); if (findNextCb)   findNextCb(opts()); });
+            mk(_("Replace"),     [this] { pushHistory(); if (replaceCb)    replaceCb(opts()); });
+            mk(_("Replace All"), [this] { pushHistory(); if (replaceAllCb) replaceAllCb(opts()); });
         } else if (t == TAB_FIF) {
-            mk("Find All",         [this] { pushHistory(); if (fifCb) fifCb(opts(), m_pages[TAB_FIF]->dir->GetValue(), m_pages[TAB_FIF]->filters->GetValue(), false); });
-            mk("Replace in Files", [this] { pushHistory(); if (fifCb) fifCb(opts(), m_pages[TAB_FIF]->dir->GetValue(), m_pages[TAB_FIF]->filters->GetValue(), true); });
+            mk(_("Find All"),         [this] { pushHistory(); if (fifCb) fifCb(opts(), m_pages[TAB_FIF]->dir->GetValue(), m_pages[TAB_FIF]->filters->GetValue(), false); });
+            mk(_("Replace in Files"), [this] { pushHistory(); if (fifCb) fifCb(opts(), m_pages[TAB_FIF]->dir->GetValue(), m_pages[TAB_FIF]->filters->GetValue(), true); });
         } else { // TAB_MARK
-            mk("Mark All",    [this] { pushHistory(); if (markAllCb) markAllCb(opts()); });
-            mk("Clear Marks", [this] { if (clearMarksCb) clearMarksCb(); });
+            mk(_("Mark All"),    [this] { pushHistory(); if (markAllCb) markAllCb(opts()); });
+            mk(_("Clear Marks"), [this] { if (clearMarksCb) clearMarksCb(); });
         }
-        mk("Close", [this] { Hide(); });
+        mk(_("Close"), [this] { Hide(); });
         mid->Add(col, 0, wxALIGN_TOP);
         s->Add(mid, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
@@ -1473,11 +1538,7 @@ private:
     }
     void reskin()
     {
-        // The pin gets the project's accent green (Open Color green-8, same as the active-tab marker and
-        // the toolbar's own highlight palette) so it reads as a distinct, on-brand action - not just
-        // another neutral glyph like the close button, which keeps the plain theme-aware tone below.
-        static const wxColour kAccentGreen(47, 158, 68);
-        const wxBitmapBundle pin = iconBundle("pin", 11, kAccentGreen);   // small secondary button, like Notepad++'s pin (close stays 16)
+        const wxBitmapBundle pin = iconBundle("pin", 11, m_iconColour);   // small secondary button, like Notepad++'s pin (close stays 16)
         if (pin.IsOk()) { m_activePinBmp = pin; m_activeUnpinBmp = pin; m_disabledPinBmp = pin; m_disabledUnpinBmp = pin; }
         const wxBitmapBundle cls = iconBundle("close-tab", 12, m_iconColour);   // match the tab bar's (smaller) global close button
         if (cls.IsOk()) { m_activeCloseBmp = cls; m_disabledCloseBmp = cls; }
@@ -1713,9 +1774,8 @@ public:
         g_nibEditorMain   = [this]() -> void* { return m_main.sci; };   // _scintillaMainHandle is always the MAIN view (not the active alias)
         g_nibEditorSecond = [this]() -> void* { return m_sub.sci; };    // _scintillaSecondHandle is the SUB view (valid even before first split)
         g_nibPluginsMenu  = [this]() -> void* {           // the Plugins menu HMENU (the GPL bridge maps it to NPPM_GETMENUHANDLE)
-            auto* mb = menuBar(); if (!mb) return nullptr;
-            const int mi = mb->FindMenu("Plugins");
-            return mi == wxNOT_FOUND ? nullptr : reinterpret_cast<void*>(mb->GetMenu(mi)->GetHMenu());
+            wxMenu* pm = m_menuRegistry.find("menu.plugins");
+            return pm ? reinterpret_cast<void*>(pm->GetHMenu()) : nullptr;
         };
         g_nibDockNative = [this](void* hwndV, const char* title, int edge) {   // host a plugin's native window in a dock pane
             HWND hc = static_cast<HWND>(hwndV);
@@ -1743,17 +1803,23 @@ public:
 #endif
         loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
         if (!g_nibCommands.empty())   // surface registered Nib commands in the Plugins menu
-            if (auto* mb = menuBar()) { const int mi = mb->FindMenu("Plugins");
-                if (mi != wxNOT_FOUND) { wxMenu* pm = mb->GetMenu(mi);
-                    if (pm->GetMenuItemCount() > 0) pm->AppendSeparator();
-                    for (size_t i = 0; i < g_nibCommands.size(); ++i)
-                        pm->Append(NIB_CMD_BASE + static_cast<int>(i), wxString::FromUTF8(g_nibCommands[i].title)); } }
+            if (wxMenu* pm = m_menuRegistry.find("menu.plugins"))
+            {
+                if (pm->GetMenuItemCount() > 0) pm->AppendSeparator();
+                for (size_t i = 0; i < g_nibCommands.size(); ++i)
+                    pm->Append(NIB_CMD_BASE + static_cast<int>(i), wxString::FromUTF8(g_nibCommands[i].title));
+            }
 
         Bind(wxEVT_MENU, &NppShellFrameT::onCommand, this);          // one dispatcher for all menu+toolbar ids
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) { updateStatus(); updateUiState(); }, myID_TIMER);
         g_editorContextMenu = [this](int sx, int sy) { showEditorContext(sx, sy); };   // editor right-click menu
         g_openDropped = [this](const wxString& s) { openDroppedPaths(s); };            // files dropped on the editor
         g_onZoom = [this](int z) { onZoomChanged(z); };                                // sync + persist zoom
+        g_ipcOpenRequest = [this](const wxArrayString& paths, int gotoLine, int gotoCol, int forceEnc) {
+            for (const auto& p : paths) openPath(p);
+            if (!paths.IsEmpty()) applyGotoAndEncoding(gotoLine, gotoCol, forceEnc);
+            Raise(); if (IsIconized()) Iconize(false);   // a background launch handed us files - come to front
+        };
         SetDropTarget(new FileDrop([this](const wxArrayString& fs) { for (const auto& f : fs) openPath(f); }));
         Bind(wxEVT_CLOSE_WINDOW, &NppShellFrameT::onCloseWindow, this);                 // prompt to save on exit
         m_timer.Start(150);
@@ -1764,8 +1830,22 @@ public:
         updateUiState();
     }
 
-    // Open a file given on the command line (Notepad++ opens cmdline paths as tabs).
-    void openPath(const wxString& p) { if (wxFileExists(p)) addDocument(p, wxFileNameFromPath(p)); }
+    // Open a file given on the command line (Notepad++ opens cmdline paths as tabs). Returns the new
+    // page (nullptr if the path didn't exist) so callers can act on it further (e.g. -g/-e, IPC handoff).
+    EditorPage* openPath(const wxString& p) { return wxFileExists(p) ? addDocument(p, wxFileNameFromPath(p)) : nullptr; }
+    // Apply -g (goto line[,col]) / -e (force encoding) to whichever page is active after opening some
+    // CLI/IPC-supplied paths - matches Notepad2/Notepad4's own semantics of applying to the file just
+    // opened, and since addDocument() always activates the newest page, that's simply activePage().
+    void applyGotoAndEncoding(int gotoLine, int gotoCol, int forceEnc)
+    {
+        if (forceEnc >= 0) interpretAs(forceEnc);
+        if (gotoLine >= 0)
+        {
+            const sptr_t pos = gotoCol > 0 ? sci(SCI_FINDCOLUMN, gotoLine - 1, gotoCol - 1) : sci(SCI_POSITIONFROMLINE, gotoLine - 1);
+            sci(SCI_GOTOPOS, pos);
+        }
+        if (m_stc) m_stc->SetFocus();
+    }
     // Open file(s) from a Scintilla SCN_URIDROPPED payload (newline-separated; may be file:// URIs).
     void openDroppedPaths(const wxString& data)
     {
@@ -2424,7 +2504,7 @@ private:
     void projAddFiles(const wxTreeItemId& parent)
     {
         if (!parent.IsOk()) return;
-        wxFileDialog dlg(this, _("Add Files"), "", "", "All files (*.*)|*.*", wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
+        wxFileDialog dlg(this, _("Add Files"), "", "", _("All files (*.*)|*.*"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
         if (dlg.ShowModal() != wxID_OK) return;
         wxArrayString paths; dlg.GetPaths(paths);
         for (const auto& p : paths) m_projPanel->AppendItem(parent, wxFileNameFromPath(p), -1, -1, new ProjItemData(true, p));
@@ -2446,7 +2526,7 @@ private:
     }
     void projOpen()
     {
-        wxFileDialog dlg(this, _("Open Workspace"), "", "", "Workspace (*.xml)|*.xml", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        wxFileDialog dlg(this, _("Open Workspace"), "", "", _("Workspace (*.xml)|*.xml"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
         if (dlg.ShowModal() == wxID_OK) loadProjectXml(dlg.GetPath());
     }
     void projSave()
@@ -2454,7 +2534,7 @@ private:
         wxString path = m_projWorkspace;
         if (path.empty())
         {
-            wxFileDialog dlg(this, _("Save Workspace As"), "", "workspace.xml", "Workspace (*.xml)|*.xml", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+            wxFileDialog dlg(this, _("Save Workspace As"), "", "workspace.xml", _("Workspace (*.xml)|*.xml"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
             if (dlg.ShowModal() != wxID_OK) return;
             path = dlg.GetPath();
         }
@@ -2606,9 +2686,9 @@ private:
         if (m_dark) { m_incField->SetBackgroundColour(wxColour(30, 30, 30)); m_incField->SetForegroundColour(wxColour(220, 220, 220)); }
         auto mkToggle = [&](const wxString& cap, const wxString& tip) {
             auto* b = new wxToggleButton(m_incBar, wxID_ANY, cap, wxDefaultPosition, wxSize(34, -1)); b->SetToolTip(tip); return b; };
-        m_incCaseBtn  = mkToggle("Aa",  "Match case");
-        m_incWordBtn  = mkToggle("\\b", "Match whole word only");
-        m_incRegexBtn = mkToggle(".*",  "Regular expression");
+        m_incCaseBtn  = mkToggle("Aa",  _("Match case"));
+        m_incWordBtn  = mkToggle("\\b", _("Match whole word only"));
+        m_incRegexBtn = mkToggle(".*",  _("Regular expression"));
         m_incCount = new wxStaticText(m_incBar, wxID_ANY, "", wxDefaultPosition, wxSize(108, -1));
         if (m_dark) m_incCount->SetForegroundColour(wxColour(170, 170, 170));
         auto* nextB  = new wxButton(m_incBar, wxID_ANY, _("Next"),  wxDefaultPosition, wxSize(60, -1));
@@ -2753,7 +2833,7 @@ private:
     }
     void onFindInFiles()
     {
-        wxDialog dlg(this, wxID_ANY, "Find in Files");
+        wxDialog dlg(this, wxID_ANY, _("Find in Files"));
         auto* find = new wxTextCtrl(&dlg, wxID_ANY, selText());
         wxString dir; if (auto* p = activePage()) dir = wxPathOnly(p->path); if (dir.empty()) dir = wxGetCwd();
         auto* dirc = new wxTextCtrl(&dlg, wxID_ANY, dir);
@@ -2769,7 +2849,7 @@ private:
         auto* browse = new wxButton(&dlg, wxID_ANY, "...", wxDefaultPosition, wxSize(32, -1)); drow->Add(browse, 0, wxLEFT, 4);
         gs->Add(drow, 1, wxEXPAND);
         gs->Add(new wxStaticText(&dlg, wxID_ANY, _("Filters:")), 0, wxALIGN_CENTRE_VERTICAL); gs->Add(filt, 1, wxEXPAND);
-        browse->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) { wxDirDialog dd(&dlg, "Choose folder", dirc->GetValue()); if (dd.ShowModal() == wxID_OK) dirc->SetValue(dd.GetPath()); });
+        browse->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) { wxDirDialog dd(&dlg, _("Choose folder"), dirc->GetValue()); if (dd.ShowModal() == wxID_OK) dirc->SetValue(dd.GetPath()); });
         auto* opt = new wxBoxSizer(wxHORIZONTAL); opt->Add(cc, 0, wxRIGHT, 12); opt->Add(ww, 0, wxRIGHT, 12); opt->Add(rx, 0, wxRIGHT, 12); opt->Add(sd, 0);
         auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
         auto* findAll = new wxButton(&dlg, wxID_OK, _("Find All")); findAll->SetDefault();   // Enter submits
@@ -2812,7 +2892,7 @@ private:
     void onRun()   // Run dialog (F5): enter a command with $(...) variables and launch it
     {
         wxString cmd; wxConfigBase::Get()->Read("RunCommand", &cmd, "");
-        wxDialog dlg(this, wxID_ANY, "Run...");
+        wxDialog dlg(this, wxID_ANY, _("Run..."));
         auto* tc = new wxTextCtrl(&dlg, wxID_ANY, cmd, wxDefaultPosition, wxSize(520, -1));
         auto* browse = new wxButton(&dlg, wxID_ANY, "...", wxDefaultPosition, wxSize(32, -1));
         auto* row = new wxBoxSizer(wxHORIZONTAL); row->Add(tc, 1, wxEXPAND); row->Add(browse, 0, wxLEFT, 4);
@@ -2825,7 +2905,7 @@ private:
         top->Add(btn, 0, wxEXPAND | wxALL, 12);
         dlg.SetSizerAndFit(top); dlg.SetSize(wxSize(540, dlg.GetSize().GetHeight()));
         tc->SetFocus(); tc->SetInsertionPointEnd();
-        browse->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){ wxFileDialog fd(&dlg, "Select a program to run", "", "", "Programs (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|All files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST); if (fd.ShowModal() == wxID_OK) tc->SetValue("\"" + fd.GetPath() + "\" \"$(FULL_CURRENT_PATH)\""); });
+        browse->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){ wxFileDialog fd(&dlg, _("Select a program to run"), "", "", _("Programs (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|All files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST); if (fd.ShowModal() == wxID_OK) tc->SetValue("\"" + fd.GetPath() + "\" \"$(FULL_CURRENT_PATH)\""); });
         themeDialog(&dlg);
         if (dlg.ShowModal() != wxID_OK) return;
         cmd = tc->GetValue().Trim().Trim(false); if (cmd.empty()) return;
@@ -2841,7 +2921,7 @@ private:
     void saveSession()
     {
         if (!m_tabs) return;
-        wxFileDialog d(this, _("Save Session"), "", "session.xml", "Session files (*.xml)|*.xml|All files (*.*)|*.*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        wxFileDialog d(this, _("Save Session"), "", "session.xml", _("Session files (*.xml)|*.xml|All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
         if (d.ShowModal() != wxID_OK) return;
         const int active = m_tabs->GetSelection();
         wxXmlDocument doc;
@@ -2873,7 +2953,7 @@ private:
     }
     void loadSession()
     {
-        wxFileDialog d(this, _("Load Session"), "", "", "Session files (*.xml)|*.xml|All files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        wxFileDialog d(this, _("Load Session"), "", "", _("Session files (*.xml)|*.xml|All files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
         if (d.ShowModal() != wxID_OK) return;
         wxXmlDocument doc;
         if (!doc.Load(d.GetPath()) || !doc.GetRoot()) { wxMessageBox(_("Could not read the session file."), _("Load Session"), wxOK | wxICON_ERROR, this); return; }
@@ -3099,7 +3179,7 @@ private:
         m_fifPanel->DeleteAllItems();
         const wxTreeItemId root = m_fifPanel->AddRoot("");
         std::set<wxString> files; for (const auto& h : hits) files.insert(h.file);
-        const wxTreeItemId head = m_fifPanel->AppendItem(root, wxString::Format("Search \"%s\"  (%d hits in %d files of %d searched)",
+        const wxTreeItemId head = m_fifPanel->AppendItem(root, wxString::Format(_("Search \"%s\"  (%d hits in %d files of %d searched)"),
                                                           term, (int)hits.size(), (int)files.size(), searched));
         m_fifPanel->SetItemBold(head, true);
         wxString cur; wxTreeItemId fnode;
@@ -3107,7 +3187,7 @@ private:
         {
             if (h.file != cur) { cur = h.file; fnode = m_fifPanel->AppendItem(head, h.file); m_fifPanel->SetItemBold(fnode, true); }
             wxString t = h.text; t.Trim(true).Trim(false);
-            m_fifPanel->AppendItem(fnode, wxString::Format("Line %d:  %s", h.line, t), -1, -1, new FifItemData(h.file, h.line));
+            m_fifPanel->AppendItem(fnode, wxString::Format(_("Line %d:  %s"), h.line, t), -1, -1, new FifItemData(h.file, h.line));
         }
         m_fifPanel->ExpandAll();
         m_fifPanel->Thaw();
@@ -3132,9 +3212,9 @@ private:
             b->Bind(wxEVT_BUTTON, [act](wxCommandEvent&) { act(); });
             s->Add(b, 0, wxALIGN_CENTRE_VERTICAL | wxLEFT, 2);
         };
-        mkBtn("M8 4.5 V11.5 M4.5 8 H11.5",               "New",            [this] { doNew(); });   // span 4.5..11.5, matching the "x"
-        mkBtn("M3.5 6.5 L8 11 L12.5 6.5",                "Open documents", [this] { onDocList(); });
-        mkBtn("M4.5 4.5 L11.5 11.5 M11.5 4.5 L4.5 11.5", "Close current",  [this] { closeActive(); });
+        mkBtn("M8 4.5 V11.5 M4.5 8 H11.5",               _("New"),            [this] { doNew(); });   // span 4.5..11.5, matching the "x"
+        mkBtn("M3.5 6.5 L8 11 L12.5 6.5",                _("Open documents"), [this] { onDocList(); });
+        mkBtn("M4.5 4.5 L11.5 11.5 M11.5 4.5 L4.5 11.5", _("Close current"),  [this] { closeActive(); });
         m_capBar->SetSizerAndFit(s);
         m_tabs->Bind(wxEVT_SIZE, [this](wxSizeEvent& e) { positionCapBar(); e.Skip(); });
         positionCapBar();
@@ -4000,7 +4080,7 @@ private:
     void buildMenuBar()
     {
         auto* mb = new wxMenuBar;
-        buildNppMainMenu(mb);   // full 1:1 Notepad++ menu tree (see spike/npp_menu.h)
+        buildNppMainMenu(mb, m_menuRegistry);   // full 1:1 Notepad++ menu tree, built from menu_data_*.h (see menu_builder.h)
         // Localization: pick the UI language straight from the menu bar (radio group; restart-to-apply,
         // same flow as the Preferences > General dropdown). Inserted right after the Settings menu.
         {
@@ -4011,17 +4091,21 @@ private:
                 wxMenuItem* it = loc->AppendRadioItem(myID_UILANG_FIRST + i, uiLangName(i));
                 if (i == cur) it->Check();
             }
-            const int at = mb->FindMenu(_("Se&ttings"));   // position derived, not hardcoded (FindMenu ignores the '&')
-            mb->Insert(at == wxNOT_FOUND ? (int)mb->GetMenuCount() : at + 1, loc, _("Locali&zation"));
+            const int at = m_menuRegistry.barPositionOf("menu.settings");   // symbolic lookup, not translated-label text
+            mb->Insert(at < 0 ? (int)mb->GetMenuCount() : at + 1, loc, _("Locali&zation"));
         }
-        // Recent Files (MRU) submenu near the bottom of the File menu, backed by wxFileHistory.
-        if (wxMenu* fileMenu = mb->GetMenu(0))
+        // Recent Files (MRU) submenu near the bottom of the File menu, backed by wxFileHistory. Inserted
+        // at the "slot.recentFiles" DynamicSlot the File menu's data table (menu_data_file.h) reserves,
+        // rather than recomputed position arithmetic.
         {
-            auto* recent = new wxMenu;
-            const size_t n = fileMenu->GetMenuItemCount();
-            fileMenu->Insert(n > 0 ? n - 1 : 0, wxID_ANY, _("Recent &Files"), recent);
-            m_fileHistory.UseMenu(recent);
-            auto* c = wxConfigBase::Get(); c->SetPath("/RecentFiles"); m_fileHistory.Load(*c); c->SetPath("/");
+            auto [fileMenu, insertAt] = m_menuRegistry.slot("slot.recentFiles");
+            if (fileMenu)
+            {
+                auto* recent = new wxMenu;
+                fileMenu->Insert(insertAt, wxID_ANY, _("Recent &Files"), recent);
+                m_fileHistory.UseMenu(recent);
+                auto* c = wxConfigBase::Get(); c->SetPath("/RecentFiles"); m_fileHistory.Load(*c); c->SetPath("/");
+            }
         }
 #ifdef WXNPP_HAS_BORDERLESS
         if constexpr (kBorderless)
@@ -4784,7 +4868,7 @@ private:
         setLexerForFile(path);
         updateEncodingMenuChecks();
     }
-    void onOpen() { wxFileDialog d(this, _("Open"), "", "", "All files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST); if (d.ShowModal() == wxID_OK) addDocument(d.GetPath(), wxFileNameFromPath(d.GetPath())); }
+    void onOpen() { wxFileDialog d(this, _("Open"), "", "", _("All files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST); if (d.ShowModal() == wxID_OK) addDocument(d.GetPath(), wxFileNameFromPath(d.GetPath())); }
     void onReload() { if (!m_path.empty()) loadFile(m_path); }
 
     // ---- View > Monitoring (tail -f): poll monitored files for external changes; reload + jump to end ----
@@ -4871,6 +4955,37 @@ private:
         if (sci(SCI_GETMODIFY)) { p->monitored = false; syncMonitoringUi(p); monStatus(_("Monitoring stopped (document was edited)")); updateMonTimer(); return; }
         monReloadTail(p, oldSize);
     }
+#ifdef __WXMSW__
+    // The unprivileged process can't write path (access denied) - ask, then relaunch itself elevated
+    // (via ShellExecuteExW "runas") with a hidden --elevated-write switch to copy just this one file in.
+    // The elevated child runs NO GUI code at all (see NppApp::OnInit) - it exists only to do that copy.
+    bool tryElevatedWrite(const wxString& path, const std::string& data)
+    {
+        if (wxMessageBox(
+                wxString::Format(_("\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnpp elevated to save this file?"), path),
+                _("Access Denied"), wxYES_NO | wxICON_QUESTION, this) != wxYES)
+            return false;
+
+        const wxString tempPath = wxFileName::CreateTempFileName("wxnpp_elev_");
+        if (tempPath.empty()) return false;
+        { wxFile tf(tempPath, wxFile::write); if (!tf.IsOpened()) return false; tf.Write(data.data(), data.size()); }
+
+        const wxString exePath = wxStandardPaths::Get().GetExecutablePath();
+        const wxString params = wxString::Format("--elevated-write \"%s\" \"%s\"", tempPath, path);
+        SHELLEXECUTEINFOW sei = {};
+        sei.cbSize = sizeof(sei);
+        sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+        sei.lpVerb = L"runas";
+        sei.lpFile = exePath.wc_str();
+        sei.lpParameters = params.wc_str();
+        sei.nShow = SW_HIDE;
+        if (!::ShellExecuteExW(&sei) || !sei.hProcess) { wxRemoveFile(tempPath); return false; }   // user declined the UAC prompt, or launch failed
+        ::WaitForSingleObject(sei.hProcess, 15000);   // give the elevated copy a moment; don't hang the UI forever
+        ::CloseHandle(sei.hProcess);
+        wxRemoveFile(tempPath);
+        return wxFileExists(path);
+    }
+#endif
     bool writeFile(const wxString& path)
     {
         const int len = static_cast<int>(sci(SCI_GETLENGTH));
@@ -4878,13 +4993,22 @@ private:
         sci(SCI_GETTEXT, len + 1, reinterpret_cast<sptr_t>(&b[0])); b.resize(len);
         const std::string out = encodeForPage(b, activePage());
         wxFile f(path, wxFile::write);
-        if (!f.IsOpened()) return false;
-        f.Write(out.data(), out.size()); sci(SCI_SETSAVEPOINT);
+        if (!f.IsOpened())
+        {
+#ifdef __WXMSW__
+            if (errno != EACCES || !tryElevatedWrite(path, out)) return false;
+#else
+            return false;
+#endif
+        }
+        else
+            f.Write(out.data(), out.size());
+        sci(SCI_SETSAVEPOINT);
         if (auto* p = activePage()) { p->path = path; clearRecovery(p); }   // content is safely on disk now - no recovery copy needed
         m_path = path; setDocTitle(wxFileNameFromPath(path)); setLexerForFile(path); addToMRU(path); return true;
     }
     void onSave() { if (m_path.empty()) onSaveAs(); else writeFile(m_path); }
-    void onSaveAs() { wxFileDialog d(this, _("Save As"), "", "new 1.txt", "All files (*.*)|*.*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT); if (d.ShowModal() == wxID_OK) writeFile(d.GetPath()); }
+    void onSaveAs() { wxFileDialog d(this, _("Save As"), "", "new 1.txt", _("All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT); if (d.ShowModal() == wxID_OK) writeFile(d.GetPath()); }
 
     // ----- edit actions --------------------------------------------------
     std::string getDocUtf8()
@@ -5165,7 +5289,7 @@ private:
     // ---- file operations ----
     void saveCopyAs()
     {
-        wxFileDialog dlg(this, _("Save a Copy As"), wxFileName(curPath()).GetPath(), wxFileNameFromPath(curPath()), "All files (*.*)|*.*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        wxFileDialog dlg(this, _("Save a Copy As"), wxFileName(curPath()).GetPath(), wxFileNameFromPath(curPath()), _("All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
         if (dlg.ShowModal() != wxID_OK) return;
         const std::string body = encodeForPage(getDocUtf8(), activePage());
         wxFile f(dlg.GetPath(), wxFile::write);
@@ -5175,7 +5299,7 @@ private:
     {
         const wxString p = curPath();
         if (p.empty()) { notImpl(_("Rename (save the file first)")); return; }
-        wxFileDialog dlg(this, _("Rename"), wxFileName(p).GetPath(), wxFileNameFromPath(p), "All files (*.*)|*.*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        wxFileDialog dlg(this, _("Rename"), wxFileName(p).GetPath(), wxFileNameFromPath(p), _("All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
         if (dlg.ShowModal() != wxID_OK) return;
         if (wxRenameFile(p, dlg.GetPath()))
         { if (auto* ep = activePage()) { ep->path = dlg.GetPath(); ep->title = wxFileNameFromPath(dlg.GetPath()); setLexerForFile(dlg.GetPath()); refreshTab(ep); SetTitle(ep->title + " - wxNotepad++"); } }
@@ -5443,7 +5567,7 @@ private:
     {
 #ifdef __WXMSW__
         wxFileDialog dlg(this, wxString::Format(_("%s - generate from files"), name), wxEmptyString, wxEmptyString,
-                          "All files (*.*)|*.*", wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
+                          _("All files (*.*)|*.*"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
         if (dlg.ShowModal() != wxID_OK) return;
         wxArrayString paths; dlg.GetPaths(paths);
         wxString out;
@@ -5848,7 +5972,7 @@ private:
         ensureFindResultsPanel();
         m_findResults->SetReadOnly(false); m_findResults->ClearAll(); m_fifJump.clear();
         auto out = [&](const wxString& txt, const wxString& file, int line) { m_findResults->AppendText(txt + "\n"); m_fifJump.push_back({ file, line }); };
-        out(wxString::Format("Search \"%s\" in %s  (%s)", o.find, dir, filters), "", -1);
+        out(wxString::Format(_("Search \"%s\" in %s  (%s)"), o.find, dir, filters), "", -1);
 
         int hits = 0, hitFiles = 0, repl = 0, replFiles = 0;
         for (const wxString& file : files)
@@ -5868,7 +5992,7 @@ private:
                     int ne = m_fifScratch->GetTargetEnd(); end += (ne - e); if (e == s) ++ne;
                     m_fifScratch->SetTargetStart(ne); m_fifScratch->SetTargetEnd(end); ++n;
                 }
-                if (n > 0) { wxFile w(file, wxFile::write); if (w.IsOpened()) w.Write(m_fifScratch->GetText()); ++replFiles; repl += n; out(wxString::Format("  %s  (%d replaced)", file, n), file, 0); }
+                if (n > 0) { wxFile w(file, wxFile::write); if (w.IsOpened()) w.Write(m_fifScratch->GetText()); ++replFiles; repl += n; out(wxString::Format(_("  %s  (%d replaced)"), file, n), file, 0); }
             }
             else
             {
@@ -5881,7 +6005,7 @@ private:
                     const int line = m_fifScratch->LineFromPosition(s);
                     if (n == 0) out(wxString::Format("  %s", file), file, 0);
                     wxString lt = m_fifScratch->GetTextRange(m_fifScratch->PositionFromLine(line), m_fifScratch->GetLineEndPosition(line));
-                    out(wxString::Format("    Line %d:  %s", line + 1, lt.Trim(true).Trim(false)), file, line);
+                    out(wxString::Format(_("    Line %d:  %s"), line + 1, lt.Trim(true).Trim(false)), file, line);
                     ++n; ++hits; pos = (e > s) ? e : e + 1;
                 }
                 if (n > 0) ++hitFiles;
@@ -6020,6 +6144,7 @@ private:
         c->Read("IntegratedBar", &m_integratedBar, false);
         m_themeMode = (int)readThemeMode();   // also resolved in OnInit (before the frame/config exist as members here)
         c->Read("AskBeforeClose", &m_askBeforeClose, false);
+        c->Read("ReuseInstance", &m_reuseInstance, false);
         c->Read("Editing/CustomGutterColour", &m_customGutterColor, false);
         // Default swatch (only shown/used before the user has ever picked a colour themselves) matches
         // the current theme's tone instead of a fixed light gray - a bright swatch read as a jarring
@@ -6127,6 +6252,11 @@ private:
         // rather than blocking on a Save/Don't Save/Cancel prompt every time.
         auto* cbAskClose = new wxCheckBox(gen, wxID_ANY, _("Ask before closing unsaved changes"));
         cbAskClose->SetValue(m_askBeforeClose); row(gs, cbAskClose);
+        // Off by default: each launch opens its own window, like today. When on, a second launch hands
+        // its file args to the first window over IPC and exits instead of opening a new one (-n/-r on
+        // the command line override this per-launch either way).
+        auto* cbReuseInstance = new wxCheckBox(gen, wxID_ANY, _("Reuse an existing window"));
+        cbReuseInstance->SetValue(m_reuseInstance); row(gs, cbReuseInstance);
 #ifdef WXNPP_HAS_BORDERLESS
         auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, _("Show integrated top bar"));
         cbIntBar->SetValue(m_integratedBar); row(gs, cbIntBar);
@@ -6258,7 +6388,7 @@ private:
                                      3, eolChoices, 1, wxRA_SPECIFY_COLS);
         rbEol->SetSelection(m_defaultEol == SC_EOL_LF ? 1 : (m_defaultEol == SC_EOL_CR ? 2 : 0));
         nds->Add(rbEol, 0, wxALL, 10);
-        const wxString encChoices[5] = { "UTF-8", "UTF-8 with BOM", "UTF-16 LE", "UTF-16 BE", "ANSI" };
+        const wxString encChoices[5] = { _("UTF-8"), _("UTF-8 with BOM"), _("UTF-16 LE"), _("UTF-16 BE"), _("ANSI") };
         auto* rbEnc = new wxRadioBox(nd, wxID_ANY, _("Encoding"), wxDefaultPosition, wxDefaultSize,
                                      5, encChoices, 1, wxRA_SPECIFY_COLS);
         rbEnc->SetSelection((m_defaultEncoding >= 0 && m_defaultEncoding <= 4) ? m_defaultEncoding : 0);
@@ -6266,7 +6396,7 @@ private:
         auto* lrow = new wxBoxSizer(wxHORIZONTAL);
         lrow->Add(new wxStaticText(nd, wxID_ANY, _("Default language:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* chLang = new wxChoice(nd, wxID_ANY);
-        chLang->Append("Normal Text");
+        chLang->Append(_("Normal Text"));
         { size_t ln; const NppLang* lt = nppLangTable(ln); int sel = 0;
           for (size_t i = 0; i < ln; ++i) { chLang->Append(lt[i].name); if (lt[i].id == m_defaultLangId) sel = (int)i + 1; }
           chLang->SetSelection(sel); }
@@ -6344,7 +6474,9 @@ private:
         const bool newIntBar = cbIntBar->GetValue();
 #endif
         const int newIconStyle = chIconStyle->GetSelection();
-        bool needRestart = (newThemeMode != m_themeMode) || tabRecentChanged || (newUi != curUi) || (newIconStyle != m_iconStyle);
+        const bool newReuseInstance = cbReuseInstance->GetValue();
+        bool needRestart = (newThemeMode != m_themeMode) || tabRecentChanged || (newUi != curUi) || (newIconStyle != m_iconStyle)
+                         || (newReuseInstance != m_reuseInstance);
 #ifdef WXNPP_HAS_BORDERLESS
         needRestart = needRestart || (newIntBar != m_integratedBar);
 #endif
@@ -6357,6 +6489,7 @@ private:
                 if (newIntBar != m_integratedBar) cfg->Write("IntegratedBar", newIntBar);
 #endif
                 if (newIconStyle != m_iconStyle) cfg->Write("ToolbarIconStyle", (long)newIconStyle);
+                if (newReuseInstance != m_reuseInstance) cfg->Write("ReuseInstance", newReuseInstance);
             });
     }
 
@@ -6436,9 +6569,7 @@ private:
     }
     void appendMacroMenuItems()   // (re)list the saved macros at the bottom of the Macro menu
     {
-        auto* mb = menuBar(); if (!mb) return;
-        const int mi = mb->FindMenu("Macro"); if (mi == wxNOT_FOUND) return;
-        wxMenu* menu = mb->GetMenu(mi);
+        wxMenu* menu = m_menuRegistry.find("menu.macro"); if (!menu) return;
         for (int id = myID_MACRO_ITEM; id < myID_MACRO_ITEM + 200; ++id) if (auto* it = menu->FindItem(id)) menu->Destroy(it);
         if (!m_savedMacros.empty() && !m_macroSepAdded) { menu->AppendSeparator(); m_macroSepAdded = true; }
         for (size_t i = 0; i < m_savedMacros.size(); ++i) menu->Append(myID_MACRO_ITEM + (int)i, m_savedMacros[i].first);
@@ -6582,7 +6713,8 @@ private:
     void onStyleConfig()   // Settings > Style Configurator: theme picker + per-language token style editor (like N++)
     {
         const wxString original = m_themeName;
-        wxDialog dlg(this, wxID_ANY, "Style Configurator", wxDefaultPosition, wxSize(680, 440));
+        const wxString kGlobalStyles = _("Global Styles");   // both displayed AND compared-against below - must be the same translated value
+        wxDialog dlg(this, wxID_ANY, _("Style Configurator"), wxDefaultPosition, wxSize(680, 440));
         auto* themeRow = new wxBoxSizer(wxHORIZONTAL);
         themeRow->Add(new wxStaticText(&dlg, wxID_ANY, _("Select theme:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* themeCombo = new wxChoice(&dlg, wxID_ANY, wxDefaultPosition, wxSize(220, -1), availableThemes());
@@ -6598,31 +6730,31 @@ private:
         eg->Add(new wxStaticText(&dlg, wxID_ANY, _("Foreground colour:")), 0, wxALIGN_CENTRE_VERTICAL); eg->Add(fgPick, 0);
         eg->Add(new wxStaticText(&dlg, wxID_ANY, _("Background colour:")), 0, wxALIGN_CENTRE_VERTICAL); eg->Add(bgPick, 0);
         eg->Add(cbBold, 0); eg->Add(cbItalic, 0);
-        auto* edBox = new wxStaticBoxSizer(wxVERTICAL, &dlg, "Style settings"); edBox->Add(eg, 0, wxALL, 8);
-        auto col = [&](const char* cap, wxWindow* w){ auto* s = new wxBoxSizer(wxVERTICAL); s->Add(new wxStaticText(&dlg, wxID_ANY, cap), 0, wxBOTTOM, 4); s->Add(w, 1, wxEXPAND); return s; };
+        auto* edBox = new wxStaticBoxSizer(wxVERTICAL, &dlg, _("Style settings")); edBox->Add(eg, 0, wxALL, 8);
+        auto col = [&](const wxString& cap, wxWindow* w){ auto* s = new wxBoxSizer(wxVERTICAL); s->Add(new wxStaticText(&dlg, wxID_ANY, cap), 0, wxBOTTOM, 4); s->Add(w, 1, wxEXPAND); return s; };
         auto* mid = new wxBoxSizer(wxHORIZONTAL);
-        mid->Add(col("Language:", langList), 0, wxEXPAND | wxRIGHT, 10);
-        mid->Add(col("Style:", styleList), 0, wxEXPAND | wxRIGHT, 10);
+        mid->Add(col(_("Language:"), langList), 0, wxEXPAND | wxRIGHT, 10);
+        mid->Add(col(_("Style:"), styleList), 0, wxEXPAND | wxRIGHT, 10);
         mid->Add(edBox, 1, wxEXPAND);
         auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
         btn->Add(new wxButton(&dlg, wxID_OK, _("Save && Close")), 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL);
         top->Add(themeRow, 0, wxALL, 12); top->Add(mid, 1, wxEXPAND | wxLEFT | wxRIGHT, 12); top->Add(btn, 0, wxEXPAND | wxALL, 12);
         dlg.SetSizer(top);
-        auto fillLangs = [&]{ langList->Clear(); langList->Append("Global Styles"); for (auto& kv : m_theme.lexers) langList->Append(kv.first); };
+        auto fillLangs = [&]{ langList->Clear(); langList->Append(kGlobalStyles); for (auto& kv : m_theme.lexers) langList->Append(kv.first); };
         auto fillStyles = [&]{
             styleList->Clear(); const wxString lang = langList->GetStringSelection();
-            if (lang == "Global Styles") { for (auto& kv : m_theme.global) styleList->Append(kv.first); }
-            else { auto it = m_theme.lexers.find(lang); if (it != m_theme.lexers.end()) for (auto& s : it->second) styleList->Append(s.name.empty() ? wxString::Format("Style %d", s.id) : s.name); }
+            if (lang == kGlobalStyles) { for (auto& kv : m_theme.global) styleList->Append(kv.first); }
+            else { auto it = m_theme.lexers.find(lang); if (it != m_theme.lexers.end()) for (auto& s : it->second) styleList->Append(s.name.empty() ? wxString::Format(_("Style %d"), s.id) : s.name); }
         };
         auto loadStyle = [&]{
             const wxString lang = langList->GetStringSelection(); const int si = styleList->GetSelection(); if (si < 0) return;
-            if (lang == "Global Styles") { auto it = m_theme.global.begin(); std::advance(it, si); fgPick->SetColour(bgrToColour(it->second.first)); bgPick->SetColour(it->second.second < 0 ? *wxWHITE : bgrToColour(it->second.second)); cbBold->Disable(); cbItalic->Disable(); }
+            if (lang == kGlobalStyles) { auto it = m_theme.global.begin(); std::advance(it, si); fgPick->SetColour(bgrToColour(it->second.first)); bgPick->SetColour(it->second.second < 0 ? *wxWHITE : bgrToColour(it->second.second)); cbBold->Disable(); cbItalic->Disable(); }
             else { auto it = m_theme.lexers.find(lang); if (it == m_theme.lexers.end() || si >= (int)it->second.size()) return; const StyleDef& s = it->second[si]; fgPick->SetColour(bgrToColour(s.fg)); bgPick->SetColour(s.bg < 0 ? *wxWHITE : bgrToColour(s.bg)); cbBold->Enable(); cbItalic->Enable(); cbBold->SetValue((s.fontStyle & 1) != 0); cbItalic->SetValue((s.fontStyle & 2) != 0); }
         };
         auto applyEdit = [&]{
             const wxString lang = langList->GetStringSelection(); const int si = styleList->GetSelection(); if (si < 0) return;
-            if (lang == "Global Styles") { auto it = m_theme.global.begin(); std::advance(it, si); it->second.first = colourToBgr(fgPick->GetColour()); it->second.second = colourToBgr(bgPick->GetColour()); }
+            if (lang == kGlobalStyles) { auto it = m_theme.global.begin(); std::advance(it, si); it->second.first = colourToBgr(fgPick->GetColour()); it->second.second = colourToBgr(bgPick->GetColour()); }
             else { auto it = m_theme.lexers.find(lang); if (it == m_theme.lexers.end() || si >= (int)it->second.size()) return; StyleDef& s = it->second[si]; s.fg = colourToBgr(fgPick->GetColour()); s.bg = colourToBgr(bgPick->GetColour()); s.fontStyle = (cbBold->GetValue() ? 1 : 0) | (cbItalic->GetValue() ? 2 : 0); }
             applyEditorTheme(m_dark); if (auto* p = activePage()) setLexerForFile(p->path); if (m_stc) m_stc->Refresh();
         };
@@ -6641,7 +6773,7 @@ private:
     }
     void importStyleTheme()
     {
-        wxFileDialog d(this, _("Import style theme(s)"), "", "", "Theme files (*.xml)|*.xml", wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
+        wxFileDialog d(this, _("Import style theme(s)"), "", "", _("Theme files (*.xml)|*.xml"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
         if (d.ShowModal() != wxID_OK) return;
         wxArrayString paths; d.GetPaths(paths);
         const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\themes";
@@ -7316,15 +7448,15 @@ private:
     }
     void showAbout()
     {
-        wxDialog dlg(this, wxID_ANY, "About wxNotepad++");
+        wxDialog dlg(this, wxID_ANY, _("About wxNotepad++"));
         auto* s = new wxBoxSizer(wxVERTICAL);
         s->Add(new wxStaticBitmap(&dlg, wxID_ANY, wxBitmapBundle::FromSVG(APP_ICON_SVG, wxSize(72, 72))),
                0, wxALIGN_CENTRE | wxTOP, 18);
         s->Add(new wxStaticText(&dlg, wxID_ANY,
-                   "wxNotepad++\n\n"
-                   "A cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\n"
-                   "a native Scintilla editor with dark/light themes and plugin support.\n\n"
-                   "Independent project - not affiliated with or endorsed by Notepad++."),
+                   _("wxNotepad++\n\n"
+                     "A cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\n"
+                     "a native Scintilla editor with dark/light themes and plugin support.\n\n"
+                     "Independent project - not affiliated with or endorsed by Notepad++.")),
                0, wxALL, 16);
         s->Add(dlg.CreateButtonSizer(wxOK), 0, wxALL | wxALIGN_RIGHT, 10);
         dlg.SetSizerAndFit(s);
@@ -7738,7 +7870,7 @@ private:
             case IDM_LANG_UDLCOLLECTION_PROJECT_SITE: wxLaunchDefaultBrowser("https://github.com/notepad-plus-plus/userDefinedLanguages"); break;
             case IDM_DEBUGINFO: themedInfo(wxString::Format(_("wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"),
                 wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER, wxGetOsDescription(), wxStandardPaths::Get().GetExecutablePath()), _("Debug Info")); break;
-            case IDM_CMDLINEARGUMENTS: themedInfo(_("Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs."), _("Command Line Arguments")); break;
+            case IDM_CMDLINEARGUMENTS: themedInfo(_("Usage: wxnpp [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."), _("Command Line Arguments")); break;
 
             case IDM_EXECUTE: onRun(); break;   // Run... (F5)
 
@@ -7869,6 +8001,7 @@ private:
     wxStyledTextCtrl*  m_fifScratch  = nullptr;   // hidden scratch buffer for searching file contents
     std::vector<std::pair<wxString, int>> m_fifJump;   // results panel line -> (file, 0-based editor line)
     wxFileHistory      m_fileHistory{ recentMaxFromConfig() };   // Recent Files (MRU); max read from config at construction (restart-to-apply)
+    MenuRegistry       m_menuRegistry;   // symbolicName -> wxMenu*/bar position/DynamicSlot, built once in buildMenuBar() (see menu_builder.h)
     wxStyledTextCtrl* m_stc = nullptr;   // the cross-platform editor view; its native HWND on Windows == m_sci
     wxStyledTextCtrl* m_docMap = nullptr;   // Document Map (minimap): a second view sharing the active document
     wxTreeCtrl* m_funcList = nullptr;       // Function List: per-file symbol tree (regex-parsed)
@@ -7898,6 +8031,7 @@ private:
     bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON like Notepad++
     int         m_themeMode = 1;   // Preferences > General "Theme": 0 = System, 1 = Dark, 2 = Light (restart-to-apply)
     bool        m_askBeforeClose = false;   // Preferences > General "Ask before closing unsaved changes" (off by default, like Notepad++)
+    bool        m_reuseInstance = false;    // Preferences > General "Reuse an existing window" (restart-to-apply; read in OnInit)
     bool        m_customGutterColor = false;   // Preferences > Editing "Use a custom line-number margin colour"
     long        m_gutterColorValue = 0xE0E0E0;   // Scintilla BGR-packed int (see bgrToColour/colourToBgr); only used when m_customGutterColor
     wxString    m_fontFace = "JetBrains Mono";   // Preferences > Editing "Font"; effectiveFontFace() falls back to this if it's no longer installed
@@ -7946,7 +8080,80 @@ class NppApp : public wxApp
 public:
     bool OnInit() override
     {
+#ifdef __WXMSW__
+        // Hidden UAC-elevation helper mode (see writeFile()): a normal, unprivileged wxnpp process that hit
+        // access-denied writes its buffer to a temp file, then relaunches itself elevated with this switch
+        // to do just the copy - no GUI, no locale/theme setup, nothing else ever runs elevated.
+        if (argc >= 4 && wxString(argv[1]) == "--elevated-write")
+        {
+            wxCopyFile(argv[2], argv[3], true);
+            return false;   // wx skips the main loop and exits immediately
+        }
+#endif
         SetAppName("wxNotepadPlusPlus_spike");                  // stable key for the persisted theme choice
+
+        // ---- command line: -g/--goto, -e/--encoding, -n/--new-instance, -r/--reuse-instance, file... ----
+        wxCmdLineParser parser(argc, argv);
+        parser.SetSwitchChars("-");                              // don't also accept "/" (ambiguous with paths)
+        parser.AddOption("g", "goto", _("open at line[,col]"), wxCMD_LINE_VAL_STRING);
+        parser.AddOption("e", "encoding", _("force encoding: ansi|utf8|utf8bom|utf16le|utf16be"), wxCMD_LINE_VAL_STRING);
+        parser.AddSwitch("n", "new-instance", _("always open a new window"));
+        parser.AddSwitch("r", "reuse-instance", _("reuse an already-running window"));
+        parser.AddParam(_("file"), wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_MULTIPLE | wxCMD_LINE_PARAM_OPTIONAL);
+        if (parser.Parse() != 0) return false;                   // --help/bad args: wx already showed usage
+
+        wxArrayString files;
+        for (size_t i = 0; i < parser.GetParamCount(); ++i)
+        {
+            wxFileName fn(parser.GetParam(i));
+            fn.MakeAbsolute();                                    // an IPC handoff runs in a different process's cwd
+            files.Add(fn.GetFullPath());
+        }
+        int gotoLine = -1, gotoCol = -1, forceEnc = -1;
+        wxString gotoArg, encArg;
+        if (parser.Found("g", &gotoArg))
+        {
+            long l = -1, c = -1;
+            gotoArg.BeforeFirst(',').ToLong(&l);
+            if (gotoArg.Contains(",")) gotoArg.AfterFirst(',').ToLong(&c);
+            gotoLine = (int)l; gotoCol = (int)c;
+        }
+        if (parser.Found("e", &encArg)) forceEnc = encodingFromName(encArg);
+        const bool forceNew = parser.Found("n");
+        const bool forceReuse = parser.Found("r");
+
+        // ---- single-instance "reuse window" handoff (Preferences > General; off by default) -----------
+        bool reuseSetting = false;
+        wxConfigBase::Get()->Read("ReuseInstance", &reuseSetting, false);
+        bool startIpcServer = false;
+        if (forceReuse || (reuseSetting && !forceNew))
+        {
+            m_checker = new wxSingleInstanceChecker(wxString::Format("wxnpp-%s", wxGetUserId()));
+            if (m_checker->IsAnotherRunning())
+            {
+                wxLogNull noWarn;                                 // a refused/failed connection is handled below
+                wxClient client;
+                wxConnectionBase* conn = client.MakeConnection(wxEmptyString, kIpcServiceName, kIpcTopic);
+                if (conn)
+                {
+                    wxString payload;
+                    for (const auto& f : files) payload += f + "\n";
+                    if (gotoLine >= 0) payload += wxString::Format("\x01GOTO=%d,%d\n", gotoLine, gotoCol);
+                    if (forceEnc >= 0) payload += wxString::Format("\x01ENC=%d\n", forceEnc);
+                    conn->Execute(payload);
+                    conn->Disconnect();
+                    delete conn;
+                    return false;                                 // handed off to the running instance; done
+                }
+                // the lock holder isn't answering IPC (e.g. crashed mid-startup) - fall through and open
+                // our own window rather than getting stuck; don't start a second server under this name.
+            }
+            else
+            {
+                startIpcServer = true;                            // we're first; later launches will find us
+            }
+        }
+
         wxImage::AddHandler(new wxPNGHandler());                // needed to load raster icons (iconColored) - SVG icons go through NanoSVG instead and don't need this
 #ifdef __WXMSW__
         // Bundle JetBrains Mono (SIL OFL 1.1, resources/fonts/) as the default editor font instead of
@@ -7985,14 +8192,18 @@ public:
             auto* frame = new NppIntegratedFrame(dark);
             frame->Show(true);
             frame->restoreSession();
-            for (int i = 1; i < argc; ++i) frame->openPath(argv[i]);
+            if (startIpcServer) { m_ipcServer = new NppIpcServer(); m_ipcServer->Create(kIpcServiceName); }
+            for (const auto& f : files) frame->openPath(f);
+            if (!files.IsEmpty()) frame->applyGotoAndEncoding(gotoLine, gotoCol, forceEnc);
             return true;
         }
 #endif
         auto* frame = new NppShellFrame(dark);
         frame->Show(true);
         frame->restoreSession();                                   // reopen files from a theme-restart
-        for (int i = 1; i < argc; ++i) frame->openPath(argv[i]);   // open any files passed on the command line
+        if (startIpcServer) { m_ipcServer = new NppIpcServer(); m_ipcServer->Create(kIpcServiceName); }
+        for (const auto& f : files) frame->openPath(f);             // open any files passed on the command line
+        if (!files.IsEmpty()) frame->applyGotoAndEncoding(gotoLine, gotoCol, forceEnc);
         return true;
     }
     int OnExit() override
@@ -8002,11 +8213,15 @@ public:
         ::RemoveFontResourceExW((fontDir + "JetBrainsMono-Regular.ttf").wc_str(), FR_PRIVATE, nullptr);
         ::RemoveFontResourceExW((fontDir + "JetBrainsMono-Bold.ttf").wc_str(), FR_PRIVATE, nullptr);
 #endif
+        delete m_ipcServer;
+        delete m_checker;
         return wxApp::OnExit();
     }
 
 private:
     wxLocale m_locale;   // must outlive OnInit() - destroying it would revert the process's locale
+    wxSingleInstanceChecker* m_checker = nullptr;   // held for the app's lifetime while "reuse window" is active
+    NppIpcServer* m_ipcServer = nullptr;            // ditto - accepts handoffs from later wxnpp launches
 };
 
 wxIMPLEMENT_APP(NppApp);

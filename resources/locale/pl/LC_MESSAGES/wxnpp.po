@@ -2399,3 +2399,165 @@ msgstr "Użyj niestandardowego koloru marginesu numerów linii"
 
 msgid "Font:"
 msgstr "Czcionka:"
+
+msgid "Open documents"
+msgstr "Otwarte dokumenty"
+
+msgid "Close current"
+msgstr "Zamknij bieżący"
+
+msgid "Match whole word only"
+msgstr "Dopasuj tylko całe słowo"
+
+msgid "wxNotepad++ on GitHub"
+msgstr "wxNotepad++ na GitHubie"
+
+msgid "wxNotepad++ Releases"
+msgstr "Wydania wxNotepad++"
+
+msgid "wxNotepad++ Documentation"
+msgstr "Dokumentacja wxNotepad++"
+
+msgid "Report an Issue"
+msgstr "Zgłoś problem"
+
+msgid "Count"
+msgstr "Policz"
+
+msgid "Replace All"
+msgstr "Zamień wszystko"
+
+msgid "Replace in Files"
+msgstr "Zamień w plikach"
+
+msgid "Mark All"
+msgstr "Zaznacz wszystko"
+
+msgid "Clear Marks"
+msgstr "Wyczyść znaczniki"
+
+msgid "&Normal"
+msgstr "&Normalny"
+
+msgid "E&xtended (\\n, \\r, \\t, \\0, \\x...)"
+msgstr "&Rozszerzony (\\n, \\r, \\t, \\0, \\x...)"
+
+msgid "Re&gular expression"
+msgstr "Wyrażenie re&gularne"
+
+msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnpp elevated to save this file?"
+msgstr "Nie można zapisać pliku \"%s\" z bieżącymi uprawnieniami.\n\nUruchomić ponownie wxnpp z podwyższonymi uprawnieniami, aby zapisać ten plik?"
+
+msgid "Access Denied"
+msgstr "Odmowa dostępu"
+
+msgid "Reuse an existing window"
+msgstr "Użyj istniejącego okna"
+
+msgid "Usage: wxnpp [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
+msgstr "Użycie: wxnpp [opcje] [pliki...]\n\n-g, --goto <wiersz[,kolumna]>   przejdź do tego wiersza (i kolumny) w ostatnio otwartym pliku\n-e, --encoding <nazwa>          wymuś kodowanie: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance              zawsze otwórz nowe okno\n-r, --reuse-instance            użyj już uruchomionego okna\n\nPliki podane w wierszu poleceń są otwierane w kartach."
+
+msgid "open at line[,col]"
+msgstr "przejdź do wiersza[,kolumny]"
+
+msgid "force encoding: ansi|utf8|utf8bom|utf16le|utf16be"
+msgstr "wymuś kodowanie: ansi|utf8|utf8bom|utf16le|utf16be"
+
+msgid "always open a new window"
+msgstr "zawsze otwieraj nowe okno"
+
+msgid "reuse an already-running window"
+msgstr "użyj już uruchomionego okna"
+
+msgid "Recovered"
+msgstr "Odzyskany"
+
+msgid "NewLanguage"
+msgstr "NowyJęzyk"
+
+msgid "file"
+msgstr "plik"
+
+msgid "Dec"
+msgstr "Dziesiętny"
+
+msgid "Oct"
+msgstr "Ósemkowy"
+
+msgid "Bin"
+msgstr "Binarny"
+
+msgid "Choose folder"
+msgstr "Wybierz folder"
+
+msgid "Run..."
+msgstr "Uruchom..."
+
+msgid "Select a program to run"
+msgstr "Wybierz program do uruchomienia"
+
+msgid "Programs (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|All files (*.*)|*.*"
+msgstr "Programy (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|Wszystkie pliki (*.*)|*.*"
+
+msgid "Workspace (*.xml)|*.xml"
+msgstr "Obszar roboczy (*.xml)|*.xml"
+
+msgid "Session files (*.xml)|*.xml|All files (*.*)|*.*"
+msgstr "Pliki sesji (*.xml)|*.xml|Wszystkie pliki (*.*)|*.*"
+
+msgid "All files (*.*)|*.*"
+msgstr "Wszystkie pliki (*.*)|*.*"
+
+msgid "Theme files (*.xml)|*.xml"
+msgstr "Pliki motywów (*.xml)|*.xml"
+
+msgid "Style Configurator"
+msgstr "Konfigurator stylów"
+
+msgid "Style settings"
+msgstr "Ustawienia stylu"
+
+msgid "Language:"
+msgstr "Język:"
+
+msgid "Style:"
+msgstr "Styl:"
+
+msgid "Global Styles"
+msgstr "Style globalne"
+
+msgid "Style %d"
+msgstr "Styl %d"
+
+msgid "About wxNotepad++"
+msgstr "O programie wxNotepad++"
+
+msgid "wxNotepad++\n\nA cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\na native Scintilla editor with dark/light themes and plugin support.\n\nIndependent project - not affiliated with or endorsed by Notepad++."
+msgstr "wxNotepad++\n\nMiędzyplatformowa reimplementacja edytora w stylu Notepad++ oparta na wxWidgets:\nnatywny edytor Scintilla z jasnym/ciemnym motywem i obsługą wtyczek.\n\nProjekt niezależny - niezwiązany z Notepad++ ani przez niego nie wspierany."
+
+msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
+msgstr "Szukaj \"%s\"  (%d wystąpień w %d z %d przeszukanych plików)"
+
+msgid "Line %d:  %s"
+msgstr "Wiersz %d:  %s"
+
+msgid "Search \"%s\" in %s  (%s)"
+msgstr "Szukaj \"%s\" w %s  (%s)"
+
+msgid "  %s  (%d replaced)"
+msgstr "  %s  (%d zamienionych)"
+
+msgid "    Line %d:  %s"
+msgstr "    Wiersz %d:  %s"
+
+msgid "Normal Text"
+msgstr "Zwykły tekst"
+
+msgid "UTF-8 with BOM"
+msgstr "UTF-8 z BOM"
+
+msgid "UTF-16 LE"
+msgstr "UTF-16 LE"
+
+msgid "UTF-16 BE"
+msgstr "UTF-16 BE"
