@@ -3,6 +3,38 @@
 All notable changes to wxNotepad++ are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-07-06
+
+### Added
+- Command-line switches: `-g`/`--goto <line[,col]>` opens the last file given on the command line at
+  that position, `-e`/`--encoding <name>` (ansi/utf8/utf8bom/utf16le/utf16be) re-interprets it in a
+  forced encoding, and `-n`/`--new-instance` / `-r`/`--reuse-instance` override the instance-reuse
+  setting below for a single launch.
+- Preferences > General: "Reuse an existing window" (off by default). When on, launching wxnpp a
+  second time hands its file arguments to the already-running window over IPC and exits instead of
+  opening a new one.
+- Saving to a location your account can't write to (e.g. `C:\Program Files\...`) now offers to
+  relaunch wxnpp elevated (UAC) to complete just that one save, instead of failing outright.
+
+### Changed
+- The menu bar is now built from data tables instead of one large hand-written function
+  (`src/menu_labels_*.h` / `src/menu_data_*.h` / `src/menu_builder.h`, replacing `src/npp_menu.h`) -
+  a mechanical, behavior-preserving refactor with no visible change, laying the groundwork for a
+  future menu reorganization.
+
+### Fixed
+- A full sweep of the UI turned up several strings that were never wired into the translation
+  system: a handful of tooltips, four Help-menu items, several Find/Replace dialog labels, the
+  Find in Files / Run / Style Configurator / About dialog titles and the About dialog's body text,
+  the Column Editor's number-format choices, several `wxFileDialog` file-type filters, the
+  Preferences encoding/default-language dropdowns, and the Find in Files result messages. All are
+  now translated into all 8 supported languages.
+- The Japanese, Chinese, and Korean translations of the Find/Replace-in-Files summary line
+  (e.g. "12 hits in 3 / 8 files") had their numbers in the wrong order relative to the English
+  source, so those languages were showing the wrong count next to each label.
+- The tab pin icon no longer forces an accent-green tint; it uses the same theme-aware color as
+  other toolbar icons.
+
 ## [0.3.0] - 2026-07-06
 
 ### Added

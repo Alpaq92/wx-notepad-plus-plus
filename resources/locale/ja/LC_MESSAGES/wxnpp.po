@@ -1978,7 +1978,7 @@ msgid "Replace in Files: %d occurrence(s) in %d file(s)"
 msgstr "ファイル内置換: %d 個の一致（%d 個のファイル内）"
 
 msgid "Find in Files: %d hit(s) in %d / %d file(s)"
-msgstr "ファイル内検索: %d / %d 個のファイル中 %d 件ヒット"
+msgstr "ファイル内検索: %2$d / %3$d 個のファイル中 %1$d 件ヒット"
 
 msgid "No search results yet - run Find in Files or Find All first"
 msgstr "検索結果がまだありません - 先に「ファイル内検索」または「すべて検索」を実行してください"
@@ -2399,3 +2399,165 @@ msgstr "行番号マージンにカスタムカラーを使用する"
 
 msgid "Font:"
 msgstr "フォント:"
+
+msgid "Open documents"
+msgstr "開いているドキュメント"
+
+msgid "Close current"
+msgstr "現在のドキュメントを閉じる"
+
+msgid "Match whole word only"
+msgstr "単語単位でのみ一致"
+
+msgid "wxNotepad++ on GitHub"
+msgstr "GitHub上のwxNotepad++"
+
+msgid "wxNotepad++ Releases"
+msgstr "wxNotepad++ のリリース"
+
+msgid "wxNotepad++ Documentation"
+msgstr "wxNotepad++ のドキュメント"
+
+msgid "Report an Issue"
+msgstr "問題を報告"
+
+msgid "Count"
+msgstr "カウント"
+
+msgid "Replace All"
+msgstr "すべて置換"
+
+msgid "Replace in Files"
+msgstr "ファイル内で置換"
+
+msgid "Mark All"
+msgstr "すべてマーク"
+
+msgid "Clear Marks"
+msgstr "マークをクリア"
+
+msgid "&Normal"
+msgstr "標準(&N)"
+
+msgid "E&xtended (\\n, \\r, \\t, \\0, \\x...)"
+msgstr "拡張(&E) (\\n, \\r, \\t, \\0, \\x...)"
+
+msgid "Re&gular expression"
+msgstr "正規表現(&G)"
+
+msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnpp elevated to save this file?"
+msgstr "現在の権限では \"%s\" に書き込めません。\n\nこのファイルを保存するために、wxnpp を管理者権限で再起動しますか?"
+
+msgid "Access Denied"
+msgstr "アクセスが拒否されました"
+
+msgid "Reuse an existing window"
+msgstr "既存のウィンドウを再利用する"
+
+msgid "Usage: wxnpp [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
+msgstr "使い方: wxnpp [オプション] [ファイル...]\n\n-g, --goto <行[,列]>   最後に開いたファイルのこの行(と列)に移動する\n-e, --encoding <名前>   エンコーディングを強制指定: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance      常に新しいウィンドウを開く\n-r, --reuse-instance    既に実行中のウィンドウを再利用する\n\nコマンドラインで指定したファイルはタブで開かれます。"
+
+msgid "open at line[,col]"
+msgstr "行[,列]に移動"
+
+msgid "force encoding: ansi|utf8|utf8bom|utf16le|utf16be"
+msgstr "エンコーディングを強制指定: ansi|utf8|utf8bom|utf16le|utf16be"
+
+msgid "always open a new window"
+msgstr "常に新しいウィンドウを開く"
+
+msgid "reuse an already-running window"
+msgstr "既に実行中のウィンドウを再利用する"
+
+msgid "Recovered"
+msgstr "復元済み"
+
+msgid "NewLanguage"
+msgstr "新しい言語"
+
+msgid "file"
+msgstr "ファイル"
+
+msgid "Dec"
+msgstr "10進数"
+
+msgid "Oct"
+msgstr "8進数"
+
+msgid "Bin"
+msgstr "2進数"
+
+msgid "Choose folder"
+msgstr "フォルダーを選択"
+
+msgid "Run..."
+msgstr "実行..."
+
+msgid "Select a program to run"
+msgstr "実行するプログラムを選択"
+
+msgid "Programs (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|All files (*.*)|*.*"
+msgstr "プログラム (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|すべてのファイル (*.*)|*.*"
+
+msgid "Workspace (*.xml)|*.xml"
+msgstr "ワークスペース (*.xml)|*.xml"
+
+msgid "Session files (*.xml)|*.xml|All files (*.*)|*.*"
+msgstr "セッションファイル (*.xml)|*.xml|すべてのファイル (*.*)|*.*"
+
+msgid "All files (*.*)|*.*"
+msgstr "すべてのファイル (*.*)|*.*"
+
+msgid "Theme files (*.xml)|*.xml"
+msgstr "テーマファイル (*.xml)|*.xml"
+
+msgid "Style Configurator"
+msgstr "スタイル設定"
+
+msgid "Style settings"
+msgstr "スタイル設定"
+
+msgid "Language:"
+msgstr "言語:"
+
+msgid "Style:"
+msgstr "スタイル:"
+
+msgid "Global Styles"
+msgstr "グローバルスタイル"
+
+msgid "Style %d"
+msgstr "スタイル %d"
+
+msgid "About wxNotepad++"
+msgstr "wxNotepad++ について"
+
+msgid "wxNotepad++\n\nA cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\na native Scintilla editor with dark/light themes and plugin support.\n\nIndependent project - not affiliated with or endorsed by Notepad++."
+msgstr "wxNotepad++\n\nwxWidgets によるクロスプラットフォームな Notepad++ 風エディタの再実装:\nダーク/ライトテーマとプラグイン対応のネイティブ Scintilla エディタ。\n\n独立プロジェクトです - Notepad++ とは提携しておらず、その承認も受けていません。"
+
+msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
+msgstr "検索 \"%s\"  (%d件ヒット、検索した%dファイル中%dファイルで)"
+
+msgid "Line %d:  %s"
+msgstr "行 %d:  %s"
+
+msgid "Search \"%s\" in %s  (%s)"
+msgstr "検索 \"%s\"  対象: %s  (%s)"
+
+msgid "  %s  (%d replaced)"
+msgstr "  %s  (%d 件置換)"
+
+msgid "    Line %d:  %s"
+msgstr "    行 %d:  %s"
+
+msgid "Normal Text"
+msgstr "標準テキスト"
+
+msgid "UTF-8 with BOM"
+msgstr "UTF-8 (BOM付き)"
+
+msgid "UTF-16 LE"
+msgstr "UTF-16 LE"
+
+msgid "UTF-16 BE"
+msgstr "UTF-16 BE"

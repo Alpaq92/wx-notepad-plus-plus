@@ -99,6 +99,22 @@ Every push also builds all of these as CI artifacts (see `.github/workflows/buil
 `.github/workflows/release.yml`, which rebuilds everything and attaches it to a new GitHub Release.
 See [`CHANGELOG.md`](CHANGELOG.md) for release history.
 
+## Command line
+
+```
+wxnpp [options] [files...]
+
+-g, --goto <line[,col]>   go to this line (and column) in the last file opened
+-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be
+-n, --new-instance        always open a new window
+-r, --reuse-instance      reuse an already-running window
+```
+
+Files given on the command line are opened in tabs. By default every launch opens its own window;
+turning on Preferences > General > "Reuse an existing window" makes a second launch hand its files to
+the already-running window instead (over a local IPC connection) and exit — `-n`/`-r` override that
+setting for a single launch either way.
+
 ## License
 
 **GPL v3 today — with a committed plan to go permissive.** wxNotepad++ is an **independent

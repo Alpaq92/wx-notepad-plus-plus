@@ -97,6 +97,14 @@ target_link_libraries(wxnpp PRIVATE
     wx::core wx::aui wx::base wx::xml wx::stc
     lexilla)
 
+# Single-instance "reuse window" IPC (wxServer/wxClient/wxConnection): on Windows these map to the
+# DDE classes, which live in wx::base itself (src/msw/dde.cpp) - no extra link needed there. Everywhere
+# else they map to wxTCPServer/wxTCPClient/wxTCPConnection, which live in wxWidgets' separate "net"
+# component (src/common/sckipc.cpp) and must be linked explicitly.
+if(UNIX)
+    target_link_libraries(wxnpp PRIVATE wx::net)
+endif()
+
 # Optional integrated/borderless title bar (Settings > Preferences): link the vendored wxBorderlessFrame
 # where it exists + let the code use it (WXNPP_HAS_BORDERLESS). Off on macOS (keeps the native bar).
 if(WIN32 OR (UNIX AND NOT APPLE))

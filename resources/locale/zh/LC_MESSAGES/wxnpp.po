@@ -901,7 +901,7 @@ msgid "Find in Files"
 msgstr "在文件中查找"
 
 msgid "Find in Files: %d hit(s) in %d / %d file(s)"
-msgstr "在文件中查找：%d / %d 个文件中 %d 处匹配"
+msgstr "在文件中查找：%2$d / %3$d 个文件中 %1$d 处匹配"
 
 msgid "Find in Files: no such directory - %s"
 msgstr "在文件中查找：没有此目录 - %s"
@@ -1795,7 +1795,7 @@ msgid "Replace by space"
 msgstr "用空格代替"
 
 msgid "Replace in Files: %d occurrence(s) in %d file(s)"
-msgstr "文件内替换：%d 个文件中 %d 处匹配"
+msgstr "文件内替换：%2$d 个文件中 %1$d 处匹配"
 
 msgid "Replace with :"
 msgstr "替换为 :"
@@ -2400,3 +2400,165 @@ msgstr "为行号边距使用自定义颜色"
 
 msgid "Font:"
 msgstr "字体:"
+
+msgid "Open documents"
+msgstr "打开的文档"
+
+msgid "Close current"
+msgstr "关闭当前"
+
+msgid "Match whole word only"
+msgstr "仅匹配整个单词"
+
+msgid "wxNotepad++ on GitHub"
+msgstr "GitHub 上的 wxNotepad++"
+
+msgid "wxNotepad++ Releases"
+msgstr "wxNotepad++ 发行版"
+
+msgid "wxNotepad++ Documentation"
+msgstr "wxNotepad++ 文档"
+
+msgid "Report an Issue"
+msgstr "报告问题"
+
+msgid "Count"
+msgstr "计数"
+
+msgid "Replace All"
+msgstr "全部替换"
+
+msgid "Replace in Files"
+msgstr "在文件中替换"
+
+msgid "Mark All"
+msgstr "标记全部"
+
+msgid "Clear Marks"
+msgstr "清除标记"
+
+msgid "&Normal"
+msgstr "普通(&N)"
+
+msgid "E&xtended (\\n, \\r, \\t, \\0, \\x...)"
+msgstr "扩展(&E) (\\n, \\r, \\t, \\0, \\x...)"
+
+msgid "Re&gular expression"
+msgstr "正则表达式(&G)"
+
+msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnpp elevated to save this file?"
+msgstr "当前权限无法写入 \"%s\"。\n\n是否以提升的权限重新启动 wxnpp 以保存此文件?"
+
+msgid "Access Denied"
+msgstr "拒绝访问"
+
+msgid "Reuse an existing window"
+msgstr "重用现有窗口"
+
+msgid "Usage: wxnpp [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
+msgstr "用法: wxnpp [选项] [文件...]\n\n-g, --goto <行[,列]>   跳转到最后打开文件中的此行(和列)\n-e, --encoding <名称>   强制指定编码: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance      始终打开一个新窗口\n-r, --reuse-instance    重用一个已在运行的窗口\n\n命令行中指定的文件将在标签页中打开。"
+
+msgid "open at line[,col]"
+msgstr "跳转到行[,列]"
+
+msgid "force encoding: ansi|utf8|utf8bom|utf16le|utf16be"
+msgstr "强制指定编码: ansi|utf8|utf8bom|utf16le|utf16be"
+
+msgid "always open a new window"
+msgstr "始终打开一个新窗口"
+
+msgid "reuse an already-running window"
+msgstr "重用一个已在运行的窗口"
+
+msgid "Recovered"
+msgstr "已恢复"
+
+msgid "NewLanguage"
+msgstr "新语言"
+
+msgid "file"
+msgstr "文件"
+
+msgid "Dec"
+msgstr "十进制"
+
+msgid "Oct"
+msgstr "八进制"
+
+msgid "Bin"
+msgstr "二进制"
+
+msgid "Choose folder"
+msgstr "选择文件夹"
+
+msgid "Run..."
+msgstr "运行..."
+
+msgid "Select a program to run"
+msgstr "选择要运行的程序"
+
+msgid "Programs (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|All files (*.*)|*.*"
+msgstr "程序 (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|所有文件 (*.*)|*.*"
+
+msgid "Workspace (*.xml)|*.xml"
+msgstr "工作区 (*.xml)|*.xml"
+
+msgid "Session files (*.xml)|*.xml|All files (*.*)|*.*"
+msgstr "会话文件 (*.xml)|*.xml|所有文件 (*.*)|*.*"
+
+msgid "All files (*.*)|*.*"
+msgstr "所有文件 (*.*)|*.*"
+
+msgid "Theme files (*.xml)|*.xml"
+msgstr "主题文件 (*.xml)|*.xml"
+
+msgid "Style Configurator"
+msgstr "样式配置器"
+
+msgid "Style settings"
+msgstr "样式设置"
+
+msgid "Language:"
+msgstr "语言:"
+
+msgid "Style:"
+msgstr "样式:"
+
+msgid "Global Styles"
+msgstr "全局样式"
+
+msgid "Style %d"
+msgstr "样式 %d"
+
+msgid "About wxNotepad++"
+msgstr "关于 wxNotepad++"
+
+msgid "wxNotepad++\n\nA cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\na native Scintilla editor with dark/light themes and plugin support.\n\nIndependent project - not affiliated with or endorsed by Notepad++."
+msgstr "wxNotepad++\n\n基于 wxWidgets 的跨平台 Notepad++ 风格编辑器重新实现:\n原生 Scintilla 编辑器，支持深色/浅色主题和插件。\n\n独立项目 - 与 Notepad++ 无关，也未获得其认可。"
+
+msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
+msgstr "搜索 \"%s\"  (%d 处匹配，搜索的 %d 个文件中有 %d 个)"
+
+msgid "Line %d:  %s"
+msgstr "第 %d 行:  %s"
+
+msgid "Search \"%s\" in %s  (%s)"
+msgstr "搜索 \"%s\"  位置: %s  (%s)"
+
+msgid "  %s  (%d replaced)"
+msgstr "  %s  (已替换 %d 处)"
+
+msgid "    Line %d:  %s"
+msgstr "    第 %d 行:  %s"
+
+msgid "Normal Text"
+msgstr "普通文本"
+
+msgid "UTF-8 with BOM"
+msgstr "UTF-8 带 BOM"
+
+msgid "UTF-16 LE"
+msgstr "UTF-16 LE"
+
+msgid "UTF-16 BE"
+msgstr "UTF-16 BE"
