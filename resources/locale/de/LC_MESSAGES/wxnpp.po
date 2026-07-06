@@ -2378,3 +2378,24 @@ msgstr "Stil: Schlüsselwörter %d"
 
 msgid "Operators"
 msgstr "Operatoren"
+
+msgid "Theme:"
+msgstr "Design:"
+
+msgid "System"
+msgstr "System"
+
+msgid "Dark"
+msgstr "Dunkel"
+
+msgid "Light"
+msgstr "Hell"
+
+msgid "Ask before closing unsaved changes"
+msgstr "Vor dem Schließen ungespeicherter Änderungen fragen"
+
+msgid "Use a custom line-number margin colour"
+msgstr "Benutzerdefinierte Farbe für den Zeilennummern-Rand verwenden"
+
+msgid "Font:"
+msgstr "Schriftart:"

@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."   # repo root, as an absolute path (needed for the _srcdir macro below)
 
-VERSION="0.2.0"
+VERSION="0.3.0"
 TOPDIR="build/rpmbuild"
 OUTDIR="build/installer"
 SRCDIR="$(pwd)"

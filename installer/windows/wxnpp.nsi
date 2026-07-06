@@ -16,7 +16,7 @@
 !include "x64.nsh"
 
 !define APP_NAME    "wxNotepad++"
-!define APP_VERSION "0.2.0"
+!define APP_VERSION "0.3.0"
 !define APP_URL     "https://github.com/Alpaq92/wx-notepad-plus-plus"
 !define APP_EXE     "wxnpp.exe"
 !define ARP_KEY     "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"

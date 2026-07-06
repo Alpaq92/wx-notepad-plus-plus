@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."   # repo root
 
-VERSION="0.2.0"
+VERSION="0.3.0"
 APPDIR="build/AppDir"
 OUTDIR="build/installer"
 

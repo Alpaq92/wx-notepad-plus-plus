@@ -139,9 +139,7 @@ inline const NppLang* nppLangFind(int id)
     return nullptr;
 }
 
-// darkModeId: our extra restart-to-apply "Dark Mode" toggle (myID_DARKMODE),
-// added under Settings (real Notepad++ keeps dark mode under Settings too).
-inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
+inline void buildNppMainMenu(wxMenuBar* mb)
 {
     // ----------------------------------------------------------------- File
     {
@@ -750,8 +748,6 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         }
         settings->AppendSeparator();
         settings->Append(IDM_SETTING_EDITCONTEXTMENU, _("Edit Popup ContextMenu"));
-        settings->AppendSeparator();
-        settings->AppendCheckItem(darkModeId, _("&Dark Mode"));   // our restart-to-apply theme toggle
         mb->Append(settings, _("Se&ttings"));
     }
 
@@ -834,13 +830,12 @@ inline void buildNppMainMenu(wxMenuBar* mb, int darkModeId)
         auto* help = new wxMenu;
         help->Append(IDM_CMDLINEARGUMENTS, _("Command Line Arguments..."));
         help->AppendSeparator();
-        help->Append(IDM_HOMESWEETHOME, _("Notepad++ Home"));
-        help->Append(IDM_PROJECTPAGE, _("Notepad++ Project Page"));
-        help->Append(IDM_ONLINEDOCUMENT, _("Notepad++ Online User Manual"));
-        help->Append(IDM_FORUM, _("Notepad++ Community (Forum)"));
+        help->Append(IDM_HOMESWEETHOME, _("wxNotepad++ on GitHub"));
+        help->Append(IDM_PROJECTPAGE, _("wxNotepad++ Releases"));
+        help->Append(IDM_ONLINEDOCUMENT, _("wxNotepad++ Documentation"));
+        help->Append(IDM_FORUM, _("Report an Issue"));
         help->AppendSeparator();
         help->Append(IDM_UPDATE_NPP, _("Check for Updates"));
-        help->Append(IDM_CONFUPDATERPROXY, _("Set Updater Proxy..."));
         help->AppendSeparator();
         help->Append(IDM_DEBUGINFO, _("Debug Info..."));
         help->Append(IDM_ABOUT, _("About wxNotepad++\tF1"));

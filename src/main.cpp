@@ -24,6 +24,7 @@
 #include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
 #include <wx/listctrl.h>       // wxListView - wxListbook's page list (we widen it so labels don't truncate)
 #include <wx/clrpicker.h>      // wxColourPickerCtrl - Style Configurator foreground/background pickers
+#include <wx/fontenum.h>       // wxFontEnumerator - list system fonts + validate the chosen editor font is still installed
 #include <wx/graphics.h>       // wxGraphicsContext - translucent per-tab colour tint
 #include <wx/tglbtn.h>         // wxToggleButton - incremental search bar match-case/whole-word/regex toggles
 #include <wx/aui/auibook.h>
@@ -118,7 +119,7 @@ static const int  SMART_INDIC   = 10;     // indicator number for smart-highligh
 static const int  MARK_STYLE_BASE = 21;   // "Mark All Ext 1-5" style indicators (21..25) - Notepad++'s 5 mark colours
 static const unsigned MARK_STYLE_COLOUR[5] = { 0x1F90FF, 0xE0A020, 0x50B050, 0xC060C0, 0x30B0C0 };  // BGR: orange, blue, green, purple, olive
 static const int  URL_INDIC = 11;         // clickable-URL underline indicator
-enum { myID_TIMER = 60000, myID_DARKMODE, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER, myID_MONTIMER };   // fixed ids, above the IDM_* range
+enum { myID_TIMER = 60000, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER, myID_MONTIMER };   // fixed ids, above the IDM_* range
 // UI language selection - shared by the top-level Localization menu and Preferences > General.
 // Endonyms are ALWAYS shown in their own language (never translated); index 0 is "System default".
 static const int myID_UILANG_FIRST = 60100;   // 10 radio items (myID_UILANG_FIRST + 0..9), clear of the 61xxx/62xxx/63xxx bases
@@ -133,6 +134,23 @@ static wxString uiLangName(int i) { return i == 0 ? wxString(_("System default")
 // One source of truth for the EOL-mode display names (status bar, EOL popup, Preferences > New Document).
 // Deliberately untranslated in the status bar (matches N++); menu items wrap them in _() as literals.
 static const char* eolName(int mode) { return mode == SC_EOL_LF ? "Unix (LF)" : mode == SC_EOL_CR ? "Macintosh (CR)" : "Windows (CR LF)"; }
+// Theme mode (Preferences > General): 0 = follow OS, 1 = Dark, 2 = Light - replaces the old plain
+// "DarkMode" bool. Falls back to that legacy key when ThemeMode was never written (upgrading users
+// keep whatever they already had instead of being silently switched to "follow OS").
+static long readThemeMode()
+{
+    auto* c = wxConfigBase::Get();
+    long mode;
+    if (c->Read("ThemeMode", &mode)) return mode;
+    bool legacyDark = true; c->Read("DarkMode", &legacyDark, true);
+    return legacyDark ? 1 : 2;
+}
+// "System" (themeMode anything but 1/2) must read the OS's app-theme preference directly:
+// wxSystemAppearance::IsDark() deliberately does NOT check that (its own docs/source say so) - it
+// only reports whether THIS process has already turned dark mode on, which is exactly what we're
+// trying to decide here (chicken-and-egg, always false on a fresh light-born process). AreAppsDark()
+// reads the actual AppsUseLightTheme registry value, which is what "follow the OS" needs.
+static bool resolveDark(long themeMode) { return themeMode == 1 ? true : themeMode == 2 ? false : wxSystemSettings::GetAppearance().AreAppsDark(); }
 static const int myID_DOCLIST_ITEM = 61000;   // base id for the document-list dropdown entries
 static const int myID_MACRO_ITEM   = 62100;   // base id for saved-macro entries at the bottom of the Macro menu
 
@@ -167,6 +185,7 @@ public:
     wxColour tabColour;                    // optional per-tab colour (invalid = none) - drawn as a stripe by PinTabArt
     bool     monitored = false;            // View > Monitoring (tail -f): reload on external change, caret to end
     wxLongLong monMtime = 0; wxULongLong monSize = 0;   // last-seen on-disk stats; background tabs catch up by re-comparing on activation
+    wxString recoveryId;                   // set once this page's unsaved edits have been backed up (see backupUnsavedChanges); empty = nothing pending
 };
 
 // One editor "view" = a tab strip + ONE persistent wxStyledTextCtrl that hops across its pages (Notepad++'s
@@ -1443,20 +1462,24 @@ public:
     }
 private:
     wxColour m_iconColour;
-    wxBitmapBundle iconBundle(const wxString& name, int px = 16) const   // resources/icons/<name>.svg, recoloured to the button colour
+    wxBitmapBundle iconBundle(const wxString& name, int px, const wxColour& colour) const   // resources/icons/<name>.svg, recoloured to the given colour
     {
         const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\" + name + ".svg";
         if (!wxFileExists(path)) return wxBitmapBundle();
         wxFile f(path); wxString svg;
         if (!f.IsOpened() || !f.ReadAll(&svg)) return wxBitmapBundle();
-        svg.Replace("currentColor", m_iconColour.GetAsString(wxC2S_HTML_SYNTAX));
+        svg.Replace("currentColor", colour.GetAsString(wxC2S_HTML_SYNTAX));
         return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(px, px));
     }
     void reskin()
     {
-        const wxBitmapBundle pin = iconBundle("pin", 11);   // small secondary button, like Notepad++'s pin (close stays 16)
+        // The pin gets the project's accent green (Open Color green-8, same as the active-tab marker and
+        // the toolbar's own highlight palette) so it reads as a distinct, on-brand action - not just
+        // another neutral glyph like the close button, which keeps the plain theme-aware tone below.
+        static const wxColour kAccentGreen(47, 158, 68);
+        const wxBitmapBundle pin = iconBundle("pin", 11, kAccentGreen);   // small secondary button, like Notepad++'s pin (close stays 16)
         if (pin.IsOk()) { m_activePinBmp = pin; m_activeUnpinBmp = pin; m_disabledPinBmp = pin; m_disabledUnpinBmp = pin; }
-        const wxBitmapBundle cls = iconBundle("close-tab", 12);   // match the tab bar's (smaller) global close button
+        const wxBitmapBundle cls = iconBundle("close-tab", 12, m_iconColour);   // match the tab bar's (smaller) global close button
         if (cls.IsOk()) { m_activeCloseBmp = cls; m_disabledCloseBmp = cls; }
     }
 };
@@ -1772,14 +1795,17 @@ public:
         EditorPage* initial = activePage();        // the startup "new 1"
         EditorPage* activePg = nullptr;
         int restored = 0;
+        std::map<wxString, EditorPage*> openedByPath;   // so the recovery pass below can overlay onto these instead of reopening
         for (int i = 0; i < (int)count; ++i)
         {
             wxString path;
             if (!cfg->Read(wxString::Format("Session/File%d", i), &path) || path.empty() || !wxFileExists(path)) continue;
             EditorPage* pg = addDocument(path, wxFileNameFromPath(path));
+            openedByPath[path] = pg;
             if (i == (int)active) activePg = pg;
             ++restored;
         }
+        restoreRecoveryBackups(openedByPath);
         if (restored > 0 && initial && initial->path.empty() && (int)m_tabs->GetPageCount() > restored)
         {
             // Defer dropping the redundant empty "new 1": restoreSession runs during OnInit, before the
@@ -1788,6 +1814,45 @@ public:
             this->CallAfter([this, initial]() { const int idx = m_tabs->GetPageIndex(initial); if (idx != wxNOT_FOUND) m_tabs->DeletePage(idx); });
         }
         if (activePg) { const int idx = m_tabs->GetPageIndex(activePg); if (idx != wxNOT_FOUND) m_tabs->SetSelection(idx); }
+    }
+    // Reopens anything left in the Recovery/* manifest (see backupUnsavedChanges): unsaved edits that
+    // were discarded without prompting (or a crash) and never got explicitly saved since. Runs after
+    // the normal Session/File* pass above - alreadyOpen lets it overlay onto a page that pass already
+    // reopened instead of opening the same path twice.
+    void restoreRecoveryBackups(const std::map<wxString, EditorPage*>& alreadyOpen)
+    {
+        auto* cfg = wxConfigBase::Get();
+        const wxString prevPath = cfg->GetPath();
+        cfg->SetPath("/Recovery");
+        wxArrayString ids; wxString grp; long grpIdx;
+        for (bool more = cfg->GetFirstGroup(grp, grpIdx); more; more = cfg->GetNextGroup(grp, grpIdx)) ids.Add(grp);
+        cfg->SetPath(prevPath);
+        for (const wxString& id : ids)
+        {
+            const wxString bak = recoveryDir() + wxFILE_SEP_PATH + id + ".bak";
+            if (!wxFileExists(bak)) { cfg->DeleteGroup("Recovery/" + id); continue; }   // stale entry (backup file gone) - drop it
+            wxString path, title;
+            cfg->Read("Recovery/" + id + "/Path", &path);
+            cfg->Read("Recovery/" + id + "/Title", &title);
+            wxFile f(bak); wxString content;
+            if (f.IsOpened())
+            {
+                const wxFileOffset len = f.Length();
+                std::string b(static_cast<size_t>(len), '\0');
+                f.Read(&b[0], static_cast<size_t>(len));
+                content = wxString::FromUTF8(b.data(), b.size());
+            }
+            EditorPage* pg = nullptr;
+            auto it = path.empty() ? alreadyOpen.end() : alreadyOpen.find(path);
+            if (it != alreadyOpen.end()) pg = it->second;   // already reopened above - just overlay the pending edits onto it
+            else pg = addDocument((!path.empty() && wxFileExists(path)) ? path : wxString(),
+                                   title.empty() ? wxString(_("Recovered")) : title);
+            if (!pg) continue;
+            setActiveView(viewOf(pg)); activateBuffer(pg);
+            setAllText(content);   // deliberately NOT SCI_SETSAVEPOINT - stays flagged unsaved, like the edits it's replacing
+            pg->recoveryId = id;   // so a later Save (or another silent discard) updates/clears the SAME backup instead of orphaning it
+            refreshTab(pg);
+        }
     }
 
 private:
@@ -3133,6 +3198,14 @@ private:
         sci(SCI_MARKERDEFINERGBAIMAGE, MARK_BOOKMARK, reinterpret_cast<sptr_t>(rgba.data()));
     }
 
+    // Preferences > Editing "Font" (m_fontFace), falling back to JetBrains Mono if the chosen font was
+    // uninstalled since it was picked - IsValidFacename also happily reports true for JetBrains Mono
+    // itself (privately loaded, but still visible to GDI's font enumeration within this same process).
+    wxString effectiveFontFace() const
+    {
+        if (m_fontFace.empty() || !wxFontEnumerator::IsValidFacename(m_fontFace)) return "JetBrains Mono";
+        return m_fontFace;
+    }
     // Per-editor Scintilla configuration: margins, font, options, theme, scrollbars.
     void setupScintilla()
     {
@@ -3157,7 +3230,17 @@ private:
         sci(SCI_INDICSETFORE, URL_INDIC, 0xCC6600);
         sci(SCI_INDICSETHOVERSTYLE, URL_INDIC, INDIC_PLAIN);
         sci(SCI_INDICSETHOVERFORE, URL_INDIC, 0xEE8822);
-        sci(SCI_STYLESETFONT, STYLE_DEFAULT, reinterpret_cast<sptr_t>("Consolas"));
+        // Default: JetBrains Mono (SIL OFL 1.1, bundled - see resources/fonts/), permissively-licensed
+        // and present on every platform we ship, unlike Consolas (Microsoft's, Windows-only, not
+        // redistributable). See NppApp::OnInit's AddFontResourceEx call (Windows-only private
+        // registration; Linux/macOS reference the family name directly and fall back to the system
+        // default monospace font if it isn't separately installed there). User-overridable via
+        // Preferences > Editing "Font"; effectiveFontFace() re-falls-back here if that choice
+        // disappears (uninstalled) since it was picked.
+        // ToUTF8() can return a buffer that's merely a view into the temporary wxString's own storage
+        // (wxScopedCharTypeBuffer's documented "non-owned" mode) - safe only within the single expression
+        // that creates it, NOT if split across statements (the temporary wxString would already be gone).
+        sci(SCI_STYLESETFONT, STYLE_DEFAULT, reinterpret_cast<sptr_t>(effectiveFontFace().ToUTF8().data()));
         sci(SCI_STYLESETSIZE, STYLE_DEFAULT, 11);
         sci(SCI_STYLECLEARALL);
         sci(SCI_SETTABWIDTH, 4);
@@ -3507,14 +3590,54 @@ private:
         NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_ACTIVATED; ev.struct_size = sizeof(NibEvent);
         ev.as.document.id = reinterpret_cast<intptr_t>(p); nibFireEvent(ev);
     }
+    // ----- unsaved-changes recovery (Preferences > General "Ask before closing unsaved changes", off
+    // by default) - when a modified document is discarded WITHOUT prompting, its content is backed up
+    // to <exe>/RecoveryBackups/<id>.bak first, so it survives that close (or a later crash/relaunch)
+    // instead of being silently lost. The manifest is a set of wxConfig groups keyed by that same id
+    // (Recovery/<id>/Path, Recovery/<id>/Title) - independent of Session/File* (which only tracks
+    // "what's currently open" and is fully rewritten on every exit); an id is only removed once its
+    // content is safely saved to disk for real (see writeFile()).
+    wxString recoveryDir() { return wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "RecoveryBackups"; }
+    wxString generateRecoveryId()
+    {
+        auto* cfg = wxConfigBase::Get();
+        long next = 1; cfg->Read("Recovery/NextId", &next, 1L);
+        cfg->Write("Recovery/NextId", next + 1);
+        return wxString::Format("r%ld", next);
+    }
+    void backupUnsavedChanges(EditorPage* p)
+    {
+        if (!p) return;
+        if (p->recoveryId.empty()) p->recoveryId = generateRecoveryId();
+        const wxString dir = recoveryDir();
+        if (!wxDirExists(dir)) wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        wxFile f(dir + wxFILE_SEP_PATH + p->recoveryId + ".bak", wxFile::write);
+        if (f.IsOpened()) { const wxScopedCharBuffer u = getAllText().ToUTF8(); f.Write(u.data(), u.length()); }
+        auto* cfg = wxConfigBase::Get();
+        cfg->Write("Recovery/" + p->recoveryId + "/Path", p->path);
+        cfg->Write("Recovery/" + p->recoveryId + "/Title", p->title);
+        cfg->Flush();
+    }
+    void clearRecovery(EditorPage* p)
+    {
+        if (!p || p->recoveryId.empty()) return;
+        wxConfigBase::Get()->DeleteGroup("Recovery/" + p->recoveryId);
+        wxRemoveFile(recoveryDir() + wxFILE_SEP_PATH + p->recoveryId + ".bak");
+        p->recoveryId.clear();
+    }
     // Ask to save a modified document before closing it (Save / Don't Save / Cancel), themed like the
     // rest of the app. Returns true if the caller may close the page, false if the user cancelled.
-    bool confirmClose(EditorPage* p)
+    // exiting=true (only from onCloseWindow) means this discard is the app quitting with unsaved content
+    // still open - back it up so it can be recovered next launch. A deliberate in-session tab close
+    // (exiting=false, all other call sites) is a final decision - clear any stale recovery instead, or
+    // discarded scratch tabs would resurrect as ghost tabs on every future launch forever.
+    bool confirmClose(EditorPage* p, bool exiting = false)
     {
         if (!p) return true;
         setActiveView(viewOf(p));            // make p's view active so sci()/m_path/onSave refer to p (incl. the OTHER split view)
         activateBuffer(p);                   // swap that view to p's document and select its tab
         if (sci(SCI_GETMODIFY) == 0) return true;
+        if (!m_askBeforeClose) { if (exiting) backupUnsavedChanges(p); else clearRecovery(p); return true; }   // setting off (default, matches Notepad++): discard silently, no prompt
         const wxString name = !p->path.empty() ? p->path : (p->title.empty() ? wxString("new") : p->title);
 
         wxDialog dlg(this, wxID_ANY, "wxNotepad++");
@@ -3535,7 +3658,8 @@ private:
         const int r = dlg.ShowModal();
         if (r == wxID_CANCEL) return false;
         if (r == wxID_YES) { onSave(); return sci(SCI_GETMODIFY) == 0; }   // p is active now (SetSelection above); false if Save As cancelled
-        return true;   // Don't Save -> discard
+        clearRecovery(p);   // Don't Save -> discard; an explicit, informed choice needs no safety net
+        return true;
     }
     void onPageClose(wxAuiNotebookEvent& e)
     {
@@ -3647,7 +3771,7 @@ private:
     {
         if (e.CanVeto())   // a forced close (e.g. the theme-restart) skips prompts and just exits
             for (EditorPage* p : allPages())   // prompt EVERY modified doc across BOTH views - none lost on exit
-                if (!confirmClose(p)) { e.Veto(); return; }
+                if (!confirmClose(p, /*exiting=*/true)) { e.Veto(); return; }
         saveSettings();    // persist any in-session View-menu toggle changes
         saveSession(wxConfigBase::Get());   // remember the open (saved) files so the next launch reopens them, like Notepad++
         wxConfigBase::Get()->Flush();
@@ -3876,7 +4000,7 @@ private:
     void buildMenuBar()
     {
         auto* mb = new wxMenuBar;
-        buildNppMainMenu(mb, myID_DARKMODE);   // full 1:1 Notepad++ menu tree (see spike/npp_menu.h)
+        buildNppMainMenu(mb);   // full 1:1 Notepad++ menu tree (see spike/npp_menu.h)
         // Localization: pick the UI language straight from the menu bar (radio group; restart-to-apply,
         // same flow as the Preferences > General dropdown). Inserted right after the Settings menu.
         {
@@ -3954,6 +4078,13 @@ private:
 #ifdef __WXMSW__
         // Win11 rounds top-level windows; the rounded cut-off leaves a small notch at the corner of our
         // square chrome. Square the window (DWMWCP_DONOTROUND) so all four corners are clean.
+        // (Tried flipping this to DWMWCP_ROUND to get real Win11 rounding instead - confirmed via
+        // pixel-level screenshot inspection, even with an explicit SWP_FRAMECHANGED nudge afterward,
+        // that DWM does not actually round this window's corners either way. This borderless frame's
+        // underlying window style is almost certainly not eligible for DWM's automatic rounding at
+        // all - getting real rounded corners here would need deeper surgery (keeping WS_CAPTION while
+        // custom-handling WM_NCCALCSIZE, matching how Windows Terminal/similar apps do it), not a
+        // one-line attribute flip. DONOTROUND stays the correct call for this architecture as-is.)
         { DWORD corner = DWMWCP_DONOTROUND;
           ::DwmSetWindowAttribute(static_cast<HWND>(this->GetHandle()), DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner)); }
 #endif
@@ -4749,7 +4880,7 @@ private:
         wxFile f(path, wxFile::write);
         if (!f.IsOpened()) return false;
         f.Write(out.data(), out.size()); sci(SCI_SETSAVEPOINT);
-        if (auto* p = activePage()) p->path = path;
+        if (auto* p = activePage()) { p->path = path; clearRecovery(p); }   // content is safely on disk now - no recovery copy needed
         m_path = path; setDocTitle(wxFileNameFromPath(path)); setLexerForFile(path); addToMRU(path); return true;
     }
     void onSave() { if (m_path.empty()) onSaveAs(); else writeFile(m_path); }
@@ -5887,6 +6018,14 @@ private:
     {
         auto* c = wxConfigBase::Get();
         c->Read("IntegratedBar", &m_integratedBar, false);
+        m_themeMode = (int)readThemeMode();   // also resolved in OnInit (before the frame/config exist as members here)
+        c->Read("AskBeforeClose", &m_askBeforeClose, false);
+        c->Read("Editing/CustomGutterColour", &m_customGutterColor, false);
+        // Default swatch (only shown/used before the user has ever picked a colour themselves) matches
+        // the current theme's tone instead of a fixed light gray - a bright swatch read as a jarring
+        // full inversion against a dark theme rather than a subtle "this margin stands out" accent.
+        const long gcDefault = m_dark ? 0x3E3A3AL : 0xE8E8E8L;
+        long gc = gcDefault; c->Read("Editing/GutterColourValue", &gc, gcDefault); m_gutterColorValue = gc;
         long is = 0; c->Read("ToolbarIconStyle", &is, 0L);
         m_iconStyle = (is < 0 || is > 2) ? 2 : (int)is;   // 0 = line icons, 1 = Solar, 2 = IconPark; clamp a stale "3 = Bold" (removed) into IconPark
         long mr = 10; c->Read("RecentFiles/Max", &mr, 10L); m_maxRecent = (int)mr;
@@ -5917,6 +6056,7 @@ private:
         c->Read("Print/Header", &m_printHeader, wxEmptyString);
         c->Read("Print/Footer", &m_printFooter, wxEmptyString);
         long se = 0; c->Read("Editing/SearchEngine", &se, 0L); m_searchEngine = (int)se;
+        c->Read("Editing/FontFace", &m_fontFace, "JetBrains Mono");
     }
     void saveSettings()
     {
@@ -5937,6 +6077,10 @@ private:
         c->Write("Theme", m_themeName);
         c->Write("Print/Header", m_printHeader); c->Write("Print/Footer", m_printFooter);
         c->Write("Editing/SearchEngine", (long)m_searchEngine);
+        c->Write("AskBeforeClose", m_askBeforeClose);
+        c->Write("Editing/CustomGutterColour", m_customGutterColor);
+        c->Write("Editing/GutterColourValue", m_gutterColorValue);
+        c->Write("Editing/FontFace", m_fontFace);
         c->Flush();
     }
     void applySettings()   // push the current preferences onto the editor view + chrome
@@ -5979,6 +6123,10 @@ private:
         auto* cbToolbar = new wxCheckBox(gen, wxID_ANY, _("Show toolbar"));    cbToolbar->SetValue(m_showToolbar);
         auto* cbStatus  = new wxCheckBox(gen, wxID_ANY, _("Show status bar")); cbStatus->SetValue(m_showStatusbar);
         row(gs, cbToolbar); row(gs, cbStatus);
+        // Off by default, matching Notepad++: closing a modified document just discards it silently
+        // rather than blocking on a Save/Don't Save/Cancel prompt every time.
+        auto* cbAskClose = new wxCheckBox(gen, wxID_ANY, _("Ask before closing unsaved changes"));
+        cbAskClose->SetValue(m_askBeforeClose); row(gs, cbAskClose);
 #ifdef WXNPP_HAS_BORDERLESS
         auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, _("Show integrated top bar"));
         cbIntBar->SetValue(m_integratedBar); row(gs, cbIntBar);
@@ -5999,23 +6147,47 @@ private:
         iconStyleNames.Add(_("IconPark icons (teal/lime)"));
         auto* chIconStyle = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, iconStyleNames);
         chIconStyle->SetSelection(m_iconStyle);
-        // A 2-column grid (not two independent row sizers) so both combo boxes line up under each other
+        // Theme (restart-to-apply, like the two above): follow the OS's own light/dark setting, or pin
+        // one explicitly. Was a standalone "Dark Mode" checkbox page; folded in here since it's the same
+        // kind of restart-required, general-appearance choice as Localization/Toolbar icon style.
+        wxArrayString themeNames;
+        themeNames.Add(_("System")); themeNames.Add(_("Dark")); themeNames.Add(_("Light"));
+        auto* chTheme = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, themeNames);
+        chTheme->SetSelection(m_themeMode);
+        // A 2-column grid (not independent row sizers) so all combo boxes line up under each other
         // regardless of their label's length - "Localization:" and "Toolbar icon style:" differ enough in
-        // width that separate row sizers left the two combos visibly staggered. wxEXPAND on the control
+        // width that separate row sizers left the combos visibly staggered. wxEXPAND on the control
         // column additionally stretches each wxChoice to the column's full (uniform) width - without it,
         // a FlexGridSizer still gives both cells the same width, but a narrower control (e.g. "Polski")
         // just sits left-aligned inside its cell rather than filling it, so the two still looked
         // different widths even once their left edges lined up.
-        auto* locGrid = new wxFlexGridSizer(2, 2, 8, 8);
+        auto* locGrid = new wxFlexGridSizer(3, 2, 8, 8);
         locGrid->Add(new wxStaticText(gen, wxID_ANY, _("Localization:")), 0, wxALIGN_CENTRE_VERTICAL);
         locGrid->Add(chUiLang, 0, wxEXPAND | wxALIGN_CENTRE_VERTICAL);
         locGrid->Add(new wxStaticText(gen, wxID_ANY, _("Toolbar icon style:")), 0, wxALIGN_CENTRE_VERTICAL);
         locGrid->Add(chIconStyle, 0, wxEXPAND | wxALIGN_CENTRE_VERTICAL);
+        locGrid->Add(new wxStaticText(gen, wxID_ANY, _("Theme:")), 0, wxALIGN_CENTRE_VERTICAL);
+        locGrid->Add(chTheme, 0, wxEXPAND | wxALIGN_CENTRE_VERTICAL);
         gs->Add(locGrid, 0, wxLEFT | wxRIGHT | wxTOP, 10);
         gen->SetSizer(gs);
 
         // ---- Editing --------------------------------------------------------------------------
         auto* ed = pg(_("Editing")); auto* es = new wxBoxSizer(wxVERTICAL);
+        // Font: JetBrains Mono first (our bundled default), then every system font below it. Falls back
+        // to JetBrains Mono at render time (effectiveFontFace()) if the chosen one is later uninstalled.
+        auto* frow = new wxBoxSizer(wxHORIZONTAL);
+        frow->Add(new wxStaticText(ed, wxID_ANY, _("Font:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        // wxChoice has no native separator item, so a plain-text divider line stands in for one - harmless
+        // even if somehow selected: it's not a real face name, so effectiveFontFace() falls back to
+        // JetBrains Mono exactly as it would for any other uninstalled/invalid font.
+        const wxString kFontSep = wxString(wxUniChar(0x2500), 20);
+        wxArrayString fontNames; fontNames.Add("JetBrains Mono"); fontNames.Add(kFontSep);
+        { wxArrayString sysFonts = wxFontEnumerator::GetFacenames(); sysFonts.Sort();
+          for (const wxString& f : sysFonts) if (f != "JetBrains Mono") fontNames.Add(f); }
+        auto* chFont = new wxChoice(ed, wxID_ANY, wxDefaultPosition, wxDefaultSize, fontNames);
+        { int sel = fontNames.Index(m_fontFace); chFont->SetSelection(sel != wxNOT_FOUND ? sel : 0); }
+        frow->Add(chFont, 1, wxALIGN_CENTRE_VERTICAL);
+        es->Add(frow, 0, wxEXPAND | wxALL, 10);
         auto* cbLineNum = new wxCheckBox(ed, wxID_ANY, _("Display line number"));      cbLineNum->SetValue(m_lineNumbers);
         auto* cbGuides  = new wxCheckBox(ed, wxID_ANY, _("Show indentation guide"));   cbGuides->SetValue(m_guides);
         auto* cbWs      = new wxCheckBox(ed, wxID_ANY, _("Show white space and TAB")); cbWs->SetValue(m_ws);
@@ -6037,7 +6209,19 @@ private:
         brow->Add(new wxStaticText(ed, wxID_ANY, _("Caret blink rate (ms, 0 = steady):")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spBlink = new SpinField(ed, 0, 2000, m_caretBlink, m_dark, 80);
         brow->Add(spBlink, 0);
-        es->Add(brow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10); ed->SetSizer(es);
+        es->Add(brow, 0, wxLEFT | wxRIGHT | wxTOP, 10);
+        // Optional distinct colour for the line-number/bookmark/fold "gutter" strip on the left edge
+        // of the editor - off by default (follows the active theme, as before).
+        auto* grow = new wxBoxSizer(wxHORIZONTAL);
+        auto* cbGutter = new wxCheckBox(ed, wxID_ANY, _("Use a custom line-number margin colour"));
+        cbGutter->SetValue(m_customGutterColor);
+        auto* gutterPick = new wxColourPickerCtrl(ed, wxID_ANY, bgrToColour((int)m_gutterColorValue));
+        gutterPick->Enable(m_customGutterColor);
+        cbGutter->Bind(wxEVT_CHECKBOX, [gutterPick](wxCommandEvent& e) { gutterPick->Enable(e.IsChecked()); });
+        grow->Add(cbGutter, 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 10); grow->Add(gutterPick, 0);
+        es->Add(grow, 0, wxALL, 10);
+        ed->SetSizer(es);
+
 
         // ---- Indentation ----------------------------------------------------------------------
         auto* ind = pg(_("Indentation")); auto* is = new wxBoxSizer(wxVERTICAL);
@@ -6061,11 +6245,6 @@ private:
         as->Add(acrow, 0, wxALL, 10);
         auto* cbPairs = new wxCheckBox(ac, wxID_ANY, _("Auto-insert matching brackets and quotes")); cbPairs->SetValue(m_autoInsertPairs);
         row(as, cbPairs); ac->SetSizer(as);
-
-        // ---- Dark Mode ------------------------------------------------------------------------
-        auto* dm = pg(_("Dark Mode")); auto* ds = new wxBoxSizer(wxVERTICAL);
-        auto* cbDark = new wxCheckBox(dm, wxID_ANY, _("Enable Dark Mode   (applied on restart)")); cbDark->SetValue(m_dark);
-        row(ds, cbDark); dm->SetSizer(ds);
 
         // ---- New Document ---------------------------------------------------------------------
         auto* nd = pg(_("New Document")); auto* nds = new wxBoxSizer(wxVERTICAL);
@@ -6137,8 +6316,9 @@ private:
         auto* top = new wxBoxSizer(wxVERTICAL); top->Add(book, 1, wxEXPAND | wxALL, 8); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
         dlg.SetSizer(top); themeDialog(&dlg);
         dlg.ShowModal();   // Notepad++ Preferences has no Cancel - changes apply on close
-        const bool newDark = cbDark->GetValue();
+        const int newThemeMode = chTheme->GetSelection();
         m_showToolbar = cbToolbar->GetValue(); m_showStatusbar = cbStatus->GetValue();
+        m_askBeforeClose = cbAskClose->GetValue();
         m_tabWidth = spTab->GetValue(); m_useTabs = !cbSpace->GetValue(); m_lineNumbers = cbLineNum->GetValue();
         m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
         m_caretLine = cbCaretLn->GetValue(); m_autoindent = cbIndent->GetValue(); m_caretWidth = spCaret->GetValue(); m_edgeColumn = spEdge->GetValue();
@@ -6151,7 +6331,10 @@ private:
         const bool tabRecentChanged = (cbTabClose->GetValue() != m_tabCloseBtn) || (spMaxRec->GetValue() != m_maxRecent);
         m_tabCloseBtn = cbTabClose->GetValue(); m_maxRecent = spMaxRec->GetValue();
         m_printHeader = txHeader->GetValue(); m_printFooter = txFooter->GetValue();
+        m_customGutterColor = cbGutter->GetValue(); m_gutterColorValue = colourToBgr(gutterPick->GetColour());
+        { const wxString sel = chFont->GetStringSelection(); if (sel != kFontSep) m_fontFace = sel; }
         applySettings(); saveSettings();
+        applyEditorTheme(m_dark);   // gutter-colour override takes effect immediately, no restart needed
         // Chrome settings fixed per process (locale/toolbar-toggle/icon-set all need a relaunch to take effect).
         // The config writes ride restartWithTheme's commit callback, which only runs once the save-prompt loop
         // has actually confirmed the restart - writing them here unconditionally would apply the new value
@@ -6161,12 +6344,13 @@ private:
         const bool newIntBar = cbIntBar->GetValue();
 #endif
         const int newIconStyle = chIconStyle->GetSelection();
-        bool needRestart = (newDark != m_dark) || tabRecentChanged || (newUi != curUi) || (newIconStyle != m_iconStyle);
+        bool needRestart = (newThemeMode != m_themeMode) || tabRecentChanged || (newUi != curUi) || (newIconStyle != m_iconStyle);
 #ifdef WXNPP_HAS_BORDERLESS
         needRestart = needRestart || (newIntBar != m_integratedBar);
 #endif
         if (needRestart)
-            restartWithTheme(newDark, [=] {
+            restartWithTheme([=] {
+                m_themeMode = newThemeMode;
                 auto* cfg = wxConfigBase::Get();
                 if (newUi != curUi) cfg->Write("UILanguage", (long)newUi);
 #ifdef WXNPP_HAS_BORDERLESS
@@ -6855,7 +7039,7 @@ private:
         if (n == 0) return;
         if (wxMessageBox(wxString::Format(_("%d plugin(s) imported. Restart wxNotepad++ now to load them?"), n),
                           "wxNotepad++", wxYES_NO | wxICON_QUESTION, this) == wxYES)
-            restartWithTheme(m_dark);
+            restartWithTheme();
         else
         { setStatus(0, wxString::Format(_("Imported %d plugin(s) - restart to load them"), n)); m_hint = true; }
     }
@@ -6868,11 +7052,20 @@ private:
             const auto def = G("Default Style");
             sci(SCI_STYLESETBACK, STYLE_DEFAULT, def.second >= 0 ? def.second : (dark ? 0x1E1E1E : 0xFFFFFF));
             sci(SCI_STYLESETFORE, STYLE_DEFAULT, def.first  >= 0 ? def.first  : (dark ? 0xDCDCDC : 0x000000));
-            if (!m_theme.defaultFont.empty()) sci(SCI_STYLESETFONT, STYLE_DEFAULT, reinterpret_cast<sptr_t>(m_theme.defaultFont.c_str()));
+            // The user's Preferences > Editing "Font" choice always wins over whatever font a loaded
+            // theme XML declares - a theme should only ever affect colours here, not silently override
+            // an explicit font preference.
+            // See setupScintilla()'s identical call for why this stays a single expression (ToUTF8()'s
+            // buffer can be a non-owned view into the temporary wxString - splitting across statements
+            // would dangle).
+            sci(SCI_STYLESETFONT, STYLE_DEFAULT, reinterpret_cast<sptr_t>(effectiveFontFace().ToUTF8().data()));
             if (m_theme.defaultSize > 0)      sci(SCI_STYLESETSIZE, STYLE_DEFAULT, m_theme.defaultSize);
             sci(SCI_STYLECLEARALL);                                  // propagate default to every style
             const auto ln = G("Line number margin");
-            const int gutterBg = ln.second >= 0 ? ln.second : (dark ? 0x2D2D2D : 0xE0E0E0);
+            // Preferences > Editing "custom gutter colour" wins over both the theme and the built-in
+            // default, for every piece of the gutter (line numbers, bookmark, fold) so it stays one tone.
+            const int gutterBg = m_customGutterColor ? (int)m_gutterColorValue
+                                : (ln.second >= 0 ? ln.second : (dark ? 0x2D2D2D : 0xE0E0E0));
             sci(SCI_STYLESETFORE, STYLE_LINENUMBER, ln.first >= 0 ? ln.first : 0x808080);
             sci(SCI_STYLESETBACK, STYLE_LINENUMBER, gutterBg);
             sci(SCI_SETMARGINBACKN, 1, gutterBg);   // bookmark margin matches line-number margin (one-tone gutter)
@@ -6880,21 +7073,24 @@ private:
             const auto car = G("Caret colour");          sci(SCI_SETCARETFORE, car.first >= 0 ? car.first : (dark ? 0xFFFFFF : 0x000000));
             sci(SCI_SETCARETLINEVISIBLE, 1);
             const auto cur = G("Current line background colour"); sci(SCI_SETCARETLINEBACK, cur.second >= 0 ? cur.second : (dark ? 0x2A2A2A : 0xF6F6F6));
-            const auto sel = G("Selected text colour");  sci(SCI_SETSELBACK, 1, sel.second >= 0 ? sel.second : (dark ? 0x515151 : 0xC8C8C8));
+            // VS Code's own proven light/dark selection colours (#ADD6FF / #264F78, BGR-encoded for
+            // Scintilla) - the flat gray this replaced had too little contrast against the editor
+            // background to read clearly as a selection at a glance.
+            const auto sel = G("Selected text colour");  sci(SCI_SETSELBACK, 1, sel.second >= 0 ? sel.second : (dark ? 0x784F26 : 0xFFD6AD));
             const auto wsp = G("White space symbol");    sci(SCI_SETWHITESPACEFORE, 1, wsp.first >= 0 ? wsp.first : (dark ? 0x606060 : 0xB0B0B0));
             // Fold margin + markers, edge, and highlight indicators - re-applied on every theme switch so the whole
             // editor surface follows the theme like Notepad++ (not just tokens + default background).
             const auto fold = G("Fold"); const auto foldActive = G("Fold active"); const auto foldMargin = G("Fold margin");
-            const int fMarginBg = foldMargin.second >= 0 ? foldMargin.second : gutterBg;
+            const int fMarginBg = m_customGutterColor ? gutterBg : (foldMargin.second >= 0 ? foldMargin.second : gutterBg);
             sci(SCI_SETFOLDMARGINCOLOUR, 1, fMarginBg); sci(SCI_SETFOLDMARGINHICOLOUR, 1, fMarginBg);
-            const int markFore = fold.second >= 0 ? fold.second : gutterBg;        // N++ swaps Fold fg/bg onto the markers
+            const int markFore = m_customGutterColor ? gutterBg : (fold.second >= 0 ? fold.second : gutterBg);        // N++ swaps Fold fg/bg onto the markers
             const int markBack = fold.first  >= 0 ? fold.first  : 0x808080;
             const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;   // full "Fold active" accent on the box markers
             applyFoldMarkerColours(markFore, markBack, markActive);   // recolour the 7 fold markers + re-arm the nested-square accent
             sci(SCI_SETEDGECOLOUR, dark ? 0x4A4A4A : 0xC8C8C8);   // long-line ruler: a subtle but visible gray (column set in applySettings)
             const auto smart = G("Smart Highlighting");  if (smart.second >= 0) sci(SCI_INDICSETFORE, SMART_INDIC, smart.second);
             const auto findMk = G("Find Mark Style");    if (findMk.second >= 0) sci(SCI_INDICSETFORE, MARK_INDIC, findMk.second);
-            const auto bmk = G("Bookmark margin");       if (bmk.second  >= 0) sci(SCI_SETMARGINBACKN, 1, bmk.second);
+            const auto bmk = G("Bookmark margin");       if (!m_customGutterColor && bmk.second >= 0) sci(SCI_SETMARGINBACKN, 1, bmk.second);
             applyBraceStyles(dark);
             return;
         }
@@ -6903,13 +7099,14 @@ private:
         sci(SCI_STYLESETBACK, STYLE_DEFAULT, bg);
         sci(SCI_STYLESETFORE, STYLE_DEFAULT, fg);
         sci(SCI_STYLECLEARALL);
-        sci(SCI_STYLESETBACK, STYLE_LINENUMBER, dark ? 0x2D2D2D : 0xE0E0E0);
+        const int fallbackGutterBg = m_customGutterColor ? (int)m_gutterColorValue : (dark ? 0x2D2D2D : 0xE0E0E0);
+        sci(SCI_STYLESETBACK, STYLE_LINENUMBER, fallbackGutterBg);
         sci(SCI_STYLESETFORE, STYLE_LINENUMBER, 0x808080);
-        sci(SCI_SETMARGINBACKN, 1, dark ? 0x2D2D2D : 0xE0E0E0);
+        sci(SCI_SETMARGINBACKN, 1, fallbackGutterBg);
         sci(SCI_SETCARETFORE, dark ? 0xFFFFFF : 0x000000);
         sci(SCI_SETCARETLINEVISIBLE, 1);
         sci(SCI_SETCARETLINEBACK, dark ? 0x2A2A2A : 0xF6F6F6);
-        sci(SCI_SETSELBACK, 1, dark ? 0x515151 : 0xC8C8C8);
+        sci(SCI_SETSELBACK, 1, dark ? 0x784F26 : 0xFFD6AD);   // VS Code's selection colours (see the other SETSELBACK call)
         sci(SCI_SETWHITESPACEFORE, 1, dark ? 0x606060 : 0xB0B0B0);
         applyBraceStyles(dark);
     }
@@ -6940,7 +7137,6 @@ private:
         g_editorDark = dark;
         ::RedrawWindow(m_sci, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW);  // refresh the dead-corner now
 #endif
-        if (menuBar()) menuBar()->Check(myID_DARKMODE, dark);
         const wxColour chromeBg = dark ? wxColour(32, 32, 32) : wxColour(240, 240, 240);   // explicit both ways
         const wxColour chromeFg = dark ? wxColour(220, 220, 220) : wxColour(0, 0, 0);
         if (auto* tb = toolBar()) { tb->SetBackgroundColour(chromeBg); tb->Refresh(); }
@@ -6960,15 +7156,16 @@ private:
     // toolbar bake in their theme at creation (mixing them yields "a horrible mix of light and
     // dark mode elements", per wx's own source). We therefore persist the choice and relaunch:
     // each process is born in ONE consistent mode (light skips MSWEnableDarkMode entirely).
-    void restartWithTheme(bool dark, const std::function<void()>& commit = {})
+    void restartWithTheme(const std::function<void()>& commit = {})
     {
         // Close(true) below is a FORCED close (no veto), so run the save prompts up front -
-        // otherwise unsaved edits would be silently discarded. Cancel aborts the restart.
+        // otherwise unsaved edits would be silently discarded. Cancel aborts the restart. This process
+        // is about to exit (to relaunch), same as onCloseWindow, so any silent discard here is backed up too.
         for (EditorPage* p : allPages())
-            if (!confirmClose(p)) return;
+            if (!confirmClose(p, /*exiting=*/true)) return;
         if (commit) commit();   // config writes that must NOT land when the user cancels above (e.g. the new UI language)
         auto* cfg = wxConfigBase::Get();
-        cfg->Write("DarkMode", dark);
+        cfg->Write("ThemeMode", (long)m_themeMode);   // m_themeMode is updated inside commit() when it actually changed
         saveSession(cfg);                     // remember open files so the relaunch restores them
         cfg->Flush();
         this->Hide();   // hide the current window before relaunching so the two processes' windows don't briefly overlap on screen
@@ -7164,7 +7361,10 @@ private:
                 {
                     case CDDS_PREPAINT: return CDRF_NOTIFYITEMDRAW;
                     case CDDS_ITEMPREPAINT:
-                        cd->clrHighlightHotTrack = RGB(0xb2, 0xf2, 0xbb);   // Open Color green-2
+                        // Pale green-2 reads as a soft highlight on the light toolbar but glares against
+                        // a dark one - dark mode uses the same Open Color family's deep end (green-9)
+                        // instead, so the hover cue stays a recognizable "green" without the mismatch.
+                        cd->clrHighlightHotTrack = m_dark ? RGB(0x2b, 0x8a, 0x3e) : RGB(0xb2, 0xf2, 0xbb);
                         return CDRF_DODEFAULT | TBCDRF_HILITEHOTTRACK;
                 }
             }
@@ -7196,7 +7396,7 @@ private:
         {
             const long newUi = UI_LANG_IDS[cmd - myID_UILANG_FIRST];
             if (newUi != readUiLang())   // the language write rides the commit callback: a cancelled restart must not switch the config
-                restartWithTheme(m_dark, [newUi] { wxConfigBase::Get()->Write("UILanguage", newUi); });
+                restartWithTheme([newUi] { wxConfigBase::Get()->Write("UILanguage", newUi); });
             return;
         }
         if (cmd >= myID_DOCLIST_ITEM && cmd < myID_DOCLIST_ITEM + 1000)   // document-list dropdown entry
@@ -7330,7 +7530,6 @@ private:
             case IDM_VIEW_TAB1: case IDM_VIEW_TAB2: case IDM_VIEW_TAB3: case IDM_VIEW_TAB4: case IDM_VIEW_TAB5:
             case IDM_VIEW_TAB6: case IDM_VIEW_TAB7: case IDM_VIEW_TAB8: case IDM_VIEW_TAB9:
                 { const size_t n = (size_t)((e.GetId() & 0xFFFF) - IDM_VIEW_TAB1); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); break; }
-            case myID_DARKMODE: restartWithTheme(!m_dark); break;   // relaunch in the other mode (wx can't switch live)
             case myID_CAP_NEW: doNew(); break;                      // "+" caption button
             case myID_CAP_CLOSE: closeActive(); break;             // "x" caption button
             case myID_DOCLIST: onDocList(); break;                 // "v" caption dropdown
@@ -7532,10 +7731,10 @@ private:
             case IDM_LANG_OPENUDLDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "userDefineLangs"); break;
 
             // ---- Help: external links + info ----
-            case IDM_HOMESWEETHOME: wxLaunchDefaultBrowser("https://notepad-plus-plus.org/"); break;
-            case IDM_PROJECTPAGE: wxLaunchDefaultBrowser("https://github.com/notepad-plus-plus/notepad-plus-plus"); break;
-            case IDM_ONLINEDOCUMENT: wxLaunchDefaultBrowser("https://npp-user-manual.org/"); break;
-            case IDM_FORUM: wxLaunchDefaultBrowser("https://community.notepad-plus-plus.org/"); break;
+            case IDM_HOMESWEETHOME: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus"); break;
+            case IDM_PROJECTPAGE: case IDM_UPDATE_NPP: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/releases"); break;
+            case IDM_ONLINEDOCUMENT: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/tree/master/docs"); break;
+            case IDM_FORUM: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/issues"); break;
             case IDM_LANG_UDLCOLLECTION_PROJECT_SITE: wxLaunchDefaultBrowser("https://github.com/notepad-plus-plus/userDefinedLanguages"); break;
             case IDM_DEBUGINFO: themedInfo(wxString::Format(_("wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"),
                 wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER, wxGetOsDescription(), wxStandardPaths::Get().GetExecutablePath()), _("Debug Info")); break;
@@ -7697,6 +7896,11 @@ private:
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
     bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON like Notepad++
+    int         m_themeMode = 1;   // Preferences > General "Theme": 0 = System, 1 = Dark, 2 = Light (restart-to-apply)
+    bool        m_askBeforeClose = false;   // Preferences > General "Ask before closing unsaved changes" (off by default, like Notepad++)
+    bool        m_customGutterColor = false;   // Preferences > Editing "Use a custom line-number margin colour"
+    long        m_gutterColorValue = 0xE0E0E0;   // Scintilla BGR-packed int (see bgrToColour/colourToBgr); only used when m_customGutterColor
+    wxString    m_fontFace = "JetBrains Mono";   // Preferences > Editing "Font"; effectiveFontFace() falls back to this if it's no longer installed
     int         m_tabWidth = 4;                                   // persisted editor preferences (Settings > Preferences)
     bool        m_useTabs = true, m_lineNumbers = true, m_wrapSymbol = false, m_showToolbar = true, m_showStatusbar = true;
     bool        m_autocomplete = true;                            // auto word/keyword completion while typing
@@ -7744,6 +7948,18 @@ public:
     {
         SetAppName("wxNotepadPlusPlus_spike");                  // stable key for the persisted theme choice
         wxImage::AddHandler(new wxPNGHandler());                // needed to load raster icons (iconColored) - SVG icons go through NanoSVG instead and don't need this
+#ifdef __WXMSW__
+        // Bundle JetBrains Mono (SIL OFL 1.1, resources/fonts/) as the default editor font instead of
+        // Consolas: Consolas is a proprietary Microsoft font that happens to already be installed on
+        // Windows, but isn't legally ours to redistribute and isn't present on Linux/macOS at all - so
+        // referencing it by name there would silently fall back to an arbitrary system font. Loading
+        // it as a FR_PRIVATE resource means no installer/admin rights are needed and it never touches
+        // the user's system-wide font list; Windows unloads it automatically on process exit regardless
+        // of whether RemoveFontResourceEx in OnExit() below runs (belt-and-suspenders cleanup).
+        { const wxString fontDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\fonts\\";
+          ::AddFontResourceExW((fontDir + "JetBrainsMono-Regular.ttf").wc_str(), FR_PRIVATE, nullptr);
+          ::AddFontResourceExW((fontDir + "JetBrainsMono-Bold.ttf").wc_str(), FR_PRIVATE, nullptr); }
+#endif
         // UI localization (gettext): every _()-wrapped string looks itself up in resources/locale/<lang>/
         // LC_MESSAGES/wxnpp.mo next to the exe. The language is the user's Preferences > General >
         // Localization choice (wxLANGUAGE_DEFAULT = follow the OS); if no catalog exists for it (e.g. English,
@@ -7752,8 +7968,7 @@ public:
           m_locale.Init((int)readUiLang()); }                          // ignore failure: wx installs the chosen wxTranslations even then, and a second Init() would assert (wx forbids re-Init)
         m_locale.AddCatalogLookupPathPrefix(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\locale");
         m_locale.AddCatalog("wxnpp");
-        bool dark = true;                                      // default: dark, matching Notepad++
-        wxConfigBase::Get()->Read("DarkMode", &dark, true);
+        const bool dark = resolveDark(readThemeMode());
 #ifdef __WXMSW__
         if (dark)
             MSWEnableDarkMode(DarkMode_Always);                // native dark chrome ONLY in dark mode; light
@@ -7779,6 +7994,15 @@ public:
         frame->restoreSession();                                   // reopen files from a theme-restart
         for (int i = 1; i < argc; ++i) frame->openPath(argv[i]);   // open any files passed on the command line
         return true;
+    }
+    int OnExit() override
+    {
+#ifdef __WXMSW__
+        const wxString fontDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\fonts\\";
+        ::RemoveFontResourceExW((fontDir + "JetBrainsMono-Regular.ttf").wc_str(), FR_PRIVATE, nullptr);
+        ::RemoveFontResourceExW((fontDir + "JetBrainsMono-Bold.ttf").wc_str(), FR_PRIVATE, nullptr);
+#endif
+        return wxApp::OnExit();
     }
 
 private:

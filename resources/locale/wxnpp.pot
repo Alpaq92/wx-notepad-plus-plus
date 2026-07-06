@@ -2362,3 +2362,24 @@ msgstr ""
 
 msgid "Operators"
 msgstr ""
+
+msgid "Theme:"
+msgstr ""
+
+msgid "System"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
+msgid "Ask before closing unsaved changes"
+msgstr ""
+
+msgid "Use a custom line-number margin colour"
+msgstr ""
+
+msgid "Font:"
+msgstr ""
