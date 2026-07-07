@@ -6,7 +6,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."   # repo root
 
-VERSION="0.3.0"
+# Read straight from the top-level CMakeLists.txt's project(... VERSION ...) so this can't drift
+# out of sync with it again (every packaging script independently hardcoded its own version string
+# and 0.4.0 shipped labeled 0.3.0 everywhere as a result).
+VERSION="$(sed -n 's/.*project(wxNotepadPlusPlus VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
 PKGDIR="build/deb-pkg"
 OUTDIR="build/installer"
 
