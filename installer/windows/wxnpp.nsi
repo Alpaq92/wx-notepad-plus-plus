@@ -15,8 +15,12 @@
 !include "FileFunc.nsh"
 !include "x64.nsh"
 
+; Read straight from the top-level CMakeLists.txt's project(... VERSION ...) so this can't drift
+; out of sync with it again (every packaging script independently hardcoded its own version string
+; and 0.4.0 shipped labeled 0.3.0 everywhere as a result).
+!searchparse /file "..\..\CMakeLists.txt" "project(wxNotepadPlusPlus VERSION " APP_VERSION " LANGUAGES"
+
 !define APP_NAME    "wxNotepad++"
-!define APP_VERSION "0.3.0"
 !define APP_URL     "https://github.com/Alpaq92/wx-notepad-plus-plus"
 !define APP_EXE     "wxnpp.exe"
 !define ARP_KEY     "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
