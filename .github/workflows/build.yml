@@ -10,8 +10,11 @@ on:
   push:
     branches: [ wx-migration, master ]
     paths: [ 'src/**', 'include/**', 'third_party/**', 'resources/**', 'installer/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
+  # Deliberately NOT path-filtered (unlike push above): master's branch ruleset requires these 3
+  # jobs to report on every PR unconditionally, so a doc-only PR (e.g. CHANGELOG.md) that skipped
+  # the build here would sit forever as "Expected - waiting for status to be reported" and could
+  # never merge normally.
   pull_request:
-    paths: [ 'src/**', 'include/**', 'third_party/**', 'installer/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
   workflow_dispatch:
   workflow_call:   # release.yml calls this on a version tag push, then publishes the 3 packaging artifacts
 
