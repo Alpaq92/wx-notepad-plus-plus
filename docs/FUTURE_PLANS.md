@@ -41,10 +41,11 @@ conservatively on GPL is **not** lingering GPL files — it's three unresolved g
    upstream styling. The remaining "Notepad++" mentions are nominative (code comments, the
    `<NotepadPlus>` data format, and Help-menu links to Notepad++'s own resources).
 3. **A final clean-room audit of `src/`.** — ✅ **done.** A full line-audit confirmed the core
-   (`main.cpp` + `npp_menu.h`) carries no `NPPM_*`/`NppData`/`FuncItem` ABI code and no N++ plugin-ABI
-   headers — only nominative references (comments, the `<NotepadPlus>` data format, Help links). The one
-   N++-ABI *consumer* still in the tree (the Windows-only test-fixture plugin) was relocated out of
-   `src/` to `packages/test_plugin/`, so `src/` is now uniformly permissive.
+   (`main.cpp` + the data-driven menu engine, `src/menu_builder.h`/`src/menu_data_*.h` — replacing the
+   original imperative `npp_menu.h`, since deleted) carries no `NPPM_*`/`NppData`/`FuncItem` ABI code and
+   no N++ plugin-ABI headers — only nominative references (comments, the `<NotepadPlus>` data format, Help
+   links). The one N++-ABI *consumer* still in the tree (the Windows-only test-fixture plugin) was
+   relocated out of `src/` to `packages/test_plugin/`, so `src/` is now uniformly permissive.
 
 The engineering gates are now cleared — the core is *technically* relicensable. We nonetheless keep GPL
 until the maintainer makes the deliberate call; claiming permissive prematurely would be dishonest.

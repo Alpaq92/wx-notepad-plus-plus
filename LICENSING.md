@@ -45,32 +45,36 @@ we are confident — permissively-licensed files composing into a GPL aggregate 
 | Colored toolbar icon option — `resources/icons-iconpark/` | **Apache-2.0** | IconPark © ByteDance, recoloured to Open Color teal-7 / lime-5 |
 | Default editor font — `resources/fonts/` | **SIL OFL 1.1** | JetBrains Mono, unmodified, bundled in place of the proprietary Consolas |
 | Plugin ABI headers — `include/npp-compat/` | Apache-2.0 *expression*, but they **functionally reproduce N++'s GPL ABI** (gate #1) | to be replaced by the permissive Nib API |
-| Menu structure — `src/npp_menu.h` | under the project's **GPL v3** (original builder code) | the menu *content* reproduces N++'s command hierarchy — see "Compatibility surfaces" below |
+| Menu structure — `src/menu_builder.h` + `src/menu_data_*.h` | under the project's **GPL v3** (original code) | Phase B (2026-07-09) reshaped this into an original 10-menu hierarchy — no longer reproduces N++'s menu structure; only the numeric `IDM_*` ids carry over, as documented in the ABI-headers row above |
 | Regenerated themes + `stylers.model.xml` | **Apache-2.0** | our data: factual Lexilla structure + permissive palettes |
 | Kept third-party themes — `resources/themes/` | **MIT** / upstream-permissive | © Fabio Zendhi Nagao, Oren Farhi, … |
 | Scintilla / Lexilla — `third_party/` | **HPND** (permissive) | the editing/highlighting engine |
 | wxBorderlessFrame (wxbf) — `third_party/wxbf/` | wxWindows Licence (LGPL + static-link exception) | vendored; Windows/Linux only (no macOS backend) |
 | wxWidgets | wxWindows Licence (LGPL + static-link exception) | fetched at build, not vendored |
+| Project site — `site/` | **MIT** (matches its template's license) | adapted from codewithsadee/vcard-personal-portfolio (MIT) — see [`site/CREDITS.md`](site/CREDITS.md) |
 
-## Compatibility surfaces (ABI + menu structure)
+## Compatibility surface (ABI)
 
-Two parts of this project intentionally reproduce *facts about how Notepad++ operates* — as distinct
+One part of this project intentionally reproduces *facts about how Notepad++ operates* — as distinct
 from reproducing its code:
 
 - **The plugin ABI** (`include/npp-compat/`): numeric message/command ids, struct layouts, and exported
   symbol names. These are the wire protocol a compiled N++ plugin speaks; a compatible host has no
   choice about their values. Covered by gate #1 above.
-- **The menu structure** (`src/npp_menu.h`): the same popups, item order, labels, and mnemonics as real
-  Notepad++. The `IDM_*` command ids double as plugin ABI (plugins invoke menu commands by posting these
-  ids), and the hierarchy of functional command labels is the application's *method of operation* — the
-  thing a user's muscle memory navigates — which is the category U.S. courts have treated as outside
-  copyright's scope for menu trees specifically (*Lotus v. Borland*). The C++ that builds the menu is
-  this project's own; upstream's `.rc` resource script was consulted only as the reference for what the
-  menus contain.
 
-Neither surface involves copying Notepad++ implementation code. Both are documented here so the
+This does not involve copying Notepad++ implementation code. It is documented here so the
 "independent reimplementation" claim above is precise about what *is* deliberately kept identical and
 why.
+
+> **Historical note:** until 2026-07-09, the menu *hierarchy* (which popup a command lived under, item
+> order) also intentionally mirrored Notepad++'s, on the same interoperability-adjacent reasoning — the
+> `IDM_*` ids double as plugin-invocable command ids, so keeping them in familiar places aided the port.
+> That mirroring was never a legal necessity (menu trees are the kind of "method of operation" *Lotus v.
+> Borland* held outside copyright's scope), and it was dropped in the Phase B menu redesign
+> (`src/menu_builder.h`, `src/menu_data_*.h`): the app now uses an original 10-menu hierarchy
+> (File/Edit/Selection/Go/View/Document/Automation/Extensions/Window/Help) designed from research across
+> five editors (VS Code, Notepad++, Pulsar Edit, Android Studio, Visual Studio), not copied from any one
+> of them. Only the numeric `IDM_*` ids still carry over, as an unavoidable ABI fact — see above.
 
 ## Scintilla / Lexilla license (permissive)
 

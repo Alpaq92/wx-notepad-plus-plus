@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>wxNotepad++</title>
+  <meta name="description" content="wxNotepad++ - a cross-platform, wxWidgets + Scintilla reimplementation of Notepad++, for Windows, Linux, and macOS.">
+
+  <!--
+    - theme (applied before first paint, so there's no flash of the wrong theme - script.js
+      re-derives the same value later just to keep the toggle buttons and system-preference
+      listener in sync)
+  -->
+  <script>
+    (function () {
+      var pref = localStorage.getItem('wxnpp-site-theme') || 'system';
+      var resolved = pref === 'system'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : pref;
+      document.documentElement.setAttribute('data-theme', resolved);
+    })();
+  </script>
+
+  <!--
+    - favicon
+  -->
+  <link rel="icon" href="./assets/images/logo.svg" type="image/svg+xml">
+
+  <!--
+    - custom css link
+  -->
+  <link rel="stylesheet" href="./assets/css/style.css">
+
+  <!--
+    - google font link
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+  <!--
+    - #MAIN
+  -->
+
+  <main>
+
+    <!--
+      - #SIDEBAR
+    -->
+
+    <aside class="sidebar" data-sidebar>
+
+      <div class="sidebar-info">
+
+        <figure class="avatar-box">
+          <img src="./assets/images/logo.svg" alt="wxNotepad++ logo" width="80">
+        </figure>
+
+        <div class="info-content">
+          <h1 class="name" title="wxNotepad++">wxNotepad++</h1>
+
+          <p class="title">Cross-platform text editor</p>
+        </div>
+
+        <button class="info_more-btn" data-sidebar-btn>
+          <span>Show quick facts</span>
+
+          <ion-icon name="chevron-down"></ion-icon>
+        </button>
+
+      </div>
+
+      <div class="sidebar-info_more">
+
+        <div class="separator"></div>
+
+        <ul class="contacts-list">
+
+          <li class="contact-item">
+
+            <div class="icon-box">
+              <ion-icon name="pricetag-outline"></ion-icon>
+            </div>
+
+            <div class="contact-info">
+              <p class="contact-title">Latest release</p>
+
+              <span class="contact-link" data-latest-version>Loading…</span>
+            </div>
+
+          </li>
+
+          <li class="contact-item">
+
+            <div class="icon-box">
+              <ion-icon name="desktop-outline"></ion-icon>
+            </div>
+
+            <div class="contact-info">
+              <p class="contact-title">Platforms</p>
+
+              <address>Windows · Linux · macOS</address>
+            </div>
+
+          </li>
+
+          <li class="contact-item">
+
+            <div class="icon-box">
+              <ion-icon name="language-outline"></ion-icon>
+            </div>
+
+            <div class="contact-info">
+              <p class="contact-title">Languages</p>
+
+              <address>8 supported</address>
+            </div>
+
+          </li>
+
+          <li class="contact-item">
+
+            <div class="icon-box">
+              <ion-icon name="document-text-outline"></ion-icon>
+            </div>
+
+            <div class="contact-info">
+              <p class="contact-title">License</p>
+
+              <a href="https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/LICENSE" class="contact-link" target="_blank" rel="noopener">GPL v3</a>
+            </div>
+
+          </li>
+
+        </ul>
+
+        <div class="separator"></div>
+
+        <ul class="social-list">
+
+          <li class="social-item">
+            <a href="https://github.com/Alpaq92/wx-notepad-plus-plus" class="social-link" target="_blank" rel="noopener" title="GitHub repository">
+              <ion-icon name="logo-github"></ion-icon>
+            </a>
+          </li>
+
+          <li class="social-item">
+            <a href="https://github.com/Alpaq92/wx-notepad-plus-plus/issues" class="social-link" target="_blank" rel="noopener" title="Issues">
+              <ion-icon name="bug-outline"></ion-icon>
+            </a>
+          </li>
+
+          <li class="social-item">
+            <a href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" class="social-link" target="_blank" rel="noopener" title="Releases">
+              <ion-icon name="download-outline"></ion-icon>
+            </a>
+          </li>
+
+        </ul>
+
+      </div>
+
+    </aside>
+
+
+
+
+
+    <!--
+      - #main-content
+    -->
+
+    <div class="main-content">
+
+      <!--
+        - #NAVBAR
+      -->
+
+      <nav class="navbar">
+
+        <ul class="navbar-list">
+
+          <li class="navbar-item">
+            <button class="navbar-link  active" data-nav-link>About</button>
+          </li>
+
+          <li class="navbar-item">
+            <button class="navbar-link" data-nav-link>Features</button>
+          </li>
+
+          <li class="navbar-item">
+            <button class="navbar-link" data-nav-link>Screenshots</button>
+          </li>
+
+          <li class="navbar-item">
+            <button class="navbar-link" data-nav-link>Download</button>
+          </li>
+
+          <li class="navbar-item">
+            <button class="navbar-link" data-nav-link>Changelog</button>
+          </li>
+
+        </ul>
+
+        <div class="theme-toggle" data-theme-toggle role="group" aria-label="Colour theme">
+
+          <button type="button" data-theme-option="light" aria-pressed="false" title="Light">
+            <ion-icon name="sunny-outline"></ion-icon>
+          </button>
+
+          <button type="button" data-theme-option="system" aria-pressed="true" title="Match system">
+            <ion-icon name="desktop-outline"></ion-icon>
+          </button>
+
+          <button type="button" data-theme-option="dark" aria-pressed="false" title="Dark">
+            <ion-icon name="moon-outline"></ion-icon>
+          </button>
+
+        </div>
+
+      </nav>
+
+
+
+
+
+      <!--
+        - #ABOUT
+      -->
+
+      <article class="about  active" data-page="about">
+
+        <header>
+          <h2 class="h2 article-title">About</h2>
+        </header>
+
+        <section class="about-text">
+          <p>
+            wxNotepad++ is a ground-up, cross-platform reimplementation of a Notepad++-style editor, built on
+            wxWidgets and wxStyledTextCtrl (Scintilla/Lexilla). It runs natively on Windows, Linux, and macOS from
+            one codebase - no source code is copied from Notepad++; the original is used only as a functional
+            reference and test target.
+          </p>
+
+          <p>
+            The project is licensed GPL v3 today, consistent with its Notepad++ heritage, with a committed goal of
+            moving to a permissive license as the remaining interoperability ties are resolved - purely to give
+            users and downstream developers more freedom, with no commercial agenda behind it.
+          </p>
+        </section>
+
+
+        <!--
+          - service
+        -->
+
+        <section class="service">
+
+          <h3 class="h3 service-title">Why wxNotepad++</h3>
+
+          <ul class="service-list">
+
+            <li class="service-item">
+
+              <div class="service-icon-box">
+                <ion-icon name="globe-outline"></ion-icon>
+              </div>
+
+              <div class="service-content-box">
+                <h4 class="h4 service-item-title">Cross-platform</h4>
+
+                <p class="service-item-text">
+                  One codebase, native builds for Windows, Linux, and macOS - not a wrapper around a single
+                  platform's APIs.
+                </p>
+              </div>
+
+            </li>
+
+            <li class="service-item">
+
+              <div class="service-icon-box">
+                <ion-icon name="extension-puzzle-outline"></ion-icon>
+              </div>
+
+              <div class="service-content-box">
+                <h4 class="h4 service-item-title">Plugin-compatible</h4>
+
+                <p class="service-item-text">
+                  An original, permissive "Nib" plugin API, plus an optional bridge that loads real compiled
+                  Notepad++ plugin DLLs on Windows.
+                </p>
+              </div>
+
+            </li>
+
+            <li class="service-item">
+
+              <div class="service-icon-box">
+                <ion-icon name="language-outline"></ion-icon>
+              </div>
+
+              <div class="service-content-box">
+                <h4 class="h4 service-item-title">Fully localized</h4>
+
+                <p class="service-item-text">
+                  The entire UI - not just top-level menus - is translated into 8 languages, with more welcome via
+                  contribution.
+                </p>
+              </div>
+
+            </li>
+
+            <li class="service-item">
+
+              <div class="service-icon-box">
+                <ion-icon name="color-palette-outline"></ion-icon>
+              </div>
+
+              <div class="service-content-box">
+                <h4 class="h4 service-item-title">Familiar, yet original</h4>
+
+                <p class="service-item-text">
+                  Scintilla-powered editing you already know, inside a menu layout designed from scratch - not
+                  copied from any single editor.
+                </p>
+              </div>
+
+            </li>
+
+          </ul>
+
+        </section>
+
+
+        <!--
+          - highlights
+        -->
+
+        <section class="highlights">
+
+          <h3 class="h3 highlights-title">By the numbers</h3>
+
+          <ul class="highlights-list has-scrollbar">
+
+            <li class="highlights-item">
+              <div class="content-card highlight-card">
+                <p class="highlight-number">3</p>
+                <p class="highlight-label">Platforms - native on Windows, Linux, and macOS</p>
+              </div>
+            </li>
+
+            <li class="highlights-item">
+              <div class="content-card highlight-card">
+                <p class="highlight-number">8</p>
+                <p class="highlight-label">Languages - the whole UI is localized, not just the menus</p>
+              </div>
+            </li>
+
+            <li class="highlights-item">
+              <div class="content-card highlight-card">
+                <p class="highlight-number">10</p>
+                <p class="highlight-label">Top-level menus, laid out from scratch - not a copy of any one editor</p>
+              </div>
+            </li>
+
+            <li class="highlights-item">
+              <div class="content-card highlight-card">
+                <p class="highlight-number">GPL v3</p>
+                <p class="highlight-label">Free and open source today, with a committed permissive-license goal</p>
+              </div>
+            </li>
+
+          </ul>
+
+        </section>
+
+
+        <!--
+          - built with
+        -->
+
+        <section class="built-with">
+
+          <h3 class="h3 built-with-title">Built with</h3>
+
+          <ul class="built-with-list">
+
+            <li><a href="https://www.wxwidgets.org/" target="_blank" rel="noopener">wxWidgets</a></li>
+            <li><a href="https://www.scintilla.org/" target="_blank" rel="noopener">Scintilla</a></li>
+            <li><a href="https://github.com/ScintillaOrg/lexilla" target="_blank" rel="noopener">Lexilla</a></li>
+            <li><a href="https://cmake.org/" target="_blank" rel="noopener">CMake</a></li>
+            <li><a href="https://github.com/features/actions" target="_blank" rel="noopener">GitHub Actions</a></li>
+            <li><a href="https://nsis.sourceforge.io/" target="_blank" rel="noopener">NSIS</a></li>
+
+          </ul>
+
+        </section>
+
+      </article>
+
+
+
+
+
+      <!--
+        - #FEATURES
+      -->
+
+      <article data-page="features">
+
+        <header>
+          <h2 class="h2 article-title">Features</h2>
+        </header>
+
+        <section class="timeline">
+
+          <div class="title-wrapper">
+            <div class="icon-box">
+              <ion-icon name="create-outline"></ion-icon>
+            </div>
+
+            <h3 class="h3">Editing &amp; navigation</h3>
+          </div>
+
+          <ol class="timeline-list">
+
+            <li class="timeline-item">
+
+              <h4 class="h4 timeline-item-title">Multi-cursor editing &amp; smart selection</h4>
+
+              <span>Selection menu</span>
+
+              <p class="timeline-text">
+                Select all occurrences, add or skip the next match, and a dedicated character panel - split out
+                of Edit into its own menu.
+              </p>
+
+            </li>
+
+            <li class="timeline-item">
+
+              <h4 class="h4 timeline-item-title">User-Defined Languages</h4>
+
+              <span>Document menu</span>
+
+              <p class="timeline-text">
+                Define syntax highlighting for a language Scintilla doesn't ship out of the box, with full
+                container-lexer styling and state recovery.
+              </p>
+
+            </li>
+
+            <li class="timeline-item">
+
+              <h4 class="h4 timeline-item-title">Macros &amp; automation</h4>
+
+              <span>Automation menu</span>
+
+              <p class="timeline-text">
+                Record and replay editing macros, run external tools, and generate MD5/SHA hashes from the
+                current selection or a file.
+              </p>
+
+            </li>
+
+            <li class="timeline-item">
+
+              <h4 class="h4 timeline-item-title">Print &amp; print preview</h4>
+
+              <span>File menu</span>
+
+              <p class="timeline-text">
+                A themed, live print preview with customizable header and footer macros, backed by Scintilla's
+                own formatted-range printing.
+              </p>
+
+            </li>
+
+          </ol>
+
+        </section>
+
+        <section class="timeline">
+
+          <div class="title-wrapper">
+            <div class="icon-box">
+              <ion-icon name="git-branch-outline"></ion-icon>
+            </div>
+
+            <h3 class="h3">Platform &amp; compatibility</h3>
+          </div>
+
+          <ol class="timeline-list">
+
+            <li class="timeline-item">
+
+              <h4 class="h4 timeline-item-title">Native on three platforms</h4>
+
+              <span>Windows · Linux · macOS</span>
+
+              <p class="timeline-text">
+                One codebase, built on wxWidgets and Scintilla/Lexilla, packaged as an NSIS installer, an
+                AppImage/.deb/.rpm/Flatpak, and a .dmg.
+              </p>
+
+            </li>
+
+            <li class="timeline-item">
+
+              <h4 class="h4 timeline-item-title">Nib plugin API</h4>
+
+              <span>Extensions menu</span>
+
+              <p class="timeline-text">
+                wxNotepad++'s own original, permissive, cross-platform plugin API for native extensions - no
+                Notepad++ ABI required.
+              </p>
+
+            </li>
+
+            <li class="timeline-item">
+
+              <h4 class="h4 timeline-item-title">Notepad++ plugin compatibility</h4>
+
+              <span>Windows only</span>
+
+              <p class="timeline-text">
+                An optional GPL bridge loads real, compiled Notepad++-ABI plugin DLLs by reproducing the
+                NPPM_* wire protocol.
+              </p>
+
+            </li>
+
+            <li class="timeline-item">
+
+              <h4 class="h4 timeline-item-title">File-format compatible</h4>
+
+              <span>Import &amp; export</span>
+
+              <p class="timeline-text">
+                Reads and writes Notepad++'s own session, style-theme, and user-defined-language XML formats.
+              </p>
+
+            </li>
+
+          </ol>
+
+        </section>
+
+      </article>
+
+
+
+
+
+      <!--
+        - #SCREENSHOTS
+      -->
+
+      <article data-page="screenshots">
+
+        <header>
+          <h2 class="h2 article-title">Screenshots</h2>
+        </header>
+
+        <section class="projects">
+
+          <ul class="filter-list">
+
+            <li class="filter-item">
+              <button class="active" data-filter-btn>All</button>
+            </li>
+
+            <li class="filter-item">
+              <button data-filter-btn>Editing</button>
+            </li>
+
+            <li class="filter-item">
+              <button data-filter-btn>Themes</button>
+            </li>
+
+            <li class="filter-item">
+              <button data-filter-btn>Panels</button>
+            </li>
+
+          </ul>
+
+          <div class="filter-select-box">
+
+            <button class="filter-select" data-select>
+
+              <div class="select-value" data-selecct-value>Select category</div>
+
+              <div class="select-icon">
+                <ion-icon name="chevron-down"></ion-icon>
+              </div>
+
+            </button>
+
+            <ul class="select-list">
+
+              <li class="select-item">
+                <button data-select-item>All</button>
+              </li>
+
+              <li class="select-item">
+                <button data-select-item>Editing</button>
+              </li>
+
+              <li class="select-item">
+                <button data-select-item>Themes</button>
+              </li>
+
+              <li class="select-item">
+                <button data-select-item>Panels</button>
+              </li>
+
+            </ul>
+
+          </div>
+
+          <ul class="project-list">
+
+            <li class="project-item  active" data-filter-item data-category="editing">
+              <figure class="project-img project-img--placeholder">
+                <ion-icon name="image-outline"></ion-icon>
+                <span>Screenshot coming soon</span>
+              </figure>
+
+              <h3 class="project-title">Multi-document editing</h3>
+
+              <p class="project-category">Editing</p>
+            </li>
+
+            <li class="project-item  active" data-filter-item data-category="themes">
+              <figure class="project-img project-img--placeholder">
+                <ion-icon name="image-outline"></ion-icon>
+                <span>Screenshot coming soon</span>
+              </figure>
+
+              <h3 class="project-title">Dark theme</h3>
+
+              <p class="project-category">Themes</p>
+            </li>
+
+            <li class="project-item  active" data-filter-item data-category="themes">
+              <figure class="project-img project-img--placeholder">
+                <ion-icon name="image-outline"></ion-icon>
+                <span>Screenshot coming soon</span>
+              </figure>
+
+              <h3 class="project-title">Light theme</h3>
+
+              <p class="project-category">Themes</p>
+            </li>
+
+            <li class="project-item  active" data-filter-item data-category="editing">
+              <figure class="project-img project-img--placeholder">
+                <ion-icon name="image-outline"></ion-icon>
+                <span>Screenshot coming soon</span>
+              </figure>
+
+              <h3 class="project-title">Find &amp; Replace</h3>
+
+              <p class="project-category">Editing</p>
+            </li>
+
+            <li class="project-item  active" data-filter-item data-category="panels">
+              <figure class="project-img project-img--placeholder">
+                <ion-icon name="image-outline"></ion-icon>
+                <span>Screenshot coming soon</span>
+              </figure>
+
+              <h3 class="project-title">Folder as Workspace</h3>
+
+              <p class="project-category">Panels</p>
+            </li>
+
+            <li class="project-item  active" data-filter-item data-category="panels">
+              <figure class="project-img project-img--placeholder">
+                <ion-icon name="image-outline"></ion-icon>
+                <span>Screenshot coming soon</span>
+              </figure>
+
+              <h3 class="project-title">Preferences</h3>
+
+              <p class="project-category">Panels</p>
+            </li>
+
+          </ul>
+
+        </section>
+
+      </article>
+
+
+
+
+
+      <!--
+        - #DOWNLOAD
+      -->
+
+      <article data-page="download">
+
+        <header>
+          <h2 class="h2 article-title">Download</h2>
+        </header>
+
+        <section class="release-hero">
+
+          <div class="release-hero-info">
+            <p class="release-hero-label">Latest release</p>
+
+            <h3 class="h3 release-hero-version" data-latest-version>Loading…</h3>
+
+            <p class="release-hero-date" data-latest-date></p>
+          </div>
+
+          <a class="release-hero-link" data-latest-notes-link href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" target="_blank" rel="noopener">
+            Release notes <ion-icon name="arrow-forward-outline"></ion-icon>
+          </a>
+
+        </section>
+
+        <section class="platforms">
+
+          <ul class="platform-list">
+
+            <li class="platform-item">
+              <div class="content-card platform-card">
+
+                <ion-icon name="logo-windows"></ion-icon>
+
+                <h4 class="h4">Windows</h4>
+
+                <p>NSIS installer, 64-bit</p>
+
+                <a class="platform-download-btn" data-download="windows" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">
+                  <ion-icon name="download-outline"></ion-icon>
+                  <span>Download for Windows</span>
+                </a>
+
+              </div>
+            </li>
+
+            <li class="platform-item">
+              <div class="content-card platform-card">
+
+                <ion-icon name="logo-apple"></ion-icon>
+
+                <h4 class="h4">macOS</h4>
+
+                <p>.dmg disk image</p>
+
+                <a class="platform-download-btn" data-download="macos" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">
+                  <ion-icon name="download-outline"></ion-icon>
+                  <span>Download for macOS</span>
+                </a>
+
+              </div>
+            </li>
+
+            <li class="platform-item">
+              <div class="content-card platform-card">
+
+                <ion-icon name="terminal-outline"></ion-icon>
+
+                <h4 class="h4">Linux</h4>
+
+                <p>Pick your package format</p>
+
+                <div class="platform-download-dropdown" data-dropdown>
+
+                  <button type="button" class="platform-download-btn" data-dropdown-btn aria-expanded="false">
+                    <ion-icon name="download-outline"></ion-icon>
+                    <span>Download for Linux</span>
+                    <ion-icon name="chevron-down" class="dropdown-caret"></ion-icon>
+                  </button>
+
+                  <ul class="platform-download-menu" data-dropdown-menu>
+                    <li><a data-download="appimage" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">AppImage</a></li>
+                    <li><a data-download="deb" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">.deb</a></li>
+                    <li><a data-download="rpm" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">.rpm</a></li>
+                    <li><a data-download="flatpak" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Flatpak</a></li>
+                  </ul>
+
+                </div>
+
+              </div>
+            </li>
+
+          </ul>
+
+        </section>
+
+        <p class="source-note">
+          Prefer to build it yourself? See the build instructions in the
+          <a href="https://github.com/Alpaq92/wx-notepad-plus-plus#readme" target="_blank" rel="noopener">README</a>.
+        </p>
+
+      </article>
+
+
+
+
+
+      <!--
+        - #CHANGELOG
+      -->
+
+      <article data-page="changelog">
+
+        <header>
+          <h2 class="h2 article-title">Changelog</h2>
+        </header>
+
+        <section class="changelog-posts">
+
+          <ul class="changelog-list" data-changelog-list>
+
+            <li class="changelog-item">
+              <div class="content-card changelog-card">
+                <p class="changelog-text">Loading releases from GitHub…</p>
+              </div>
+            </li>
+
+          </ul>
+
+          <div class="changelog-footer">
+            <a class="release-hero-link" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" target="_blank" rel="noopener">
+              View all releases on GitHub <ion-icon name="arrow-forward-outline"></ion-icon>
+            </a>
+          </div>
+
+        </section>
+
+      </article>
+
+    </div>
+
+  </main>
+
+
+
+
+
+  <!--
+    - custom js link
+  -->
+  <script src="./assets/js/script.js"></script>
+
+  <!--
+    - ionicon link
+  -->
+  <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
+  <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
+
+</body>
+
+</html>

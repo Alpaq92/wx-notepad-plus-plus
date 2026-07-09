@@ -121,4 +121,4 @@ static const MenuItemDef kSearchMenuItems[] = {
     { MenuItemKind::Normal,  IDM_SEARCH_FINDCHARINRANGE, &Label::SearchFindCharInRange, "search.findCharInRange" },
 };
 
-static const MenuDef kSearchMenu = { "menu.search", &Label::MenuSearch, kSearchMenuItems, WXSIZEOF(kSearchMenuItems) };
+static const MenuDef kGoMenu = { "menu.go", &Label::MenuGo, kSearchMenuItems, WXSIZEOF(kSearchMenuItems) };

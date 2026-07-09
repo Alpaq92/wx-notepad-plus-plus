@@ -2,7 +2,6 @@
 #include <wx/intl.h>
 
 namespace Label {
-inline const wxString MenuTools()          { return _("T&ools"); }
 inline const wxString ToolsMd5()           { return _("MD5"); }
 inline const wxString ToolsSha1()          { return _("SHA-1"); }
 inline const wxString ToolsSha256()        { return _("SHA-256"); }

@@ -3,7 +3,7 @@
 
 namespace Label
 {
-    inline const wxString MenuSearch() { return _("&Search"); }
+    inline const wxString MenuGo() { return _("&Go"); }
 
     inline const wxString SearchFind() { return _("&Find...\tCtrl+F"); }
     inline const wxString SearchFindInFiles() { return _("Find in Fi&les...\tCtrl+Shift+F"); }

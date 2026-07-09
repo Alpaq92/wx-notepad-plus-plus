@@ -2561,3 +2561,21 @@ msgstr "UTF-16 LE"
 
 msgid "UTF-16 BE"
 msgstr "UTF-16 BE"
+
+msgid "&Selection"
+msgstr "선택(&S)"
+
+msgid "&Go"
+msgstr "이동(&G)"
+
+msgid "&Document"
+msgstr "문서(&D)"
+
+msgid "&Automation"
+msgstr "자동화(&A)"
+
+msgid "E&xtensions"
+msgstr "확장(&X)"
+
+msgid "&Help"
+msgstr "도움말(&H)"

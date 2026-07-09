@@ -2561,3 +2561,21 @@ msgstr "UTF-16 LE"
 
 msgid "UTF-16 BE"
 msgstr "UTF-16 BE"
+
+msgid "&Selection"
+msgstr "Вы&деление"
+
+msgid "&Go"
+msgstr "П&ерейти"
+
+msgid "&Document"
+msgstr "Док&умент"
+
+msgid "&Automation"
+msgstr "&Автоматизация"
+
+msgid "E&xtensions"
+msgstr "&Расширения"
+
+msgid "&Help"
+msgstr "&Справка"

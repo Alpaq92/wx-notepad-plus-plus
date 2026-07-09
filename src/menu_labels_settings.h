@@ -2,7 +2,8 @@
 #include <wx/intl.h>
 
 namespace Label {
-inline const wxString MenuSettings()             { return _("Se&ttings"); }
+// Phase B reshape: Settings' own top-level label is retired - its items now live directly inside
+// the Window menu's table (see menu_data_window.h), which keeps its own pre-existing MenuWindow().
 inline const wxString SettingsPreferences()      { return _("Preferences..."); }
 inline const wxString SettingsStyleConfigurator(){ return _("Style Configurator..."); }
 inline const wxString SettingsShortcutMapper()   { return _("Shortcut Mapper..."); }

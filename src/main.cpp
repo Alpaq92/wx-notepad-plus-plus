@@ -1774,7 +1774,7 @@ public:
         g_nibEditorMain   = [this]() -> void* { return m_main.sci; };   // _scintillaMainHandle is always the MAIN view (not the active alias)
         g_nibEditorSecond = [this]() -> void* { return m_sub.sci; };    // _scintillaSecondHandle is the SUB view (valid even before first split)
         g_nibPluginsMenu  = [this]() -> void* {           // the Plugins menu HMENU (the GPL bridge maps it to NPPM_GETMENUHANDLE)
-            wxMenu* pm = m_menuRegistry.find("menu.plugins");
+            wxMenu* pm = m_menuRegistry.find("menu.extensions");
             return pm ? reinterpret_cast<void*>(pm->GetHMenu()) : nullptr;
         };
         g_nibDockNative = [this](void* hwndV, const char* title, int edge) {   // host a plugin's native window in a dock pane
@@ -1803,7 +1803,7 @@ public:
 #endif
         loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
         if (!g_nibCommands.empty())   // surface registered Nib commands in the Plugins menu
-            if (wxMenu* pm = m_menuRegistry.find("menu.plugins"))
+            if (wxMenu* pm = m_menuRegistry.find("menu.extensions"))
             {
                 if (pm->GetMenuItemCount() > 0) pm->AppendSeparator();
                 for (size_t i = 0; i < g_nibCommands.size(); ++i)
@@ -4082,17 +4082,22 @@ private:
         auto* mb = new wxMenuBar;
         buildNppMainMenu(mb, m_menuRegistry);   // full 1:1 Notepad++ menu tree, built from menu_data_*.h (see menu_builder.h)
         // Localization: pick the UI language straight from the menu bar (radio group; restart-to-apply,
-        // same flow as the Preferences > General dropdown). Inserted right after the Settings menu.
+        // same flow as the Preferences > General dropdown). A submenu of Window now (Phase B reshape),
+        // inserted at the "slot.localization" DynamicSlot the Window menu's data table reserves - not a
+        // separate top-level bar entry anymore, and not recomputed position arithmetic either.
         {
-            auto* loc = new wxMenu;
-            const int cur = uiLangIndex(readUiLang());
-            for (int i = 0; i < (int)WXSIZEOF(UI_LANG_IDS); ++i)
+            auto [winMenu, insertAt] = m_menuRegistry.slot("slot.localization");
+            if (winMenu)
             {
-                wxMenuItem* it = loc->AppendRadioItem(myID_UILANG_FIRST + i, uiLangName(i));
-                if (i == cur) it->Check();
+                auto* loc = new wxMenu;
+                const int cur = uiLangIndex(readUiLang());
+                for (int i = 0; i < (int)WXSIZEOF(UI_LANG_IDS); ++i)
+                {
+                    wxMenuItem* it = loc->AppendRadioItem(myID_UILANG_FIRST + i, uiLangName(i));
+                    if (i == cur) it->Check();
+                }
+                winMenu->Insert(insertAt, wxID_ANY, _("Locali&zation"), loc);
             }
-            const int at = m_menuRegistry.barPositionOf("menu.settings");   // symbolic lookup, not translated-label text
-            mb->Insert(at < 0 ? (int)mb->GetMenuCount() : at + 1, loc, _("Locali&zation"));
         }
         // Recent Files (MRU) submenu near the bottom of the File menu, backed by wxFileHistory. Inserted
         // at the "slot.recentFiles" DynamicSlot the File menu's data table (menu_data_file.h) reserves,

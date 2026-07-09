@@ -14,6 +14,18 @@
 > old "distilled from N++'s functionList XML" provenance no longer applies to any shipped rule;
 > (6) `src/npp_menu.h`'s header + a new `LICENSING.md` "Compatibility surfaces" section now document the
 > menu data's interoperability/method-of-operation rationale precisely.
+>
+> **Second remediation addendum (2026-07-09):** item (6) above is now further resolved, not just
+> documented. `src/npp_menu.h` was deleted (Phase A of the menu-engine rewrite — replaced by an original,
+> data-driven builder: `src/menu_builder.h`, `src/menu_data_*.h`). Phase B (same date) then reshaped the
+> menu *hierarchy* itself away from Notepad++'s: the app now presents an original 10-menu structure
+> (File/Edit/Selection/Go/View/Document/Automation/Extensions/Window/Help), designed from research across
+> five editors (VS Code, Notepad++, Pulsar Edit, Android Studio, Visual Studio) — not copied from any one
+> of them. The finding below at `src/npp_menu.h:4` is now moot: that file doesn't exist, and the "same
+> popups, item order... as real Notepad++" language `LICENSING.md` used to carry has been replaced with a
+> historical note. Only the numeric `IDM_*` command ids remain a documented interoperability fact
+> (unavoidable plugin-ABI wire-protocol values, gate #1) — the hierarchy around them carries no N++
+> provenance anymore.
 
 **Bottom line:** No improper leftover Notepad++ source code was found anywhere in the current tree. The one place that historically held verbatim upstream GPL headers (`third_party/notepad-plus-plus/`, 4 files) was deliberately removed on 2026-06-25 and replaced with a clean-room, Apache-2.0 ABI-compatibility layer (`include/npp-compat/`) whose "only numeric IDs/struct layouts are reproduced" claim holds up under direct diff verification. All third-party dependencies (wxWidgets, Scintilla, Lexilla, wxBorderlessFrame, GTK3, plus CI/installer tooling) are legitimately vendored or linked with correctly identified, compatible permissive/LGPL licenses, and are consistent with the project's GPLv3 status. Non-code assets (icons, themes, app icon) are all provenance-documented at the root (`LICENSING.md`/`NOTICE`) and, with one minor exception, at the asset-directory level too. The only real gap found was a documentation-consistency nit, not a legal problem: `resources/icons/` lacked its own in-directory `CREDITS.md` the way its two colored sibling icon sets have (since fixed — see the remediation addendum above). No agent found any undisclosed copying, unattributed asset, or unidentified dependency.
 

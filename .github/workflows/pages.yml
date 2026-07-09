@@ -1,0 +1,49 @@
+name: Deploy site to GitHub Pages
+
+# Publishes site/ (a static, framework-free HTML/CSS/JS landing page - see site/README.md) to GitHub
+# Pages. Triggers on every published release, so the deployed page always reflects the current
+# release cadence, and on any push to master that touches the site itself, so site-only edits go
+# live without needing a fake release. The page's own "latest release" / download-link / changelog
+# content is fetched live from the GitHub API by the browser (see site/assets/js/script.js) - it
+# doesn't need a rebuild to stay current, but redeploying on release keeps the static HTML/CSS/JS in
+# sync with whatever shipped in that release too.
+
+on:
+  release:
+    types: [published]
+  push:
+    branches: [master]
+    paths: ['site/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deployment at a time; let an in-flight one finish rather than cancelling it, since
+# cancelling mid-deploy can leave Pages serving a half-updated site.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site/ as the Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

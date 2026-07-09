@@ -42,7 +42,7 @@ plugin ABI itself.
 
 Real, compiled **Notepad++-ABI plugin binaries** (`NPPM_*` messages, `FuncItem`, `NppData`, …) are
 additionally supported on **Windows only**, through an optional bridge, `packages/npp-bridge`. The
-bridge is itself just a Nib plugin: it loads Notepad++-ABI DLLs, surfaces their commands in the Plugins
+bridge is itself just a Nib plugin: it loads Notepad++-ABI DLLs, surfaces their commands in the Extensions
 menu, and translates `NPPM_*` / `FuncItem` / `SCNotification` to and from Nib on their behalf — see
 [`packages/npp-bridge/README.md`](packages/npp-bridge/README.md) for exact `NPPM_*` coverage. Because
 this bridge reproduces Notepad++'s ABI, it is licensed **GPL-3.0-or-later**, kept isolated from the
