@@ -1201,21 +1201,56 @@ main {
   pointer-events: none;
 }
 
-.platform-formats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 10px;
-  justify-content: center;
-  margin-top: 12px;
+.dropdown-caret {
+  margin-left: -2px;
+  transition: transform 0.15s ease-in-out;
 }
 
-.platform-formats a {
-  font-size: var(--fs-8);
-  color: var(--light-gray-70);
-  text-decoration: underline;
+.platform-download-dropdown.active .dropdown-caret { transform: rotate(180deg); }
+
+.platform-download-dropdown { position: relative; }
+
+.platform-download-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 100%;
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: var(--shadow-2);
+  z-index: 2;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: 0.15s ease-in-out;
 }
 
-.platform-formats a:hover { color: var(--accent); }
+.platform-download-dropdown.active .platform-download-menu {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: all;
+}
+
+.platform-download-menu a {
+  color: var(--light-gray);
+  font-size: var(--fs-6);
+  font-weight: var(--fw-400);
+  padding: 9px 10px;
+  border-radius: 8px;
+  transition: var(--transition-1);
+}
+
+.platform-download-menu a:hover {
+  background: var(--select-hover-bg);
+  color: var(--accent);
+}
+
+.platform-download-menu a[aria-disabled="true"] {
+  opacity: 0.5;
+  pointer-events: none;
+}
 
 .source-note {
   color: var(--light-gray);

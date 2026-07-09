@@ -82,6 +82,28 @@ for (let i = 0; i < filterBtn.length; i++) {
 
 
 
+// platform download dropdown (Download page - Linux's AppImage/.deb/.rpm/Flatpak choice)
+document.querySelectorAll("[data-dropdown]").forEach((dropdown) => {
+  const btn = dropdown.querySelector("[data-dropdown-btn]");
+
+  const closeDropdown = () => {
+    dropdown.classList.remove("active");
+    btn.setAttribute("aria-expanded", "false");
+  };
+
+  btn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const isOpen = dropdown.classList.toggle("active");
+    btn.setAttribute("aria-expanded", String(isOpen));
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!dropdown.contains(event.target)) closeDropdown();
+  });
+});
+
+
+
 // page navigation variables
 const navigationLinks = document.querySelectorAll("[data-nav-link]");
 const pages = document.querySelectorAll("[data-page]");

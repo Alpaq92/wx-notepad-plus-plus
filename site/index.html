@@ -776,11 +776,21 @@
 
                 <p>Pick your package format</p>
 
-                <div class="platform-formats">
-                  <a data-download="appimage" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">AppImage</a>
-                  <a data-download="deb" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">.deb</a>
-                  <a data-download="rpm" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">.rpm</a>
-                  <a data-download="flatpak" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Flatpak</a>
+                <div class="platform-download-dropdown" data-dropdown>
+
+                  <button type="button" class="platform-download-btn" data-dropdown-btn aria-expanded="false">
+                    <ion-icon name="download-outline"></ion-icon>
+                    <span>Download for Linux</span>
+                    <ion-icon name="chevron-down" class="dropdown-caret"></ion-icon>
+                  </button>
+
+                  <ul class="platform-download-menu" data-dropdown-menu>
+                    <li><a data-download="appimage" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">AppImage</a></li>
+                    <li><a data-download="deb" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">.deb</a></li>
+                    <li><a data-download="rpm" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">.rpm</a></li>
+                    <li><a data-download="flatpak" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Flatpak</a></li>
+                  </ul>
+
                 </div>
 
               </div>
