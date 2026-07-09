@@ -1263,10 +1263,26 @@ main {
 
 /* img-previewer's own stylesheet (assets/vendor/img-previewer/index.css) references
    var(--header-bg-opcity) - a typo for --header-bg-opacity, which is what its JS actually sets - so
-   the "1 / 7" counter and reset/rotate/close buttons float with no header bar behind them at all.
-   Fixed here (not in the vendored file, which stays unmodified) using the correctly-spelled variable
-   the JS does set, with a fallback matching the headerOpacity passed to ImgPreviewer() in script.js. */
-.img-pre__header { background: rgba(0, 0, 0, var(--header-bg-opacity, 0.75)) !important; }
+   the "1 / 7" counter and reset/rotate/close buttons floated with no header bar behind them at all.
+   Two follow-up attempts before this one both technically changed the computed background-color but
+   were still not visually distinguishable: (1) rgba(0,0,0, var(--header-bg-opacity)) is the same
+   black as the lightbox's own modal backdrop (.img-pre__container, --container-opacity), just a
+   different opacity - stacked over an already-near-black dark-theme page the two blend into
+   effectively the same rendered color; (2) rgba(28,28,30,0.92) fixed that (a genuinely different
+   hue/lightness, confirmed via getBoundingClientRect + getComputedStyle to cover the full header
+   width, not just the button cluster), but ~20/255 of lightness difference against an almost-black
+   backdrop is still too subtle to read as a bar at a glance, particularly for the "1 / 7" counter
+   text (thin characters, no strong visual anchor) vs. the button icons next to it (chunky SVG
+   shapes read as "boxed" even against a subtle background, making the asymmetry look like the
+   background wasn't applied on the left side at all when it actually was, uniformly, on both).
+   Solid opaque color (no alpha blending ambiguity with whatever's behind) + real lightness contrast
+   + an explicit border to guarantee a crisp, unmistakable edge regardless of exact contrast ratio -
+   deliberately NOT tied to the site's own [data-theme] variables, since this lightbox is always a
+   dark overlay regardless of which theme the host page is in (standard lightbox convention). */
+.img-pre__header {
+  background: rgb(75, 75, 82) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+}
 
 
 

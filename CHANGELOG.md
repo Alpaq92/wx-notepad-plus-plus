@@ -3,6 +3,19 @@
 All notable changes to wxNotepad++ are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- The Screenshots lightbox's header bar (the "1 / 7" counter and the reset/rotate/close buttons) was
+  still invisible in 0.5.0 despite that release's own fix - the corrected background
+  (`rgba(0, 0, 0, var(--header-bg-opacity))`) technically applied (confirmed via computed style,
+  bounding rect, and element-stacking checks - it wasn't a caching or deployment issue) but was the
+  *same color*, just a different opacity, as the lightbox's own modal backdrop, which is also black.
+  Two translucent black layers over an already near-black dark-theme page don't create enough
+  contrast to read as a distinct bar to the eye, even though they're technically different computed
+  values. Now uses a genuinely different, solid (non-transparent) grey plus a subtle top-of-content
+  border, verified with real numeric contrast rather than a value that was merely "not identical."
+
 ## [0.5.0] - 2026-07-09
 
 ### Fixed
