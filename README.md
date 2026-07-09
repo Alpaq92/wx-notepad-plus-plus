@@ -2,6 +2,8 @@
 
 **An experimental, cross-platform (Windows / Linux / macOS) Notepad++-faithful editor built on [wxWidgets](https://www.wxwidgets.org/).**
 
+**[Project site & downloads →](https://alpaq92.github.io/wx-notepad-plus-plus/)**
+
 > ⚠️ Experimental and unofficial. Not affiliated with or endorsed by the Notepad++ project.
 
 Upstream [Notepad++](https://notepad-plus-plus.org/) is Windows-only — its UI, plugin ABI, docking,
