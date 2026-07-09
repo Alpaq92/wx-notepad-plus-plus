@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # Build a macOS .app bundle + .dmg from the wxnpp build output. Run from the repo root after
 # `cmake --build build --target wxnpp`:
-#   installer/macos/build-dmg.sh
-# Produces build/installer/wxNotepadPlusPlus-<version>.dmg
+#   installer/macos/build-dmg.sh [arch]
+# `arch` (arm64 or x86_64) is only used to name the output file - it must match whatever
+# CMAKE_OSX_ARCHITECTURES the build itself was actually configured with (see build.yml), since this
+# script has no way to inspect the already-built binary's arch itself. Defaults to `uname -m` for a
+# local, non-CI build on a single-arch machine.
+# Produces build/installer/wxNotepadPlusPlus-<version>-<arch>.dmg
 set -euo pipefail
 cd "$(dirname "$0")/../.."   # repo root
+
+ARCH="${1:-$(uname -m)}"
 
 # Read straight from the top-level CMakeLists.txt's project(... VERSION ...) so this can't drift
 # out of sync with it again (every packaging script independently hardcoded its own version string
@@ -65,5 +71,5 @@ DMGROOT="build/dmg-root"
 rm -rf "$DMGROOT"; mkdir -p "$DMGROOT"
 cp -r "$APPDIR" "$DMGROOT/"
 ln -s /Applications "$DMGROOT/Applications"
-hdiutil create -volname "wxNotepad++" -srcfolder "$DMGROOT" -ov -format UDZO "$OUTDIR/wxNotepadPlusPlus-${VERSION}.dmg"
-echo "Built $OUTDIR/wxNotepadPlusPlus-${VERSION}.dmg"
+hdiutil create -volname "wxNotepad++ (${ARCH})" -srcfolder "$DMGROOT" -ov -format UDZO "$OUTDIR/wxNotepadPlusPlus-${VERSION}-${ARCH}.dmg"
+echo "Built $OUTDIR/wxNotepadPlusPlus-${VERSION}-${ARCH}.dmg"

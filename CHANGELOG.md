@@ -5,11 +5,39 @@ All notable changes to wxNotepad++ are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- On Linux and macOS, toolbar/menu icons, theme files, the User-Defined Language dialog's bookmark
+  marker, the context-menu XML, bundled fonts, and - most impactfully - **all 8 translated languages**
+  silently failed to load, because a dozen resource-path lookups in `src/main.cpp` were built with a
+  hardcoded Windows `\` separator instead of the cross-platform `wxFILE_SEP_PATH`. The UI always fell
+  back to English on those platforms even when a non-English language was selected. Windows was never
+  affected (its separator happens to be `\`), which is why this went unnoticed until real Linux testing.
+- The macOS `.dmg` baked in whatever macOS version the CI runner happened to be running as its minimum
+  supported OS, rather than a fixed floor - a `.dmg` built today could refuse to launch on anything
+  older than that runner image. `CMAKE_OSX_DEPLOYMENT_TARGET` is now pinned to 11.0 (Big Sur), matching
+  the installer's own `LSMinimumSystemVersion`.
+- The Preferences dialog's category list rendered left-aligned on Windows but visually centered on
+  Linux/macOS - `wxListbook` only self-selects the left-aligned single-column list mode on MSW; other
+  platforms fell back to an icon-grid layout that GTK renders less predictably for iconless items. The
+  list now forces the same left-aligned mode on every platform.
+- The Linux download button's hover state used a fading gradient meant for an avatar glow effect,
+  making its label unreadable partway through the fade. Hover now uses a solid accent background.
+- The Folder as Workspace tree's icon patch only covered 3 of wxWidgets' 9 built-in slots (folder,
+  folder-open, generic file); the other 6 (computer/drive/cdrom/floppy/removable/executable) and every
+  per-file-extension icon (`.cpp`, `.py`, `.png`, …) still fell back to the OS's own icon set. All 9
+  built-in slots are now patched, plus ~90 common extensions across code/document/image/archive/
+  audio/video, pre-seeded into `wxFileIconsTable`'s own lookup cache so the OS's MIME-based icon
+  lookup is never consulted for a recognized extension.
+
 ### Added
 - A project landing page (`site/`), deployed to GitHub Pages on every published release: About,
   Features, Screenshots, Download, and Changelog, with a system/light/dark theme switch. The version
   badge, per-platform download links, and changelog list are fetched live from the GitHub API, so the
   page never needs a rebuild to stay current with the latest release.
+- macOS now ships as two separate, single-arch `.dmg` builds (Apple Silicon `arm64` and Intel
+  `x86_64`) instead of one build that only matched whichever architecture happened to be running the
+  CI job. Both build on the same runner via `CMAKE_OSX_ARCHITECTURES`; the project site's macOS
+  download button is now a dropdown, matching the Linux one.
 
 ### Changed
 - The menu bar has been reorganized from Notepad++'s original 13-menu layout into an original 10-menu

@@ -30,7 +30,8 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             artifacts/wxnpp-windows-installer/* \
             artifacts/wxnpp-linux-packages/* \
-            artifacts/wxnpp-macos-package/* \
+            artifacts/wxnpp-macos-arm64-package/* \
+            artifacts/wxnpp-macos-x86_64-package/* \
             --repo "${{ github.repository }}" \
             --title "wxNotepad++ ${{ github.ref_name }}" \
             --generate-notes

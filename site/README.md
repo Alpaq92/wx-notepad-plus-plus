@@ -22,11 +22,12 @@ Plain HTML/CSS/JS, no build step, no dependencies to install - adapted from
 
 ## Where the "live" content comes from
 
-The version badge, the three platform download buttons, and the changelog list are **not** baked in
+The version badge, the platform download buttons, and the changelog list are **not** baked in
 at deploy time - `script.js` calls the GitHub REST API directly from the visitor's browser
 (`GET /repos/Alpaq92/wx-notepad-plus-plus/releases/latest` and `.../releases?per_page=6`) on every
 page load, so they're always current even between deploys. Download buttons are matched to release
-assets by filename suffix (`.exe`, `.dmg`, `.AppImage`, `.deb`, `.rpm`, `.flatpak`) - if a packaging
+assets by filename suffix and, for the two macOS builds, an `arm64`/`x86_64` substring
+(`.exe`, `arm64...dmg`, `x86_64...dmg`, `.AppImage`, `.deb`, `.rpm`, `.flatpak`) - if a packaging
 script's output naming ever changes (see `installer/*/build-*.sh` and `installer/windows/wxnpp.nsi`),
 update `ASSET_MATCHERS` in `script.js` to match.
 

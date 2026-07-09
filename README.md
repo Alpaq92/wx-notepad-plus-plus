@@ -11,6 +11,8 @@ portable C++/wx. Plugins are first-class via the project's own permissive, cross
 real Win32 Notepad++-ABI plugin binaries are additionally supported on Windows through an optional GPL
 bridge plugin (see [Plugins](#plugins) below).
 
+**[Project site & downloads →](https://alpaq92.github.io/wx-notepad-plus-plus/)**
+
 ## Status
 
 Experimental, under active development. The Windows build is feature-rich and closely matches native
@@ -88,11 +90,14 @@ docs/                CROSS_PLATFORM_PLAN.md, FUTURE_PLANS.md (licensing roadmap)
 
 ## Installing
 
-Grab the latest build from [Releases](https://github.com/Alpaq92/wx-notepad-plus-plus/releases):
+Grab the latest build from the [project site's Download page](https://alpaq92.github.io/wx-notepad-plus-plus/)
+(picks the right asset for you) or straight from
+[Releases](https://github.com/Alpaq92/wx-notepad-plus-plus/releases):
 
 - **Windows** — the NSIS installer (`wxNotepadPlusPlus-<version>-Setup.exe`)
 - **Linux** — an AppImage, `.deb`, `.rpm`, or `.flatpak` (`flatpak install wxNotepadPlusPlus-<version>.flatpak`)
-- **macOS** — a `.dmg`
+- **macOS** — a `.dmg`, built separately for Apple Silicon (`wxNotepadPlusPlus-<version>-arm64.dmg`) and
+  Intel (`wxNotepadPlusPlus-<version>-x86_64.dmg`) — pick the one matching your Mac's chip
 
 Every push also builds all of these as CI artifacts (see `.github/workflows/build.yml` and
 `installer/{windows,linux,macos}/`); pushing a version tag (`v*`) runs

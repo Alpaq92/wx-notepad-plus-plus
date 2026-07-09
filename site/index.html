@@ -751,12 +751,22 @@
 
                 <h4 class="h4">macOS</h4>
 
-                <p>.dmg disk image</p>
+                <p>Pick your Mac's chip</p>
 
-                <a class="platform-download-btn" data-download="macos" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">
-                  <ion-icon name="download-outline"></ion-icon>
-                  <span>Download for macOS</span>
-                </a>
+                <div class="platform-download-dropdown" data-dropdown>
+
+                  <button type="button" class="platform-download-btn" data-dropdown-btn aria-expanded="false">
+                    <ion-icon name="download-outline"></ion-icon>
+                    <span>Download for macOS</span>
+                    <ion-icon name="chevron-down" class="dropdown-caret"></ion-icon>
+                  </button>
+
+                  <ul class="platform-download-menu" data-dropdown-menu>
+                    <li><a data-download="macos-arm64" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Apple Silicon (M1 and newer)</a></li>
+                    <li><a data-download="macos-x86_64" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Intel</a></li>
+                  </ul>
+
+                </div>
 
               </div>
             </li>
@@ -764,7 +774,7 @@
             <li class="platform-item">
               <div class="content-card platform-card">
 
-                <ion-icon name="terminal-outline"></ion-icon>
+                <ion-icon name="logo-tux"></ion-icon>
 
                 <h4 class="h4">Linux</h4>
 
