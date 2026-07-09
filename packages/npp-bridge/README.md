@@ -16,7 +16,7 @@ permissive `nib.*` API; this bridge is the one place the two worlds meet.
 ## What it does
 
 1. **Loads** each `<exe>/plugins/<Name>/<Name>.dll` (`LoadLibrary` + `setInfo`/`getFuncsArray`/`getName`).
-2. **Surfaces** every `FuncItem` as a Nib command, so the plugin's commands appear in the Plugins menu.
+2. **Surfaces** every `FuncItem` as a Nib command, so the plugin's commands appear in the Extensions menu.
 3. **Routes `NPPM_*`** — it subclasses the frame (HWND from `nib.win32`) and answers the messages plugins
    send, translating them to Nib calls.
 4. **Forwards `beNotified`** — it subscribes to `nib.events` and delivers them to each plugin as

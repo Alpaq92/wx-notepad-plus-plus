@@ -2561,3 +2561,21 @@ msgstr "UTF-16 LE"
 
 msgid "UTF-16 BE"
 msgstr "UTF-16 BE"
+
+msgid "&Selection"
+msgstr "選択(&S)"
+
+msgid "&Go"
+msgstr "移動(&G)"
+
+msgid "&Document"
+msgstr "ドキュメント(&D)"
+
+msgid "&Automation"
+msgstr "自動化(&A)"
+
+msgid "E&xtensions"
+msgstr "拡張機能(&X)"
+
+msgid "&Help"
+msgstr "ヘルプ(&H)"

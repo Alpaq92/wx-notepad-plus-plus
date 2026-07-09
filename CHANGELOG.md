@@ -3,6 +3,25 @@
 All notable changes to wxNotepad++ are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- A project landing page (`site/`), deployed to GitHub Pages on every published release: About,
+  Features, Screenshots, Download, and Changelog, with a system/light/dark theme switch. The version
+  badge, per-platform download links, and changelog list are fetched live from the GitHub API, so the
+  page never needs a rebuild to stay current with the latest release.
+
+### Changed
+- The menu bar has been reorganized from Notepad++'s original 13-menu layout into an original 10-menu
+  hierarchy — File, Edit, **Selection** (new: multi-cursor/select-all items split out of Edit),
+  **Go** (renamed from Search), View, **Document** (new: Language + Encoding), **Automation** (new:
+  Macro + Run + the MD5/SHA hash-generator submenus, previously three near-empty top-level menus),
+  **Extensions** (renamed from Plugins), Window (now also hosts what used to be a standalone Settings
+  menu, plus the Localization picker), Help (renamed from "?"/About) — designed from cross-editor
+  research (VS Code, Notepad++, Pulsar Edit, Android Studio, Visual Studio) rather than copied from any
+  one of them. Every command keeps its existing keyboard shortcut and `IDM_*` id; only which menu it
+  lives under changed.
+
 ## [0.4.0] - 2026-07-06
 
 ### Added

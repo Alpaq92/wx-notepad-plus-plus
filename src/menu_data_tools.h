@@ -24,11 +24,6 @@ static const MenuItemDef kToolsSha512Items[] = {
     { MenuItemKind::Normal, IDM_TOOL_SHA512_GENERATEINTOCLIPBOARD,  &Label::ToolsGenerateIntoClipboard, "tools.sha512.generateIntoClipboard" },
 };
 
-static const MenuItemDef kToolsMenuItems[] = {
-    { MenuItemKind::Submenu, 0, &Label::ToolsMd5,    "tools.md5",    kToolsMd5Items,    WXSIZEOF(kToolsMd5Items) },
-    { MenuItemKind::Submenu, 0, &Label::ToolsSha1,   "tools.sha1",   kToolsSha1Items,   WXSIZEOF(kToolsSha1Items) },
-    { MenuItemKind::Submenu, 0, &Label::ToolsSha256, "tools.sha256", kToolsSha256Items, WXSIZEOF(kToolsSha256Items) },
-    { MenuItemKind::Submenu, 0, &Label::ToolsSha512, "tools.sha512", kToolsSha512Items, WXSIZEOF(kToolsSha512Items) },
-};
-
-static const MenuDef kToolsMenu = { "menu.tools", &Label::MenuTools, kToolsMenuItems, WXSIZEOF(kToolsMenuItems) };
+// Phase B reshape: Tools is no longer a standalone top-level menu - it had no items of its own
+// besides these 4 hash submenus, which now lift directly into the new Automation menu (see
+// menu_data_automation.h) instead of nesting behind a now-redundant "Tools" wrapper.

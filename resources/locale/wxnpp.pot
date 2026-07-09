@@ -2545,3 +2545,21 @@ msgstr ""
 
 msgid "UTF-16 BE"
 msgstr ""
+
+msgid "&Selection"
+msgstr ""
+
+msgid "&Go"
+msgstr ""
+
+msgid "&Document"
+msgstr ""
+
+msgid "&Automation"
+msgstr ""
+
+msgid "E&xtensions"
+msgstr ""
+
+msgid "&Help"
+msgstr ""

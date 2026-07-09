@@ -2,7 +2,7 @@
 #include <wx/intl.h>
 
 namespace Label {
-inline const wxString MenuHelp()               { return _("&About"); }
+inline const wxString MenuHelp()               { return _("&Help"); }
 inline const wxString HelpCmdLineArguments()   { return _("Command Line Arguments..."); }
 inline const wxString HelpGitHub()             { return _("wxNotepad++ on GitHub"); }
 inline const wxString HelpReleases()           { return _("wxNotepad++ Releases"); }

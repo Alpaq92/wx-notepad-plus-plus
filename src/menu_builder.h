@@ -8,16 +8,14 @@
 #include "menu_model.h"
 #include "menu_data_file.h"
 #include "menu_data_edit.h"
-#include "menu_data_search.h"
+#include "menu_data_selection.h"
+#include "menu_data_search.h"     // kGoMenu (renamed from Search in the Phase B reshape; content unchanged)
 #include "menu_data_view.h"
-#include "menu_data_encoding.h"
+#include "menu_data_document.h"   // Document: Language (DynamicSlot, see below) + Encoding submenu
 #include "menu_data_language.h"   // buildLanguageMenu() - the one hand-written generator (see its own header comment)
-#include "menu_data_settings.h"
-#include "menu_data_tools.h"
-#include "menu_data_macro.h"
-#include "menu_data_run.h"
-#include "menu_data_plugins.h"
-#include "menu_data_window.h"
+#include "menu_data_automation.h" // Automation: Macro + Run + Tools' hash submenus
+#include "menu_data_plugins.h"    // kExtensionsMenu (renamed from Plugins in the Phase B reshape; content unchanged)
+#include "menu_data_window.h"     // Window: Settings + Localization (DynamicSlot, see main.cpp) + the old Window items
 #include "menu_data_help.h"
 
 inline wxMenu* buildMenuFromDefs(const MenuItemDef* items, size_t count, MenuRegistry& reg)
@@ -55,16 +53,19 @@ inline wxMenu* buildMenuFromDefs(const MenuItemDef* items, size_t count, MenuReg
     return menu;
 }
 
-// Builds the whole menu bar and populates `reg`. Menu order matches the original npp_menu.h exactly:
-// File, Edit, Search, View, Encoding, Language, Settings, Tools, Macro, Run, Plugins, Window, Help.
+// Builds the whole menu bar and populates `reg`. Ten top-level menus (the Phase B reshape - see the
+// project's menu-redesign plan): File, Edit, Selection, Go, View, Document, Automation, Extensions,
+// Window, Help. Every IDM_* id and every item's internal wording/nesting is unchanged from before the
+// reshape; only which top-level menu owns what, and ~5 new top-level names, changed.
 inline void buildNppMainMenu(wxMenuBar* mb, MenuRegistry& reg)
 {
     struct Entry { const MenuDef* def; };
-    static const Entry kStaticMenus[] = {
-        { &kFileMenu }, { &kEditMenu }, { &kSearchMenu }, { &kViewMenu }, { &kEncodingMenu },
+    static const Entry kMenus[] = {
+        { &kFileMenu }, { &kEditMenu }, { &kSelectionMenu }, { &kGoMenu }, { &kViewMenu },
+        { &kDocumentMenu }, { &kAutomationMenu }, { &kExtensionsMenu }, { &kWindowMenu }, { &kHelpMenu },
     };
     int barPos = 0;
-    for (const Entry& e : kStaticMenus)
+    for (const Entry& e : kMenus)
     {
         wxMenu* menu = buildMenuFromDefs(e.def->items, e.def->itemCount, reg);
         mb->Append(menu, e.def->label());
@@ -72,22 +73,14 @@ inline void buildNppMainMenu(wxMenuBar* mb, MenuRegistry& reg)
     }
 
     // Language: a hand-written generator (not a static MenuItemDef table) - see menu_data_language.h's
-    // own header comment for why. It self-registers "menu.language" with a placeholder bar position;
-    // fix that up now that we know the real one.
+    // own header comment for why. Insert it as a submenu at Document's "slot.language" DynamicSlot;
+    // buildLanguageMenu() self-registers "menu.language" as it returns.
     {
-        wxMenu* lang = buildLanguageMenu(reg);
-        mb->Append(lang, Label::MenuLanguage());
-        reg.registerMenu("menu.language", lang, barPos++);
-    }
-
-    static const Entry kMoreStaticMenus[] = {
-        { &kSettingsMenu }, { &kToolsMenu }, { &kMacroMenu }, { &kRunMenu },
-        { &kPluginsMenu }, { &kWindowMenu }, { &kHelpMenu },
-    };
-    for (const Entry& e : kMoreStaticMenus)
-    {
-        wxMenu* menu = buildMenuFromDefs(e.def->items, e.def->itemCount, reg);
-        mb->Append(menu, e.def->label());
-        reg.registerMenu(e.def->symbolicName, menu, barPos++);
+        auto [docMenu, langAt] = reg.slot("slot.language");
+        if (docMenu)
+        {
+            wxMenu* lang = buildLanguageMenu(reg);
+            docMenu->Insert(langAt, wxID_ANY, Label::MenuLanguage(), lang);
+        }
     }
 }
