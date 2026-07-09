@@ -2,6 +2,8 @@
 
 **An experimental, cross-platform (Windows / Linux / macOS) Notepad++-faithful editor built on [wxWidgets](https://www.wxwidgets.org/).**
 
+**[Project site & downloads →](https://alpaq92.github.io/wx-notepad-plus-plus/)**
+
 > ⚠️ Experimental and unofficial. Not affiliated with or endorsed by the Notepad++ project.
 
 Upstream [Notepad++](https://notepad-plus-plus.org/) is Windows-only — its UI, plugin ABI, docking,
@@ -88,7 +90,9 @@ docs/                CROSS_PLATFORM_PLAN.md, FUTURE_PLANS.md (licensing roadmap)
 
 ## Installing
 
-Grab the latest build from [Releases](https://github.com/Alpaq92/wx-notepad-plus-plus/releases):
+Grab the latest build from the [project site's Download page](https://alpaq92.github.io/wx-notepad-plus-plus/)
+(picks the right asset for you) or straight from
+[Releases](https://github.com/Alpaq92/wx-notepad-plus-plus/releases):
 
 - **Windows** — the NSIS installer (`wxNotepadPlusPlus-<version>-Setup.exe`)
 - **Linux** — an AppImage, `.deb`, `.rpm`, or `.flatpak` (`flatpak install wxNotepadPlusPlus-<version>.flatpak`)
