@@ -1261,12 +1261,19 @@ main {
   #IMG-PREVIEWER OVERRIDES
 \*-----------------------------------*/
 
-/* img-previewer's own stylesheet (assets/vendor/img-previewer/index.css) references
-   var(--header-bg-opcity) - a typo for --header-bg-opacity, which is what its JS actually sets - so
-   the "1 / 7" counter and reset/rotate/close buttons float with no header bar behind them at all.
-   Fixed here (not in the vendored file, which stays unmodified) using the correctly-spelled variable
-   the JS does set, with a fallback matching the headerOpacity passed to ImgPreviewer() in script.js. */
+/* The vendored img-previewer stylesheet references var(--header-bg-opcity) - a typo for
+   --header-bg-opacity, which is what its JS actually sets - so the header bar behind the counter and
+   the reset/rotate/close buttons never gets a background. Restore it here (the vendored file stays
+   unmodified) using the correctly-spelled variable, with a fallback matching script.js's headerOpacity. */
 .img-pre__header { background: rgba(0, 0, 0, var(--header-bg-opacity, 0.75)) !important; }
+
+/* The "1 / 7" counter (three spans: current / delimiter / total) was stacking onto three lines
+   because this stylesheet's own global reset - `img, ion-icon, a, button, time, span { display:
+   block }` (search "span { display: block" above) - makes EVERY span a block element, so the
+   img-previewer counter's spans each take their own line. Force just these back to inline so the
+   whole "1 / 7" sits on one line. */
+.img-pre__nums span { display: inline; }
+.img-pre__nums p { margin: 0; }
 
 
 

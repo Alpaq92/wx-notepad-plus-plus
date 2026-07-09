@@ -15,7 +15,8 @@
 #include "menu_data_language.h"   // buildLanguageMenu() - the one hand-written generator (see its own header comment)
 #include "menu_data_automation.h" // Automation: Macro + Run + Tools' hash submenus
 #include "menu_data_plugins.h"    // kExtensionsMenu (renamed from Plugins in the Phase B reshape; content unchanged)
-#include "menu_data_window.h"     // Window: Settings + Localization (DynamicSlot, see main.cpp) + the old Window items
+#include "menu_data_settings.h"   // Settings: config items + Localization (DynamicSlot, see main.cpp) - split back out of Window
+#include "menu_data_window.h"     // Window: window management only (Sort By / Windows / Recent Window)
 #include "menu_data_help.h"
 
 inline wxMenu* buildMenuFromDefs(const MenuItemDef* items, size_t count, MenuRegistry& reg)
@@ -53,16 +54,17 @@ inline wxMenu* buildMenuFromDefs(const MenuItemDef* items, size_t count, MenuReg
     return menu;
 }
 
-// Builds the whole menu bar and populates `reg`. Ten top-level menus (the Phase B reshape - see the
-// project's menu-redesign plan): File, Edit, Selection, Go, View, Document, Automation, Extensions,
-// Window, Help. Every IDM_* id and every item's internal wording/nesting is unchanged from before the
-// reshape; only which top-level menu owns what, and ~5 new top-level names, changed.
+// Builds the whole menu bar and populates `reg`. Eleven top-level menus: File, Edit, Selection, Go,
+// View, Document, Automation, Extensions, Settings, Window, Help. (The Phase B reshape had merged
+// Settings into Window for a round 10; it was split back out after user feedback that Preferences
+// under "Window" was a weird home.) Every IDM_* id and every item's internal wording/nesting is
+// unchanged; only which top-level menu owns what changed.
 inline void buildNppMainMenu(wxMenuBar* mb, MenuRegistry& reg)
 {
     struct Entry { const MenuDef* def; };
     static const Entry kMenus[] = {
         { &kFileMenu }, { &kEditMenu }, { &kSelectionMenu }, { &kGoMenu }, { &kViewMenu },
-        { &kDocumentMenu }, { &kAutomationMenu }, { &kExtensionsMenu }, { &kWindowMenu }, { &kHelpMenu },
+        { &kDocumentMenu }, { &kAutomationMenu }, { &kExtensionsMenu }, { &kSettingsMenu }, { &kWindowMenu }, { &kHelpMenu },
     };
     int barPos = 0;
     for (const Entry& e : kMenus)
