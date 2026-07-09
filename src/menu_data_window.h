@@ -1,19 +1,14 @@
 #pragma once
 #include "menu_model.h"
 #include "menu_labels_window.h"
-#include "menu_labels_settings.h"   // reuses Label::Settings* verbatim - see below
-#include "menu_data_settings.h"     // reuses kSettingsImportItems verbatim
 #include "menuCmdID.h"
 
 // ----------------------------------------------------------------- Window
-// Phase B reshape: Window absorbs Settings and the dynamically-inserted Localization menu (see the
-// reshape plan - "Window: repurposed as the app-wide 'environment' menu"). Settings' items and the
-// old Window menu's items each keep their own exact wording/ids/nesting; only the grouping changed.
-//
-// "slot.localization" is a DynamicSlot: the Localization submenu is built at runtime from the app's
-// UI-language list (main.cpp's UI_LANG_IDS/uiLangName), not static data, so main.cpp's buildMenuBar()
-// resolves this slot after the tree walk - exactly the same pattern already used for
-// "slot.recentFiles" in the File menu, just now inserting a submenu instead of appending in-place.
+// Window is genuine window management only: Sort By, the open-document Windows list, and the
+// Recent Window MRU. The config-type items (Preferences, Style Configurator, Shortcut Mapper, Import,
+// Edit Popup ContextMenu) and the Localization submenu that briefly lived here in the Phase B reshape
+// moved out to a restored top-level Settings menu (menu_data_settings.h) after user feedback that
+// Preferences under "Window" was a weird home.
 
 static const MenuItemDef kWindowSortByItems[] = {
     { MenuItemKind::Normal, IDM_WINDOW_SORT_FN_ASC, &Label::WindowSortNameAsc,  "window.sortBy.nameAsc" },
@@ -29,17 +24,6 @@ static const MenuItemDef kWindowSortByItems[] = {
 };
 
 static const MenuItemDef kWindowMenuItems[] = {
-    { MenuItemKind::Normal, IDM_SETTING_PREFERENCE,      &Label::SettingsPreferences,       "window.preferences" },
-    { MenuItemKind::Normal, IDM_LANGSTYLE_CONFIG_DLG,    &Label::SettingsStyleConfigurator, "window.styleConfigurator" },
-    { MenuItemKind::Normal, IDM_SETTING_SHORTCUT_MAPPER, &Label::SettingsShortcutMapper,    "window.shortcutMapper" },
-    { MenuItemKind::Separator },
-    { MenuItemKind::Submenu, 0, &Label::SettingsImportSubmenu, "window.import",
-      kSettingsImportItems, WXSIZEOF(kSettingsImportItems) },
-    { MenuItemKind::Separator },
-    { MenuItemKind::Normal, IDM_SETTING_EDITCONTEXTMENU, &Label::SettingsEditContextMenu, "window.editContextMenu" },
-    { MenuItemKind::Separator },
-    { MenuItemKind::DynamicSlot, 0, nullptr, "slot.localization" },
-    { MenuItemKind::Separator },
     { MenuItemKind::Submenu, 0, &Label::WindowSortBy, "window.sortBy", kWindowSortByItems, WXSIZEOF(kWindowSortByItems) },
     { MenuItemKind::Normal, IDM_WINDOW_WINDOWS, &Label::WindowWindows, "window.windows" },
     { MenuItemKind::Separator },

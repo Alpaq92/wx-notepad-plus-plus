@@ -3,6 +3,42 @@
 All notable changes to wxNotepad++ are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.5] - 2026-07-10
+
+### Added
+- Preferences > General **"Auto-hide toolbar in full screen"** (off by default - the toolbar now stays
+  visible in full-screen mode; turn this on for the old behaviour of hiding it).
+
+### Changed
+- Preferences and the other configuration items (Style Configurator, Shortcut Mapper, Import, Edit
+  Popup ContextMenu, Localization) moved out of the Window menu into a restored top-level **Settings**
+  menu - the Phase B reshape had merged Settings into Window to hit a round 10 top-level menus, but
+  Preferences under "Window" was an unintuitive home. Window is now genuine window management only
+  (Sort By / Windows / Recent Window). Back to 11 top-level menus. Every `IDM_*` id is unchanged; the
+  "Se&ttings" label was already translated in every locale from the original port, so no catalog change.
+- On macOS the window title bar is now left blank instead of showing "<document> - wxNotepad++"
+  (the document name is already in the tab; a clean native title bar is the macOS convention).
+
+### Fixed
+- On Linux/GTK, the integrated top bar's menu items (File, Edit, Selection, …) were crammed together
+  with no spacing - `wxBU_EXACTFIT` collapses each menu button to its bare text extent, and the sizer
+  added no border between them, so on GTK (which, unlike MSW, keeps no internal button margin) the
+  labels abutted. Added a 4px border each side.
+- On Linux/GTK, the "+/v/x" caption buttons at the right of the tab strip stood out as a distinct
+  block - their panel used a hardcoded chrome colour, but `wxAuiFlatTabArt` paints the strip itself
+  from a system-derived colour (`wxAuiDimColour(wxSYS_COLOUR_WINDOW, 5)`) that differs from it on GTK.
+  The caption bar now replicates that exact formula on non-Windows platforms so it matches the strip.
+- On Linux/GTK, the Preferences dialog was badly broken (clipped checkbox labels, empty/mispositioned
+  combos, dead space) - the dialog is opened at a fixed size with no post-show resize, and on GTK
+  `SetSizer` alone doesn't lay children out until an explicit `Layout()` or a size event, so every
+  `wxDefaultSize` control rendered at its unlaid-out construction geometry. Added an explicit
+  `dlg.Layout()` (a no-op on Windows, which reflows on the initial show).
+- The Screenshots lightbox's "1 / 7" image counter rendered stacked vertically (each of "1", "/", "7"
+  on its own line) instead of on one line. Root cause: this site's own global CSS reset
+  (`img, ion-icon, a, button, time, span { display: block }`, inherited from the vcard template the
+  page was adapted from) turns *every* span into a block element, and the counter is built from three
+  spans - so each took its own line. Forced just the counter's spans back to `inline`.
+
 ## [0.5.0] - 2026-07-09
 
 ### Fixed

@@ -1744,6 +1744,9 @@ public:
         : FB(nullptr, wxID_ANY, "new 1 - wxNotepad++", wxDefaultPosition, wxSize(1100, 720)),
           m_timer(this, myID_TIMER)
     {
+#ifdef __WXMAC__
+        SetTitle(wxString());   // macOS: clean/blank native title bar (see setWindowTitle) - the constructor seeded a literal for the other platforms
+#endif
         m_dark = dark;          // chrome darkness is fixed for this process (restart-to-apply)
         loadSettings();         // restore preferences incl. the chosen editor theme (before loadTheme reads m_themeName)
         loadTheme();            // parse the active Notepad++ theme XML for exact colours
@@ -3305,11 +3308,31 @@ private:
         e.Skip();
     }
 
+    // The colour wxAuiFlatTabArt actually paints the tab-strip background with: m_bgWindow, which its
+    // Data::InitColours derives as wxAuiDimColour(wxSYS_COLOUR_WINDOW, 5) (see the vendored
+    // aui/tabart.cpp). The caption bar (m_capBar) is an opaque wxPanel Raise()'d over the strip, so its
+    // own background has to be that exact colour or it shows as a distinct block. On Windows the strip's
+    // system-derived colour happens to sit close enough to our hardcoded chrome that the seam isn't
+    // noticed; on GTK the system WINDOW colour is theme-driven and clearly different, so match the strip
+    // by replicating the same formula there. (m_tabs->GetBackgroundColour() is NOT the strip colour -
+    // the flat art repaints over it - so it can't be used here.)
+    static wxColour tabStripBg()
+    {
+        const wxColour c = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
+        const bool isDarkColour = c.GetLuminance() < 0.5;
+        const int ialpha = 100 + (isDarkColour != wxSystemSettings::GetAppearance().IsDark() ? 5 : -5);
+        return c.ChangeLightness(ialpha);
+    }
+
     // Notepad++'s caption buttons (new / document-list / close), overlaid at the right of the tab strip.
     void buildTabCaptionButtons()
     {
         m_capBar = new wxPanel(m_tabs);
+#ifdef __WXMSW__
         m_capBar->SetBackgroundColour(m_dark ? wxColour(32, 32, 32) : wxColour(240, 240, 240));
+#else
+        m_capBar->SetBackgroundColour(tabStripBg());   // match the flat tab-art's actual strip colour on GTK/Cocoa
+#endif
         auto* s = new wxBoxSizer(wxHORIZONTAL);
         auto mkBtn = [&](const char* path, const wxString& tip, std::function<void()> act) {
             auto* b = new wxBitmapButton(m_capBar, wxID_ANY, captionIcon(path), wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxBU_EXACTFIT);
@@ -3355,7 +3378,7 @@ private:
         m_tabs->AddPage(page, title, true);    // selecting it fires PAGE_CHANGED -> activateBuffer
         activateBuffer(page);                  // ensure it (the first AddPage may not fire PAGE_CHANGED); idempotent
         if (!path.empty()) { loadFile(path); addToMRU(path); } else { sci(SCI_SETSAVEPOINT); setLexerForFile(""); }
-        SetTitle(title + " - wxNotepad++");
+        setWindowTitle(title);
         updateStatus();
         return page;
     }
@@ -3980,6 +4003,20 @@ private:
         CallAfter([this] { unloadNibPlugins(); });
         e.Skip();
     }
+    // The window title-bar text for a given document part. Blank on macOS - the user prefers a clean
+    // native title bar there (the document name is already shown in the tab, and macOS apps commonly
+    // leave the title empty); "<doc> - wxNotepad++" on Windows/Linux. All main-frame title updates go
+    // through here so the platform choice lives in one place.
+    void setWindowTitle(const wxString& docPart)
+    {
+#ifdef __WXMAC__
+        (void)docPart; if (!GetTitle().empty()) SetTitle(wxString());
+#else
+        const wxString t = docPart + " - wxNotepad++";
+        if (GetTitle() != t) SetTitle(t);
+#endif
+    }
+
     // Show "*" on the active tab + title bar while the document has unsaved changes (like Notepad++).
     void refreshTab(EditorPage* p)
     {
@@ -3990,10 +4027,7 @@ private:
         const int idx = m_tabs->GetPageIndex(p);
         if (idx != wxNOT_FOUND && m_tabs->GetPageText(idx) != lbl) m_tabs->SetPageText(idx, lbl);
         if (p == activePage())                                           // title bar = full path, like Notepad++
-        {
-            const wxString t = star + (p->path.empty() ? p->title : p->path) + " - wxNotepad++";
-            if (GetTitle() != t) SetTitle(t);
-        }
+            setWindowTitle(star + (p->path.empty() ? p->title : p->path));
     }
     void onTabContext(wxAuiNotebookEvent& e)
     {
@@ -4188,12 +4222,13 @@ private:
         auto* mb = new wxMenuBar;
         buildNppMainMenu(mb, m_menuRegistry);   // full 1:1 Notepad++ menu tree, built from menu_data_*.h (see menu_builder.h)
         // Localization: pick the UI language straight from the menu bar (radio group; restart-to-apply,
-        // same flow as the Preferences > General dropdown). A submenu of Window now (Phase B reshape),
-        // inserted at the "slot.localization" DynamicSlot the Window menu's data table reserves - not a
-        // separate top-level bar entry anymore, and not recomputed position arithmetic either.
+        // same flow as the Preferences > General dropdown). A submenu of Settings, inserted at the
+        // "slot.localization" DynamicSlot that Settings' data table reserves - not a separate top-level
+        // bar entry, and not recomputed position arithmetic either. (The slot resolves by symbolic name,
+        // so it didn't need touching when Settings was split back out of Window.)
         {
-            auto [winMenu, insertAt] = m_menuRegistry.slot("slot.localization");
-            if (winMenu)
+            auto [locMenu, insertAt] = m_menuRegistry.slot("slot.localization");
+            if (locMenu)
             {
                 auto* loc = new wxMenu;
                 const int cur = uiLangIndex(readUiLang());
@@ -4202,7 +4237,7 @@ private:
                     wxMenuItem* it = loc->AppendRadioItem(myID_UILANG_FIRST + i, uiLangName(i));
                     if (i == cur) it->Check();
                 }
-                winMenu->Insert(insertAt, wxID_ANY, _("Locali&zation"), loc);
+                locMenu->Insert(insertAt, wxID_ANY, _("Locali&zation"), loc);
             }
         }
         // Recent Files (MRU) submenu near the bottom of the File menu, backed by wxFileHistory. Inserted
@@ -4308,7 +4343,12 @@ private:
                                 b->GetPosition() + wxPoint(0, b->GetSize().y)));
                 this->PopupMenu(menu, p);
             });
-            sz->Add(b, 0, wxALIGN_CENTRE_VERTICAL);
+            // 4px border each side (8px between neighbours). wxBU_EXACTFIT collapses each button to its
+            // bare text extent, and on GTK that leaves adjacent menu labels touching with no gap (they
+            // read as one crammed string) - MSW's native button keeps a little internal margin so it
+            // isn't as obvious there. The sizer border adds the gap on both platforms; the middle
+            // AddStretchSpacer below absorbs the extra width so it can't overflow the bar.
+            sz->Add(b, 0, wxALIGN_CENTRE_VERTICAL | wxLEFT | wxRIGHT, 4);
         }
 
         sz->AddStretchSpacer(1);   // empty middle stays draggable
@@ -4783,7 +4823,7 @@ private:
         S(SCE_P_WORD,kw);S(SCE_P_DEFNAME,kw);S(SCE_P_CLASSNAME,kw);
     }
     // ----- file actions --------------------------------------------------
-    void setDocTitle(const wxString& name) { if (auto* p = activePage()) { p->title = name; refreshTab(p); } else SetTitle(name + " - wxNotepad++"); }
+    void setDocTitle(const wxString& name) { if (auto* p = activePage()) { p->title = name; refreshTab(p); } else setWindowTitle(name); }
     void doNew()   // New opens a fresh tab, like Notepad++ - honouring the New Document default EOL + language
     {
         addDocument("", nextNewName());
@@ -5420,7 +5460,7 @@ private:
         wxFileDialog dlg(this, _("Rename"), wxFileName(p).GetPath(), wxFileNameFromPath(p), _("All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
         if (dlg.ShowModal() != wxID_OK) return;
         if (wxRenameFile(p, dlg.GetPath()))
-        { if (auto* ep = activePage()) { ep->path = dlg.GetPath(); ep->title = wxFileNameFromPath(dlg.GetPath()); setLexerForFile(dlg.GetPath()); refreshTab(ep); SetTitle(ep->title + " - wxNotepad++"); } }
+        { if (auto* ep = activePage()) { ep->path = dlg.GetPath(); ep->title = wxFileNameFromPath(dlg.GetPath()); setLexerForFile(dlg.GetPath()); refreshTab(ep); setWindowTitle(ep->title); } }
     }
     void recycleFile()
     {
@@ -6262,6 +6302,7 @@ private:
         c->Read("IntegratedBar", &m_integratedBar, false);
         m_themeMode = (int)readThemeMode();   // also resolved in OnInit (before the frame/config exist as members here)
         c->Read("AskBeforeClose", &m_askBeforeClose, false);
+        c->Read("FullscreenAutohideToolbar", &m_fsAutohideToolbar, false);
         c->Read("ReuseInstance", &m_reuseInstance, false);
         c->Read("Editing/CustomGutterColour", &m_customGutterColor, false);
         // Default swatch (only shown/used before the user has ever picked a colour themselves) matches
@@ -6321,6 +6362,7 @@ private:
         c->Write("Print/Header", m_printHeader); c->Write("Print/Footer", m_printFooter);
         c->Write("Editing/SearchEngine", (long)m_searchEngine);
         c->Write("AskBeforeClose", m_askBeforeClose);
+        c->Write("FullscreenAutohideToolbar", m_fsAutohideToolbar);
         c->Write("Editing/CustomGutterColour", m_customGutterColor);
         c->Write("Editing/GutterColourValue", m_gutterColorValue);
         c->Write("Editing/FontFace", m_fontFace);
@@ -6370,6 +6412,9 @@ private:
         // rather than blocking on a Save/Don't Save/Cancel prompt every time.
         auto* cbAskClose = new wxCheckBox(gen, wxID_ANY, _("Ask before closing unsaved changes"));
         cbAskClose->SetValue(m_askBeforeClose); row(gs, cbAskClose);
+        // Off by default: the toolbar stays visible in full screen. On: full screen hides it (macOS-style).
+        auto* cbFsToolbar = new wxCheckBox(gen, wxID_ANY, _("Auto-hide toolbar in full screen"));
+        cbFsToolbar->SetValue(m_fsAutohideToolbar); row(gs, cbFsToolbar);
         // Off by default: each launch opens its own window, like today. When on, a second launch hands
         // its file args to the first window over IPC and exits instead of opening a new one (-n/-r on
         // the command line override this per-launch either way).
@@ -6574,11 +6619,17 @@ private:
 
         auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer(); btn->Add(new wxButton(&dlg, wxID_OK, _("Close")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL); top->Add(book, 1, wxEXPAND | wxALL, 8); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
-        dlg.SetSizer(top); themeDialog(&dlg);
+        // Layout() explicitly, not just SetSizer: this dialog is opened at a fixed size with no
+        // post-show resize, and on GTK SetSizer alone doesn't lay children out until an actual size
+        // event - so the wxDefaultSize checkboxes/choices would render at their unlaid-out construction
+        // geometry (clipped labels, collapsed combos, dead space). MSW reflows on the initial show, so
+        // this is a no-op there. Layout() (not Fit/SetSizerAndFit) keeps the deliberate 620x440 size.
+        dlg.SetSizer(top); dlg.Layout(); themeDialog(&dlg);
         dlg.ShowModal();   // Notepad++ Preferences has no Cancel - changes apply on close
         const int newThemeMode = chTheme->GetSelection();
         m_showToolbar = cbToolbar->GetValue(); m_showStatusbar = cbStatus->GetValue();
         m_askBeforeClose = cbAskClose->GetValue();
+        m_fsAutohideToolbar = cbFsToolbar->GetValue();
         m_tabWidth = spTab->GetValue(); m_useTabs = !cbSpace->GetValue(); m_lineNumbers = cbLineNum->GetValue();
         m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
         m_caretLine = cbCaretLn->GetValue(); m_autoindent = cbIndent->GetValue(); m_caretWidth = spCaret->GetValue(); m_edgeColumn = spEdge->GetValue();
@@ -7421,7 +7472,24 @@ private:
     // both in sync regardless of direction.
     void toggleFullScreen()
     {
-        ShowFullScreen(!IsFullScreen());
+        const bool goingFull = !IsFullScreen();
+        // Keep the toolbar visible in full screen by default (Preferences > General "Auto-hide toolbar
+        // in full screen", off by default); only strip it when the user opts in. This is deliberately
+        // one consistent behaviour on every platform - wxFULLSCREEN_ALL (the old unconditional call)
+        // always included wxFULLSCREEN_NOTOOLBAR, i.e. hid the toolbar everywhere; now it stays unless
+        // opted in. The style arg only applies when entering; leaving full screen restores everything.
+        long style = wxFULLSCREEN_ALL;
+        if (!m_fsAutohideToolbar) style &= ~wxFULLSCREEN_NOTOOLBAR;
+        ShowFullScreen(goingFull, style);
+        // wxFULLSCREEN_NOTOOLBAR only acts on the frame's own GetToolBar(); in integrated/borderless
+        // mode the toolbar is an AUI pane wx's flag never touches, so honour the preference by hand
+        // there. Entering: hide only if auto-hide is on; leaving: restore to the persistent "Show
+        // toolbar" preference. (Compiled out on macOS, where WXNPP_HAS_BORDERLESS is off and the native
+        // path above already handles it.)
+#ifdef WXNPP_HAS_BORDERLESS
+        if constexpr (kBorderless)
+            showToolBar(goingFull ? (m_showToolbar && !m_fsAutohideToolbar) : m_showToolbar);
+#endif
         applyTheme(m_dark);
     }
 
@@ -8173,6 +8241,7 @@ private:
     bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON like Notepad++
     int         m_themeMode = 1;   // Preferences > General "Theme": 0 = System, 1 = Dark, 2 = Light (restart-to-apply)
     bool        m_askBeforeClose = false;   // Preferences > General "Ask before closing unsaved changes" (off by default, like Notepad++)
+    bool        m_fsAutohideToolbar = false; // Preferences > General "Auto-hide toolbar in full screen" (off by default: toolbar stays)
     bool        m_reuseInstance = false;    // Preferences > General "Reuse an existing window" (restart-to-apply; read in OnInit)
     bool        m_customGutterColor = false;   // Preferences > Editing "Use a custom line-number margin colour"
     long        m_gutterColorValue = 0xE0E0E0;   // Scintilla BGR-packed int (see bgrToColour/colourToBgr); only used when m_customGutterColor
