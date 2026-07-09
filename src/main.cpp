@@ -49,6 +49,7 @@
 #include <wx/datetime.h>        // wxDateTime - insert date/time
 #include <wx/dnd.h>             // wxFileDropTarget - drag & drop files to open
 #include <wx/dcgraph.h>         // wxGCDC - antialiased drawing (symmetric spinner triangles)
+#include <wx/dcbuffer.h>        // wxAutoBufferedPaintDC - flicker-free custom paint (title-bar window-control buttons)
 #include <wx/dir.h>             // wxDir - scan the plugins/ folder + Find-in-Files traversal
 #include <wx/textfile.h>        // wxTextFile - read files line-by-line for Find in Files
 #include <wx/dirdlg.h>          // wxDirDialog - folder picker for Find in Files
@@ -1517,11 +1518,19 @@ public:
         if (page.active)   // active tab's top-edge marker (Notepad++'s own is orange; recoloured to this
                             // project's accent green, Open Color green-8, to match the toolbar palette)
         {
+            // wxAuiFlatTabArt::DrawPageTab() (just called above) already draws its OWN active-tab marker
+            // here first, in wxSYS_COLOUR_HOTLIGHT (a system accent colour - blue on GTK/most Linux themes,
+            // see build/_deps/wxwidgets-src/src/aui/tabart.cpp) at page.rect.GetLeft()+1, width
+            // page.rect.GetWidth()-1. This green rectangle is meant to fully paint over it, but was sized
+            // from `extent` (DrawPageTab's return value, xExtent - the tab's horizontal *advance* to the
+            // next tab, which can be narrower than the tab's own page.rect) instead of page.rect's own
+            // width, so on tabs where those two values differ, a sliver of that system-blue marker was left
+            // showing past the right edge of the green one. Match the base class's own rect exactly instead
+            // of reusing `extent`, so this always fully covers it regardless of what `extent` happens to be.
             static const wxBrush accent(wxColour(47, 158, 68));   // built once - DrawPageTab runs on every paint
             dc.SetPen(*wxTRANSPARENT_PEN);
             dc.SetBrush(accent);
-            const int w = (extent > 0 && extent <= rect.width) ? extent : rect.width;
-            dc.DrawRectangle(rect.x, rect.y, w, 3);
+            dc.DrawRectangle(page.rect.GetLeft() + 1, page.rect.GetTop(), page.rect.GetWidth() - 1, 3);
         }
         return extent;
     }
@@ -1543,6 +1552,48 @@ private:
         const wxBitmapBundle cls = iconBundle("close-tab", 12, m_iconColour);   // match the tab bar's (smaller) global close button
         if (cls.IsOk()) { m_activeCloseBmp = cls; m_disabledCloseBmp = cls; }
     }
+};
+
+// The integrated title bar's minimize/maximize/close buttons, non-Windows only (see buildIntegratedTitleBar).
+// A plain wxButton fights its own native widget on GTK: wx-on-GTK maps wxButton onto a real GtkButton
+// rendered by the GTK CSS theme engine, which independently drives its own :hover/:prelight pseudo-class
+// repaint on pointer-enter/leave through its own invalidate cycle - racing this app's own explicit
+// SetBackgroundColour()+Refresh() call on the same enter/leave events. Two uncoordinated repaint passes on
+// the same widget is what produces the "hover highlight fills half the button, then catches up a moment
+// later" artifact. Painting the button entirely by hand removes the native GtkButton (and its independent
+// repaint cycle) from the picture - there is nothing left for wx's own Refresh() to race against.
+class TitleBarBtn : public wxWindow
+{
+public:
+    TitleBarBtn(wxWindow* parent, wxWindowID id, const wxSize& size, const wxBitmapBundle& glyph, const wxColour& bg, const wxColour& hotBg)
+        : wxWindow(parent, id, wxDefaultPosition, size, wxBORDER_NONE), m_glyph(glyph), m_bg(bg), m_hotBg(hotBg)
+    {
+        SetBackgroundStyle(wxBG_STYLE_PAINT);   // we paint the whole background ourselves - no native erase
+        Bind(wxEVT_PAINT, &TitleBarBtn::onPaint, this);
+        Bind(wxEVT_ENTER_WINDOW, [this](wxMouseEvent& e) { m_hot = true;  Refresh(); e.Skip(); });
+        Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent& e) { m_hot = false; Refresh(); e.Skip(); });
+        Bind(wxEVT_LEFT_UP, [this](wxMouseEvent&) {
+            wxCommandEvent evt(wxEVT_BUTTON, GetId());
+            evt.SetEventObject(this);
+            ProcessWindowEvent(evt);
+        });
+    }
+    void SetGlyph(const wxBitmapBundle& glyph) { m_glyph = glyph; Refresh(); }
+
+private:
+    void onPaint(wxPaintEvent&)
+    {
+        wxAutoBufferedPaintDC dc(this);
+        dc.SetBrush(wxBrush(m_hot ? m_hotBg : m_bg));
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.DrawRectangle(wxPoint(0, 0), GetClientSize());
+        const wxBitmap bmp = m_glyph.GetBitmap(FromDIP(wxSize(12, 12)));
+        const wxSize sz = GetClientSize();
+        dc.DrawBitmap(bmp, (sz.x - bmp.GetWidth()) / 2, (sz.y - bmp.GetHeight()) / 2, true);
+    }
+    wxBitmapBundle m_glyph;
+    wxColour m_bg, m_hotBg;
+    bool m_hot = false;
 };
 
 // Notepad++'s File > Print (Ctrl+P) / Print Now: paginate + render the active document through Scintilla's
@@ -4268,22 +4319,29 @@ private:
         // + glyphs (Chrome{Minimize,Maximize,Restore,Close}) so the controls are pixel-identical to native.
         const wxFont mdl2(wxFontInfo(10).FaceName("Segoe MDL2 Assets"));
 #endif
-        auto ctrl = [&](wchar_t mdl2Glyph, const char* svgPath, int which, const wxColour& hot) -> wxButton* {
+        auto ctrl = [&](wchar_t mdl2Glyph, const char* svgPath, int which, const wxColour& hot) -> wxWindow* {
+#ifdef __WXMSW__
+            // Windows: native wxButton, pixel-identical to the OS's own caption buttons (see mdl2 above).
+            // This path has no hover-repaint issue - MSW's native wxButton doesn't run its own independent
+            // theme-driven repaint cycle behind wx's back the way GTK's does (see TitleBarBtn above).
             auto* b = new wxButton(m_titleBar, wxID_ANY, "", wxDefaultPosition,
                                    wxSize(46, kTitleBarH), wxBU_EXACTFIT | wxBORDER_NONE);
-#ifdef __WXMSW__
             b->SetFont(mdl2); b->SetLabel(wxString(wxUniChar(mdl2Glyph)));
             b->SetForegroundColour(m_dark ? wxColour(240, 240, 240) : wxColour(20, 20, 20));
             (void)svgPath;
-#else
-            b->SetBitmap(winGlyph(svgPath)); (void)mdl2Glyph;   // Linux/GTK: no Segoe MDL2 - drawn fallback
-#endif
             b->SetBackgroundColour(barBg);
             b->Bind(wxEVT_BUTTON,       [this, which](wxCommandEvent&) { onWindowControl(which); });
             b->Bind(wxEVT_ENTER_WINDOW, [b, hot](wxMouseEvent& e)   { b->SetBackgroundColour(hot);   b->Refresh(); e.Skip(); });
             b->Bind(wxEVT_LEAVE_WINDOW, [b, barBg](wxMouseEvent& e) { b->SetBackgroundColour(barBg); b->Refresh(); e.Skip(); });
             sz->Add(b, 0, wxEXPAND);
             return b;
+#else
+            (void)mdl2Glyph;
+            auto* b = new TitleBarBtn(m_titleBar, wxID_ANY, wxSize(46, kTitleBarH), winGlyph(svgPath), barBg, hot);
+            b->Bind(wxEVT_BUTTON, [this, which](wxCommandEvent&) { onWindowControl(which); });
+            sz->Add(b, 0, wxEXPAND);
+            return b;
+#endif
         };
         const wxColour hover = m_dark ? wxColour(63, 63, 70) : wxColour(220, 220, 220);
         ctrl(0xE921, GLYPH_MIN, 0, hover);                                                                 // minimize
@@ -4319,9 +4377,9 @@ private:
     {
         if (!m_maxBtn) return;
 #ifdef __WXMSW__
-        m_maxBtn->SetLabel(wxString(wxUniChar(IsMaximized() ? 0xE923 : 0xE922)));   // ChromeRestore / ChromeMaximize
+        static_cast<wxButton*>(m_maxBtn)->SetLabel(wxString(wxUniChar(IsMaximized() ? 0xE923 : 0xE922)));   // ChromeRestore / ChromeMaximize
 #else
-        m_maxBtn->SetBitmap(winGlyph(IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX));
+        static_cast<TitleBarBtn*>(m_maxBtn)->SetGlyph(winGlyph(IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX));
 #endif
     }
     void onWindowControl(int which)
@@ -7355,6 +7413,18 @@ private:
         this->SetBackgroundColour(chromeBg);   // frame backing shows through the Win11 rounded corners - chrome, not black
     }
 
+    // ShowFullScreen() alone leaves the toolbar looking two-toned: the AUI dock-art background strip
+    // beside the (non-full-width) toolbar pane and the toolbar's own background are both painted by
+    // applyTheme(), but that only ever runs at startup / an explicit theme switch - never on a
+    // fullscreen transition, which changes the frame's width (window chrome/borders removed or
+    // restored) without re-triggering either paint. Re-running applyTheme() after every toggle keeps
+    // both in sync regardless of direction.
+    void toggleFullScreen()
+    {
+        ShowFullScreen(!IsFullScreen());
+        applyTheme(m_dark);
+    }
+
     // wxWidgets refuses to re-theme live: wxApp::SetAppearance() returns CannotChange once a
     // top-level window exists, and MSWEnableDarkMode is startup-only, so the native menu bar and
     // toolbar bake in their theme at creation (mixing them yields "a horrible mix of light and
@@ -7737,7 +7807,7 @@ private:
             case myID_CAP_NEW: doNew(); break;                      // "+" caption button
             case myID_CAP_CLOSE: closeActive(); break;             // "x" caption button
             case myID_DOCLIST: onDocList(); break;                 // "v" caption dropdown
-            case IDM_VIEW_FULLSCREENTOGGLE: ShowFullScreen(!IsFullScreen()); break;
+            case IDM_VIEW_FULLSCREENTOGGLE: toggleFullScreen(); break;
             case IDM_VIEW_FOLDALL: sci(SCI_FOLDALL, SC_FOLDACTION_CONTRACT); break;
             case IDM_VIEW_UNFOLDALL: sci(SCI_FOLDALL, SC_FOLDACTION_EXPAND); break;
             case IDM_VIEW_FOLD_CURRENT: foldCurrent(true); break;
@@ -7897,7 +7967,7 @@ private:
             case IDM_VIEW_IN_EDGE: openInBrowser(""); break;
             case IDM_VIEW_IN_IE: openInBrowser("iexplore"); break;
             case IDM_VIEW_LOAD_IN_NEW_INSTANCE: case IDM_VIEW_GOTO_NEW_INSTANCE: newInstance(true); break;
-            case IDM_VIEW_POSTIT: case IDM_VIEW_DISTRACTIONFREE: ShowFullScreen(!IsFullScreen()); break;
+            case IDM_VIEW_POSTIT: case IDM_VIEW_DISTRACTIONFREE: toggleFullScreen(); break;
 
             // ---- Tools: MD5 / SHA digests ----
             case IDM_TOOL_MD5_GENERATEINTOCLIPBOARD: hashSelection(L"MD5", "MD5", true); break;
@@ -8092,7 +8162,7 @@ private:
 #ifdef WXNPP_HAS_BORDERLESS
     wxPanel*    m_titleBar  = nullptr;            // integrated top bar (icon + menu-buttons + window controls)
     wxMenuBar*  m_menuOwner = nullptr;            // owns the wxMenus the title-bar buttons pop (never attached as a real menu bar)
-    wxButton*   m_maxBtn    = nullptr;            // the maximize/restore button (its glyph tracks IsMaximized())
+    wxWindow*   m_maxBtn    = nullptr;            // the maximize/restore button - a wxButton (MSW) or TitleBarBtn (else); its glyph tracks IsMaximized()
     wxWindowGripper* m_gripper = nullptr;         // lib helper for cross-platform window move (drag the bar)
 #endif
     wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()

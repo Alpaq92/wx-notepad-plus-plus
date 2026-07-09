@@ -56,6 +56,14 @@
     hsl(134, 55%, 58%),
     hsl(150, 55%, 48%)
   );
+  /* Wider lightness spread than text-gradient-accent (whose two stops are close enough together to
+     read as flat once compressed into a small button) - both stops still fully opaque, unlike
+     bg-gradient-accent-1/2 which fade to transparent (see the platform-download-btn:hover comment). */
+  --btn-hover-gradient: linear-gradient(
+    135deg,
+    hsl(134, 60%, 68%) 0%,
+    hsl(152, 65%, 32%) 100%
+  );
   --navbar-bg: hsla(240, 1%, 17%, 0.75);
   --select-hover-bg: hsl(240, 2%, 20%);
   --scrollbar-thumb-bg: hsla(0, 0%, 100%, 0.1);
@@ -156,6 +164,11 @@
     to right,
     hsl(134, 55%, 40%),
     hsl(150, 55%, 34%)
+  );
+  --btn-hover-gradient: linear-gradient(
+    135deg,
+    hsl(134, 55%, 45%) 0%,
+    hsl(152, 65%, 24%) 100%
   );
   --navbar-bg: hsla(0, 0%, 100%, 0.75);
   --select-hover-bg: hsl(220, 20%, 92%);
@@ -365,6 +378,18 @@ article.active {
   cursor: pointer;
   z-index: 1;
 }
+
+/* Every .content-card is its own stacking context (position: relative + z-index above), so a
+   platform card's open dropdown menu only outranks elements *inside that same card* - against a
+   later sibling card (equal z-index, later in DOM order) it loses and renders underneath it.
+   .content-card.dropdown-open (toggled in script.js) raises the whole card while its dropdown is
+   open, so the menu clears every sibling card instead of just its own. 6, not 5: .navbar (below)
+   is also z-index 5, and at both the >=1024px layout (where .navbar and every .content-card share
+   .main-content's stacking context) and mobile widths (where .navbar is a fixed bottom bar in the
+   same root stacking context as everything else) a tie would only resolve correctly by DOM-order
+   coincidence, not by this rule actually outranking it. The highest z-index anywhere else in this
+   stylesheet is 5, so 6 is deliberate headroom, not an arbitrary bump. */
+.content-card.dropdown-open { z-index: 6; }
 
 .content-card::before {
   content: "";
@@ -797,8 +822,6 @@ main {
   100% { transform: scale(1); }
 }
 
-.project-item > a { width: 100%; }
-
 .project-img {
   position: relative;
   width: 100%;
@@ -808,52 +831,15 @@ main {
   margin-bottom: 15px;
 }
 
-.project-img::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: transparent;
-  z-index: 1;
-  transition: var(--transition-1);
-}
-
-.project-item > a:hover .project-img::before { background: hsla(0, 0%, 0%, 0.5); }
-
-.project-item-icon-box {
-  --scale: 0.8;
-
-  background: var(--jet);
-  color: var(--accent);
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) scale(var(--scale));
-  font-size: 20px;
-  padding: 18px;
-  border-radius: 12px;
-  opacity: 0;
-  z-index: 1;
-  transition: var(--transition-1);
-}
-
-.project-item > a:hover .project-item-icon-box {
-  --scale: 1;
-  opacity: 1;
-}
-
-.project-item-icon-box ion-icon { --ionicon-stroke-width: 50px; }
-
 .project-img img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   transition: var(--transition-1);
+  cursor: pointer;   /* click-to-zoom via img-previewer, see script.js */
 }
 
-.project-item > a:hover img { transform: scale(1.1); }
+.project-img img:hover { transform: scale(1.05); }
 
 .project-title,
 .project-category { margin-left: 10px; }
@@ -1192,7 +1178,12 @@ main {
 }
 
 .platform-download-btn:hover {
-  background: var(--accent);
+  /* btn-hover-gradient, not bg-gradient-accent-1: both its stops are fully opaque (no fade to
+     transparent), unlike bg-gradient-accent-1 (designed for an avatar glow, fading out at 50%) which
+     made the label illegible partway through - see CHANGELOG. Its own two stops are much further
+     apart in lightness than text-gradient-accent's (designed for a thin text underline, not a whole
+     button-sized area) so the gradient actually reads as one instead of looking flat.  */
+  background: var(--btn-hover-gradient);
   color: var(--smoky-black);
 }
 
@@ -1263,6 +1254,19 @@ main {
 .source-note a { color: var(--accent); text-decoration: underline; }
 
 
+
+
+
+/*-----------------------------------*\
+  #IMG-PREVIEWER OVERRIDES
+\*-----------------------------------*/
+
+/* img-previewer's own stylesheet (assets/vendor/img-previewer/index.css) references
+   var(--header-bg-opcity) - a typo for --header-bg-opacity, which is what its JS actually sets - so
+   the "1 / 7" counter and reset/rotate/close buttons float with no header bar behind them at all.
+   Fixed here (not in the vendored file, which stays unmodified) using the correctly-spelled variable
+   the JS does set, with a fallback matching the headerOpacity passed to ImgPreviewer() in script.js. */
+.img-pre__header { background: rgba(0, 0, 0, var(--header-bg-opacity, 0.75)) !important; }
 
 
 
