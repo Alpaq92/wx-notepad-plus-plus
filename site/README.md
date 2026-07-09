@@ -32,10 +32,13 @@ update `ASSET_MATCHERS` in `script.js` to match.
 
 ## Screenshots page
 
-Currently ships with placeholder tiles (`.project-img--placeholder`, dashed border + an icon) instead
-of real screenshots. To swap one in: replace the `<figure class="project-img project-img--placeholder">
-...</figure>` block for that tile with a plain `<figure class="project-img"><img src="..." loading="lazy">
-</figure>` - the surrounding grid/filter CSS doesn't need to change.
+Real screenshots live in `assets/images/screenshots/`, captured from an actual running build (English
+UI, Tabler icons). To retake one: replace the PNG in place and it picks up automatically - each tile is
+a plain `<figure class="project-img"><img src="..." loading="lazy"></figure>`, no other markup to
+change. The `.project-img--placeholder` CSS variant (dashed border + icon) still exists in
+`assets/css/style.css` for any future tile that doesn't have a screenshot yet - swap a `<figure
+class="project-img">...<img></figure>` back to `<figure class="project-img project-img--placeholder">
+<ion-icon name="image-outline"></ion-icon><span>Screenshot coming soon</span></figure>` to use it.
 
 ## Local preview
 
