@@ -3,7 +3,7 @@
 All notable changes to wxNotepad++ are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.5.0] - 2026-07-09
 
 ### Fixed
 - On Linux and macOS, toolbar/menu icons, theme files, the User-Defined Language dialog's bookmark
@@ -28,8 +28,52 @@ All notable changes to wxNotepad++ are documented here. Format loosely follows
   built-in slots are now patched, plus ~90 common extensions across code/document/image/archive/
   audio/video, pre-seeded into `wxFileIconsTable`'s own lookup cache so the OS's MIME-based icon
   lookup is never consulted for a recognized extension.
+- On Linux, the integrated top bar's minimize/maximize/close buttons had a visible hover-repaint lag
+  (the highlight would fill half the button, then catch up a moment later) - a plain `wxButton`'s
+  native GTK widget drives its own `:hover`/`:prelight` repaint independently of, and racing, this
+  app's own `SetBackgroundColour()`+`Refresh()` call on the same pointer events. These buttons are now
+  fully custom-painted on non-Windows platforms (`TitleBarBtn`), removing the native GTK widget - and
+  its independent repaint cycle - from the picture entirely. Windows is unaffected and unchanged (its
+  native `wxButton` has no equivalent independent repaint path to race against).
+- Entering or leaving full-screen mode left the toolbar two-toned - the AUI dock-art background strip
+  beside the (non-full-width) toolbar pane and the toolbar's own background are both painted by
+  `applyTheme()`, which only ran at startup or an explicit theme switch, never on a full-screen
+  transition (which changes the frame's width without re-triggering either paint). Both now re-apply
+  on every full-screen toggle.
+- The active tab's green top-edge marker could leave a sliver of `wxSYS_COLOUR_HOTLIGHT` (a system
+  accent colour - blue on GTK/most Linux desktop themes) showing past its right edge: the marker was
+  sized from `DrawPageTab`'s return value (the tab's horizontal *advance* to the next tab), which can
+  be narrower than the tab's own rendered width, while the base class's own marker underneath - which
+  the green one is meant to fully cover - is sized from the tab's actual width. The green marker now
+  matches the base class's own rectangle exactly, so it always fully covers it regardless of what the
+  advance value happens to be.
+- The Linux download button's hover state (fixed earlier to a flat solid colour after a fading
+  gradient made the label illegible) now uses a two-stop, fully opaque gradient instead of a flat
+  colour - visually closer to the button's own default (non-hover) gradient look, without reintroducing
+  the fade-to-transparent bug.
+- The project site's Windows/macOS/Linux download dropdowns had three bugs: opening a second one
+  while another was already open just visually hid the first behind the newly-raised card instead of
+  closing it; clicking a download item inside an open dropdown didn't close it (the outside-click
+  handler that closes a dropdown never fires for a click that lands *inside* it); and an open
+  dropdown's raised `z-index` (added to clear sibling cards) happened to tie with the site's own
+  navbar, so it only rendered above the navbar by DOM-order coincidence rather than an actual
+  guarantee. Opening a dropdown now explicitly closes every other one first, picking an item closes
+  it, and its raised `z-index` now has deliberate headroom above every other value in the stylesheet.
+- Clicking a Screenshots page thumbnail did nothing - a dead, invisible CSS overlay (`::before`, left
+  over from the vcard template this site was adapted from, for a hover effect that hasn't applied
+  since these tiles stopped being links) sat on top of every thumbnail, intercepting the click before
+  it ever reached the `<img>` the lightbox listens on.
+- The lightbox's "1 / 7" counter and its reset/rotate/close buttons floated with no header bar behind
+  them - `headerOpacity` defaults to 0 in the vendored library, and its own CSS references a
+  misspelled custom property (`--header-bg-opcity` instead of `--header-bg-opacity`, which is what its
+  JS actually sets) so setting it wouldn't have helped without also fixing that typo, worked around
+  here rather than in the vendored file.
 
 ### Added
+- A click-to-zoom lightbox on the project site's Screenshots page
+  ([img-previewer](https://github.com/yue1123/img-previewer), MIT, vendored locally).
+- Two Screenshots page tiles showing the Solar and IconPark toolbar icon packs, replacing a redundant
+  "Dark theme" tile that duplicated the (also dark-theme) Multi-document editing screenshot.
 - A project landing page (`site/`), deployed to GitHub Pages on every published release: About,
   Features, Screenshots, Download, and Changelog, with a system/light/dark theme switch. The version
   badge, per-platform download links, and changelog list are fetched live from the GitHub API, so the

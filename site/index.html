@@ -34,6 +34,12 @@
   <link rel="stylesheet" href="./assets/css/style.css">
 
   <!--
+    - img-previewer (screenshot lightbox) - vendored locally rather than a live CDN link, matching
+      every other third-party asset in this project (see assets/vendor/img-previewer/CREDITS.md)
+  -->
+  <link rel="stylesheet" href="./assets/vendor/img-previewer/index.css">
+
+  <!--
     - google font link
   -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -639,20 +645,30 @@
 
             <li class="project-item  active" data-filter-item data-category="themes">
               <figure class="project-img">
-                <img src="./assets/images/screenshots/dark-theme.png" alt="The dark theme, editing a Python file" loading="lazy">
+                <img src="./assets/images/screenshots/light-theme.png" alt="The light theme, editing a C++ file" loading="lazy">
               </figure>
 
-              <h3 class="project-title">Dark theme</h3>
+              <h3 class="project-title">Light theme</h3>
 
               <p class="project-category">Themes</p>
             </li>
 
             <li class="project-item  active" data-filter-item data-category="themes">
               <figure class="project-img">
-                <img src="./assets/images/screenshots/light-theme.png" alt="The light theme, editing a C++ file" loading="lazy">
+                <img src="./assets/images/screenshots/solar-icons.png" alt="The Solar toolbar icon pack, one of three selectable icon styles" loading="lazy">
               </figure>
 
-              <h3 class="project-title">Light theme</h3>
+              <h3 class="project-title">Solar icon pack</h3>
+
+              <p class="project-category">Themes</p>
+            </li>
+
+            <li class="project-item  active" data-filter-item data-category="themes">
+              <figure class="project-img">
+                <img src="./assets/images/screenshots/iconpark-icons.png" alt="The IconPark toolbar icon pack, one of three selectable icon styles" loading="lazy">
+              </figure>
+
+              <h3 class="project-title">IconPark icon pack</h3>
 
               <p class="project-category">Themes</p>
             </li>
@@ -762,7 +778,7 @@
                   </button>
 
                   <ul class="platform-download-menu" data-dropdown-menu>
-                    <li><a data-download="macos-arm64" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Apple Silicon (M1 and newer)</a></li>
+                    <li><a data-download="macos-arm64" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Apple Silicon</a></li>
                     <li><a data-download="macos-x86_64" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Intel</a></li>
                   </ul>
 
@@ -854,6 +870,11 @@
 
 
 
+
+  <!--
+    - img-previewer (screenshot lightbox) - loaded before script.js, which does the init call
+  -->
+  <script src="./assets/vendor/img-previewer/img-previewer.min.js"></script>
 
   <!--
     - custom js link

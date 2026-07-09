@@ -19,6 +19,9 @@ Plain HTML/CSS/JS, no build step, no dependencies to install - adapted from
   toggle and the live GitHub API calls described below.
 - `assets/images/logo.svg` - the app icon (`src/app_icon_svg.h`'s SVG, copied verbatim), used as
   favicon and sidebar avatar.
+- `assets/vendor/img-previewer/` - [img-previewer](https://github.com/yue1123/img-previewer) (MIT),
+  vendored rather than CDN-linked (see its own `CREDITS.md`), powers the Screenshots page's
+  click-to-zoom lightbox.
 
 ## Where the "live" content comes from
 
@@ -34,9 +37,13 @@ update `ASSET_MATCHERS` in `script.js` to match.
 ## Screenshots page
 
 Real screenshots live in `assets/images/screenshots/`, captured from an actual running build (English
-UI, Tabler icons). To retake one: replace the PNG in place and it picks up automatically - each tile is
-a plain `<figure class="project-img"><img src="..." loading="lazy"></figure>`, no other markup to
-change. The `.project-img--placeholder` CSS variant (dashed border + icon) still exists in
+UI, Tabler icons unless the tile is specifically about a different icon pack/theme). To retake one:
+replace the PNG in place and it picks up automatically - each tile is a plain `<figure
+class="project-img"><img src="..." loading="lazy"></figure>`, no other markup to change. Every tile's
+`<img>` is click-to-zoom via img-previewer (see Stack above) - a single `new ImgPreviewer(".project-list")`
+call in `script.js` covers the whole list, including filtered-out (hidden, not removed) tiles, so no
+re-init is needed when the category filter changes. The `.project-img--placeholder` CSS variant
+(dashed border + icon) still exists in
 `assets/css/style.css` for any future tile that doesn't have a screenshot yet - swap a `<figure
 class="project-img">...<img></figure>` back to `<figure class="project-img project-img--placeholder">
 <ion-icon name="image-outline"></ion-icon><span>Screenshot coming soon</span></figure>` to use it.

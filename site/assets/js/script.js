@@ -80,25 +80,57 @@ for (let i = 0; i < filterBtn.length; i++) {
 
 }
 
+// screenshot lightbox (Screenshots page) - one init covers every <img> under .project-list,
+// including ones the category filter above currently hides (filtering only toggles a class,
+// it never removes the <img> from the DOM), so no re-init is needed when the filter changes.
+const projectList = document.querySelector(".project-list");
+// headerOpacity defaults to 0 (fully transparent) - without this the "1 / 7" counter and the
+// reset/rotate/close buttons float over the page with no header bar behind them at all.
+if (projectList && typeof ImgPreviewer !== "undefined") new ImgPreviewer(".project-list", { style: { headerOpacity: 0.75 } });
 
 
-// platform download dropdown (Download page - Linux's AppImage/.deb/.rpm/Flatpak choice)
-document.querySelectorAll("[data-dropdown]").forEach((dropdown) => {
+
+// platform download dropdown (Download page - macOS's Apple Silicon/Intel and Linux's
+// AppImage/.deb/.rpm/Flatpak choices)
+const platformDropdowns = [...document.querySelectorAll("[data-dropdown]")].map((dropdown) => {
   const btn = dropdown.querySelector("[data-dropdown-btn]");
+  // Every .content-card is its own stacking context (position: relative + z-index: 1 in style.css),
+  // so an open dropdown's z-index only ever wins against elements *inside its own card* - against a
+  // later sibling card (equal z-index, later in DOM order) it loses and renders underneath it. Raise
+  // the whole card, not just the dropdown, while it's open so it stacks above its siblings too.
+  const card = dropdown.closest(".content-card");
 
-  const closeDropdown = () => {
+  const close = () => {
     dropdown.classList.remove("active");
     btn.setAttribute("aria-expanded", "false");
+    if (card) card.classList.remove("dropdown-open");
   };
 
+  return { dropdown, btn, card, close };
+});
+
+platformDropdowns.forEach(({ dropdown, btn, card, close }) => {
   btn.addEventListener("click", (event) => {
     event.stopPropagation();
-    const isOpen = dropdown.classList.toggle("active");
-    btn.setAttribute("aria-expanded", String(isOpen));
+    const isOpen = dropdown.classList.contains("active");
+    // Close every other dropdown first - two open at once means the later one's raised card
+    // (.dropdown-open) just hides the earlier one behind it instead of it visibly closing.
+    platformDropdowns.forEach((other) => { if (other.dropdown !== dropdown) other.close(); });
+    if (isOpen) { close(); return; }
+    dropdown.classList.add("active");
+    btn.setAttribute("aria-expanded", "true");
+    if (card) card.classList.add("dropdown-open");
+  });
+
+  // Picking an item closes the dropdown same as clicking outside it would - without this the
+  // outside-click handler below never fires for a click that lands inside the dropdown, so it
+  // stayed open (looking like the click "did nothing") even though the link itself still worked.
+  dropdown.querySelectorAll("[data-download]").forEach((item) => {
+    item.addEventListener("click", () => close());
   });
 
   document.addEventListener("click", (event) => {
-    if (!dropdown.contains(event.target)) closeDropdown();
+    if (!dropdown.contains(event.target)) close();
   });
 });
 
