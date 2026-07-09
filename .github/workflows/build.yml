@@ -16,7 +16,7 @@ on:
   # never merge normally.
   pull_request:
   workflow_dispatch:
-  workflow_call:   # release.yml calls this on a version tag push, then publishes the 3 packaging artifacts
+  workflow_call:   # release.yml calls this on a version tag push, then publishes the 4 packaging artifacts
 
 # A newer push to a branch cancels that branch's still-queued/running build, so the matrix doesn't
 # pile up (each macOS run counts 10x against private-repo Actions minutes). Only the latest commit
@@ -33,7 +33,14 @@ jobs:
       matrix:
         include:
           - { os: ubuntu-latest,  name: linux }
-          - { os: macos-latest,   name: macos }
+          # Two separate single-arch macOS builds rather than one universal (fat) binary, so each
+          # download is smaller and users don't need to think about it beyond picking their chip.
+          # Both build on the same (Apple Silicon) runner image - macos-latest has no native x86_64
+          # option anymore, so the x86_64 leg cross-compiles via CMAKE_OSX_ARCHITECTURES below. That
+          # runner ships Rosetta 2 preinstalled, which transparently covers any x86_64 try-run checks
+          # CMake's configure step needs to execute during the wxWidgets FetchContent build.
+          - { os: macos-latest,   name: macos-arm64,  osx_arch: arm64 }
+          - { os: macos-latest,   name: macos-x86_64, osx_arch: x86_64 }
           - { os: windows-latest, name: windows }
     runs-on: ${{ matrix.os }}
     steps:
@@ -102,8 +109,18 @@ jobs:
       # build/bin/Release/ instead of build/bin/ - breaking every packaging script below that reads
       # from build/bin/wxnpp.exe directly. Ninja is single-config and preinstalled on all 3 hosted
       # runner images; this also matches the build command documented at the top of CMakeLists.txt.
+      # CMAKE_OSX_DEPLOYMENT_TARGET: without it, the macOS build inherits the hosted runner's SDK
+      # version (whatever "macos-latest" happens to be), baking that into the binary's minimum-OS
+      # requirement - so a .dmg built today could refuse to launch on anything older than this
+      # month's macOS release. 11.0 (Big Sur) matches installer/macos/build-dmg.sh's own
+      # LSMinimumSystemVersion and is well within what wxWidgets 3.3.1 supports. Harmless no-op on
+      # the Linux/Windows legs of this matrix - CMake ignores Apple-only cache variables elsewhere.
+      # CMAKE_OSX_ARCHITECTURES: only set (via matrix.osx_arch) on the two macOS legs, pinning each
+      # build to a single target arch instead of wxWidgets/CMake's own default of "whatever the
+      # runner's chip is" - that default would silently make both macOS legs produce an identical
+      # arm64 binary since they share the same (Apple Silicon) runner image.
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 ${{ matrix.osx_arch && format('-DCMAKE_OSX_ARCHITECTURES={0}', matrix.osx_arch) || '' }}
 
       # Cap parallelism to 2: one cc1plus per core compiling wxWidgets + the large single-TU main.cpp
       # at -O2 all at once OOM-kills cc1plus on the hosted runners (esp. the 7 GB macOS M1). Two at a
@@ -135,14 +152,14 @@ jobs:
           path: build/installer/*
 
       - name: Package .dmg (macOS)
-        if: matrix.name == 'macos'
-        run: bash installer/macos/build-dmg.sh
+        if: startsWith(matrix.name, 'macos')
+        run: bash installer/macos/build-dmg.sh ${{ matrix.osx_arch }}
 
       - name: Upload macOS package
-        if: matrix.name == 'macos'
+        if: startsWith(matrix.name, 'macos')
         uses: actions/upload-artifact@v7
         with:
-          name: wxnpp-macos-package
+          name: wxnpp-${{ matrix.name }}-package
           path: build/installer/*
 
       # windows-latest does NOT ship makensis preinstalled (confirmed by an actual CI failure - an

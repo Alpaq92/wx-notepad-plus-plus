@@ -2,8 +2,6 @@
 
 **An experimental, cross-platform (Windows / Linux / macOS) Notepad++-faithful editor built on [wxWidgets](https://www.wxwidgets.org/).**
 
-**[Project site & downloads →](https://alpaq92.github.io/wx-notepad-plus-plus/)**
-
 > ⚠️ Experimental and unofficial. Not affiliated with or endorsed by the Notepad++ project.
 
 Upstream [Notepad++](https://notepad-plus-plus.org/) is Windows-only — its UI, plugin ABI, docking,
@@ -12,6 +10,8 @@ and dialogs are welded to the Win32 API. wxNotepad++ reuses only the genuinely p
 portable C++/wx. Plugins are first-class via the project's own permissive, cross-platform **Nib API**;
 real Win32 Notepad++-ABI plugin binaries are additionally supported on Windows through an optional GPL
 bridge plugin (see [Plugins](#plugins) below).
+
+**[Project site & downloads →](https://alpaq92.github.io/wx-notepad-plus-plus/)**
 
 ## Status
 
@@ -96,7 +96,8 @@ Grab the latest build from the [project site's Download page](https://alpaq92.gi
 
 - **Windows** — the NSIS installer (`wxNotepadPlusPlus-<version>-Setup.exe`)
 - **Linux** — an AppImage, `.deb`, `.rpm`, or `.flatpak` (`flatpak install wxNotepadPlusPlus-<version>.flatpak`)
-- **macOS** — a `.dmg`
+- **macOS** — a `.dmg`, built separately for Apple Silicon (`wxNotepadPlusPlus-<version>-arm64.dmg`) and
+  Intel (`wxNotepadPlusPlus-<version>-x86_64.dmg`) — pick the one matching your Mac's chip
 
 Every push also builds all of these as CI artifacts (see `.github/workflows/build.yml` and
 `installer/{windows,linux,macos}/`); pushing a version tag (`v*`) runs

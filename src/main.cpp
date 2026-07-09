@@ -1529,7 +1529,7 @@ private:
     wxColour m_iconColour;
     wxBitmapBundle iconBundle(const wxString& name, int px, const wxColour& colour) const   // resources/icons/<name>.svg, recoloured to the given colour
     {
-        const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\" + name + ".svg";
+        const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "icons" + wxFILE_SEP_PATH + name + ".svg";
         if (!wxFileExists(path)) return wxBitmapBundle();
         wxFile f(path); wxString svg;
         if (!f.IsOpened() || !f.ReadAll(&svg)) return wxBitmapBundle();
@@ -2608,7 +2608,62 @@ private:
         const wxSize sz = il->GetSize();
         il->Replace(wxFileIconsTable::folder,      icon("folder").GetBitmap(sz));
         il->Replace(wxFileIconsTable::folder_open, icon("open").GetBitmap(sz));   // open.svg is already Tabler's folder-open glyph
+        il->Replace(wxFileIconsTable::computer,    icon("computer").GetBitmap(sz));
+        il->Replace(wxFileIconsTable::drive,       icon("drive").GetBitmap(sz));
+        il->Replace(wxFileIconsTable::cdrom,       icon("cdrom").GetBitmap(sz));
+        il->Replace(wxFileIconsTable::floppy,      icon("floppy").GetBitmap(sz));
+        il->Replace(wxFileIconsTable::removeable,  icon("removable").GetBitmap(sz));
         il->Replace(wxFileIconsTable::file,        icon("file").GetBitmap(sz));
+        il->Replace(wxFileIconsTable::executable,  icon("executable").GetBitmap(sz));
+
+        // wxFileIconsTable::GetIconID(extension) caches its result per extension (m_HashTable) before
+        // ever consulting the OS's MIME database, so calling it here for a known extension - then
+        // overwriting whatever image-list slot it just allocated - pre-empts every later real lookup
+        // wxGenericDirCtrl makes for that extension with our own icon instead of an OS one. Skip the
+        // Replace when GetIconID falls back to the shared `file` id (extension unrecognized by the OS
+        // too): that id is the generic fallback for every other unmatched extension, so overwriting it
+        // here would wrongly reskin unrelated file types.
+        static const struct { const char* ext; const char* iconName; } kExtIcons[] = {
+            // source/markup/config - the primary content of a code-editor workspace
+            {"c","filetype-code"},{"h","filetype-code"},{"cpp","filetype-code"},{"cc","filetype-code"},
+            {"cxx","filetype-code"},{"hpp","filetype-code"},{"hxx","filetype-code"},{"py","filetype-code"},
+            {"java","filetype-code"},{"js","filetype-code"},{"jsx","filetype-code"},{"mjs","filetype-code"},
+            {"cjs","filetype-code"},{"ts","filetype-code"},{"tsx","filetype-code"},{"go","filetype-code"},
+            {"rs","filetype-code"},{"rb","filetype-code"},{"php","filetype-code"},{"cs","filetype-code"},
+            {"swift","filetype-code"},{"kt","filetype-code"},{"kts","filetype-code"},{"sh","filetype-code"},
+            {"bash","filetype-code"},{"zsh","filetype-code"},{"pl","filetype-code"},{"lua","filetype-code"},
+            {"r","filetype-code"},{"m","filetype-code"},{"mm","filetype-code"},{"scala","filetype-code"},
+            {"dart","filetype-code"},{"sql","filetype-code"},{"json","filetype-code"},{"yaml","filetype-code"},
+            {"yml","filetype-code"},{"toml","filetype-code"},{"xml","filetype-code"},{"html","filetype-code"},
+            {"htm","filetype-code"},{"css","filetype-code"},{"scss","filetype-code"},{"less","filetype-code"},
+            {"vue","filetype-code"},{"ps1","filetype-code"},{"bat","filetype-code"},{"cmake","filetype-code"},
+            {"ini","filetype-code"},{"cfg","filetype-code"},{"conf","filetype-code"},{"md","filetype-code"},
+            {"markdown","filetype-code"},
+            // documents
+            {"pdf","filetype-document"},{"doc","filetype-document"},{"docx","filetype-document"},
+            {"odt","filetype-document"},{"rtf","filetype-document"},{"xls","filetype-document"},
+            {"xlsx","filetype-document"},{"csv","filetype-document"},{"ods","filetype-document"},
+            {"ppt","filetype-document"},{"pptx","filetype-document"},{"odp","filetype-document"},
+            // images
+            {"png","filetype-image"},{"jpg","filetype-image"},{"jpeg","filetype-image"},{"gif","filetype-image"},
+            {"bmp","filetype-image"},{"ico","filetype-image"},{"svg","filetype-image"},{"webp","filetype-image"},
+            {"tiff","filetype-image"},{"tif","filetype-image"},
+            // archives
+            {"zip","filetype-archive"},{"tar","filetype-archive"},{"gz","filetype-archive"},
+            {"tgz","filetype-archive"},{"7z","filetype-archive"},{"rar","filetype-archive"},
+            {"bz2","filetype-archive"},{"xz","filetype-archive"},{"iso","filetype-archive"},
+            // audio
+            {"mp3","filetype-audio"},{"wav","filetype-audio"},{"flac","filetype-audio"},{"ogg","filetype-audio"},
+            {"m4a","filetype-audio"},{"aac","filetype-audio"},{"wma","filetype-audio"},
+            // video
+            {"mp4","filetype-video"},{"avi","filetype-video"},{"mkv","filetype-video"},{"mov","filetype-video"},
+            {"webm","filetype-video"},{"flv","filetype-video"},{"wmv","filetype-video"},{"m4v","filetype-video"},
+        };
+        for (const auto& e : kExtIcons)
+        {
+            const int id = wxTheFileIconsTable->GetIconID(e.ext);
+            if (id != wxFileIconsTable::file) il->Replace(id, icon(e.iconName).GetBitmap(sz));
+        }
     }
     void createFileBrowser(const wxString& root)
     {
@@ -3258,7 +3313,7 @@ private:
     // as an RGBA image so its Open-Color accent shows through, instead of a flat Scintilla marker shape.
     void defineBookmarkMarker()
     {
-        static const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\bookmark.svg";
+        static const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "icons" + wxFILE_SEP_PATH + "bookmark.svg";
         const int sz = 14;   // matches the bookmark margin width
         wxImage img = wxFileExists(path)
             ? wxBitmapBundle::FromSVGFile(path, wxSize(sz, sz)).GetBitmap(wxSize(sz, sz)).ConvertToImage()
@@ -4001,7 +4056,7 @@ private:
     // live from the real menu bar entry so they follow the current UI language, and enable state
     // mirrors the editor for the handful of ids that need it (undo/redo/paste/selection-dependent).
     struct PopupMenuEntry { int id = 0; bool separator = false; };
-    wxString contextMenuFilePath() { return wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\contextMenu.xml"; }
+    wxString contextMenuFilePath() { return wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "contextMenu.xml"; }
     std::vector<PopupMenuEntry> loadPopupContextMenu()
     {
         std::vector<PopupMenuEntry> out;
@@ -4308,7 +4363,7 @@ private:
     // on top of the baked file rather than shipping four colour variants per pack.
     wxBitmapBundle iconColored(const wxString& name, const wxString& packDir)
     {
-        const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\" + packDir + "\\" + name + ".svg";
+        const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + packDir + wxFILE_SEP_PATH + name + ".svg";
         if (!wxFileExists(path)) return wxBitmapBundle();   // caller falls back to the line-icon SVG for anything the colored set doesn't cover
         if (packDir == "icons-solar" && !m_dark)
         {
@@ -4352,7 +4407,7 @@ private:
         // m_iconStyle: 0 = line icons (default), 1 = Solar (green), 2 = IconPark (teal/lime)
         if (m_iconStyle == 1) { wxBitmapBundle c = iconColored(name, "icons-solar"); if (c.IsOk()) return c; }
         else if (m_iconStyle >= 2) { wxBitmapBundle c = iconColored(name, "icons-iconpark"); if (c.IsOk()) return c; }   // >= 2: also catches a stale ToolbarIconStyle=3 ("Bold", removed - looked identical to this in dark mode) from an older config
-        static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\icons\\";
+        static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "icons" + wxFILE_SEP_PATH;
         // Permissive toolbar icons (Tabler x Open Color, MIT) - monochrome by default, with a meaning-accent
         // on 8 of the 32 (gold New "+", blue Save/Save-All, red Record/Stop, green Playback/-multiple). Neutral
         // parts paint with stroke="currentColor"; the accents are explicit Open-Color hues. Resolve ONLY
@@ -6437,8 +6492,20 @@ private:
         // wxListbook leaves its single-column page list too narrow, so the longer labels truncate
         // ("Auto-Comp...", "Recent Files ..."). Grow the column to the widest label - which feeds the list's
         // best width, so the whole selector pane widens to fit - and pin a matching min size.
+        //
+        // wxListbook::GetListCtrlFlags() only picks wxLC_REPORT (a real single-column, left-aligned
+        // list) on MSW; GTK/Cocoa fall back to wxLC_LIST mode (an iconless cell-grid layout) purely
+        // because of a #ifdef __WXMSW__ guard in wx's own source, not because report mode looks wrong
+        // there. GTK's native rendering of that LC_LIST cell layout visually centers each item instead
+        // of hugging the left edge, so force the same REPORT style wx already uses on Windows on every
+        // platform for a consistent, left-aligned nav list.
         if (auto* lv = book->GetListView())
         {
+            if (!lv->InReportView())
+            {
+                lv->SetWindowStyleFlag(wxLC_REPORT | wxLC_NO_HEADER);
+                lv->InsertColumn(0, wxS("Pages"));
+            }
             int maxw = 0;
             for (size_t i = 0; i < book->GetPageCount(); ++i)
             { int tw = 0, th = 0; lv->GetTextExtent(book->GetPageText(i), &tw, &th); if (tw > maxw) maxw = tw; }
@@ -6622,7 +6689,7 @@ private:
     wxArrayString availableThemes()   // "Default" + every themes/*.xml (the 22 Notepad++ themes)
     {
         wxArrayString out; out.Add("Default");
-        wxDir d(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\themes");
+        wxDir d(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "themes");
         if (d.IsOpened()) { wxString f; bool more = d.GetFirst(&f, "*.xml", wxDIR_FILES); while (more) { out.Add(f.BeforeLast('.')); more = d.GetNext(&f); } }
         return out;
     }
@@ -6781,8 +6848,8 @@ private:
         wxFileDialog d(this, _("Import style theme(s)"), "", "", _("Theme files (*.xml)|*.xml"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
         if (d.ShowModal() != wxID_OK) return;
         wxArrayString paths; d.GetPaths(paths);
-        const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\themes";
-        int n = 0; for (const auto& p : paths) if (wxCopyFile(p, dir + "\\" + wxFileNameFromPath(p))) ++n;
+        const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "themes";
+        int n = 0; for (const auto& p : paths) if (wxCopyFile(p, dir + wxFILE_SEP_PATH + wxFileNameFromPath(p))) ++n;
         setStatus(0, wxString::Format(_("Imported %d theme(s) - choose them in Style Configurator"), n)); m_hint = true;
     }
     // Reused by every "Style..." button in the UDL dialog below: fg/bg colour, font/size,
@@ -8168,7 +8235,7 @@ public:
         // it as a FR_PRIVATE resource means no installer/admin rights are needed and it never touches
         // the user's system-wide font list; Windows unloads it automatically on process exit regardless
         // of whether RemoveFontResourceEx in OnExit() below runs (belt-and-suspenders cleanup).
-        { const wxString fontDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\fonts\\";
+        { const wxString fontDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "fonts" + wxFILE_SEP_PATH;
           ::AddFontResourceExW((fontDir + "JetBrainsMono-Regular.ttf").wc_str(), FR_PRIVATE, nullptr);
           ::AddFontResourceExW((fontDir + "JetBrainsMono-Bold.ttf").wc_str(), FR_PRIVATE, nullptr); }
 #endif
@@ -8178,7 +8245,7 @@ public:
         // which has none), AddCatalog finds nothing and _() falls back to returning its English argument.
         { wxLogNull noWarn;                                     // a chosen language whose OS locale isn't installed still loads our catalog; hush the C-locale warning
           m_locale.Init((int)readUiLang()); }                          // ignore failure: wx installs the chosen wxTranslations even then, and a second Init() would assert (wx forbids re-Init)
-        m_locale.AddCatalogLookupPathPrefix(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\locale");
+        m_locale.AddCatalogLookupPathPrefix(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "locale");
         m_locale.AddCatalog("wxnpp");
         const bool dark = resolveDark(readThemeMode());
 #ifdef __WXMSW__
@@ -8214,7 +8281,7 @@ public:
     int OnExit() override
     {
 #ifdef __WXMSW__
-        const wxString fontDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + "\\fonts\\";
+        const wxString fontDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "fonts" + wxFILE_SEP_PATH;
         ::RemoveFontResourceExW((fontDir + "JetBrainsMono-Regular.ttf").wc_str(), FR_PRIVATE, nullptr);
         ::RemoveFontResourceExW((fontDir + "JetBrainsMono-Bold.ttf").wc_str(), FR_PRIVATE, nullptr);
 #endif

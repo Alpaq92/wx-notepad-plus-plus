@@ -172,7 +172,8 @@ applyTheme(localStorage.getItem(THEME_KEY) || 'system');
 
 const ASSET_MATCHERS = {
   windows: (name) => name.endsWith('.exe'),
-  macos: (name) => name.endsWith('.dmg'),
+  'macos-arm64': (name) => name.endsWith('.dmg') && name.includes('arm64'),
+  'macos-x86_64': (name) => name.endsWith('.dmg') && name.includes('x86_64'),
   appimage: (name) => name.endsWith('.AppImage'),
   deb: (name) => name.endsWith('.deb'),
   rpm: (name) => name.endsWith('.rpm'),

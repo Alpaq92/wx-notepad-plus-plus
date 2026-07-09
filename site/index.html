@@ -628,9 +628,8 @@
           <ul class="project-list">
 
             <li class="project-item  active" data-filter-item data-category="editing">
-              <figure class="project-img project-img--placeholder">
-                <ion-icon name="image-outline"></ion-icon>
-                <span>Screenshot coming soon</span>
+              <figure class="project-img">
+                <img src="./assets/images/screenshots/multi-document-editing.png" alt="Several tabs open at once - a C++, a Python, and a JSON file, each with correct syntax highlighting" loading="lazy">
               </figure>
 
               <h3 class="project-title">Multi-document editing</h3>
@@ -639,9 +638,8 @@
             </li>
 
             <li class="project-item  active" data-filter-item data-category="themes">
-              <figure class="project-img project-img--placeholder">
-                <ion-icon name="image-outline"></ion-icon>
-                <span>Screenshot coming soon</span>
+              <figure class="project-img">
+                <img src="./assets/images/screenshots/dark-theme.png" alt="The dark theme, editing a Python file" loading="lazy">
               </figure>
 
               <h3 class="project-title">Dark theme</h3>
@@ -650,9 +648,8 @@
             </li>
 
             <li class="project-item  active" data-filter-item data-category="themes">
-              <figure class="project-img project-img--placeholder">
-                <ion-icon name="image-outline"></ion-icon>
-                <span>Screenshot coming soon</span>
+              <figure class="project-img">
+                <img src="./assets/images/screenshots/light-theme.png" alt="The light theme, editing a C++ file" loading="lazy">
               </figure>
 
               <h3 class="project-title">Light theme</h3>
@@ -661,9 +658,8 @@
             </li>
 
             <li class="project-item  active" data-filter-item data-category="editing">
-              <figure class="project-img project-img--placeholder">
-                <ion-icon name="image-outline"></ion-icon>
-                <span>Screenshot coming soon</span>
+              <figure class="project-img">
+                <img src="./assets/images/screenshots/find-and-replace.png" alt="The Find and Replace dialog, with its Match whole word, Match case, and regular-expression options" loading="lazy">
               </figure>
 
               <h3 class="project-title">Find &amp; Replace</h3>
@@ -672,9 +668,8 @@
             </li>
 
             <li class="project-item  active" data-filter-item data-category="panels">
-              <figure class="project-img project-img--placeholder">
-                <ion-icon name="image-outline"></ion-icon>
-                <span>Screenshot coming soon</span>
+              <figure class="project-img">
+                <img src="./assets/images/screenshots/folder-as-workspace.png" alt="The Folder as Workspace panel, showing this project's own src/ directory tree" loading="lazy">
               </figure>
 
               <h3 class="project-title">Folder as Workspace</h3>
@@ -683,9 +678,8 @@
             </li>
 
             <li class="project-item  active" data-filter-item data-category="panels">
-              <figure class="project-img project-img--placeholder">
-                <ion-icon name="image-outline"></ion-icon>
-                <span>Screenshot coming soon</span>
+              <figure class="project-img">
+                <img src="./assets/images/screenshots/preferences.png" alt="The Preferences dialog's General page, with the localization, toolbar icon style, and theme options" loading="lazy">
               </figure>
 
               <h3 class="project-title">Preferences</h3>
@@ -757,12 +751,22 @@
 
                 <h4 class="h4">macOS</h4>
 
-                <p>.dmg disk image</p>
+                <p>Pick your Mac's chip</p>
 
-                <a class="platform-download-btn" data-download="macos" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">
-                  <ion-icon name="download-outline"></ion-icon>
-                  <span>Download for macOS</span>
-                </a>
+                <div class="platform-download-dropdown" data-dropdown>
+
+                  <button type="button" class="platform-download-btn" data-dropdown-btn aria-expanded="false">
+                    <ion-icon name="download-outline"></ion-icon>
+                    <span>Download for macOS</span>
+                    <ion-icon name="chevron-down" class="dropdown-caret"></ion-icon>
+                  </button>
+
+                  <ul class="platform-download-menu" data-dropdown-menu>
+                    <li><a data-download="macos-arm64" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Apple Silicon (M1 and newer)</a></li>
+                    <li><a data-download="macos-x86_64" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Intel</a></li>
+                  </ul>
+
+                </div>
 
               </div>
             </li>

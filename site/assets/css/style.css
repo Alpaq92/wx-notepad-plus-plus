@@ -1192,7 +1192,7 @@ main {
 }
 
 .platform-download-btn:hover {
-  background: var(--bg-gradient-accent-1);
+  background: var(--accent);
   color: var(--smoky-black);
 }
 
