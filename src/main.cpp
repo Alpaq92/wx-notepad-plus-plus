@@ -99,6 +99,15 @@ using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/
 extern "C" void wxnpp_HideWindowTitle(void* nsWindow);        // titleVisibility = Hidden (blank native bar)
 #endif
 
+#ifdef __WXGTK__
+// GTK-native tweak wxWidgets doesn't expose, implemented in src/gtk_native.cpp (compiled only on GTK).
+// Installs a screen-wide, application-priority GtkCssProvider that repaints the app's native GtkScrollbars
+// (incl. the editor's raw child GtkScrollbar, which Mint's dark-green theme otherwise paints full-height
+// down the right edge on an empty document) to neutral greys. Takes any of our GtkWidget*s (from GetHandle())
+// purely to resolve the GdkScreen; passed as a void* so this header stays free of GTK types, and may be null.
+extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
+#endif
+
 #include <string>
 #include <functional>
 #include <cctype>
@@ -1995,6 +2004,7 @@ public:
     // reopened instead of opening the same path twice.
     void restoreRecoveryBackups(const std::map<wxString, EditorPage*>& alreadyOpen)
     {
+        wxLogNull noLog;   // recovery restore is best-effort - a missing/unreadable backup is skipped, never surfaced as an error
         auto* cfg = wxConfigBase::Get();
         const wxString prevPath = cfg->GetPath();
         cfg->SetPath("/Recovery");
@@ -3849,12 +3859,14 @@ private:
 
     // ----- unsaved-changes recovery (Preferences > General "Ask before closing unsaved changes", off
     // by default) - when a modified document is discarded WITHOUT prompting, its content is backed up
-    // to <exe>/RecoveryBackups/<id>.bak first, so it survives that close (or a later crash/relaunch)
+    // to <userDataDir>/RecoveryBackups/<id>.bak first, so it survives that close (or a later crash/relaunch)
     // instead of being silently lost. The manifest is a set of wxConfig groups keyed by that same id
     // (Recovery/<id>/Path, Recovery/<id>/Title) - independent of Session/File* (which only tracks
     // "what's currently open" and is fully rewritten on every exit); an id is only removed once its
-    // content is safely saved to disk for real (see writeFile()).
-    wxString recoveryDir() { return wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "RecoveryBackups"; }
+    // content is safely saved to disk for real (see writeFile()). Backups live under userDataDir() (NOT
+    // <exe>/): the install dir isn't user-writable, so a write there used to fail with ENOENT (its parent
+    // RecoveryBackups dir couldn't be created) and pop a wxLog error dialog.
+    wxString recoveryDir() { return userDataDir() + wxFILE_SEP_PATH + "RecoveryBackups"; }
     wxString generateRecoveryId()
     {
         auto* cfg = wxConfigBase::Get();
@@ -3867,9 +3879,11 @@ private:
         if (!p) return;
         if (p->recoveryId.empty()) p->recoveryId = generateRecoveryId();
         const wxString dir = recoveryDir();
+        wxLogNull noLog;   // best-effort safety net: a failed backup must never surface a wxLog error dialog
         if (!wxDirExists(dir)) wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
         wxFile f(dir + wxFILE_SEP_PATH + p->recoveryId + ".bak", wxFile::write);
-        if (f.IsOpened()) { const wxScopedCharBuffer u = getAllText().ToUTF8(); f.Write(u.data(), u.length()); }
+        if (!f.IsOpened()) return;   // couldn't write the backup - don't record a manifest entry pointing at a file that isn't there
+        const wxScopedCharBuffer u = getAllText().ToUTF8(); f.Write(u.data(), u.length());
         auto* cfg = wxConfigBase::Get();
         cfg->Write("Recovery/" + p->recoveryId + "/Path", p->path);
         cfg->Write("Recovery/" + p->recoveryId + "/Title", p->title);
@@ -3879,7 +3893,7 @@ private:
     {
         if (!p || p->recoveryId.empty()) return;
         wxConfigBase::Get()->DeleteGroup("Recovery/" + p->recoveryId);
-        wxRemoveFile(recoveryDir() + wxFILE_SEP_PATH + p->recoveryId + ".bak");
+        { wxLogNull noLog; wxRemoveFile(recoveryDir() + wxFILE_SEP_PATH + p->recoveryId + ".bak"); }   // best-effort: the .bak may already be gone
         p->recoveryId.clear();
     }
     // Ask to save a modified document before closing it (Save / Don't Save / Cancel), themed like the
@@ -7602,6 +7616,12 @@ private:
         ::SetWindowTheme(m_sci, dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);  // dark/light native scrollbars
         g_editorDark = dark;
         ::RedrawWindow(m_sci, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW);  // refresh the dead-corner now
+#endif
+#ifdef __WXGTK__
+        // GTK analogue of the MSW DarkMode_Explorer scrollbar theming above: neutral-theme the editor's native
+        // GtkScrollbar so Mint's accent gradient stops painting a full-height strip down the right edge on an
+        // empty document. Runs at startup (applyTheme @ startup) and on every live dark/light toggle.
+        wxnpp_InstallDarkScrollbarCss(m_stc ? (void*)m_stc->GetHandle() : nullptr, dark ? 1 : 0);
 #endif
         const wxColour chromeBg = dark ? wxColour(32, 32, 32) : wxColour(240, 240, 240);   // explicit both ways
         const wxColour chromeFg = dark ? wxColour(220, 220, 220) : wxColour(0, 0, 0);
