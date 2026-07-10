@@ -3,6 +3,27 @@
 All notable changes to wxNotepad++ are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.1] - 2026-07-10
+
+### Fixed
+- Installs that never explicitly chose a theme - fresh installs, and upgrades that always ran on the
+  default - now follow the OS (**System**) instead of being hard-locked into Dark by a missing legacy
+  config key, which read as "the app can't tell my system is light" even though the OS-theme detection
+  was fine. Users who explicitly picked Dark or Light in Preferences keep their choice.
+- On Linux the **toolbar's inter-icon spacing** was much wider than on Windows/macOS: the desktop
+  theme's own button metrics (padding + minimum width on GTK toolbar buttons, e.g. Mint-Y) inflate the
+  row. The GTK shim now compacts the toolbar buttons and separators to match the other platforms;
+  hover/pressed feedback is unchanged.
+- On Linux the **"+ / v / x" tab caption buttons** were exactly as tall as the tab strip and painted
+  over the 1px separator line above it; they are now slightly shorter and centred, leaving the
+  separator visible.
+
+### Changed
+- Dropped MSBuild from the repo entirely: removed the vendored Lexilla MSBuild project
+  (`Lexilla.vcxproj` and its code-analysis ruleset - lexilla is built by the repo's own CMake), and
+  the README now spells out that Windows needs only the MSVC **compiler** from VS Build Tools - the
+  build itself is CMake + Ninja; MSBuild and solution files are not used.
+
 ## [0.6.0] - 2026-07-10
 
 ### Fixed

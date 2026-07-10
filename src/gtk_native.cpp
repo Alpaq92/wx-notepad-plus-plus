@@ -74,6 +74,22 @@ extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
     if (GtkSettings* settings = gtk_settings_get_default())
         g_object_set(settings, "gtk-overlay-scrolling", FALSE, NULL);
 
+    // Structural (colour-independent) toolbar compaction, appended to BOTH palettes below. The inter-icon
+    // spacing on GTK comes entirely from the desktop theme's button metrics (Mint-Y: `button { min-width:
+    // 20px; padding: 5px 8px; }`, `.image-button { min-width: 24px; }`, `toolbar { padding: 4px; }` plus
+    // 1px margins), which makes the toolbar row far airier than the Windows/macOS toolbars. wx adds no
+    // spacing of its own (wxToolBar/GTK is a plain GtkToolbar with GtkToolButton items), so theme-level CSS
+    // is the right lever - and at G_MAXUINT these plain declarations win the cascade. Node tree:
+    // toolbar > toolbutton > button - the theme's padding/min-width sit on the INNER `button` node;
+    // separators are `separator` nodes. border/background are deliberately untouched so the theme's flat
+    // hover/pressed feedback still paints.
+#define WXNPP_TOOLBAR_COMPACT_CSS \
+    "toolbar { padding: 2px; }" \
+    "toolbar toolbutton > button, toolbar toolitem button {" \
+    "  padding: 3px; margin: 0; min-width: 0; min-height: 0; }" \
+    "toolbar.horizontal separator { margin: 0 3px; }" \
+    "toolbar.vertical separator { margin: 3px 0; }"
+
     static GtkCssProvider* provider = nullptr;
     static gboolean        added    = FALSE;
 
@@ -138,7 +154,8 @@ extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
         // toolbar row reads as one seamless full window width instead of "icons then a different-shade gap".
         "toolbar, toolbar.horizontal, toolbar.primary-toolbar {"
         "  background-color: #202020; background-image: none;"
-        "  box-shadow: none; border: none; }";
+        "  box-shadow: none; border: none; }"
+        WXNPP_TOOLBAR_COMPACT_CSS;
 
     static const char* const css_light =
         "scrollbar, scrollbar.vertical, scrollbar.horizontal,"
@@ -176,7 +193,8 @@ extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
         "  box-shadow: none; border: none; }"
         "toolbar, toolbar.horizontal, toolbar.primary-toolbar {"   // match the AUI dock gap (#f0f0f0 == wxColour(240,240,240)) - seamless full-width toolbar
         "  background-color: #f0f0f0; background-image: none;"
-        "  box-shadow: none; border: none; }";
+        "  box-shadow: none; border: none; }"
+        WXNPP_TOOLBAR_COMPACT_CSS;
 
     gtk_css_provider_load_from_data(provider, dark ? css_dark : css_light, -1, nullptr);
 

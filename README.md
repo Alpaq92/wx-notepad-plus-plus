@@ -60,7 +60,7 @@ cmake --build build --target wxnpp
 # -> build/bin/wxnpp   (wxnpp.exe on Windows)
 ```
 
-- **Windows** — Visual Studio 2022 (MSVC); the native dark-mode code and the optional `packages/npp-bridge` (Notepad++-ABI plugin bridge) compile in here.
+- **Windows** — the MSVC compiler from Visual Studio 2022 Build Tools (the build itself is CMake + Ninja; MSBuild and solution files are not used); the native dark-mode code and the optional `packages/npp-bridge` (Notepad++-ABI plugin bridge) compile in here.
 - **Linux** — needs GTK3 dev headers: `sudo apt-get install build-essential cmake ninja-build pkg-config libgtk-3-dev`
 - **macOS** — needs the Xcode command-line tools.
 
