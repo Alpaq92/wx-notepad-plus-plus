@@ -2187,6 +2187,9 @@ msgstr "切换单行注释	Ctrl+Q"
 msgid "Toolbar icon style:"
 msgstr "工具栏图标样式："
 
+msgid "Toolbar icon size:"
+msgstr "工具栏图标大小："
+
 msgid "Trim Leading Space"
 msgstr "删除行首空格"
 

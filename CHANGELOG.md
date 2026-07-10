@@ -3,6 +3,48 @@
 All notable changes to wxNotepad++ are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.6] - 2026-07-10
+
+### Added
+- Preferences > General **"Toolbar icon size"** - pick 16, 20, 24, or 32 px for the toolbar icons
+  (restart-to-apply, like the icon-style option next to it). The icons are SVG, so every size stays
+  crisp. Fully localized in all 8 languages.
+
+### Fixed
+- On macOS the toolbar had three linked problems - oversized icons, a large empty gap before the first
+  icon, and an over-tall bar - all rooted in the native `NSToolbar`, which sizes icons by a coarse size
+  *mode* (not the bitmap size), reserves a wide leading band, and turns each group separator into a fat
+  space item. macOS now builds the toolbar the same way Windows/Linux do: an ordinary child toolbar wx
+  lays out itself (real icon-sized slots, thin separators, no leading gap), docked as a top pane, instead
+  of the frame's native `NSToolbar`. Icons now honour the chosen size and the bar matches the other
+  platforms.
+- On macOS the title bar still showed "new 1 - wxNotepad++" despite the 0.5.5 blank-title change: wx's
+  `SetTitle("")` clears the text, but nothing kept it blank against later title reassertions. A small
+  Objective-C++ shim (`src/macos_native.mm`) now sets `NSWindow.titleVisibility = Hidden`, which blanks
+  the native title bar unconditionally.
+- On macOS the Preferences dialog's category list ran as a squashed horizontal strip across the *top*
+  instead of down the left side (cramping the page content). wx's default listbook alignment
+  (`wxLB_DEFAULT`) resolves to *top* on macOS but *left* on Windows/Linux; the dialog now passes
+  `wxLB_LEFT` explicitly so the list is a left column everywhere (no change on Windows/Linux, whose
+  default already resolved to left).
+- On macOS the main window opened at 1100×720 even on laptops whose usable width is narrower (~1016 px),
+  so it spilled off-screen. The initial size is now clamped to the display's usable area (and re-centred)
+  on macOS; Windows/Linux keep the 1100×720 default unchanged.
+- On Windows the integrated top bar's menu items (File, Edit, …) were spaced too far apart - a regression
+  from the 0.5.5 Linux fix, which added a 4px border on *every* platform. MSW's native buttons already
+  reserve internal horizontal margin, so the extra border there over-spaced the bar. The 4px border is
+  now applied only on GTK/macOS (where `wxBU_EXACTFIT` buttons genuinely need it); Windows gets none.
+- On Linux/GTK the Preferences dialog's options still rendered too slim (clipped checkbox labels,
+  mispositioned combos) even after the 0.5.5 `Layout()` fix. Root cause: the left nav list is created
+  with `wxLC_NO_HEADER`, which makes `wxListCtrlBase::DoGetBestClientSize()` ignore the real column width
+  and report an arbitrary ~250px; the book control then handed the nav list that inflated width and
+  pushed the page content off to the right. Setting only `SetMinSize` didn't cap it - `GetBestSize()`
+  clamps to the *max* size too - so the nav list now pins `SetMaxSize` to the intended width as well.
+- On Linux/GTK the persistent "blue tint/glow in the bottom-right corner" was the native status-bar
+  size grip (`wxSTB_SIZEGRIP`), which GTK paints in the desktop theme's accent - a blue diagonal under
+  Linux Mint's dark theme - clashing sharply with our dark chrome. The grip is now dropped on GTK too
+  (as it already was on Windows); the window still resizes from its borders. macOS keeps its native grip.
+
 ## [0.5.5] - 2026-07-10
 
 ### Added

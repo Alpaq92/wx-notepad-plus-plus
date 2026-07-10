@@ -2079,6 +2079,9 @@ msgstr "Arguments de ligne de commande"
 msgid "Toolbar icon style:"
 msgstr "Style d'icônes de la barre d'outils :"
 
+msgid "Toolbar icon size:"
+msgstr "Taille d'icônes de la barre d'outils :"
+
 msgid "Line icons (default)"
 msgstr "Icônes filaires (par défaut)"
 

@@ -2079,6 +2079,9 @@ msgstr "コマンドライン引数"
 msgid "Toolbar icon style:"
 msgstr "ツールバーアイコンのスタイル:"
 
+msgid "Toolbar icon size:"
+msgstr "ツールバーアイコンのサイズ:"
+
 msgid "Line icons (default)"
 msgstr "ラインアイコン（既定）"
 
