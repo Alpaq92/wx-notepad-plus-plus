@@ -161,15 +161,20 @@ static wxString uiLangName(int i) { return i == 0 ? wxString(_("System default")
 // Deliberately untranslated in the status bar (matches N++); menu items wrap them in _() as literals.
 static const char* eolName(int mode) { return mode == SC_EOL_LF ? "Unix (LF)" : mode == SC_EOL_CR ? "Macintosh (CR)" : "Windows (CR LF)"; }
 // Theme mode (Preferences > General): 0 = follow OS, 1 = Dark, 2 = Light - replaces the old plain
-// "DarkMode" bool. Falls back to that legacy key when ThemeMode was never written (upgrading users
-// keep whatever they already had instead of being silently switched to "follow OS").
+// "DarkMode" bool. Falls back to that legacy key only when it actually EXISTS (users who explicitly
+// chose a theme keep that choice). When NEITHER key exists the app follows the OS - that covers fresh
+// installs but DELIBERATELY also upgrades that never touched a restart-required preference (ThemeMode
+// is only ever written by restartWithTheme): those users never chose Dark, they sat on the old
+// accidental default - the previous fallback defaulted the missing legacy key to true, hard-locking
+// such installs into Dark and making "system theme detection" look broken on a light OS.
 static long readThemeMode()
 {
     auto* c = wxConfigBase::Get();
     long mode;
     if (c->Read("ThemeMode", &mode)) return mode;
-    bool legacyDark = true; c->Read("DarkMode", &legacyDark, true);
-    return legacyDark ? 1 : 2;
+    bool legacyDark;
+    if (c->Read("DarkMode", &legacyDark)) return legacyDark ? 1 : 2;
+    return 0;
 }
 // "System" (themeMode anything but 1/2) must read the OS's app-theme preference directly:
 // wxSystemAppearance::IsDark() deliberately does NOT check that (its own docs/source say so) - it
@@ -1814,6 +1819,14 @@ public:
         // above already ran m_aui.SetManagedWindow(this), so AUI is live for the dock in buildToolBar().
         m_toolBarHost = new wxPanel(this, wxID_ANY);
 #endif
+#ifdef __WXGTK__
+        // Install the GTK CSS (scrollbar/tint palette + toolbar compaction) BEFORE the toolbar exists: in
+        // the integrated-top-bar mode dockIntegratedToolBar()'s AddPane snapshots the GtkToolbar's best size
+        // ONCE and never re-measures, so the compact button metrics must already be in effect when the
+        // toolbar is realized - installing only from applyTheme() (which runs later) left the docked row at
+        // the roomy pre-CSS theme height. applyTheme()'s later call reloads the same provider (harmless).
+        wxnpp_InstallDarkScrollbarCss(nullptr, m_dark ? 1 : 0);
+#endif
         buildToolBar();
         buildStatusBar();
 
@@ -3407,6 +3420,7 @@ private:
         // this->FromDIP: FromDIP is a dependent-base (wxWindowBase) member and this is a class template
         // (NppShellFrameT<FB>), so GCC/Clang two-phase lookup rejects the unqualified call (MSVC is lax).
         int capH = m_tabs->GetTabCtrlHeight(); if (capH < this->FromDIP(18)) capH = this->FromDIP(24);
+        capH -= this->FromDIP(2);   // full-strip-height buttons paint over the strip's 1px top separator line; shrink so centering leaves a sliver above and below
         const wxSize capBtnSize(this->FromDIP(24), capH);
         const wxColour capHot = m_dark ? wxColour(62, 62, 62) : wxColour(210, 210, 210);
 #endif
