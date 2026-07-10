@@ -3,6 +3,24 @@
 All notable changes to wxNotepad++ are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.8] - 2026-07-10
+
+### Fixed
+- Closing an unsaved document could pop a **"can't open file … RecoveryBackups/…bak" error** on Linux
+  (and silently fail on installed Windows/macOS): the unsaved-changes recovery backups were written to a
+  `RecoveryBackups/` folder next to the executable, which isn't user-writable on an installed build
+  (`/opt/wxnpp`, `Program Files`, inside the `.app` bundle). Backups now live under the per-user data dir
+  (`wxStandardPaths::GetUserDataDir()`), and the whole recovery subsystem is best-effort (`wxLogNull`), so
+  a failed backup/restore can never surface an error dialog.
+- **User-Defined Languages and the context-menu file** (`contextMenu.xml`) were likewise stored next to
+  the executable, so creating/editing them silently failed to persist on installed builds. They now use
+  the same per-user data dir.
+- On Linux (GTK), a **green/teal vertical strip ran down the right edge** of the window under desktop
+  themes with a coloured accent (e.g. Linux Mint's dark green): the editor's native `GtkScrollbar` was
+  left raw-native and took the theme accent, and on an empty document its thumb spans the full track. A
+  small GTK shim (`src/gtk_native.cpp`) now dark-themes the native scrollbars via a `GtkCssProvider` — the
+  GTK analogue of the `DarkMode_Explorer` scrollbar theming already done on Windows.
+
 ## [0.5.6] - 2026-07-10
 
 ### Added

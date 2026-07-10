@@ -10,7 +10,7 @@
 #   ./build/bin/wxnpp            (wxnpp.exe on Windows)
 
 cmake_minimum_required(VERSION 3.20)
-project(wxNotepadPlusPlus VERSION 0.5.6 LANGUAGES CXX)
+project(wxNotepadPlusPlus VERSION 0.5.8 LANGUAGES CXX)
 
 include(FetchContent)
 
@@ -95,6 +95,21 @@ if(APPLE)
     enable_language(OBJCXX)
     target_sources(wxnpp PRIVATE src/macos_native.mm)
     target_link_libraries(wxnpp PRIVATE "-framework AppKit")
+endif()
+
+# GTK-native shim wxWidgets doesn't expose: neutral-theme the app's native GtkScrollbars (kills the Mint
+# accent gradient that otherwise paints full-height down the editor's right edge). Plain C++ (no Objective-C);
+# compiled + GTK3-wired ONLY here, so MSW/macOS never see it. NOTE: gtk_native.cpp has no #ifdef self-guard
+# (it includes no wx header, so __WXGTK__ wouldn't be defined there) - the CMake gate below is what excludes
+# it off-Linux. wxWidgets does not propagate GTK include dirs to dependents, so add them explicitly (the wxbf
+# block above already discovered GTK3 via pkg_check_modules; re-invoking is idempotent).
+if(UNIX AND NOT APPLE)
+    target_sources(wxnpp PRIVATE src/gtk_native.cpp)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
+    target_include_directories(wxnpp PRIVATE ${GTK3_INCLUDE_DIRS})
+    target_link_directories(wxnpp PRIVATE ${GTK3_LIBRARY_DIRS})
+    target_link_libraries(wxnpp PRIVATE ${GTK3_LIBRARIES})
 endif()
 
 target_include_directories(wxnpp PRIVATE
