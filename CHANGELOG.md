@@ -3,6 +3,39 @@
 All notable changes to wxNotepad++ are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-07-10
+
+### Fixed
+- **Duplicate "new 1" tab on launch**: quitting with unsaved edits in the untitled buffer backs them up
+  for recovery, but the next launch restored that backup *alongside* a fresh startup "new 1" instead of
+  replacing it - the redundant-tab cleanup only counted reopened session files, never recovery restores.
+  The pristine startup tab is now dropped whenever the restore pass brings in any page (session file or
+  recovery backup), and a pristine-empty untitled buffer is no longer backed up at all (there is nothing
+  to recover), which also stops empty backup files accumulating on disk.
+- On Linux the **"+ / v / x" tab caption buttons rendered blurry**: the 0.5.9 custom-painted caption
+  buttons rasterized their glyphs at 12 px while the caption icons are drawn for 16 px. They now render
+  at 16 px (the window-control buttons keep their original 12 px).
+- On Linux the **coloured tint down the right edge** survived the 0.5.9 scrollbar fix for two reasons,
+  both corrected. The big one: every declaration in the shim's CSS carried `!important`, which GTK3's CSS
+  parser **does not support** - each such declaration is rejected wholesale ("Junk at end of value"), so
+  the entire 0.5.8/0.5.9 stylesheet silently loaded *empty* and the theming never took effect at all. The
+  CSS is now valid GTK CSS (the max-priority provider wins the cascade on its own; GTK sorts by provider
+  priority, `!important` isn't part of its model). Second, the fix targeted the wrong widget: wxSTC never
+  instantiates the native ScintillaGTK backend - its scrollbar is wx's own `GtkScrolledWindow` scrollbar -
+  and the accent "tint" can also arrive on the scrolled window's `overshoot`/`undershoot`/`junction`
+  decoration nodes. The shim now covers those nodes too, and attaches the provider directly to every
+  scrollbar widget in the window as well as screen-wide.
+- **Unsaved-changes recovery after a crash**: recovery backups were only restored when the previous run
+  exited cleanly (the same flag that gates session restore), so the launch right after a crash - the very
+  scenario the backups exist for - silently skipped them, and the backed-up tabs "resurrected" one launch
+  later instead. The recovery pass now runs on every launch, independent of the clean-exit flag.
+
+- The Windows exe's **file-properties version metadata** (Explorer > Properties > Details) was stale
+  at 0.3.0.0; it now matches the release version.
+
+### Added
+- Project site: macOS screenshot in the gallery, under a new "Platforms" category.
+
 ## [0.5.9] - 2026-07-10
 
 ### Fixed

@@ -1,40 +1,42 @@
-// gtk_native.cpp - GTK-only tweak wxWidgets doesn't expose: neutral-theme the app's native GtkScrollbars.
+// gtk_native.cpp - GTK-only tweak wxWidgets doesn't expose: neutral-theme the app's native GtkScrollbars
+// (and their GtkScrolledWindow decoration nodes) so a coloured desktop theme accent stops painting down the
+// editor's right edge.
 //
-// The main editor is a wxStyledTextCtrl whose GTK backend (bundled Scintilla, ScintillaGTK.cxx) creates a
-// REAL child GtkScrollbar for the vertical scrollbar and leaves it styled by the desktop GTK theme. Confirmed
-// in the vendored source: ScintillaGTK::Initialise() does `scrollbarv = gtk_scrollbar_new(...)` and
-// `gtk_widget_set_parent(PWidget(scrollbarv), PWidget(wMain))` (ScintillaGTK.cxx:592 / :599), so the CSS node
-// is a plain `scrollbar` parented directly onto Scintilla's main widget - a CHILD of the STC's GtkWidget, not
-// a widget we own. On Linux Mint's dark themes with a coloured system accent that native scrollbar picks up
-// the accent (a green/teal gradient) and, on an EMPTY document, its thumb spans the whole track -> a
-// full-height coloured strip down the window's right edge. This is the GTK analogue of the MSW
-// SetWindowTheme(DarkMode_Explorer) scrollbar theming in applyTheme().
+// WHAT THE STRIP ACTUALLY IS. The main editor is a wxStyledTextCtrl. Crucially, wxSTC does NOT use the native
+// ScintillaGTK backend - it uses wxWidgets' own Scintilla platform layer (src/stc/ScintillaWX.cpp), whose
+// ScintillaWX::ModifyScrollBars() calls stc->SetScrollbar(wxVERTICAL, ...) - i.e. the *wxWindow built-in*
+// scrollbar. On wxGTK that built-in scrollbar is a real GtkScrollbar living inside the wxWindow's GtkScrolled-
+// Window wrapper (wxPizza-in-GtkScrolledWindow). So the editor IS inside a GtkScrolledWindow (this is exactly
+// what the user's GTK Inspector reported), and on Linux Mint's dark themes with a coloured system accent that
+// scrollbar - plus the scrolled window's overshoot/undershoot/junction decoration nodes - picks up the accent.
+// On an EMPTY document the slider spans the whole track -> a full-height coloured strip / "tint" down the right
+// edge. (An earlier version of this file wrongly attributed the strip to a raw ScintillaGTK child scrollbar;
+// wxSTC never instantiates ScintillaGTK, so that rationale was incorrect - the widget is wx's own GtkScrollbar.)
 //
-// WHY THE OLD APPROACH LOST. A screen-wide provider added at GTK_STYLE_PROVIDER_PRIORITY_APPLICATION (600)
-// beats the desktop THEME (200) - that is exactly why third_party/wxbf/src/borderless_frame_gtk.cpp's
-// APPLICATION-priority `decoration` provider visibly wins (its grey window border shows). But on Mint the
-// scrollbar accent survived APPLICATION, which means it is injected ABOVE 600 - the classic culprit being a
-// user ~/.config/gtk-3.0/gtk.css, loaded by GTK at GTK_STYLE_PROVIDER_PRIORITY_USER (800). GTK's cascade
-// sorts by PROVIDER PRIORITY FIRST (a higher-priority provider wins regardless of selector specificity), so
-// an APPLICATION(600) rule can never override a USER(800) rule. The fix is therefore two-fold and belt-and-
-// suspenders:
-//   (a) add the provider at G_MAXUINT - strictly above USER(800) and every other standard bucket
-//       (FALLBACK 1 / THEME 200 / SETTINGS 400 / APPLICATION 600 / USER 800), so we win the priority sort
-//       against anything Mint injects; and
-//   (b) mark every declaration `!important`, so even in the CSS-origin edge case where a lower-priority
-//       provider's important declaration could contend, our important declaration at the top priority still
-//       wins.
-// A screen-wide provider (not widget-scoped) is required to reach Scintilla's CHILD scrollbar, and a
-// widget-scoped provider would gain NOTHING here: a per-widget provider is merged into the SAME priority
-// cascade as the screen providers, so it would still lose to a USER(800) rule unless it, too, sat above 800.
-// Priority - not scope - is what decides the winner, so screen-wide-at-top-priority is both sufficient and
-// simplest.
+// TWO THINGS ARE NEEDED, because the accent can arrive on more than one node:
+//   1. the GtkScrollbar's slider/trough (the classic scrollbar), and
+//   2. the GtkScrolledWindow's `overshoot`/`undershoot` edge-glow and `junction` nodes, which many themes paint
+//      as a semi-transparent accent gradient - this is the "blue TINT" (a gradient, not a solid bar) the
+//      scrollbar-only rules of the previous version left untouched.
 //
-// Both background-image AND box-shadow (and the `background` shorthand, via background-color+background-image)
-// must be killed on trough AND slider: themes deliver the accent as a linear-gradient background-image OR as
-// an inset box-shadow, so neutralising background-color alone can leave the gradient. We also cover the GTK
-// 3.20+ sub-nodes (`contents`, `trough`, `slider`), the orientation/overlay classes, and the :hover/:active/
-// :disabled/:backdrop states so nothing accent-coloured survives in any state.
+// WINNING THE CASCADE. GTK's style cascade sorts by PROVIDER PRIORITY FIRST (a higher-priority provider wins
+// regardless of selector specificity). Mint injects the accent somewhere at/above APPLICATION(600) - typically
+// a USER(800) ~/.config/gtk-3.0/gtk.css. We therefore:
+//   (a) install a screen-wide provider at G_MAXUINT - strictly above every standard bucket (FALLBACK 1 /
+//       THEME 200 / SETTINGS 400 / APPLICATION 600 / USER 800) - so we win the priority sort; and
+//   (b) ALSO add the same provider DIRECTLY to every GtkScrollbar widget's own style context (walking the
+//       toplevel's widget tree, internal children included). A widget-scoped provider rooted at the scrollbar
+//       matches the `scrollbar {...}` rules against the scrollbar itself, so it cannot miss the node via a
+//       selector-shape mismatch - a guarantee the screen-wide selector alone doesn't give. Both are at
+//       G_MAXUINT.
+// Belt (screen-wide, catches nodes/widgets created later) and suspenders (per-widget, guarantees today's
+// scrollbars are hit).
+//
+// WARNING - never add `!important` to this CSS. GTK3's CSS parser does NOT implement it (provider priority
+// is GTK's substitute for it): any declaration carrying `!important` is rejected wholesale as "Junk at end
+// of value" and silently discarded. The 0.5.9 shim had it on EVERY declaration, so the whole stylesheet
+// loaded empty and the "fix" was a no-op - that, not the cascade, is why the accent strip survived two
+// releases. (The rejects do show up as "Theme parsing error" g_warnings on stderr, ~one per declaration.)
 //
 // Compiled + GTK3-linked ONLY on UNIX-AND-NOT-APPLE (see CMakeLists.txt), exactly like src/macos_native.mm
 // is Apple-only. It MUST NOT be #ifdef __WXGTK__-guarded: that macro comes from wxWidgets headers, which are
@@ -45,14 +47,30 @@
 // third_party/wxbf/src/borderless_frame_gtk.cpp, which proves these symbols link in this build.)
 #include <gtk/gtk.h>
 
+// Recursively add `provider` (at G_MAXUINT) to every GtkScrollbar's own style context under `w`. Uses
+// gtk_container_forall (not _foreach) so a GtkScrolledWindow's scrollbars - which are INTERNAL children and
+// invisible to _foreach - are reached. Re-adding the same provider to a context that already has it is guarded
+// by a remove-first, so repeated calls (e.g. every dark/light toggle) never stack duplicate references.
+static void wxnpp_restyle_scrollbars(GtkWidget* w, gpointer data)
+{
+    if (!w) return;
+    GtkStyleProvider* provider = GTK_STYLE_PROVIDER(data);
+    if (GTK_IS_SCROLLBAR(w))
+    {
+        GtkStyleContext* ctx = gtk_widget_get_style_context(w);
+        gtk_style_context_remove_provider(ctx, provider);
+        gtk_style_context_add_provider(ctx, provider, G_MAXUINT);
+    }
+    if (GTK_IS_CONTAINER(w))
+        gtk_container_forall(GTK_CONTAINER(w), wxnpp_restyle_scrollbars, data);
+}
+
 extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
 {
-    // Disable GTK overlay scrolling app-wide. GTK Inspector confirmed the "green strip down the right edge"
-    // is the editor's vertical GtkScrollbar in its "overlay-indicator" state: a thin bar GTK paints with the
-    // desktop accent (Mint's green/teal), full-height on an empty document. With overlay off it becomes a
-    // normal, always-visible scrollbar that the CSS below dark-themes to grey. This is the in-code equivalent
-    // of launching with GTK_OVERLAY_SCROLLING=0. (GtkSettings prop, GTK 3.16+.) We keep the overlay-indicator
-    // selectors below too, in case some path re-enables overlay for a given scrolled window.
+    // Disable GTK overlay scrolling app-wide so the editor's GtkScrolledWindow scrollbar becomes a normal,
+    // always-visible scrollbar that the CSS below dark-themes to grey (rather than the thin accent-coloured
+    // "overlay-indicator" bar). GtkSettings prop, GTK 3.16+; the in-code equivalent of GTK_OVERLAY_SCROLLING=0.
+    // The overlay-indicator selectors below are kept too, in case a path re-enables overlay for some window.
     if (GtkSettings* settings = gtk_settings_get_default())
         g_object_set(settings, "gtk-overlay-scrolling", FALSE, NULL);
 
@@ -71,74 +89,94 @@ extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
     if (!provider)
         provider = gtk_css_provider_new();
 
-    // Every declaration is `!important` and the provider is installed at G_MAXUINT priority (see file header):
-    // together they beat any theme/user provider, including a USER(800) ~/.config/gtk-3.0/gtk.css, that Mint
-    // uses to paint the accent on the scrollbar.
+    // The provider sits at G_MAXUINT priority (see file header), which alone beats any theme/user provider -
+    // including a USER(800) ~/.config/gtk-3.0/gtk.css - that Mint uses to paint the accent; GTK sorts the
+    // cascade by provider priority before selector specificity, and GTK3 CSS has no `!important` (see the
+    // WARNING in the file header - adding it would void the whole stylesheet). Both background-image AND
+    // box-shadow (and the `background` shorthand) are killed on trough AND slider, because themes deliver
+    // the accent as a linear-gradient background-image OR an inset box-shadow. `overshoot`/`undershoot`/
+    // `junction` cover the GtkScrolledWindow decoration nodes that carry the semi-transparent accent "tint".
     static const char* const css_dark =
         "scrollbar, scrollbar.vertical, scrollbar.horizontal,"
         "scrollbar.overlay-indicator, scrollbar.overlay-indicator.vertical,"
         "scrollbar.overlay-indicator.horizontal {"
-        "  background-color: #262626 !important; background-image: none !important;"
-        "  box-shadow: none !important; border: none !important; -gtk-icon-shadow: none !important; }"
+        "  background-color: #262626; background-image: none;"
+        "  box-shadow: none; border: none; -gtk-icon-shadow: none; }"
         "scrollbar contents {"
-        "  background-color: #262626 !important; background-image: none !important;"
-        "  box-shadow: none !important; border: none !important; }"
+        "  background-color: #262626; background-image: none;"
+        "  box-shadow: none; border: none; }"
         "scrollbar trough, scrollbar contents trough {"
-        "  background-color: #262626 !important; background-image: none !important;"
-        "  box-shadow: none !important; border: none !important; border-radius: 0 !important;"
-        "  outline: none !important; }"
+        "  background-color: #262626; background-image: none;"
+        "  box-shadow: none; border: none; border-radius: 0;"
+        "  outline: none; }"
         "scrollbar slider, scrollbar contents trough slider {"
-        "  background-color: #4a4a4a !important; background-image: none !important;"
-        "  box-shadow: none !important; border: none !important; border-radius: 6px !important;"
-        "  min-width: 8px !important; min-height: 8px !important; outline: none !important; }"
+        "  background-color: #4a4a4a; background-image: none;"
+        "  box-shadow: none; border: none; border-radius: 6px;"
+        "  min-width: 8px; min-height: 8px; outline: none; }"
         "scrollbar slider:hover {"
-        "  background-color: #5c5c5c !important; background-image: none !important; box-shadow: none !important; }"
+        "  background-color: #5c5c5c; background-image: none; box-shadow: none; }"
         "scrollbar slider:active, scrollbar slider:hover:active {"
-        "  background-color: #6e6e6e !important; background-image: none !important; box-shadow: none !important; }"
+        "  background-color: #6e6e6e; background-image: none; box-shadow: none; }"
         "scrollbar slider:disabled {"
-        "  background-color: #3a3a3a !important; background-image: none !important; box-shadow: none !important; }"
+        "  background-color: #3a3a3a; background-image: none; box-shadow: none; }"
         "scrollbar slider:backdrop {"
-        "  background-color: #4a4a4a !important; background-image: none !important; box-shadow: none !important; }"
+        "  background-color: #4a4a4a; background-image: none; box-shadow: none; }"
         "scrollbar:backdrop, scrollbar trough:backdrop, scrollbar contents:backdrop {"
-        "  background-color: #262626 !important; background-image: none !important; box-shadow: none !important; }"
+        "  background-color: #262626; background-image: none; box-shadow: none; }"
+        // GtkScrolledWindow decoration nodes: the accent frequently arrives here as a semi-transparent radial/
+        // linear gradient (the "tint"), NOT on the scrollbar at all. Kill the gradient + shadow on all of them.
+        "overshoot, overshoot.top, overshoot.bottom, overshoot.left, overshoot.right,"
+        "undershoot, undershoot.top, undershoot.bottom, undershoot.left, undershoot.right {"
+        "  background: none; background-image: none; background-color: transparent;"
+        "  box-shadow: none; border: none; }"
+        "junction {"
+        "  background-color: #262626; background-image: none;"
+        "  box-shadow: none; border: none; }"
         // The integrated toolbar is a native GtkToolbar whose bg Mint's theme paints; wxToolBar::SetBackgroundColour
         // is defeated by that theme (same cascade as the scrollbar). Force the `toolbar` node to the chrome colour
         // (#202020 == wxColour(32,32,32)) so the toolbar matches the wx-drawn AUI dock gap to its right - i.e. the
         // toolbar row reads as one seamless full window width instead of "icons then a different-shade gap".
         "toolbar, toolbar.horizontal, toolbar.primary-toolbar {"
-        "  background-color: #202020 !important; background-image: none !important;"
-        "  box-shadow: none !important; border: none !important; }";
+        "  background-color: #202020; background-image: none;"
+        "  box-shadow: none; border: none; }";
 
     static const char* const css_light =
         "scrollbar, scrollbar.vertical, scrollbar.horizontal,"
         "scrollbar.overlay-indicator, scrollbar.overlay-indicator.vertical,"
         "scrollbar.overlay-indicator.horizontal {"
-        "  background-color: #f0f0f0 !important; background-image: none !important;"
-        "  box-shadow: none !important; border: none !important; -gtk-icon-shadow: none !important; }"
+        "  background-color: #f0f0f0; background-image: none;"
+        "  box-shadow: none; border: none; -gtk-icon-shadow: none; }"
         "scrollbar contents {"
-        "  background-color: #f0f0f0 !important; background-image: none !important;"
-        "  box-shadow: none !important; border: none !important; }"
+        "  background-color: #f0f0f0; background-image: none;"
+        "  box-shadow: none; border: none; }"
         "scrollbar trough, scrollbar contents trough {"
-        "  background-color: #f0f0f0 !important; background-image: none !important;"
-        "  box-shadow: none !important; border: none !important; border-radius: 0 !important;"
-        "  outline: none !important; }"
+        "  background-color: #f0f0f0; background-image: none;"
+        "  box-shadow: none; border: none; border-radius: 0;"
+        "  outline: none; }"
         "scrollbar slider, scrollbar contents trough slider {"
-        "  background-color: #c2c2c2 !important; background-image: none !important;"
-        "  box-shadow: none !important; border: none !important; border-radius: 6px !important;"
-        "  min-width: 8px !important; min-height: 8px !important; outline: none !important; }"
+        "  background-color: #c2c2c2; background-image: none;"
+        "  box-shadow: none; border: none; border-radius: 6px;"
+        "  min-width: 8px; min-height: 8px; outline: none; }"
         "scrollbar slider:hover {"
-        "  background-color: #a8a8a8 !important; background-image: none !important; box-shadow: none !important; }"
+        "  background-color: #a8a8a8; background-image: none; box-shadow: none; }"
         "scrollbar slider:active, scrollbar slider:hover:active {"
-        "  background-color: #909090 !important; background-image: none !important; box-shadow: none !important; }"
+        "  background-color: #909090; background-image: none; box-shadow: none; }"
         "scrollbar slider:disabled {"
-        "  background-color: #d8d8d8 !important; background-image: none !important; box-shadow: none !important; }"
+        "  background-color: #d8d8d8; background-image: none; box-shadow: none; }"
         "scrollbar slider:backdrop {"
-        "  background-color: #c2c2c2 !important; background-image: none !important; box-shadow: none !important; }"
+        "  background-color: #c2c2c2; background-image: none; box-shadow: none; }"
         "scrollbar:backdrop, scrollbar trough:backdrop, scrollbar contents:backdrop {"
-        "  background-color: #f0f0f0 !important; background-image: none !important; box-shadow: none !important; }"
+        "  background-color: #f0f0f0; background-image: none; box-shadow: none; }"
+        "overshoot, overshoot.top, overshoot.bottom, overshoot.left, overshoot.right,"
+        "undershoot, undershoot.top, undershoot.bottom, undershoot.left, undershoot.right {"
+        "  background: none; background-image: none; background-color: transparent;"
+        "  box-shadow: none; border: none; }"
+        "junction {"
+        "  background-color: #f0f0f0; background-image: none;"
+        "  box-shadow: none; border: none; }"
         "toolbar, toolbar.horizontal, toolbar.primary-toolbar {"   // match the AUI dock gap (#f0f0f0 == wxColour(240,240,240)) - seamless full-width toolbar
-        "  background-color: #f0f0f0 !important; background-image: none !important;"
-        "  box-shadow: none !important; border: none !important; }";
+        "  background-color: #f0f0f0; background-image: none;"
+        "  box-shadow: none; border: none; }";
 
     gtk_css_provider_load_from_data(provider, dark ? css_dark : css_light, -1, nullptr);
 
@@ -152,5 +190,16 @@ extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
             screen, GTK_STYLE_PROVIDER(provider),
             G_MAXUINT);
         added = TRUE;
+    }
+
+    // Suspenders: attach the same provider directly to every GtkScrollbar already in the tree, so the
+    // scrollbar rules are guaranteed to be rooted at (and thus match) each actual scrollbar node - not merely
+    // reachable via a screen-wide `scrollbar` selector. Walk from the toplevel so panel scrollbars are covered
+    // too, not just the editor's. Safe pre-realization: GtkWidgets exist as objects (and forall traverses
+    // them) before they're shown.
+    if (gtkWidgetOrNull)
+    {
+        GtkWidget* top = gtk_widget_get_toplevel(GTK_WIDGET(gtkWidgetOrNull));
+        wxnpp_restyle_scrollbars(top ? top : GTK_WIDGET(gtkWidgetOrNull), provider);
     }
 }

@@ -101,10 +101,12 @@ extern "C" void wxnpp_HideWindowTitle(void* nsWindow);        // titleVisibility
 
 #ifdef __WXGTK__
 // GTK-native tweak wxWidgets doesn't expose, implemented in src/gtk_native.cpp (compiled only on GTK).
-// Installs a screen-wide, application-priority GtkCssProvider that repaints the app's native GtkScrollbars
-// (incl. the editor's raw child GtkScrollbar, which Mint's dark-green theme otherwise paints full-height
-// down the right edge on an empty document) to neutral greys. Takes any of our GtkWidget*s (from GetHandle())
-// purely to resolve the GdkScreen; passed as a void* so this header stays free of GTK types, and may be null.
+// Installs a top-priority GtkCssProvider that repaints the app's native GtkScrollbars and their GtkScrolled-
+// Window decoration nodes (the editor is wx's own GtkScrolledWindow scrollbar - see gtk_native.cpp - which
+// Mint's accented dark theme otherwise paints as a full-height strip/tint down the right edge on an empty
+// document) to neutral greys, and also attaches it directly to each scrollbar widget. Takes any of our
+// GtkWidget*s (from GetHandle()) to resolve the GdkScreen AND as the tree-walk root; passed as a void* so this
+// header stays free of GTK types, and may be null (then only the screen-wide provider is installed).
 extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 #endif
 
@@ -1583,8 +1585,8 @@ private:
 class TitleBarBtn : public wxWindow
 {
 public:
-    TitleBarBtn(wxWindow* parent, wxWindowID id, const wxSize& size, const wxBitmapBundle& glyph, const wxColour& bg, const wxColour& hotBg)
-        : wxWindow(parent, id, wxDefaultPosition, size, wxBORDER_NONE), m_glyph(glyph), m_bg(bg), m_hotBg(hotBg)
+    TitleBarBtn(wxWindow* parent, wxWindowID id, const wxSize& size, const wxBitmapBundle& glyph, const wxColour& bg, const wxColour& hotBg, int glyphPx = 12)
+        : wxWindow(parent, id, wxDefaultPosition, size, wxBORDER_NONE), m_glyph(glyph), m_bg(bg), m_hotBg(hotBg), m_glyphPx(glyphPx)
     {
         SetBackgroundStyle(wxBG_STYLE_PAINT);   // we paint the whole background ourselves - no native erase
         Bind(wxEVT_PAINT, &TitleBarBtn::onPaint, this);
@@ -1605,12 +1607,13 @@ private:
         dc.SetBrush(wxBrush(m_hot ? m_hotBg : m_bg));
         dc.SetPen(*wxTRANSPARENT_PEN);
         dc.DrawRectangle(wxPoint(0, 0), GetClientSize());
-        const wxBitmap bmp = m_glyph.GetBitmap(FromDIP(wxSize(12, 12)));
+        const wxBitmap bmp = m_glyph.GetBitmap(FromDIP(wxSize(m_glyphPx, m_glyphPx)));
         const wxSize sz = GetClientSize();
         dc.DrawBitmap(bmp, (sz.x - bmp.GetWidth()) / 2, (sz.y - bmp.GetHeight()) / 2, true);
     }
     wxBitmapBundle m_glyph;
     wxColour m_bg, m_hotBg;
+    int m_glyphPx = 12;   // glyph render size (px, DIP-scaled): 12 for window controls, 16 for the tab caption +/v/x
     bool m_hot = false;
 };
 
@@ -1965,37 +1968,49 @@ public:
         flush();
     }
 
-    // Reopen the files saved by the previous (theme-restart) instance, once.
+    // Reopen the previous instance's files (Session/File*, gated on Session/Pending) plus any pending
+    // recovery backups. The recovery pass deliberately runs even when Pending is false: Pending is only
+    // re-set by a CLEAN exit, so gating recovery on it meant the launch right after a CRASH - the one
+    // scenario the backups exist for - silently skipped the recovery manifest (the backed-up tabs then
+    // "resurrected" a launch later). restoreRecoveryBackups self-guards (empty manifest = no-op), so
+    // running it unconditionally costs nothing.
     void restoreSession()
     {
         auto* cfg = wxConfigBase::Get();
         bool pending = false;
-        if (!cfg->Read("Session/Pending", &pending, false) || !pending) return;
-        cfg->Write("Session/Pending", false); cfg->Flush();
-        long count = 0, active = -1;
-        cfg->Read("Session/Count", &count, 0L);
-        cfg->Read("Session/Active", &active, -1L);
+        cfg->Read("Session/Pending", &pending, false);
         EditorPage* initial = activePage();        // the startup "new 1"
         EditorPage* activePg = nullptr;
-        int restored = 0;
         std::map<wxString, EditorPage*> openedByPath;   // so the recovery pass below can overlay onto these instead of reopening
-        for (int i = 0; i < (int)count; ++i)
+        if (pending)
         {
-            wxString path;
-            if (!cfg->Read(wxString::Format("Session/File%d", i), &path) || path.empty() || !wxFileExists(path)) continue;
-            EditorPage* pg = addDocument(path, wxFileNameFromPath(path));
-            openedByPath[path] = pg;
-            if (i == (int)active) activePg = pg;
-            ++restored;
+            cfg->Write("Session/Pending", false); cfg->Flush();
+            long count = 0, active = -1;
+            cfg->Read("Session/Count", &count, 0L);
+            cfg->Read("Session/Active", &active, -1L);
+            for (int i = 0; i < (int)count; ++i)
+            {
+                wxString path;
+                if (!cfg->Read(wxString::Format("Session/File%d", i), &path) || path.empty() || !wxFileExists(path)) continue;
+                EditorPage* pg = addDocument(path, wxFileNameFromPath(path));
+                openedByPath[path] = pg;
+                if (i == (int)active) activePg = pg;
+            }
         }
         restoreRecoveryBackups(openedByPath);
-        if (restored > 0 && initial && initial->path.empty() && (int)m_tabs->GetPageCount() > restored)
-        {
-            // Defer dropping the redundant empty "new 1": restoreSession runs during OnInit, before the
-            // event loop starts, and deleting an aui-notebook page that early crashes. CallAfter runs it
-            // once the loop is up (adding the restored docs beforehand is fine - argv-open does the same).
-            this->CallAfter([this, initial]() { const int idx = m_tabs->GetPageIndex(initial); if (idx != wxNOT_FOUND) m_tabs->DeletePage(idx); });
-        }
+        // Drop the redundant startup "new 1" if the restore (session files AND/OR recovery backups) brought
+        // in at least one other page. Counting only session files here was the bug behind "relaunching adds a
+        // second 'new 1' tab": editing the untitled buffer then quitting without saving backs it up, and the
+        // recovery pass restores it as a page ALONGSIDE the fresh startup "new 1" - two "new 1" tabs. The
+        // initial buffer is always pristine at this point (restore runs during OnInit, before the user can
+        // type), so the empty-path check suffices; the >1 guard (here and again inside CallAfter) means the
+        // last remaining tab is never deleted. Deferred via CallAfter because deleting an aui-notebook page
+        // this early - before the event loop starts - crashes.
+        if (initial && initial->path.empty() && (int)m_tabs->GetPageCount() > 1)
+            this->CallAfter([this, initial]() {
+                const int idx = m_tabs->GetPageIndex(initial);
+                if (idx != wxNOT_FOUND && m_tabs->GetPageCount() > 1) m_tabs->DeletePage(idx);
+            });
         if (activePg) { const int idx = m_tabs->GetPageIndex(activePg); if (idx != wxNOT_FOUND) m_tabs->SetSelection(idx); }
     }
     // Reopens anything left in the Recovery/* manifest (see backupUnsavedChanges): unsaved edits that
@@ -3398,7 +3413,7 @@ private:
         auto* s = new wxBoxSizer(wxHORIZONTAL);
         auto mkBtn = [&](const char* path, const wxString& tip, std::function<void()> act) {
 #ifdef __WXGTK__
-            wxWindow* b = new TitleBarBtn(m_capBar, wxID_ANY, capBtnSize, captionIcon(path), capBg, capHot);
+            wxWindow* b = new TitleBarBtn(m_capBar, wxID_ANY, capBtnSize, captionIcon(path), capBg, capHot, 16);   // 16px glyph so the +/v/x aren't blurry (captionIcon SVGs are drawn for 16px)
 #else
             wxWindow* b = new wxBitmapButton(m_capBar, wxID_ANY, captionIcon(path), wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxBU_EXACTFIT);
             b->SetBackgroundColour(capBg);
@@ -3893,6 +3908,10 @@ private:
     void backupUnsavedChanges(EditorPage* p)
     {
         if (!p) return;
+        // An empty untitled buffer holds no work to recover: backing it up would resurrect an empty "new 1"
+        // ghost tab on the next launch (and leak an empty .bak + a stale Recovery/ config group every quit).
+        // confirmClose has already activated p, so getAllText() reflects it. Clear any stale backup and bail.
+        if (p->path.empty() && getAllText().empty()) { clearRecovery(p); return; }
         if (p->recoveryId.empty()) p->recoveryId = generateRecoveryId();
         const wxString dir = recoveryDir();
         wxLogNull noLog;   // best-effort safety net: a failed backup must never surface a wxLog error dialog
