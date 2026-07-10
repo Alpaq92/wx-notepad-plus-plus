@@ -1776,7 +1776,9 @@ public:
         // SetTitle("") clears the text but the clean look shouldn't hinge on that one call surviving every
         // wx/AppKit title reassertion; hide the title outright. Deferred so the NSWindow peer is realized
         // (Show has run) before we reach for it via MacGetTopLevelWindowRef().
-        CallAfter([this]{ wxnpp_HideWindowTitle((void*)MacGetTopLevelWindowRef()); });
+        // this-> is required: MacGetTopLevelWindowRef() lives in the dependent template base (FB -> wxWindowMac)
+        // and isn't in this class's `using FB::...` list, so Clang's two-phase lookup rejects the unqualified name.
+        CallAfter([this]{ wxnpp_HideWindowTitle((void*)this->MacGetTopLevelWindowRef()); });
 #endif
         m_dark = dark;          // chrome darkness is fixed for this process (restart-to-apply)
         loadSettings();         // restore preferences incl. the chosen editor theme (before loadTheme reads m_themeName)

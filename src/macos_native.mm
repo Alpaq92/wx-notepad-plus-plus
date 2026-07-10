@@ -12,5 +12,5 @@ extern "C" void wxnpp_HideWindowTitle(void* nsWindow)
 {
     if (!nsWindow) return;
     NSWindow* w = (NSWindow*)nsWindow;
-    w.titleVisibility = NSWindowTitleVisibilityHidden;
+    w.titleVisibility = NSWindowTitleHidden;   // NSWindowTitleVisibility enum: Visible=0, Hidden=1
 }
