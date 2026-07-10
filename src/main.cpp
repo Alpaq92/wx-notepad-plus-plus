@@ -3389,8 +3389,10 @@ private:
         // TALLER than the tab strip and overflows it. TitleBarBtn is a plain custom-painted wxWindow with no
         // native button chrome, so we size it exactly to the strip height and it always fits. (MSW/macOS keep
         // wxBitmapButton, where the fit is fine.)
-        int capH = m_tabs->GetTabCtrlHeight(); if (capH < FromDIP(18)) capH = FromDIP(24);
-        const wxSize capBtnSize(FromDIP(24), capH);
+        // this->FromDIP: FromDIP is a dependent-base (wxWindowBase) member and this is a class template
+        // (NppShellFrameT<FB>), so GCC/Clang two-phase lookup rejects the unqualified call (MSVC is lax).
+        int capH = m_tabs->GetTabCtrlHeight(); if (capH < this->FromDIP(18)) capH = this->FromDIP(24);
+        const wxSize capBtnSize(this->FromDIP(24), capH);
         const wxColour capHot = m_dark ? wxColour(62, 62, 62) : wxColour(210, 210, 210);
 #endif
         auto* s = new wxBoxSizer(wxHORIZONTAL);
