@@ -10,7 +10,7 @@
 #   ./build/bin/wxnpp            (wxnpp.exe on Windows)
 
 cmake_minimum_required(VERSION 3.20)
-project(wxNotepadPlusPlus VERSION 0.5.5 LANGUAGES CXX)
+project(wxNotepadPlusPlus VERSION 0.5.6 LANGUAGES CXX)
 
 include(FetchContent)
 
@@ -85,6 +85,17 @@ set_target_properties(wxnpp PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+# macOS-native shim wxWidgets doesn't expose (blank the native title bar via NSWindow.titleVisibility).
+# Objective-C++ (.mm) compiled only on Apple; needs AppKit (wx::core links Cocoa transitively, but be
+# explicit for our own translation unit's NSWindow symbols). enable_language(OBJCXX) is
+# required: since CMake 3.16 the .mm extension maps to the separate OBJCXX language, which the top-level
+# project(... LANGUAGES CXX) doesn't turn on (and can't unconditionally, as Win/Linux have no ObjC++).
+if(APPLE)
+    enable_language(OBJCXX)
+    target_sources(wxnpp PRIVATE src/macos_native.mm)
+    target_link_libraries(wxnpp PRIVATE "-framework AppKit")
+endif()
 
 target_include_directories(wxnpp PRIVATE
     "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"     # Scintilla.h, ILexer.h (SCI_* + SCNotification)

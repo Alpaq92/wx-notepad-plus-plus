@@ -2079,6 +2079,9 @@ msgstr "Argumentos de línea de comandos"
 msgid "Toolbar icon style:"
 msgstr "Estilo de iconos de la barra de herramientas:"
 
+msgid "Toolbar icon size:"
+msgstr "Tamaño de iconos de la barra de herramientas:"
+
 msgid "Line icons (default)"
 msgstr "Iconos de línea (predeterminado)"
 

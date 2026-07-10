@@ -2079,6 +2079,9 @@ msgstr "Argumenty wiersza poleceń"
 msgid "Toolbar icon style:"
 msgstr "Styl ikon paska narzędzi:"
 
+msgid "Toolbar icon size:"
+msgstr "Rozmiar ikon paska narzędzi:"
+
 msgid "Line icons (default)"
 msgstr "Ikony liniowe (domyślne)"
 

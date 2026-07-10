@@ -2079,6 +2079,9 @@ msgstr "명령줄 인수"
 msgid "Toolbar icon style:"
 msgstr "도구 모음 아이콘 스타일:"
 
+msgid "Toolbar icon size:"
+msgstr "도구 모음 아이콘 크기:"
+
 msgid "Line icons (default)"
 msgstr "선 아이콘(기본값)"
 

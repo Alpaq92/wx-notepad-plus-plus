@@ -22,6 +22,7 @@
 #include <wx/imagpng.h>        // wxPNGHandler - loading raster PNG icons (the colored toolbar icon set)
 #include <wx/notebook.h>
 #include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
+#include <wx/display.h>        // wxDisplay::GetClientArea/GetFromPoint - clamp the initial window to the usable screen (macOS)
 #include <wx/listctrl.h>       // wxListView - wxListbook's page list (we widen it so labels don't truncate)
 #include <wx/clrpicker.h>      // wxColourPickerCtrl - Style Configurator foreground/background pickers
 #include <wx/fontenum.h>       // wxFontEnumerator - list system fonts + validate the chosen editor font is still installed
@@ -88,6 +89,14 @@
 #endif
 #else
 using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/sciSend() message-id params
+#endif
+
+#ifdef __WXMAC__
+// macOS-native tweak wxWidgets doesn't expose, implemented in src/macos_native.mm (compiled only on
+// Apple). Takes the frame's raw NSWindow* (from MacGetTopLevelWindowRef()) as a void* so this header
+// stays free of Cocoa types. (The toolbar is a docked non-native child wxToolBar on macOS, so it honours
+// SetToolBitmapSize directly - no native NSToolbar icon-pinning shim is needed.)
+extern "C" void wxnpp_HideWindowTitle(void* nsWindow);        // titleVisibility = Hidden (blank native bar)
 #endif
 
 #include <string>
@@ -1745,7 +1754,31 @@ public:
           m_timer(this, myID_TIMER)
     {
 #ifdef __WXMAC__
+        // Clamp the initial window to the current display's usable area so it can never open larger than the
+        // screen. A macOS laptop's usable width (NSScreen visibleFrame - screen minus menu bar and Dock) is
+        // ~1016px, narrower than the 1100px default, so the frame would otherwise be created partly off-screen.
+        // Nudge to a margin-friendly default first, then shrink-clamp to be safe on any small screen. macOS-only,
+        // so Windows/Linux keep the 1100x720 default byte-for-byte. The frame's create-time position is already a
+        // concrete on-screen point (wxNonOwnedWindow centres wxDefaultPosition frames), so GetFromPoint() resolves
+        // here even though Show() (in OnInit) hasn't run yet; the primary-display fallback is a defensive backstop.
+        {
+            SetSize(wxSize(1040, 700));
+            int dispIdx = wxDisplay::GetFromPoint(GetPosition());
+            if (dispIdx == wxNOT_FOUND) dispIdx = 0;
+            const wxRect area = wxDisplay(static_cast<unsigned>(dispIdx)).GetClientArea();
+            const wxSize cur  = GetSize();
+            const int margin  = 24;
+            const int w = wxMin(cur.GetWidth(),  area.GetWidth()  - margin);
+            const int h = wxMin(cur.GetHeight(), area.GetHeight() - margin);
+            if (w < cur.GetWidth() || h < cur.GetHeight()) { SetSize(wxSize(w, h)); Centre(); }
+        }
         SetTitle(wxString());   // macOS: clean/blank native title bar (see setWindowTitle) - the constructor seeded a literal for the other platforms
+        // SetTitle("") clears the text but the clean look shouldn't hinge on that one call surviving every
+        // wx/AppKit title reassertion; hide the title outright. Deferred so the NSWindow peer is realized
+        // (Show has run) before we reach for it via MacGetTopLevelWindowRef().
+        // this-> is required: MacGetTopLevelWindowRef() lives in the dependent template base (FB -> wxWindowMac)
+        // and isn't in this class's `using FB::...` list, so Clang's two-phase lookup rejects the unqualified name.
+        CallAfter([this]{ wxnpp_HideWindowTitle((void*)this->MacGetTopLevelWindowRef()); });
 #endif
         m_dark = dark;          // chrome darkness is fixed for this process (restart-to-apply)
         loadSettings();         // restore preferences incl. the chosen editor theme (before loadTheme reads m_themeName)
@@ -1762,6 +1795,13 @@ public:
         buildEditor();
         buildMenuBar();
         rebuildUserLangMenu();   // populate the Language menu's per-UDL section from what loadAllUdls() found
+#ifdef __WXMAC__
+        // Host panel for the docked (non-native) macOS toolbar (see buildToolBar). A direct frame child so
+        // it can be a wxAui pane; the toolbar is parented to THIS (not the frame) so wxToolBar::Create leaves
+        // m_macToolbar null and we get a wx-laid-out toolbar instead of the native NSToolbar. buildEditor()
+        // above already ran m_aui.SetManagedWindow(this), so AUI is live for the dock in buildToolBar().
+        m_toolBarHost = new wxPanel(this, wxID_ANY);
+#endif
         buildToolBar();
         buildStatusBar();
 
@@ -4010,7 +4050,7 @@ private:
     void setWindowTitle(const wxString& docPart)
     {
 #ifdef __WXMAC__
-        (void)docPart; if (!GetTitle().empty()) SetTitle(wxString());
+        (void)docPart; SetTitle(wxString());   // keep the native bar blank (titleVisibility is also hidden, see ctor)
 #else
         const wxString t = docPart + " - wxNotepad++";
         if (GetTitle() != t) SetTitle(t);
@@ -4214,6 +4254,10 @@ private:
 #ifdef WXNPP_HAS_BORDERLESS
         if constexpr (kBorderless) { auto& pi = m_aui.GetPane(tb); if (pi.IsOk()) { pi.Show(show); m_aui.Update(); } return; }
 #endif
+#ifdef __WXMAC__
+        // Docked (non-native) toolbar lives in an AUI pane keyed by the host panel, not the toolbar itself.
+        if (m_toolBarHost) { auto& pi = m_aui.GetPane(m_toolBarHost); if (pi.IsOk()) { pi.Show(show); m_aui.Update(); } return; }
+#endif
         tb->Show(show);   // native frame toolbar
     }
 
@@ -4343,12 +4387,16 @@ private:
                                 b->GetPosition() + wxPoint(0, b->GetSize().y)));
                 this->PopupMenu(menu, p);
             });
-            // 4px border each side (8px between neighbours). wxBU_EXACTFIT collapses each button to its
-            // bare text extent, and on GTK that leaves adjacent menu labels touching with no gap (they
-            // read as one crammed string) - MSW's native button keeps a little internal margin so it
-            // isn't as obvious there. The sizer border adds the gap on both platforms; the middle
-            // AddStretchSpacer below absorbs the extra width so it can't overflow the bar.
+            // GTK/macOS only: wxBU_EXACTFIT collapses each menu button to its bare text extent, so
+            // adjacent labels touch with no gap and read as one crammed string - a 4px border each
+            // side gives them air (confirmed good on GTK). MSW's native button already reserves internal
+            // horizontal margin, so the extra border there just makes the bar look too widely spaced;
+            // keep no border on MSW. (The AddStretchSpacer below absorbs the width, so no overflow.)
+#ifdef __WXMSW__
+            sz->Add(b, 0, wxALIGN_CENTRE_VERTICAL);
+#else
             sz->Add(b, 0, wxALIGN_CENTRE_VERTICAL | wxLEFT | wxRIGHT, 4);
+#endif
         }
 
         sz->AddStretchSpacer(1);   // empty middle stays draggable
@@ -4436,11 +4484,7 @@ private:
     }
     void dockIntegratedToolBar(wxToolBar* tb)
     {
-        // ToolbarPane() must come FIRST: it turns gripper/movable/floatable back ON, so the locking flags
-        // have to follow it. Result is a fixed toolbar - no drag gripper, not movable, not floatable.
-        m_aui.AddPane(tb, wxAuiPaneInfo().Name("toolbar").ToolbarPane().Top().Layer(1)
-            .Gripper(false).Floatable(false).Movable(false).Dockable(false).DockFixed()
-            .CaptionVisible(false).PaneBorder(false).Resizable(false));
+        m_aui.AddPane(tb, toolbarPaneInfo());   // shared fixed-top-toolbar recipe (see toolbarPaneInfo())
         m_aui.Update();
     }
 #endif // WXNPP_HAS_BORDERLESS
@@ -4459,7 +4503,7 @@ private:
     // runtime retint (below): the single baked colour that reads best on dark chrome isn't always the one
     // that reads best on light chrome (or vice versa), so `iconColored()` does a cheap string substitution
     // on top of the baked file rather than shipping four colour variants per pack.
-    wxBitmapBundle iconColored(const wxString& name, const wxString& packDir)
+    wxBitmapBundle iconColored(const wxString& name, const wxString& packDir, int px = 16)
     {
         const wxString path = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + packDir + wxFILE_SEP_PATH + name + ".svg";
         if (!wxFileExists(path)) return wxBitmapBundle();   // caller falls back to the line-icon SVG for anything the colored set doesn't cover
@@ -4475,7 +4519,7 @@ private:
                 svg.Replace("#2f9e44", "#2b8a3e");   // Open Color green-9 (primary, darker for light chrome)
                 svg.Replace("#8ce99a", "#40c057");   // Open Color green-6 (secondary, darker for light chrome)
                 const wxScopedCharBuffer u = svg.utf8_str();
-                return wxBitmapBundle::FromSVG(u.data(), wxSize(16, 16));
+                return wxBitmapBundle::FromSVG(u.data(), wxSize(px, px));
             }
         }
         if (packDir == "icons-iconpark" && m_dark)
@@ -4495,16 +4539,18 @@ private:
             {
                 svg.Replace("stroke=\"#000\"", "stroke=\"#63e6be\"");   // Open Color teal-3
                 const wxScopedCharBuffer u = svg.utf8_str();
-                return wxBitmapBundle::FromSVG(u.data(), wxSize(16, 16));
+                return wxBitmapBundle::FromSVG(u.data(), wxSize(px, px));
             }
         }
-        return wxBitmapBundle::FromSVGFile(path, wxSize(16, 16));
+        return wxBitmapBundle::FromSVGFile(path, wxSize(px, px));
     }
-    wxBitmapBundle icon(const wxString& name)
+    // px is the raster/default bundle size - the toolbar passes m_toolbarIconSize (configurable, restart-to-
+    // apply); other callers (Function List tree, file-browser icon table) keep the fixed 16 default.
+    wxBitmapBundle icon(const wxString& name, int px = 16)
     {
         // m_iconStyle: 0 = line icons (default), 1 = Solar (green), 2 = IconPark (teal/lime)
-        if (m_iconStyle == 1) { wxBitmapBundle c = iconColored(name, "icons-solar"); if (c.IsOk()) return c; }
-        else if (m_iconStyle >= 2) { wxBitmapBundle c = iconColored(name, "icons-iconpark"); if (c.IsOk()) return c; }   // >= 2: also catches a stale ToolbarIconStyle=3 ("Bold", removed - looked identical to this in dark mode) from an older config
+        if (m_iconStyle == 1) { wxBitmapBundle c = iconColored(name, "icons-solar", px); if (c.IsOk()) return c; }
+        else if (m_iconStyle >= 2) { wxBitmapBundle c = iconColored(name, "icons-iconpark", px); if (c.IsOk()) return c; }   // >= 2: also catches a stale ToolbarIconStyle=3 ("Bold", removed - looked identical to this in dark mode) from an older config
         static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "icons" + wxFILE_SEP_PATH;
         // Permissive toolbar icons (Tabler x Open Color, MIT) - monochrome by default, with a meaning-accent
         // on 8 of the 32 (gold New "+", blue Save/Save-All, red Record/Stop, green Playback/-multiple). Neutral
@@ -4520,11 +4566,11 @@ private:
                 const wxString col = m_dark ? "#dee2e6" : "#343a40";
                 svg.Replace("currentColor", col);
                 const wxScopedCharBuffer u = svg.utf8_str();
-                return wxBitmapBundle::FromSVG(u.data(), wxSize(16, 16));
+                return wxBitmapBundle::FromSVG(u.data(), wxSize(px, px));
             }
-            return wxBitmapBundle::FromSVGFile(path, wxSize(16, 16));
+            return wxBitmapBundle::FromSVGFile(path, wxSize(px, px));
         }
-        return wxArtProvider::GetBitmapBundle(wxART_QUESTION, wxART_TOOLBAR, wxSize(16, 16));
+        return wxArtProvider::GetBitmapBundle(wxART_QUESTION, wxART_TOOLBAR, wxSize(px, px));
     }
     // A clearly-disabled version of a toolbar icon: fade the alpha channel down to ~30% instead of
     // wxToolBar's automatic "shadow" (wxImage::ConvertToDisabled blends every pixel towards a fixed
@@ -4566,6 +4612,18 @@ private:
         PopupMenu(&menu);
     }
 
+    // Shared wxAuiPaneInfo recipe for a fixed, non-draggable top toolbar pane - used by both the borderless
+    // integrated toolbar (dockIntegratedToolBar) and the macOS docked toolbar. ToolbarPane() must come
+    // FIRST (it turns gripper/movable/floatable back ON), so the locking flags have to follow it; the
+    // result is a fixed toolbar - no drag gripper, not movable, not floatable. (Defined outside the
+    // WXNPP_HAS_BORDERLESS guard so the macOS branch, where that flag is off, can reuse it too.)
+    static wxAuiPaneInfo toolbarPaneInfo()
+    {
+        return wxAuiPaneInfo().Name("toolbar").ToolbarPane().Top().Layer(1)
+            .Gripper(false).Floatable(false).Movable(false).Dockable(false).DockFixed()
+            .CaptionVisible(false).PaneBorder(false).Resizable(false);
+    }
+
     void buildToolBar()
     {
         // Native frame: the frame's own toolbar (CreateToolBar). Integrated frame: a child wxToolBar we
@@ -4574,13 +4632,23 @@ private:
 #ifdef WXNPP_HAS_BORDERLESS
         if constexpr (kBorderless) tb = makeIntegratedToolBar();
         else                       tb = CreateToolBar(wxTB_FLAT | wxTB_HORIZONTAL);
+#elif defined(__WXMAC__)
+        // macOS has no borderless backend, but we still avoid the frame's native NSToolbar: it inflates
+        // icons to a coarse size-mode slot (ignoring SetToolBitmapSize) and turns each AddSeparator into a
+        // fat NSToolbarSpaceItem that shoves the first icon ~180px right. Parenting the toolbar to
+        // m_toolBarHost (a wxPanel, NOT the frame) makes wxToolBar::Create leave m_macToolbar null, so wx
+        // lays the bar out itself with real icon-sized slots + thin separators; we dock it as a top AUI
+        // pane below (the frame is wxAuiManager-managed, like the Windows/Linux integrated toolbar).
+        tb = new wxToolBar(m_toolBarHost, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                           wxTB_FLAT | wxTB_HORIZONTAL | wxTB_NODIVIDER);
 #else
         tb = CreateToolBar(wxTB_FLAT | wxTB_HORIZONTAL);
 #endif
         m_toolBarPtr = tb;                 // so toolBar() works in both modes (frame toolbar / aui pane)
-        tb->SetToolBitmapSize(wxSize(16, 16));
-        auto T  = [&](int id, const wxString& svg, const wxString& tip) { const wxBitmapBundle bmp = icon(svg); tb->AddTool(id, tip, bmp, iconDisabled(bmp), wxITEM_NORMAL, tip); };
-        auto TC = [&](int id, const wxString& svg, const wxString& tip) { tb->AddCheckTool(id, tip, icon(svg), wxNullBitmap, tip); };
+        const int isz = m_toolbarIconSize;   // configurable toolbar icon size (Preferences > General, restart-to-apply)
+        tb->SetToolBitmapSize(wxSize(isz, isz));
+        auto T  = [&](int id, const wxString& svg, const wxString& tip) { const wxBitmapBundle bmp = icon(svg, isz); tb->AddTool(id, tip, bmp, iconDisabled(bmp, isz), wxITEM_NORMAL, tip); };
+        auto TC = [&](int id, const wxString& svg, const wxString& tip) { tb->AddCheckTool(id, tip, icon(svg, isz), wxNullBitmap, tip); };
 
         T(IDM_FILE_NEW, "new", _("New"));           T(IDM_FILE_OPEN, "open", _("Open"));
         T(IDM_FILE_SAVE, "save", _("Save"));        T(IDM_FILE_SAVEALL, "save-all", _("Save All"));
@@ -4645,16 +4713,38 @@ private:
 #endif
         }
 #endif
+#ifdef __WXMAC__
+        // Dock the non-native child toolbar as a fixed top AUI pane. The frame is wxAuiManager-managed
+        // (there is no top-level box sizer), and the toolbar lives inside m_toolBarHost, so the HOST panel
+        // is the pane window. Pin the pane height to the host's best height so it never grows/shrinks.
+        // Mirrors dockIntegratedToolBar() but for the non-borderless macOS frame.
+        {
+            auto* hostSizer = new wxBoxSizer(wxVERTICAL);
+            hostSizer->Add(tb, 1, wxEXPAND);
+            m_toolBarHost->SetSizerAndFit(hostSizer);
+            const int barH = wxMax(m_toolBarHost->GetBestSize().GetHeight(), isz + 12);   // floor so the pane can't collapse
+            // Same fixed-toolbar pane recipe as the integrated bar (toolbarPaneInfo()), plus a pinned height.
+            m_aui.AddPane(m_toolBarHost, toolbarPaneInfo().MinSize(-1, barH).MaxSize(-1, barH));
+            m_aui.Update();
+        }
+        // Route tool clicks. The non-native macOS toolbar fires wxEVT_TOOL (== wxEVT_MENU) from each button;
+        // bind it on the toolbar and do NOT Skip, so onCommand runs exactly once - the event is caught here
+        // before it would propagate on to the frame, so there is no double-fire either way.
+        tb->Bind(wxEVT_TOOL, [this](wxCommandEvent& ce){ this->onCommand(ce); });
+#endif
     }
 
     void buildStatusBar()
     {
-#ifdef __WXMSW__
-        // Drop the native size-grip (wxSTB_SIZEGRIP): Windows draws it on a light 3D corner that ignores
-        // our dark chrome. We park our own dark-matching grip (SizeGripWin) in the corner instead.
+#if defined(__WXMSW__) || defined(__WXGTK__)
+        // Drop the native size-grip (wxSTB_SIZEGRIP). Windows draws it on a light 3D corner that ignores
+        // our dark chrome (we park our own dark SizeGripWin in the corner instead, below). GTK draws it
+        // in the desktop theme's accent - e.g. a blue diagonal grip under Linux Mint's dark theme - which
+        // stands out sharply against our dark chrome (this was the persistent "blue tint in the bottom-
+        // right corner"). The window still resizes from its borders without it.
         auto* sb = CreateStatusBar(7, wxSTB_DEFAULT_STYLE & ~wxSTB_SIZEGRIP);
 #else
-        auto* sb = CreateStatusBar(7);   // GTK/Cocoa theme their own grip correctly - keep the native one
+        auto* sb = CreateStatusBar(7);   // macOS: keep the native grip (Cocoa themes it consistently)
 #endif
         // field 0 (doc type / message area) is proportional so the fields fill the whole bar and
         // the typing-mode field lands flush right, like Notepad++ (no dead slack on the right).
@@ -6312,6 +6402,8 @@ private:
         long gc = gcDefault; c->Read("Editing/GutterColourValue", &gc, gcDefault); m_gutterColorValue = gc;
         long is = 0; c->Read("ToolbarIconStyle", &is, 0L);
         m_iconStyle = (is < 0 || is > 2) ? 2 : (int)is;   // 0 = line icons, 1 = Solar, 2 = IconPark; clamp a stale "3 = Bold" (removed) into IconPark
+        long tis = 16; c->Read("ToolbarIconSize", &tis, 16L);
+        m_toolbarIconSize = (tis < 12 || tis > 64) ? 16 : (int)tis;   // px; clamp garbage/out-of-range back to the 16 default
         long mr = 10; c->Read("RecentFiles/Max", &mr, 10L); m_maxRecent = (int)mr;
         c->Read("TabBar/CloseButton", &m_tabCloseBtn, true);   // integrated top bar on/off (also read in OnInit; here for the Preferences checkbox)
         long tw = 4; c->Read("Editing/TabWidth", &tw, 4L); m_tabWidth = (int)tw;
@@ -6399,7 +6491,13 @@ private:
         // Page layout mirrors Notepad++'s Preferences (General / Editing / Indentation /
         // Auto-Completion / Dark Mode); the labels are Notepad++'s exact wording.
         wxDialog dlg(this, wxID_ANY, _("Preferences"), wxDefaultPosition, wxSize(620, 440));
-        auto* book = new wxListbook(&dlg, wxID_ANY);
+        // wxListbook's default style (wxLB_DEFAULT == wxBK_DEFAULT == 0) is resolved by wx to a *horizontal
+        // top strip* on macOS but a *left column* on Win/Linux (wx/src/generic/listbkg.cpp Create():
+        // #ifdef __WXMAC__ style |= wxBK_TOP; #else style |= wxBK_LEFT). That top strip squashed the page
+        // area and shoved the Close button on macOS. Pass wxLB_LEFT (== wxBK_LEFT) so the nav list is a left
+        // column on every platform. On Win/Linux the default already resolved to wxBK_LEFT, so the final
+        // style is byte-for-byte identical there (no change); only macOS flips top -> left, which is the fix.
+        auto* book = new wxListbook(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLB_LEFT);
         auto pg  = [&](const wxString& name, bool sel = false) { auto* p = new wxPanel(book); book->AddPage(p, name, sel); return p; };
         auto row = [&](wxBoxSizer* s, wxWindow* w) { s->Add(w, 0, wxLEFT | wxRIGHT | wxTOP, 10); };
 
@@ -6440,6 +6538,14 @@ private:
         iconStyleNames.Add(_("IconPark icons (teal/lime)"));
         auto* chIconStyle = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, iconStyleNames);
         chIconStyle->SetSelection(m_iconStyle);
+        // Toolbar icon size (restart-to-apply, like the icon style above): the icons are SVG, so they stay
+        // crisp at any size. Presets keep it simple; the "20 px" labels are digits + a universal unit, so
+        // they need no translation (only the "Toolbar icon size:" field label does).
+        static const int kIconSizes[] = { 16, 20, 24, 32 };
+        wxArrayString iconSizeNames;
+        for (int s : kIconSizes) iconSizeNames.Add(wxString::Format("%d px", s));
+        auto* chIconSize = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, iconSizeNames);
+        { int sel = 0; for (int i = 0; i < (int)WXSIZEOF(kIconSizes); ++i) if (kIconSizes[i] == m_toolbarIconSize) sel = i; chIconSize->SetSelection(sel); }
         // Theme (restart-to-apply, like the two above): follow the OS's own light/dark setting, or pin
         // one explicitly. Was a standalone "Dark Mode" checkbox page; folded in here since it's the same
         // kind of restart-required, general-appearance choice as Localization/Toolbar icon style.
@@ -6454,11 +6560,13 @@ private:
         // a FlexGridSizer still gives both cells the same width, but a narrower control (e.g. "Polski")
         // just sits left-aligned inside its cell rather than filling it, so the two still looked
         // different widths even once their left edges lined up.
-        auto* locGrid = new wxFlexGridSizer(3, 2, 8, 8);
+        auto* locGrid = new wxFlexGridSizer(4, 2, 8, 8);
         locGrid->Add(new wxStaticText(gen, wxID_ANY, _("Localization:")), 0, wxALIGN_CENTRE_VERTICAL);
         locGrid->Add(chUiLang, 0, wxEXPAND | wxALIGN_CENTRE_VERTICAL);
         locGrid->Add(new wxStaticText(gen, wxID_ANY, _("Toolbar icon style:")), 0, wxALIGN_CENTRE_VERTICAL);
         locGrid->Add(chIconStyle, 0, wxEXPAND | wxALIGN_CENTRE_VERTICAL);
+        locGrid->Add(new wxStaticText(gen, wxID_ANY, _("Toolbar icon size:")), 0, wxALIGN_CENTRE_VERTICAL);
+        locGrid->Add(chIconSize, 0, wxEXPAND | wxALIGN_CENTRE_VERTICAL);
         locGrid->Add(new wxStaticText(gen, wxID_ANY, _("Theme:")), 0, wxALIGN_CENTRE_VERTICAL);
         locGrid->Add(chTheme, 0, wxEXPAND | wxALIGN_CENTRE_VERTICAL);
         gs->Add(locGrid, 0, wxLEFT | wxRIGHT | wxTOP, 10);
@@ -6613,7 +6721,16 @@ private:
             for (size_t i = 0; i < book->GetPageCount(); ++i)
             { int tw = 0, th = 0; lv->GetTextExtent(book->GetPageText(i), &tw, &th); if (tw > maxw) maxw = tw; }
             if (lv->GetColumnCount() > 0) lv->SetColumnWidth(0, maxw + lv->FromDIP(28));
-            lv->SetMinSize(wxSize(maxw + lv->FromDIP(36), -1));
+            // Pin BOTH min and max width, not just min: with wxLC_NO_HEADER set (above),
+            // wxListCtrlBase::DoGetBestClientSize() ignores the real column width and returns an
+            // arbitrary 50*charWidth (~250px, see the vendored src/common/listctrlcmn.cpp). wxBookCtrlBase
+            // sizes the nav list from that best width, so on GTK the list grabbed ~250px+ (while only
+            // painting ~180px of items), pushing the page content ~230px to the right and clipping the
+            // checkbox labels/combos. GetBestSize() clamps to MaxSize (wincmn.cpp), so capping max at the
+            // intended width fixes it. No-op on Windows (its listbook is already report-mode/sized right).
+            const wxSize listSize(maxw + lv->FromDIP(36), -1);
+            lv->SetMinSize(listSize);
+            lv->SetMaxSize(listSize);
             lv->InvalidateBestSize();
         }
 
@@ -6655,9 +6772,11 @@ private:
         const bool newIntBar = cbIntBar->GetValue();
 #endif
         const int newIconStyle = chIconStyle->GetSelection();
+        const int iconSel = chIconSize->GetSelection();   // always 0..3 (a selection is always set); guard the index anyway
+        const int newIconSize = kIconSizes[iconSel < 0 ? 0 : iconSel];
         const bool newReuseInstance = cbReuseInstance->GetValue();
         bool needRestart = (newThemeMode != m_themeMode) || tabRecentChanged || (newUi != curUi) || (newIconStyle != m_iconStyle)
-                         || (newReuseInstance != m_reuseInstance);
+                         || (newIconSize != m_toolbarIconSize) || (newReuseInstance != m_reuseInstance);
 #ifdef WXNPP_HAS_BORDERLESS
         needRestart = needRestart || (newIntBar != m_integratedBar);
 #endif
@@ -6670,6 +6789,7 @@ private:
                 if (newIntBar != m_integratedBar) cfg->Write("IntegratedBar", newIntBar);
 #endif
                 if (newIconStyle != m_iconStyle) cfg->Write("ToolbarIconStyle", (long)newIconStyle);
+                if (newIconSize != m_toolbarIconSize) cfg->Write("ToolbarIconSize", (long)newIconSize);
                 if (newReuseInstance != m_reuseInstance) cfg->Write("ReuseInstance", newReuseInstance);
             });
     }
@@ -7490,6 +7610,11 @@ private:
         if constexpr (kBorderless)
             showToolBar(goingFull ? (m_showToolbar && !m_fsAutohideToolbar) : m_showToolbar);
 #endif
+#ifdef __WXMAC__
+        // macOS toolbar is now an AUI pane too (not the frame's GetToolBar()), so wxFULLSCREEN_NOTOOLBAR
+        // doesn't touch it - honour the auto-hide preference by hand, same as the borderless branch above.
+        showToolBar(goingFull ? (m_showToolbar && !m_fsAutohideToolbar) : m_showToolbar);
+#endif
         applyTheme(m_dark);
     }
 
@@ -8234,8 +8359,10 @@ private:
     wxWindowGripper* m_gripper = nullptr;         // lib helper for cross-platform window move (drag the bar)
 #endif
     wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()
+    wxPanel*    m_toolBarHost = nullptr;          // macOS: host panel for the docked non-native child toolbar (see buildToolBar)
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
     int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Solar, 2 = IconPark (restart-to-apply)
+    int         m_toolbarIconSize = 16;          // toolbar icon size in px (16/20/24/32, default 16; restart-to-apply)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
     bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON like Notepad++
