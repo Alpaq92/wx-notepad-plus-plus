@@ -3839,6 +3839,14 @@ private:
         NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_ACTIVATED; ev.struct_size = sizeof(NibEvent);
         ev.as.document.id = reinterpret_cast<intptr_t>(p); nibFireEvent(ev);
     }
+    // ----- user-writable app data ------------------------------------------------------------
+    // Per-user, WRITABLE app-data root - per-user User-Defined Languages (userDefineLangs/) and an
+    // edited contextMenu.xml live here, NOT next to the exe, which is read-only on an installed build
+    // (/opt/wxnpp on Linux, Program Files on Windows, inside the .app bundle on macOS). This is the
+    // same identity wxConfig persists settings/theme under. Kept a pure path getter (it's called on
+    // hot paths like every right-click); callers that WRITE create it first (Mkdir with FULL).
+    wxString userDataDir() { return wxStandardPaths::Get().GetUserDataDir(); }
+
     // ----- unsaved-changes recovery (Preferences > General "Ask before closing unsaved changes", off
     // by default) - when a modified document is discarded WITHOUT prompting, its content is backed up
     // to <exe>/RecoveryBackups/<id>.bak first, so it survives that close (or a later crash/relaunch)
@@ -4176,17 +4184,24 @@ private:
     }
 
     // Popup (right-click) context menu, user-editable via Settings > Edit Popup ContextMenu ->
-    // contextMenu.xml next to the exe (see contextMenuFilePath()/loadPopupContextMenu()). Item ids
-    // are the same IDM_* the main menu uses, so onCommand handles them unchanged; labels are pulled
+    // the per-user contextMenu.xml (see contextMenuFilePath()/loadPopupContextMenu()/editContextMenu()).
+    // Item ids are the same IDM_* the main menu uses, so onCommand handles them unchanged; labels are pulled
     // live from the real menu bar entry so they follow the current UI language, and enable state
     // mirrors the editor for the handful of ids that need it (undo/redo/paste/selection-dependent).
     struct PopupMenuEntry { int id = 0; bool separator = false; };
-    wxString contextMenuFilePath() { return wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "contextMenu.xml"; }
+    // The shipped, read-only default (co-located next to the exe by CMake) vs. the per-user override.
+    // Loads prefer the per-user copy and fall back to the shipped default; edits/saves only ever touch
+    // the per-user copy (see editContextMenu) - the install dir is read-only on an installed build.
+    wxString shippedContextMenuFilePath() { return wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "contextMenu.xml"; }
+    wxString contextMenuFilePath()        { return userDataDir() + wxFILE_SEP_PATH + "contextMenu.xml"; }
     std::vector<PopupMenuEntry> loadPopupContextMenu()
     {
         std::vector<PopupMenuEntry> out;
         wxXmlDocument doc;
-        if (doc.Load(contextMenuFilePath()) && doc.GetRoot())
+        wxLogNull noLog;   // a bad hand-edit / unreadable file must not pop an error dialog on right-click
+        wxString path = contextMenuFilePath();          // prefer the per-user copy...
+        if (!wxFileExists(path)) path = shippedContextMenuFilePath();   // ...else the shipped default
+        if (doc.Load(path) && doc.GetRoot())
         {
             for (wxXmlNode* sec = doc.GetRoot()->GetChildren(); sec; sec = sec->GetNext())
             {
@@ -4207,6 +4222,22 @@ private:
                  { IDM_EDIT_CUT, false }, { IDM_EDIT_COPY, false }, { IDM_EDIT_PASTE, false }, { IDM_EDIT_DELETE, false }, { 0, true },
                  { IDM_EDIT_SELECTALL, false }, { 0, true },
                  { IDM_SEARCH_TOGGLE_BOOKMARK, false } };
+    }
+    // Settings > Edit Popup ContextMenu: open the PER-USER contextMenu.xml in the editor to hand-edit.
+    // The shipped default sits in the read-only install dir, so on first edit we seed the per-user copy
+    // from it - giving the user a working, commented starting point that saves back to a writable path.
+    void editContextMenu()
+    {
+        const wxString userPath = contextMenuFilePath();
+        if (!wxFileExists(userPath))
+        {
+            wxLogNull noLog;   // best-effort seed: a non-writable data dir must not pop an error dialog
+            wxFileName::Mkdir(userDataDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+            const wxString shipped = shippedContextMenuFilePath();
+            if (wxFileExists(shipped)) wxCopyFile(shipped, userPath, false);
+        }
+        if (wxFileExists(userPath)) openPath(userPath);
+        else setStatus(0, _("Could not create a writable contextMenu.xml to edit."));   // degenerate: seed failed
     }
     void showEditorContext(int screenX, int screenY)
     {
@@ -6898,10 +6929,11 @@ private:
         return dir + "\\themes\\" + name + ".xml";
     }
     // ----- User-Defined Language (UDL) persistence -------------------------------------------
-    // One <name>.xml (a bare <UserLang> root, the same shape N++'s own Export writes) per language
-    // in <exe>/userDefineLangs/ - the folder IDM_LANG_OPENUDLDIR already opens, and the layout real
-    // N++'s "UDL Collection" shares files in (see IDM_LANG_UDLCOLLECTION_PROJECT_SITE).
-    wxString udlDir() { return wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "userDefineLangs"; }
+    // One <name>.xml (a bare <UserLang> root, the same shape N++'s own Export writes) per language in
+    // the per-user userDefineLangs/ folder (under wxStandardPaths' user-data dir - NOT next to the exe,
+    // which is read-only on an installed build). IDM_LANG_OPENUDLDIR opens this folder; it's the same
+    // layout real N++'s "UDL Collection" shares files in (see IDM_LANG_UDLCOLLECTION_PROJECT_SITE).
+    wxString udlDir() { return userDataDir() + wxFILE_SEP_PATH + "userDefineLangs"; }
     void loadAllUdls()
     {
         m_udls.clear();
@@ -6912,6 +6944,7 @@ private:
     }
     void saveUdlToDisk(const UdlLanguage& u)
     {
+        wxLogNull noLog;   // best-effort persist: a non-writable data dir must not pop an error dialog
         if (!wxDirExists(udlDir())) wxFileName::Mkdir(udlDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
         saveUdlFile(udlDir() + wxFILE_SEP_PATH + u.name + ".xml", { u });
     }
@@ -7387,7 +7420,7 @@ private:
             if (curIndex < 0 || curIndex >= (int)m_udls.size()) return;
             if (wxMessageBox(wxString::Format(_("Remove user-defined language \"%s\"?"), m_udls[curIndex].name),
                               "wxNotepad++", wxYES_NO | wxICON_QUESTION, &dlg) != wxYES) return;
-            wxRemoveFile(udlDir() + wxFILE_SEP_PATH + m_udls[curIndex].name + ".xml");
+            { wxLogNull noLog; wxRemoveFile(udlDir() + wxFILE_SEP_PATH + m_udls[curIndex].name + ".xml"); }
             m_udls.erase(m_udls.begin() + curIndex);
             curIndex = m_udls.empty() ? -1 : 0;
             cur = curIndex >= 0 ? m_udls[curIndex] : UdlLanguage{};
@@ -7415,7 +7448,7 @@ private:
             if (cur.name.empty()) { wxMessageBox(_("Please give the language a name."), "wxNotepad++", wxOK | wxICON_WARNING, &dlg); return; }
             if (curIndex < 0) { m_udls.push_back(cur); curIndex = (int)m_udls.size() - 1; }
             else m_udls[curIndex] = cur;
-            if (!oldName.empty() && oldName != cur.name) wxRemoveFile(udlDir() + wxFILE_SEP_PATH + oldName + ".xml");
+            if (!oldName.empty() && oldName != cur.name) { wxLogNull noLog; wxRemoveFile(udlDir() + wxFILE_SEP_PATH + oldName + ".xml"); }
             saveUdlToDisk(m_udls[curIndex]);
             refreshLangCombo();
             rebuildUserLangMenu();
@@ -8193,9 +8226,9 @@ private:
             case IDM_SETTING_IMPORTPLUGIN: importPlugin(); break;
             case IDM_SETTING_IMPORTSTYLETHEMES: importStyleTheme(); break;
             case IDM_SETTING_OPENPLUGINSDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "plugins"); break;
-            case IDM_SETTING_EDITCONTEXTMENU: openPath(contextMenuFilePath()); break;
+            case IDM_SETTING_EDITCONTEXTMENU: editContextMenu(); break;
             case IDM_LANG_TEXT: setForcedLang("", _("Normal text file")); break;   // force Normal Text (a manual pick, like the languages)
-            case IDM_LANG_OPENUDLDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "userDefineLangs"); break;
+            case IDM_LANG_OPENUDLDIR: { wxLogNull noLog; wxFileName::Mkdir(udlDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL); openFolder(udlDir()); break; }   // create-then-open the per-user dir
 
             // ---- Help: external links + info ----
             case IDM_HOMESWEETHOME: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus"); break;
