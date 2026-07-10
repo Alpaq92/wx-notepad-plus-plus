@@ -3383,10 +3383,24 @@ private:
 #else
         m_capBar->SetBackgroundColour(tabStripBg());   // match the flat tab-art's actual strip colour on GTK/Cocoa
 #endif
+        const wxColour capBg = m_capBar->GetBackgroundColour();
+#ifdef __WXGTK__
+        // On GTK a wxBitmapButton carries the theme's button min-height/padding, so the +/v/x row ends up
+        // TALLER than the tab strip and overflows it. TitleBarBtn is a plain custom-painted wxWindow with no
+        // native button chrome, so we size it exactly to the strip height and it always fits. (MSW/macOS keep
+        // wxBitmapButton, where the fit is fine.)
+        int capH = m_tabs->GetTabCtrlHeight(); if (capH < FromDIP(18)) capH = FromDIP(24);
+        const wxSize capBtnSize(FromDIP(24), capH);
+        const wxColour capHot = m_dark ? wxColour(62, 62, 62) : wxColour(210, 210, 210);
+#endif
         auto* s = new wxBoxSizer(wxHORIZONTAL);
         auto mkBtn = [&](const char* path, const wxString& tip, std::function<void()> act) {
-            auto* b = new wxBitmapButton(m_capBar, wxID_ANY, captionIcon(path), wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxBU_EXACTFIT);
-            b->SetBackgroundColour(m_capBar->GetBackgroundColour());
+#ifdef __WXGTK__
+            wxWindow* b = new TitleBarBtn(m_capBar, wxID_ANY, capBtnSize, captionIcon(path), capBg, capHot);
+#else
+            wxWindow* b = new wxBitmapButton(m_capBar, wxID_ANY, captionIcon(path), wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxBU_EXACTFIT);
+            b->SetBackgroundColour(capBg);
+#endif
             b->SetToolTip(tip);
             b->Bind(wxEVT_BUTTON, [act](wxCommandEvent&) { act(); });
             s->Add(b, 0, wxALIGN_CENTRE_VERTICAL | wxLEFT, 2);

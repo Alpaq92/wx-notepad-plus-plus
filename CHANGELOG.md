@@ -3,6 +3,24 @@
 All notable changes to wxNotepad++ are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.9] - 2026-07-10
+
+### Fixed
+- On Linux (GTK) the v0.5.8 dark-scrollbar theming didn't actually take effect under desktop themes with a
+  coloured accent (e.g. Linux Mint's dark green): the editor's native `GtkScrollbar` kept the accent and,
+  on an empty document, its full-height thumb read as a green strip down the right edge. Root cause was a
+  GTK CSS **priority war** - our provider sat at `APPLICATION` priority, below the accent (`USER` priority,
+  from `~/.config/gtk-3.0/gtk.css`). The provider now installs at the maximum priority with `!important`
+  rules, so it wins the cascade regardless of how the theme injects the accent.
+- On Linux the integrated toolbar showed a **different-shade gap to the right** of the icons instead of
+  spanning the full window width. The AUI dock area was already the chrome colour; the seam was the native
+  `GtkToolbar`'s own themed background (which `SetBackgroundColour` couldn't override) not matching it. The
+  same top-priority GTK CSS provider now forces the `toolbar` node to the chrome colour, so the toolbar row
+  is a seamless full width.
+- On Linux the **"+ / v / x" tab caption buttons** overflowed the tab strip: `wxBitmapButton` carried the
+  GTK theme's button min-height/padding. They now use the app's own custom-painted `TitleBarBtn` (no native
+  button chrome), sized exactly to the strip height, on GTK only (Windows/macOS unchanged).
+
 ## [0.5.8] - 2026-07-10
 
 ### Fixed
