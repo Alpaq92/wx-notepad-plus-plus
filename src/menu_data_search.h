@@ -1,11 +1,11 @@
 #pragma once
 #include "menu_model.h"
 #include "menu_labels_search.h"
-#include "menuCmdID.h"
+#include "command_ids.h"
 
 // --------------------------------------------------------------- Search
 // Mechanical, zero-behavior-change port of the Search menu from the old
-// inline buildNppMainMenu() (see src/npp_menu.h). Same items, same order,
+// inline buildWxnMainMenu() (since replaced by this table). Same items, same order,
 // same IDM_* ids, same labels, same shortcuts, same nesting.
 
 static const MenuItemDef kSearchChangeHistoryItems[] = {

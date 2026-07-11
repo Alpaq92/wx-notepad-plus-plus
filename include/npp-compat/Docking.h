@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// wxNotepad++ - plugin ABI: dockable-panel registration.
-// Copyright 2026 The wxNotepad++ Authors.
+// wxNote - plugin ABI: dockable-panel registration.
+// Copyright 2026 The wxNote Authors.
 //
 // Clean-room, cross-platform redeclaration of the structures and flags a plugin uses
 // to register a dockable panel (sent via NPPM_DMMREGASDCKDLG). Layouts and constant

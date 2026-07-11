@@ -6,9 +6,9 @@
 
 // Blank the native title bar. wx's SetTitle("") technically clears the text, but the clean look
 // shouldn't hinge on that one call surviving every wx/AppKit title reassertion; hiding the title
-// outright is unconditional. (User preference on macOS: no "<doc> - wxNotepad++" - the document name
+// outright is unconditional. (User preference on macOS: no "<doc> - wxNote" - the document name
 // already shows in the tab, and Cocoa apps commonly leave the title empty.)
-extern "C" void wxnpp_HideWindowTitle(void* nsWindow)
+extern "C" void wxn_HideWindowTitle(void* nsWindow)
 {
     if (!nsWindow) return;
     NSWindow* w = (NSWindow*)nsWindow;
@@ -31,7 +31,7 @@ extern "C" void wxnpp_HideWindowTitle(void* nsWindow)
 // installs ONE shared NSWindowDelegate for all windows that must not be replaced or subclassed).
 // Returns the x where toolbar content may start (right edge of the zoom button + a gap), so the
 // caller can inset the first toolbar icon; 0 if the window/buttons are unavailable.
-extern "C" int wxnpp_InlineTrafficLights(void* nsWindow, int rowHeightPx)
+extern "C" int wxn_InlineTrafficLights(void* nsWindow, int rowHeightPx)
 {
     if (!nsWindow) return 0;
     NSWindow* w = (NSWindow*)nsWindow;
@@ -72,7 +72,7 @@ extern "C" int wxnpp_InlineTrafficLights(void* nsWindow, int rowHeightPx)
 // empty toolbar-row area couldn't drag the window otherwise. Call from a wxEVT_LEFT_DOWN handler -
 // [NSApp currentEvent] IS that mouse-down NSEvent, since wx dispatches synchronously (the same
 // pattern as Tauri's drag regions). NSWindow API, macOS 10.11+.
-extern "C" void wxnpp_DragWindow(void* nsWindow)
+extern "C" void wxn_DragWindow(void* nsWindow)
 {
     if (!nsWindow) return;
     NSWindow* w = (NSWindow*)nsWindow;

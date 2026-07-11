@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// A minimal Nib plugin for wxNotepad++ - reference implementation + smoke test for the Nib plugin API.
+// A minimal Nib plugin for wxNote - reference implementation + smoke test for the Nib plugin API.
 // Cross-platform: it includes only nib.h (no Win32, no Notepad++ ABI) and is built as a shared module
 // loaded from <exe>/nib/. It exercises four interfaces: nib.commands, nib.editor, nib.events, nib.panels.
 #include "nib.h"
@@ -15,7 +15,7 @@ static int         g_textChanges = 0;
 static void cmd_hello(NibHost* host, NibQueryFn query, void*)
 {
     const NibEditorApi* ed = static_cast<const NibEditorApi*>(query(host, NIB_IFACE_EDITOR, 1));
-    if (ed) ed->replace_selection(host, "// Hello from a Nib plugin - wxNotepad++'s own cross-platform API\n");
+    if (ed) ed->replace_selection(host, "// Hello from a Nib plugin - wxNote's own cross-platform API\n");
 }
 
 static void cmd_doclen(NibHost* host, NibQueryFn query, void*)
@@ -70,15 +70,15 @@ static void activate(NibHost* host, NibQueryFn query)
 
     const NibCommandsApi* cmds = static_cast<const NibCommandsApi*>(query(host, NIB_IFACE_COMMANDS, 1));
     if (cmds) {
-        cmds->register_command(host, "com.wxnpp.nibtest.hello",   "Insert Hello (Nib)",      cmd_hello,   nullptr);
-        cmds->register_command(host, "com.wxnpp.nibtest.doclen",  "Insert Doc Length (Nib)", cmd_doclen,  nullptr);
-        cmds->register_command(host, "com.wxnpp.nibtest.evcount", "Show Nib Event Count",    cmd_evcount, nullptr);
-        cmds->register_command(host, "com.wxnpp.nibtest.win32",   "Check nib.win32 (handles)", cmd_win32, nullptr);
+        cmds->register_command(host, "com.wxn.nibtest.hello",   "Insert Hello (Nib)",      cmd_hello,   nullptr);
+        cmds->register_command(host, "com.wxn.nibtest.doclen",  "Insert Doc Length (Nib)", cmd_doclen,  nullptr);
+        cmds->register_command(host, "com.wxn.nibtest.evcount", "Show Nib Event Count",    cmd_evcount, nullptr);
+        cmds->register_command(host, "com.wxn.nibtest.win32",   "Check nib.win32 (handles)", cmd_win32, nullptr);
     }
 
     const NibPanelsApi* panels = static_cast<const NibPanelsApi*>(query(host, NIB_IFACE_PANELS, 1));
     if (panels) {
-        g_panel = panels->register_panel(host, "com.wxnpp.nibtest.log", "Nib Events Log", NIB_DOCK_BOTTOM);
+        g_panel = panels->register_panel(host, "com.wxn.nibtest.log", "Nib Events Log", NIB_DOCK_BOTTOM);
         if (g_panel) panels->set_text(host, g_panel, "Nib Events Log - type in the editor to see text-changed events.\n");
     }
 
@@ -87,7 +87,7 @@ static void activate(NibHost* host, NibQueryFn query)
 }
 
 static const NibPluginApi PLUGIN = {
-    NIB_ABI_VERSION, sizeof(NibPluginApi), "com.wxnpp.nibtest", activate, /*deactivate*/ nullptr
+    NIB_ABI_VERSION, sizeof(NibPluginApi), "com.wxn.nibtest", activate, /*deactivate*/ nullptr
 };
 
 // The single symbol the host resolves by name.

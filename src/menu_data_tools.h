@@ -1,7 +1,7 @@
 #pragma once
 #include "menu_model.h"
 #include "menu_labels_tools.h"
-#include "menuCmdID.h"
+#include "command_ids.h"
 
 static const MenuItemDef kToolsMd5Items[] = {
     { MenuItemKind::Normal, IDM_TOOL_MD5_GENERATE,               &Label::ToolsGenerate,             "tools.md5.generate" },

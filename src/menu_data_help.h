@@ -1,7 +1,7 @@
 #pragma once
 #include "menu_model.h"
 #include "menu_labels_help.h"
-#include "menuCmdID.h"
+#include "command_ids.h"
 
 static const MenuItemDef kHelpMenuItems[] = {
     { MenuItemKind::Normal, IDM_CMDLINEARGUMENTS, &Label::HelpCmdLineArguments, "help.cmdLineArguments" },

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=wxNote
+GenericName=Text Editor
+Comment=Experimental cross-platform text editor
+Exec=wxnote %F
+Icon=wxnote
+Terminal=false
+Categories=Utility;TextEditor;Development;
+MimeType=text/plain;

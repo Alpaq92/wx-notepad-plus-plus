@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// wxNotepad++ - plugin ABI: host <-> plugin messages
-// Copyright 2026 The wxNotepad++ Authors.
+// wxNote - plugin ABI: host <-> plugin messages
+// Copyright 2026 The wxNote Authors.
 //
 // Clean-room reproduction of the *functional* Notepad++ plugin messages and payloads: the numeric
 // values and struct/enum layouts that binary interoperability requires (functional
 // facts, not creative expression). Notepad++'s license header and explanatory comments
 // are NOT reproduced - this file carries only what compatibility needs, expressed
-// portably for wxNotepad++. Reference: https://npp-user-manual.org/docs/plugin-communication/
+// portably for wxNote. Reference: https://npp-user-manual.org/docs/plugin-communication/
 
 #pragma once
 

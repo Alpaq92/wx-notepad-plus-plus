@@ -1,5 +1,5 @@
-wxNotepad++
-Copyright 2026 The wxNotepad++ Authors
+wxNote
+Copyright 2026 The wxNote Authors
 
 This product is distributed under the GNU General Public License, version 3
 (see LICENSE), consistent with its Notepad++ heritage. This NOTICE records the
@@ -9,7 +9,7 @@ project's provenance and third-party attributions.
 A license-aware, independent reimplementation
 ------------------------------------------------------------------------------
 
-wxNotepad++ is an independent, ground-up reimplementation of a Notepad++-style
+wxNote is an independent, ground-up reimplementation of a Notepad++-style
 editor built on wxWidgets + wxStyledTextCtrl (Scintilla) and Lexilla. It is NOT
 a fork of, and contains no source code copied from, the Notepad++ application.
 
@@ -25,7 +25,7 @@ implementation informs and validates behavior, it is not a code dependency.
 
 Notepad++ is a trademark of its respective owner. This project is not affiliated
 with, endorsed by, or sponsored by Notepad++ or its authors. The UI uses the
-wxNotepad++ name throughout; the app icon is the project's own SVG (whose green
+wxNote name throughout; the app icon is the project's own SVG (whose green
 plate + monogram echo the upstream styling).
 
 ------------------------------------------------------------------------------

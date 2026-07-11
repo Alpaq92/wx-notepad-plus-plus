@@ -165,7 +165,7 @@ for (let i = 0; i < navigationLinks.length; i++) {
 // same localStorage key, before CSS applies) - this block only wires up the toggle buttons and
 // keeps things in sync afterwards, so there is no flash-of-wrong-theme on load.
 
-const THEME_KEY = 'wxnpp-site-theme';
+const THEME_KEY = 'wxn-site-theme';
 const root = document.documentElement;
 const themeButtons = document.querySelectorAll('[data-theme-option]');
 const darkMedia = window.matchMedia('(prefers-color-scheme: dark)');

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// wxNotepad++ - plugin ABI compatibility layer: cross-platform type shims.
-// Copyright 2026 The wxNotepad++ Authors.
+// wxNote - plugin ABI compatibility layer: cross-platform type shims.
+// Copyright 2026 The wxNote Authors.
 //
-// This header is original work, written for wxNotepad++. It declares portable
+// This header is original work, written for wxNote. It declares portable
 // equivalents of the Win32 scalar types in which the Notepad++ plugin ABI happens
 // to be expressed, so that the same interface is usable on every platform:
 //
@@ -14,7 +14,7 @@
 //
 // No Notepad++ source code is reproduced here - only the portable type vocabulary
 // required to express a binary-compatible interface. Notepad++ is a trademark of
-// its owner; wxNotepad++ is an independent, unaffiliated reimplementation.
+// its owner; wxNote is an independent, unaffiliated reimplementation.
 
 #pragma once
 

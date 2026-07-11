@@ -1,9 +1,24 @@
 # Changelog
 
-All notable changes to wxNotepad++ are documented here. Format loosely follows
+All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+
+### Changed
+- **Rebranded to wxNote.** The application, window titles, About box, menus, installers, and the
+  8-language locale catalogs (`wxnpp.*` -> `wxn.*`) now use the wxNote name; the executable is now
+  `wxnote` (`wxnote.exe` on Windows) and packaged artifacts are named `wxNote-<version>-...`.
+  Existing settings and per-user data (recovery backups, UDLs, contextMenu.xml) are migrated
+  automatically from the old identity on first launch. Because the single-instance channel was
+  renamed with the binary, one old-version instance running alongside the first new-version launch
+  won't be detected - a one-time transition quirk.
+- **Core decoupled from the Notepad++ plugin ABI.** The editor core now defines its own command-id
+  space (`src/command_ids.h`) and includes nothing from `include/npp-compat`; those ABI headers are
+  consumed exclusively by the optional GPL `packages/npp-bridge`, which remains the (Windows-only)
+  compatibility path for legacy Notepad++ plugin binaries. Notepad++ references were removed from
+  core code and UI text; the Language menu item linking to Notepad++'s UDL collection site was
+  removed.
 
 ### Removed
 - The **DansLeRuSH-Dark** color theme is no longer shipped. Its upstream license is Creative Commons

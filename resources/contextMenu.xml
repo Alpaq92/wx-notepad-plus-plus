@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!--
-    wxNotepad++'s editor popup (right-click) context menu, hand-editable.
+    wxNote's editor popup (right-click) context menu, hand-editable.
 
     Reorder, remove, or add <Item id="..."/> entries to change what shows up on right-click.
     - "id" is the numeric command id from include/npp-compat/menuCmdID.h (e.g. IDM_EDIT_UNDO = 42003).

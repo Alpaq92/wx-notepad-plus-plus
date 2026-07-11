@@ -1,10 +1,10 @@
 #pragma once
-// Embedded application icon for the wx Notepad++ front.
-// Source of truth: spike/wxNotepad++.svg (copied from the user's npp-icon-set).
+// Embedded application icon for wxNote.
+// Source of truth: resources/wxnote.svg (the user's own icon design).
 // Rendered to a wxIconBundle at runtime via wxBitmapBundle::FromSVG, so the exe
 // is self-contained (no external icon file needed at runtime).
-static const char APP_ICON_SVG[] = R"NPPSVG(<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Notepad++ fork app icon">
-  <title>Notepad++ fork — app icon</title>
+static const char APP_ICON_SVG[] = R"NPPSVG(<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="wxNote app icon">
+  <title>wxNote — app icon</title>
 
   <!-- plate (brand green, soft rounded square) -->
   <rect x="12" y="12" width="232" height="232" rx="34" fill="#37b24d"/>

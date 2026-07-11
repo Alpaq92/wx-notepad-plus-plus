@@ -1,4 +1,4 @@
-# wxNotepad++ - experimental cross-platform (Windows / Linux / macOS) Notepad++-faithful editor.
+# wxNote - experimental cross-platform (Windows / Linux / macOS) text editor.
 #
 # wxWidgets UI + wxStyledTextCtrl editor (which bundles Scintilla); our portable Lexilla supplies the
 # language lexers. The core exposes its own permissive cross-platform plugin API ("Nib") and contains no
@@ -7,10 +7,10 @@
 #
 #   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 #   cmake --build build
-#   ./build/bin/wxnpp            (wxnpp.exe on Windows)
+#   ./build/bin/wxnote            (wxnote.exe on Windows)
 
 cmake_minimum_required(VERSION 3.20)
-project(wxNotepadPlusPlus VERSION 0.6.2 LANGUAGES CXX)
+project(wxNote VERSION 0.6.2 LANGUAGES CXX)
 
 include(FetchContent)
 
@@ -28,7 +28,7 @@ set(wxBUILD_SAMPLES          OFF CACHE BOOL "" FORCE)
 set(wxBUILD_TESTS            OFF CACHE BOOL "" FORCE)
 set(wxBUILD_DEMOS            OFF CACHE BOOL "" FORCE)
 
-message(STATUS "[wxnpp] Fetching wxWidgets 3.3.1 (one-time; builds from source)...")
+message(STATUS "[wxnote] Fetching wxWidgets 3.3.1 (one-time; builds from source)...")
 FetchContent_Declare(wxwidgets
     URL https://github.com/wxWidgets/wxWidgets/releases/download/v3.3.1/wxWidgets-3.3.1.tar.bz2
 )
@@ -74,14 +74,14 @@ if(WIN32 OR (UNIX AND NOT APPLE))
     endif()
 endif()
 
-# ---- the wxNotepad++ executable --------------------------------------------------------------------
+# ---- the wxNote executable --------------------------------------------------------------------
 # WIN32 = GUI-subsystem app on Windows; a plain executable elsewhere (GTK on Linux, Cocoa on macOS).
 if(WIN32)
-    add_executable(wxnpp WIN32 src/main.cpp resources/app.rc)   # .rc embeds wxNotepad++.ico as the exe's shell icon
+    add_executable(wxnote WIN32 src/main.cpp resources/app.rc)   # .rc embeds wxnote.ico as the exe's shell icon
 else()
-    add_executable(wxnpp src/main.cpp)
+    add_executable(wxnote src/main.cpp)
 endif()
-set_target_properties(wxnpp PROPERTIES
+set_target_properties(wxnote PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
@@ -93,8 +93,8 @@ set_target_properties(wxnpp PROPERTIES
 # project(... LANGUAGES CXX) doesn't turn on (and can't unconditionally, as Win/Linux have no ObjC++).
 if(APPLE)
     enable_language(OBJCXX)
-    target_sources(wxnpp PRIVATE src/macos_native.mm)
-    target_link_libraries(wxnpp PRIVATE "-framework AppKit")
+    target_sources(wxnote PRIVATE src/macos_native.mm)
+    target_link_libraries(wxnote PRIVATE "-framework AppKit")
 endif()
 
 # GTK-native shim wxWidgets doesn't expose: neutral-theme the app's native GtkScrollbars (kills the Mint
@@ -104,22 +104,21 @@ endif()
 # it off-Linux. wxWidgets does not propagate GTK include dirs to dependents, so add them explicitly (the wxbf
 # block above already discovered GTK3 via pkg_check_modules; re-invoking is idempotent).
 if(UNIX AND NOT APPLE)
-    target_sources(wxnpp PRIVATE src/gtk_native.cpp)
+    target_sources(wxnote PRIVATE src/gtk_native.cpp)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
-    target_include_directories(wxnpp PRIVATE ${GTK3_INCLUDE_DIRS})
-    target_link_directories(wxnpp PRIVATE ${GTK3_LIBRARY_DIRS})
-    target_link_libraries(wxnpp PRIVATE ${GTK3_LIBRARIES})
+    target_include_directories(wxnote PRIVATE ${GTK3_INCLUDE_DIRS})
+    target_link_directories(wxnote PRIVATE ${GTK3_LIBRARY_DIRS})
+    target_link_libraries(wxnote PRIVATE ${GTK3_LIBRARIES})
 endif()
 
-target_include_directories(wxnpp PRIVATE
+target_include_directories(wxnote PRIVATE
     "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"     # Scintilla.h, ILexer.h (SCI_* + SCNotification)
     "${CMAKE_SOURCE_DIR}/third_party/lexilla/include"       # Lexilla.h (CreateLexer), SciLexer.h (SCE_*)
-    "${CMAKE_SOURCE_DIR}/include/npp-compat"                # menuCmdID.h only (IDM_* command ids); the rest of the N++ ABI is used solely by packages/npp-bridge
     "${CMAKE_SOURCE_DIR}/include/nib"                       # nib.h - our own permissive, cross-platform plugin API
-    "${CMAKE_SOURCE_DIR}/src")                              # app_icon_svg.h, npp_menu.h
+    "${CMAKE_SOURCE_DIR}/src")                              # command_ids.h, app_icon_svg.h, menu_*.h - the core includes nothing from include/npp-compat (that ABI belongs to packages/npp-bridge alone)
 
-target_link_libraries(wxnpp PRIVATE
+target_link_libraries(wxnote PRIVATE
     wx::core wx::aui wx::base wx::xml wx::stc
     lexilla)
 
@@ -128,42 +127,42 @@ target_link_libraries(wxnpp PRIVATE
 # else they map to wxTCPServer/wxTCPClient/wxTCPConnection, which live in wxWidgets' separate "net"
 # component (src/common/sckipc.cpp) and must be linked explicitly.
 if(UNIX)
-    target_link_libraries(wxnpp PRIVATE wx::net)
+    target_link_libraries(wxnote PRIVATE wx::net)
 endif()
 
 # Optional integrated/borderless title bar (Settings > Preferences): link the vendored wxBorderlessFrame
-# where it exists + let the code use it (WXNPP_HAS_BORDERLESS). Off on macOS (keeps the native bar).
+# where it exists + let the code use it (WXN_HAS_BORDERLESS). Off on macOS (keeps the native bar).
 if(WIN32 OR (UNIX AND NOT APPLE))
-    target_link_libraries(wxnpp PRIVATE wxbf)
-    target_compile_definitions(wxnpp PRIVATE WXNPP_HAS_BORDERLESS=1)
+    target_link_libraries(wxnote PRIVATE wxbf)
+    target_compile_definitions(wxnote PRIVATE WXN_HAS_BORDERLESS=1)
 endif()
 
 # Windows-only chrome + plugin host (all behind #ifdef __WXMSW__ in src/main.cpp).
 if(WIN32)
-    target_link_libraries(wxnpp PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme)
+    target_link_libraries(wxnote PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme)
 endif()
 if(MSVC)
-    target_compile_options(wxnpp PRIVATE /utf-8)
+    target_compile_options(wxnote PRIVATE /utf-8)
 endif()
 
 # ---- deploy runtime resources (toolbar icons, themes, default styler) next to the exe --------------
-add_custom_command(TARGET wxnpp POST_BUILD
+add_custom_command(TARGET wxnote POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/icons"  "$<TARGET_FILE_DIR:wxnpp>/icons"
+        "${CMAKE_SOURCE_DIR}/resources/icons"  "$<TARGET_FILE_DIR:wxnote>/icons"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/icons-solar" "$<TARGET_FILE_DIR:wxnpp>/icons-solar"
+        "${CMAKE_SOURCE_DIR}/resources/icons-solar" "$<TARGET_FILE_DIR:wxnote>/icons-solar"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/icons-iconpark" "$<TARGET_FILE_DIR:wxnpp>/icons-iconpark"
+        "${CMAKE_SOURCE_DIR}/resources/icons-iconpark" "$<TARGET_FILE_DIR:wxnote>/icons-iconpark"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/themes" "$<TARGET_FILE_DIR:wxnpp>/themes"
+        "${CMAKE_SOURCE_DIR}/resources/themes" "$<TARGET_FILE_DIR:wxnote>/themes"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/fonts" "$<TARGET_FILE_DIR:wxnpp>/fonts"
+        "${CMAKE_SOURCE_DIR}/resources/fonts" "$<TARGET_FILE_DIR:wxnote>/fonts"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/resources/stylers.model.xml" "$<TARGET_FILE_DIR:wxnpp>/stylers.model.xml"
+        "${CMAKE_SOURCE_DIR}/resources/stylers.model.xml" "$<TARGET_FILE_DIR:wxnote>/stylers.model.xml"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/resources/contextMenu.xml" "$<TARGET_FILE_DIR:wxnpp>/contextMenu.xml"
+        "${CMAKE_SOURCE_DIR}/resources/contextMenu.xml" "$<TARGET_FILE_DIR:wxnote>/contextMenu.xml"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/locale" "$<TARGET_FILE_DIR:wxnpp>/locale"
+        "${CMAKE_SOURCE_DIR}/resources/locale" "$<TARGET_FILE_DIR:wxnote>/locale"
     VERBATIM)
 
 # ---- Windows-only Notepad++-ABI test plugin (exercises the Win32 plugin loader) --------------------
@@ -171,15 +170,15 @@ add_custom_command(TARGET wxnpp POST_BUILD
 # plugin, so it stays with the N++-compat world in packages/, keeping src/ free of N++-ABI code.
 if(WIN32)
     add_subdirectory(packages/test_plugin)
-    add_dependencies(wxnpp npp_test_plugin)
+    add_dependencies(wxnote npp_test_plugin)
 endif()
 
 # ---- cross-platform Nib-API plugin (exercises our own permissive plugin API on every OS) -----------
 add_subdirectory(src/plugins/nib_test_plugin)
-add_dependencies(wxnpp nib_test_plugin)
+add_dependencies(wxnote nib_test_plugin)
 
 # ---- optional GPL Notepad++ binary-plugin bridge (Windows-only; itself a Nib plugin) ---------------
 if(WIN32)
     add_subdirectory(packages/npp-bridge)
-    add_dependencies(wxnpp npp_bridge)
+    add_dependencies(wxnote npp_bridge)
 endif()

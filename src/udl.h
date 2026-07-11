@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// wxNotepad++ - User-Defined Language (UDL) data model + XML (de)serialization.
+// wxNote - User-Defined Language (UDL) data model + XML (de)serialization.
 //
-// Mirrors Notepad++'s real userDefineLang.xml schema field-for-field (verified against a real
-// sample export, not guessed), so definitions written here can be exchanged with real Notepad++
-// installs. This is a pure data model + XML I/O - no Scintilla/UI code lives here, so it can be
+// Models the userDefineLang.xml schema field-for-field (verified against a real sample export,
+// not guessed), so definition files can be exchanged both ways (Notepad++-compatible UDL
+// format). This is a pure data model + XML I/O - no Scintilla/UI code lives here, so it can be
 // unit-reasoned about independently of the styling engine (see udlLexer.h) and the dialog (see
 // the "User-Defined Language Dialogue" section of src/main.cpp).
 //
-// Schema reference (real N++ userDefineLang.xml, one <UserLang> element):
+// Schema reference (userDefineLang.xml, one <UserLang> element):
 //   <UserLang name="..." ext="..." udlVersion="2.1">
 //     <Settings>
 //       <Global caseIgnored="no" allowFoldOfComments="no" foldCompact="no"
@@ -33,7 +33,7 @@
 //
 // Two encodings worth calling out (matched exactly, not reinvented):
 //   - "Comments" keyword list packs 5 space-separated 2-digit-prefixed tokens in a fixed order:
-//     00=comment-line-open, 01=comment-open, 02=comment-close, 03=? , 04=? per real N++ - in
+//     00=comment-line-open, 01=comment-open, 02=comment-close, 03=? , 04=? (purpose unknown) - in
 //     practice only 00/01/02 are populated by the dialog; the encoding leaves room for the rest.
 //     We store this decoded (commentLineOpen/commentOpen/commentClose as plain strings) and
 //     re-encode losslessly on export.
@@ -48,7 +48,7 @@
 #include <wx/tokenzr.h>
 #include <array>
 
-// One paired-delimiter region (e.g. a quoted string, a bracketed expression). Notepad++ allows 8
+// One paired-delimiter region (e.g. a quoted string, a bracketed expression). The format allows 8
 // independent sets; each is a triple of open/escape/close TOKENS (usually single characters, but
 // the format allows short strings, so we don't constrain length).
 struct UdlDelimiterSet
@@ -92,7 +92,7 @@ enum UdlNestBit : uint32_t
     NEST_NUMBER = 1u << 20,
 };
 
-// The 21 fixed style-slot names, in the same order real Notepad++ writes <WordsStyle name="...">
+// The 21 fixed style-slot names, in the same order the <WordsStyle name="..."> elements are written
 // - used both as the canonical index (styles[kUdlStyleIndex_X]) and as the XML "name" attribute.
 enum UdlStyleIndex
 {
@@ -165,7 +165,7 @@ namespace udl_detail {
 
 // "00{ 01 02}" -> 8 UdlDelimiterSet, one triple (open,escape,close) per set, each token prefixed
 // with its own 2-digit slot index (0-23) and space-separated; an empty token still gets emitted
-// as its bare index with nothing after it. This is N++'s actual on-disk Delimiters encoding.
+// as its bare index with nothing after it. This is the actual on-disk Delimiters encoding.
 inline std::array<UdlDelimiterSet, 8> decodeDelimiters(const wxString& packed)
 {
     std::array<UdlDelimiterSet, 8> out;
@@ -242,8 +242,8 @@ inline bool parseYesNo(const wxString& s) { return s.IsSameAs("yes", false) || s
 
 }  // namespace udl_detail
 
-// Serialize one UdlLanguage as a real Notepad++-compatible <UserLang> element, ready to be
-// inserted into a <NotepadPlus> root (or written standalone - N++ accepts a bare <UserLang> too).
+// Serialize one UdlLanguage as a <UserLang> element, ready to be inserted into a <NotepadPlus>
+// root (or written standalone - a bare <UserLang> root is also a valid file).
 inline wxXmlNode* udlToXml(const UdlLanguage& u)
 {
     using namespace udl_detail;
@@ -295,7 +295,7 @@ inline wxXmlNode* udlToXml(const UdlLanguage& u)
         n->AddAttribute("fgColor", colourToHex(s.fgColor));
         n->AddAttribute("bgColor", colourToHex(s.bgColor));
         n->AddAttribute("fontName", s.fontName);
-        int fontStyle = (s.bold ? 1 : 0) | (s.italic ? 2 : 0) | (s.underline ? 8 : 0);   // matches N++'s bitmask
+        int fontStyle = (s.bold ? 1 : 0) | (s.italic ? 2 : 0) | (s.underline ? 8 : 0);   // the on-disk fontStyle bitmask
         n->AddAttribute("fontStyle", wxString::Format("%d", fontStyle));
         n->AddAttribute("fontSize", s.fontSize > 0 ? wxString::Format("%d", s.fontSize) : wxString(""));
         n->AddAttribute("nesting", wxString::Format("%u", static_cast<unsigned>(s.nesting)));
@@ -397,8 +397,8 @@ inline bool udlFromXml(const wxXmlNode* node, UdlLanguage& out)
 }
 
 // Load every <UserLang> from a userDefineLang.xml-shaped file (root <NotepadPlus> containing one
-// or more <UserLang> children - or a single bare <UserLang> root, which N++ also accepts for a
-// one-language export). Returns the languages found, in document order.
+// or more <UserLang> children - or a single bare <UserLang> root, the shape a one-language
+// export produces). Returns the languages found, in document order.
 inline std::vector<UdlLanguage> loadUdlFile(const wxString& path)
 {
     std::vector<UdlLanguage> out;
@@ -421,7 +421,7 @@ inline std::vector<UdlLanguage> loadUdlFile(const wxString& path)
 }
 
 // Write one or more UdlLanguage as a userDefineLang.xml-shaped file (<NotepadPlus> root, one
-// <UserLang> child per language) - matches the real multi-language file N++ itself writes.
+// <UserLang> child per language) - the standard multi-language layout of that format.
 inline bool saveUdlFile(const wxString& path, const std::vector<UdlLanguage>& langs)
 {
     wxXmlDocument doc;

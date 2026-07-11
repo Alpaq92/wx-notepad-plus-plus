@@ -42,7 +42,7 @@
 // is Apple-only. It MUST NOT be #ifdef __WXGTK__-guarded: that macro comes from wxWidgets headers, which are
 // deliberately NOT included here (only <gtk/gtk.h>), so a self-guard would delete the whole TU and leave
 // main.cpp's call unresolved at link time. Gating is purely via CMake. main.cpp only calls the extern "C"
-// entry below, mirroring the macOS wxnpp_HideWindowTitle shim. The provider is process-wide and reused;
+// entry below, mirroring the macOS wxn_HideWindowTitle shim. The provider is process-wide and reused;
 // re-calling with a new `dark` reloads it live. (The identical GTK CSS-provider pattern is already used by
 // third_party/wxbf/src/borderless_frame_gtk.cpp, which proves these symbols link in this build.)
 #include <gtk/gtk.h>
@@ -51,7 +51,7 @@
 // gtk_container_forall (not _foreach) so a GtkScrolledWindow's scrollbars - which are INTERNAL children and
 // invisible to _foreach - are reached. Re-adding the same provider to a context that already has it is guarded
 // by a remove-first, so repeated calls (e.g. every dark/light toggle) never stack duplicate references.
-static void wxnpp_restyle_scrollbars(GtkWidget* w, gpointer data)
+static void wxn_restyle_scrollbars(GtkWidget* w, gpointer data)
 {
     if (!w) return;
     GtkStyleProvider* provider = GTK_STYLE_PROVIDER(data);
@@ -62,10 +62,10 @@ static void wxnpp_restyle_scrollbars(GtkWidget* w, gpointer data)
         gtk_style_context_add_provider(ctx, provider, G_MAXUINT);
     }
     if (GTK_IS_CONTAINER(w))
-        gtk_container_forall(GTK_CONTAINER(w), wxnpp_restyle_scrollbars, data);
+        gtk_container_forall(GTK_CONTAINER(w), wxn_restyle_scrollbars, data);
 }
 
-extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
+extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
 {
     // Disable GTK overlay scrolling app-wide so the editor's GtkScrolledWindow scrollbar becomes a normal,
     // always-visible scrollbar that the CSS below dark-themes to grey (rather than the thin accent-coloured
@@ -83,7 +83,7 @@ extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
     // toolbar > toolbutton > button - the theme's padding/min-width sit on the INNER `button` node;
     // separators are `separator` nodes. border/background are deliberately untouched so the theme's flat
     // hover/pressed feedback still paints.
-#define WXNPP_TOOLBAR_COMPACT_CSS \
+#define WXN_TOOLBAR_COMPACT_CSS \
     "toolbar { padding: 2px; }" \
     "toolbar toolbutton > button, toolbar toolitem button {" \
     "  padding: 3px; margin: 0; min-width: 0; min-height: 0; }" \
@@ -155,7 +155,7 @@ extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
         "toolbar, toolbar.horizontal, toolbar.primary-toolbar {"
         "  background-color: #202020; background-image: none;"
         "  box-shadow: none; border: none; }"
-        WXNPP_TOOLBAR_COMPACT_CSS;
+        WXN_TOOLBAR_COMPACT_CSS;
 
     static const char* const css_light =
         "scrollbar, scrollbar.vertical, scrollbar.horizontal,"
@@ -194,7 +194,7 @@ extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
         "toolbar, toolbar.horizontal, toolbar.primary-toolbar {"   // match the AUI dock gap (#f0f0f0 == wxColour(240,240,240)) - seamless full-width toolbar
         "  background-color: #f0f0f0; background-image: none;"
         "  box-shadow: none; border: none; }"
-        WXNPP_TOOLBAR_COMPACT_CSS;
+        WXN_TOOLBAR_COMPACT_CSS;
 
     gtk_css_provider_load_from_data(provider, dark ? css_dark : css_light, -1, nullptr);
 
@@ -218,6 +218,6 @@ extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
     if (gtkWidgetOrNull)
     {
         GtkWidget* top = gtk_widget_get_toplevel(GTK_WIDGET(gtkWidgetOrNull));
-        wxnpp_restyle_scrollbars(top ? top : GTK_WIDGET(gtkWidgetOrNull), provider);
+        wxn_restyle_scrollbars(top ? top : GTK_WIDGET(gtkWidgetOrNull), provider);
     }
 }

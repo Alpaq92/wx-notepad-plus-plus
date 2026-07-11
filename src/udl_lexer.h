@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// wxNotepad++ - User-Defined Language: the live styling/folding engine.
+// wxNote - User-Defined Language: the live styling/folding engine.
 //
 // Applies a UdlLanguage (src/udl.h) to a wxStyledTextCtrl via Scintilla's container-lexing mode
 // (wxSTC_LEX_CONTAINER): Scintilla fires wxEVT_STC_STYLENEEDED whenever it needs text styled
 // beyond what's already been painted, and udlStyleRange()/udlFoldRange() below do the painting
 // and fold-level computation by hand - there is no built-in Lexilla lexer for a user-defined
-// language, so the app has to be the lexer for these buffers. This mirrors what Notepad++ itself
-// does internally for UDL buffers (it isn't a real Scintilla/Lexilla lexer there either).
+// language, so the app has to be the lexer for these buffers.
 //
 // Style numbers used on the Scintilla side are UdlStyleIndex values directly (0..UDL_STYLE_COUNT-1,
 // well under Scintilla's 256-style ceiling and disjoint from the numbered-lexer style ranges used
