@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Nib - the wxNotepad++ plugin API (codename "Nib", as in a pen nib).
-// Copyright 2026 The wxNotepad++ Authors.
+// Nib - the wxNote plugin API (codename "Nib", as in a pen nib).
+// Copyright 2026 The wxNote Authors.
 //
-// An original, cross-platform, stable C ABI for extending wxNotepad++. It is clean-sheet work: it
+// An original, cross-platform, stable C ABI for extending wxNote. It is clean-sheet work: it
 // borrows nothing from Notepad++ (no NPPM_* numbers, no FuncItem/NppData/SCNotification, no WM_USER,
 // and no platform handles such as HWND in the contract). A plugin is a shared library exporting a
 // single entry point; it asks the host for capability interfaces by stable id + version and gets back
@@ -54,7 +54,7 @@ typedef struct NibBootstrap {
 typedef struct NibHostApi {
     uint32_t    version;
     uint32_t    struct_size;
-    const char* (*product_name)(NibHost*);   // e.g. "wxNotepad++"
+    const char* (*product_name)(NibHost*);   // e.g. "wxNote"
     uint32_t    (*abi_version)(NibHost*);     // the host's NIB_ABI_VERSION
 } NibHostApi;
 

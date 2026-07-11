@@ -4,7 +4,7 @@
 #include "menu_data_macro.h"   // reuses kMacroMenuItems verbatim
 #include "menu_data_run.h"     // reuses kRunMenuItems verbatim
 #include "menu_data_tools.h"   // reuses kToolsMd5/Sha1/Sha256/Sha512Items verbatim
-#include "menuCmdID.h"
+#include "command_ids.h"
 
 // ------------------------------------------------------------- Automation
 // Phase B reshape: Macro, Run, and Tools (hash generation) - three near-empty top-level menus -

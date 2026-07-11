@@ -176,7 +176,7 @@ The layer **exists and works**: `packages/npp-bridge` is itself a Nib plugin (GP
 Windows-only) that recreates a Notepad++-shaped world for real N++ binary plugins:
 
 ```
-N++ plugin DLL  ⇄  npp-bridge (GPL)  ⇄  Nib C ABI  ⇄  wxNotepad++ core (permissive-ready)
+N++ plugin DLL  ⇄  npp-bridge (GPL)  ⇄  Nib C ABI  ⇄  wxNote core (permissive-ready)
    NPPM_* / FuncItem / beNotified        nib.win32 / nib.documents / nib.events / nib.commands
 ```
 

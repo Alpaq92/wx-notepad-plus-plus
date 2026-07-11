@@ -2,7 +2,7 @@
 >
 > **Everything below this banner describes an approach the project evaluated and rejected.** It proposes
 > a **Windows-only**, HWND-shim-based migration that keeps the plugin ABI's Win32 message architecture and
-> Scintilla as a native HWND control. **That is not what wxNotepad++ is or does.** Do not read this
+> Scintilla as a native HWND control. **That is not what wxNote is or does.** Do not read this
 > document as a description of the current codebase, and do not resume or partially adopt Path A without
 > a fresh, explicit decision — the two approaches are not compatible half-measures; picking one forecloses
 > the other's assumptions (native-HWND Scintilla vs. `wxStyledTextCtrl`, Windows-only vs. cross-platform,

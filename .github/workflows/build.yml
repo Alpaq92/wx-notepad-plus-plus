@@ -1,6 +1,6 @@
 name: build
 
-# Builds wxNotepad++ on all three target platforms. wxWidgets is fetched + built from source
+# Builds wxNote on all three target platforms. wxWidgets is fetched + built from source
 # (FetchContent), so the only system dependency is GTK3 on Linux; macOS/Windows need just the
 # toolchain. Verifies the cross-platform claim - the parts the Windows dev machine can't check.
 
@@ -107,7 +107,7 @@ jobs:
       # -G Ninja: without it, Windows' default generator is the multi-config "Visual Studio" one,
       # which ignores RUNTIME_OUTPUT_DIRECTORY's plain (non-per-config) setting and puts the exe in
       # build/bin/Release/ instead of build/bin/ - breaking every packaging script below that reads
-      # from build/bin/wxnpp.exe directly. Ninja is single-config and preinstalled on all 3 hosted
+      # from build/bin/wxnote.exe directly. Ninja is single-config and preinstalled on all 3 hosted
       # runner images; this also matches the build command documented at the top of CMakeLists.txt.
       # CMAKE_OSX_DEPLOYMENT_TARGET: without it, the macOS build inherits the hosted runner's SDK
       # version (whatever "macos-latest" happens to be), baking that into the binary's minimum-OS
@@ -125,8 +125,8 @@ jobs:
       # Cap parallelism to 2: one cc1plus per core compiling wxWidgets + the large single-TU main.cpp
       # at -O2 all at once OOM-kills cc1plus on the hosted runners (esp. the 7 GB macOS M1). Two at a
       # time fits, at the cost of a slower (but reliable) build.
-      - name: Build wxnpp
-        run: cmake --build build --config Release --target wxnpp --parallel 2
+      - name: Build wxnote
+        run: cmake --build build --config Release --target wxnote --parallel 2
 
       - name: Package AppImage (Linux)
         if: matrix.name == 'linux'
@@ -148,7 +148,7 @@ jobs:
         if: matrix.name == 'linux'
         uses: actions/upload-artifact@v7
         with:
-          name: wxnpp-linux-packages
+          name: wxnote-linux-packages
           path: build/installer/*
 
       - name: Package .dmg (macOS)
@@ -159,7 +159,7 @@ jobs:
         if: startsWith(matrix.name, 'macos')
         uses: actions/upload-artifact@v7
         with:
-          name: wxnpp-${{ matrix.name }}-package
+          name: wxnote-${{ matrix.name }}-package
           path: build/installer/*
 
       # windows-latest does NOT ship makensis preinstalled (confirmed by an actual CI failure - an
@@ -184,11 +184,11 @@ jobs:
         shell: cmd
         run: |
           if not exist build\installer mkdir build\installer
-          makensis installer\windows\wxnpp.nsi
+          makensis installer\windows\wxnote.nsi
 
       - name: Upload Windows installer
         if: matrix.name == 'windows'
         uses: actions/upload-artifact@v7
         with:
-          name: wxnpp-windows-installer
+          name: wxnote-windows-installer
           path: build/installer/*

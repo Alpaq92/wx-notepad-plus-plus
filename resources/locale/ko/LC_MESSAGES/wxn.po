@@ -1110,9 +1110,6 @@ msgstr "사용자 언어 정의..."
 msgid "Open User Defined Language folder..."
 msgstr "사용자 정의 언어 폴더 열기..."
 
-msgid "Notepad++ User Defined Languages Collection"
-msgstr "Notepad++ 사용자 정의 언어 모음"
-
 msgid "User Defined Language"
 msgstr "사용자 정의 언어"
 
@@ -1250,18 +1247,6 @@ msgstr "창(&W)"
 
 msgid "Command Line Arguments..."
 msgstr "명령줄 인수..."
-
-msgid "Notepad++ Home"
-msgstr "Notepad++ 홈"
-
-msgid "Notepad++ Project Page"
-msgstr "Notepad++ 프로젝트 페이지"
-
-msgid "Notepad++ Online User Manual"
-msgstr "Notepad++ 온라인 사용자 설명서"
-
-msgid "Notepad++ Community (Forum)"
-msgstr "Notepad++ 커뮤니티 (포럼)"
 
 msgid "Check for Updates"
 msgstr "업데이트 확인"
@@ -2064,14 +2049,11 @@ msgstr "%d개 표시됨 - 스타일 4"
 msgid "Marked %d - style 5"
 msgstr "%d개 표시됨 - 스타일 5"
 
-msgid "wxNote (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
-msgstr "wxNote(실험적 wxWidgets 포크)\n\nwxWidgets %d.%d.%d\n%s\n\n실행 파일:\n%s"
+msgid "wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgstr "wxNote(실험적)\n\nwxWidgets %d.%d.%d\n%s\n\n실행 파일:\n%s"
 
 msgid "Debug Info"
 msgstr "디버그 정보"
-
-msgid "Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs."
-msgstr "사용법: wxnpp [파일...]\n\n명령줄에 지정된 파일은 탭으로 열립니다."
 
 msgid "Command Line Arguments"
 msgstr "명령줄 인수"
@@ -2448,8 +2430,8 @@ msgstr "확장(&E) (\\n, \\r, \\t, \\0, \\x...)"
 msgid "Re&gular expression"
 msgstr "정규식(&G)"
 
-msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnpp elevated to save this file?"
-msgstr "현재 권한으로는 \"%s\"에 쓸 수 없습니다.\n\n이 파일을 저장하려면 wxnpp를 관리자 권한으로 다시 시작하시겠습니까?"
+msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnote elevated to save this file?"
+msgstr "현재 권한으로는 \"%s\"에 쓸 수 없습니다.\n\n이 파일을 저장하려면 wxnote를 관리자 권한으로 다시 시작하시겠습니까?"
 
 msgid "Access Denied"
 msgstr "액세스 거부됨"
@@ -2457,8 +2439,8 @@ msgstr "액세스 거부됨"
 msgid "Reuse an existing window"
 msgstr "기존 창 재사용"
 
-msgid "Usage: wxnpp [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
-msgstr "사용법: wxnpp [옵션] [파일...]\n\n-g, --goto <줄[,열]>   마지막으로 연 파일에서 이 줄(및 열)로 이동\n-e, --encoding <이름>   인코딩 강제 지정: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance      항상 새 창 열기\n-r, --reuse-instance    이미 실행 중인 창 재사용\n\n명령줄에 지정된 파일은 탭으로 열립니다."
+msgid "Usage: wxnote [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
+msgstr "사용법: wxnote [옵션] [파일...]\n\n-g, --goto <줄[,열]>   마지막으로 연 파일에서 이 줄(및 열)로 이동\n-e, --encoding <이름>   인코딩 강제 지정: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance      항상 새 창 열기\n-r, --reuse-instance    이미 실행 중인 창 재사용\n\n명령줄에 지정된 파일은 탭으로 열립니다."
 
 msgid "open at line[,col]"
 msgstr "줄[,열]로 이동"
@@ -2535,8 +2517,8 @@ msgstr "스타일 %d"
 msgid "About wxNote"
 msgstr "wxNote 정보"
 
-msgid "wxNote\n\nA cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\na native Scintilla editor with dark/light themes and plugin support.\n\nIndependent project - not affiliated with or endorsed by Notepad++."
-msgstr "wxNote\n\nwxWidgets 기반의 크로스 플랫폼 Notepad++ 스타일 편집기 재구현:\n다크/라이트 테마와 플러그인을 지원하는 네이티브 Scintilla 편집기입니다.\n\n독립 프로젝트입니다 - Notepad++와 제휴하거나 그 승인을 받지 않았습니다."
+msgid "wxNote\n\nA fast, cross-platform text editor built on wxWidgets:\na native Scintilla editor with dark/light themes and plugin support."
+msgstr "wxNote\n\nwxWidgets 기반의 빠른 크로스 플랫폼 텍스트 편집기:\n다크/라이트 테마와 플러그인을 지원하는 네이티브 Scintilla 편집기입니다."
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
 msgstr "검색 \"%s\"  (%d건 일치, 검색한 %d개 파일 중 %d개)"

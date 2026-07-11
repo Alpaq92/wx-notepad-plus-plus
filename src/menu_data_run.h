@@ -1,7 +1,7 @@
 #pragma once
 #include "menu_model.h"
 #include "menu_labels_run.h"
-#include "menuCmdID.h"
+#include "command_ids.h"
 
 static const MenuItemDef kRunMenuItems[] = {
     { MenuItemKind::Normal, IDM_EXECUTE,                       &Label::RunExecute,              "run.execute" },

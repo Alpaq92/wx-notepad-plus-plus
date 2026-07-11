@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// npp-bridge - the optional Notepad++ binary-plugin compatibility bridge for wxNotepad++.
+// npp-bridge - the optional Notepad++ binary-plugin compatibility bridge for wxNote.
 //
 // It is a Nib plugin (Windows-only) that reaches the host's native handles through the nib.win32
 // capability and rebuilds the Notepad++ NppData environment, so real Notepad++ plugin DLLs can be
-// hosted. This module is GPL because it reproduces Notepad++'s plugin ABI; the wxNotepad++ core does
+// hosted. This module is GPL because it reproduces Notepad++'s plugin ABI; the wxNote core does
 // NOT depend on it - it is loaded, like any plugin, only if present. Keeping it separate + GPL is what
 // lets the core relicense permissively (see docs/FUTURE_PLANS.md).
 //
@@ -289,7 +289,7 @@ static void activate(NibHost* host, NibQueryFn query)
     }
     const NibCommandsApi* cmds = static_cast<const NibCommandsApi*>(query(host, NIB_IFACE_COMMANDS, 1));
     if (!cmds) return;
-    cmds->register_command(host, "org.wxnpp.npp-bridge.info", "N++ Bridge: NppData Info", cmd_info, nullptr);
+    cmds->register_command(host, "org.wxn.npp-bridge.info", "N++ Bridge: NppData Info", cmd_info, nullptr);
     if (w) loadNppPlugins(host, cmds);
 
     // Forward editor events to the loaded plugins' beNotified (Stage 3).
@@ -315,7 +315,7 @@ static void deactivate(NibHost*)
 }
 
 static const NibPluginApi PLUGIN = {
-    NIB_ABI_VERSION, sizeof(NibPluginApi), "org.wxnpp.npp-bridge", activate, deactivate
+    NIB_ABI_VERSION, sizeof(NibPluginApi), "org.wxn.npp-bridge", activate, deactivate
 };
 
 extern "C" NIB_API const NibPluginApi* nib_plugin_main(const NibBootstrap* boot)

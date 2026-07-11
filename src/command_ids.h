@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// wxNote - plugin ABI: menu command ids
+// wxNote - the core's command-id space (menu items, toolbar, dispatch).
 // Copyright 2026 The wxNote Authors.
 //
-// Clean-room reproduction of the *functional* Notepad++ plugin command ids: the numeric
-// values and struct/enum layouts that binary interoperability requires (functional
-// facts, not creative expression). Notepad++'s license header and explanatory comments
-// are NOT reproduced - this file carries only what compatibility needs, expressed
-// portably for wxNote. Reference: https://npp-user-manual.org/docs/plugin-communication/
+// This is the application's own, authoritative id table; the core includes nothing
+// from include/npp-compat. The numeric values are nevertheless FROZEN, not free to
+// renumber: on Windows the optional GPL packages/npp-bridge forwards plugin
+// NPPM_MENUCOMMAND requests straight into WM_COMMAND with the id the plugin sent,
+// so host command ids and the plugin-ABI ids (include/npp-compat/menuCmdID.h) must
+// stay value-identical for that passthrough to dispatch correctly. The
+// static_asserts at the bottom pin the section bases (and the range-sensitive ids)
+// to those contract values - renumbering anything asserted here is an ABI break.
 
 #pragma once
-
-#include "npp_plugin_port.h"
 
 #define    IDM    40000
 
@@ -597,3 +598,22 @@
 #define IDR_DROPLIST_MENU 14000
     #define    IDM_DROPLIST_LIST           (IDR_DROPLIST_MENU + 1)
     #define    IDM_DROPLIST_MRU_FIRST      (IDR_DROPLIST_MENU + 20)
+
+// ---- frozen-value pins (see header comment; keep in lockstep with the plugin ABI) -------------------
+static_assert(IDM               == 40000, "command-id base is a frozen plugin-ABI contract value");
+static_assert(IDM_FILE          == 41000, "IDM_FILE section base is frozen (plugin ABI)");
+static_assert(IDM_EDIT          == 42000, "IDM_EDIT section base is frozen (plugin ABI)");
+static_assert(IDM_SEARCH        == 43000, "IDM_SEARCH section base is frozen (plugin ABI)");
+static_assert(IDM_SYSTRAYPOPUP  == 43100, "IDM_SYSTRAYPOPUP base is frozen (plugin ABI)");
+static_assert(IDM_MISC          == 43500, "IDM_MISC section base is frozen (plugin ABI)");
+static_assert(IDM_VIEW          == 44000, "IDM_VIEW section base is frozen (plugin ABI)");
+static_assert(IDM_FORMAT        == 45000, "IDM_FORMAT section base is frozen (plugin ABI)");
+static_assert(IDM_LANG          == 46000, "IDM_LANG section base is frozen (plugin ABI)");
+static_assert(IDM_LANG_USER     == 46180, "UDL menu-id range start is frozen (plugin ABI + UDL dispatch range checks)");
+static_assert(IDM_LANG_USER_LIMIT == 46210, "UDL menu-id range end is frozen (plugin ABI + UDL dispatch range checks)");
+static_assert(IDM_ABOUT         == 47000, "IDM_ABOUT section base is frozen (plugin ABI)");
+static_assert(IDM_SETTING       == 48000, "IDM_SETTING section base is frozen (plugin ABI)");
+static_assert(IDM_TOOL          == 48500, "IDM_TOOL section base is frozen (plugin ABI)");
+static_assert(IDM_EXECUTE       == 49000, "IDM_EXECUTE section base is frozen (plugin ABI)");
+static_assert(IDR_WINDOWS_MENU  == 11000, "Window-menu id base is frozen (plugin ABI)");
+static_assert(IDR_DROPLIST_MENU == 14000, "Doc-droplist id base is frozen (plugin ABI)");

@@ -3,29 +3,29 @@
 // The Language menu: SPECIAL-CASED and intentionally NOT a static
 // MenuItemDef table like the other menus (see menu_model.h). Most of its
 // content - the ~88 built-in languages bucketed into single-letter (A, B,
-// C...) submenus - is generated at runtime from nppLangTable, exactly like
-// upstream Notepad++ does. That shape doesn't fit a static array, so this
-// stays a small hand-written generator function, buildLanguageMenu(), by
-// deliberate design decision.
+// C...) submenus - is generated at runtime from wxnLangTable. That shape
+// doesn't fit a static array, so this stays a small hand-written generator
+// function, buildLanguageMenu(), by deliberate design decision.
 //
-// nppLangTable()/nppLangFind() are relocated here VERBATIM from the old
-// src/npp_menu.h so existing call sites (main.cpp's language dispatch,
-// the Preferences dialog) keep working by simply switching their include.
+// wxnLangTable()/wxnLangFind() are relocated here VERBATIM from the old
+// inline menu construction so existing call sites (main.cpp's language
+// dispatch, the Preferences dialog) keep working by simply switching their
+// include.
 // =====================================================================
 #include "menu_model.h"
-#include "menuCmdID.h"
+#include "command_ids.h"
 #include <wx/menu.h>
 #include <wx/intl.h>
 
-// Notepad++'s full built-in Language list, each mapped to the Lexilla lexer that highlights it (the
+// The app's full built-in Language list, each mapped to the Lexilla lexer that highlights it (the
 // CreateLexer name, which doubles as the theme/styler key for per-token colours). Shared so it both
-// POPULATES the Language menu - bucketed into A/B/C... submenus like Notepad++ - and DISPATCHES a manual
+// POPULATES the Language menu - bucketed into A/B/C... submenus - and DISPATCHES a manual
 // pick (force that lexer on the active buffer). Entries are grouped contiguously by first letter so the
 // submenu builder can split on letter changes. Lexers without a Lexilla module fall back to Normal Text.
-struct NppLang { int id; const char* name; const char* lexer; };
-inline const NppLang* nppLangTable(size_t& n)
+struct WxnLang { int id; const char* name; const char* lexer; };
+inline const WxnLang* wxnLangTable(size_t& n)
 {
-    static const NppLang t[] = {
+    static const WxnLang t[] = {
         { IDM_LANG_FLASH,        "ActionScript",         "as"           },
         { IDM_LANG_ADA,          "Ada",                  "ada"          },
         { IDM_LANG_ASN1,         "ASN.1",                "asn1"         },
@@ -118,15 +118,15 @@ inline const NppLang* nppLangTable(size_t& n)
     n = sizeof(t) / sizeof(t[0]);
     return t;
 }
-inline const NppLang* nppLangFind(int id)
+inline const WxnLang* wxnLangFind(int id)
 {
-    size_t n; const NppLang* t = nppLangTable(n);
+    size_t n; const WxnLang* t = wxnLangTable(n);
     for (size_t i = 0; i < n; ++i) if (t[i].id == id) return &t[i];
     return nullptr;
 }
 
 // The only static/fixed labels in this menu - the ~88 per-language names come straight from
-// nppLangTable's own `name` field, which is NOT translated today (language names like "Python",
+// wxnLangTable's own `name` field, which is NOT translated today (language names like "Python",
 // "JavaScript" are used as-is) and must stay that way; see buildLanguageMenu() below.
 namespace Label
 {
@@ -135,13 +135,12 @@ namespace Label
     inline const wxString LanguageUserDefinedSubmenu() { return _("User Defined Language"); }
     inline const wxString LanguageDefineYourLanguage() { return _("Define your language..."); }
     inline const wxString LanguageOpenUdlDir() { return _("Open User Defined Language folder..."); }
-    inline const wxString LanguageUdlCollectionSite() { return _("Notepad++ User Defined Languages Collection"); }
     inline const wxString LanguageUserDefined() { return _("User-Defined"); }
 }
 
 // ------------------------------------------------------------- Language
-// The full Notepad++ language list, bucketed into single-letter submenus (A, B, C, ...) exactly like
-// Notepad++. The shared nppLangTable is grouped contiguously by first letter (see the top of this
+// The full built-in language list, bucketed alphabetically into single-letter submenus (A, B, C,
+// ...). The shared wxnLangTable is grouped contiguously by first letter (see the top of this
 // file), so a new submenu starts whenever the first letter changes.
 inline wxMenu* buildLanguageMenu(class MenuRegistry& reg)
 {
@@ -149,7 +148,7 @@ inline wxMenu* buildLanguageMenu(class MenuRegistry& reg)
     lang->Append(IDM_LANG_TEXT, Label::LanguageNone());
     lang->AppendSeparator();
     {
-        size_t ln; const NppLang* lt = nppLangTable(ln);
+        size_t ln; const WxnLang* lt = wxnLangTable(ln);
         wxMenu* sub = nullptr; char cur = 0;
         for (size_t i = 0; i < ln; ++i)
         {
@@ -164,7 +163,6 @@ inline wxMenu* buildLanguageMenu(class MenuRegistry& reg)
         auto* sub = new wxMenu;
         sub->Append(IDM_LANG_USER_DLG, Label::LanguageDefineYourLanguage());
         sub->Append(IDM_LANG_OPENUDLDIR, Label::LanguageOpenUdlDir());
-        sub->Append(IDM_LANG_UDLCOLLECTION_PROJECT_SITE, Label::LanguageUdlCollectionSite());
         lang->AppendSubMenu(sub, Label::LanguageUserDefinedSubmenu());
     }
     lang->Append(IDM_LANG_USER, Label::LanguageUserDefined());

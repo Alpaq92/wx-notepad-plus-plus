@@ -9,7 +9,7 @@ What changed from the original template:
   / Screenshots / Download / Changelog instead of About / Resume / Portfolio / Blog / Contact).
 - Color system: every color token now has a light-theme counterpart (`[data-theme="light"]` in
   `assets/css/style.css`), plus a system/light/dark toggle (`assets/js/script.js`) - the original
-  template is dark-only. The accent color was changed from the template's yellow to wxNotepad++'s own
+  template is dark-only. The accent color was changed from the template's yellow to wxNote's own
   brand green.
 - Sections with no project equivalent (testimonials, client logos, the skills progress bars, the
   contact form and map) were removed; their CSS was removed with them rather than left dead.
@@ -43,7 +43,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-The app icon (`assets/images/logo.svg`) is wxNotepad++'s own, copied from `src/app_icon_svg.h` - see
+The app icon (`assets/images/logo.svg`) is wxNote's own, copied from `src/app_icon_svg.h` - see
 the root [`LICENSING.md`](../LICENSING.md) for its provenance.
 
 [Ionicons](https://ionic.io/ionicons) (MIT) and [Poppins](https://fonts.google.com/specimen/Poppins)

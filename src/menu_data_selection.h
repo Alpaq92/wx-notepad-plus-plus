@@ -2,7 +2,7 @@
 #include "menu_model.h"
 #include "menu_labels_selection.h"
 #include "menu_data_edit.h"   // reuses kEditMultiselectAllItems/kEditMultiselectNextItems/kEditOnSelectionItems verbatim
-#include "menuCmdID.h"
+#include "command_ids.h"
 
 // ------------------------------------------------------------- Selection
 // Phase B reshape: the selection/multi-cursor cluster carved out of the old Edit menu (see

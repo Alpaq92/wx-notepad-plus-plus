@@ -1,7 +1,7 @@
 #pragma once
 #include "menu_model.h"
 #include "menu_labels_macro.h"
-#include "menuCmdID.h"
+#include "command_ids.h"
 
 static const MenuItemDef kMacroMenuItems[] = {
     { MenuItemKind::Normal, IDM_MACRO_STARTRECORDINGMACRO,   &Label::MacroStartRecording, "macro.startRecording" },

@@ -1,11 +1,11 @@
 #pragma once
 #include "menu_model.h"
 #include "menu_labels_encoding.h"
-#include "menuCmdID.h"
+#include "command_ids.h"
 
 // ------------------------------------------------------------- Encoding
 // Mechanical, zero-behavior-change port of the Encoding menu from the old
-// inline buildNppMainMenu() (see src/npp_menu.h). Same items, same order,
+// inline buildWxnMainMenu() (since replaced by this table). Same items, same order,
 // same IDM_* ids, same labels, same nesting (including the 3-level-deep
 // "Character sets" tree: Encoding > Character sets > [15 regions] > [codepages]).
 

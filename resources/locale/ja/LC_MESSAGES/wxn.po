@@ -1110,9 +1110,6 @@ msgstr "ユーザー定義言語の作成..."
 msgid "Open User Defined Language folder..."
 msgstr "ユーザー定義言語フォルダーを開く..."
 
-msgid "Notepad++ User Defined Languages Collection"
-msgstr "Notepad++ ユーザー定義言語コレクション"
-
 msgid "User Defined Language"
 msgstr "ユーザー定義言語"
 
@@ -1250,18 +1247,6 @@ msgstr "ウィンドウ(&W)"
 
 msgid "Command Line Arguments..."
 msgstr "コマンドライン引数..."
-
-msgid "Notepad++ Home"
-msgstr "Notepad++ ホーム"
-
-msgid "Notepad++ Project Page"
-msgstr "Notepad++ プロジェクトページ"
-
-msgid "Notepad++ Online User Manual"
-msgstr "Notepad++ オンラインユーザーマニュアル"
-
-msgid "Notepad++ Community (Forum)"
-msgstr "Notepad++ コミュニティ (フォーラム)"
 
 msgid "Check for Updates"
 msgstr "更新の確認"
@@ -2064,14 +2049,11 @@ msgstr "%d 件マーク - スタイル4"
 msgid "Marked %d - style 5"
 msgstr "%d 件マーク - スタイル5"
 
-msgid "wxNote (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
-msgstr "wxNote（wxWidgets の実験的フォーク）\n\nwxWidgets %d.%d.%d\n%s\n\n実行ファイル:\n%s"
+msgid "wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgstr "wxNote（実験版）\n\nwxWidgets %d.%d.%d\n%s\n\n実行ファイル:\n%s"
 
 msgid "Debug Info"
 msgstr "デバッグ情報"
-
-msgid "Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs."
-msgstr "使い方: wxnpp [ファイル...]\n\nコマンドラインで指定したファイルはタブで開かれます。"
 
 msgid "Command Line Arguments"
 msgstr "コマンドライン引数"
@@ -2448,8 +2430,8 @@ msgstr "拡張(&E) (\\n, \\r, \\t, \\0, \\x...)"
 msgid "Re&gular expression"
 msgstr "正規表現(&G)"
 
-msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnpp elevated to save this file?"
-msgstr "現在の権限では \"%s\" に書き込めません。\n\nこのファイルを保存するために、wxnpp を管理者権限で再起動しますか?"
+msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnote elevated to save this file?"
+msgstr "現在の権限では \"%s\" に書き込めません。\n\nこのファイルを保存するために、wxnote を管理者権限で再起動しますか?"
 
 msgid "Access Denied"
 msgstr "アクセスが拒否されました"
@@ -2457,8 +2439,8 @@ msgstr "アクセスが拒否されました"
 msgid "Reuse an existing window"
 msgstr "既存のウィンドウを再利用する"
 
-msgid "Usage: wxnpp [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
-msgstr "使い方: wxnpp [オプション] [ファイル...]\n\n-g, --goto <行[,列]>   最後に開いたファイルのこの行(と列)に移動する\n-e, --encoding <名前>   エンコーディングを強制指定: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance      常に新しいウィンドウを開く\n-r, --reuse-instance    既に実行中のウィンドウを再利用する\n\nコマンドラインで指定したファイルはタブで開かれます。"
+msgid "Usage: wxnote [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
+msgstr "使い方: wxnote [オプション] [ファイル...]\n\n-g, --goto <行[,列]>   最後に開いたファイルのこの行(と列)に移動する\n-e, --encoding <名前>   エンコーディングを強制指定: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance      常に新しいウィンドウを開く\n-r, --reuse-instance    既に実行中のウィンドウを再利用する\n\nコマンドラインで指定したファイルはタブで開かれます。"
 
 msgid "open at line[,col]"
 msgstr "行[,列]に移動"
@@ -2535,8 +2517,8 @@ msgstr "スタイル %d"
 msgid "About wxNote"
 msgstr "wxNote について"
 
-msgid "wxNote\n\nA cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\na native Scintilla editor with dark/light themes and plugin support.\n\nIndependent project - not affiliated with or endorsed by Notepad++."
-msgstr "wxNote\n\nwxWidgets によるクロスプラットフォームな Notepad++ 風エディタの再実装:\nダーク/ライトテーマとプラグイン対応のネイティブ Scintilla エディタ。\n\n独立プロジェクトです - Notepad++ とは提携しておらず、その承認も受けていません。"
+msgid "wxNote\n\nA fast, cross-platform text editor built on wxWidgets:\na native Scintilla editor with dark/light themes and plugin support."
+msgstr "wxNote\n\nwxWidgets 上に構築された高速なクロスプラットフォームのテキストエディタ:\nダーク/ライトテーマとプラグイン対応のネイティブ Scintilla エディタ。"
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
 msgstr "検索 \"%s\"  (%d件ヒット、検索した%dファイル中%dファイルで)"

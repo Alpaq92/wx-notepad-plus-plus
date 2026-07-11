@@ -1,7 +1,7 @@
 #pragma once
 #include "menu_model.h"
 #include "menu_labels_settings.h"
-#include "menuCmdID.h"
+#include "command_ids.h"
 
 // ----------------------------------------------------------------- Settings
 // Settings is a standalone top-level menu again (post-Phase-B revision - Preferences under "Window"

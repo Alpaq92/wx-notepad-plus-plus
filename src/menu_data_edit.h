@@ -1,11 +1,11 @@
 #pragma once
 #include "menu_model.h"
 #include "menu_labels_edit.h"
-#include "menuCmdID.h"
+#include "command_ids.h"
 
 // ----------------------------------------------------------------- Edit
 // Mechanical, zero-behavior-change port of the Edit menu from the old
-// inline buildNppMainMenu() (see src/npp_menu.h). Same items, same order,
+// inline buildWxnMainMenu() (since replaced by this table). Same items, same order,
 // same IDM_* ids, same labels, same shortcuts.
 
 static const MenuItemDef kEditInsertItems[] = {

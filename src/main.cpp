@@ -1,16 +1,15 @@
 // wxNote  |  cross-platform main-window shell
 // ---------------------------------------------------------------------------
-// A wxWidgets reproduction of the Notepad++ UI, pursuing a close match with the
-// native (default/light) look while building cross-platform (Windows/Linux/macOS):
-//   * wxMenuBar with Notepad++-style menu labels + the project's OWN clean-room
-//     IDM_* command ids (include/npp-compat/menuCmdID.h, Apache-2.0)
+// A wxWidgets text editor built for a native look on Windows / Linux / macOS:
+//   * wxMenuBar built data-driven (menu_model.h / menu_data_*.h) over the
+//     application's OWN command-id space (src/command_ids.h)
 //   * wxToolBar using the project's own MIT icon set (resources/icons/*.svg)
 //   * wxAuiNotebook tab strip + a wxStyledTextCtrl editor (bundles Scintilla + Lexilla)
 //   * 6-field status bar, updated live
 //   * the application's own icon (src/app_icon_svg.h)
-//   * plugins via the core's OWN permissive "Nib" API (include/nib/nib.h); real
-//     Notepad++ binary plugins load through the optional GPL packages/npp-bridge -
-//     the core itself reproduces NO Notepad++ plugin ABI.
+//   * plugins via the core's OWN permissive "Nib" API (include/nib/nib.h); binary
+//     plugins written against the legacy Notepad++ ABI load through the optional GPL
+//     packages/npp-bridge - the core itself reproduces NO third-party plugin ABI.
 //
 // Commands are routed through one onCommand() dispatcher. Editor-backed functions
 // (file I/O, clipboard, case/EOL/line ops, comment, find/replace, bookmarks, brace
@@ -29,7 +28,7 @@
 #include <wx/graphics.h>       // wxGraphicsContext - translucent per-tab colour tint
 #include <wx/tglbtn.h>         // wxToggleButton - incremental search bar match-case/whole-word/regex toggles
 #include <wx/aui/auibook.h>
-#include <wx/aui/aui.h>          // wxAuiManager - dock host for plugin panels (NPPM_DMM*)
+#include <wx/aui/aui.h>          // wxAuiManager - dock host for plugin panels
 #include <wx/stc/stc.h>          // wxStyledTextCtrl - cross-platform editor (Phase 3 port target)
 #include <wx/splitter.h>         // wxSplitterWindow - hosts the two editor views (MAIN | SUB) side by side
 #include <wx/treectrl.h>         // wxTreeCtrl - Function List symbol tree
@@ -46,7 +45,7 @@
 #include <wx/radiobox.h>
 #include <wx/config.h>
 #include <wx/filehistory.h>     // wxFileHistory - Recent Files (MRU)
-#include <wx/xml/xml.h>         // wxXmlDocument - load Notepad++ theme XML
+#include <wx/xml/xml.h>         // wxXmlDocument - load theme XML
 #include <wx/datetime.h>        // wxDateTime - insert date/time
 #include <wx/dnd.h>             // wxFileDropTarget - drag & drop files to open
 #include <wx/dcgraph.h>         // wxGCDC - antialiased drawing (symmetric spinner triangles)
@@ -57,14 +56,14 @@
 #include <wx/print.h>           // wxPrinter/wxPrintout - File > Print
 #include <wx/printdlg.h>        // wxPrintDialogData/wxPageSetupDialogData - the Print dialog + page geometry
 #include <wx/paper.h>           // wxThePrintPaperDatabase - resolve a concrete default paper size (A4)
-#include <wx/cmdline.h>         // wxCmdLineParser - -g/-e/-n/-r switches (see NppApp::OnInit)
+#include <wx/cmdline.h>         // wxCmdLineParser - -g/-e/-n/-r switches (see WxnApp::OnInit)
 #include <wx/snglinst.h>        // wxSingleInstanceChecker - "reuse an existing window" (Preferences > General)
 #include <wx/ipc.h>             // wxServer/wxClient/wxConnection - hand file args to the already-running instance
 #include <wx/tokenzr.h>         // wxStringTokenizer - splits the IPC payload back into paths/goto/encoding
 #include <cerrno>               // errno/EACCES - detect permission-denied saves (see tryElevatedWrite)
 
-#ifdef WXNPP_HAS_BORDERLESS
-#include <type_traits>                  // std::is_base_of - detect the borderless base in NppShellFrameT<FB>
+#ifdef WXN_HAS_BORDERLESS
+#include <type_traits>                  // std::is_base_of - detect the borderless base in WxnShellFrameT<FB>
 #include <vector>                       // std::vector - accelerator-entry list for installAccelsFromMenuBar
 #include <wxbf/borderless_frame.h>      // wxBorderlessFrame - the optional integrated/borderless title bar (Windows + GTK)
 #include <wxbf/window_gripper.h>        // wxWindowGripper - cross-platform window move (MSW + GTK begin_move_drag)
@@ -96,13 +95,13 @@ using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/
 // Apple). Takes the frame's raw NSWindow* (from MacGetTopLevelWindowRef()) as a void* so this header
 // stays free of Cocoa types. (The toolbar is a docked non-native child wxToolBar on macOS, so it honours
 // SetToolBitmapSize directly - no native NSToolbar icon-pinning shim is needed.)
-extern "C" void wxnpp_HideWindowTitle(void* nsWindow);        // titleVisibility = Hidden (blank native bar)
+extern "C" void wxn_HideWindowTitle(void* nsWindow);        // titleVisibility = Hidden (blank native bar)
 // Integrated top bar (macOS flavour): transparent title bar + FullSizeContentView + the stock traffic
 // lights re-centred in the toolbar row (Electron's WindowButtonsProxy technique - see macos_native.mm).
 // Idempotent; re-call after resize/activate/deminiaturize/fullscreen-exit (AppKit snaps buttons back).
 // Returns the left inset (px) where toolbar content may start, 0 if unavailable.
-extern "C" int  wxnpp_InlineTrafficLights(void* nsWindow, int rowHeightPx);
-extern "C" void wxnpp_DragWindow(void* nsWindow);             // native window drag from the current mouse-down
+extern "C" int  wxn_InlineTrafficLights(void* nsWindow, int rowHeightPx);
+extern "C" void wxn_DragWindow(void* nsWindow);             // native window drag from the current mouse-down
 #endif
 
 #ifdef __WXGTK__
@@ -113,7 +112,7 @@ extern "C" void wxnpp_DragWindow(void* nsWindow);             // native window d
 // document) to neutral greys, and also attaches it directly to each scrollbar widget. Takes any of our
 // GtkWidget*s (from GetHandle()) to resolve the GdkScreen AND as the tree-walk root; passed as a void* so this
 // header stays free of GTK types, and may be null (then only the screen-wide provider is installed).
-extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
+extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 #endif
 
 #include <string>
@@ -138,18 +137,18 @@ extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 #include "SciLexer.h"           // SCE_* lexer style numbers
 #include <wx/dynlib.h>         // wxDynamicLibrary - portable .dll/.so/.dylib loader (Nib plugin host)
 #include <cstring>             // strcmp / memcpy (Nib host)
-#include "menuCmdID.h"
+#include "command_ids.h"
 #include "app_icon_svg.h"
 #include "nib.h"               // our own permissive, cross-platform plugin API (Nib)
 #include "terminal_panel.h"    // View > Show Terminal - bottom multi-tab shell panel (defines myID_VIEW_TERMINAL, used by menu_data_view.h below)
-#include "menu_builder.h"      // data-driven menu bar builder (menu_model.h/menu_data_*.h) - replaces npp_menu.h
+#include "menu_builder.h"      // data-driven menu bar builder (menu_model.h/menu_data_*.h) - replaces the old inline menu construction
 #include "udl.h"               // User-Defined Language data model + userDefineLang.xml (de)serialization
 #include "udl_lexer.h"         // User-Defined Language: live container-lexer styling/folding engine
 
 static const int  MARK_BOOKMARK = 2;      // a free Scintilla marker number for bookmarks
 static const int  MARK_INDIC    = 9;      // indicator number for "Mark All" highlights (Find dialog)
 static const int  SMART_INDIC   = 10;     // indicator number for smart-highlight (double-click a word)
-static const int  MARK_STYLE_BASE = 21;   // "Mark All Ext 1-5" style indicators (21..25) - Notepad++'s 5 mark colours
+static const int  MARK_STYLE_BASE = 21;   // "Mark All Ext 1-5" style indicators (21..25) - the 5 mark-style colours
 static const unsigned MARK_STYLE_COLOUR[5] = { 0x1F90FF, 0xE0A020, 0x50B050, 0xC060C0, 0x30B0C0 };  // BGR: orange, blue, green, purple, olive
 static const int  URL_INDIC = 11;         // clickable-URL underline indicator
 enum { myID_TIMER = 60000, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER, myID_MONTIMER };   // fixed ids, above the IDM_* range
@@ -165,7 +164,7 @@ static long readUiLang() { long v = wxLANGUAGE_DEFAULT; wxConfigBase::Get()->Rea
 static int  uiLangIndex(long lang) { for (int i = 0; i < (int)WXSIZEOF(UI_LANG_IDS); ++i) if (UI_LANG_IDS[i] == lang) return i; return 0; }
 static wxString uiLangName(int i) { return i == 0 ? wxString(_("System default")) : wxString::FromUTF8(UI_LANG_ENDONYMS[i]); }
 // One source of truth for the EOL-mode display names (status bar, EOL popup, Preferences > New Document).
-// Deliberately untranslated in the status bar (matches N++); menu items wrap them in _() as literals.
+// Deliberately untranslated in the status bar; menu items wrap them in _() as literals.
 static const char* eolName(int mode) { return mode == SC_EOL_LF ? "Unix (LF)" : mode == SC_EOL_CR ? "Macintosh (CR)" : "Windows (CR LF)"; }
 // Theme mode (Preferences > General): 0 = follow OS, 1 = Dark, 2 = Light - replaces the old plain
 // "DarkMode" bool. Falls back to that legacy key only when it actually EXISTS (users who explicitly
@@ -225,7 +224,7 @@ public:
     bool     dirty = false;    // unsaved-changes flag (live SCI_GETMODIFY for the active tab; cached here otherwise)
     wxString path;
     wxString title;            // tab/window title without the unsaved "*" marker
-    wxString lang  = _("Normal text file");   // status-bar language label (like Notepad++)
+    wxString lang  = _("Normal text file");   // status-bar language label
     bool     langForced = false;           // true once the user picks a language from the Language menu
     wxString forcedLexer;                  // that pick's Lexilla lexer name ("" = forced Normal Text)
     wxString forcedName;                   // that pick's display label for the status bar, e.g. "C++"
@@ -239,8 +238,8 @@ public:
     wxString recoveryId;                   // set once this page's unsaved edits have been backed up (see backupUnsavedChanges); empty = nothing pending
 };
 
-// One editor "view" = a tab strip + ONE persistent wxStyledTextCtrl that hops across its pages (Notepad++'s
-// MAIN_VIEW / SUB_VIEW). The frame keeps two and aliases m_tabs/m_stc/m_sci to whichever is active.
+// One editor "view" = a tab strip + ONE persistent wxStyledTextCtrl that hops across its pages (the
+// MAIN / SUB view halves of the split). The frame keeps two and aliases m_tabs/m_stc/m_sci to whichever is active.
 struct ViewPane {
     wxAuiNotebook*    tabs = nullptr;
     wxStyledTextCtrl* stc  = nullptr;
@@ -249,16 +248,16 @@ struct ViewPane {
 #endif
 };
 
-// A parsed Notepad++ theme (stylers.model.xml / themes/*.xml).
+// A parsed colour theme (stylers.model.xml / themes/*.xml).
 struct StyleDef { int id; int fg; int bg; int fontStyle; wxString name; };   // fg/bg = -1 when unspecified
-struct NppTheme
+struct WxnTheme
 {
     bool loaded = false;
     std::map<wxString, std::pair<int,int>>   global;   // WidgetStyle name -> (fg,bg)
     std::map<wxString, std::vector<StyleDef>> lexers;   // LexerType name  -> WordsStyles
     std::string defaultFont; int defaultSize = 0;
 };
-// "RRGGBB" (Notepad++ XML) -> Scintilla 0xBBGGRR int, or -1 if empty/invalid.
+// "RRGGBB" (theme XML) -> Scintilla 0xBBGGRR int, or -1 if empty/invalid.
 static int npp_bgr(const wxString& rrggbb)
 {
     long v = 0;
@@ -404,20 +403,20 @@ static std::function<void(const wxString&)> g_openDropped;
 // Set by the frame: a zoom change (Ctrl+wheel etc.) in one editor syncs all tabs + persists.
 static std::function<void(int)> g_onZoom;
 
-// Set by the frame: a second wxnpp launch handed its file args (+ optional -g/-e) to us over IPC
-// (see NppIpcConnection below) because "reuse an existing window" is active. gotoLine/gotoCol/forceEnc
+// Set by the frame: a second wxnote launch handed its file args (+ optional -g/-e) to us over IPC
+// (see WxnIpcConnection below) because "reuse an existing window" is active. gotoLine/gotoCol/forceEnc
 // are -1 when not requested by the sending launch.
 static std::function<void(const wxArrayString&, int, int, int)> g_ipcOpenRequest;
 
 // ---- single-instance "reuse window" IPC (Preferences > General; off by default) ------------------
-// A second wxnpp process, on finding one already running (wxSingleInstanceChecker), connects here as a
+// A second wxnote process, on finding one already running (wxSingleInstanceChecker), connects here as a
 // wxClient and Executes() a small payload instead of opening its own window - one path per line, with
 // an optional trailing "\x01GOTO=line,col" / "\x01ENC=n" line carrying -g/-e. Standard wx pattern for
 // pairing wxSingleInstanceChecker with wxServer/wxClient; DDE on Windows, a loopback TCP port elsewhere.
 static const wxChar* const kIpcServiceName = wxT("31415");   // arbitrary but fixed "port" (Unix) / DDE service (Windows)
-static const wxChar* const kIpcTopic = wxT("wxnpp-open");
+static const wxChar* const kIpcTopic = wxT("wxnote-open");
 
-class NppIpcConnection : public wxConnection
+class WxnIpcConnection : public wxConnection
 {
 public:
     // The modern OnExec(topic, wxString) override (not the deprecated raw OnExecute(data,size,format)):
@@ -445,11 +444,11 @@ public:
         return true;
     }
 };
-class NppIpcServer : public wxServer
+class WxnIpcServer : public wxServer
 {
 public:
     wxConnectionBase* OnAcceptConnection(const wxString& topic) override
-    { return topic == kIpcTopic ? new NppIpcConnection() : nullptr; }
+    { return topic == kIpcTopic ? new WxnIpcConnection() : nullptr; }
 };
 
 // ---- editor behaviours driven by Scintilla notifications (auto-indent, brace match, smart-hilite) ----
@@ -461,8 +460,8 @@ static sptr_t sciSend(wxStyledTextCtrl* s, UINT m, uptr_t w = 0, sptr_t l = 0)
 static bool g_smartActive = false;
 static wxStyledTextCtrl* g_smartSci = nullptr;
 
-// On Enter, give the new line the previous line's indentation, plus one level after an opening
-// brace/paren/colon - matches Notepad++'s auto-indent.
+// Auto-indent: on Enter, give the new line the previous line's indentation, plus one level after
+// an opening brace/paren/colon.
 static void autoIndentOnNewline(wxStyledTextCtrl* sci)
 {
     const int line = static_cast<int>(sciSend(sci, SCI_LINEFROMPOSITION, sciSend(sci, SCI_GETCURRENTPOS)));
@@ -478,7 +477,7 @@ static void autoIndentOnNewline(wxStyledTextCtrl* sci)
 }
 
 // When '}' is typed on an otherwise-blank line, dedent that line one level so the brace lines up
-// with its opener (like Notepad++).
+// with its opener.
 static void dedentCloseBrace(wxStyledTextCtrl* sci)
 {
     const int pos = static_cast<int>(sciSend(sci, SCI_GETCURRENTPOS));
@@ -492,7 +491,7 @@ static void dedentCloseBrace(wxStyledTextCtrl* sci)
     sciSend(sci, SCI_GOTOPOS, sciSend(sci, SCI_GETLINEENDPOSITION, line));
 }
 
-// Highlight the brace pair straddling the caret (red when unmatched), like Notepad++.
+// Highlight the brace pair straddling the caret (red when unmatched).
 static void updateBraceMatch(wxStyledTextCtrl* sci)
 {
     const int pos = static_cast<int>(sciSend(sci, SCI_GETCURRENTPOS));
@@ -513,8 +512,8 @@ static void clearSmart(wxStyledTextCtrl* sci)
     g_smartActive = false; g_smartSci = nullptr;
 }
 
-// Box every whole-word, case-sensitive occurrence of the just double-clicked word (Notepad++'s
-// "Smart Highlighting").
+// "Smart Highlighting": box every whole-word, case-sensitive occurrence of the just
+// double-clicked word.
 static void smartHighlight(wxStyledTextCtrl* sci)
 {
     clearSmart(sci);
@@ -964,7 +963,7 @@ private:
     SpinField* m_spin = nullptr;
 };
 
-// Notepad++-style Column Editor (Alt+C): insert text or an incrementing number down a column /
+// Column Editor (Alt+C): insert text or an incrementing number down a column /
 // rectangular (or multi-) selection. The dialog gathers the choice; the frame applies it per selection.
 class ColumnEditorDialog : public wxDialog
 {
@@ -1069,10 +1068,10 @@ private:
 // Options gathered from the Find/Replace dialog and passed to the editor search engine.
 struct FindOpts { wxString find, repl; bool matchCase = false, wholeWord = false, regex = false, wrap = true, forward = true, inSelection = false; };
 
-// A modeless Notepad++-style Find dialog: a tabbed control (Find / Replace / Find in Files /
-// Mark), exactly like the real app. It is UI-only: each button calls a std::function the frame
-// supplies (so the dialog needn't know about NppShellFrame). opts() reads the active tab's
-// controls; the find/replace text carries across tabs, like Notepad++.
+// A modeless Find dialog: a tabbed control (Find / Replace / Find in Files /
+// Mark). It is UI-only: each button calls a std::function the frame
+// supplies (so the dialog needn't know about WxnShellFrame). opts() reads the active tab's
+// controls; the find/replace text carries across tabs.
 class FindReplaceDialog : public wxDialog
 {
 public:
@@ -1094,7 +1093,7 @@ public:
 
         auto* top = new wxBoxSizer(wxVERTICAL);
         top->Add(m_nb, 1, wxEXPAND | wxALL, 6);
-        m_status = new wxStaticText(this, wxID_ANY, " ");   // result line ("Replaced N occurrences"), like N++
+        m_status = new wxStaticText(this, wxID_ANY, " ");   // result line ("Replaced N occurrences")
         top->Add(m_status, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
         SetSizerAndFit(top);
         m_nb->SetSelection(TAB_REPLACE);
@@ -1146,7 +1145,7 @@ public:
         if (!findText.empty() && p->find) p->find->SetValue(findText);
         if (p->find) { p->find->SetFocus(); p->find->SelectAll(); }
     }
-    // Show a result message in the dialog (e.g. "Replaced 3 occurrences"), like Notepad++.
+    // Show a result message in the dialog (e.g. "Replaced 3 occurrences").
     void setResult(const wxString& msg) { if (m_status) m_status->SetLabel(msg); }
 
 private:
@@ -1164,7 +1163,7 @@ private:
     }
 
     // Translate Extended-mode escapes (\n \r \t \0 \\ \xHH) to their literal bytes, so a plain
-    // (non-regex) search matches them - exactly Notepad++'s "Extended" search mode.
+    // (non-regex) search matches them - the "Extended" search mode.
     static void unescapeExtended(wxString& s)
     {
         wxString out;
@@ -1284,7 +1283,7 @@ private:
             case TAB_FIF:     if (infoCb)     infoCb(_("Find in Files")); break;
         }
     }
-    // Remember the searched text in the combo dropdowns (most-recent first, de-duplicated), like N++.
+    // Remember the searched text in the combo dropdowns (most-recent first, de-duplicated).
     void pushHistory()
     {
         PageCtrls* a = m_pages[m_nb->GetSelection()];
@@ -1374,7 +1373,7 @@ struct NibCmd { std::string id, title; NibCommandFn fn; void* user; };
 static std::vector<NibCmd>            g_nibCommands;
 struct NibLoaded { const NibPluginApi* api; wxDynamicLibrary* lib; };   // a loaded Nib plugin (kept for teardown)
 static std::vector<NibLoaded> g_nibLibs;
-static const int NIB_CMD_BASE = 63000;   // Nib command menu ids (clear of IDM_*, doc-list 61xxx, N++ plugins 62xxx)
+static const int NIB_CMD_BASE = 63000;   // Nib command menu ids (clear of IDM_*, doc-list 61xxx, bridge plugins 62xxx)
 
 static sptr_t nibSci(UINT m, uptr_t w = 0, sptr_t l = 0)
 { return g_view ? static_cast<sptr_t>(g_view->SendMsg(static_cast<int>(m), static_cast<wxUIntPtr>(w), static_cast<wxIntPtr>(l))) : 0; }
@@ -1530,7 +1529,7 @@ public:
     // wxAuiFlatTabArt is non-copyable (private pimpl); clone a fresh one (the app sets no custom art
     // colours, so a fresh instance has the same state) and re-skin its buttons.
     wxAuiTabArt* Clone() override { auto* a = new PinTabArt(m_iconColour); a->UpdateColoursFromSystem(); return a; }
-    // Notepad++'s per-tab colour. With pinned tabs the flat art calls DrawPageTab (NOT the legacy DrawTab), so we
+    // Per-tab colour. With pinned tabs the flat art calls DrawPageTab (NOT the legacy DrawTab), so we
     // hook here: draw the normal tab, then lay a translucent colour wash over its body so the label still reads.
     int DrawPageTab(wxDC& dc, wxWindow* wnd, wxAuiNotebookPage& page, const wxRect& rect) override
     {
@@ -1548,8 +1547,8 @@ public:
                 delete gc;
             }
         }
-        if (page.active)   // active tab's top-edge marker (Notepad++'s own is orange; recoloured to this
-                            // project's accent green, Open Color green-8, to match the toolbar palette)
+        if (page.active)   // active tab's top-edge marker, drawn in this project's accent green
+                            // (Open Color green-8) to match the toolbar palette
         {
             // wxAuiFlatTabArt::DrawPageTab() (just called above) already draws its OWN active-tab marker
             // here first, in wxSYS_COLOUR_HOTLIGHT (a system accent colour - blue on GTK/most Linux themes,
@@ -1580,7 +1579,7 @@ private:
     }
     void reskin()
     {
-        const wxBitmapBundle pin = iconBundle("pin", 11, m_iconColour);   // small secondary button, like Notepad++'s pin (close stays 16)
+        const wxBitmapBundle pin = iconBundle("pin", 11, m_iconColour);   // small secondary button (close stays 16)
         if (pin.IsOk()) { m_activePinBmp = pin; m_activeUnpinBmp = pin; m_disabledPinBmp = pin; m_disabledUnpinBmp = pin; }
         const wxBitmapBundle cls = iconBundle("close-tab", 12, m_iconColour);   // match the tab bar's (smaller) global close button
         if (cls.IsOk()) { m_activeCloseBmp = cls; m_disabledCloseBmp = cls; }
@@ -1630,7 +1629,7 @@ private:
     bool m_hot = false;
 };
 
-// Notepad++'s File > Print (Ctrl+P) / Print Now: paginate + render the active document through Scintilla's
+// File > Print (Ctrl+P) / Print Now: paginate + render the active document through Scintilla's
 // FormatRange (wx's cross-platform wrapper around SCI_FORMATRANGE). Follows the pattern from wxWidgets' own
 // samples/stc/edit.cpp (EditPrint) - measure page breaks with a dry (non-drawing) pass over the whole
 // document, then draw just the one page's range when the print system asks for it.
@@ -1733,7 +1732,7 @@ private:
 // native wxFrame or the borderless wxBorderlessFrame. The base is chosen at startup (restart-to-apply)
 // via the two aliases defined just after the class. (Two-phase lookup: MSVC is permissive, but GCC needs
 // the inherited wxFrame methods brought into scope - see the `using FB::` block below.)
-template <class FB> class NppShellFrameT : public FB
+template <class FB> class WxnShellFrameT : public FB
 {
 public:
     // Bring inherited wxFrame/wxWindow/wxEvtHandler members into scope. MSVC's permissive lookup resolves
@@ -1761,7 +1760,7 @@ public:
     // True when the chrome base is the borderless frame (integrated top bar), false for native wxFrame.
     // Compile-time, so the borderless-only branches below are `if constexpr` and never instantiated for
     // the native frame (and never reference wxBorderlessFrame symbols on macOS, where the lib is absent).
-#ifdef WXNPP_HAS_BORDERLESS
+#ifdef WXN_HAS_BORDERLESS
     static constexpr bool kBorderless = std::is_base_of<wxBorderlessFrameBase, FB>::value;
     static constexpr int  kTitleBarH  = 30;   // height (px) of the integrated top bar
     // Window-control glyphs drawn (not text): crisp + correctly sized, in a 10x10 box. Restore is the
@@ -1774,7 +1773,7 @@ public:
     static constexpr bool kBorderless = false;
 #endif
 
-    explicit NppShellFrameT(bool dark)
+    explicit WxnShellFrameT(bool dark)
         : FB(nullptr, wxID_ANY, "new 1 - wxNote", wxDefaultPosition, wxSize(1100, 720)),
           m_timer(this, myID_TIMER)
     {
@@ -1806,10 +1805,10 @@ public:
         // (Also the integrated-top-bar hook: by the time this lambda runs, loadSettings()/buildToolBar()
         // below have populated m_integratedBar and m_macToolbarRowH, and Show() has realized the NSWindow.)
         CallAfter([this]{
-            wxnpp_HideWindowTitle((void*)this->MacGetTopLevelWindowRef());
+            wxn_HideWindowTitle((void*)this->MacGetTopLevelWindowRef());
             if (m_integratedBar && m_macToolbarRowH > 0)
             {
-                const int inset = wxnpp_InlineTrafficLights((void*)this->MacGetTopLevelWindowRef(), m_macToolbarRowH);
+                const int inset = wxn_InlineTrafficLights((void*)this->MacGetTopLevelWindowRef(), m_macToolbarRowH);
                 if (inset > 0 && m_macInsetItem && m_toolBarHost)
                 { m_macInsetItem->AssignSpacer(inset, -1); m_toolBarHost->Layout(); }   // exact live inset (default was a safe guess)
             }
@@ -1817,7 +1816,7 @@ public:
 #endif
         m_dark = dark;          // chrome darkness is fixed for this process (restart-to-apply)
         loadSettings();         // restore preferences incl. the chosen editor theme (before loadTheme reads m_themeName)
-        loadTheme();            // parse the active Notepad++ theme XML for exact colours
+        loadTheme();            // parse the active theme XML for exact colours
         loadAllUdls();          // parse any saved User-Defined Languages (Language > User Defined Language)
         { long z = 0; wxConfigBase::Get()->Read("Zoom", &z, 0L); m_zoom = static_cast<int>(z); }   // restore zoom
         // Seed a concrete paper size/orientation so File > Print's page geometry is never (0,0) before the
@@ -1843,7 +1842,7 @@ public:
         // ONCE and never re-measures, so the compact button metrics must already be in effect when the
         // toolbar is realized - installing only from applyTheme() (which runs later) left the docked row at
         // the roomy pre-CSS theme height. applyTheme()'s later call reloads the same provider (harmless).
-        wxnpp_InstallDarkScrollbarCss(nullptr, m_dark ? 1 : 0);
+        wxn_InstallDarkScrollbarCss(nullptr, m_dark ? 1 : 0);
 #endif
         buildToolBar();
         buildStatusBar();
@@ -1864,7 +1863,7 @@ public:
             if (m_dark) { stc->StyleSetBackground(wxSTC_STYLE_DEFAULT, wxColour(30, 30, 30)); stc->StyleSetForeground(wxSTC_STYLE_DEFAULT, wxColour(220, 220, 220)); }
             stc->StyleClearAll();
             stc->SetReadOnly(true);
-            wxAuiPaneInfo pi; pi.Name(wxString::FromUTF8(id)).Caption(wxString::FromUTF8(title)).CloseButton(true).MaximizeButton(false).Hide();   // like N++: plugin panels only appear when invoked
+            wxAuiPaneInfo pi; pi.Name(wxString::FromUTF8(id)).Caption(wxString::FromUTF8(title)).CloseButton(true).MaximizeButton(false).Hide();   // plugin panels only appear when invoked
             switch (dock) { case 1: pi.Left().BestSize(240, 320); break; case 2: pi.Right().BestSize(240, 320); break;
                             case 3: pi.Top().BestSize(320, 150);  break; default: pi.Bottom().BestSize(320, 150); }
             m_aui.AddPane(stc, pi); m_aui.Update();
@@ -1947,7 +1946,7 @@ public:
                     pm->Append(NIB_CMD_BASE + static_cast<int>(i), wxString::FromUTF8(g_nibCommands[i].title));
             }
 
-        Bind(wxEVT_MENU, &NppShellFrameT::onCommand, this);          // one dispatcher for all menu+toolbar ids
+        Bind(wxEVT_MENU, &WxnShellFrameT::onCommand, this);          // one dispatcher for all menu+toolbar ids
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) { updateStatus(); updateUiState(); }, myID_TIMER);
         g_editorContextMenu = [this](int sx, int sy) { showEditorContext(sx, sy); };   // editor right-click menu
         g_openDropped = [this](const wxString& s) { openDroppedPaths(s); };            // files dropped on the editor
@@ -1958,7 +1957,7 @@ public:
             Raise(); if (IsIconized()) Iconize(false);   // a background launch handed us files - come to front
         };
         SetDropTarget(new FileDrop([this](const wxArrayString& fs) { for (const auto& f : fs) openPath(f); }));
-        Bind(wxEVT_CLOSE_WINDOW, &NppShellFrameT::onCloseWindow, this);                 // prompt to save on exit
+        Bind(wxEVT_CLOSE_WINDOW, &WxnShellFrameT::onCloseWindow, this);                 // prompt to save on exit
         m_timer.Start(150);
         applyTheme(m_dark);     // style for the mode this process was launched in
         applySettings();        // apply persisted preferences (tab size, wrap, line numbers, toolbar/status visibility)
@@ -1967,12 +1966,12 @@ public:
         updateUiState();
     }
 
-    // Open a file given on the command line (Notepad++ opens cmdline paths as tabs). Returns the new
+    // Open a file given on the command line (cmdline paths open as tabs). Returns the new
     // page (nullptr if the path didn't exist) so callers can act on it further (e.g. -g/-e, IPC handoff).
     EditorPage* openPath(const wxString& p) { return wxFileExists(p) ? addDocument(p, wxFileNameFromPath(p)) : nullptr; }
     // Apply -g (goto line[,col]) / -e (force encoding) to whichever page is active after opening some
-    // CLI/IPC-supplied paths - matches Notepad2/Notepad4's own semantics of applying to the file just
-    // opened, and since addDocument() always activates the newest page, that's simply activePage().
+    // CLI/IPC-supplied paths - the switches apply to the file just opened, and since addDocument()
+    // always activates the newest page, that's simply activePage().
     void applyGotoAndEncoding(int gotoLine, int gotoCol, int forceEnc)
     {
         if (forceEnc >= 0) interpretAs(forceEnc);
@@ -2163,8 +2162,8 @@ private:
         buildFifPanel(); // Find-in-Files results pane - hidden until a search runs
     }
 
-    // Build one view = a tab strip + ONE persistent wxStyledTextCtrl that hops across its pages (N++'s
-    // ScintillaEditView). Each tab is a Scintilla Document; switching tabs swaps it via SCI_SETDOCPOINTER,
+    // Build one view = a tab strip + ONE persistent wxStyledTextCtrl that hops across its pages.
+    // Each tab is a Scintilla Document; switching tabs swaps it via SCI_SETDOCPOINTER,
     // so a handle a plugin cached at setInfo() stays valid. On Windows the native HWND is what plugins target.
     void buildView(ViewPane& v, wxWindow* parent)
     {
@@ -2174,9 +2173,9 @@ private:
                                    wxAUI_NB_PIN_ON_ACTIVE_TAB);
         { auto* art = new PinTabArt(m_dark ? wxColour(222, 226, 230) : wxColour(52, 58, 64));
           art->UpdateColoursFromSystem(); v.tabs->SetArtProvider(art); }   // pin glyph from resources/icons/pin.svg
-        v.tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE,   &NppShellFrameT::onPageClose,   this);
-        v.tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &NppShellFrameT::onPageChanged, this);
-        v.tabs->Bind(wxEVT_AUINOTEBOOK_TAB_RIGHT_UP, &NppShellFrameT::onTabContext,  this);
+        v.tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE,   &WxnShellFrameT::onPageClose,   this);
+        v.tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &WxnShellFrameT::onPageChanged, this);
+        v.tabs->Bind(wxEVT_AUINOTEBOOK_TAB_RIGHT_UP, &WxnShellFrameT::onTabContext,  this);
         v.stc = new wxStyledTextCtrl(v.tabs, wxID_ANY);
         v.stc->Hide();                                       // activateBuffer mounts it onto the active page
 #ifdef __WXMSW__
@@ -2199,18 +2198,18 @@ private:
     // beNotified() forwarding per view, plus a focus-in that makes that view the active one.
     void bindViewEvents(ViewPane& v)
     {
-        v.stc->Bind(wxEVT_STC_CHARADDED,        &NppShellFrameT::onStcCharAdded,   this);
-        v.stc->Bind(wxEVT_STC_CALLTIP_CLICK,    &NppShellFrameT::onCallTipClick,   this);
-        v.stc->Bind(wxEVT_STC_INDICATOR_CLICK,  &NppShellFrameT::onUrlClick,       this);
-        v.stc->Bind(wxEVT_STC_UPDATEUI,         &NppShellFrameT::onStcUpdateUI,    this);
-        v.stc->Bind(wxEVT_STC_DOUBLECLICK,      &NppShellFrameT::onStcDoubleClick, this);
-        v.stc->Bind(wxEVT_STC_MARGINCLICK,      &NppShellFrameT::onStcMarginClick, this);
-        v.stc->Bind(wxEVT_STC_ZOOM,             &NppShellFrameT::onStcZoom,        this);
-        v.stc->Bind(wxEVT_STC_MODIFIED,         &NppShellFrameT::onStcModified,    this);
-        v.stc->Bind(wxEVT_STC_MACRORECORD,      &NppShellFrameT::onMacroRecord,    this);   // capture commands while recording a macro
-        v.stc->Bind(wxEVT_STC_STYLENEEDED,      &NppShellFrameT::onStcStyleNeeded, this);   // container-lexed User-Defined Language buffers only (see udl_lexer.h)
+        v.stc->Bind(wxEVT_STC_CHARADDED,        &WxnShellFrameT::onStcCharAdded,   this);
+        v.stc->Bind(wxEVT_STC_CALLTIP_CLICK,    &WxnShellFrameT::onCallTipClick,   this);
+        v.stc->Bind(wxEVT_STC_INDICATOR_CLICK,  &WxnShellFrameT::onUrlClick,       this);
+        v.stc->Bind(wxEVT_STC_UPDATEUI,         &WxnShellFrameT::onStcUpdateUI,    this);
+        v.stc->Bind(wxEVT_STC_DOUBLECLICK,      &WxnShellFrameT::onStcDoubleClick, this);
+        v.stc->Bind(wxEVT_STC_MARGINCLICK,      &WxnShellFrameT::onStcMarginClick, this);
+        v.stc->Bind(wxEVT_STC_ZOOM,             &WxnShellFrameT::onStcZoom,        this);
+        v.stc->Bind(wxEVT_STC_MODIFIED,         &WxnShellFrameT::onStcModified,    this);
+        v.stc->Bind(wxEVT_STC_MACRORECORD,      &WxnShellFrameT::onMacroRecord,    this);   // capture commands while recording a macro
+        v.stc->Bind(wxEVT_STC_STYLENEEDED,      &WxnShellFrameT::onStcStyleNeeded, this);   // container-lexed User-Defined Language buffers only (see udl_lexer.h)
         v.stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev); e.Skip(); });
-        v.stc->Bind(wxEVT_CONTEXT_MENU,         &NppShellFrameT::onStcContextMenu, this);
+        v.stc->Bind(wxEVT_CONTEXT_MENU,         &WxnShellFrameT::onStcContextMenu, this);
         v.stc->Bind(wxEVT_SET_FOCUS, [this, vp = &v](wxFocusEvent& e) { onViewFocus(vp); e.Skip(); });   // focus -> this view becomes active
     }
     // Auto-insert the matching closer (caret stays between), or skip over an existing one. Returns true if it
@@ -2328,8 +2327,8 @@ private:
         m_docMap->SetSelEOLFilled(true);                             // viewport band spans the full line width
         m_docMap->SetExtraAscent(-1); m_docMap->SetExtraDescent(-1); // tighten line spacing
         applyDocMapTheme();
-        m_docMap->Bind(wxEVT_LEFT_DOWN, &NppShellFrameT::onDocMapClick, this);
-        m_docMap->Bind(wxEVT_MOTION,    &NppShellFrameT::onDocMapDrag,  this);
+        m_docMap->Bind(wxEVT_LEFT_DOWN, &WxnShellFrameT::onDocMapClick, this);
+        m_docMap->Bind(wxEVT_MOTION,    &WxnShellFrameT::onDocMapDrag,  this);
         m_aui.AddPane(m_docMap, wxAuiPaneInfo().Name("docmap").Caption(_("Document Map"))
                           .Right().BestSize(150, 400).MinSize(70, 80).CloseButton(true).Hide());
         m_aui.Update();
@@ -2418,8 +2417,8 @@ private:
         m_funcList = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                     wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_NO_LINES | wxTR_FULL_ROW_HIGHLIGHT | wxBORDER_NONE);
         { wxVector<wxBitmapBundle> imgs; imgs.push_back(icon("func-leaf")); imgs.push_back(icon("func-node")); m_funcList->SetImages(imgs); }   // 0=symbol, 1=group/class (icon set)
-        m_funcList->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrameT::onFuncListActivate, this);
-        m_funcList->Bind(wxEVT_TREE_SEL_CHANGED,     &NppShellFrameT::onFuncListActivate, this);   // single-click jumps too (like N++)
+        m_funcList->Bind(wxEVT_TREE_ITEM_ACTIVATED, &WxnShellFrameT::onFuncListActivate, this);
+        m_funcList->Bind(wxEVT_TREE_SEL_CHANGED,     &WxnShellFrameT::onFuncListActivate, this);   // single-click jumps too
         m_flTimer = new wxTimer(this, myID_FLTIMER);
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) { parseFuncList(); }, myID_FLTIMER);
         m_aui.AddPane(m_funcList, wxAuiPaneInfo().Name("funclist").Caption(_("Function List"))
@@ -2532,7 +2531,7 @@ private:
         if (togglePane(m_docList)) refreshDocList();
     }
 
-    // ---- Clipboard History (Notepad++'s panel: a ring of recent cut/copy entries; double-click to paste) ----
+    // ---- Clipboard History (a ring of recent cut/copy entries; double-click to paste) ----
     wxListBox* m_clipList = nullptr;
     std::vector<wxString> m_clipHist;   // most-recent-first, capped ring of copied/cut text
     static wxString clipPreview(const wxString& t)   // collapse a (possibly multi-line) entry to a one-line list label
@@ -2583,7 +2582,7 @@ private:
         if (togglePane(m_clipList)) refreshClipList();
     }
 
-    // ---- Character Panel (Notepad++'s ASCII Insertion Panel: 0-255 with value/hex/glyph; double-click inserts) ----
+    // ---- Character Panel (ASCII insertion panel: 0-255 with value/hex/glyph; double-click inserts) ----
     wxListView* m_charPanel = nullptr;
     static wxString charGlyph(int v)   // display text for a code: control-char mnemonic, else the Latin-1 glyph
     {
@@ -2616,7 +2615,7 @@ private:
     void insertCharCode(int v)   // insert the Unicode code point (UTF-8) for value 0-255 at the caret
     {
         if (v < 0 || v > 255) return;
-        if (v == 0)   // NUL: wxString treats it as a terminator, so insert the byte directly (like N++ does)
+        if (v == 0)   // NUL: wxString treats it as a terminator, so insert the byte directly
         {
             const long pos = (long)sci(SCI_GETSELECTIONSTART);
             sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(""));               // drop any selection first
@@ -2636,14 +2635,14 @@ private:
         togglePane(m_charPanel);
     }
 
-    // ---- Project Panel (Notepad++'s workspace tree: named folders + file refs, saved as .xml) ------
+    // ---- Project Panel (workspace tree: named folders + file refs, saved as .xml) ------
     void buildProjectPanel()
     {
         m_projPanel = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                      wxTR_HAS_BUTTONS | wxTR_FULL_ROW_HIGHLIGHT | wxTR_EDIT_LABELS | wxBORDER_NONE);
         themeToEditor(m_projPanel);
-        m_projPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrameT::onProjActivate, this);
-        m_projPanel->Bind(wxEVT_TREE_ITEM_MENU,      &NppShellFrameT::onProjContext,  this);
+        m_projPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &WxnShellFrameT::onProjActivate, this);
+        m_projPanel->Bind(wxEVT_TREE_ITEM_MENU,      &WxnShellFrameT::onProjContext,  this);
         m_projPanel->AddRoot("Workspace", -1, -1, new ProjItemData(false));
         m_aui.AddPane(m_projPanel, wxAuiPaneInfo().Name("project").Caption(_("Project"))
                           .Left().BestSize(220, 400).MinSize(120, 80).CloseButton(true).Hide());
@@ -2749,7 +2748,7 @@ private:
     void saveProjectXml(const wxString& path)
     {
         wxXmlDocument doc;
-        auto* npp = new wxXmlNode(wxXML_ELEMENT_NODE, "NotepadPlus");   // N++-compatible workspace format
+        auto* npp = new wxXmlNode(wxXML_ELEMENT_NODE, "NotepadPlus");   // the workspace XML root tag (existing workspace files keep loading)
         doc.SetRoot(npp);
         auto* proj = new wxXmlNode(wxXML_ELEMENT_NODE, "Project");
         proj->AddAttribute("name", m_projPanel->GetItemText(m_projPanel->GetRootItem()));
@@ -3104,7 +3103,7 @@ private:
     {
         m_fifPanel = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                     wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxBORDER_NONE);
-        m_fifPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &NppShellFrameT::onFifActivate, this);
+        m_fifPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &WxnShellFrameT::onFifActivate, this);
         m_aui.AddPane(m_fifPanel, wxAuiPaneInfo().Name("findresult").Caption(_("Find result"))
                           .Bottom().BestSize(800, 180).MinSize(150, 70).CloseButton(true).Hide());
         m_aui.Update();
@@ -3152,7 +3151,7 @@ private:
         std::string buf((size_t)(b - a) + 1, '\0'); sci(SCI_GETTARGETTEXT, 0, reinterpret_cast<sptr_t>(&buf[0])); buf.resize(b - a);
         return wxString::FromUTF8(buf.c_str(), buf.size());
     }
-    wxString substituteRunVars(wxString c)   // expand Notepad++'s $(...) Run variables
+    wxString substituteRunVars(wxString c)   // expand the Run dialog's $(...) variables
     {
         const wxString full = curPath(); wxFileName fn(full);
         c.Replace("$(FULL_CURRENT_PATH)", full);
@@ -3193,7 +3192,7 @@ private:
     }
 
     // ----- sessions (File > Save / Load Session) ------------------------
-    // Notepad++-style session XML: <NotepadPlus><Session><mainView><File .../></mainView></Session>.
+    // Session XML: <NotepadPlus><Session><mainView><File .../></mainView></Session>.
     // Beyond the file list, each entry persists what's needed to restore the *editing position*, not
     // just the document set: caret position, first-visible line (scroll), and bookmark lines.
     void saveSession()
@@ -3311,7 +3310,7 @@ private:
         sci(SCI_AUTOCSETIGNORECASE, 0); sci(SCI_AUTOCSETSEPARATOR, ' '); sci(SCI_AUTOCSETMAXHEIGHT, 10); sci(SCI_AUTOCSETORDER, SC_ORDER_PERFORMSORT);
         sci(SCI_AUTOCSHOW, plen, reinterpret_cast<sptr_t>(list.c_str()));
     }
-    // ----- function parameter call tips (Notepad++'s "Function Parameters Hint") ----------------------
+    // ----- function parameter call tips ("Function Parameters Hint") ----------------------
     // No API database is loaded, so signatures are harvested from the open document: each distinct
     // "name(...)" (plus any preceding return-type / def token) becomes an overload.
     std::vector<std::string> m_ctSigs; int m_ctIdx = 0; int m_ctOpen = -1;
@@ -3493,7 +3492,7 @@ private:
         return c.ChangeLightness(ialpha);
     }
 
-    // Notepad++'s caption buttons (new / document-list / close), overlaid at the right of the tab strip.
+    // The tab strip's caption buttons (new / document-list / close), overlaid at its right edge.
     void buildTabCaptionButtons()
     {
         m_capBar = new wxPanel(m_tabs);
@@ -3509,7 +3508,7 @@ private:
         // native button chrome, so we size it exactly to the strip height and it always fits. (MSW/macOS keep
         // wxBitmapButton, where the fit is fine.)
         // this->FromDIP: FromDIP is a dependent-base (wxWindowBase) member and this is a class template
-        // (NppShellFrameT<FB>), so GCC/Clang two-phase lookup rejects the unqualified call (MSVC is lax).
+        // (WxnShellFrameT<FB>), so GCC/Clang two-phase lookup rejects the unqualified call (MSVC is lax).
         int capH = m_tabs->GetTabCtrlHeight(); if (capH < this->FromDIP(18)) capH = this->FromDIP(24);
         capH -= this->FromDIP(2);   // full-strip-height buttons paint over the strip's 1px top separator line; shrink so centering leaves a sliver above and below
         const wxSize capBtnSize(this->FromDIP(24), capH);
@@ -3549,7 +3548,7 @@ private:
         const int s = m_tabs ? m_tabs->GetSelection() : wxNOT_FOUND;
         return s == wxNOT_FOUND ? nullptr : static_cast<EditorPage*>(m_tabs->GetPage(s));
     }
-    wxString nextNewName() { return wxString::Format(_("new %d"), ++m_newCount); }   // untitled-buffer name, localized like Notepad++ ("nowy N" / "neu N" / ...)
+    wxString nextNewName() { return wxString::Format(_("new %d"), ++m_newCount); }   // untitled-buffer name, localized ("nowy N" / "neu N" / ...)
 
     // Create a new document tab (panel + its own native Scintilla) and make it active.
     EditorPage* addDocument(const wxString& path, const wxString& title)
@@ -3559,7 +3558,7 @@ private:
             if (m_stc && m_stc->GetParent() == page) m_stc->SetSize(page->GetClientSize());   // only the page hosting the view resizes it
             e.Skip();
         });
-        page->doc = sci(SCI_CREATEDOCUMENT, 0, SC_DOCUMENTOPTION_TEXT_LARGE);   // the buffer owns one ref (N++ newEmptyDocument)
+        page->doc = sci(SCI_CREATEDOCUMENT, 0, SC_DOCUMENTOPTION_TEXT_LARGE);   // the buffer owns one ref
         page->path = path; page->title = title;
         m_tabs->AddPage(page, title, true);    // selecting it fires PAGE_CHANGED -> activateBuffer
         activateBuffer(page);                  // ensure it (the first AddPage may not fire PAGE_CHANGED); idempotent
@@ -3605,7 +3604,7 @@ private:
     void setupScintilla()
     {
         sci(SCI_SETMARGINTYPEN, 0, SC_MARGIN_NUMBER);   // right-justified line numbers
-        sci(SCI_SETMARGINWIDTHN, 1, 14);                 // bookmark/symbol margin (like Notepad++)
+        sci(SCI_SETMARGINWIDTHN, 1, 14);                 // bookmark/symbol margin
         sci(SCI_SETMARGINSENSITIVEN, 1, 1);
         defineBookmarkMarker();   // the project's own bookmark icon (resources/icons/bookmark.svg)
         sci(SCI_INDICSETSTYLE, MARK_INDIC, INDIC_ROUNDBOX);   // "Mark All" / found-highlight indicator
@@ -3627,7 +3626,7 @@ private:
         sci(SCI_INDICSETHOVERFORE, URL_INDIC, 0xEE8822);
         // Default: JetBrains Mono (SIL OFL 1.1, bundled - see resources/fonts/), permissively-licensed
         // and present on every platform we ship, unlike Consolas (Microsoft's, Windows-only, not
-        // redistributable). See NppApp::OnInit's AddFontResourceEx call (Windows-only private
+        // redistributable). See WxnApp::OnInit's AddFontResourceEx call (Windows-only private
         // registration; Linux/macOS reference the family name directly and fall back to the system
         // default monospace font if it isn't separately installed there). User-overridable via
         // Preferences > Editing "Font"; effectiveFontFace() re-falls-back here if that choice
@@ -3644,7 +3643,7 @@ private:
         sci(SCI_SETENDATLASTLINE, m_scrollBeyond ? 0 : 1);
         sci(SCI_SETCARETPERIOD, m_caretBlink);
         sci(SCI_USEPOPUP, SC_POPUP_NEVER);   // suppress Scintilla's light popup; we show our own themed menu
-        // Column (Alt+drag) + multi-caret (Ctrl+click) selection, typing into all - exactly Notepad++'s setup.
+        // Column (Alt+drag) + multi-caret (Ctrl+click) selection, typing into all of them.
         sci(SCI_SETMULTIPLESELECTION, m_multiEdit ? 1 : 0);
         sci(SCI_SETADDITIONALSELECTIONTYPING, 1);
         sci(SCI_SETVIRTUALSPACEOPTIONS, SCVS_RECTANGULARSELECTION);
@@ -3658,16 +3657,16 @@ private:
         sci(SCI_SETZOOM, m_zoom);   // new tabs inherit the current (persisted) zoom level
         updateLineMargin();
     }
-    // Code folding: margin 2 with a box-tree, automatic fold on margin click (like Notepad++).
+    // Code folding: margin 2 with a box-tree, automatic fold on margin click.
     void setupFolding()
     {
         sci(SCI_SETMARGINTYPEN, 2, SC_MARGIN_SYMBOL);
         sci(SCI_SETMARGINMASKN, 2, SC_MASK_FOLDERS);
         sci(SCI_SETMARGINWIDTHN, 2, 14);
         sci(SCI_SETMARGINSENSITIVEN, 2, 1);
-        // Exactly as Notepad++ (ScintillaEditView::getFoldColor + defineMarker):
+        // Fold colour mapping (theme XML files define their "Fold" entries expecting exactly this):
         //   fold-margin background = "Fold margin" bg / fg
-        //   marker FORE = "Fold" *bgColor*, marker BACK = "Fold" *fgColor*  (Notepad++ SWAPS them)
+        //   marker FORE = "Fold" *bgColor*, marker BACK = "Fold" *fgColor*  (deliberately SWAPPED)
         //   marker BACKSELECTED = "Fold active" fg, plus SCI_MARKERENABLEHIGHLIGHT.
         auto G = [&](const char* n) -> std::pair<int,int> {
             auto it = m_theme.global.find(n); return it == m_theme.global.end() ? std::make_pair(-1,-1) : it->second; };
@@ -3681,7 +3680,7 @@ private:
         const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;   // full "Fold active" accent on the active fold's box markers
         const int markers[7] = { SC_MARKNUM_FOLDEROPEN, SC_MARKNUM_FOLDER, SC_MARKNUM_FOLDERSUB, SC_MARKNUM_FOLDERTAIL,
                                  SC_MARKNUM_FOLDEREND, SC_MARKNUM_FOLDEROPENMID, SC_MARKNUM_FOLDERMIDTAIL };
-        const int symbols[7] = { SC_MARK_BOXMINUS, SC_MARK_BOXPLUS, SC_MARK_VLINE, SC_MARK_LCORNER,   // box-tree (N++ default)
+        const int symbols[7] = { SC_MARK_BOXMINUS, SC_MARK_BOXPLUS, SC_MARK_VLINE, SC_MARK_LCORNER,   // box-tree
                                  SC_MARK_BOXPLUSCONNECTED, SC_MARK_BOXMINUSCONNECTED, SC_MARK_TCORNER };
         for (int i = 0; i < 7; ++i)
             sci(SCI_MARKERDEFINE, markers[i], symbols[i]);   // box-tree shapes (defined once; colours live in applyFoldMarkerColours)
@@ -3942,7 +3941,7 @@ private:
             return;
         }
     }
-    // Mount the single view on the active page and swap to its document - Notepad++'s activateBuffer.
+    // Mount the single view on the active page and swap to its document.
     void activateBuffer(EditorPage* p)
     {
         if (!p) return;
@@ -3958,7 +3957,7 @@ private:
         sci(SCI_SETDOCPOINTER, 0, p->doc);                                   // the magical switch
         sci(SCI_SETMODEVENTMASK, SC_MODEVENTMASKALL);
         m_path = p->path;
-        setLexerForFile(p->path);                                           // re-apply lexer/styling for this doc (N++ defineDocType)
+        setLexerForFile(p->path);                                           // re-apply lexer/styling for this doc
         m_lastFoldSection = -2; refreshFoldNestedAccent();                  // the nested-square accent marker is global to the view - re-evaluate it for the swapped-in document
         if (m_docMap) { m_docMap->SetDocPointer(reinterpret_cast<void*>(p->doc)); updateDocMapViewport(); }   // minimap follows the active doc
         parseFuncList();                                                    // re-parse symbols for the newly active doc
@@ -3988,7 +3987,7 @@ private:
     // ----- user-writable app data ------------------------------------------------------------
     // Per-user, WRITABLE app-data root - per-user User-Defined Languages (userDefineLangs/) and an
     // edited contextMenu.xml live here, NOT next to the exe, which is read-only on an installed build
-    // (/opt/wxnpp on Linux, Program Files on Windows, inside the .app bundle on macOS). This is the
+    // (/opt/wxnote on Linux, Program Files on Windows, inside the .app bundle on macOS). This is the
     // same identity wxConfig persists settings/theme under. Kept a pure path getter (it's called on
     // hot paths like every right-click); callers that WRITE create it first (Mkdir with FULL).
     wxString userDataDir() { return wxStandardPaths::Get().GetUserDataDir(); }
@@ -4048,7 +4047,7 @@ private:
         setActiveView(viewOf(p));            // make p's view active so sci()/m_path/onSave refer to p (incl. the OTHER split view)
         activateBuffer(p);                   // swap that view to p's document and select its tab
         if (sci(SCI_GETMODIFY) == 0) return true;
-        if (!m_askBeforeClose) { if (exiting) backupUnsavedChanges(p); else clearRecovery(p); return true; }   // setting off (default, matches Notepad++): discard silently, no prompt
+        if (!m_askBeforeClose) { if (exiting) backupUnsavedChanges(p); else clearRecovery(p); return true; }   // setting off (the default): discard silently, no prompt
         const wxString name = !p->path.empty() ? p->path : (p->title.empty() ? wxString("new") : p->title);
 
         wxDialog dlg(this, wxID_ANY, "wxNote");
@@ -4078,7 +4077,7 @@ private:
         auto* p = static_cast<EditorPage*>(m_tabs->GetPage(e.GetSelection()));
         if (!confirmClose(p)) { e.Veto(); return; }
         recordClosed(p);                                                                     // remember it for Restore Recent Closed File
-        if (totalDocs() <= 1) { e.Veto(); resetActiveDoc(); return; }                        // never zero documents (N++)
+        if (totalDocs() <= 1) { e.Veto(); resetActiveDoc(); return; }                        // never zero documents
         // Remove the page ourselves (after this event) so the collapse check sees the real count - wxAui's
         // own removal races a CallAfter, which would leave an empty pane behind.
         e.Veto();
@@ -4115,7 +4114,7 @@ private:
                 while (nb->GetPageCount() > 0) nb->DeletePage(0);
             }
         setActiveView(&m_main);
-        addDocument("", nextNewName());                    // leave one empty doc in MAIN (N++ never has zero)
+        addDocument("", nextNewName());                    // leave one empty doc in MAIN (never zero documents)
         collapseIfEmpty();                                 // unsplit the now-empty SUB
     }
     void resetActiveDoc()
@@ -4155,7 +4154,7 @@ private:
     }
     // Same three-pass shape as closeAllBut (confirm all first so a Cancel aborts before anything closes; then
     // record + delete), but keeping every Pinned tab instead of one specific page - so, unlike closeAllBut,
-    // it CAN legitimately empty both views if nothing is pinned, hence the "N++ never has zero" fallback.
+    // it CAN legitimately empty both views if nothing is pinned, hence the "never zero documents" fallback.
     void closeAllButPinned()
     {
         auto unpinned = [](wxAuiNotebook* nb, int i) { return nb->GetPageKind(i) != wxAuiTabKind::Pinned; };
@@ -4174,7 +4173,7 @@ private:
                 for (int i = (int)nb->GetPageCount() - 1; i >= 0; --i)
                     if (unpinned(nb, i)) nb->DeletePage(i);
             }
-        if (totalDocs() == 0) { setActiveView(&m_main); addDocument("", nextNewName()); }   // leave one empty doc (N++ never has zero)
+        if (totalDocs() == 0) { setActiveView(&m_main); addDocument("", nextNewName()); }   // leave one empty doc (never zero documents)
         collapseIfEmpty();
     }
     // On window close / app exit, prompt for every modified document; a Cancel aborts the close.
@@ -4184,7 +4183,7 @@ private:
             for (EditorPage* p : allPages())   // prompt EVERY modified doc across BOTH views - none lost on exit
                 if (!confirmClose(p, /*exiting=*/true)) { e.Veto(); return; }
         saveSettings();    // persist any in-session View-menu toggle changes
-        saveSession(wxConfigBase::Get());   // remember the open (saved) files so the next launch reopens them, like Notepad++
+        saveSession(wxConfigBase::Get());   // remember the open (saved) files so the next launch reopens them
         wxConfigBase::Get()->Flush();
         if (m_terminal) m_terminal->shutdownAll();   // kill child shells + stop their poll timers before AUI teardown
         // stop + free the owned timers so no WM_TIMER can Notify() into the frame while teardown pumps messages
@@ -4220,7 +4219,7 @@ private:
 #endif
     }
 
-    // Show "*" on the active tab + title bar while the document has unsaved changes (like Notepad++).
+    // Show "*" on the active tab + title bar while the document has unsaved changes.
     void refreshTab(EditorPage* p)
     {
         if (!p || !m_tabs) return;
@@ -4229,7 +4228,7 @@ private:
         const wxString lbl = star + p->title;                            // tab label = filename
         const int idx = m_tabs->GetPageIndex(p);
         if (idx != wxNOT_FOUND && m_tabs->GetPageText(idx) != lbl) m_tabs->SetPageText(idx, lbl);
-        if (p == activePage())                                           // title bar = full path, like Notepad++
+        if (p == activePage())                                           // title bar = full path
             setWindowTitle(star + (p->path.empty() ? p->title : p->path));
     }
     void onTabContext(wxAuiNotebookEvent& e)
@@ -4262,7 +4261,7 @@ private:
         wxCommandEvent ce(wxEVT_MENU, sel); onCommand(ce);   // Close / Save / Move / Clone via the normal dispatcher
     }
 
-    // ----- second view (Notepad++'s MAIN | SUB split) ---------------------------------------------
+    // ----- second view (the MAIN | SUB split) ---------------------------------------------
     // Reveal the other view (splitting if needed) and put the active document into it, side by side.
     // clone=true shares the document (edits sync); clone=false relocates the tab, but falls back to a
     // clone when the source view has only this one tab (so a view never goes empty).
@@ -4280,7 +4279,7 @@ private:
         {
             auto* np = new EditorPage(to.tabs);
             np->doc = p->doc;
-            sci(SCI_ADDREFDOCUMENT, 0, p->doc);    // share the Scintilla Document (extra ref) - N++ "Clone to Other View"
+            sci(SCI_ADDREFDOCUMENT, 0, p->doc);    // share the Scintilla Document (extra ref) - "Clone to Other View"
             np->path = p->path; np->title = p->title; np->lang = p->lang;
             np->langForced = p->langForced; np->forcedLexer = p->forcedLexer; np->forcedName = p->forcedName;
             np->encoding = p->encoding; np->codepage = p->codepage; np->encLabel = p->encLabel;
@@ -4306,8 +4305,8 @@ private:
         m_sub.tabs->Show();
         m_split->SplitVertically(m_main.tabs, m_sub.tabs);
     }
-    // After a close: if the editor is split and a view emptied, collapse back to one view (N++ hides the
-    // sub view when it has no documents). If MAIN emptied, the sub's pages move into it so MAIN stays the
+    // After a close: if the editor is split and a view emptied, collapse back to one view (the sub
+    // view hides when it has no documents). If MAIN emptied, the sub's pages move into it so MAIN stays the
     // always-present primary view (keeps _scintillaMainHandle meaningful).
     void collapseIfEmpty()
     {
@@ -4428,7 +4427,7 @@ private:
     // GetMenuBar()/GetToolBar() return null there. Route all item enable/check/toggle state through these.
     wxMenuBar* menuBar() const
     {
-#ifdef WXNPP_HAS_BORDERLESS
+#ifdef WXN_HAS_BORDERLESS
         if (m_menuOwner) return m_menuOwner;
 #endif
         return GetMenuBar();
@@ -4437,7 +4436,7 @@ private:
     void showToolBar(bool show)
     {
         auto* tb = toolBar(); if (!tb) return;
-#ifdef WXNPP_HAS_BORDERLESS
+#ifdef WXN_HAS_BORDERLESS
         if constexpr (kBorderless) { auto& pi = m_aui.GetPane(tb); if (pi.IsOk()) { pi.Show(show); m_aui.Update(); } return; }
 #endif
 #ifdef __WXMAC__
@@ -4450,7 +4449,7 @@ private:
     void buildMenuBar()
     {
         auto* mb = new wxMenuBar;
-        buildNppMainMenu(mb, m_menuRegistry);   // full 1:1 Notepad++ menu tree, built from menu_data_*.h (see menu_builder.h)
+        buildWxnMainMenu(mb, m_menuRegistry);   // the full menu tree, built from menu_data_*.h (see menu_builder.h)
         // Localization: pick the UI language straight from the menu bar (radio group; restart-to-apply,
         // same flow as the Preferences > General dropdown). A submenu of Settings, inserted at the
         // "slot.localization" DynamicSlot that Settings' data table reserves - not a separate top-level
@@ -4502,13 +4501,13 @@ private:
                     ofMenu->Insert(insertAt + (int)i, myID_OPENFOLDER_TOOL_BASE + (int)i, m_openFolderTools[i].label);
             }
         }
-#ifdef WXNPP_HAS_BORDERLESS
+#ifdef WXN_HAS_BORDERLESS
         if constexpr (kBorderless)
         {
             m_menuOwner = mb;                  // keep the wxMenus alive for the title-bar buttons to pop
             // The bar is never SetMenuBar'd, so a popped menu's commands route to it, not the frame - bind
             // onCommand on the bar itself so menu clicks actually fire (otherwise items appear but do nothing).
-            mb->Bind(wxEVT_MENU, &NppShellFrameT::onCommand, this);
+            mb->Bind(wxEVT_MENU, &WxnShellFrameT::onCommand, this);
             installAccelsFromMenuBar(mb);      // keyboard shortcuts still fire without a native menu bar
             buildIntegratedTitleBar(mb);       // VS-style top bar: icon + menu-buttons + window controls
             return;
@@ -4517,7 +4516,7 @@ private:
         SetMenuBar(mb);
     }
 
-#ifdef WXNPP_HAS_BORDERLESS
+#ifdef WXN_HAS_BORDERLESS
     // ---- integrated/borderless top bar (compiled only where wxBorderlessFrame exists; instantiated only
     //      for the borderless frame, i.e. kBorderless - the native frame never reaches these) ------------
 
@@ -4569,7 +4568,7 @@ private:
 #endif
         m_titleBar = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, kTitleBarH));
         m_titleBar->SetBackgroundColour(barBg);
-        m_titleBar->Bind(wxEVT_LEFT_DOWN, &NppShellFrameT::onTitleBarDrag, this);     // drag empty area to move
+        m_titleBar->Bind(wxEVT_LEFT_DOWN, &WxnShellFrameT::onTitleBarDrag, this);     // drag empty area to move
         m_titleBar->Bind(wxEVT_LEFT_DCLICK, [this](wxMouseEvent&){ onWindowControl(1); });   // double-click = maximize/restore
         this->Bind(wxEVT_SIZE, [this](wxSizeEvent& e){ updateMaxGlyph(); e.Skip(); });       // keep the glyph synced (snap, Win+Up)
 
@@ -4694,7 +4693,7 @@ private:
         m_aui.AddPane(tb, toolbarPaneInfo());   // shared fixed-top-toolbar recipe (see toolbarPaneInfo())
         m_aui.Update();
     }
-#endif // WXNPP_HAS_BORDERLESS
+#endif // WXN_HAS_BORDERLESS
 
     void addToMRU(const wxString& path)
     {
@@ -4702,7 +4701,7 @@ private:
         auto* c = wxConfigBase::Get(); c->SetPath("/RecentFiles"); m_fileHistory.Save(*c); c->SetPath("/"); c->Flush();
     }
 
-    // ----- toolbar (Notepad++ icon pack, native order) -------------------
+    // ----- toolbar (default icon set, fixed button order) -------------------
     // Colored icon sets (Settings > Preferences > General > Toolbar icon style): Solar (Bold Duotone,
     // CC BY 4.0) tinted Open Color green, and IconPark (Apache-2.0) tinted Open Color teal-7/lime-5 -
     // see resources/icons-solar|iconpark/CREDITS.md. Unlike the default set these bake a FIXED colour in
@@ -4829,7 +4828,7 @@ private:
     // integrated toolbar (dockIntegratedToolBar) and the macOS docked toolbar. ToolbarPane() must come
     // FIRST (it turns gripper/movable/floatable back ON), so the locking flags have to follow it; the
     // result is a fixed toolbar - no drag gripper, not movable, not floatable. (Defined outside the
-    // WXNPP_HAS_BORDERLESS guard so the macOS branch, where that flag is off, can reuse it too.)
+    // WXN_HAS_BORDERLESS guard so the macOS branch, where that flag is off, can reuse it too.)
     static wxAuiPaneInfo toolbarPaneInfo()
     {
         return wxAuiPaneInfo().Name("toolbar").ToolbarPane().Top().Layer(1)
@@ -4842,7 +4841,7 @@ private:
         // Native frame: the frame's own toolbar (CreateToolBar). Integrated frame: a child wxToolBar we
         // dock as an aui pane just under the title bar (the frame toolbar would otherwise sit above it).
         wxToolBar* tb;
-#ifdef WXNPP_HAS_BORDERLESS
+#ifdef WXN_HAS_BORDERLESS
         if constexpr (kBorderless) tb = makeIntegratedToolBar();
         else                       tb = CreateToolBar(wxTB_FLAT | wxTB_HORIZONTAL);
 #elif defined(__WXMAC__)
@@ -4894,7 +4893,7 @@ private:
         T(IDM_MACRO_RUNMULTIMACRODLG, "playback-multiple", _("Run a Macro Multiple Times"));
         T(IDM_MACRO_SAVECURRENTMACRO, "save-macro", _("Save Current Recorded Macro"));
         tb->Realize();
-        // Macro idle state (nothing recording, no macro stored) - matches Notepad++: only "Start Recording"
+        // Macro idle state (nothing recording, no macro stored): only "Start Recording"
         // is enabled; Stop / Playback / Run-Multiple / Save stay greyed until a macro is being/been recorded.
         tb->EnableTool(IDM_MACRO_STOPRECORDINGMACRO, false);
         tb->EnableTool(IDM_MACRO_PLAYBACKRECORDEDMACRO, false);
@@ -4903,7 +4902,7 @@ private:
 #ifdef __WXMSW__
         ::SendMessageW(static_cast<HWND>(tb->GetHandle()), TB_SETINDENT, 4, 0);  // small left margin before the first button
 #endif
-#ifdef WXNPP_HAS_BORDERLESS
+#ifdef WXN_HAS_BORDERLESS
         if constexpr (kBorderless)
         {
             dockIntegratedToolBar(tb);            // dock the child toolbar under the title bar
@@ -4934,13 +4933,13 @@ private:
         {
             auto* hostSizer = new wxBoxSizer(wxHORIZONTAL);
             // Integrated top bar: reserve room at the left for the traffic lights, which the deferred
-            // wxnpp_InlineTrafficLights call (ctor CallAfter) re-centres onto this row. 72px is a safe
+            // wxn_InlineTrafficLights call (ctor CallAfter) re-centres onto this row. 72px is a safe
             // guess for the stock button cluster; the CallAfter replaces it with the exact live inset.
             if (m_integratedBar) m_macInsetItem = hostSizer->AddSpacer(this->FromDIP(72));
             hostSizer->Add(tb, 1, wxEXPAND);
             m_toolBarHost->SetSizerAndFit(hostSizer);
             const int barH = wxMax(m_toolBarHost->GetBestSize().GetHeight(), isz + 12);   // floor so the pane can't collapse
-            m_macToolbarRowH = barH;   // the traffic-light row height (see wxnpp_InlineTrafficLights)
+            m_macToolbarRowH = barH;   // the traffic-light row height (see wxn_InlineTrafficLights)
             // Same fixed-toolbar pane recipe as the integrated bar (toolbarPaneInfo()), plus a pinned height.
             m_aui.AddPane(m_toolBarHost, toolbarPaneInfo().MinSize(-1, barH).MaxSize(-1, barH));
             m_aui.Update();
@@ -4964,10 +4963,10 @@ private:
             // click on a real tool still works: only tool-less spots start a drag.
             tb->Bind(wxEVT_LEFT_DOWN, [this, tb](wxMouseEvent& ev){
                 if (tb->FindToolForPosition(ev.GetX(), ev.GetY())) { ev.Skip(); return; }
-                wxnpp_DragWindow((void*)this->MacGetTopLevelWindowRef());
+                wxn_DragWindow((void*)this->MacGetTopLevelWindowRef());
             });
             m_toolBarHost->Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent&){   // the spacer strip left of the toolbar
-                wxnpp_DragWindow((void*)this->MacGetTopLevelWindowRef());
+                wxn_DragWindow((void*)this->MacGetTopLevelWindowRef());
             });
         }
 #endif
@@ -4981,7 +4980,7 @@ private:
     void reapplyTrafficLights()
     {
         if (!m_integratedBar || m_macToolbarRowH <= 0) return;
-        wxnpp_InlineTrafficLights((void*)this->MacGetTopLevelWindowRef(), m_macToolbarRowH);
+        wxn_InlineTrafficLights((void*)this->MacGetTopLevelWindowRef(), m_macToolbarRowH);
     }
 #endif
 
@@ -4998,12 +4997,12 @@ private:
         auto* sb = CreateStatusBar(7);   // macOS: keep the native grip (Cocoa themes it consistently)
 #endif
         // field 0 (doc type / message area) is proportional so the fields fill the whole bar and
-        // the typing-mode field lands flush right, like Notepad++ (no dead slack on the right).
+        // the typing-mode field lands flush right (no dead slack on the right).
         const int w[7] = { -1, 150, 210, 110, 130, 120, 46 };   // field 5 (encoding) wide enough for "UTF-16 LE BOM"
         sb->SetStatusWidths(7, w);
         const int styles[7] = { wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT };
         sb->SetStatusStyles(7, styles);   // flat fields - no per-field sunken background
-        sb->Bind(wxEVT_LEFT_DCLICK, &NppShellFrameT::onStatusDClick, this);   // interactive status bar: double-click a field to act
+        sb->Bind(wxEVT_LEFT_DCLICK, &WxnShellFrameT::onStatusDClick, this);   // interactive status bar: double-click a field to act
 #ifdef __WXMSW__
         // our own resize grip, parked in the bottom-right corner and kept there as the bar resizes
         m_grip = new SizeGripWin(sb);
@@ -5017,7 +5016,7 @@ private:
 #endif
     }
 
-    // ----- syntax highlighting (Lexilla + Notepad++ theme colours) -------
+    // ----- syntax highlighting (Lexilla + theme colours) -------
     struct LexMap { const char* lexer; const char* theme; };   // Lexilla lexer name, theme LexerType name
     static LexMap lexerForExt(const wxString& e)
     {
@@ -5041,7 +5040,7 @@ private:
         if (e=="xml"||e=="svg"||e=="xaml"||e=="xsd"||e=="xsl"||e=="vcxproj") return m("xml", "xml");
         return m(nullptr, nullptr);   // plain text
     }
-    // Friendly document-type label for the status bar (like Notepad++'s "C++ source file").
+    // Friendly document-type label for the status bar (e.g. "C++ source file").
     static wxString langDisplayName(const wxString& e)
     {
         if (e=="cpp"||e=="cc"||e=="cxx"||e=="hpp"||e=="hxx") return "C++ source file";
@@ -5146,7 +5145,7 @@ private:
                 auto it = m_theme.lexers.find(themeKey.ToStdString());
                 if (it != m_theme.lexers.end())
                 {
-                    for (const StyleDef& s : it->second)   // apply Notepad++'s exact per-token colours
+                    for (const StyleDef& s : it->second)   // apply the theme's exact per-token colours
                     {
                         if (s.id < 0) continue;
                         if (s.fg >= 0) sci(SCI_STYLESETFORE, s.id, s.fg);
@@ -5201,12 +5200,12 @@ private:
     }
     // ----- file actions --------------------------------------------------
     void setDocTitle(const wxString& name) { if (auto* p = activePage()) { p->title = name; refreshTab(p); } else setWindowTitle(name); }
-    void doNew()   // New opens a fresh tab, like Notepad++ - honouring the New Document default EOL + language
+    void doNew()   // New opens a fresh tab - honouring the New Document default EOL + language
     {
         addDocument("", nextNewName());
         if (auto* p = activePage()) p->encoding = m_defaultEncoding;
         setEol(m_defaultEol);
-        if (m_defaultLangId >= 0) { if (const NppLang* L = nppLangFind(m_defaultLangId)) setForcedLang(L->lexer, L->name); }
+        if (m_defaultLangId >= 0) { if (const WxnLang* L = wxnLangFind(m_defaultLangId)) setForcedLang(L->lexer, L->name); }
         updateEncodingMenuChecks();
         updateStatus();   // reflect the default EOL/encoding/language in the status bar
     }
@@ -5256,7 +5255,7 @@ private:
         if (raw.size() >= 2 && (unsigned char)raw[0] == 0xFE && (unsigned char)raw[1] == 0xFF) { enc = ENC_UTF16_BE; return utf16ToUtf8(raw.substr(2), true); }
         bool hi = false; for (unsigned char c : raw) if (c >= 0x80) { hi = true; break; }
         if (hi && isValidUtf8(raw)) { enc = ENC_UTF8; return raw; }                 // UTF-8 without BOM
-        if (!hi) { enc = ENC_UTF8; return raw; }                                    // pure ASCII: report UTF-8 like modern Notepad++ (bytes identical either way)
+        if (!hi) { enc = ENC_UTF8; return raw; }                                    // pure ASCII: report UTF-8 (bytes identical either way)
         enc = ENC_ANSI;                                                             // high bytes, not valid UTF-8 -> system code page
         return std::string(wxString(raw.data(), wxCSConv(wxFONTENCODING_SYSTEM), raw.size()).utf8_str());
     }
@@ -5357,7 +5356,7 @@ private:
         setStatus(0, wxString::Format(_("Encoding: %s (save to apply)"), encName(enc))); m_hint = true;
         updateStatus(); updateEncodingMenuChecks();
     }
-    void interpretAs(int enc)   // re-read the file's bytes decoded as the chosen encoding (Notepad++ "interpret as")
+    void interpretAs(int enc)   // re-read the file's bytes decoded as the chosen encoding ("interpret as")
     {
         const wxString p = curPath();
         if (p.empty()) { if (auto* pg = activePage()) pg->encoding = enc; updateStatus(); updateEncodingMenuChecks(); return; }
@@ -5383,7 +5382,7 @@ private:
         if (auto* p = activePage()) p->encoding = enc;
         sci(SCI_CLEARALL);
         sci(SCI_ADDTEXT, (int)u.length(), reinterpret_cast<sptr_t>(u.data()));
-        // Detect the file's line-ending style and match Scintilla's EOL mode to it (like Notepad++), so the
+        // Detect the file's line-ending style and match Scintilla's EOL mode to it, so the
         // status bar reports the real format (Unix/Windows/Mac) instead of the Windows default. Mode only -
         // the content's actual bytes are preserved (no SCI_CONVERTEOLS) until the user explicitly converts.
         {
@@ -5429,7 +5428,7 @@ private:
     void updateMonTimer()   // the one shared 1s poll timer runs only while at least one tab is monitored
     {
         bool any = false; for (EditorPage* q : allPages()) if (q && q->monitored) { any = true; break; }
-        if (any && !m_monTimer) { m_monTimer = new wxTimer(this, myID_MONTIMER); Bind(wxEVT_TIMER, &NppShellFrameT::onMonTimer, this, myID_MONTIMER); }
+        if (any && !m_monTimer) { m_monTimer = new wxTimer(this, myID_MONTIMER); Bind(wxEVT_TIMER, &WxnShellFrameT::onMonTimer, this, myID_MONTIMER); }
         if (m_monTimer) { if (any) { if (!m_monTimer->IsRunning()) m_monTimer->Start(1000); } else m_monTimer->Stop(); }
     }
     void monStatus(const wxString& msg) { setStatus(0, msg); m_hint = true; }   // m_hint keeps the 150ms status refresh from wiping it
@@ -5493,15 +5492,15 @@ private:
 #ifdef __WXMSW__
     // The unprivileged process can't write path (access denied) - ask, then relaunch itself elevated
     // (via ShellExecuteExW "runas") with a hidden --elevated-write switch to copy just this one file in.
-    // The elevated child runs NO GUI code at all (see NppApp::OnInit) - it exists only to do that copy.
+    // The elevated child runs NO GUI code at all (see WxnApp::OnInit) - it exists only to do that copy.
     bool tryElevatedWrite(const wxString& path, const std::string& data)
     {
         if (wxMessageBox(
-                wxString::Format(_("\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnpp elevated to save this file?"), path),
+                wxString::Format(_("\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnote elevated to save this file?"), path),
                 _("Access Denied"), wxYES_NO | wxICON_QUESTION, this) != wxYES)
             return false;
 
-        const wxString tempPath = wxFileName::CreateTempFileName("wxnpp_elev_");
+        const wxString tempPath = wxFileName::CreateTempFileName("wxnote_elev_");
         if (tempPath.empty()) return false;
         { wxFile tf(tempPath, wxFile::write); if (!tf.IsOpened()) return false; tf.Write(data.data(), data.size()); }
 
@@ -5609,7 +5608,7 @@ private:
     }
     void setEol(int mode) { sci(SCI_SETEOLMODE, mode); sci(SCI_CONVERTEOLS, mode); }
 
-    // ----- line / blank / sort operations (Notepad++ Edit menu) ----------
+    // ----- line / blank / sort operations (Edit menu) ----------
     const char* eolStr() { const int m = (int)sci(SCI_GETEOLMODE); return m == SC_EOL_CR ? "\r" : m == SC_EOL_LF ? "\n" : "\r\n"; }
     void linesJoin()  { sci(SCI_TARGETFROMSELECTION); sci(SCI_LINESJOIN); }
     void linesSplit() { sci(SCI_TARGETFROMSELECTION); sci(SCI_LINESSPLIT, 0); }
@@ -5674,7 +5673,7 @@ private:
     void eolToSpace()  { std::string b = getDocUtf8(), out; for (char c : b) { if (c == '\r') continue; out += (c == '\n') ? ' ' : c; } setDocUtf8(out); }
 
     // ===================================================================================
-    //  Additional Notepad++ menu commands (clipboard / files / shell / search / view / tools)
+    //  Additional menu commands (clipboard / files / shell / search / view / tools)
     // ===================================================================================
     bool m_onTop = false;                                  // "Always on Top" state
     wxString curPath() const { auto* p = activePage(); return p ? p->path : wxString(); }
@@ -6179,7 +6178,7 @@ private:
         if (m_stc) m_stc->Refresh();
     }
     // Rebuild the Language menu's dynamic per-UDL section from m_udls (ids IDM_LANG_USER..IDM_LANG_USER_LIMIT-1,
-    // the exact range real Notepad++ reserves - see menuCmdID.h). Called once at startup (after loadAllUdls) and
+    // the frozen range src/command_ids.h reserves for UDL entries). Called once at startup (after loadAllUdls) and
     // again whenever the UDL dialog adds/renames/removes a language, so the menu never needs a restart to catch up.
     void rebuildUserLangMenu()
     {
@@ -6197,7 +6196,7 @@ private:
 
     // ----- search engine (drives the Find/Replace dialog) ----------------
     // Report a search outcome both in the main status bar and, if it is open, inside the Find dialog
-    // (Notepad++ shows the result line at the bottom of the dialog).
+    // (the result line at the bottom of the dialog).
     void findResult(const wxString& msg) { setStatus(0, msg); if (m_findDlg && m_findDlg->IsShown()) m_findDlg->setResult(msg); }
     int searchFlags(const FindOpts& o) const
     {
@@ -6257,7 +6256,7 @@ private:
         if (b - a <= 0 || b - a > 4096) return {};
         return m_stc->GetTextRange(a, b).utf8_string();   // UTF-8 bytes of the main selection
     }
-    // Notepad++ "Multi-select All": box every occurrence of the term as its own selection so typing edits
+    // "Multi-select All": box every occurrence of the term as its own selection so typing edits
     // them all at once (multi-cursor). flags picks MATCHCASE / WHOLEWORD per the menu variant.
     void multiSelectAll(int flags)
     {
@@ -6301,7 +6300,7 @@ private:
         }
         return false;
     }
-    // Notepad++ "Multi-select Next" (VS Code's Ctrl+D): add the next occurrence of the current term as an
+    // "Multi-select Next" (VS Code's Ctrl+D): add the next occurrence of the current term as an
     // extra selection and make it the main one. Wraps around; skips occurrences already selected.
     void multiSelectNext(int flags)
     {
@@ -6341,7 +6340,7 @@ private:
         sci(SCI_SETMAINSELECTION, static_cast<int>(sci(SCI_GETSELECTIONS)) - 1);
         sci(SCI_SCROLLCARET);
     }
-    // Notepad++/VS Code "skip this occurrence": jump to the next occurrence without keeping the current
+    // "Skip this occurrence" (as in VS Code): jump to the next occurrence without keeping the current
     // one (add next, then drop the old main).
     void multiSelectSkip(int flags)
     {
@@ -6407,7 +6406,7 @@ private:
         return count;
     }
     void clearMarks() { sci(SCI_SETINDICATORCURRENT, MARK_INDIC); sci(SCI_INDICATORCLEARRANGE, 0, sci(SCI_GETLENGTH)); }
-    // Notepad++'s multi-style "Mark": highlight the current word/selection in one of 5 persistent colours.
+    // Multi-style "Mark": highlight the current word/selection in one of 5 persistent colours.
     // all=true marks every occurrence, all=false just the current one; returns the number marked.
     int markExt(int style, bool all)
     {
@@ -6604,7 +6603,7 @@ private:
         sci(SCI_SETFIRSTVISIBLELINE, line0 > half ? line0 - half : 0);
         if (m_stc) m_stc->SetFocus();
     }
-    // F4 / Shift+F4 step the visible search-results panel (Notepad++'s Next/Previous Search Result).
+    // F4 / Shift+F4 step the visible search-results panel (Next/Previous Search Result).
     // Two panels can hold results - the Ctrl+Shift+F tree (m_fifPanel, 1-based) and the Find-dialog STC
     // (m_findResults, 0-based) - so try each in turn; fall back to in-document Find Next when neither has any.
     bool stepTreeResult(bool fwd)
@@ -6811,8 +6810,8 @@ private:
     }
     void onPreferences()
     {
-        // Page layout mirrors Notepad++'s Preferences (General / Editing / Indentation /
-        // Auto-Completion / Dark Mode); the labels are Notepad++'s exact wording.
+        // Page layout: General / Editing / Indentation / Auto-Completion / Dark Mode
+        // (the labels' wording is frozen - the .po catalogs key on these exact strings).
         wxDialog dlg(this, wxID_ANY, _("Preferences"), wxDefaultPosition, wxSize(620, 440));
         // wxListbook's default style (wxLB_DEFAULT == wxBK_DEFAULT == 0) is resolved by wx to a *horizontal
         // top strip* on macOS but a *left column* on Win/Linux (wx/src/generic/listbkg.cpp Create():
@@ -6829,7 +6828,7 @@ private:
         auto* cbToolbar = new wxCheckBox(gen, wxID_ANY, _("Show toolbar"));    cbToolbar->SetValue(m_showToolbar);
         auto* cbStatus  = new wxCheckBox(gen, wxID_ANY, _("Show status bar")); cbStatus->SetValue(m_showStatusbar);
         row(gs, cbToolbar); row(gs, cbStatus);
-        // Off by default, matching Notepad++: closing a modified document just discards it silently
+        // Off by default: closing a modified document just discards it silently
         // rather than blocking on a Save/Don't Save/Cancel prompt every time.
         auto* cbAskClose = new wxCheckBox(gen, wxID_ANY, _("Ask before closing unsaved changes"));
         cbAskClose->SetValue(m_askBeforeClose); row(gs, cbAskClose);
@@ -6841,7 +6840,7 @@ private:
         // the command line override this per-launch either way).
         auto* cbReuseInstance = new wxCheckBox(gen, wxID_ANY, _("Reuse an existing window"));
         cbReuseInstance->SetValue(m_reuseInstance); row(gs, cbReuseInstance);
-#if defined(WXNPP_HAS_BORDERLESS) || defined(__WXMAC__)
+#if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
         auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, _("Show integrated top bar"));
         cbIntBar->SetValue(m_integratedBar); row(gs, cbIntBar);
 #endif
@@ -6973,8 +6972,8 @@ private:
         // ---- New Document ---------------------------------------------------------------------
         auto* nd = pg(_("New Document")); auto* nds = new wxBoxSizer(wxVERTICAL);
         // Reuses the same 3 msgids as the Edit > EOL Conversion menu (IDM_FORMAT_TODOS/TOUNIX/TOMAC) -
-        // eolName() itself stays untranslated (the status bar's own use of it deliberately matches N++'s
-        // English-always EOL indicator), so translate it here rather than in the shared helper. Calling
+        // eolName() itself stays untranslated (the status bar's EOL indicator is deliberately
+        // English-always), so translate it here rather than in the shared helper. Calling
         // wxGetTranslation() directly (not the _() macro) because _() requires a compile-time string
         // literal for its static extraction check - eolName() returns one at runtime, not a literal.
         const wxString eolChoices[3] = { wxGetTranslation(eolName(SC_EOL_CRLF)), wxGetTranslation(eolName(SC_EOL_LF)), wxGetTranslation(eolName(SC_EOL_CR)) };
@@ -6991,7 +6990,7 @@ private:
         lrow->Add(new wxStaticText(nd, wxID_ANY, _("Default language:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* chLang = new wxChoice(nd, wxID_ANY);
         chLang->Append(_("Normal Text"));
-        { size_t ln; const NppLang* lt = nppLangTable(ln); int sel = 0;
+        { size_t ln; const WxnLang* lt = wxnLangTable(ln); int sel = 0;
           for (size_t i = 0; i < ln; ++i) { chLang->Append(lt[i].name); if (lt[i].id == m_defaultLangId) sel = (int)i + 1; }
           chLang->SetSelection(sel); }
         lrow->Add(chLang, 0, wxALIGN_CENTRE_VERTICAL);
@@ -7065,7 +7064,7 @@ private:
         // geometry (clipped labels, collapsed combos, dead space). MSW reflows on the initial show, so
         // this is a no-op there. Layout() (not Fit/SetSizerAndFit) keeps the deliberate 620x440 size.
         dlg.SetSizer(top); dlg.Layout(); themeDialog(&dlg);
-        dlg.ShowModal();   // Notepad++ Preferences has no Cancel - changes apply on close
+        dlg.ShowModal();   // Preferences has no Cancel - changes apply on close
         const int newThemeMode = chTheme->GetSelection();
         m_showToolbar = cbToolbar->GetValue(); m_showStatusbar = cbStatus->GetValue();
         m_askBeforeClose = cbAskClose->GetValue();
@@ -7078,7 +7077,7 @@ private:
         m_defaultEol = (rbEol->GetSelection() == 1) ? SC_EOL_LF : (rbEol->GetSelection() == 2) ? SC_EOL_CR : SC_EOL_CRLF;
         m_defaultEncoding = rbEnc->GetSelection();   // index maps directly to the Enc enum (UTF8=0 .. ANSI=4)
         { int s = chLang->GetSelection(); if (s <= 0) m_defaultLangId = -1;
-          else { size_t ln; const NppLang* lt = nppLangTable(ln); m_defaultLangId = (s - 1 < (int)ln) ? lt[s - 1].id : -1; } }
+          else { size_t ln; const WxnLang* lt = wxnLangTable(ln); m_defaultLangId = (s - 1 < (int)ln) ? lt[s - 1].id : -1; } }
         const bool tabRecentChanged = (cbTabClose->GetValue() != m_tabCloseBtn) || (spMaxRec->GetValue() != m_maxRecent);
         m_tabCloseBtn = cbTabClose->GetValue(); m_maxRecent = spMaxRec->GetValue();
         m_printHeader = txHeader->GetValue(); m_printFooter = txFooter->GetValue();
@@ -7095,7 +7094,7 @@ private:
         // has actually confirmed the restart - writing them here unconditionally would apply the new value
         // even if the user then cancels a "save changes?" prompt during the attempted restart.
         const int newUi = UI_LANG_IDS[chUiLang->GetSelection()];
-#if defined(WXNPP_HAS_BORDERLESS) || defined(__WXMAC__)
+#if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
         const bool newIntBar = cbIntBar->GetValue();
 #endif
         const int newIconStyle = chIconStyle->GetSelection();
@@ -7104,7 +7103,7 @@ private:
         const bool newReuseInstance = cbReuseInstance->GetValue();
         bool needRestart = (newThemeMode != m_themeMode) || tabRecentChanged || (newUi != curUi) || (newIconStyle != m_iconStyle)
                          || (newIconSize != m_toolbarIconSize) || (newReuseInstance != m_reuseInstance);
-#if defined(WXNPP_HAS_BORDERLESS) || defined(__WXMAC__)
+#if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
         needRestart = needRestart || (newIntBar != m_integratedBar);
 #endif
         if (needRestart)
@@ -7112,7 +7111,7 @@ private:
                 m_themeMode = newThemeMode;
                 auto* cfg = wxConfigBase::Get();
                 if (newUi != curUi) cfg->Write("UILanguage", (long)newUi);
-#if defined(WXNPP_HAS_BORDERLESS) || defined(__WXMAC__)
+#if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
                 if (newIntBar != m_integratedBar) cfg->Write("IntegratedBar", newIntBar);
 #endif
                 if (newIconStyle != m_iconStyle) cfg->Write("ToolbarIconStyle", (long)newIconStyle);
@@ -7213,10 +7212,10 @@ private:
     }
 
     // ----- dark / light theme -------------------------------------------
-    // Parse Notepad++'s theme XML *format* (dark = themes/DarkModeDefault.xml, light =
-    // stylers.model.xml) deployed next to the exe - the schema this parses is N++'s own, so a real
-    // N++ theme file works here unmodified, but the two shipped-by-default files are wxNote's
-    // own regenerated, permissively-licensed replacements, not copied N++ theme data (see
+    // Parse the theme XML (dark = themes/DarkModeDefault.xml, light = stylers.model.xml)
+    // deployed next to the exe. The schema is a Notepad++-compatible format, so a third-party
+    // theme file in that format works here unmodified - but the two shipped-by-default files are
+    // wxNote's own regenerated, permissively-licensed replacements, not copied theme data (see
     // resources/themes/DarkModeDefault.xml's header and NOTICE for the license/provenance detail).
     wxString themeFilePath(const wxString& name)   // resolve a theme name to its XML on disk
     {
@@ -7225,10 +7224,11 @@ private:
         return dir + "\\themes\\" + name + ".xml";
     }
     // ----- User-Defined Language (UDL) persistence -------------------------------------------
-    // One <name>.xml (a bare <UserLang> root, the same shape N++'s own Export writes) per language in
-    // the per-user userDefineLangs/ folder (under wxStandardPaths' user-data dir - NOT next to the exe,
-    // which is read-only on an installed build). IDM_LANG_OPENUDLDIR opens this folder; it's the same
-    // layout real N++'s "UDL Collection" shares files in (see IDM_LANG_UDLCOLLECTION_PROJECT_SITE).
+    // One <name>.xml (a bare <UserLang> root, the shape a single-language export writes) per language
+    // in the per-user userDefineLangs/ folder (under wxStandardPaths' user-data dir - NOT next to the
+    // exe, which is read-only on an installed build). IDM_LANG_OPENUDLDIR opens this folder; the
+    // one-file-per-language layout matches how shared UDL collections distribute definitions
+    // (Notepad++-compatible format), so downloaded files drop in as-is.
     wxString udlDir() { return userDataDir() + wxFILE_SEP_PATH + "userDefineLangs"; }
     void loadAllUdls()
     {
@@ -7244,7 +7244,7 @@ private:
         if (!wxDirExists(udlDir())) wxFileName::Mkdir(udlDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
         saveUdlFile(udlDir() + wxFILE_SEP_PATH + u.name + ".xml", { u });
     }
-    wxArrayString availableThemes()   // "Default" + every themes/*.xml (the 22 Notepad++ themes)
+    wxArrayString availableThemes()   // "Default" + every themes/*.xml (the 22 bundled themes)
     {
         wxArrayString out; out.Add("Default");
         wxDir d(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "themes");
@@ -7257,7 +7257,7 @@ private:
     }
     void loadThemeFile(const wxString& path)
     {
-        m_theme = NppTheme{};   // reset so switching themes fully replaces the previous palette
+        m_theme = WxnTheme{};   // reset so switching themes fully replaces the previous palette
         wxXmlDocument doc;
         if (!wxFileExists(path) || !doc.Load(path) || !doc.GetRoot()) return;   // fall back to built-in palette
         for (wxXmlNode* sec = doc.GetRoot()->GetChildren(); sec; sec = sec->GetNext())
@@ -7340,7 +7340,7 @@ private:
         }
         doc.Save(path);
     }
-    void onStyleConfig()   // Settings > Style Configurator: theme picker + per-language token style editor (like N++)
+    void onStyleConfig()   // Settings > Style Configurator: theme picker + per-language token style editor
     {
         const wxString original = m_themeName;
         const wxString kGlobalStyles = _("Global Styles");   // both displayed AND compared-against below - must be the same translated value
@@ -7472,11 +7472,11 @@ private:
         for (size_t i = 0; i < nestBoxes.size(); ++i) if (nestBoxes[i]->GetValue()) style.nesting |= kNestBits[i].first;
         return true;
     }
-    // Language > User Defined Language > Define your language...: full parity with Notepad++'s UDL
+    // Language > User Defined Language > Define your language...: the full UDL
     // dialog - Folder & Default / Comment & Number / Operator & Delimiter / Keywords tabs, each field
     // pairable with a Style... button (see showUdlStylerDialog) for the 24 style slots (UdlStyleIndex).
     // Edits a UdlLanguage in memory; Save commits it into m_udls and to disk (saveUdlToDisk) so it
-    // survives a restart and can be shared as a plain XML file, like real N++'s UDL exports.
+    // survives a restart and can be shared as a plain XML file (see udl.h for the exchange format).
     void onUserDefineLang()
     {
         int curIndex = m_udls.empty() ? -1 : 0;
@@ -7841,11 +7841,11 @@ private:
             const auto sel = G("Selected text colour");  sci(SCI_SETSELBACK, 1, sel.second >= 0 ? sel.second : (dark ? 0x784F26 : 0xFFD6AD));
             const auto wsp = G("White space symbol");    sci(SCI_SETWHITESPACEFORE, 1, wsp.first >= 0 ? wsp.first : (dark ? 0x606060 : 0xB0B0B0));
             // Fold margin + markers, edge, and highlight indicators - re-applied on every theme switch so the whole
-            // editor surface follows the theme like Notepad++ (not just tokens + default background).
+            // editor surface follows the theme (not just tokens + default background).
             const auto fold = G("Fold"); const auto foldActive = G("Fold active"); const auto foldMargin = G("Fold margin");
             const int fMarginBg = m_customGutterColor ? gutterBg : (foldMargin.second >= 0 ? foldMargin.second : gutterBg);
             sci(SCI_SETFOLDMARGINCOLOUR, 1, fMarginBg); sci(SCI_SETFOLDMARGINHICOLOUR, 1, fMarginBg);
-            const int markFore = m_customGutterColor ? gutterBg : (fold.second >= 0 ? fold.second : gutterBg);        // N++ swaps Fold fg/bg onto the markers
+            const int markFore = m_customGutterColor ? gutterBg : (fold.second >= 0 ? fold.second : gutterBg);        // the theme's Fold fg/bg map onto the markers SWAPPED (see setupFolding)
             const int markBack = fold.first  >= 0 ? fold.first  : 0x808080;
             const int markActive = foldActive.first >= 0 ? foldActive.first : markBack;   // full "Fold active" accent on the box markers
             applyFoldMarkerColours(markFore, markBack, markActive);   // recolour the 7 fold markers + re-arm the nested-square accent
@@ -7903,7 +7903,7 @@ private:
         // GTK analogue of the MSW DarkMode_Explorer scrollbar theming above: neutral-theme the editor's native
         // GtkScrollbar so Mint's accent gradient stops painting a full-height strip down the right edge on an
         // empty document. Runs at startup (applyTheme @ startup) and on every live dark/light toggle.
-        wxnpp_InstallDarkScrollbarCss(m_stc ? (void*)m_stc->GetHandle() : nullptr, dark ? 1 : 0);
+        wxn_InstallDarkScrollbarCss(m_stc ? (void*)m_stc->GetHandle() : nullptr, dark ? 1 : 0);
 #endif
         const wxColour chromeBg = dark ? wxColour(32, 32, 32) : wxColour(240, 240, 240);   // explicit both ways
         const wxColour chromeFg = dark ? wxColour(220, 220, 220) : wxColour(0, 0, 0);
@@ -7956,9 +7956,9 @@ private:
         // wxFULLSCREEN_NOTOOLBAR only acts on the frame's own GetToolBar(); in integrated/borderless
         // mode the toolbar is an AUI pane wx's flag never touches, so honour the preference by hand
         // there. Entering: hide only if auto-hide is on; leaving: restore to the persistent "Show
-        // toolbar" preference. (Compiled out on macOS, where WXNPP_HAS_BORDERLESS is off and the native
+        // toolbar" preference. (Compiled out on macOS, where WXN_HAS_BORDERLESS is off and the native
         // path above already handles it.)
-#ifdef WXNPP_HAS_BORDERLESS
+#ifdef WXN_HAS_BORDERLESS
         if constexpr (kBorderless)
             showToolBar(goingFull ? (m_showToolbar && !m_fsAutohideToolbar) : m_showToolbar);
 #endif
@@ -8074,8 +8074,8 @@ private:
         m_printData = printer.GetPrintDialogData().GetPrintData();
         setStatus(0, wxString::Format(_("Printed %s"), title)); m_hint = true;
     }
-    void setStatus(int field, const wxString& text) { SetStatusText(" " + text, field); }  // leading space ~ 4px left margin, like Notepad++
-    // Notepad++'s interactive status bar: double-click a field to act on it.
+    void setStatus(int field, const wxString& text) { SetStatusText(" " + text, field); }  // leading space ~ 4px left margin
+    // Interactive status bar: double-click a field to act on it.
     void onStatusDClick(wxMouseEvent& e)
     {
         wxStatusBar* sb = GetStatusBar();
@@ -8141,9 +8141,8 @@ private:
                0, wxALIGN_CENTRE | wxTOP, 18);
         s->Add(new wxStaticText(&dlg, wxID_ANY,
                    _("wxNote\n\n"
-                     "A cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\n"
-                     "a native Scintilla editor with dark/light themes and plugin support.\n\n"
-                     "Independent project - not affiliated with or endorsed by Notepad++.")),
+                     "A fast, cross-platform text editor built on wxWidgets:\n"
+                     "a native Scintilla editor with dark/light themes and plugin support.")),
                0, wxALL, 16);
         s->Add(dlg.CreateButtonSizer(wxOK), 0, wxALL | wxALIGN_RIGHT, 10);
         dlg.SetSizerAndFit(s);
@@ -8152,7 +8151,7 @@ private:
     }
 
 #ifdef __WXMSW__
-    // wxToolBar::MSWCommand sign-extends the 16-bit WM_COMMAND id to a signed short, so N++'s command ids
+    // wxToolBar::MSWCommand sign-extends the 16-bit WM_COMMAND id to a signed short, so command ids
     // above 32767 (e.g. IDM_FILE_NEW = 41001) wrap negative and its FindById() can't match the tool - the
     // click is silently dropped (this also breaks the native frame toolbar, not just the aui one). Catch a
     // toolbar's WM_COMMAND here and redispatch it through onCommand with the correct, unsigned id.
@@ -8220,7 +8219,7 @@ private:
         }
         if (cmd >= myID_DOCLIST_ITEM && cmd < myID_DOCLIST_ITEM + 1000)   // document-list dropdown entry
         { const size_t n = (size_t)(cmd - myID_DOCLIST_ITEM); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); return; }
-        if (const NppLang* L = nppLangFind(cmd)) { setForcedLang(L->lexer, L->name); return; }   // Language menu: force that lexer on the active buffer
+        if (const WxnLang* L = wxnLangFind(cmd)) { setForcedLang(L->lexer, L->name); return; }   // Language menu: force that lexer on the active buffer
         if (cmd >= IDM_LANG_USER && cmd < IDM_LANG_USER_LIMIT)   // Language menu: a user-defined language's dynamic entry (rebuildUserLangMenu)
         { applyUdlToActiveBuffer(cmd - IDM_LANG_USER); return; }
         if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + 200)        // a saved macro from the Macro menu
@@ -8228,8 +8227,8 @@ private:
         if (cmd >= myID_OPENFOLDER_TOOL_BASE && cmd < myID_OPENFOLDER_TOOL_BASE + (int)m_openFolderTools.size())
         { openHereToolAt(cmd - myID_OPENFOLDER_TOOL_BASE); return; }   // a dynamically-detected File > Open Containing Folder entry
         // Win32 WM_COMMAND carries only a 16-bit id and wx sign-extends it, so command ids
-        // above 32767 (all of Notepad++'s IDM_*) arrive negative. Read it as unsigned 16-bit,
-        // exactly as Notepad++ does with LOWORD(wParam).
+        // above 32767 (all of the IDM_* range) arrive negative. Read it as unsigned 16-bit
+        // (LOWORD(wParam) semantics).
         switch (e.GetId() & 0xFFFF)
         {
             case IDM_FILE_NEW: doNew(); break;
@@ -8341,7 +8340,7 @@ private:
             case IDM_VIEW_TAB_COLOUR_NONE: applyTabColour(-1); break;
             case IDM_EDIT_RTL: if (m_stc) m_stc->SetLayoutDirection(wxLayout_RightToLeft); break;
             case IDM_EDIT_LTR: if (m_stc) m_stc->SetLayoutDirection(wxLayout_LeftToRight); break;
-            case IDM_VIEW_TAB_NEXT: mruSwitch(); break;   // Ctrl+Tab -> most-recently-used switch (N++ MRU behaviour)
+            case IDM_VIEW_TAB_NEXT: mruSwitch(); break;   // Ctrl+Tab -> most-recently-used switch
             case IDM_VIEW_TAB_PREV: m_tabs->AdvanceSelection(false); break;
             case IDM_VIEW_TAB_MOVEFORWARD:  moveTab(true);  break;
             case IDM_VIEW_TAB_MOVEBACKWARD: moveTab(false); break;
@@ -8559,10 +8558,9 @@ private:
             case IDM_PROJECTPAGE: case IDM_UPDATE_NPP: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/releases"); break;
             case IDM_ONLINEDOCUMENT: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/tree/master/docs"); break;
             case IDM_FORUM: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/issues"); break;
-            case IDM_LANG_UDLCOLLECTION_PROJECT_SITE: wxLaunchDefaultBrowser("https://github.com/notepad-plus-plus/userDefinedLanguages"); break;
-            case IDM_DEBUGINFO: themedInfo(wxString::Format(_("wxNote (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"),
+            case IDM_DEBUGINFO: themedInfo(wxString::Format(_("wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"),
                 wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER, wxGetOsDescription(), wxStandardPaths::Get().GetExecutablePath()), _("Debug Info")); break;
-            case IDM_CMDLINEARGUMENTS: themedInfo(_("Usage: wxnpp [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."), _("Command Line Arguments")); break;
+            case IDM_CMDLINEARGUMENTS: themedInfo(_("Usage: wxnote [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."), _("Command Line Arguments")); break;
 
             case IDM_EXECUTE: onRun(); break;   // Run... (F5)
 
@@ -8640,8 +8638,8 @@ private:
     }
 
     // Gray out toolbar buttons and menu items that don't apply right now (Save when clean, Undo/Redo
-    // when there's no history, Cut/Copy/Delete with no selection, Paste with an empty clipboard) -
-    // exactly like Notepad++. Cached so we only touch the UI when a state actually flips.
+    // when there's no history, Cut/Copy/Delete with no selection, Paste with an empty clipboard).
+    // Cached so we only touch the UI when a state actually flips.
     void updateUiState()
     {
         if (!m_stc) return;
@@ -8679,7 +8677,7 @@ private:
             mb->Enable(IDM_EDIT_CUT, hasSel);   mb->Enable(IDM_EDIT_COPY, hasSel);
             mb->Enable(IDM_EDIT_PASTE, canPaste); mb->Enable(IDM_EDIT_DELETE, hasSel);
             // Items that TRULY need the document to exist on disk: nothing to reload, nothing a default
-            // viewer could open - grey them out (like Notepad++) instead of a dead click. The Open
+            // viewer could open - grey them out instead of a dead click. The Open
             // Containing Folder submenu stays fully enabled: its entries all fall back to the working
             // directory for untitled buffers.
             mb->Enable(IDM_FILE_OPEN_DEFAULT_VIEWER, hasPath);
@@ -8687,7 +8685,7 @@ private:
         }
     }
 
-    // ---- two editor views (Notepad++'s MAIN_VIEW / SUB_VIEW; ViewPane defined above the frame) -----
+    // ---- two editor views (the MAIN / SUB split; ViewPane defined above the frame) -----
     // m_tabs/m_stc/m_sci are ALIASES to the *active* view, so the ~140 sci()/m_stc/m_tabs sites follow focus.
     ViewPane          m_main, m_sub;            // the two views (sub is empty + hidden until first split)
     ViewPane*         m_active = nullptr;       // -> &m_main or &m_sub
@@ -8718,7 +8716,7 @@ private:
     std::vector<NibDock> m_nibDocks;        // installed via nib.win32 dock_native (the GPL bridge maps NPPM_DMM* to it)
 #endif
     wxAuiManager m_aui;                          // hosts the dockable side/bottom panels (Function List, Doc Map, Find results, Nib panels)
-#ifdef WXNPP_HAS_BORDERLESS
+#ifdef WXN_HAS_BORDERLESS
     wxPanel*    m_titleBar  = nullptr;            // integrated top bar (icon + menu-buttons + window controls)
     wxMenuBar*  m_menuOwner = nullptr;            // owns the wxMenus the title-bar buttons pop (never attached as a real menu bar)
     wxWindow*   m_maxBtn    = nullptr;            // the maximize/restore button - a wxButton (MSW) or TitleBarBtn (else); its glyph tracks IsMaximized()
@@ -8735,9 +8733,9 @@ private:
     int         m_toolbarIconSize = 16;          // toolbar icon size in px (16/20/24/32, default 16; restart-to-apply)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
-    bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON like Notepad++
+    bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON
     int         m_themeMode = 1;   // Preferences > General "Theme": 0 = System, 1 = Dark, 2 = Light (restart-to-apply)
-    bool        m_askBeforeClose = false;   // Preferences > General "Ask before closing unsaved changes" (off by default, like Notepad++)
+    bool        m_askBeforeClose = false;   // Preferences > General "Ask before closing unsaved changes" (off by default)
     bool        m_fsAutohideToolbar = false; // Preferences > General "Auto-hide toolbar in full screen" (off by default: toolbar stays)
     bool        m_reuseInstance = false;    // Preferences > General "Reuse an existing window" (restart-to-apply; read in OnInit)
     bool        m_customGutterColor = false;   // Preferences > Editing "Use a custom line-number margin colour"
@@ -8770,7 +8768,7 @@ private:
     bool        m_stSave = true, m_stSaveAll = true, m_stUndo = true, m_stRedo = true, m_stSel = true, m_stPaste = true, m_stHasPath = true;
     int         m_newCount = 0;   // counter for "new N" tab titles
     int         m_zoom = 0;       // shared zoom level across all tabs (Ctrl+wheel), persisted
-    NppTheme    m_theme;          // exact Notepad++ colours (loaded from theme XML)
+    WxnTheme    m_theme;          // theme colours (loaded from theme XML)
     int         m_searchEngine = 0;                               // Edit > Change Search Engine: 0=DuckDuckGo 1=Google 2=Bing 3=Yahoo
     bool        m_beginEndSelectActive = false, m_beginEndSelectColumnMode = false, m_selExtendGuard = false;
     int         m_beginEndSelectAnchor = -1;                      // Edit > Begin/End Select: the sticky selection anchor
@@ -8778,18 +8776,73 @@ private:
 
 // Chrome base, chosen at startup (restart-to-apply): native wxFrame, or - when the "integrated top bar"
 // option is on and the platform supports it (Windows + Linux/GTK) - the borderless wxBorderlessFrame.
-using NppShellFrame = NppShellFrameT<wxFrame>;
-#ifdef WXNPP_HAS_BORDERLESS
-using NppIntegratedFrame = NppShellFrameT<wxBorderlessFrame>;
+using WxnShellFrame = WxnShellFrameT<wxFrame>;
+#ifdef WXN_HAS_BORDERLESS
+using WxnIntegratedFrame = WxnShellFrameT<wxBorderlessFrame>;
 #endif
 
-class NppApp : public wxApp
+// Recursively copy every entry and group at the two configs' current paths (wxConfigBase's
+// enumeration API is cursor-based per path level, hence the explicit recursion).
+static void copyConfigGroup(wxConfigBase& src, wxConfigBase& dst)
+{
+    wxString name; long cookie;
+    for (bool ok = src.GetFirstEntry(name, cookie); ok; ok = src.GetNextEntry(name, cookie))
+    {
+        switch (src.GetEntryType(name))
+        {
+            case wxConfigBase::Type_Boolean: { bool v = false;   if (src.Read(name, &v)) dst.Write(name, v); break; }
+            case wxConfigBase::Type_Integer: { long v = 0;       if (src.Read(name, &v)) dst.Write(name, v); break; }
+            case wxConfigBase::Type_Float:   { double v = 0;     if (src.Read(name, &v)) dst.Write(name, v); break; }
+            default:                         { wxString v;       if (src.Read(name, &v)) dst.Write(name, v); break; }
+        }
+    }
+    for (bool ok = src.GetFirstGroup(name, cookie); ok; ok = src.GetNextGroup(name, cookie))
+    {
+        src.SetPath(name); dst.SetPath(name);
+        copyConfigGroup(src, dst);
+        src.SetPath(".."); dst.SetPath("..");
+    }
+}
+
+// One-time migration from the app's pre-rename identity ("wxNotepadPlusPlus_spike"): without this,
+// renaming SetAppName would silently orphan every existing install's settings (wxConfig tree) and
+// per-user data dir (recovery backups, UDLs, contextMenu.xml). Copies settings only while the new
+// tree is still empty (so an already-migrated or freshly-used install is never overwritten) and
+// moves the data dir only if the new location doesn't exist yet. Best-effort: the old tree is left
+// in place, and any failure is silently ignored rather than allowed to block startup.
+static void migrateLegacyIdentity()
+{
+    wxLogNull noLog;
+    {
+        wxConfig newCfg("wxNote");   // same identity SetAppName just established
+        if (newCfg.GetNumberOfEntries(true) == 0 && newCfg.GetNumberOfGroups(true) == 0)
+        {
+            wxConfig oldCfg("wxNotepadPlusPlus_spike");
+            if (oldCfg.GetNumberOfEntries(true) > 0 || oldCfg.GetNumberOfGroups(true) > 0)
+            {
+                copyConfigGroup(oldCfg, newCfg);
+                newCfg.Flush();
+            }
+        }
+    }
+    // Derive the old dir by asking wxStandardPaths under the old app name rather than composing a
+    // sibling path by hand: the per-platform shapes differ in more than the last component (classic
+    // Linux layout is dot-prefixed "~/.<appname>", so a hand-built sibling would miss the dot).
+    const wxString newDir = wxStandardPaths::Get().GetUserDataDir();
+    wxTheApp->SetAppName("wxNotepadPlusPlus_spike");
+    const wxString oldDir = wxStandardPaths::Get().GetUserDataDir();
+    wxTheApp->SetAppName("wxNote");
+    if (!wxDirExists(newDir) && wxDirExists(oldDir))
+        wxRenameFile(oldDir, newDir);
+}
+
+class WxnApp : public wxApp
 {
 public:
     bool OnInit() override
     {
 #ifdef __WXMSW__
-        // Hidden UAC-elevation helper mode (see writeFile()): a normal, unprivileged wxnpp process that hit
+        // Hidden UAC-elevation helper mode (see writeFile()): a normal, unprivileged wxnote process that hit
         // access-denied writes its buffer to a temp file, then relaunches itself elevated with this switch
         // to do just the copy - no GUI, no locale/theme setup, nothing else ever runs elevated.
         if (argc >= 4 && wxString(argv[1]) == "--elevated-write")
@@ -8798,7 +8851,8 @@ public:
             return false;   // wx skips the main loop and exits immediately
         }
 #endif
-        SetAppName("wxNotepadPlusPlus_spike");                  // stable key for the persisted theme choice
+        SetAppName("wxNote");             // the identity wxConfig + GetUserDataDir() key everything under
+        migrateLegacyIdentity();          // one-time settings + data-dir carry-over from the old identity
 
         // ---- command line: -g/--goto, -e/--encoding, -n/--new-instance, -r/--reuse-instance, file... ----
         wxCmdLineParser parser(argc, argv);
@@ -8836,7 +8890,7 @@ public:
         bool startIpcServer = false;
         if (forceReuse || (reuseSetting && !forceNew))
         {
-            m_checker = new wxSingleInstanceChecker(wxString::Format("wxnpp-%s", wxGetUserId()));
+            m_checker = new wxSingleInstanceChecker(wxString::Format("wxnote-%s", wxGetUserId()));
             if (m_checker->IsAnotherRunning())
             {
                 wxLogNull noWarn;                                 // a refused/failed connection is handled below
@@ -8890,26 +8944,26 @@ public:
                                                                // mode never enables it, so it stays fully native-light.
                                                                // MSW-only API; other platforms theme via wx below.
 #endif
-#ifdef WXNPP_HAS_BORDERLESS
+#ifdef WXN_HAS_BORDERLESS
         // Integrated top bar (Settings > Preferences, restart-to-apply): a borderless frame whose chrome is
         // our own title bar. Only available where the wxBorderlessFrame backend exists (Windows + Linux/GTK).
         bool integrated = false;
         wxConfigBase::Get()->Read("IntegratedBar", &integrated, false);
         if (integrated)
         {
-            auto* frame = new NppIntegratedFrame(dark);
+            auto* frame = new WxnIntegratedFrame(dark);
             frame->Show(true);
             frame->restoreSession();
-            if (startIpcServer) { m_ipcServer = new NppIpcServer(); m_ipcServer->Create(kIpcServiceName); }
+            if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(kIpcServiceName); }
             for (const auto& f : files) frame->openPath(f);
             if (!files.IsEmpty()) frame->applyGotoAndEncoding(gotoLine, gotoCol, forceEnc);
             return true;
         }
 #endif
-        auto* frame = new NppShellFrame(dark);
+        auto* frame = new WxnShellFrame(dark);
         frame->Show(true);
         frame->restoreSession();                                   // reopen files from a theme-restart
-        if (startIpcServer) { m_ipcServer = new NppIpcServer(); m_ipcServer->Create(kIpcServiceName); }
+        if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(kIpcServiceName); }
         for (const auto& f : files) frame->openPath(f);             // open any files passed on the command line
         if (!files.IsEmpty()) frame->applyGotoAndEncoding(gotoLine, gotoCol, forceEnc);
         return true;
@@ -8929,7 +8983,7 @@ public:
 private:
     wxLocale m_locale;   // must outlive OnInit() - destroying it would revert the process's locale
     wxSingleInstanceChecker* m_checker = nullptr;   // held for the app's lifetime while "reuse window" is active
-    NppIpcServer* m_ipcServer = nullptr;            // ditto - accepts handoffs from later wxnpp launches
+    WxnIpcServer* m_ipcServer = nullptr;            // ditto - accepts handoffs from later wxnote launches
 };
 
-wxIMPLEMENT_APP(NppApp);
+wxIMPLEMENT_APP(WxnApp);

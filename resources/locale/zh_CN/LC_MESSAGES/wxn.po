@@ -1110,9 +1110,6 @@ msgstr "自定义语言格式..."
 msgid "Open User Defined Language folder..."
 msgstr "打开用户自定义语言文件夹..."
 
-msgid "Notepad++ User Defined Languages Collection"
-msgstr "Notepad++ 用户自定义语言合集"
-
 msgid "User Defined Language"
 msgstr "用户自定义语言"
 
@@ -1250,18 +1247,6 @@ msgstr "窗口(&W)"
 
 msgid "Command Line Arguments..."
 msgstr "命令行参数..."
-
-msgid "Notepad++ Home"
-msgstr "Notepad++ 主页"
-
-msgid "Notepad++ Project Page"
-msgstr "Notepad++ 项目页面"
-
-msgid "Notepad++ Online User Manual"
-msgstr "Notepad++ 在线用户手册"
-
-msgid "Notepad++ Community (Forum)"
-msgstr "Notepad++ 社区 (论坛)"
 
 msgid "Check for Updates"
 msgstr "检查更新"
@@ -2064,14 +2049,11 @@ msgstr "已标记 %d - 样式4"
 msgid "Marked %d - style 5"
 msgstr "已标记 %d - 样式5"
 
-msgid "wxNote (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
-msgstr "wxNote（wxWidgets 实验性分支）\n\nwxWidgets %d.%d.%d\n%s\n\n可执行文件：\n%s"
+msgid "wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgstr "wxNote（实验版）\n\nwxWidgets %d.%d.%d\n%s\n\n可执行文件：\n%s"
 
 msgid "Debug Info"
 msgstr "调试信息"
-
-msgid "Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs."
-msgstr "用法：wxnpp [文件...]\n\n命令行中给出的文件将在标签页中打开。"
 
 msgid "Command Line Arguments"
 msgstr "命令行参数"
