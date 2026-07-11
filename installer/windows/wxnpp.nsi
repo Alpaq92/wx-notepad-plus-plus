@@ -1,4 +1,4 @@
-; NSIS script for wxNotepad++ (Windows installer). NSIS is zlib-licensed (fully open source) and
+; NSIS script for wxNote (Windows installer). NSIS is zlib-licensed (fully open source) and
 ; ships preinstalled on GitHub's windows-latest runners as `makensis`.
 ;
 ; Build first (cmake --build build --target wxnpp --config Release), create build\installer\, then:
@@ -20,13 +20,13 @@
 ; and 0.4.0 shipped labeled 0.3.0 everywhere as a result).
 !searchparse /file "..\..\CMakeLists.txt" "project(wxNotepadPlusPlus VERSION " APP_VERSION " LANGUAGES"
 
-!define APP_NAME    "wxNotepad++"
+!define APP_NAME    "wxNote"
 !define APP_URL     "https://github.com/Alpaq92/wx-notepad-plus-plus"
 !define APP_EXE     "wxnpp.exe"
 !define ARP_KEY     "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 
 Name "${APP_NAME}"
-OutFile "..\..\build\installer\wxNotepadPlusPlus-${APP_VERSION}-Setup.exe"
+OutFile "..\..\build\installer\wxNote-${APP_VERSION}-Setup.exe"
 Unicode true
 SetCompressor /SOLID lzma
 ManifestDPIAware true
@@ -34,7 +34,7 @@ ManifestDPIAware true
 ; Per-user install (no UAC), mirroring the previous installer's lowest-privilege default.
 RequestExecutionLevel user
 InstallDir "$LOCALAPPDATA\Programs\${APP_NAME}"
-InstallDirRegKey HKCU "Software\wxNotepadPlusPlus\Installer" "InstallDir"
+InstallDirRegKey HKCU "Software\wxNote\Installer" "InstallDir"
 
 !define MUI_ICON "..\..\resources\wxNotepad++.ico"
 !define MUI_UNICON "..\..\resources\wxNotepad++.ico"
@@ -56,7 +56,7 @@ VIAddVersionKey /LANG=1033 "ProductName"     "${APP_NAME}"
 VIAddVersionKey /LANG=1033 "ProductVersion"  "${APP_VERSION}.0"
 VIAddVersionKey /LANG=1033 "FileVersion"     "${APP_VERSION}.0"
 VIAddVersionKey /LANG=1033 "FileDescription" "${APP_NAME} installer"
-VIAddVersionKey /LANG=1033 "CompanyName"     "wxNotepad++ Project"
+VIAddVersionKey /LANG=1033 "CompanyName"     "wxNote Project"
 VIAddVersionKey /LANG=1033 "LegalCopyright"  "GPL v3 - see LICENSE"
 
 ; wxnpp.exe is built x64-only (see CMakeLists.txt) - NSIS itself has no "ArchitecturesAllowed" concept
@@ -78,18 +78,18 @@ Section "${APP_NAME} (required)" SecCore
   File /r "..\..\build\bin\icons-solar"
   File /r "..\..\build\bin\icons-iconpark"
   File /r "..\..\build\bin\themes"
-  File /r /x "po2mo.py" /x "wxnpp.pot" /x "*.po" /x "__pycache__" "..\..\build\bin\locale"
+  File /r /x "po2mo.py" /x "wxn.pot" /x "*.po" /x "__pycache__" "..\..\build\bin\locale"
   SetOutPath "$INSTDIR\nib"
   File "..\..\build\bin\nib\npp_bridge.dll"
   SetOutPath "$INSTDIR"
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
-  WriteRegStr HKCU "Software\wxNotepadPlusPlus\Installer" "InstallDir" "$INSTDIR"
+  WriteRegStr HKCU "Software\wxNote\Installer" "InstallDir" "$INSTDIR"
 
   ; Add/Remove Programs entry (per-user hive, matching the per-user install).
   WriteRegStr   HKCU "${ARP_KEY}" "DisplayName"          "${APP_NAME}"
   WriteRegStr   HKCU "${ARP_KEY}" "DisplayVersion"       "${APP_VERSION}"
-  WriteRegStr   HKCU "${ARP_KEY}" "Publisher"            "wxNotepad++ Project"
+  WriteRegStr   HKCU "${ARP_KEY}" "Publisher"            "wxNote Project"
   WriteRegStr   HKCU "${ARP_KEY}" "URLInfoAbout"         "${APP_URL}"
   WriteRegStr   HKCU "${ARP_KEY}" "DisplayIcon"          "$INSTDIR\${APP_EXE}"
   WriteRegStr   HKCU "${ARP_KEY}" "UninstallString"      '"$INSTDIR\uninstall.exe"'
@@ -130,5 +130,5 @@ Section "Uninstall"
   RMDir "$SMPROGRAMS\${APP_NAME}"
 
   DeleteRegKey HKCU "${ARP_KEY}"
-  DeleteRegKey HKCU "Software\wxNotepadPlusPlus"   ; only ever held the Installer\InstallDir value written above
+  DeleteRegKey HKCU "Software\wxNote"   ; only ever held the Installer\InstallDir value written above
 SectionEnd

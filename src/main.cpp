@@ -1,4 +1,4 @@
-// wxNotepad++  |  cross-platform main-window shell
+// wxNote  |  cross-platform main-window shell
 // ---------------------------------------------------------------------------
 // A wxWidgets reproduction of the Notepad++ UI, pursuing a close match with the
 // native (default/light) look while building cross-platform (Windows/Linux/macOS):
@@ -1439,7 +1439,7 @@ static void  nibW32ShowDock(NibHost*, void* h, int v)            { if (g_nibShow
 static const NibWin32Api g_nibWin32Api = { 1, sizeof(NibWin32Api), nibW32Main, nibW32EdMain, nibW32EdSec, nibW32Menu, nibW32Dock, nibW32ShowDock };
 #endif
 // nib.host/1
-static const char* nibHostName(NibHost*) { return "wxNotepad++"; }
+static const char* nibHostName(NibHost*) { return "wxNote"; }
 static uint32_t     nibHostAbi(NibHost*) { return NIB_ABI_VERSION; }
 
 static const NibHostApi     g_nibHostApi     = { 1, sizeof(NibHostApi),     nibHostName, nibHostAbi };
@@ -1775,7 +1775,7 @@ public:
 #endif
 
     explicit NppShellFrameT(bool dark)
-        : FB(nullptr, wxID_ANY, "new 1 - wxNotepad++", wxDefaultPosition, wxSize(1100, 720)),
+        : FB(nullptr, wxID_ANY, "new 1 - wxNote", wxDefaultPosition, wxSize(1100, 720)),
           m_timer(this, myID_TIMER)
     {
 #ifdef __WXMAC__
@@ -4051,7 +4051,7 @@ private:
         if (!m_askBeforeClose) { if (exiting) backupUnsavedChanges(p); else clearRecovery(p); return true; }   // setting off (default, matches Notepad++): discard silently, no prompt
         const wxString name = !p->path.empty() ? p->path : (p->title.empty() ? wxString("new") : p->title);
 
-        wxDialog dlg(this, wxID_ANY, "wxNotepad++");
+        wxDialog dlg(this, wxID_ANY, "wxNote");
         auto* s = new wxBoxSizer(wxVERTICAL);
         s->Add(new wxStaticText(&dlg, wxID_ANY, wxString::Format(_("Save file\n%s ?"), name)), 0, wxALL, 16);
         auto* row = new wxBoxSizer(wxHORIZONTAL);
@@ -4208,14 +4208,14 @@ private:
     }
     // The window title-bar text for a given document part. Blank on macOS - the user prefers a clean
     // native title bar there (the document name is already shown in the tab, and macOS apps commonly
-    // leave the title empty); "<doc> - wxNotepad++" on Windows/Linux. All main-frame title updates go
+    // leave the title empty); "<doc> - wxNote" on Windows/Linux. All main-frame title updates go
     // through here so the platform choice lives in one place.
     void setWindowTitle(const wxString& docPart)
     {
 #ifdef __WXMAC__
         (void)docPart; SetTitle(wxString());   // keep the native bar blank (titleVisibility is also hidden, see ctor)
 #else
-        const wxString t = docPart + " - wxNotepad++";
+        const wxString t = docPart + " - wxNote";
         if (GetTitle() != t) SetTitle(t);
 #endif
     }
@@ -5687,7 +5687,7 @@ private:
     // saw the format as available (IsSupported() false immediately after our own SetData()). Also writes
     // CF_UNICODETEXT in the same session, so pasting into another app still gets ordinary text.
 #ifdef __WXMSW__
-    static UINT cfBinary() { static UINT cf = ::RegisterClipboardFormatW(L"wxNotepad++Binary"); return cf; }
+    static UINT cfBinary() { static UINT cf = ::RegisterClipboardFormatW(L"wxNoteBinary"); return cf; }
 #endif
     void copyCutBinary(bool cut)
     {
@@ -5879,7 +5879,7 @@ private:
     {
         const wxString p = curPath();
         if (p.empty()) { notImpl(_("Move to Recycle Bin (save the file first)")); return; }
-        if (wxMessageBox(wxString::Format(_("Move \"%s\" to the Recycle Bin?"), wxFileNameFromPath(p)), "wxNotepad++", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
+        if (wxMessageBox(wxString::Format(_("Move \"%s\" to the Recycle Bin?"), wxFileNameFromPath(p)), "wxNote", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
 #ifdef __WXMSW__
         std::wstring from = p.ToStdWstring(); from.push_back(L'\0'); from.push_back(L'\0');   // double-NUL terminated list
         SHFILEOPSTRUCTW op{}; op.wFunc = FO_DELETE; op.pFrom = from.c_str(); op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
@@ -7215,7 +7215,7 @@ private:
     // ----- dark / light theme -------------------------------------------
     // Parse Notepad++'s theme XML *format* (dark = themes/DarkModeDefault.xml, light =
     // stylers.model.xml) deployed next to the exe - the schema this parses is N++'s own, so a real
-    // N++ theme file works here unmodified, but the two shipped-by-default files are wxNotepad++'s
+    // N++ theme file works here unmodified, but the two shipped-by-default files are wxNote's
     // own regenerated, permissively-licensed replacements, not copied N++ theme data (see
     // resources/themes/DarkModeDefault.xml's header and NOTICE for the license/provenance detail).
     wxString themeFilePath(const wxString& name)   // resolve a theme name to its XML on disk
@@ -7715,7 +7715,7 @@ private:
         btnRemove->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
             if (curIndex < 0 || curIndex >= (int)m_udls.size()) return;
             if (wxMessageBox(wxString::Format(_("Remove user-defined language \"%s\"?"), m_udls[curIndex].name),
-                              "wxNotepad++", wxYES_NO | wxICON_QUESTION, &dlg) != wxYES) return;
+                              "wxNote", wxYES_NO | wxICON_QUESTION, &dlg) != wxYES) return;
             { wxLogNull noLog; wxRemoveFile(udlDir() + wxFILE_SEP_PATH + m_udls[curIndex].name + ".xml"); }
             m_udls.erase(m_udls.begin() + curIndex);
             curIndex = m_udls.empty() ? -1 : 0;
@@ -7741,7 +7741,7 @@ private:
         btnSave->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
             const wxString oldName = (curIndex >= 0 && curIndex < (int)m_udls.size()) ? m_udls[curIndex].name : wxString();
             pullFromControls();
-            if (cur.name.empty()) { wxMessageBox(_("Please give the language a name."), "wxNotepad++", wxOK | wxICON_WARNING, &dlg); return; }
+            if (cur.name.empty()) { wxMessageBox(_("Please give the language a name."), "wxNote", wxOK | wxICON_WARNING, &dlg); return; }
             if (curIndex < 0) { m_udls.push_back(cur); curIndex = (int)m_udls.size() - 1; }
             else m_udls[curIndex] = cur;
             if (!oldName.empty() && oldName != cur.name) { wxLogNull noLog; wxRemoveFile(udlDir() + wxFILE_SEP_PATH + oldName + ".xml"); }
@@ -7799,8 +7799,8 @@ private:
         for (const auto& p : paths) if (wxCopyFile(p, nibDir + wxFILE_SEP_PATH + wxFileNameFromPath(p))) ++n;
 #endif
         if (n == 0) return;
-        if (wxMessageBox(wxString::Format(_("%d plugin(s) imported. Restart wxNotepad++ now to load them?"), n),
-                          "wxNotepad++", wxYES_NO | wxICON_QUESTION, this) == wxYES)
+        if (wxMessageBox(wxString::Format(_("%d plugin(s) imported. Restart wxNote now to load them?"), n),
+                          "wxNote", wxYES_NO | wxICON_QUESTION, this) == wxYES)
             restartWithTheme();
         else
         { setStatus(0, wxString::Format(_("Imported %d plugin(s) - restart to load them"), n)); m_hint = true; }
@@ -8135,12 +8135,12 @@ private:
     }
     void showAbout()
     {
-        wxDialog dlg(this, wxID_ANY, _("About wxNotepad++"));
+        wxDialog dlg(this, wxID_ANY, _("About wxNote"));
         auto* s = new wxBoxSizer(wxVERTICAL);
         s->Add(new wxStaticBitmap(&dlg, wxID_ANY, wxBitmapBundle::FromSVG(APP_ICON_SVG, wxSize(72, 72))),
                0, wxALIGN_CENTRE | wxTOP, 18);
         s->Add(new wxStaticText(&dlg, wxID_ANY,
-                   _("wxNotepad++\n\n"
+                   _("wxNote\n\n"
                      "A cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\n"
                      "a native Scintilla editor with dark/light themes and plugin support.\n\n"
                      "Independent project - not affiliated with or endorsed by Notepad++.")),
@@ -8560,7 +8560,7 @@ private:
             case IDM_ONLINEDOCUMENT: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/tree/master/docs"); break;
             case IDM_FORUM: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/issues"); break;
             case IDM_LANG_UDLCOLLECTION_PROJECT_SITE: wxLaunchDefaultBrowser("https://github.com/notepad-plus-plus/userDefinedLanguages"); break;
-            case IDM_DEBUGINFO: themedInfo(wxString::Format(_("wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"),
+            case IDM_DEBUGINFO: themedInfo(wxString::Format(_("wxNote (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"),
                 wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER, wxGetOsDescription(), wxStandardPaths::Get().GetExecutablePath()), _("Debug Info")); break;
             case IDM_CMDLINEARGUMENTS: themedInfo(_("Usage: wxnpp [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."), _("Command Line Arguments")); break;
 
@@ -8876,13 +8876,13 @@ public:
           ::AddFontResourceExW((fontDir + "JetBrainsMono-Bold.ttf").wc_str(), FR_PRIVATE, nullptr); }
 #endif
         // UI localization (gettext): every _()-wrapped string looks itself up in resources/locale/<lang>/
-        // LC_MESSAGES/wxnpp.mo next to the exe. The language is the user's Preferences > General >
+        // LC_MESSAGES/wxn.mo next to the exe. The language is the user's Preferences > General >
         // Localization choice (wxLANGUAGE_DEFAULT = follow the OS); if no catalog exists for it (e.g. English,
         // which has none), AddCatalog finds nothing and _() falls back to returning its English argument.
         { wxLogNull noWarn;                                     // a chosen language whose OS locale isn't installed still loads our catalog; hush the C-locale warning
           m_locale.Init((int)readUiLang()); }                          // ignore failure: wx installs the chosen wxTranslations even then, and a second Init() would assert (wx forbids re-Init)
         m_locale.AddCatalogLookupPathPrefix(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "locale");
-        m_locale.AddCatalog("wxnpp");
+        m_locale.AddCatalog("wxn");
         const bool dark = resolveDark(readThemeMode());
 #ifdef __WXMSW__
         if (dark)

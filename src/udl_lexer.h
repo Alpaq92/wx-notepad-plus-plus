@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// wxNotepad++ - User-Defined Language: the live styling/folding engine.
+// wxNote - User-Defined Language: the live styling/folding engine.
 //
 // Applies a UdlLanguage (src/udl.h) to a wxStyledTextCtrl via Scintilla's container-lexing mode
 // (wxSTC_LEX_CONTAINER): Scintilla fires wxEVT_STC_STYLENEEDED whenever it needs text styled

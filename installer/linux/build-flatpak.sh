@@ -4,11 +4,11 @@
 # org.gnome.Platform//46 + org.gnome.Sdk//46 runtimes already available (see build.yml's "Install
 # Flatpak runtime" step):
 #   installer/linux/build-flatpak.sh
-# Produces build/installer/wxNotepadPlusPlus-<version>.flatpak
+# Produces build/installer/wxNote-<version>.flatpak
 set -euo pipefail
 cd "$(dirname "$0")/../.."   # repo root
 
-APP_ID="io.github.Alpaq92.WxNotepadPlusPlus"
+APP_ID="io.github.Alpaq92.WxNote"
 # Read straight from the top-level CMakeLists.txt's project(... VERSION ...) so this can't drift
 # out of sync with it again (every packaging script independently hardcoded its own version string
 # and 0.4.0 shipped labeled 0.3.0 everywhere as a result).
@@ -28,5 +28,5 @@ rm -rf "$BUILDDIR" "$REPODIR"
 rsvg-convert -w 256 -h 256 "resources/wxNotepad++.svg" -o "build/flatpak-icon-256.png"
 
 flatpak-builder --force-clean --user --repo="$REPODIR" "$BUILDDIR" "installer/linux/${APP_ID}.yml"
-flatpak build-bundle "$REPODIR" "$OUTDIR/wxNotepadPlusPlus-${VERSION}.flatpak" "$APP_ID"
-echo "Built $OUTDIR/wxNotepadPlusPlus-${VERSION}.flatpak"
+flatpak build-bundle "$REPODIR" "$OUTDIR/wxNote-${VERSION}.flatpak" "$APP_ID"
+echo "Built $OUTDIR/wxNote-${VERSION}.flatpak"

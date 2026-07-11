@@ -1,4 +1,4 @@
-# Flatpak manifest for wxNotepad++. Unlike a typical Flatpak module, this does NOT compile from
+# Flatpak manifest for wxNote. Unlike a typical Flatpak module, this does NOT compile from
 # source inside the build sandbox - it stages the already-built wxnpp binary (from
 # `cmake --build build --target wxnpp`, run before installer/linux/build-flatpak.sh) via
 # `buildsystem: simple`, matching the same "package what's already built" approach as
@@ -12,7 +12,7 @@
 # convention, it's just a convention, and violating it costs nothing here since nothing else reads
 # /app/bin looking only for executables.
 
-app-id: io.github.Alpaq92.WxNotepadPlusPlus
+app-id: io.github.Alpaq92.WxNote
 runtime: org.gnome.Platform
 runtime-version: '46'
 sdk: org.gnome.Sdk
@@ -42,15 +42,15 @@ modules:
       - find /app/bin/locale -name 'po2mo.py' -delete
       - find /app/bin/locale -depth -type d -name '__pycache__' -exec rm -rf {} +
       - install -Dm644 build-bin/stylers.model.xml /app/bin/stylers.model.xml
-      - install -Dm644 wxnpp.desktop /app/share/applications/io.github.Alpaq92.WxNotepadPlusPlus.desktop
-      - install -Dm644 wxnpp.png /app/share/icons/hicolor/256x256/apps/io.github.Alpaq92.WxNotepadPlusPlus.png
-      - install -Dm644 wxnpp.metainfo.xml /app/share/metainfo/io.github.Alpaq92.WxNotepadPlusPlus.metainfo.xml
+      - install -Dm644 wxnpp.desktop /app/share/applications/io.github.Alpaq92.WxNote.desktop
+      - install -Dm644 wxnpp.png /app/share/icons/hicolor/256x256/apps/io.github.Alpaq92.WxNote.png
+      - install -Dm644 wxnpp.metainfo.xml /app/share/metainfo/io.github.Alpaq92.WxNote.metainfo.xml
     sources:
       - type: dir
         path: ../../build/bin
         dest: build-bin
       - type: file
-        path: io.github.Alpaq92.WxNotepadPlusPlus.desktop
+        path: io.github.Alpaq92.WxNote.desktop
         dest-filename: wxnpp.desktop
       - type: file
         # Rasterized by build-flatpak.sh from resources/wxNotepad++.svg immediately before this
@@ -60,5 +60,5 @@ modules:
         path: ../../build/flatpak-icon-256.png
         dest-filename: wxnpp.png
       - type: file
-        path: io.github.Alpaq92.WxNotepadPlusPlus.metainfo.xml
+        path: io.github.Alpaq92.WxNote.metainfo.xml
         dest-filename: wxnpp.metainfo.xml

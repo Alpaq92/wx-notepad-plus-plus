@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.Alpaq92.WxNotepadPlusPlus</id>
-  <name>wxNotepad++</name>
+  <id>io.github.Alpaq92.WxNote</id>
+  <name>wxNote</name>
   <summary>Experimental cross-platform Notepad++-faithful editor</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <description>
     <p>
-      wxNotepad++ is a cross-platform (Windows, Linux, macOS) reimplementation of Notepad++ built
+      wxNote is a cross-platform (Windows, Linux, macOS) reimplementation of Notepad++ built
       on wxWidgets, reusing the Scintilla and Lexilla editing/highlighting engines. It ships a
       full User-Defined Language system, a Function List with rules derived from each supported
       language's own grammar, session restore, macros, print preview, and full UI localization
@@ -15,7 +15,7 @@
       support for real compiled Notepad++-ABI plugin binaries on Windows.
     </p>
   </description>
-  <launchable type="desktop-id">io.github.Alpaq92.WxNotepadPlusPlus.desktop</launchable>
+  <launchable type="desktop-id">io.github.Alpaq92.WxNote.desktop</launchable>
   <url type="homepage">https://github.com/Alpaq92/wx-notepad-plus-plus</url>
   <url type="bugtracker">https://github.com/Alpaq92/wx-notepad-plus-plus/issues</url>
   <provides>

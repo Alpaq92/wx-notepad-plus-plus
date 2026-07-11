@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: wxNotepad++\n"
+"Project-Id-Version: wxNote\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12,8 +12,8 @@ msgstr "%d 个匹配项"
 msgid "%d of %d"
 msgstr "%d / %d"
 
-msgid "%d plugin(s) imported. Restart wxNotepad++ now to load them?"
-msgstr "已导入 %d 个插件。是否立即重启 wxNotepad++ 以加载它们？"
+msgid "%d plugin(s) imported. Restart wxNote now to load them?"
+msgstr "已导入 %d 个插件。是否立即重启 wxNote 以加载它们？"
 
 msgid "%d+ matches"
 msgstr "%d+ 个匹配项"
@@ -339,8 +339,8 @@ msgstr "第 9 个标签	Ctrl+9"
 msgid "ANSI"
 msgstr "ANSI"
 
-msgid "About wxNotepad++	F1"
-msgstr "关于 wxNotepad++	F1"
+msgid "About wxNote	F1"
+msgstr "关于 wxNote	F1"
 
 msgid "Activate document:"
 msgstr "激活文档："
@@ -2379,8 +2379,8 @@ msgstr "个字符起"
 msgid "times"
 msgstr "次"
 
-msgid "wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
-msgstr "wxNotepad++（wxWidgets 实验性分支）\n\nwxWidgets %d.%d.%d\n%s\n\n可执行文件：\n%s"
+msgid "wxNote (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgstr "wxNote（wxWidgets 实验性分支）\n\nwxWidgets %d.%d.%d\n%s\n\n可执行文件：\n%s"
 
 
 msgid "Theme:"
@@ -2413,14 +2413,14 @@ msgstr "关闭当前"
 msgid "Match whole word only"
 msgstr "仅匹配整个单词"
 
-msgid "wxNotepad++ on GitHub"
-msgstr "GitHub 上的 wxNotepad++"
+msgid "wxNote on GitHub"
+msgstr "GitHub 上的 wxNote"
 
-msgid "wxNotepad++ Releases"
-msgstr "wxNotepad++ 发行版"
+msgid "wxNote Releases"
+msgstr "wxNote 发行版"
 
-msgid "wxNotepad++ Documentation"
-msgstr "wxNotepad++ 文档"
+msgid "wxNote Documentation"
+msgstr "wxNote 文档"
 
 msgid "Report an Issue"
 msgstr "报告问题"
@@ -2533,11 +2533,11 @@ msgstr "全局样式"
 msgid "Style %d"
 msgstr "样式 %d"
 
-msgid "About wxNotepad++"
-msgstr "关于 wxNotepad++"
+msgid "About wxNote"
+msgstr "关于 wxNote"
 
-msgid "wxNotepad++\n\nA cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\na native Scintilla editor with dark/light themes and plugin support.\n\nIndependent project - not affiliated with or endorsed by Notepad++."
-msgstr "wxNotepad++\n\n基于 wxWidgets 的跨平台 Notepad++ 风格编辑器重新实现:\n原生 Scintilla 编辑器，支持深色/浅色主题和插件。\n\n独立项目 - 与 Notepad++ 无关，也未获得其认可。"
+msgid "wxNote\n\nA cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\na native Scintilla editor with dark/light themes and plugin support.\n\nIndependent project - not affiliated with or endorsed by Notepad++."
+msgstr "wxNote\n\n基于 wxWidgets 的跨平台 Notepad++ 风格编辑器重新实现:\n原生 Scintilla 编辑器，支持深色/浅色主题和插件。\n\n独立项目 - 与 Notepad++ 无关，也未获得其认可。"
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
 msgstr "搜索 \"%s\"  (%d 处匹配，搜索的 %d 个文件中有 %d 个)"
