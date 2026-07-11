@@ -2,7 +2,8 @@
 # Build a .deb package from the wxnote build output. Run from the repo root after
 # `cmake --build build --target wxnote`:
 #   installer/linux/build-deb.sh
-# Produces build/installer/wxnote_<version>_amd64.deb
+# Produces build/installer/wxnote_<version>_<arch>.deb (amd64 or arm64, from the build host -
+# the same script serves both the x86_64 and the ARM CI runners).
 set -euo pipefail
 cd "$(dirname "$0")/../.."   # repo root
 
@@ -10,6 +11,7 @@ cd "$(dirname "$0")/../.."   # repo root
 # out of sync with it again (every packaging script independently hardcoded its own version string
 # and 0.4.0 shipped labeled 0.3.0 everywhere as a result).
 VERSION="$(sed -n 's/.*project(wxNote VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
+DEB_ARCH="$(dpkg --print-architecture)"   # amd64 / arm64 - Debian's own name for the build host
 PKGDIR="build/deb-pkg"
 OUTDIR="build/installer"
 
@@ -34,7 +36,7 @@ Package: wxnote
 Version: ${VERSION}
 Section: editors
 Priority: optional
-Architecture: amd64
+Architecture: ${DEB_ARCH}
 Maintainer: wxNote Project <noreply@wx-notepad-plus-plus.invalid>
 Description: Experimental cross-platform text editor
  wxWidgets-based cross-platform text editor built on the Scintilla and Lexilla
@@ -42,5 +44,5 @@ Description: Experimental cross-platform text editor
  Windows compatibility bridge for legacy Notepad++ plugin binaries.
 EOF
 
-dpkg-deb --build --root-owner-group "$PKGDIR" "$OUTDIR/wxnote_${VERSION}_amd64.deb"
-echo "Built $OUTDIR/wxnote_${VERSION}_amd64.deb"
+dpkg-deb --build --root-owner-group "$PKGDIR" "$OUTDIR/wxnote_${VERSION}_${DEB_ARCH}.deb"
+echo "Built $OUTDIR/wxnote_${VERSION}_${DEB_ARCH}.deb"

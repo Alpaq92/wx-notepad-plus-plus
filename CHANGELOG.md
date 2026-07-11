@@ -3,7 +3,15 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.7.0] - 2026-07-11
+
+### Added
+- **ARM builds for Windows and Linux.** CI now builds two extra legs on GitHub's native arm64
+  runners: a Windows **ARM64** NSIS installer (`wxNote-<version>-arm64-Setup.exe`, with a
+  native-ARM64 install guard) and all four Linux package formats for **aarch64**
+  (`wxnote_<version>_arm64.deb`, `wxnote-<version>-1.aarch64.rpm`, `wxNote-<version>-aarch64.AppImage`,
+  `wxNote-<version>-aarch64.flatpak`). Existing x64 asset names are unchanged; the project site's
+  download page now offers a per-CPU choice for Windows and Linux.
 
 ### Changed
 - **Rebranded to wxNote.** The application, window titles, About box, menus, installers, and the
@@ -19,6 +27,17 @@ All notable changes to wxNote are documented here. Format loosely follows
   compatibility path for legacy Notepad++ plugin binaries. Notepad++ references were removed from
   core code and UI text; the Language menu item linking to Notepad++'s UDL collection site was
   removed.
+- **Relicensed to Apache-2.0.** The project (everything that ships except the optional
+  `packages/npp-bridge` plugin, which stays GPL-3.0-or-later under its own LICENSE because it
+  reproduces Notepad++'s plugin ABI) is now under the Apache License 2.0 - the permissive goal the
+  project's licensing roadmap had been driving toward since the de-GPL engineering began. All
+  installer/package metadata (NSIS, RPM spec, Flatpak metainfo, macOS Info.plist) and the project
+  site now state Apache-2.0. See `LICENSING.md` for the per-component record.
+- **docs/ rebuilt.** The five development-era planning documents were removed and replaced with
+  three permanent ones: `GOALS.md` (why the project exists and why it isn't a port), `ARCHITECTURE.md`
+  (how the editor is put together), and `CREDITS.md` (everything used or consulted during
+  development). A root `CONTRIBUTING.md` was added with build instructions, the PR workflow, and the
+  project's code/licensing ground rules.
 
 ### Removed
 - The **DansLeRuSH-Dark** color theme is no longer shipped. Its upstream license is Creative Commons
@@ -28,6 +47,14 @@ All notable changes to wxNote are documented here. Format loosely follows
   falls back to the built-in palette; the theme remains available from the author at
   https://codeberg.org/DansLeRuSH/notepad-plus-plus-dark-theme for personal installs (drop it into
   the `themes/` folder).
+
+### Fixed
+- macOS **Preferences dialog**: the section list's selected row rendered plain white instead of the
+  system highlight colour, and the Close button carried a stray rectangular border in dark mode
+  (native buttons are now left fully native under the dialog's dark-mode recolouring).
+- **Themes on Linux/macOS**: theme files were resolved with Windows-style path separators, which
+  could prevent the theme XMLs deployed next to the executable from loading on non-Windows
+  platforms.
 
 ## [0.6.2] - 2026-07-11
 

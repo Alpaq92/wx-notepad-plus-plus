@@ -25,8 +25,17 @@
 !define APP_EXE     "wxnote.exe"
 !define ARP_KEY     "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 
+; TARGET_ARM64 (makensis /DTARGET_ARM64): the windows-arm64 CI leg builds an ARM64 wxnote.exe and
+; passes this define so the installer is named apart and guards for the right CPU at .onInit.
+; Default (undefined) = the x64 build, whose asset name stays exactly as before.
+!ifdef TARGET_ARM64
+  !define ARCH_SUFFIX "-arm64"
+!else
+  !define ARCH_SUFFIX ""
+!endif
+
 Name "${APP_NAME}"
-OutFile "..\..\build\installer\wxNote-${APP_VERSION}-Setup.exe"
+OutFile "..\..\build\installer\wxNote-${APP_VERSION}${ARCH_SUFFIX}-Setup.exe"
 Unicode true
 SetCompressor /SOLID lzma
 ManifestDPIAware true
@@ -61,16 +70,26 @@ VIAddVersionKey /LANG=1033 "ProductVersion"  "${APP_VERSION}.0"
 VIAddVersionKey /LANG=1033 "FileVersion"     "${APP_VERSION}.0"
 VIAddVersionKey /LANG=1033 "FileDescription" "${APP_NAME} installer"
 VIAddVersionKey /LANG=1033 "CompanyName"     "wxNote Project"
-VIAddVersionKey /LANG=1033 "LegalCopyright"  "GPL v3 - see LICENSE"
+VIAddVersionKey /LANG=1033 "LegalCopyright"  "Apache-2.0 - see LICENSE"
 
-; wxnote.exe is built x64-only (see CMakeLists.txt) - NSIS itself has no "ArchitecturesAllowed" concept
-; the way Inno Setup does, so the 64-bit-ness has to be enforced by hand or the 32-bit installer stub
-; would happily lay a 64-bit exe down on a 32-bit system, where it can't run at all.
+; The payload exe is single-arch (see CMakeLists.txt) - NSIS itself has no "ArchitecturesAllowed"
+; concept the way Inno Setup does, so the CPU check has to be enforced by hand or the 32-bit
+; installer stub would happily lay an exe down on a machine that can't run it. The ARM64 build
+; requires a native ARM64 Windows (x64 Windows can't run ARM64 binaries); the x64 build keeps the
+; broader RunningX64 check - it deliberately still installs on ARM64 Windows 11, where x64 apps
+; run fine under the OS's built-in emulation.
 Function .onInit
+!ifdef TARGET_ARM64
+  ${IfNot} ${IsNativeARM64}
+    MessageBox MB_OK|MB_ICONSTOP "This ${APP_NAME} installer is for ARM64 Windows. Please download the x64 installer instead."
+    Quit
+  ${EndIf}
+!else
   ${IfNot} ${RunningX64}
     MessageBox MB_OK|MB_ICONSTOP "${APP_NAME} requires 64-bit Windows."
     Quit
   ${EndIf}
+!endif
 FunctionEnd
 
 Section "${APP_NAME} (required)" SecCore

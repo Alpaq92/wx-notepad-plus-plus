@@ -7,8 +7,8 @@
 // borrows nothing from Notepad++ (no NPPM_* numbers, no FuncItem/NppData/SCNotification, no WM_USER,
 // and no platform handles such as HWND in the contract). A plugin is a shared library exporting a
 // single entry point; it asks the host for capability interfaces by stable id + version and gets back
-// typed function tables. This file (and the API it defines) is permissively licensed even while the
-// project as a whole ships GPL - it is the intended permissive core (see docs/FUTURE_PLANS.md).
+// typed function tables. This file (and the API it defines) is Apache-2.0, matching the rest of the
+// core (see LICENSING.md) - only the optional npp-bridge module stays GPL.
 //
 // This is the Part-1 surface: enough to load a plugin, register a command, and edit text. It will grow
 // (documents, panels, events, language services, ...) additively - every struct is length-prefixed and

@@ -29,7 +29,9 @@ jobs:
         run: |
           gh release create "${{ github.ref_name }}" \
             artifacts/wxnote-windows-installer/* \
+            artifacts/wxnote-windows-arm64-installer/* \
             artifacts/wxnote-linux-packages/* \
+            artifacts/wxnote-linux-arm64-packages/* \
             artifacts/wxnote-macos-arm64-package/* \
             artifacts/wxnote-macos-x86_64-package/* \
             --repo "${{ github.repository }}" \

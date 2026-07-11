@@ -7,8 +7,8 @@ IDI_APPICON ICON "wxnote.ico"
 // the project() version in CMakeLists.txt on every release (the NSIS script reads its version
 // from CMakeLists.txt directly; this block is only the exe's own metadata).
 1 VERSIONINFO
-FILEVERSION     0,6,2,0
-PRODUCTVERSION  0,6,2,0
+FILEVERSION     0,7,0,0
+PRODUCTVERSION  0,7,0,0
 FILEFLAGSMASK   0x3fL
 FILEFLAGS       0x0L
 FILEOS          0x40004L
@@ -21,12 +21,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "wxNote Project"
             VALUE "FileDescription",  "wxNote - experimental cross-platform text editor"
-            VALUE "FileVersion",      "0.6.2.0"
+            VALUE "FileVersion",      "0.7.0.0"
             VALUE "InternalName",     "wxnote"
             VALUE "OriginalFilename", "wxnote.exe"
             VALUE "ProductName",      "wxNote"
-            VALUE "ProductVersion",   "0.6.2.0"
-            VALUE "LegalCopyright",   "GPL v3 - see LICENSE"
+            VALUE "ProductVersion",   "0.7.0.0"
+            VALUE "LegalCopyright",   "Apache-2.0 - see LICENSE"
         END
     END
     BLOCK "VarFileInfo"
