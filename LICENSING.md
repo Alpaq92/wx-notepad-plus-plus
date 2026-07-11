@@ -47,11 +47,21 @@ we are confident — permissively-licensed files composing into a GPL aggregate 
 | Plugin ABI headers — `include/npp-compat/` | Apache-2.0 *expression*, but they **functionally reproduce N++'s GPL ABI** (gate #1) | to be replaced by the permissive Nib API |
 | Menu structure — `src/menu_builder.h` + `src/menu_data_*.h` | under the project's **GPL v3** (original code) | Phase B (2026-07-09) reshaped this into an original 10-menu hierarchy — no longer reproduces N++'s menu structure; only the numeric `IDM_*` ids carry over, as documented in the ABI-headers row above |
 | Regenerated themes + `stylers.model.xml` | **Apache-2.0** | our data: factual Lexilla structure + permissive palettes |
-| Kept third-party themes — `resources/themes/` | **MIT** / upstream-permissive | © Fabio Zendhi Nagao, Oren Farhi, … |
+| Kept third-party themes — `resources/themes/` | **MIT** (© Fabio Zendhi Nagao, Oren Farhi, Renato Silva) / **CC BY 3.0** (© Paul Neubauer) | each file keeps its original author header; see the removal note below |
 | Scintilla / Lexilla — `third_party/` | **HPND** (permissive) | the editing/highlighting engine |
 | wxBorderlessFrame (wxbf) — `third_party/wxbf/` | wxWindows Licence (LGPL + static-link exception) | vendored; Windows/Linux only (no macOS backend) |
 | wxWidgets | wxWindows Licence (LGPL + static-link exception) | fetched at build, not vendored |
 | Project site — `site/` | **MIT** (matches its template's license) | adapted from codewithsadee/vcard-personal-portfolio (MIT) — see [`site/CREDITS.md`](site/CREDITS.md) |
+
+> **Removed theme (2026-07-11):** `DansLeRuSH-Dark.xml` (© Franck Albaret) was dropped from the shipped
+> set. Its header contains MIT-style permission text, but that text is labeled "[ LEGAL DISCLAIMER ]"
+> and is contradicted two lines later by an explicit `Licence : Creative Commons BY-NC-SA 3.0` field;
+> the author's canonical repository
+> ([codeberg.org/DansLeRuSH/notepad-plus-plus-dark-theme](https://codeberg.org/DansLeRuSH/notepad-plus-plus-dark-theme))
+> declares the same CC BY-NC-SA 3.0 license, so the author's intent is NonCommercial-ShareAlike and we
+> do not rely on the pasted MIT text. A NonCommercial asset is incompatible with this project's
+> redistribution goals (and with non-free policies of Debian/Fedora/Flathub), so the theme is not
+> shipped. It can return if the author grants a permissive license for our redistribution.
 
 ## Compatibility surface (ABI)
 

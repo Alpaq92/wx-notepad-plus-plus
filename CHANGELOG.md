@@ -3,6 +3,17 @@
 All notable changes to wxNotepad++ are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Removed
+- The **DansLeRuSH-Dark** color theme is no longer shipped. Its upstream license is Creative Commons
+  BY-NC-SA 3.0 — the **NonCommercial** term conflicts with this project's redistribution goals (the
+  MIT-style text in the file's header is labeled a "legal disclaimer" and is overridden by the
+  author's explicit license declaration). Details in LICENSING.md. If you were using it, the app
+  falls back to the built-in palette; the theme remains available from the author at
+  https://codeberg.org/DansLeRuSH/notepad-plus-plus-dark-theme for personal installs (drop it into
+  the `themes/` folder).
+
 ## [0.6.2] - 2026-07-11
 
 ### Added

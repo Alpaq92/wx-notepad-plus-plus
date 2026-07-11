@@ -61,9 +61,13 @@ Toolbar icons — "Notepad++ Toolbar Icons (Tabler x Open Color)"
     * Open Color      - Copyright (c) Heeyeun Jeong,   MIT License.
 
 Color themes — resources/themes/
-  Kept third-party themes under their own permissive licenses (MIT: © 2008 Fabio
-  Zendhi Nagao; Bespin © 2009 Oren Farhi; plus a few carrying an upstream "feel
-  free to modify" grant). Regenerated themes + stylers.model.xml are our own data
+  Kept third-party themes under their own attribution-preserving licenses (MIT:
+  © 2008 Fabio Zendhi Nagao, Bespin © 2009 Oren Farhi, Twilight additions
+  © 2011-2014 Renato Silva; CC BY 3.0: © Paul Neubauer). Each file retains its
+  original author header. The formerly-kept DansLeRuSH-Dark theme was removed
+  2026-07-11: its upstream license is CC BY-NC-SA 3.0 (NonCommercial), which we
+  do not redistribute — see LICENSING.md.
+  Regenerated themes + stylers.model.xml are our own data
   (Apache-2.0): the factual Lexilla style structure recoloured from permissive
   palettes - GitHub Primer, Atom One Dark/Light, Nord, Dracula and VS Code (all
   MIT) plus the canonical Zenburn / Obsidian palettes (colour values are facts).
