@@ -3,6 +3,54 @@
 All notable changes to wxNotepad++ are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.2] - 2026-07-11
+
+### Added
+- **Integrated terminal** (View > Show Terminal): a bottom panel with multi-tab shells and a
+  per-platform picker - cmd/PowerShell always, plus pwsh/Cygwin/WSL if actually installed on Windows;
+  the user's `$SHELL` (+ bash) on Linux; zsh/bash on macOS. New terminals open in the active document's
+  directory. v1 is a pipe console (like Notepad++'s NppExec) - great for commands, git, compilers,
+  REPLs; full-screen TUI apps (vim, htop) need the real-PTY upgrade this lays the groundwork for.
+  A long-running child (e.g. `npm run dev`) and any processes IT spawns are properly terminated when
+  its tab or the app closes, without freezing the UI while that happens; PowerShell/pwsh read and
+  write their console codepage correctly, so typed non-ASCII characters (e.g. Polish `ą/ć/ł/...`,
+  including via AltGr) aren't corrupted; output is decoded byte-accurately even if a stray non-UTF-8
+  byte shows up mid-stream. Fully translated in all 8 languages.
+- **File > Open Containing Folder is now dynamically filled** per what the running machine actually
+  has, instead of a fixed Explorer/cmd/PowerShell-shaped list that did nothing useful on Linux/macOS.
+  Windows keeps cmd/PowerShell as fixed entries (real Notepad++ plugins may invoke them) and adds
+  pwsh/Cygwin/WSL only if installed; Linux lists every terminal emulator found on `$PATH`
+  (GNOME Terminal, Konsole, Xfce Terminal, ...); macOS lists Terminal.app and iTerm if installed.
+- macOS: **integrated top bar** (Preferences > "Show integrated top bar", now available on macOS too)
+  drops the native title-bar band and re-centres the traffic-light window buttons into the toolbar row,
+  matching the same layout Windows/Linux already had.
+- Documents with **no recognizable extension** now get their language auto-detected from content: a
+  shebang line (`#!/usr/bin/env python3` and friends), an XML/HTML prolog, or a JSON-shaped body.
+- Project site: Linux screenshot in the gallery, alongside macOS under "Platforms".
+
+### Fixed
+- File > Open Containing Folder's **Explorer/File Manager and Folder as Workspace entries** were
+  disabled on an untitled buffer instead of falling back to the working directory like every other
+  entry in the same submenu.
+- Removed the **duplicate "Folder as Workspace"** entry from the Open Containing Folder submenu - it
+  did the same job as the top-level File > Open Folder as Workspace..., which already pre-selects the
+  current file's folder in its picker.
+- `.gitattributes` (and other dotfiles: `.gitignore`, `.editorconfig`, `.env`, ...) could pick up
+  whatever icon a locally-installed tool happened to register for them in the OS shell - a
+  machine-specific accident, not a deliberate choice. They now always render with our own icon.
+- The **Document Map** minimap's viewport-highlight band was unreadable: the translucent-selection
+  rendering path makes Scintilla skip painting the selected text entirely at minimap zoom, so the band
+  read as a blank slab instead of dimmed text. It's now an opaque, background-near tint.
+- Closing **Preferences** could leave the active document's syntax highlighting stripped until the
+  next tab switch (the instant gutter-colour update reset every style without re-running the lexer).
+- Docked-panel captions (Document Map, Function List, ...) now use a flat, chrome-coloured header
+  matching the tab strip's height and colour, instead of the stock grey gradient.
+- The **IconPark dark-theme icon set**: eight stroke-only glyphs (including the toolbar Close "x")
+  kept their light-mode stroke colour in dark mode, reading as disabled even when enabled.
+- Linux/macOS: the **integrated top bar's menu buttons** (File, Edit, ...) had no left/right padding,
+  so the hover/click highlight hugged the label text edge-to-edge instead of reading as a proper
+  menubar item.
+
 ## [0.6.1] - 2026-07-10
 
 ### Fixed

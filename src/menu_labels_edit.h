@@ -109,7 +109,16 @@ namespace Label
 
     inline const wxString EditOnSelection() { return _("&On Selection"); }
     inline const wxString EditOpenSelectedFileToEdit() { return _("Open File"); }
-    inline const wxString EditOpenSelectedFileFolderInExplorer() { return _("Open Containing Folder in Explorer"); }
+    inline const wxString EditOpenSelectedFileFolderInExplorer()
+    {
+#if defined(__WXMSW__)
+        return _("Open Containing Folder in Explorer");
+#elif defined(__WXMAC__)
+        return _("Reveal in Finder");
+#else
+        return _("Open Containing Folder in File Manager");
+#endif
+    }
     inline const wxString EditRedactSelection() { return _("&Redact Selection █ (Shift: ●)"); }
     inline const wxString EditSearchOnInternet() { return _("Search on Internet"); }
     inline const wxString EditChangeSearchEngine() { return _("Change Search Engine..."); }

@@ -2582,3 +2582,24 @@ msgstr "확장(&X)"
 
 msgid "&Help"
 msgstr "도움말(&H)"
+
+msgid "File Manager"
+msgstr "파일 관리자"
+
+msgid "Terminal"
+msgstr "터미널"
+
+msgid "Open Containing Folder in File Manager"
+msgstr "파일 관리자에서 상위 폴더 열기"
+
+msgid "Reveal in Finder"
+msgstr "Finder에서 보기"
+
+msgid "Show &Terminal"
+msgstr "터미널 표시(&T)"
+
+msgid "Failed to start: %s"
+msgstr "시작하지 못했습니다: %s"
+
+msgid "[process exited with code %d]"
+msgstr "[프로세스가 코드 %d(으)로 종료됨]"

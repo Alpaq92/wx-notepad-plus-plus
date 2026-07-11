@@ -2583,3 +2583,24 @@ msgstr "扩展(&X)"
 
 msgid "&Help"
 msgstr "帮助(&H)"
+
+msgid "File Manager"
+msgstr "文件管理器"
+
+msgid "Terminal"
+msgstr "终端"
+
+msgid "Open Containing Folder in File Manager"
+msgstr "在文件管理器中打开所在文件夹"
+
+msgid "Reveal in Finder"
+msgstr "在 Finder 中显示"
+
+msgid "Show &Terminal"
+msgstr "显示终端(&T)"
+
+msgid "Failed to start: %s"
+msgstr "启动失败：%s"
+
+msgid "[process exited with code %d]"
+msgstr "[进程已退出，代码 %d]"

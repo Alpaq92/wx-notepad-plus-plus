@@ -2582,3 +2582,24 @@ msgstr "E&xtensiones"
 
 msgid "&Help"
 msgstr "A&yuda"
+
+msgid "File Manager"
+msgstr "Administrador de archivos"
+
+msgid "Terminal"
+msgstr "Terminal"
+
+msgid "Open Containing Folder in File Manager"
+msgstr "Abrir la carpeta contenedora en el administrador de archivos"
+
+msgid "Reveal in Finder"
+msgstr "Mostrar en Finder"
+
+msgid "Show &Terminal"
+msgstr "Mostrar &terminal"
+
+msgid "Failed to start: %s"
+msgstr "No se pudo iniciar: %s"
+
+msgid "[process exited with code %d]"
+msgstr "[proceso finalizado con código %d]"

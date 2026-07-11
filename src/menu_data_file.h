@@ -8,12 +8,31 @@
 // inline buildNppMainMenu() (see src/npp_menu.h). Same items, same order,
 // same IDM_* ids, same labels, same shortcuts.
 
+// Dynamically filled per what THIS machine actually has (see terminal_panel.h's detectWindowsExtra-
+// OpenHereTools/detectLinuxTerminalEmulators/detectMacTerminalApps, populated in buildMenuBar() at the
+// "slot.openContainingFolderTools" DynamicSlot below) - a fixed Explorer/cmd/PowerShell-shaped list
+// made no sense cross-platform: cmd/PowerShell did nothing on Linux/macOS, and a single guessed
+// "Terminal" entry ignored whatever terminal emulators (or pwsh/Cygwin/WSL) were actually installed.
 static const MenuItemDef kFileOpenContainingFolderItems[] = {
-    { MenuItemKind::Normal, IDM_FILE_OPEN_FOLDER,                 &Label::FileOpenExplorer,      "file.openContainingFolder.explorer" },
-    { MenuItemKind::Normal, IDM_FILE_OPEN_CMD,                    &Label::FileOpenCmd,           "file.openContainingFolder.cmd" },
-    { MenuItemKind::Normal, IDM_FILE_OPEN_POWERSHELL,             &Label::FileOpenPowerShell,    "file.openContainingFolder.powerShell" },
-    { MenuItemKind::Separator },
-    { MenuItemKind::Normal, IDM_FILE_CONTAININGFOLDERASWORKSPACE, &Label::FileFolderAsWorkspace, "file.openContainingFolder.folderAsWorkspace" },
+#ifdef __WXMSW__
+    // cmd/PowerShell stay STATIC with their original frozen ids: this is Windows, where real Notepad++
+    // plugins exist and may invoke them via NPPM_MENUCOMMAND - every IDM_* must keep landing on a real
+    // menu item. The DynamicSlot below adds only what's genuinely new to this machine (pwsh/Cygwin/WSL).
+    { MenuItemKind::Normal, IDM_FILE_OPEN_FOLDER,     &Label::FileOpenExplorer,   "file.openContainingFolder.explorer" },
+    { MenuItemKind::Normal, IDM_FILE_OPEN_CMD,        &Label::FileOpenCmd,       "file.openContainingFolder.cmd" },
+    { MenuItemKind::Normal, IDM_FILE_OPEN_POWERSHELL, &Label::FileOpenPowerShell,"file.openContainingFolder.powerShell" },
+#else
+    // Linux/macOS: no legacy plugin ABI to preserve (packages/npp-bridge is Windows-only), so the whole
+    // terminal cluster is free to be built from what this machine actually has.
+    { MenuItemKind::Normal, IDM_FILE_OPEN_FOLDER, &Label::FileOpenFileManager, "file.openContainingFolder.fileManager" },
+#endif
+    { MenuItemKind::DynamicSlot, 0, nullptr, "slot.openContainingFolderTools" },
+    // No "Folder as Workspace" entry here - it would duplicate the top-level "Open Folder as
+    // Workspace..." item below, which already pre-selects the current file's folder in its dialog
+    // (see openFolderAsWorkspace()), so it covers both the "quick, current file" and "pick any folder"
+    // cases with one menu item instead of two near-identical ones. IDM_FILE_CONTAININGFOLDERASWORKSPACE
+    // itself is intentionally left wired in the dispatcher (containingFolderAsWorkspace()) even though
+    // no menu item fires it anymore, so a plugin invoking the id via NPPM_MENUCOMMAND still works.
 };
 
 static const MenuItemDef kFileCloseMultipleDocumentsItems[] = {

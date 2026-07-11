@@ -2582,3 +2582,24 @@ msgstr "Roz&szerzenia"
 
 msgid "&Help"
 msgstr "Po&moc"
+
+msgid "File Manager"
+msgstr "Menedżer plików"
+
+msgid "Terminal"
+msgstr "Terminal"
+
+msgid "Open Containing Folder in File Manager"
+msgstr "Otwórz folder zawierający w menedżerze plików"
+
+msgid "Reveal in Finder"
+msgstr "Pokaż w Finderze"
+
+msgid "Show &Terminal"
+msgstr "Pokaż &terminal"
+
+msgid "Failed to start: %s"
+msgstr "Nie udało się uruchomić: %s"
+
+msgid "[process exited with code %d]"
+msgstr "[proces zakończył się kodem %d]"

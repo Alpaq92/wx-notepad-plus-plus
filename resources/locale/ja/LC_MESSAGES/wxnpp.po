@@ -2582,3 +2582,24 @@ msgstr "拡張機能(&X)"
 
 msgid "&Help"
 msgstr "ヘルプ(&H)"
+
+msgid "File Manager"
+msgstr "ファイルマネージャー"
+
+msgid "Terminal"
+msgstr "ターミナル"
+
+msgid "Open Containing Folder in File Manager"
+msgstr "ファイルマネージャーで親フォルダーを開く"
+
+msgid "Reveal in Finder"
+msgstr "Finderで表示"
+
+msgid "Show &Terminal"
+msgstr "ターミナルを表示(&T)"
+
+msgid "Failed to start: %s"
+msgstr "起動に失敗しました: %s"
+
+msgid "[process exited with code %d]"
+msgstr "[プロセスはコード %d で終了しました]"

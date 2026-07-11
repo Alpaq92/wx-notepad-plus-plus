@@ -134,6 +134,7 @@ static const MenuItemDef kViewMenuItems[] = {
     { MenuItemKind::Normal, IDM_VIEW_DOC_MAP,     &Label::ViewDocMap,      "view.docMap" },
     { MenuItemKind::Normal, IDM_VIEW_DOCLIST,     &Label::ViewDocList,     "view.docList" },
     { MenuItemKind::Normal, IDM_VIEW_FUNC_LIST,   &Label::ViewFuncList,    "view.funcList" },
+    { MenuItemKind::Check,  myID_VIEW_TERMINAL,   &Label::ViewTerminal,    "view.terminal" },
     { MenuItemKind::Separator },
     { MenuItemKind::Normal, IDM_EDIT_RTL, &Label::ViewEditRTL, "view.editRtl" },
     { MenuItemKind::Normal, IDM_EDIT_LTR, &Label::ViewEditLTR, "view.editLtr" },
