@@ -35,7 +35,7 @@ Version: ${VERSION}
 Section: editors
 Priority: optional
 Architecture: amd64
-Maintainer: wxNotepad++ Project <noreply@wx-notepad-plus-plus.invalid>
+Maintainer: wxNote Project <noreply@wx-notepad-plus-plus.invalid>
 Description: Experimental cross-platform Notepad++-faithful editor
  wxWidgets-based reimplementation of Notepad++, reusing Scintilla and Lexilla,
  with an original permissive plugin API and optional Notepad++ ABI plugin

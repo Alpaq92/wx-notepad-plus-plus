@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// A minimal Nib plugin for wxNotepad++ - reference implementation + smoke test for the Nib plugin API.
+// A minimal Nib plugin for wxNote - reference implementation + smoke test for the Nib plugin API.
 // Cross-platform: it includes only nib.h (no Win32, no Notepad++ ABI) and is built as a shared module
 // loaded from <exe>/nib/. It exercises four interfaces: nib.commands, nib.editor, nib.events, nib.panels.
 #include "nib.h"
@@ -15,7 +15,7 @@ static int         g_textChanges = 0;
 static void cmd_hello(NibHost* host, NibQueryFn query, void*)
 {
     const NibEditorApi* ed = static_cast<const NibEditorApi*>(query(host, NIB_IFACE_EDITOR, 1));
-    if (ed) ed->replace_selection(host, "// Hello from a Nib plugin - wxNotepad++'s own cross-platform API\n");
+    if (ed) ed->replace_selection(host, "// Hello from a Nib plugin - wxNote's own cross-platform API\n");
 }
 
 static void cmd_doclen(NibHost* host, NibQueryFn query, void*)

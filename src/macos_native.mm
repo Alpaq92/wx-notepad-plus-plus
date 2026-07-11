@@ -6,7 +6,7 @@
 
 // Blank the native title bar. wx's SetTitle("") technically clears the text, but the clean look
 // shouldn't hinge on that one call surviving every wx/AppKit title reassertion; hiding the title
-// outright is unconditional. (User preference on macOS: no "<doc> - wxNotepad++" - the document name
+// outright is unconditional. (User preference on macOS: no "<doc> - wxNote" - the document name
 // already shows in the tab, and Cocoa apps commonly leave the title empty.)
 extern "C" void wxnpp_HideWindowTitle(void* nsWindow)
 {

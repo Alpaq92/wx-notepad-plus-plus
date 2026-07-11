@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=wxNotepad++
+Name=wxNote
 GenericName=Text Editor
 Comment=Experimental cross-platform Notepad++-faithful editor
 Exec=wxnpp %F

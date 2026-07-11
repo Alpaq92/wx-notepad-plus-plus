@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// wxNotepad++ - User-Defined Language (UDL) data model + XML (de)serialization.
+// wxNote - User-Defined Language (UDL) data model + XML (de)serialization.
 //
 // Mirrors Notepad++'s real userDefineLang.xml schema field-for-field (verified against a real
 // sample export, not guessed), so definitions written here can be exchanged with real Notepad++

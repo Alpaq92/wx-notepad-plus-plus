@@ -6,7 +6,7 @@
 # CMAKE_OSX_ARCHITECTURES the build itself was actually configured with (see build.yml), since this
 # script has no way to inspect the already-built binary's arch itself. Defaults to `uname -m` for a
 # local, non-CI build on a single-arch machine.
-# Produces build/installer/wxNotepadPlusPlus-<version>-<arch>.dmg
+# Produces build/installer/wxNote-<version>-<arch>.dmg
 set -euo pipefail
 cd "$(dirname "$0")/../.."   # repo root
 
@@ -16,7 +16,7 @@ ARCH="${1:-$(uname -m)}"
 # out of sync with it again (every packaging script independently hardcoded its own version string
 # and 0.4.0 shipped labeled 0.3.0 everywhere as a result).
 VERSION="$(sed -n 's/.*project(wxNotepadPlusPlus VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
-APPDIR="build/wxNotepad++.app"
+APPDIR="build/wxNote.app"
 OUTDIR="build/installer"
 
 rm -rf "$APPDIR"
@@ -49,9 +49,9 @@ cat > "$APPDIR/Contents/Info.plist" <<EOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>wxNotepad++</string>
-    <key>CFBundleDisplayName</key><string>wxNotepad++</string>
-    <key>CFBundleIdentifier</key><string>com.wxnotepadplusplus.app</string>
+    <key>CFBundleName</key><string>wxNote</string>
+    <key>CFBundleDisplayName</key><string>wxNote</string>
+    <key>CFBundleIdentifier</key><string>com.wxnote.app</string>
     <key>CFBundleVersion</key><string>${VERSION}</string>
     <key>CFBundleShortVersionString</key><string>${VERSION}</string>
     <key>CFBundlePackageType</key><string>APPL</string>
@@ -71,5 +71,5 @@ DMGROOT="build/dmg-root"
 rm -rf "$DMGROOT"; mkdir -p "$DMGROOT"
 cp -r "$APPDIR" "$DMGROOT/"
 ln -s /Applications "$DMGROOT/Applications"
-hdiutil create -volname "wxNotepad++ (${ARCH})" -srcfolder "$DMGROOT" -ov -format UDZO "$OUTDIR/wxNotepadPlusPlus-${VERSION}-${ARCH}.dmg"
-echo "Built $OUTDIR/wxNotepadPlusPlus-${VERSION}-${ARCH}.dmg"
+hdiutil create -volname "wxNote (${ARCH})" -srcfolder "$DMGROOT" -ov -format UDZO "$OUTDIR/wxNote-${VERSION}-${ARCH}.dmg"
+echo "Built $OUTDIR/wxNote-${VERSION}-${ARCH}.dmg"

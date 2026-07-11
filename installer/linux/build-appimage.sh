@@ -2,7 +2,7 @@
 # Build a Linux AppImage from the wxnpp build output. Run from the repo root after
 # `cmake --build build --target wxnpp`:
 #   installer/linux/build-appimage.sh
-# Produces build/installer/wxNotepadPlusPlus-<version>-x86_64.AppImage
+# Produces build/installer/wxNote-<version>-x86_64.AppImage
 set -euo pipefail
 cd "$(dirname "$0")/../.."   # repo root
 
@@ -45,5 +45,5 @@ VERSION="$VERSION" ./linuxdeploy.AppImage --appimage-extract-and-run \
 # worth hardcoding a guess for - find whatever .AppImage it just produced in the cwd.
 built=$(find . -maxdepth 1 -name '*.AppImage' ! -name 'linuxdeploy.AppImage' | head -1)
 if [ -z "$built" ]; then echo "linuxdeploy did not produce an AppImage" >&2; exit 1; fi
-mv "$built" "$OUTDIR/wxNotepadPlusPlus-${VERSION}-x86_64.AppImage"
-echo "Built $OUTDIR/wxNotepadPlusPlus-${VERSION}-x86_64.AppImage"
+mv "$built" "$OUTDIR/wxNote-${VERSION}-x86_64.AppImage"
+echo "Built $OUTDIR/wxNote-${VERSION}-x86_64.AppImage"

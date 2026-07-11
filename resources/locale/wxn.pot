@@ -1,9 +1,9 @@
-# wxNotepad++ UI string catalog template.
-# This file is distributed under the same GPL v3 license as wxNotepad++ itself.
+# wxNote UI string catalog template.
+# This file is distributed under the same GPL v3 license as wxNote itself.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: wxNotepad++\n"
+"Project-Id-Version: wxNote\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1274,7 +1274,7 @@ msgstr ""
 msgid "Debug Info..."
 msgstr ""
 
-msgid "About wxNotepad++\tF1"
+msgid "About wxNote\tF1"
 msgstr ""
 
 msgid "&About"
@@ -2024,7 +2024,7 @@ msgstr ""
 msgid "Plugin files (*.so)|*.so"
 msgstr ""
 
-msgid "%d plugin(s) imported. Restart wxNotepad++ now to load them?"
+msgid "%d plugin(s) imported. Restart wxNote now to load them?"
 msgstr ""
 
 msgid "Imported %d plugin(s) - restart to load them"
@@ -2084,7 +2084,7 @@ msgstr ""
 msgid "Marked %d - style 5"
 msgstr ""
 
-msgid "wxNotepad++ (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgid "wxNote (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
 msgstr ""
 
 msgid "Debug Info"
@@ -2396,13 +2396,13 @@ msgstr ""
 msgid "Match whole word only"
 msgstr ""
 
-msgid "wxNotepad++ on GitHub"
+msgid "wxNote on GitHub"
 msgstr ""
 
-msgid "wxNotepad++ Releases"
+msgid "wxNote Releases"
 msgstr ""
 
-msgid "wxNotepad++ Documentation"
+msgid "wxNote Documentation"
 msgstr ""
 
 msgid "Report an Issue"
@@ -2516,10 +2516,10 @@ msgstr ""
 msgid "Style %d"
 msgstr ""
 
-msgid "About wxNotepad++"
+msgid "About wxNote"
 msgstr ""
 
-msgid "wxNotepad++\n\nA cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\na native Scintilla editor with dark/light themes and plugin support.\n\nIndependent project - not affiliated with or endorsed by Notepad++."
+msgid "wxNote\n\nA cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\na native Scintilla editor with dark/light themes and plugin support.\n\nIndependent project - not affiliated with or endorsed by Notepad++."
 msgstr ""
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"

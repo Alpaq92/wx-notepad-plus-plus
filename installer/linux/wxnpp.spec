@@ -1,4 +1,4 @@
-# RPM spec for wxNotepad++. Deliberately has no %prep/%build sections - there is no source tarball
+# RPM spec for wxNote. Deliberately has no %prep/%build sections - there is no source tarball
 # to unpack or compile here, only the already-built wxnpp binary (installer/linux/build-rpm.sh passes
 # _srcdir pointing at the repo root, already built via `cmake --build build --target wxnpp`). This is
 # the same well-established "binary redistribution" spec pattern used for vendor-supplied prebuilt
@@ -43,9 +43,9 @@ install -m 644 "%{_srcdir}/resources/wxNotepad++.svg" %{buildroot}/usr/share/ico
 /usr/share/icons/hicolor/scalable/apps/wxnpp.svg
 
 %changelog
-* Sun Jul 05 2026 wxNotepad++ Project <noreply@wx-notepad-plus-plus.invalid> - 0.2.0-1
+* Sun Jul 05 2026 wxNote Project <noreply@wx-notepad-plus-plus.invalid> - 0.2.0-1
 - Edit Popup ContextMenu now opens a real, user-editable context menu
 - Linux packaging fixes (flatpak icon/debuginfo/remote-add CI issues)
 
-* Sun Jul 05 2026 wxNotepad++ Project <noreply@wx-notepad-plus-plus.invalid> - 0.1.0-1
+* Sun Jul 05 2026 wxNote Project <noreply@wx-notepad-plus-plus.invalid> - 0.1.0-1
 - Initial packaged release
