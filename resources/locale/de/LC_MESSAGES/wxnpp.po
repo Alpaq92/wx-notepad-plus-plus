@@ -2582,3 +2582,24 @@ msgstr "&Erweiterungen"
 
 msgid "&Help"
 msgstr "&Hilfe"
+
+msgid "File Manager"
+msgstr "Dateimanager"
+
+msgid "Terminal"
+msgstr "Terminal"
+
+msgid "Open Containing Folder in File Manager"
+msgstr "Übergeordneten Ordner im Dateimanager öffnen"
+
+msgid "Reveal in Finder"
+msgstr "Im Finder anzeigen"
+
+msgid "Show &Terminal"
+msgstr "&Terminal anzeigen"
+
+msgid "Failed to start: %s"
+msgstr "Start fehlgeschlagen: %s"
+
+msgid "[process exited with code %d]"
+msgstr "[Prozess mit Code %d beendet]"

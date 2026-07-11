@@ -97,6 +97,12 @@ using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/
 // stays free of Cocoa types. (The toolbar is a docked non-native child wxToolBar on macOS, so it honours
 // SetToolBitmapSize directly - no native NSToolbar icon-pinning shim is needed.)
 extern "C" void wxnpp_HideWindowTitle(void* nsWindow);        // titleVisibility = Hidden (blank native bar)
+// Integrated top bar (macOS flavour): transparent title bar + FullSizeContentView + the stock traffic
+// lights re-centred in the toolbar row (Electron's WindowButtonsProxy technique - see macos_native.mm).
+// Idempotent; re-call after resize/activate/deminiaturize/fullscreen-exit (AppKit snaps buttons back).
+// Returns the left inset (px) where toolbar content may start, 0 if unavailable.
+extern "C" int  wxnpp_InlineTrafficLights(void* nsWindow, int rowHeightPx);
+extern "C" void wxnpp_DragWindow(void* nsWindow);             // native window drag from the current mouse-down
 #endif
 
 #ifdef __WXGTK__
@@ -135,6 +141,7 @@ extern "C" void wxnpp_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 #include "menuCmdID.h"
 #include "app_icon_svg.h"
 #include "nib.h"               // our own permissive, cross-platform plugin API (Nib)
+#include "terminal_panel.h"    // View > Show Terminal - bottom multi-tab shell panel (defines myID_VIEW_TERMINAL, used by menu_data_view.h below)
 #include "menu_builder.h"      // data-driven menu bar builder (menu_model.h/menu_data_*.h) - replaces npp_menu.h
 #include "udl.h"               // User-Defined Language data model + userDefineLang.xml (de)serialization
 #include "udl_lexer.h"         // User-Defined Language: live container-lexer styling/folding engine
@@ -184,6 +191,7 @@ static long readThemeMode()
 static bool resolveDark(long themeMode) { return themeMode == 1 ? true : themeMode == 2 ? false : wxSystemSettings::GetAppearance().AreAppsDark(); }
 static const int myID_DOCLIST_ITEM = 61000;   // base id for the document-list dropdown entries
 static const int myID_MACRO_ITEM   = 62100;   // base id for saved-macro entries at the bottom of the Macro menu
+static const int myID_OPENFOLDER_TOOL_BASE = 60300;   // base id for File > Open Containing Folder's dynamically-detected entries
 
 // The one persistent editor view (set by the frame), used to release a tab's Document when its
 // EditorPage is destroyed - the notebook switches away first, so the doc holds only the buffer ref.
@@ -1795,7 +1803,17 @@ public:
         // (Show has run) before we reach for it via MacGetTopLevelWindowRef().
         // this-> is required: MacGetTopLevelWindowRef() lives in the dependent template base (FB -> wxWindowMac)
         // and isn't in this class's `using FB::...` list, so Clang's two-phase lookup rejects the unqualified name.
-        CallAfter([this]{ wxnpp_HideWindowTitle((void*)this->MacGetTopLevelWindowRef()); });
+        // (Also the integrated-top-bar hook: by the time this lambda runs, loadSettings()/buildToolBar()
+        // below have populated m_integratedBar and m_macToolbarRowH, and Show() has realized the NSWindow.)
+        CallAfter([this]{
+            wxnpp_HideWindowTitle((void*)this->MacGetTopLevelWindowRef());
+            if (m_integratedBar && m_macToolbarRowH > 0)
+            {
+                const int inset = wxnpp_InlineTrafficLights((void*)this->MacGetTopLevelWindowRef(), m_macToolbarRowH);
+                if (inset > 0 && m_macInsetItem && m_toolBarHost)
+                { m_macInsetItem->AssignSpacer(inset, -1); m_toolBarHost->Layout(); }   // exact live inset (default was a safe guess)
+            }
+        });
 #endif
         m_dark = dark;          // chrome darkness is fixed for this process (restart-to-apply)
         loadSettings();         // restore preferences incl. the chosen editor theme (before loadTheme reads m_themeName)
@@ -2323,8 +2341,14 @@ private:
         m_docMap->StyleSetBackground(wxSTC_STYLE_DEFAULT, d ? wxColour(30, 30, 30)    : wxColour(255, 255, 255));
         m_docMap->StyleSetForeground(wxSTC_STYLE_DEFAULT, d ? wxColour(150, 150, 150) : wxColour(96, 96, 96));
         m_docMap->StyleClearAll();
-        m_docMap->SetSelBackground(true, d ? wxColour(95, 115, 150) : wxColour(180, 200, 230));   // viewport box
-        m_docMap->SetSelAlpha(90);
+        // Viewport band. The band must stay SELECTION-based (selection is the only per-view visual state;
+        // markers/indicators live in the shared document and would bleed into the main editor). It must
+        // also be OPAQUE: the translucent-selection path (SetSelAlpha) makes this Scintilla skip painting
+        // the selected text at minimap zoom, which blanked the band into an unreadable slab (the original
+        // bug). Classic opaque selection always draws the glyphs over the band, so pick a background-near
+        // tint and let the text keep its syntax colours.
+        m_docMap->SetSelBackground(true, d ? wxColour(52, 64, 82) : wxColour(222, 230, 241));
+        m_docMap->SetSelAlpha(wxSTC_ALPHA_NOALPHA);
         m_docMap->SetBackgroundColour(d ? wxColour(30, 30, 30) : wxColour(255, 255, 255));
     }
     void updateDocMapViewport()
@@ -2361,6 +2385,32 @@ private:
     }
     void onDocMapClick(wxMouseEvent& e) { scrollMainToDocMapY(e.GetY()); }
     void onDocMapDrag(wxMouseEvent& e)  { if (e.Dragging() && e.LeftIsDown()) scrollMainToDocMapY(e.GetY()); else e.Skip(); }
+
+    // ---- Terminal (View > Show Terminal) ----------------------------------------------------------
+    // Lazily-built bottom pane hosting TerminalPanel (see terminal_panel.h): multi-tab shells with a
+    // per-platform picker. First toggle builds the pane and spawns the default shell in the active
+    // document's directory.
+    void toggleTerminal()
+    {
+        if (!m_terminal)
+        {
+            m_terminal = new TerminalPanel(this, m_dark, m_fontFace);
+            m_terminal->cwdProvider = [this]() -> wxString {
+                const wxString p = curPath();
+                return p.empty() ? wxGetCwd() : wxFileName(p).GetPath();
+            };
+            m_aui.AddPane(m_terminal, wxAuiPaneInfo().Name("terminal").Caption(_("Terminal"))
+                              .Bottom().Layer(1).BestSize(-1, 220).MinSize(150, 80).CloseButton(true).Hide());
+        }
+        wxAuiPaneInfo& pi = m_aui.GetPane(m_terminal);
+        if (!pi.IsOk()) return;
+        const bool show = !pi.IsShown();
+        if (show && m_terminal->empty()) m_terminal->addTerminal(-1);
+        pi.Show(show);
+        m_aui.Update();
+        if (auto* mb = menuBar()) mb->Check(myID_VIEW_TERMINAL, show);
+        if (show) m_terminal->focusActive();
+    }
 
     // ---- Function List (per-file symbol tree) -----------------------------------------------------
     void buildFuncList()
@@ -2796,6 +2846,41 @@ private:
             const int id = wxTheFileIconsTable->GetIconID(e.ext);
             if (id != wxFileIconsTable::file) il->Replace(id, icon(e.iconName).GetBitmap(sz));
         }
+
+        // Dotfiles with no "real" extension (.gitattributes, .gitignore, ...) can't go through the
+        // kExtIcons/GetIconID mechanism above: GetIconID caches its OWN OS-lookup result per key
+        // BEFORE we get a chance to override it, and since these typically have NO OS registration,
+        // it caches the SHARED generic `file` id - which the skip-guard above correctly declines to
+        // overwrite (doing so would reskin every other unmatched file too). So they get a dedicated
+        // image-list slot instead, applied by exact-filename match via applyDotfileIcons() below,
+        // entirely bypassing wxGenericDirCtrl's built-in icon resolution for just this curated set.
+        m_dotfileIconIdx = il->Add(icon("filetype-code").GetBitmap(sz));
+    }
+    int m_dotfileIconIdx = -1;
+    // Filenames matched LITERALLY (unlike kExtIcons' AfterLast('.') suffix match), so e.g.
+    // "config.env"/"production.env" are correctly left alone - only the exact dotfile gets reskinned.
+    static bool isCuratedDotfile(const wxString& name)
+    {
+        static const wxString kNames[] = {
+            ".gitattributes", ".gitignore", ".gitmodules", ".editorconfig", ".dockerignore",
+            ".npmignore", ".eslintrc", ".prettierrc", ".babelrc", ".env", ".nvmrc", ".yarnrc",
+        };
+        for (const wxString& n : kNames) if (name == n) return true;
+        return false;
+    }
+    // Re-images any curated dotfile among `parent`'s direct children. Run once for the file browser's
+    // root (already populated synchronously at construction) and again on every EVT_TREE_ITEM_EXPANDED,
+    // since wxGenericDirCtrl lazily populates a folder's children only when the user expands it.
+    void applyDotfileIcons(wxTreeCtrl* tree, const wxTreeItemId& parent)
+    {
+        if (!tree || !parent.IsOk() || m_dotfileIconIdx < 0) return;
+        wxTreeItemIdValue cookie;
+        for (wxTreeItemId child = tree->GetFirstChild(parent, cookie); child.IsOk(); child = tree->GetNextChild(parent, cookie))
+            if (isCuratedDotfile(tree->GetItemText(child)))
+            {
+                tree->SetItemImage(child, m_dotfileIconIdx, wxTreeItemIcon_Normal);
+                tree->SetItemImage(child, m_dotfileIconIdx, wxTreeItemIcon_Selected);
+            }
     }
     void createFileBrowser(const wxString& root)
     {
@@ -2811,7 +2896,12 @@ private:
         }
         m_fileBrowser = new wxGenericDirCtrl(this, wxID_ANY, root, wxDefaultPosition, wxDefaultSize,
                                              wxDIRCTRL_SHOW_FILTERS | wxBORDER_NONE);
-        if (auto* tree = m_fileBrowser->GetTreeCtrl()) themeToEditor(tree);   // theme the tree to the editor's colours
+        if (auto* tree = m_fileBrowser->GetTreeCtrl())
+        {
+            themeToEditor(tree);   // theme the tree to the editor's colours
+            applyDotfileIcons(tree, tree->GetRootItem());   // root's children are already populated synchronously
+            tree->Bind(wxEVT_TREE_ITEM_EXPANDED, [this, tree](wxTreeEvent& ev) { applyDotfileIcons(tree, ev.GetItem()); ev.Skip(); });
+        }
         m_fileBrowser->Bind(wxEVT_DIRCTRL_FILEACTIVATED, [this](wxTreeEvent&) {
             const wxString f = m_fileBrowser->GetFilePath();
             if (!f.empty() && wxFileExists(f)) openPath(f);   // double-click a file -> open it
@@ -2844,8 +2934,9 @@ private:
     }
     void containingFolderAsWorkspace()   // IDM_FILE_CONTAININGFOLDERASWORKSPACE - the active file's own folder
     {
-        if (curPath().empty()) { notImpl(_("Folder as Workspace (save the file first)")); return; }
-        showFileBrowserRooted(wxFileName(curPath()).GetPath());
+        // Untitled buffer: root the workspace at the working directory (same fallback as the rest of the
+        // Open Containing Folder submenu) rather than nagging about saving first.
+        showFileBrowserRooted(curPath().empty() ? wxGetCwd() : wxFileName(curPath()).GetPath());
     }
 
     // ---- Incremental Search (Ctrl+Alt+I): find-as-you-type bar; Enter = next, Esc = close ---------
@@ -4095,6 +4186,7 @@ private:
         saveSettings();    // persist any in-session View-menu toggle changes
         saveSession(wxConfigBase::Get());   // remember the open (saved) files so the next launch reopens them, like Notepad++
         wxConfigBase::Get()->Flush();
+        if (m_terminal) m_terminal->shutdownAll();   // kill child shells + stop their poll timers before AUI teardown
         // stop + free the owned timers so no WM_TIMER can Notify() into the frame while teardown pumps messages
         for (wxTimer** t : { &m_monTimer, &m_flTimer }) if (*t) { (*t)->Stop(); delete *t; *t = nullptr; }
         m_timer.Stop();
@@ -4391,6 +4483,25 @@ private:
                 auto* c = wxConfigBase::Get(); c->SetPath("/RecentFiles"); m_fileHistory.Load(*c); c->SetPath("/");
             }
         }
+        // File > Open Containing Folder's tool cluster (see terminal_panel.h), inserted at the
+        // "slot.openContainingFolderTools" DynamicSlot: on Windows the EXTRA shells this machine has
+        // beyond the static cmd/PowerShell (pwsh/Cygwin/WSL); on Linux/macOS the WHOLE terminal-app
+        // list, since those platforms have no legacy plugin ABI reason to keep a fixed shape.
+        {
+            auto [ofMenu, insertAt] = m_menuRegistry.slot("slot.openContainingFolderTools");
+            if (ofMenu)
+            {
+#ifdef __WXMSW__
+                m_openFolderTools = detectWindowsExtraOpenHereTools();
+#elif defined(__WXMAC__)
+                m_openFolderTools = detectMacTerminalApps();
+#else
+                m_openFolderTools = detectLinuxTerminalEmulators();
+#endif
+                for (size_t i = 0; i < m_openFolderTools.size(); ++i)
+                    ofMenu->Insert(insertAt + (int)i, myID_OPENFOLDER_TOOL_BASE + (int)i, m_openFolderTools[i].label);
+            }
+        }
 #ifdef WXNPP_HAS_BORDERLESS
         if constexpr (kBorderless)
         {
@@ -4482,15 +4593,17 @@ private:
                 this->PopupMenu(menu, p);
             });
             // GTK/macOS only: wxBU_EXACTFIT collapses each menu button to its bare text extent, so
-            // adjacent labels touch with no gap and read as one crammed string - a 4px border each
-            // side gives them air (confirmed good on GTK). MSW's native button already reserves internal
-            // horizontal margin, so the extra border there just makes the bar look too widely spaced;
-            // keep no border on MSW. (The AddStretchSpacer below absorbs the width, so no overflow.)
-#ifdef __WXMSW__
-            sz->Add(b, 0, wxALIGN_CENTRE_VERTICAL);
-#else
-            sz->Add(b, 0, wxALIGN_CENTRE_VERTICAL | wxLEFT | wxRIGHT, 4);
+            // adjacent labels touch with no gap and read as one crammed string. The air must be INSIDE
+            // the button (widen it; the label auto-centres), not a sizer border around it: the hover/
+            // pressed highlight paints across the button's own rect, so outside spacing left the
+            // highlight hugging the text edge-to-edge with no left/right padding. 8px per side matches
+            // the ~"padding: 4px 8px" a native GTK menubar item gets. MSW's native button already
+            // reserves internal horizontal margin, so adding more there reads too widely spaced.
+            // (The AddStretchSpacer below absorbs the width, so no overflow.)
+#ifndef __WXMSW__
+            b->SetMinSize(wxSize(b->GetBestSize().x + b->FromDIP(16), -1));
 #endif
+            sz->Add(b, 0, wxALIGN_CENTRE_VERTICAL);
         }
 
         sz->AddStretchSpacer(1);   // empty middle stays draggable
@@ -4632,6 +4745,12 @@ private:
             if (f.IsOpened() && f.ReadAll(&svg))
             {
                 svg.Replace("stroke=\"#000\"", "stroke=\"#63e6be\"");   // Open Color teal-3
+                // Same rule for the pack's stroke-only glyphs (close/undo/redo/word-wrap/doc-list/...):
+                // they are drawn purely in teal-7 STROKES with no accent fill, and teal-7 line art on dark
+                // chrome has so little luminance contrast that an ENABLED icon read as a disabled one
+                // (reported for the toolbar close "x"). All strokes lighten to teal-3 in dark mode; the
+                // teal-7 accent FILLS stay untouched, so filled icons keep their saturated look.
+                svg.Replace("stroke=\"#0ca678\"", "stroke=\"#63e6be\"");
                 const wxScopedCharBuffer u = svg.utf8_str();
                 return wxBitmapBundle::FromSVG(u.data(), wxSize(px, px));
             }
@@ -4813,10 +4932,15 @@ private:
         // is the pane window. Pin the pane height to the host's best height so it never grows/shrinks.
         // Mirrors dockIntegratedToolBar() but for the non-borderless macOS frame.
         {
-            auto* hostSizer = new wxBoxSizer(wxVERTICAL);
+            auto* hostSizer = new wxBoxSizer(wxHORIZONTAL);
+            // Integrated top bar: reserve room at the left for the traffic lights, which the deferred
+            // wxnpp_InlineTrafficLights call (ctor CallAfter) re-centres onto this row. 72px is a safe
+            // guess for the stock button cluster; the CallAfter replaces it with the exact live inset.
+            if (m_integratedBar) m_macInsetItem = hostSizer->AddSpacer(this->FromDIP(72));
             hostSizer->Add(tb, 1, wxEXPAND);
             m_toolBarHost->SetSizerAndFit(hostSizer);
             const int barH = wxMax(m_toolBarHost->GetBestSize().GetHeight(), isz + 12);   // floor so the pane can't collapse
+            m_macToolbarRowH = barH;   // the traffic-light row height (see wxnpp_InlineTrafficLights)
             // Same fixed-toolbar pane recipe as the integrated bar (toolbarPaneInfo()), plus a pinned height.
             m_aui.AddPane(m_toolBarHost, toolbarPaneInfo().MinSize(-1, barH).MaxSize(-1, barH));
             m_aui.Update();
@@ -4825,8 +4949,41 @@ private:
         // bind it on the toolbar and do NOT Skip, so onCommand runs exactly once - the event is caught here
         // before it would propagate on to the frame, so there is no double-fire either way.
         tb->Bind(wxEVT_TOOL, [this](wxCommandEvent& ce){ this->onCommand(ce); });
+        if (m_integratedBar)
+        {
+            // AppKit snaps the repositioned traffic lights back to their stock spot whenever it rebuilds
+            // the titlebar layout - reapply after every trigger Electron re-runs its redraw from. wx's
+            // shared NSWindowDelegate must NOT be replaced, so hook the equivalent wx events instead.
+            auto reapply = [this](wxEvent& ev){ this->reapplyTrafficLights(); ev.Skip(); };
+            this->Bind(wxEVT_SIZE,       reapply);
+            this->Bind(wxEVT_ACTIVATE,   reapply);
+            this->Bind(wxEVT_ICONIZE,    reapply);
+            this->Bind(wxEVT_FULLSCREEN, [this](wxFullScreenEvent& ev){ this->CallAfter([this]{ this->reapplyTrafficLights(); }); ev.Skip(); });
+            // With the title-bar band reclaimed, dragging must be restarted natively from empty toolbar
+            // area (wx views consume the mouse-down before AppKit's frame-drag machinery sees it). A
+            // click on a real tool still works: only tool-less spots start a drag.
+            tb->Bind(wxEVT_LEFT_DOWN, [this, tb](wxMouseEvent& ev){
+                if (tb->FindToolForPosition(ev.GetX(), ev.GetY())) { ev.Skip(); return; }
+                wxnpp_DragWindow((void*)this->MacGetTopLevelWindowRef());
+            });
+            m_toolBarHost->Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent&){   // the spacer strip left of the toolbar
+                wxnpp_DragWindow((void*)this->MacGetTopLevelWindowRef());
+            });
+        }
 #endif
     }
+
+#ifdef __WXMAC__
+    // Re-centre the traffic lights in the toolbar row (integrated top bar). Idempotent and cheap;
+    // called from wxEVT_SIZE/ACTIVATE/ICONIZE/FULLSCREEN because AppKit snaps the buttons back to
+    // their stock spot whenever it rebuilds the titlebar layout. No-ops in native fullscreen (the
+    // shim guards it) and when the integrated bar is off.
+    void reapplyTrafficLights()
+    {
+        if (!m_integratedBar || m_macToolbarRowH <= 0) return;
+        wxnpp_InlineTrafficLights((void*)this->MacGetTopLevelWindowRef(), m_macToolbarRowH);
+    }
+#endif
 
     void buildStatusBar()
     {
@@ -4910,6 +5067,37 @@ private:
         if (e=="yml"||e=="yaml")                             return "YAML file";
         return "Normal text file";
     }
+    // Content-based language sniff for documents the extension table can't place (no extension, or an
+    // unknown one): shebang interpreters, XML/HTML prologs and JSON shapes. Returns the CANONICAL
+    // extension for the existing ext-driven tables (lexerForExt / langDisplayName / keyword pick), so
+    // detection has exactly one downstream path; "" = no idea, stay plain text. Only languages the app
+    // actually has lexers for are returned (e.g. HTML maps to the XML lexer - tag colouring beats plain).
+    static wxString extFromContent(const wxString& head)
+    {
+        wxString h = head; h.Replace("\r", "\n");
+        wxString first = h.BeforeFirst('\n'); first.Trim(true).Trim(false);
+        if (first.StartsWith("#!"))
+        {
+            wxString cmd = first.Mid(2); cmd.Replace("\t", " "); cmd.Trim(true).Trim(false);
+            wxArrayString parts = wxSplit(cmd, ' ');
+            wxString interp = parts.empty() ? wxString() : parts[0].AfterLast('/');
+            if (interp == "env" && parts.size() > 1) interp = parts[1].AfterLast('/');   // "#!/usr/bin/env python3"
+            if (interp.StartsWith("python")) return "py";
+            if (interp.StartsWith("perl"))   return "pl";
+            if (interp.StartsWith("ruby"))   return "rb";
+            if (interp.StartsWith("node"))   return "js";
+            if (interp.StartsWith("lua"))    return "lua";
+            if (interp.StartsWith("pwsh"))   return "ps1";
+            return "sh";   // sh/bash/zsh/ksh/dash/fish or an unknown interpreter: shell beats plain text
+        }
+        wxString t = h; t.Trim(false);
+        const wxString tl = t.Lower();
+        if (tl.StartsWith("<?xml"))                              return "xml";
+        if (tl.StartsWith("<!doctype html") || tl.StartsWith("<html")) return "xml";   // no dedicated HTML lexer wired (yet)
+        if (!t.empty() && (t[0] == '{' || t[0] == '['))
+            if (t.Contains("\":") || t.Contains("\" :"))         return "json";        // opener + a quoted-key colon = JSON-ish
+        return "";
+    }
     void setLexerForFile(const wxString& path)
     {
         applyEditorTheme(m_dark);          // reset every style to the theme base (incl. line numbers)
@@ -4937,7 +5125,12 @@ private:
         // A manual Language pick forces its lexer directly; otherwise auto-detect from the file extension.
         wxString lexer, themeKey, disp, ext;
         if (page && page->langForced) { lexer = page->forcedLexer; themeKey = page->forcedLexer; disp = page->forcedName; }
-        else { ext = path.AfterLast('.').Lower(); const LexMap lm = lexerForExt(ext);
+        else { ext = path.AfterLast('.').Lower(); LexMap lm = lexerForExt(ext);
+               if (!lm.lexer && m_stc && m_stc->GetLength() > 0)
+               {   // the extension told us nothing - sniff the buffer head (shebang / prolog / JSON shape)
+                   const wxString sniffed = extFromContent(m_stc->GetTextRange(0, wxMin((int)m_stc->GetLength(), 512)));
+                   if (!sniffed.empty()) { ext = sniffed; lm = lexerForExt(ext); }
+               }
                lexer = lm.lexer ? lm.lexer : ""; themeKey = lm.theme ? lm.theme : ""; disp = langDisplayName(ext); }
         if (page) page->lang = disp;
         const bool hasLexer = !lexer.empty();
@@ -5582,23 +5775,59 @@ private:
     // ---- open the file's folder / a shell there / the file in another app, and new instances ----
     void revealInFolder()
     {
+        // Untitled buffers have no containing folder - fall back to the working directory, exactly like
+        // the cmd/PowerShell/Terminal entries in the same submenu, instead of a dead disabled item.
         const wxString p = curPath();
-        if (p.empty()) { notImpl(_("Open Containing Folder (save the file first)")); return; }
+        const wxString dir = p.empty() ? wxGetCwd() : wxFileName(p).GetPath();
 #ifdef __WXMSW__
-        const std::wstring arg = L"/select,\"" + p.ToStdWstring() + L"\"";
-        ShellExecuteW(nullptr, L"open", L"explorer.exe", arg.c_str(), nullptr, SW_SHOWNORMAL);
+        if (p.empty())
+            ShellExecuteW(nullptr, L"open", dir.ToStdWstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        else
+        {
+            const std::wstring arg = L"/select,\"" + p.ToStdWstring() + L"\"";
+            ShellExecuteW(nullptr, L"open", L"explorer.exe", arg.c_str(), nullptr, SW_SHOWNORMAL);
+        }
+#elif defined(__WXMAC__)
+        if (p.empty()) wxExecute(wxString::Format("open \"%s\"", dir), wxEXEC_ASYNC);
+        else           wxExecute(wxString::Format("open -R \"%s\"", p), wxEXEC_ASYNC);   // reveal (select) the file in Finder
 #else
-        wxLaunchDefaultApplication(wxFileName(p).GetPath());
+        // Prefer the freedesktop tool for opening a DIRECTORY - wxLaunchDefaultApplication routes through
+        // gnome/gvfs code paths that are flaky for folders on some distros (reported "doesn't work" on
+        // Mint); xdg-open is what every desktop's file-manager association actually answers to.
+        wxLogNull noLog;
+        if (wxExecute(wxString::Format("xdg-open \"%s\"", dir), wxEXEC_ASYNC) <= 0)
+            wxLaunchDefaultApplication(dir);
 #endif
     }
+#ifdef __WXMSW__
+    // Windows only: the two ABI-frozen static entries (cmd/PowerShell, original IDM_* ids - see
+    // menu_data_file.h). Everything genuinely dynamic (pwsh/Cygwin/WSL, and the whole Linux/macOS
+    // terminal-app list) goes through openHereToolAt() below instead.
     void openShellHere(bool powershell)
     {
         const wxString dir = curPath().empty() ? wxGetCwd() : wxFileName(curPath()).GetPath();
-#ifdef __WXMSW__
         const std::wstring exe = powershell ? L"powershell.exe" : L"cmd.exe";
         ShellExecuteW(nullptr, L"open", exe.c_str(), nullptr, dir.ToStdWstring().c_str(), SW_SHOWNORMAL);
+    }
+#endif
+    // File > Open Containing Folder's dynamically-detected entries (see terminal_panel.h's
+    // detect*OpenHereTools/TerminalEmulators/TerminalApps, populated in buildMenuBar()). `launch` is
+    // interpreted per platform: a full command line on Windows, a bare executable on Linux, an app name
+    // for `open -a` on macOS - matching what each detector produces.
+    void openHereToolAt(int idx)
+    {
+        if (idx < 0 || idx >= (int)m_openFolderTools.size()) return;
+        const wxString dir = curPath().empty() ? wxGetCwd() : wxFileName(curPath()).GetPath();
+        const wxString& launch = m_openFolderTools[(size_t)idx].launch;
+#ifdef __WXMSW__
+        wxExecuteEnv env; env.cwd = dir; wxGetEnvMap(&env.env); env.env["CHERE_INVOKING"] = "1";   // Cygwin --login keeps cwd instead of jumping to ~
+        wxExecute(launch, wxEXEC_ASYNC, nullptr, &env);
+#elif defined(__WXMAC__)
+        wxExecute(wxString::Format("open -a \"%s\" \"%s\"", launch, dir), wxEXEC_ASYNC);
 #else
-        (void)powershell; wxLaunchDefaultApplication(dir);
+        wxExecuteEnv env; env.cwd = dir;
+        wxLogNull noLog;
+        wxExecute(launch, wxEXEC_ASYNC, nullptr, &env);
 #endif
     }
     void openInDefaultViewer() { const wxString p = curPath(); if (p.empty()) { notImpl(_("Open in Default Viewer (save the file first)")); return; } wxLaunchDefaultApplication(p); }
@@ -6612,7 +6841,7 @@ private:
         // the command line override this per-launch either way).
         auto* cbReuseInstance = new wxCheckBox(gen, wxID_ANY, _("Reuse an existing window"));
         cbReuseInstance->SetValue(m_reuseInstance); row(gs, cbReuseInstance);
-#ifdef WXNPP_HAS_BORDERLESS
+#if defined(WXNPP_HAS_BORDERLESS) || defined(__WXMAC__)
         auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, _("Show integrated top bar"));
         cbIntBar->SetValue(m_integratedBar); row(gs, cbIntBar);
 #endif
@@ -6856,13 +7085,17 @@ private:
         m_customGutterColor = cbGutter->GetValue(); m_gutterColorValue = colourToBgr(gutterPick->GetColour());
         { const wxString sel = chFont->GetStringSelection(); if (sel != kFontSep) m_fontFace = sel; }
         applySettings(); saveSettings();
-        applyEditorTheme(m_dark);   // gutter-colour override takes effect immediately, no restart needed
+        // Gutter-colour override takes effect immediately, no restart needed - but applyEditorTheme's
+        // StyleClearAll wipes the lexer's per-token colours, so re-run the full lexer pass (which itself
+        // starts with applyEditorTheme) instead of the bare theme reset: closing Preferences used to
+        // leave the active document highlight-less until the next tab switch.
+        if (auto* p = activePage()) setLexerForFile(p->path); else applyEditorTheme(m_dark);
         // Chrome settings fixed per process (locale/toolbar-toggle/icon-set all need a relaunch to take effect).
         // The config writes ride restartWithTheme's commit callback, which only runs once the save-prompt loop
         // has actually confirmed the restart - writing them here unconditionally would apply the new value
         // even if the user then cancels a "save changes?" prompt during the attempted restart.
         const int newUi = UI_LANG_IDS[chUiLang->GetSelection()];
-#ifdef WXNPP_HAS_BORDERLESS
+#if defined(WXNPP_HAS_BORDERLESS) || defined(__WXMAC__)
         const bool newIntBar = cbIntBar->GetValue();
 #endif
         const int newIconStyle = chIconStyle->GetSelection();
@@ -6871,7 +7104,7 @@ private:
         const bool newReuseInstance = cbReuseInstance->GetValue();
         bool needRestart = (newThemeMode != m_themeMode) || tabRecentChanged || (newUi != curUi) || (newIconStyle != m_iconStyle)
                          || (newIconSize != m_toolbarIconSize) || (newReuseInstance != m_reuseInstance);
-#ifdef WXNPP_HAS_BORDERLESS
+#if defined(WXNPP_HAS_BORDERLESS) || defined(__WXMAC__)
         needRestart = needRestart || (newIntBar != m_integratedBar);
 #endif
         if (needRestart)
@@ -6879,7 +7112,7 @@ private:
                 m_themeMode = newThemeMode;
                 auto* cfg = wxConfigBase::Get();
                 if (newUi != curUi) cfg->Write("UILanguage", (long)newUi);
-#ifdef WXNPP_HAS_BORDERLESS
+#if defined(WXNPP_HAS_BORDERLESS) || defined(__WXMAC__)
                 if (newIntBar != m_integratedBar) cfg->Write("IntegratedBar", newIntBar);
 #endif
                 if (newIconStyle != m_iconStyle) cfg->Write("ToolbarIconStyle", (long)newIconStyle);
@@ -7682,7 +7915,24 @@ private:
         if (m_tabs) { m_tabs->SetBackgroundColour(chromeBg); m_tabs->Refresh(); }
         // The integrated toolbar is an aui pane that doesn't span the full width; paint the dock
         // background (the strip to the right of the icons) the same chrome colour so there's no grey gap.
-        if (auto* art = m_aui.GetArtProvider()) { art->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, chromeBg); m_aui.Update(); }
+        if (auto* art = m_aui.GetArtProvider())
+        {
+            art->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, chromeBg);
+            // Pane captions ("Document Map", "Function List", ...): flat chrome-coloured bars matching the
+            // tab strip instead of the stock grey gradient - same colour family as the tabs, same height as
+            // the tab strip so the docked panels' headers line up with the tab bar row next to them.
+            art->SetMetric(wxAUI_DOCKART_GRADIENT_TYPE, wxAUI_GRADIENT_NONE);
+            if (m_tabs) art->SetMetric(wxAUI_DOCKART_CAPTION_SIZE, m_tabs->GetTabCtrlHeight());
+            art->SetColour(wxAUI_DOCKART_INACTIVE_CAPTION_COLOUR,          chromeBg);
+            art->SetColour(wxAUI_DOCKART_INACTIVE_CAPTION_GRADIENT_COLOUR, chromeBg);
+            art->SetColour(wxAUI_DOCKART_ACTIVE_CAPTION_COLOUR,            chromeBg);
+            art->SetColour(wxAUI_DOCKART_ACTIVE_CAPTION_GRADIENT_COLOUR,   chromeBg);
+            art->SetColour(wxAUI_DOCKART_INACTIVE_CAPTION_TEXT_COLOUR, dark ? wxColour(220, 220, 220) : wxColour(40, 40, 40));
+            art->SetColour(wxAUI_DOCKART_ACTIVE_CAPTION_TEXT_COLOUR,   dark ? wxColour(220, 220, 220) : wxColour(40, 40, 40));
+            art->SetColour(wxAUI_DOCKART_BORDER_COLOUR, chromeBg);
+            art->SetColour(wxAUI_DOCKART_SASH_COLOUR,   chromeBg);
+            m_aui.Update();
+        }
         this->SetBackgroundColour(chromeBg);   // frame backing shows through the Win11 rounded corners - chrome, not black
     }
 
@@ -7975,6 +8225,8 @@ private:
         { applyUdlToActiveBuffer(cmd - IDM_LANG_USER); return; }
         if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + 200)        // a saved macro from the Macro menu
         { const size_t n = (size_t)(cmd - myID_MACRO_ITEM); if (n < m_savedMacros.size()) playMacro(m_savedMacros[n].second); return; }
+        if (cmd >= myID_OPENFOLDER_TOOL_BASE && cmd < myID_OPENFOLDER_TOOL_BASE + (int)m_openFolderTools.size())
+        { openHereToolAt(cmd - myID_OPENFOLDER_TOOL_BASE); return; }   // a dynamically-detected File > Open Containing Folder entry
         // Win32 WM_COMMAND carries only a 16-bit id and wx sign-extends it, so command ids
         // above 32767 (all of Notepad++'s IDM_*) arrive negative. Read it as unsigned 16-bit,
         // exactly as Notepad++ does with LOWORD(wParam).
@@ -8099,6 +8351,7 @@ private:
             case IDM_VIEW_TAB1: case IDM_VIEW_TAB2: case IDM_VIEW_TAB3: case IDM_VIEW_TAB4: case IDM_VIEW_TAB5:
             case IDM_VIEW_TAB6: case IDM_VIEW_TAB7: case IDM_VIEW_TAB8: case IDM_VIEW_TAB9:
                 { const size_t n = (size_t)((e.GetId() & 0xFFFF) - IDM_VIEW_TAB1); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); break; }
+            case myID_VIEW_TERMINAL: toggleTerminal(); break;      // View > Show Terminal
             case myID_CAP_NEW: doNew(); break;                      // "+" caption button
             case myID_CAP_CLOSE: closeActive(); break;             // "x" caption button
             case myID_DOCLIST: onDocList(); break;                 // "v" caption dropdown
@@ -8148,8 +8401,10 @@ private:
             case IDM_FILE_RENAME: renameFile(); break;
             case IDM_FILE_DELETE: recycleFile(); break;
             case IDM_FILE_OPEN_FOLDER: revealInFolder(); break;
+#ifdef __WXMSW__
             case IDM_FILE_OPEN_CMD: openShellHere(false); break;
             case IDM_FILE_OPEN_POWERSHELL: openShellHere(true); break;
+#endif
             case IDM_FILE_OPEN_DEFAULT_VIEWER: openInDefaultViewer(); break;
             case IDM_FILE_OPENFOLDERASWORKSPACE: openFolderAsWorkspace(); break;
             case IDM_FILE_CONTAININGFOLDERASWORKSPACE: containingFolderAsWorkspace(); break;
@@ -8395,6 +8650,7 @@ private:
         const bool canRedo  = sci(SCI_CANREDO) != 0;
         const bool hasSel   = sci(SCI_GETSELECTIONEMPTY) == 0;
         const bool canPaste = sci(SCI_CANPASTE) != 0;
+        const bool hasPath  = activePage() && !activePage()->path.empty();   // untitled buffers have no containing folder / disk copy
         if (auto* ap = activePage()) ap->dirty = dirty;   // keep the active tab's cached flag current (others use their last-active value)
         bool anyDirty = dirty;
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })   // Save-All reflects modified docs in BOTH views
@@ -8405,10 +8661,10 @@ private:
                     if (p && p->dirty) anyDirty = true;
                 }
         if (dirty == m_stSave && anyDirty == m_stSaveAll && canUndo == m_stUndo && canRedo == m_stRedo &&
-            hasSel == m_stSel && canPaste == m_stPaste)
+            hasSel == m_stSel && canPaste == m_stPaste && hasPath == m_stHasPath)
             return;   // nothing changed
         m_stSave = dirty; m_stSaveAll = anyDirty; m_stUndo = canUndo; m_stRedo = canRedo;
-        m_stSel = hasSel; m_stPaste = canPaste;
+        m_stSel = hasSel; m_stPaste = canPaste; m_stHasPath = hasPath;
         if (auto* tb = toolBar())
         {
             tb->EnableTool(IDM_FILE_SAVE, dirty);   tb->EnableTool(IDM_FILE_SAVEALL, anyDirty);
@@ -8422,6 +8678,12 @@ private:
             mb->Enable(IDM_EDIT_UNDO, canUndo); mb->Enable(IDM_EDIT_REDO, canRedo);
             mb->Enable(IDM_EDIT_CUT, hasSel);   mb->Enable(IDM_EDIT_COPY, hasSel);
             mb->Enable(IDM_EDIT_PASTE, canPaste); mb->Enable(IDM_EDIT_DELETE, hasSel);
+            // Items that TRULY need the document to exist on disk: nothing to reload, nothing a default
+            // viewer could open - grey them out (like Notepad++) instead of a dead click. The Open
+            // Containing Folder submenu stays fully enabled: its entries all fall back to the working
+            // directory for untitled buffers.
+            mb->Enable(IDM_FILE_OPEN_DEFAULT_VIEWER, hasPath);
+            mb->Enable(IDM_FILE_RELOAD, hasPath);
         }
     }
 
@@ -8434,6 +8696,8 @@ private:
     wxAuiNotebook* m_tabs = nullptr;            // alias -> m_active->tabs
     wxPanel*       m_capBar = nullptr;   // +/v/x caption buttons on the tab strip
     FindReplaceDialog* m_findDlg = nullptr;   // modeless Find/Replace dialog
+    TerminalPanel*     m_terminal = nullptr;  // View > Show Terminal - bottom multi-tab shell panel (lazy)
+    std::vector<OpenHereTool> m_openFolderTools;   // File > Open Containing Folder's dynamically-detected entries (see terminal_panel.h)
     wxStyledTextCtrl*  m_findResults = nullptr;   // Find-in-Files results panel (docked, bottom)
     wxStyledTextCtrl*  m_fifScratch  = nullptr;   // hidden scratch buffer for searching file contents
     std::vector<std::pair<wxString, int>> m_fifJump;   // results panel line -> (file, 0-based editor line)
@@ -8462,6 +8726,10 @@ private:
 #endif
     wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()
     wxPanel*    m_toolBarHost = nullptr;          // macOS: host panel for the docked non-native child toolbar (see buildToolBar)
+#ifdef __WXMAC__
+    wxSizerItem* m_macInsetItem = nullptr;        // integrated bar: leading spacer reserving the traffic-light cluster's width
+    int          m_macToolbarRowH = 0;            // integrated bar: toolbar row height = the re-centred traffic lights' band height
+#endif
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
     int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Solar, 2 = IconPark (restart-to-apply)
     int         m_toolbarIconSize = 16;          // toolbar icon size in px (16/20/24/32, default 16; restart-to-apply)
@@ -8499,7 +8767,7 @@ private:
     bool        m_macroSepAdded = false;
     bool        m_hint = false;   // a "needs full app" message is showing in status field 0
     // cached toolbar/menu enable states (start enabled, matching the freshly-built toolbar)
-    bool        m_stSave = true, m_stSaveAll = true, m_stUndo = true, m_stRedo = true, m_stSel = true, m_stPaste = true;
+    bool        m_stSave = true, m_stSaveAll = true, m_stUndo = true, m_stRedo = true, m_stSel = true, m_stPaste = true, m_stHasPath = true;
     int         m_newCount = 0;   // counter for "new N" tab titles
     int         m_zoom = 0;       // shared zoom level across all tabs (Ctrl+wheel), persisted
     NppTheme    m_theme;          // exact Notepad++ colours (loaded from theme XML)

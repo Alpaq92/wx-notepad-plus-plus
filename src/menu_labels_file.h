@@ -12,6 +12,17 @@ namespace Label
     inline const wxString FileOpenExplorer() { return _("Explorer"); }
     inline const wxString FileOpenCmd() { return _("cmd"); }
     inline const wxString FileOpenPowerShell() { return _("PowerShell"); }
+    // Non-Windows flavours of the submenu (see menu_data_file.h): macOS names its file manager (Finder,
+    // a proper noun left untranslated); Linux gets the generic, translated terms.
+    inline const wxString FileOpenFileManager()
+    {
+#ifdef __WXMAC__
+        return "Finder";
+#else
+        return _("File Manager");
+#endif
+    }
+    inline const wxString FileOpenTerminal() { return _("Terminal"); }
     inline const wxString FileFolderAsWorkspace() { return _("Folder as Workspace"); }
 
     inline const wxString FileOpenDefaultViewer() { return _("Open in &Default Viewer"); }

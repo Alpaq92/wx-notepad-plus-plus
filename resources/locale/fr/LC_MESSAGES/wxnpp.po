@@ -2582,3 +2582,24 @@ msgstr "E&xtensions"
 
 msgid "&Help"
 msgstr "A&ide"
+
+msgid "File Manager"
+msgstr "Gestionnaire de fichiers"
+
+msgid "Terminal"
+msgstr "Terminal"
+
+msgid "Open Containing Folder in File Manager"
+msgstr "Ouvrir le dossier parent dans le gestionnaire de fichiers"
+
+msgid "Reveal in Finder"
+msgstr "Afficher dans le Finder"
+
+msgid "Show &Terminal"
+msgstr "Afficher le &terminal"
+
+msgid "Failed to start: %s"
+msgstr "Échec du démarrage : %s"
+
+msgid "[process exited with code %d]"
+msgstr "[processus terminé avec le code %d]"

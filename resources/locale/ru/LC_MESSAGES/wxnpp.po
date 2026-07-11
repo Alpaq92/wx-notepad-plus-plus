@@ -2582,3 +2582,24 @@ msgstr "&Расширения"
 
 msgid "&Help"
 msgstr "&Справка"
+
+msgid "File Manager"
+msgstr "Файловый менеджер"
+
+msgid "Terminal"
+msgstr "Терминал"
+
+msgid "Open Containing Folder in File Manager"
+msgstr "Открыть содержащую папку в файловом менеджере"
+
+msgid "Reveal in Finder"
+msgstr "Показать в Finder"
+
+msgid "Show &Terminal"
+msgstr "Показать &терминал"
+
+msgid "Failed to start: %s"
+msgstr "Не удалось запустить: %s"
+
+msgid "[process exited with code %d]"
+msgstr "[процесс завершился с кодом %d]"

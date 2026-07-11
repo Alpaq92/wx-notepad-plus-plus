@@ -2566,3 +2566,24 @@ msgstr ""
 
 msgid "&Help"
 msgstr ""
+
+msgid "File Manager"
+msgstr ""
+
+msgid "Terminal"
+msgstr ""
+
+msgid "Open Containing Folder in File Manager"
+msgstr ""
+
+msgid "Reveal in Finder"
+msgstr ""
+
+msgid "Show &Terminal"
+msgstr ""
+
+msgid "Failed to start: %s"
+msgstr ""
+
+msgid "[process exited with code %d]"
+msgstr ""

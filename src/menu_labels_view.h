@@ -100,6 +100,7 @@ namespace Label
     inline const wxString ViewDocMap() { return _("&Document Map"); }
     inline const wxString ViewDocList() { return _("D&ocument List"); }
     inline const wxString ViewFuncList() { return _("Function &List"); }
+    inline const wxString ViewTerminal() { return _("Show &Terminal"); }
 
     inline const wxString ViewEditRTL() { return _("T&ext Direction RTL"); }
     inline const wxString ViewEditLTR() { return _("Te&xt Direction LTR"); }
