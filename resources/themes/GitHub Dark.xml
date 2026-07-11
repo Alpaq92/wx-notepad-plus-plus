@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!--
-  GitHub Dark theme for wxNotepad++  -  SPDX-License-Identifier: Apache-2.0
-  Copyright 2026 The wxNotepad++ Authors.
+  GitHub Dark theme for wxNote  -  SPDX-License-Identifier: Apache-2.0
+  Copyright 2026 The wxNote Authors.
   Regenerated, permissive replacement for the Notepad++ styler of the same name: it
   contains no Notepad++ theme data. Palette: GitHub Primer dark palette (MIT). The per-lexer style structure
   is the factual Lexilla style table, taken from the MIT-licensed Monokai N++ styler

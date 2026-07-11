@@ -1,9 +1,9 @@
 ; NSIS script for wxNote (Windows installer). NSIS is zlib-licensed (fully open source) and
 ; ships preinstalled on GitHub's windows-latest runners as `makensis`.
 ;
-; Build first (cmake --build build --target wxnpp --config Release), create build\installer\, then:
-;   makensis installer\windows\wxnpp.nsi
-; Output: build\installer\wxNotepadPlusPlus-<version>-Setup.exe
+; Build first (cmake --build build --target wxnote --config Release), create build\installer\, then:
+;   makensis installer\windows\wxnote.nsi
+; Output: build\installer\wxNote-<version>-Setup.exe
 ;
 ; Relative paths below are resolved against this script's directory (makensis cd's here by default).
 ; Only ships what the app actually reads at runtime (see the POST_BUILD copy_directory calls in the
@@ -18,11 +18,11 @@
 ; Read straight from the top-level CMakeLists.txt's project(... VERSION ...) so this can't drift
 ; out of sync with it again (every packaging script independently hardcoded its own version string
 ; and 0.4.0 shipped labeled 0.3.0 everywhere as a result).
-!searchparse /file "..\..\CMakeLists.txt" "project(wxNotepadPlusPlus VERSION " APP_VERSION " LANGUAGES"
+!searchparse /file "..\..\CMakeLists.txt" "project(wxNote VERSION " APP_VERSION " LANGUAGES"
 
 !define APP_NAME    "wxNote"
 !define APP_URL     "https://github.com/Alpaq92/wx-notepad-plus-plus"
-!define APP_EXE     "wxnpp.exe"
+!define APP_EXE     "wxnote.exe"
 !define ARP_KEY     "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 
 Name "${APP_NAME}"
@@ -32,12 +32,16 @@ SetCompressor /SOLID lzma
 ManifestDPIAware true
 
 ; Per-user install (no UAC), mirroring the previous installer's lowest-privilege default.
+; NOTE: the installer's own registry state deliberately lives OUTSIDE "Software\wxNote" - that key
+; is wxConfig's root for the app's user settings, and an installer-created subkey there would (a)
+; defeat the app's first-launch "new settings tree is still empty" legacy-migration gate and (b)
+; make uninstall's cleanup of installer state delete the user's settings with it.
 RequestExecutionLevel user
 InstallDir "$LOCALAPPDATA\Programs\${APP_NAME}"
-InstallDirRegKey HKCU "Software\wxNote\Installer" "InstallDir"
+InstallDirRegKey HKCU "Software\wxNote-Installer" "InstallDir"
 
-!define MUI_ICON "..\..\resources\wxNotepad++.ico"
-!define MUI_UNICON "..\..\resources\wxNotepad++.ico"
+!define MUI_ICON "..\..\resources\wxnote.ico"
+!define MUI_UNICON "..\..\resources\wxnote.ico"
 
 !insertmacro MUI_PAGE_LICENSE "..\..\LICENSE"
 !insertmacro MUI_PAGE_COMPONENTS
@@ -59,7 +63,7 @@ VIAddVersionKey /LANG=1033 "FileDescription" "${APP_NAME} installer"
 VIAddVersionKey /LANG=1033 "CompanyName"     "wxNote Project"
 VIAddVersionKey /LANG=1033 "LegalCopyright"  "GPL v3 - see LICENSE"
 
-; wxnpp.exe is built x64-only (see CMakeLists.txt) - NSIS itself has no "ArchitecturesAllowed" concept
+; wxnote.exe is built x64-only (see CMakeLists.txt) - NSIS itself has no "ArchitecturesAllowed" concept
 ; the way Inno Setup does, so the 64-bit-ness has to be enforced by hand or the 32-bit installer stub
 ; would happily lay a 64-bit exe down on a 32-bit system, where it can't run at all.
 Function .onInit
@@ -84,7 +88,7 @@ Section "${APP_NAME} (required)" SecCore
   SetOutPath "$INSTDIR"
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
-  WriteRegStr HKCU "Software\wxNote\Installer" "InstallDir" "$INSTDIR"
+  WriteRegStr HKCU "Software\wxNote-Installer" "InstallDir" "$INSTDIR"
 
   ; Add/Remove Programs entry (per-user hive, matching the per-user install).
   WriteRegStr   HKCU "${ARP_KEY}" "DisplayName"          "${APP_NAME}"
@@ -130,5 +134,5 @@ Section "Uninstall"
   RMDir "$SMPROGRAMS\${APP_NAME}"
 
   DeleteRegKey HKCU "${ARP_KEY}"
-  DeleteRegKey HKCU "Software\wxNote"   ; only ever held the Installer\InstallDir value written above
+  DeleteRegKey HKCU "Software\wxNote-Installer"   ; installer state only - the user's settings under Software\wxNote survive uninstall
 SectionEnd

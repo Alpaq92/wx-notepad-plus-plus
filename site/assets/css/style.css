@@ -18,7 +18,7 @@
 :root {
 
   /**
-   * colors - wxNotepad++'s own brand green (#37b24d, the app-icon plate colour) stands in for the
+   * colors - wxNote's own brand green (#37b24d, the app-icon plate colour) stands in for the
    * template's yellow accent throughout; every other token is a light/dark *theme* pair, resolved
    * for `data-theme="dark"` here and overridden under `[data-theme="light"]` below. `:root`'s own
    * values are the dark-theme defaults so an unthemed flash-of-unstyled-content still looks correct.

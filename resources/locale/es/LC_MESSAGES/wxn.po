@@ -1110,9 +1110,6 @@ msgstr "Defina su lenguaje..."
 msgid "Open User Defined Language folder..."
 msgstr "Abrir carpeta de lenguaje definido por el usuario..."
 
-msgid "Notepad++ User Defined Languages Collection"
-msgstr "Colección de lenguajes definidos por el usuario de Notepad++"
-
 msgid "User Defined Language"
 msgstr "Lenguaje definido por el usuario"
 
@@ -1250,18 +1247,6 @@ msgstr "&Pestañas"
 
 msgid "Command Line Arguments..."
 msgstr "Argumentos de línea de comandos..."
-
-msgid "Notepad++ Home"
-msgstr "Sitio oficial de Notepad++"
-
-msgid "Notepad++ Project Page"
-msgstr "Página de proyecto Notepad++"
-
-msgid "Notepad++ Online User Manual"
-msgstr "Manual de usuario online de Notepad++"
-
-msgid "Notepad++ Community (Forum)"
-msgstr "Comunidad Notepad++ (foro)"
 
 msgid "Check for Updates"
 msgstr "Buscar actualizaciones"
@@ -2064,14 +2049,11 @@ msgstr "%d marcado(s) - estilo 4"
 msgid "Marked %d - style 5"
 msgstr "%d marcado(s) - estilo 5"
 
-msgid "wxNote (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
-msgstr "wxNote (fork experimental de wxWidgets)\n\nwxWidgets %d.%d.%d\n%s\n\nEjecutable:\n%s"
+msgid "wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgstr "wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nEjecutable:\n%s"
 
 msgid "Debug Info"
 msgstr "Información de depuración"
-
-msgid "Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs."
-msgstr "Uso: wxnpp [archivos...]\n\nLos archivos indicados en la línea de comandos se abren en pestañas."
 
 msgid "Command Line Arguments"
 msgstr "Argumentos de línea de comandos"
@@ -2448,8 +2430,8 @@ msgstr "&Extendido (\\n, \\r, \\t, \\0, \\x...)"
 msgid "Re&gular expression"
 msgstr "Expresión re&gular"
 
-msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnpp elevated to save this file?"
-msgstr "No se puede escribir en \"%s\" con sus permisos actuales.\n\n¿Reiniciar wxnpp con privilegios elevados para guardar este archivo?"
+msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnote elevated to save this file?"
+msgstr "No se puede escribir en \"%s\" con sus permisos actuales.\n\n¿Reiniciar wxnote con privilegios elevados para guardar este archivo?"
 
 msgid "Access Denied"
 msgstr "Acceso denegado"
@@ -2457,8 +2439,8 @@ msgstr "Acceso denegado"
 msgid "Reuse an existing window"
 msgstr "Reutilizar una ventana existente"
 
-msgid "Usage: wxnpp [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
-msgstr "Uso: wxnpp [opciones] [archivos...]\n\n-g, --goto <línea[,columna]>   ir a esta línea (y columna) del último archivo abierto\n-e, --encoding <nombre>         forzar codificación: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance              abrir siempre una nueva ventana\n-r, --reuse-instance            reutilizar una ventana ya abierta\n\nLos archivos indicados en la línea de comandos se abren en pestañas."
+msgid "Usage: wxnote [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
+msgstr "Uso: wxnote [opciones] [archivos...]\n\n-g, --goto <línea[,columna]>   ir a esta línea (y columna) del último archivo abierto\n-e, --encoding <nombre>         forzar codificación: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance              abrir siempre una nueva ventana\n-r, --reuse-instance            reutilizar una ventana ya abierta\n\nLos archivos indicados en la línea de comandos se abren en pestañas."
 
 msgid "open at line[,col]"
 msgstr "ir a la línea[,columna]"
@@ -2535,8 +2517,8 @@ msgstr "Estilo %d"
 msgid "About wxNote"
 msgstr "Acerca de wxNote"
 
-msgid "wxNote\n\nA cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\na native Scintilla editor with dark/light themes and plugin support.\n\nIndependent project - not affiliated with or endorsed by Notepad++."
-msgstr "wxNote\n\nUna reimplementación multiplataforma, basada en wxWidgets, de un editor al estilo Notepad++:\nun editor Scintilla nativo con temas claro/oscuro y soporte de complementos.\n\nProyecto independiente - no afiliado ni respaldado por Notepad++."
+msgid "wxNote\n\nA fast, cross-platform text editor built on wxWidgets:\na native Scintilla editor with dark/light themes and plugin support."
+msgstr "wxNote\n\nUn editor de texto rápido y multiplataforma construido sobre wxWidgets:\nun editor Scintilla nativo con temas claro/oscuro y soporte de complementos."
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
 msgstr "Buscar \"%s\"  (%d resultados en %d de %d archivos buscados)"

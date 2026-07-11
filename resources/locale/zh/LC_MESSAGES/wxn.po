@@ -339,8 +339,8 @@ msgstr "第 9 个标签	Ctrl+9"
 msgid "ANSI"
 msgstr "ANSI"
 
-msgid "About wxNote	F1"
-msgstr "关于 wxNote	F1"
+msgid "About wxNote\tF1"
+msgstr "关于 wxNote\tF1"
 
 msgid "Activate document:"
 msgstr "激活文档："
@@ -1452,21 +1452,6 @@ msgstr "普通文本文件"
 msgid "North European"
 msgstr "北欧"
 
-msgid "Notepad++ Community (Forum)"
-msgstr "Notepad++ 社区 (论坛)"
-
-msgid "Notepad++ Home"
-msgstr "Notepad++ 主页"
-
-msgid "Notepad++ Online User Manual"
-msgstr "Notepad++ 在线用户手册"
-
-msgid "Notepad++ Project Page"
-msgstr "Notepad++ 项目页面"
-
-msgid "Notepad++ User Defined Languages Collection"
-msgstr "Notepad++ 用户自定义语言合集"
-
 msgid "Number"
 msgstr "数字"
 
@@ -2244,9 +2229,6 @@ msgstr "展开层级"
 msgid "Unix (LF)"
 msgstr "Unix (LF)"
 
-msgid "Usage: wxnpp [files...]\n\nFiles given on the command line are opened in tabs."
-msgstr "用法：wxnpp [文件...]\n\n命令行中给出的文件将在标签页中打开。"
-
 msgid "User Defined Language"
 msgstr "用户自定义语言"
 
@@ -2379,8 +2361,8 @@ msgstr "个字符起"
 msgid "times"
 msgstr "次"
 
-msgid "wxNote (experimental wxWidgets fork)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
-msgstr "wxNote（wxWidgets 实验性分支）\n\nwxWidgets %d.%d.%d\n%s\n\n可执行文件：\n%s"
+msgid "wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgstr "wxNote（实验版）\n\nwxWidgets %d.%d.%d\n%s\n\n可执行文件：\n%s"
 
 
 msgid "Theme:"
@@ -2449,8 +2431,8 @@ msgstr "扩展(&E) (\\n, \\r, \\t, \\0, \\x...)"
 msgid "Re&gular expression"
 msgstr "正则表达式(&G)"
 
-msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnpp elevated to save this file?"
-msgstr "当前权限无法写入 \"%s\"。\n\n是否以提升的权限重新启动 wxnpp 以保存此文件?"
+msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnote elevated to save this file?"
+msgstr "当前权限无法写入 \"%s\"。\n\n是否以提升的权限重新启动 wxnote 以保存此文件?"
 
 msgid "Access Denied"
 msgstr "拒绝访问"
@@ -2458,8 +2440,8 @@ msgstr "拒绝访问"
 msgid "Reuse an existing window"
 msgstr "重用现有窗口"
 
-msgid "Usage: wxnpp [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
-msgstr "用法: wxnpp [选项] [文件...]\n\n-g, --goto <行[,列]>   跳转到最后打开文件中的此行(和列)\n-e, --encoding <名称>   强制指定编码: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance      始终打开一个新窗口\n-r, --reuse-instance    重用一个已在运行的窗口\n\n命令行中指定的文件将在标签页中打开。"
+msgid "Usage: wxnote [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
+msgstr "用法: wxnote [选项] [文件...]\n\n-g, --goto <行[,列]>   跳转到最后打开文件中的此行(和列)\n-e, --encoding <名称>   强制指定编码: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance      始终打开一个新窗口\n-r, --reuse-instance    重用一个已在运行的窗口\n\n命令行中指定的文件将在标签页中打开。"
 
 msgid "open at line[,col]"
 msgstr "跳转到行[,列]"
@@ -2536,8 +2518,8 @@ msgstr "样式 %d"
 msgid "About wxNote"
 msgstr "关于 wxNote"
 
-msgid "wxNote\n\nA cross-platform, wxWidgets reimplementation of a Notepad++-style editor:\na native Scintilla editor with dark/light themes and plugin support.\n\nIndependent project - not affiliated with or endorsed by Notepad++."
-msgstr "wxNote\n\n基于 wxWidgets 的跨平台 Notepad++ 风格编辑器重新实现:\n原生 Scintilla 编辑器，支持深色/浅色主题和插件。\n\n独立项目 - 与 Notepad++ 无关，也未获得其认可。"
+msgid "wxNote\n\nA fast, cross-platform text editor built on wxWidgets:\na native Scintilla editor with dark/light themes and plugin support."
+msgstr "wxNote\n\n基于 wxWidgets 的快速跨平台文本编辑器:\n原生 Scintilla 编辑器，支持深色/浅色主题和插件。"
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
 msgstr "搜索 \"%s\"  (%d 处匹配，搜索的 %d 个文件中有 %d 个)"

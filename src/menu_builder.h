@@ -1,6 +1,6 @@
 #pragma once
 // Walks the MenuBarDef data tables (see menu_data_*.h) once at startup to build the real wxMenuBar,
-// replacing the old ~700-line imperative src/npp_menu.h. Also builds a MenuRegistry mapping each
+// replacing the old ~700-line imperative inline menu construction. Also builds a MenuRegistry mapping each
 // menu's stable symbolicName to its wxMenu* / bar position / DynamicSlot insertion point, so the
 // handful of main.cpp call sites that need a specific menu at runtime (Recent Files, the
 // Localization picker, Nib plugin commands, saved Macro entries) no longer depend on translated
@@ -59,7 +59,7 @@ inline wxMenu* buildMenuFromDefs(const MenuItemDef* items, size_t count, MenuReg
 // Settings into Window for a round 10; it was split back out after user feedback that Preferences
 // under "Window" was a weird home.) Every IDM_* id and every item's internal wording/nesting is
 // unchanged; only which top-level menu owns what changed.
-inline void buildNppMainMenu(wxMenuBar* mb, MenuRegistry& reg)
+inline void buildWxnMainMenu(wxMenuBar* mb, MenuRegistry& reg)
 {
     struct Entry { const MenuDef* def; };
     static const Entry kMenus[] = {

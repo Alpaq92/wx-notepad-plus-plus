@@ -1,13 +1,13 @@
-# Plan — cross-platform wxNotepad++ with Windows binary-compatibility for Notepad++ plugins
+# Plan — cross-platform wxNote with Windows binary-compatibility for Notepad++ plugins
 
-How to make wxNotepad++ run natively on Windows, Linux, and macOS, while **on Windows** it can still
+How to make wxNote run natively on Windows, Linux, and macOS, while **on Windows** it can still
 load existing **Notepad++ plugin binaries (`.dll`) unchanged**.
 
 ## The idea in one picture
 
 ```
                        ┌─────────────────────────────────────────────┐
-   all platforms ──▶   │  wxNotepad++ CORE  (wx + wxStyledTextCtrl)  │   ◀── permissive (Apache)
+   all platforms ──▶   │  wxNote CORE  (wx + wxStyledTextCtrl)  │   ◀── permissive (Apache)
                        │  + the Nib plugin API  (include/nib/nib.h)  │
                        └───────────────┬───────────────┬─────────────┘
                           loads (dlopen)│               │ loads (dlopen) — Windows only
@@ -129,7 +129,7 @@ regression check) — and `git grep` finds no N++ reproduction in `src/`. — �
 
 ## Phase 4 — Package + ship per platform — mostly done
 
-- **Windows:** ✅ done — NSIS installer (`installer/windows/wxnpp.nsi`), bundles the optional
+- **Windows:** ✅ done — NSIS installer (`installer/windows/wxnote.nsi`), bundles the optional
   `nib/npp_bridge.dll` + a `plugins/` folder, built in CI on every push.
 - **Linux:** ✅ done — AppImage (`installer/linux/build-appimage.sh`) and `.deb`
   (`installer/linux/build-deb.sh`), both built in CI (GTK3 runtime dep).

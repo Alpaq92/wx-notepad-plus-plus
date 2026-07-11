@@ -5,8 +5,8 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>wxNotepad++</title>
-  <meta name="description" content="wxNotepad++ - a cross-platform, wxWidgets + Scintilla reimplementation of Notepad++, for Windows, Linux, and macOS.">
+  <title>wxNote</title>
+  <meta name="description" content="wxNote - a fast, cross-platform text editor built on wxWidgets + Scintilla, for Windows, Linux, and macOS.">
 
   <!--
     - theme (applied before first paint, so there's no flash of the wrong theme - script.js
@@ -15,7 +15,7 @@
   -->
   <script>
     (function () {
-      var pref = localStorage.getItem('wxnpp-site-theme') || 'system';
+      var pref = localStorage.getItem('wxn-site-theme') || 'system';
       var resolved = pref === 'system'
         ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
         : pref;
@@ -64,11 +64,11 @@
       <div class="sidebar-info">
 
         <figure class="avatar-box">
-          <img src="./assets/images/logo.svg" alt="wxNotepad++ logo" width="80">
+          <img src="./assets/images/logo.svg" alt="wxNote logo" width="80">
         </figure>
 
         <div class="info-content">
-          <h1 class="name" title="wxNotepad++">wxNotepad++</h1>
+          <h1 class="name" title="wxNote">wxNote</h1>
 
           <p class="title">Cross-platform text editor</p>
         </div>
@@ -247,14 +247,13 @@
 
         <section class="about-text">
           <p>
-            wxNotepad++ is a ground-up, cross-platform reimplementation of a Notepad++-style editor, built on
-            wxWidgets and wxStyledTextCtrl (Scintilla/Lexilla). It runs natively on Windows, Linux, and macOS from
-            one codebase - no source code is copied from Notepad++; the original is used only as a functional
-            reference and test target.
+            wxNote is a ground-up, cross-platform text editor built on wxWidgets and wxStyledTextCtrl
+            (Scintilla/Lexilla). It runs natively on Windows, Linux, and macOS from one codebase, with its own
+            plugin API, theming, User-Defined Languages, and full UI localization.
           </p>
 
           <p>
-            The project is licensed GPL v3 today, consistent with its Notepad++ heritage, with a committed goal of
+            The project is licensed GPL v3 today, consistent with its origins, with a committed goal of
             moving to a permissive license as the remaining interoperability ties are resolved - purely to give
             users and downstream developers more freedom, with no commercial agenda behind it.
           </p>
@@ -267,7 +266,7 @@
 
         <section class="service">
 
-          <h3 class="h3 service-title">Why wxNotepad++</h3>
+          <h3 class="h3 service-title">Why wxNote</h3>
 
           <ul class="service-list">
 
@@ -524,7 +523,7 @@
               <span>Extensions menu</span>
 
               <p class="timeline-text">
-                wxNotepad++'s own original, permissive, cross-platform plugin API for native extensions - no
+                wxNote's own original, permissive, cross-platform plugin API for native extensions - no
                 Notepad++ ABI required.
               </p>
 
@@ -713,7 +712,7 @@
 
             <li class="project-item  active" data-filter-item data-category="platforms">
               <figure class="project-img">
-                <img src="./assets/images/screenshots/macos.png" alt="wxNotepad++ running natively on macOS" loading="lazy">
+                <img src="./assets/images/screenshots/macos.png" alt="wxNote running natively on macOS" loading="lazy">
               </figure>
 
               <h3 class="project-title">Native on macOS</h3>
@@ -723,7 +722,7 @@
 
             <li class="project-item  active" data-filter-item data-category="platforms">
               <figure class="project-img">
-                <img src="./assets/images/screenshots/linux.png" alt="wxNotepad++ running natively on Linux" loading="lazy">
+                <img src="./assets/images/screenshots/linux.png" alt="wxNote running natively on Linux" loading="lazy">
               </figure>
 
               <h3 class="project-title">Native on Linux</h3>

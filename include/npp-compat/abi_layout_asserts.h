@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// wxNotepad++ - plugin ABI compatibility layer: compile-time layout guards.
-// Copyright 2026 The wxNotepad++ Authors.
+// wxNote - plugin ABI compatibility layer: compile-time layout guards.
+// Copyright 2026 The wxNote Authors.
 //
 // A real, compiled Notepad++ plugin DLL was built against the real Notepad++ headers, and it
 // reads/writes NppData/FuncItem/tTbData/CommunicationInfo through raw pointers at fixed byte
@@ -27,7 +27,7 @@
 #include "Docking.h"            // DockedWidgetData / tTbData
 #include "Notepad_plus_msgs.h"  // CommunicationInfo
 
-namespace wxnpp_abi_layout_asserts {
+namespace wxn_abi_layout_asserts {
 
 // ---- NppData: three HWNDs, in declaration order, no gaps ------------------------------------
 static_assert(offsetof(NppData, _nppHandle) == 0);
@@ -75,4 +75,4 @@ static_assert(offsetof(CommunicationInfo, srcModuleName) >= sizeof(long));
 static_assert(offsetof(CommunicationInfo, srcModuleName) % alignof(const wchar_t*) == 0);
 static_assert(offsetof(CommunicationInfo, info) == offsetof(CommunicationInfo, srcModuleName) + sizeof(const wchar_t*));
 
-}  // namespace wxnpp_abi_layout_asserts
+}  // namespace wxn_abi_layout_asserts

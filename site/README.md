@@ -1,6 +1,6 @@
-# wxNotepad++ project site
+# wxNote project site
 
-The GitHub Pages landing page for wxNotepad++, deployed by
+The GitHub Pages landing page for wxNote, deployed by
 [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) on every published release (and on
 any push to `master` that touches this directory).
 
@@ -31,7 +31,7 @@ at deploy time - `script.js` calls the GitHub REST API directly from the visitor
 page load, so they're always current even between deploys. Download buttons are matched to release
 assets by filename suffix and, for the two macOS builds, an `arm64`/`x86_64` substring
 (`.exe`, `arm64...dmg`, `x86_64...dmg`, `.AppImage`, `.deb`, `.rpm`, `.flatpak`) - if a packaging
-script's output naming ever changes (see `installer/*/build-*.sh` and `installer/windows/wxnpp.nsi`),
+script's output naming ever changes (see `installer/*/build-*.sh` and `installer/windows/wxnote.nsi`),
 update `ASSET_MATCHERS` in `script.js` to match.
 
 ## Screenshots page

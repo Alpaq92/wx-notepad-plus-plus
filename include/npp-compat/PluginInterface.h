@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// wxNotepad++ - plugin ABI: the plugin entry-point interface.
-// Copyright 2026 The wxNotepad++ Authors.
+// wxNote - plugin ABI: the plugin entry-point interface.
+// Copyright 2026 The wxNote Authors.
 //
 // Clean-room, cross-platform redeclaration of the Notepad++ plugin entry interface.
 // The struct field layouts, function signatures, and exported symbol names below are
 // reproduced exactly as binary interoperability requires (a plugin compiled against
 // Notepad++'s headers must see the same layout and call the same names) - those are
 // functional facts, not creative expression. The wording, ordering, comments, and the
-// cross-platform handling are original to wxNotepad++; no Notepad++ source text is
+// cross-platform handling are original to wxNote; no Notepad++ source text is
 // copied. Public reference: https://npp-user-manual.org/docs/plugin-communication/
 
 #pragma once
@@ -65,5 +65,5 @@ extern "C"
     NPP_EXPORT FuncItem*      getFuncsArray(int*);
     NPP_EXPORT void           beNotified(SCNotification*);
     NPP_EXPORT LRESULT        messageProc(UINT message, WPARAM wParam, LPARAM lParam);
-    NPP_EXPORT BOOL           isUnicode();   // retained for ABI; wxNotepad++ buffers are Unicode
+    NPP_EXPORT BOOL           isUnicode();   // retained for ABI; wxNote buffers are Unicode
 }

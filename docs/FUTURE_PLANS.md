@@ -1,8 +1,8 @@
-# wxNotepad++ — Future Plans & Licensing Roadmap
+# wxNote — Future Plans & Licensing Roadmap
 
 ## Where we are today
 
-wxNotepad++ is distributed under **GPL v3** (see [`LICENSE`](../LICENSE)), consistent with its
+wxNote is distributed under **GPL v3** (see [`LICENSE`](../LICENSE)), consistent with its
 Notepad++ heritage. That is the honest, conservative position for now — see "why we're still GPL" below.
 
 **The de-GPL engineering is now complete.** The core ships its own original cross-platform plugin API
@@ -13,10 +13,10 @@ choice about timing*, not something forced by lingering N++ code in the core.
 
 ## Where we want to go
 
-Our committed goal is to **drop every GPL dependency and relicense wxNotepad++ under a permissive
+Our committed goal is to **drop every GPL dependency and relicense wxNote under a permissive
 license** (Apache-2.0 / MIT-style).
 
-**This has no commercial agenda.** We are *not* trying to make wxNotepad++ proprietary, sell it, or
+**This has no commercial agenda.** We are *not* trying to make wxNote proprietary, sell it, or
 close any of it off. The only reason for wanting a permissive license is to give **users and downstream
 developers the most freedom possible** — to use, study, modify, embed, fork, and redistribute the editor
 however they like, including in places a copyleft license makes awkward (other permissively-licensed
@@ -35,11 +35,12 @@ conservatively on GPL is **not** lingering GPL files — it's three unresolved g
    but **not settled law**. Rather than bet the core on that, we moved the entire reproduction into the
    optional GPL `npp-bridge`: the **core reproduces nothing** and the grey area stays GPL, compliant under
    any reading. This gate no longer blocks the *core's* relicense — it is resolved by construction.
-2. **Trademark — name rebranded.** The app now uses the **wxNotepad++ name** throughout: a "wxNotepad++"
-   window title, an "About wxNotepad++" box with an independence disclaimer, and rebranded menu labels.
+2. **Trademark — name rebranded.** The app now uses the **wxNote name** throughout: a "wxNote"
+   window title, an "About wxNote" box, its own menu labels, and a `wxnote` executable.
    The app icon is the project's own SVG (`src/app_icon_svg.h`); its green plate + "N" monogram echo the
-   upstream styling. The remaining "Notepad++" mentions are nominative (code comments, the
-   `<NotepadPlus>` data format, and Help-menu links to Notepad++'s own resources).
+   upstream styling. The remaining "Notepad++" mentions are nominative and confined to the
+   compatibility surface (`packages/npp-bridge`, `include/npp-compat/`, the `<NotepadPlus>`
+   interchange data format) and to the legal/provenance docs.
 3. **A final clean-room audit of `src/`.** — ✅ **done.** A full line-audit confirmed the core
    (`main.cpp` + the data-driven menu engine, `src/menu_builder.h`/`src/menu_data_*.h` — replacing the
    original imperative `npp_menu.h`, since deleted) carries no `NPPM_*`/`NppData`/`FuncItem` ABI code and
@@ -63,7 +64,7 @@ until the maintainer makes the deliberate call; claiming permissive prematurely 
    and translates N++ `NPPM_*`/`FuncItem`/`SCNotification` ⇄ Nib. **The core now contains zero N++-derived
    code** — verified, and real N++ plugins (MIME Tools, Converter) still load + run through the bridge.
 3. **Rebrand** — ✅ name done: window title, About box, dialog captions, and menu labels now carry the
-   wxNotepad++ name (the app icon is the project's own SVG).
+   wxNote name (the app icon is the project's own SVG).
 4. **Clean-room audit** of `src/` — ✅ **done.** Full line-audit; only nominative N++ references remain.
    The one N++-ABI test fixture was moved out of `src/` to `packages/test_plugin/`, keeping `src/` permissive.
 5. **Relicense the core permissively.** — the remaining step, a deliberate maintainer decision. The

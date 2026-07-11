@@ -12,7 +12,7 @@ platform gets the same, permissively-licensed, code-oriented monospace font out 
 Only the Regular and Bold weights are bundled (`JetBrainsMono-Regular.ttf`,
 `JetBrainsMono-Bold.ttf`) - unmodified from upstream. On Windows they're loaded as a process-private
 font resource (no installation or admin rights needed, and nothing is added to the user's system-wide
-font list); see `NppApp::OnInit`/`OnExit` in `src/main.cpp`.
+font list); see `WxnApp::OnInit`/`OnExit` in `src/main.cpp`.
 
 See the root `LICENSING.md` and `NOTICE` for the project-wide licensing summary this entry is
 consistent with.

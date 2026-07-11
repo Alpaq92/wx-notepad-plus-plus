@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!--
-  Vibrant Ink theme for wxNotepad++  -  SPDX-License-Identifier: Apache-2.0
-  Copyright 2026 The wxNotepad++ Authors.
+  Vibrant Ink theme for wxNote  -  SPDX-License-Identifier: Apache-2.0
+  Copyright 2026 The wxNote Authors.
   Regenerated, permissive replacement for the Notepad++ styler of the same name: it
-  contains no Notepad++ theme data. Palette: original wxNotepad++ palette. The per-lexer style structure
+  contains no Notepad++ theme data. Palette: original wxNote palette. The per-lexer style structure
   is the factual Lexilla style table, taken from the MIT-licensed Monokai N++ styler
   (Copyright (c) 2008 Fabio Zendhi Nagao, MIT).
 -->

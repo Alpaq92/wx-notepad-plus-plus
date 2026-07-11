@@ -30,7 +30,7 @@ from copyright the same way a file format's magic number or a network protocol's
 If you're reviewing a change to this directory (or reviewing the directory for the first time):
 
 1. **No textual overlap with Notepad++ source.** Comments, wording, and formatting in these files
-   should read as originally written for wxNotepad++ — if a comment sounds like it was lifted from
+   should read as originally written for wxNote — if a comment sounds like it was lifted from
    `PluginInterface.h`'s actual header, rewrite it in your own words describing the same fact.
 2. **Layout equivalence, not source equivalence.** The goal is that `sizeof`/`offsetof`/alignment
    for `NppData`, `FuncItem`, `ShortcutKey`, `tTbData`, and `CommunicationInfo` match what a real

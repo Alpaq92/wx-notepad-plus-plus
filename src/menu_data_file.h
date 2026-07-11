@@ -1,11 +1,11 @@
 #pragma once
 #include "menu_model.h"
 #include "menu_labels_file.h"
-#include "menuCmdID.h"
+#include "command_ids.h"
 
 // ----------------------------------------------------------------- File
 // Mechanical, zero-behavior-change port of the File menu from the old
-// inline buildNppMainMenu() (see src/npp_menu.h). Same items, same order,
+// inline buildWxnMainMenu() (since replaced by this table). Same items, same order,
 // same IDM_* ids, same labels, same shortcuts.
 
 // Dynamically filled per what THIS machine actually has (see terminal_panel.h's detectWindowsExtra-

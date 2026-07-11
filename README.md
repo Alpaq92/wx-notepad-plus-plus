@@ -1,25 +1,25 @@
-# wxNotepad++
+# wxNote
 
-**An experimental, cross-platform (Windows / Linux / macOS) Notepad++-faithful editor built on [wxWidgets](https://www.wxwidgets.org/).**
+**An experimental, cross-platform (Windows / Linux / macOS) text editor built on [wxWidgets](https://www.wxwidgets.org/).**
 
-> ⚠️ Experimental and unofficial. Not affiliated with or endorsed by the Notepad++ project.
+> ⚠️ Experimental software, under active development.
 
-Upstream [Notepad++](https://notepad-plus-plus.org/) is Windows-only — its UI, plugin ABI, docking,
-and dialogs are welded to the Win32 API. wxNotepad++ reuses only the genuinely portable parts of it —
-**Scintilla + Lexilla**, through wxWidgets' `wxStyledTextCtrl` — and reimplements the Notepad++ UI in
-portable C++/wx. Plugins are first-class via the project's own permissive, cross-platform **Nib API**;
-real Win32 Notepad++-ABI plugin binaries are additionally supported on Windows through an optional GPL
-bridge plugin (see [Plugins](#plugins) below).
+wxNote is built on wxWidgets' `wxStyledTextCtrl` (**Scintilla + Lexilla**) and runs natively on
+Windows, Linux, and macOS from one codebase: tabbed editing, split views, theming, User-Defined
+Languages, macros, session restore, and full UI localization. Plugins are first-class via the
+project's own permissive, cross-platform **Nib API**; legacy Win32 Notepad++-ABI plugin binaries are
+additionally supported on Windows through an optional GPL bridge plugin (see [Plugins](#plugins)
+below).
 
 **[Project site & downloads →](https://alpaq92.github.io/wx-notepad-plus-plus/)**
 
 ## Status
 
-Experimental, under active development. The Windows build is feature-rich and closely matches native
-Notepad++; the Linux/macOS builds are structured and CI-wired but still being validated.
+Experimental, under active development. The Windows build is the most mature and feature-rich; the
+Linux/macOS builds are structured and CI-wired but still being validated.
 
-**Implemented:** tabbed editor with per-tab Scintilla documents, a **split second view** (Notepad++'s
-MAIN | SUB — Move/Clone to Other View, with the split collapsing when a pane empties), syntax
+**Implemented:** tabbed editor with per-tab Scintilla documents, a **split second view**
+(MAIN | SUB — Move/Clone to Other View, with the split collapsing when a pane empties), syntax
 highlighting (Lexilla), a full **User-Defined Language** system (multi-tab dialog, per-style Styler
 popups, `userDefineLangs/` persistence, `userDefineLang.xml`-compatible), find/replace and
 find/replace-in-files, an **incremental search bar** (match-case / whole-word / regex toggles, live
@@ -37,7 +37,7 @@ change), three selectable **toolbar icon sets** (Tabler, Solar, IconPark — see
 
 ## Plugins
 
-wxNotepad++'s core hosts its own original, permissive, cross-platform plugin API, **Nib**
+wxNote's core hosts its own original, permissive, cross-platform plugin API, **Nib**
 (`include/nib/nib.h`) — a `wxDynamicLibrary`-based loader (`.dll` / `.so` / `.dylib`) with commands,
 event subscriptions, dockable panels, and document/editor access. The core reproduces **no** Notepad++
 plugin ABI itself.
@@ -56,8 +56,8 @@ Requires CMake ≥ 3.20 and a C++17 compiler. wxWidgets 3.3.1 is fetched and bui
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target wxnpp
-# -> build/bin/wxnpp   (wxnpp.exe on Windows)
+cmake --build build --target wxnote
+# -> build/bin/wxnote   (wxnote.exe on Windows)
 ```
 
 - **Windows** — the MSVC compiler from Visual Studio 2022 Build Tools (the build itself is CMake + Ninja; MSBuild and solution files are not used); the native dark-mode code and the optional `packages/npp-bridge` (Notepad++-ABI plugin bridge) compile in here.
@@ -70,12 +70,12 @@ Plugins:
   `<exe>/nib/` next to the executable.
 - **Notepad++-ABI plugins** (Windows only): drop `Plugin/Plugin.dll` into `<exe>/plugins/Plugin/`. This
   additionally requires `npp_bridge.dll` to be present in `<exe>/nib/` (built automatically alongside
-  `wxnpp` on Windows) — the bridge is what actually loads and translates for these plugins.
+  `wxnote` on Windows) — the bridge is what actually loads and translates for these plugins.
 
 ## Layout
 
 ```
-src/                 the wxNotepad++ application (+ src/plugins/nib_test_plugin, a Nib-native test plugin)
+src/                 the wxNote application (+ src/plugins/nib_test_plugin, a Nib-native test plugin)
 packages/            npp-bridge (optional GPL Notepad++-ABI bridge, Windows-only, itself a Nib plugin),
                      test_plugin (a Notepad++-ABI test fixture, Windows-only)
 include/nib/         the project's own permissive, cross-platform plugin API (nib.h)
@@ -94,10 +94,10 @@ Grab the latest build from the [project site's Download page](https://alpaq92.gi
 (picks the right asset for you) or straight from
 [Releases](https://github.com/Alpaq92/wx-notepad-plus-plus/releases):
 
-- **Windows** — the NSIS installer (`wxNotepadPlusPlus-<version>-Setup.exe`)
-- **Linux** — an AppImage, `.deb`, `.rpm`, or `.flatpak` (`flatpak install wxNotepadPlusPlus-<version>.flatpak`)
-- **macOS** — a `.dmg`, built separately for Apple Silicon (`wxNotepadPlusPlus-<version>-arm64.dmg`) and
-  Intel (`wxNotepadPlusPlus-<version>-x86_64.dmg`) — pick the one matching your Mac's chip
+- **Windows** — the NSIS installer (`wxNote-<version>-Setup.exe`)
+- **Linux** — an AppImage, `.deb`, `.rpm`, or `.flatpak` (`flatpak install wxNote-<version>.flatpak`)
+- **macOS** — a `.dmg`, built separately for Apple Silicon (`wxNote-<version>-arm64.dmg`) and
+  Intel (`wxNote-<version>-x86_64.dmg`) — pick the one matching your Mac's chip
 
 Every push also builds all of these as CI artifacts (see `.github/workflows/build.yml` and
 `installer/{windows,linux,macos}/`); pushing a version tag (`v*`) runs
@@ -107,7 +107,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for release history.
 ## Command line
 
 ```
-wxnpp [options] [files...]
+wxnote [options] [files...]
 
 -g, --goto <line[,col]>   go to this line (and column) in the last file opened
 -e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be
@@ -122,9 +122,9 @@ setting for a single launch either way.
 
 ## License
 
-**GPL v3 today — with a committed plan to go permissive.** wxNotepad++ is an **independent
-reimplementation** — it copies no Notepad++ source code; Notepad++ is used only as a behavioral
-reference and a test target (see [`NOTICE`](NOTICE)). It ships under the GNU GPL v3 for now — the honest,
+**GPL v3 today — with a committed plan to go permissive.** wxNote is an **independent project** — it
+copies no Notepad++ source code; Notepad++ was used only as a behavioral reference and a test target,
+and wxNote is not affiliated with or endorsed by it (see [`NOTICE`](NOTICE)). It ships under the GNU GPL v3 for now — the honest,
 conservative position given its heritage and the still-unsettled status of its plugin-ABI compatibility.
 We've already clean-room-reimplemented or replaced nearly every Notepad++-derived file, and our
 committed goal is to relicense permissively — **purely to give users and downstream developers more
@@ -133,7 +133,7 @@ and [`LICENSING.md`](LICENSING.md) for the per-component record.
 
 ## Credits
 
-- [Notepad++](https://github.com/notepad-plus-plus/notepad-plus-plus) — Don Ho (GPL v3): the editor this reimplementation matches and tests against. Its plugin ABI is reimplemented **clean-room and cross-platform** in our own `include/npp-compat/`, consumed only by the optional `packages/npp-bridge` bridge — no Notepad++ source is used (see [`LICENSING.md`](LICENSING.md)).
+- [Notepad++](https://github.com/notepad-plus-plus/notepad-plus-plus) — Don Ho (GPL v3): the editor whose behavior served as the original reference and test target. Its plugin ABI is reimplemented **clean-room and cross-platform** in our own `include/npp-compat/`, consumed only by the optional `packages/npp-bridge` bridge — no Notepad++ source is used (see [`LICENSING.md`](LICENSING.md)).
 - [Scintilla & Lexilla](https://www.scintilla.org/) — Neil Hodgson (permissive): the editing / syntax-highlighting engine.
 - [wxWidgets](https://www.wxwidgets.org/): the cross-platform UI toolkit.
 - Toolbar icon sets (Settings > Preferences > General > Toolbar icon style — see each set's own CREDITS.md for exact modifications):

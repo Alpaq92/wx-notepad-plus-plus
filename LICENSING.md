@@ -1,12 +1,12 @@
 # Licensing
 
-> **Not legal advice.** This records how wxNotepad++'s components are licensed, as understood from the
+> **Not legal advice.** This records how wxNote's components are licensed, as understood from the
 > license files in this repository. For anything you intend to rely on, consult a lawyer and read the
 > full texts in [`LICENSE`](LICENSE), [`NOTICE`](NOTICE), and the `third_party/*/License.txt` files.
 
 ## TL;DR
 
-**wxNotepad++ is distributed under the GNU GPL v3** (see [`LICENSE`](LICENSE)), consistent with its
+**wxNote is distributed under the GNU GPL v3** (see [`LICENSE`](LICENSE)), consistent with its
 Notepad++ heritage. It is an *independent reimplementation* — no Notepad++ source code is copied into
 `src/`; Notepad++ serves only as a functional reference and a test target (see [`NOTICE`](NOTICE)).
 
@@ -89,9 +89,10 @@ Permissive and copyleft-free; it requires only that the copyright notice be pres
 
 ## Trademark
 
-"Notepad++" is a trademark of its owner. wxNotepad++ is not affiliated with or endorsed by Notepad++ and
-references the name only nominatively. The application uses the **wxNotepad++ name** throughout — a
-"wxNotepad++" window title, an "About wxNotepad++" box with an independence disclaimer, and rebranded
-menu labels. The app icon is the project's own SVG (its green plate + "N" monogram echo the upstream
-styling). The remaining "Notepad++" mentions are nominative: code comments, the `<NotepadPlus>`
-theme/session data format, and Help-menu links to Notepad++'s own resources.
+"Notepad++" is a trademark of its owner. wxNote is not affiliated with or endorsed by Notepad++ and
+references the name only nominatively. The application uses the **wxNote name** throughout — a
+"wxNote" window title, an "About wxNote" box, and its own menu labels; the executable is `wxnote`.
+The app icon is the project's own SVG (its green plate + "N" monogram echo the upstream styling).
+The remaining "Notepad++" mentions are nominative and confined to the compatibility surface: the
+optional plugin-ABI bridge (`packages/npp-bridge`, `include/npp-compat/`), the `<NotepadPlus>`
+theme/session/UDL interchange data format, and this documentation's provenance record.

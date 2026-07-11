@@ -1,17 +1,19 @@
 #pragma once
 // =====================================================================
 // The menu bar as DATA rather than as ~700 lines of inline wxMenu/Append/
-// AppendSubMenu calls (see the old src/npp_menu.h, since replaced). A
+// AppendSubMenu calls (the old inline menu construction, since replaced). A
 // MenuItemDef tree describes shape (kind, id, label, nesting); menu_builder.h
 // walks it once at startup to build the real wxMenuBar. Reordering, renaming,
 // or regrouping items is now a matter of moving table rows/pointers around
 // in the per-menu menu_data_*.h files, not restructuring nested C++ calls.
 //
-// Every IDM_* id here is an existing constant from include/npp-compat/
-// menuCmdID.h (the plugin ABI - real Notepad++ plugin binaries invoke
-// commands by posting these exact numeric ids via NPPM_MENUCOMMAND). This
-// file and everything built on it only ever attaches metadata (label,
-// position, nesting) to those ids - it never invents new ones.
+// Every IDM_* id here is an existing constant from src/command_ids.h, the
+// core's own authoritative id table. Those values are FROZEN, not free to
+// renumber: real Notepad++ plugin binaries invoke commands by posting these
+// exact numeric ids via NPPM_MENUCOMMAND through the optional GPL bridge's
+// WM_COMMAND passthrough. This file and everything built on it only ever
+// attaches metadata (label, position, nesting) to those ids - it never
+// invents new ones.
 // =====================================================================
 #include <wx/menu.h>
 #include <wx/string.h>
@@ -68,7 +70,7 @@ struct MenuBarDef
     size_t menuCount;
 };
 
-// Built once by menu_builder.h's buildNppMainMenu() as it walks a MenuBarDef, then used by the
+// Built once by menu_builder.h's buildWxnMainMenu() as it walks a MenuBarDef, then used by the
 // handful of call sites in main.cpp that need to find/insert into a specific menu at runtime
 // (Recent Files, the Localization picker, Nib plugin commands, saved Macro entries, UDL entries).
 // Replaces today's mb->FindMenu(_("Se&ttings"))-style lookups, which silently break the moment a

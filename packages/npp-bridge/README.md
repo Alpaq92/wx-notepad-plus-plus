@@ -1,6 +1,6 @@
 # npp-bridge — the optional Notepad++ binary-plugin compatibility bridge
 
-`npp-bridge` lets **wxNotepad++ host real Notepad++ plugin DLLs** on Windows. It is itself a
+`npp-bridge` lets **wxNote host real Notepad++ plugin DLLs** on Windows. It is itself a
 [Nib](../../include/nib/nib.h) plugin: the core loads it from `<exe>/nib/` like any other plugin, and it
 reaches the host's native handles through the Windows-only `nib.win32` capability to rebuild the
 Notepad++ `NppData` environment a binary plugin expects.
@@ -8,7 +8,7 @@ Notepad++ `NppData` environment a binary plugin expects.
 ## Why it's a separate, GPL module
 
 This module reproduces Notepad++'s plugin ABI (`NPPM_*` message numbers, `FuncItem`, `NppData`,
-`tTbData`, …), so it is **GPL-3.0-or-later**. The wxNotepad++ **core depends on none of it** — it is
+`tTbData`, …), so it is **GPL-3.0-or-later**. The wxNote **core depends on none of it** — it is
 loaded only if present. Keeping the ABI reproduction confined here is exactly what lets the core stay
 permissive-ready (see [`docs/FUTURE_PLANS.md`](../../docs/FUTURE_PLANS.md)). The core talks only the
 permissive `nib.*` API; this bridge is the one place the two worlds meet.
