@@ -9,41 +9,41 @@ body:
     label: Is there an existing issue for this?
     description: |
       Please search to see if an issue already exists for the bug you encountered.
-      If the issue is for a plugin (except for mimeTools, NppConverter, and NppExport),
-      report it to the plugin author rather than here.
+      If the bug is in a third-party Notepad++-ABI plugin's own logic (loaded on Windows through
+      the optional npp-bridge), rather than in wxNote itself, npp-bridge, or a bundled Nib plugin,
+      please report it to that plugin's author instead.
     options:
     - label: I have searched the existing issues
       required: true
+- type: input
+  attributes:
+    label: wxNote Version & Platform
+    description: |
+      The wxNote version you're using (check the filename of the installer/package you downloaded,
+      e.g. wxNote-<version>-Setup.exe, or Help > Debug Info in the app) and your OS.
+    placeholder: "e.g. wxNote 0.6.2, Windows 11 / Ubuntu 24.04 / macOS 14 Sonoma (Apple Silicon)"
+  validations:
+    required: true
 - type: checkboxes
   attributes:
-    label: Is the issue reproducible in Notepad++ without plugin?
+    label: Is the issue reproducible in wxNote without plugins?
     description: |
-      If feasible, try launching Notepad++ without any plugins.
-      Some updates to Notepad++ modify communication rules used by plugins,
-      and if plugin developers do not keep their plugins in sync with these changes, issues may arise.
-      Running without plugins can help diagnose specific problems.
-      You can use cmdline `notepad++.exe -noPlugin`
-      or rename your plugin folder, usually "C:\Program Files\Notepad++\plugins\" to e.g. "...\plugins.bak\").
+      If feasible, try launching wxNote without any plugins loaded.
+      wxNote doesn't have a `-noPlugin` command-line switch, so instead rename or move the plugin
+      folder(s) next to the executable: `nib/` (Nib plugins, all platforms) and, on Windows only,
+      `plugins/` (Notepad++-ABI plugins loaded via npp-bridge) - e.g. to `nib.bak/` and `plugins.bak/`.
     options:
-    - label: I have tried Notepad++ without plugin
-      required: false
-- type: checkboxes
-  attributes:
-    label: Is the issue reproducible in portable version of Notepad++?
-    description: |
-      If feasible, try launching portable version of Notepad++.
-      It can help to diagnose if specific configuration is causing issue.
-    options:
-    - label: I have tried portable version of Notepad++
+    - label: I have tried wxNote without plugins
       required: false
 - type: checkboxes
   attributes:
     label: Does the issue affect SciTE?
     description: |
-      Notepad++ relies on the Lexilla and Scintilla libraries.
+      wxNote reuses the Lexilla and Scintilla libraries, same as Notepad++.
       For more details, visit https://github.com/ScintillaOrg/lexilla and https://sourceforge.net/p/scintilla.
-      Consider using the reference program SciTE to verify whether the issue is a genuine bug in Notepad++.
-      Download Scite from here https://www.scintilla.org/SciTEDownload.html.
+      Consider using the reference program SciTE to verify whether the issue is a genuine bug in
+      wxNote or an upstream Scintilla/Lexilla issue.
+      Download SciTE from here https://www.scintilla.org/SciTEDownload.html.
     options:
     - label: I have tried SciTE
       required: false
@@ -58,14 +58,14 @@ body:
     label: Steps To Reproduce
     description: Steps to reproduce the behavior.
     placeholder: |
-      1.  
-      2.  
-      3.  
+      1.
+      2.
+      3.
       ...
     value: |
-      1.  
-      2.  
-      3.  
+      1.
+      2.
+      3.
   validations:
     required: true
 - type: textarea
@@ -84,14 +84,12 @@ body:
   attributes:
     label: Debug Information
     description: |
-      In your Notepad++, click on the "?" menu (found to the right of "Window" in the menu bar).
-      In the menu that drops down, choose "Debug Info...".
-      A dialog will open detailing specifics about your Notepad++ version, plugins, etc.
-      CLICK ON THE BUTTON "Copy debug info into clipboard".
-      Do a PASTE HERE
+      If wxNote is able to launch, open the "Help" menu and choose "Debug Info...". It shows your
+      wxWidgets version, OS description, and executable path - there's no copy-to-clipboard button
+      for it, so just note down (or screenshot) what it says and include it here.
     render: shell
   validations:
-    required: true
+    required: false
 - type: textarea
   attributes:
     label: Anything else?
