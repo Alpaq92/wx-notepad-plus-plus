@@ -4,7 +4,8 @@
 # org.gnome.Platform//46 + org.gnome.Sdk//46 runtimes already available (see build.yml's "Install
 # Flatpak runtime" step):
 #   installer/linux/build-flatpak.sh
-# Produces build/installer/wxNote-<version>.flatpak
+# Produces build/installer/wxNote-<version>.flatpak on x86_64 (the established asset name), or
+# wxNote-<version>-<arch>.flatpak elsewhere (aarch64); flatpak-builder targets the build host's arch.
 set -euo pipefail
 cd "$(dirname "$0")/../.."   # repo root
 
@@ -28,5 +29,8 @@ rm -rf "$BUILDDIR" "$REPODIR"
 rsvg-convert -w 256 -h 256 "resources/wxnote.svg" -o "build/flatpak-icon-256.png"
 
 flatpak-builder --force-clean --user --repo="$REPODIR" "$BUILDDIR" "installer/linux/${APP_ID}.yml"
-flatpak build-bundle "$REPODIR" "$OUTDIR/wxNote-${VERSION}.flatpak" "$APP_ID"
-echo "Built $OUTDIR/wxNote-${VERSION}.flatpak"
+ARCH="$(uname -m)"
+BUNDLE="wxNote-${VERSION}.flatpak"
+if [ "$ARCH" != "x86_64" ]; then BUNDLE="wxNote-${VERSION}-${ARCH}.flatpak"; fi
+flatpak build-bundle "$REPODIR" "$OUTDIR/$BUNDLE" "$APP_ID"
+echo "Built $OUTDIR/$BUNDLE"

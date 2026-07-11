@@ -15,8 +15,8 @@
 // layout can no longer change *silently*: touch a struct here, and either the asserts still
 // hold (compiles clean) or they don't (compile error naming exactly which field moved).
 //
-// Included once from packages/npp-bridge/npp_bridge.cpp - the only GPL component in this repo
-// that consumes these ABI headers (see docs/PLUGIN_API_PLAN.md §1). Windows-only, like the
+// Included once from packages/npp-bridge/npp_bridge.cpp - the GPL component that consumes
+// these ABI headers. Windows-only, like the
 // bridge itself: these structs' real-world layout only has to match compiled plugin DLLs on
 // Windows, where the plugin-loading bridge actually runs.
 

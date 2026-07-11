@@ -10,7 +10,7 @@ Notepad++ `NppData` environment a binary plugin expects.
 This module reproduces Notepad++'s plugin ABI (`NPPM_*` message numbers, `FuncItem`, `NppData`,
 `tTbData`, …), so it is **GPL-3.0-or-later**. The wxNote **core depends on none of it** — it is
 loaded only if present. Keeping the ABI reproduction confined here is exactly what lets the core stay
-permissive-ready (see [`docs/FUTURE_PLANS.md`](../../docs/FUTURE_PLANS.md)). The core talks only the
+Apache-2.0 (see [`LICENSING.md`](../../LICENSING.md)). The core talks only the
 permissive `nib.*` API; this bridge is the one place the two worlds meet.
 
 ## What it does

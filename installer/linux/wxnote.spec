@@ -14,9 +14,9 @@ Name:           wxnote
 Version:        %{_version}
 Release:        1%{?dist}
 Summary:        Experimental cross-platform text editor
-License:        GPLv3+
+License:        Apache-2.0
 URL:            https://github.com/Alpaq92/wx-notepad-plus-plus
-BuildArch:      x86_64
+BuildArch:      %{?_wxn_arch}%{!?_wxn_arch:x86_64}
 Requires:       gtk3
 
 %description

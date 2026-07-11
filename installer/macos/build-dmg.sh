@@ -59,7 +59,7 @@ cat > "$APPDIR/Contents/Info.plist" <<EOF
     <key>CFBundleIconFile</key><string>wxnote.icns</string>
     <key>LSMinimumSystemVersion</key><string>11.0</string>
     <key>NSHighResolutionCapable</key><true/>
-    <key>NSHumanReadableCopyright</key><string>GPL v3 - see LICENSE</string>
+    <key>NSHumanReadableCopyright</key><string>Apache-2.0 - see LICENSE</string>
 </dict>
 </plist>
 EOF

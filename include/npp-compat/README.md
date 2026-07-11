@@ -51,4 +51,4 @@ If you're reviewing a change to this directory (or reviewing the directory for t
    DLL, not a build failure (`abi_layout_asserts.h` only catches drift *relative to itself*, not
    wrongness baked in from the start).
 
-See `docs/PLUGIN_API_PLAN.md` §1 for the broader plugin-API strategy this directory serves.
+See `LICENSING.md` for the broader licensing strategy this directory serves.

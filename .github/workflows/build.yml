@@ -1,6 +1,7 @@
 name: build
 
-# Builds wxNote on all three target platforms. wxWidgets is fetched + built from source
+# Builds wxNote on all three target platforms (x64 + ARM64 for Windows/Linux, arm64 + x86_64
+# for macOS). wxWidgets is fetched + built from source
 # (FetchContent), so the only system dependency is GTK3 on Linux; macOS/Windows need just the
 # toolchain. Verifies the cross-platform claim - the parts the Windows dev machine can't check.
 
@@ -10,13 +11,13 @@ on:
   push:
     branches: [ wx-migration, master ]
     paths: [ 'src/**', 'include/**', 'third_party/**', 'resources/**', 'installer/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
-  # Deliberately NOT path-filtered (unlike push above): master's branch ruleset requires these 3
-  # jobs to report on every PR unconditionally, so a doc-only PR (e.g. CHANGELOG.md) that skipped
+  # Deliberately NOT path-filtered (unlike push above): master's branch ruleset requires its
+  # checks (windows/linux/macos-arm64/macos-x86_64) on every PR unconditionally, so a doc-only PR (e.g. CHANGELOG.md) that skipped
   # the build here would sit forever as "Expected - waiting for status to be reported" and could
   # never merge normally.
   pull_request:
   workflow_dispatch:
-  workflow_call:   # release.yml calls this on a version tag push, then publishes the 4 packaging artifacts
+  workflow_call:   # release.yml calls this on a version tag push, then publishes the 6 packaging artifacts
 
 # A newer push to a branch cancels that branch's still-queued/running build, so the matrix doesn't
 # pile up (each macOS run counts 10x against private-repo Actions minutes). Only the latest commit
@@ -42,12 +43,18 @@ jobs:
           - { os: macos-latest,   name: macos-arm64,  osx_arch: arm64 }
           - { os: macos-latest,   name: macos-x86_64, osx_arch: x86_64 }
           - { os: windows-latest, name: windows }
+          # ARM legs: GitHub's arm64 runners (free for public repos). Same steps as their x64
+          # siblings - every packaging script detects the build host's arch itself; only the
+          # Windows leg needs explicit knobs (native-ARM64 MSVC env + an installer name/guard
+          # define, since NSIS can't detect the arch of the exe it's wrapping).
+          - { os: ubuntu-24.04-arm, name: linux-arm64 }
+          - { os: windows-11-arm,   name: windows-arm64, msvc_arch: arm64, nsis_flags: /DTARGET_ARM64 }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Install GTK3 (Linux)
-        if: matrix.name == 'linux'
+        if: startsWith(matrix.name, 'linux')
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config libgtk-3-dev
@@ -60,7 +67,7 @@ jobs:
       # librsvg2-bin: provides rsvg-convert, used to pre-rasterize our SVG icon to PNG for the
       # flatpak package - see build-flatpak.sh for why appstreamcli compose needs that.
       - name: Install packaging tools (Linux)
-        if: matrix.name == 'linux'
+        if: startsWith(matrix.name, 'linux')
         run: |
           sudo apt-get install -y --no-install-recommends rpm flatpak flatpak-builder elfutils librsvg2-bin
           flatpak remote-add --if-not-exists --user flathub https://flathub.org/repo/flathub.flatpakrepo
@@ -70,20 +77,20 @@ jobs:
       # standard CI workaround; harmless no-op on runner images where the sysctl key doesn't exist
       # or the restriction isn't in effect.
       - name: Allow unprivileged user namespaces for flatpak-builder (Linux)
-        if: matrix.name == 'linux'
+        if: startsWith(matrix.name, 'linux')
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
       # The GNOME runtime + SDK are a multi-hundred-MB download - cache them so only the first run
       # (or a version bump) pays that cost. Keyed on the pinned version in the Flatpak manifest.
       - name: Cache Flatpak runtime (Linux)
-        if: matrix.name == 'linux'
+        if: startsWith(matrix.name, 'linux')
         uses: actions/cache@v6
         with:
           path: ~/.local/share/flatpak
-          key: flatpak-gnome46-v1
+          key: flatpak-gnome46-v1-${{ matrix.name }}
 
       - name: Install Flatpak runtime (Linux)
-        if: matrix.name == 'linux'
+        if: startsWith(matrix.name, 'linux')
         run: flatpak install -y --user flathub org.gnome.Platform//46 org.gnome.Sdk//46
 
       # Cache the fetched + built wxWidgets so iterations don't rebuild it from source each run.
@@ -94,15 +101,21 @@ jobs:
         uses: actions/cache@v6
         with:
           path: build/_deps
-          key: wx331-v2-${{ matrix.name }}-${{ hashFiles('CMakeLists.txt') }}
-          restore-keys: wx331-v2-${{ matrix.name }}-
+          # The matrix name sits BEFORE the version token: restore-keys are prefix matches,
+          # and "wx331-v2-linux-" would also match the linux-arm64 leg's cache - restoring
+          # ARM-compiled wxWidgets onto an x64 host and poisoning the cache. "wx331-linux-v2-"
+          # cannot prefix-match "wx331-linux-arm64-v2-", so each leg only ever sees its own.
+          key: wx331-${{ matrix.name }}-v2-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: wx331-${{ matrix.name }}-v2-
 
       # msvc-dev-cmd: puts cl.exe (not the runner's incidental MinGW g++) first on PATH, which
       # plain Ninja needs since - unlike the Visual Studio generator - it has no built-in MSVC
       # discovery of its own.
       - name: Set up MSVC (Windows)
-        if: matrix.name == 'windows'
+        if: startsWith(matrix.name, 'windows')
         uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvc_arch || 'x64' }}
 
       # -G Ninja: without it, Windows' default generator is the multi-config "Visual Studio" one,
       # which ignores RUNTIME_OUTPUT_DIRECTORY's plain (non-per-config) setting and puts the exe in
@@ -129,26 +142,26 @@ jobs:
         run: cmake --build build --config Release --target wxnote --parallel 2
 
       - name: Package AppImage (Linux)
-        if: matrix.name == 'linux'
+        if: startsWith(matrix.name, 'linux')
         run: bash installer/linux/build-appimage.sh
 
       - name: Package .deb (Linux)
-        if: matrix.name == 'linux'
+        if: startsWith(matrix.name, 'linux')
         run: bash installer/linux/build-deb.sh
 
       - name: Package .rpm (Linux)
-        if: matrix.name == 'linux'
+        if: startsWith(matrix.name, 'linux')
         run: bash installer/linux/build-rpm.sh
 
       - name: Package .flatpak (Linux)
-        if: matrix.name == 'linux'
+        if: startsWith(matrix.name, 'linux')
         run: bash installer/linux/build-flatpak.sh
 
       - name: Upload Linux packages
-        if: matrix.name == 'linux'
+        if: startsWith(matrix.name, 'linux')
         uses: actions/upload-artifact@v7
         with:
-          name: wxnote-linux-packages
+          name: wxnote-${{ matrix.name }}-packages
           path: build/installer/*
 
       - name: Package .dmg (macOS)
@@ -168,7 +181,7 @@ jobs:
       # a Chocolatey install updates the machine PATH but each workflow step is a fresh process that
       # only sees $GITHUB_PATH's accumulated entries, not a live-refreshed system PATH.
       - name: Ensure NSIS (Windows)
-        if: matrix.name == 'windows'
+        if: startsWith(matrix.name, 'windows')
         shell: pwsh
         run: |
           if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
@@ -180,15 +193,15 @@ jobs:
 
       # NSIS's OutFile doesn't create its output directory, so make it first.
       - name: Package installer (Windows)
-        if: matrix.name == 'windows'
+        if: startsWith(matrix.name, 'windows')
         shell: cmd
         run: |
           if not exist build\installer mkdir build\installer
-          makensis installer\windows\wxnote.nsi
+          makensis ${{ matrix.nsis_flags }} installer\windows\wxnote.nsi
 
       - name: Upload Windows installer
-        if: matrix.name == 'windows'
+        if: startsWith(matrix.name, 'windows')
         uses: actions/upload-artifact@v7
         with:
-          name: wxnote-windows-installer
+          name: wxnote-${{ matrix.name }}-installer
           path: build/installer/*

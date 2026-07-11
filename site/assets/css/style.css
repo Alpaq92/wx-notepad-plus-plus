@@ -1243,6 +1243,21 @@ main {
   pointer-events: none;
 }
 
+.platform-download-menu .menu-group-label {
+  color: var(--light-gray-70);
+  font-size: var(--fs-8);
+  font-weight: var(--fw-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 10px 3px;
+  cursor: default;
+}
+
+.platform-download-menu li + li .menu-group-label {
+  border-top: 1px solid var(--jet);
+  margin-top: 4px;
+}
+
 .source-note {
   color: var(--light-gray);
   font-size: var(--fs-6);

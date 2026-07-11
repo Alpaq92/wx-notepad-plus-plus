@@ -21,7 +21,7 @@ body:
     description: |
       The wxNote version you're using (check the filename of the installer/package you downloaded,
       e.g. wxNote-<version>-Setup.exe, or Help > Debug Info in the app) and your OS.
-    placeholder: "e.g. wxNote 0.6.2, Windows 11 / Ubuntu 24.04 / macOS 14 Sonoma (Apple Silicon)"
+    placeholder: "e.g. wxNote 0.7.0, Windows 11 / Ubuntu 24.04 / macOS 14 Sonoma (Apple Silicon)"
   validations:
     required: true
 - type: checkboxes

@@ -2,7 +2,8 @@
 # Build a Linux AppImage from the wxnote build output. Run from the repo root after
 # `cmake --build build --target wxnote`:
 #   installer/linux/build-appimage.sh
-# Produces build/installer/wxNote-<version>-x86_64.AppImage
+# Produces build/installer/wxNote-<version>-<arch>.AppImage (x86_64 or aarch64, from the build
+# host - linuxdeploy publishes a native binary for both).
 set -euo pipefail
 cd "$(dirname "$0")/../.."   # repo root
 
@@ -10,6 +11,7 @@ cd "$(dirname "$0")/../.."   # repo root
 # out of sync with it again (every packaging script independently hardcoded its own version string
 # and 0.4.0 shipped labeled 0.3.0 everywhere as a result).
 VERSION="$(sed -n 's/.*project(wxNote VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
+ARCH="$(uname -m)"   # x86_64 / aarch64 - also read by linuxdeploy's embedded appimagetool
 APPDIR="build/AppDir"
 OUTDIR="build/installer"
 
@@ -28,13 +30,13 @@ cp installer/linux/wxnote.desktop "$APPDIR/wxnote.desktop"
 cp resources/wxnote.svg "$APPDIR/wxnote.svg"
 
 if [ ! -x linuxdeploy.AppImage ]; then
-    curl -fL -o linuxdeploy.AppImage https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+    curl -fL -o linuxdeploy.AppImage "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${ARCH}.AppImage"
     chmod +x linuxdeploy.AppImage
 fi
 
 # --appimage-extract-and-run: GitHub-hosted runners don't have FUSE configured for AppImages to
 # mount themselves directly - extracting first is the standard CI workaround.
-VERSION="$VERSION" ./linuxdeploy.AppImage --appimage-extract-and-run \
+VERSION="$VERSION" ARCH="$ARCH" ./linuxdeploy.AppImage --appimage-extract-and-run \
     --appdir "$APPDIR" \
     --executable "$APPDIR/usr/bin/wxnote" \
     --desktop-file "$APPDIR/wxnote.desktop" \
@@ -45,5 +47,5 @@ VERSION="$VERSION" ./linuxdeploy.AppImage --appimage-extract-and-run \
 # worth hardcoding a guess for - find whatever .AppImage it just produced in the cwd.
 built=$(find . -maxdepth 1 -name '*.AppImage' ! -name 'linuxdeploy.AppImage' | head -1)
 if [ -z "$built" ]; then echo "linuxdeploy did not produce an AppImage" >&2; exit 1; fi
-mv "$built" "$OUTDIR/wxNote-${VERSION}-x86_64.AppImage"
-echo "Built $OUTDIR/wxNote-${VERSION}-x86_64.AppImage"
+mv "$built" "$OUTDIR/wxNote-${VERSION}-${ARCH}.AppImage"
+echo "Built $OUTDIR/wxNote-${VERSION}-${ARCH}.AppImage"

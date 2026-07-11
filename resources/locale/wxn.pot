@@ -1,5 +1,5 @@
 # wxNote UI string catalog template.
-# This file is distributed under the same GPL v3 license as wxNote itself.
+# This file is distributed under the same license as wxNote itself (Apache-2.0).
 #
 msgid ""
 msgstr ""

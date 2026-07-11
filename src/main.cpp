@@ -7064,6 +7064,26 @@ private:
         // geometry (clipped labels, collapsed combos, dead space). MSW reflows on the initial show, so
         // this is a no-op there. Layout() (not Fit/SetSizerAndFit) keeps the deliberate 620x440 size.
         dlg.SetSizer(top); dlg.Layout(); themeDialog(&dlg);
+        // The nav list's row selection is native/generic list-control highlighting, which doesn't
+        // reliably pick up the app's own theme - macOS in particular can render the selected row's fill
+        // as plain white regardless of dark mode, instead of the system highlight colour every other
+        // "active" control here (checkboxes, choice fields) already uses natively. Drive it ourselves.
+        if (auto* lv = book->GetListView())
+        {
+            const wxColour hiBg = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
+            const wxColour hiFg = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT);
+            const wxColour normBg = m_dark ? wxColour(45, 45, 45) : lv->GetBackgroundColour();
+            const wxColour normFg = m_dark ? wxColour(220, 220, 220) : lv->GetForegroundColour();
+            auto restyle = [=](int sel) {
+                for (int i = 0; i < (int)book->GetPageCount(); ++i) {
+                    const bool on = (i == sel);
+                    lv->SetItemBackgroundColour(i, on ? hiBg : normBg);
+                    lv->SetItemTextColour(i, on ? hiFg : normFg);
+                }
+            };
+            restyle(book->GetSelection());
+            book->Bind(wxEVT_LISTBOOK_PAGE_CHANGED, [=](wxBookCtrlEvent& e) { restyle(e.GetSelection()); e.Skip(); });
+        }
         dlg.ShowModal();   // Preferences has no Cancel - changes apply on close
         const int newThemeMode = chTheme->GetSelection();
         m_showToolbar = cbToolbar->GetValue(); m_showStatusbar = cbStatus->GetValue();
@@ -7220,8 +7240,8 @@ private:
     wxString themeFilePath(const wxString& name)   // resolve a theme name to its XML on disk
     {
         const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath());
-        if (name.empty() || name == "Default") return dir + "\\stylers.model.xml";
-        return dir + "\\themes\\" + name + ".xml";
+        if (name.empty() || name == "Default") return dir + wxFILE_SEP_PATH + "stylers.model.xml";
+        return dir + wxFILE_SEP_PATH + "themes" + wxFILE_SEP_PATH + name + ".xml";
     }
     // ----- User-Defined Language (UDL) persistence -------------------------------------------
     // One <name>.xml (a bare <UserLang> root, the shape a single-language export writes) per language
@@ -8019,7 +8039,14 @@ private:
         std::function<void(wxWindow*)> rec = [&](wxWindow* x) {
             // Leave edit/combo controls to the native DarkMode_CFD theme (applied below); forcing a
             // custom background on them fights the theme and leaves the edit field white.
-            const bool editLike = wxDynamicCast(x, wxComboBox) != nullptr || wxDynamicCast(x, wxTextCtrl) != nullptr;
+            const bool editLike = wxDynamicCast(x, wxComboBox) != nullptr || wxDynamicCast(x, wxTextCtrl) != nullptr
+#ifdef __WXMAC__
+                // A native NSButton push button can't take a custom fill - wx falls back to a non-native
+                // owner-drawn render that leaves a stray rectangular border around the rounded bezel.
+                // Leave it fully native; the stock bezel is legible in both light and dark dialogs.
+                || wxDynamicCast(x, wxButton) != nullptr
+#endif
+                ;
             if (!editLike) {
                 if (m_dark) { x->SetBackgroundColour(wxColour(45, 45, 45)); x->SetForegroundColour(wxColour(220, 220, 220)); }
                 else        { x->SetBackgroundColour(wxNullColour);          x->SetForegroundColour(wxNullColour); }

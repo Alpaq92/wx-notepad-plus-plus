@@ -4,7 +4,7 @@
   <name>wxNote</name>
   <summary>Experimental cross-platform text editor</summary>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>GPL-3.0-or-later</project_license>
+  <project_license>Apache-2.0</project_license>
   <description>
     <p>
       wxNote is a cross-platform (Windows, Linux, macOS) text editor built on wxWidgets
@@ -23,6 +23,7 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.7.0" date="2026-07-11"/>
     <release version="0.3.0" date="2026-07-06"/>
     <release version="0.2.0" date="2026-07-05"/>
     <release version="0.1.0" date="2026-07-05"/>

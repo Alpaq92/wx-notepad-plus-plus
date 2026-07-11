@@ -6,7 +6,7 @@
 // capability and rebuilds the Notepad++ NppData environment, so real Notepad++ plugin DLLs can be
 // hosted. This module is GPL because it reproduces Notepad++'s plugin ABI; the wxNote core does
 // NOT depend on it - it is loaded, like any plugin, only if present. Keeping it separate + GPL is what
-// lets the core relicense permissively (see docs/FUTURE_PLANS.md).
+// lets the core stay Apache-2.0 (see LICENSING.md).
 //
 // STAGE 2: load the real N++ plugin DLLs (LoadLibrary), hand them the rebuilt NppData, and surface each
 // FuncItem as a Nib command. The core's own loader is disabled, so the bridge is the sole N++ loader.

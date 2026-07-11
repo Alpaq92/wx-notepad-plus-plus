@@ -203,13 +203,20 @@ applyTheme(localStorage.getItem(THEME_KEY) || 'system');
 // static HTML/CSS/JS themselves stay in sync too - see .github/workflows/pages.yml.)
 
 const ASSET_MATCHERS = {
-  windows: (name) => name.endsWith('.exe'),
+  // Each arch is matched explicitly: once a release carries both x64 and ARM assets of the same
+  // type, a bare endsWith() would grab whichever the API listed first.
+  windows: (name) => name.endsWith('.exe') && !name.includes('arm64'),
+  'windows-arm64': (name) => name.endsWith('.exe') && name.includes('arm64'),
   'macos-arm64': (name) => name.endsWith('.dmg') && name.includes('arm64'),
   'macos-x86_64': (name) => name.endsWith('.dmg') && name.includes('x86_64'),
-  appimage: (name) => name.endsWith('.AppImage'),
-  deb: (name) => name.endsWith('.deb'),
-  rpm: (name) => name.endsWith('.rpm'),
-  flatpak: (name) => name.endsWith('.flatpak'),
+  appimage: (name) => name.endsWith('.AppImage') && !name.includes('aarch64'),
+  'appimage-arm64': (name) => name.endsWith('.AppImage') && name.includes('aarch64'),
+  deb: (name) => name.endsWith('.deb') && !name.includes('arm64'),
+  'deb-arm64': (name) => name.endsWith('.deb') && name.includes('arm64'),
+  rpm: (name) => name.endsWith('.rpm') && !name.includes('aarch64'),
+  'rpm-arm64': (name) => name.endsWith('.rpm') && name.includes('aarch64'),
+  flatpak: (name) => name.endsWith('.flatpak') && !name.includes('aarch64'),
+  'flatpak-arm64': (name) => name.endsWith('.flatpak') && name.includes('aarch64'),
 };
 
 const formatDate = (iso) => {

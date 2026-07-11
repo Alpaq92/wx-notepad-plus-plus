@@ -2,7 +2,7 @@
 # Build a .rpm package from the wxnote build output. Run from the repo root after
 # `cmake --build build --target wxnote`:
 #   installer/linux/build-rpm.sh
-# Produces build/installer/wxnote-<version>-1.*.x86_64.rpm
+# Produces build/installer/wxnote-<version>-1.*.<arch>.rpm (x86_64 or aarch64, from the build host)
 set -euo pipefail
 cd "$(dirname "$0")/../.."   # repo root, as an absolute path (needed for the _srcdir macro below)
 
@@ -20,6 +20,7 @@ mkdir -p "$TOPDIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS,BUILDROOT} "$OUTDIR"
 rpmbuild --define "_topdir $SRCDIR/$TOPDIR" \
          --define "_version $VERSION" \
          --define "_srcdir $SRCDIR" \
+         --define "_wxn_arch $(uname -m)" \
          -bb installer/linux/wxnote.spec
 
 built=$(find "$TOPDIR/RPMS" -name '*.rpm' | head -1)

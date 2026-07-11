@@ -1,9 +1,13 @@
 wxNote
 Copyright 2026 The wxNote Authors
 
-This product is distributed under the GNU General Public License, version 3
-(see LICENSE), consistent with its Notepad++ heritage. This NOTICE records the
-project's provenance and third-party attributions.
+This product is distributed under the Apache License, Version 2.0 (see
+LICENSE), with one exception in what ships: packages/npp-bridge/ remains
+GPL-3.0-or-later (see packages/npp-bridge/LICENSE) because it reproduces
+Notepad++'s plugin ABI for interoperability - its never-shipped, Windows-only
+test fixture packages/test_plugin/ tracks the same GPL license for the same
+reason. This NOTICE records the project's provenance and third-party
+attributions.
 
 ------------------------------------------------------------------------------
 A license-aware, independent reimplementation
@@ -25,21 +29,21 @@ implementation informs and validates behavior, it is not a code dependency.
 
 Notepad++ is a trademark of its respective owner. This project is not affiliated
 with, endorsed by, or sponsored by Notepad++ or its authors. The UI uses the
-wxNote name throughout; the app icon is the project's own SVG (whose green
-plate + monogram echo the upstream styling).
+wxNote name throughout; the app icon is the project's own SVG.
 
 ------------------------------------------------------------------------------
-Licensing direction (GPL now, permissive later)
+Licensing history (GPL, then permissive)
 ------------------------------------------------------------------------------
 
-The project is GPL v3 today. Most Notepad++-derived files have already been
-replaced or clean-room-reimplemented (icons, command ids, plugin-ABI headers,
-themes, the default styler, and three GPL lexers). The committed goal is to drop
-the remaining GPL ties and relicense the project permissively — solely to give
-users and downstream developers more freedom, with NO commercial agenda. The
-reasons we remain on GPL for now (chiefly the legally-unsettled plugin-ABI
-reproduction), the progress so far, and the plan to get permissive are in
-docs/FUTURE_PLANS.md.
+The project was GPL v3 from its start through v0.6.2. Every Notepad++-derived
+file was replaced or clean-room-reimplemented over that time (icons, command
+ids, plugin-ABI headers, themes, the default styler, three GPL lexers, and
+finally the menu hierarchy itself), and the Notepad++-ABI reproduction was
+moved out of the core entirely into the optional, separately-licensed
+packages/npp-bridge module. With those engineering gates cleared, the core
+relicensed to Apache-2.0 - solely to give users and downstream developers more
+freedom, with NO commercial agenda. See LICENSING.md for the per-component
+license record.
 
 ------------------------------------------------------------------------------
 Third-party components and their licenses
@@ -55,7 +59,7 @@ wxWidgets
   wxWindows Library Licence (LGPL-2.1 plus a binary-distribution exception).
   Fetched at build time; not vendored in this repository.
 
-Toolbar icons — "Notepad++ Toolbar Icons (Tabler x Open Color)"
+Toolbar icons — "wxNote Toolbar Icons (Tabler x Open Color)"
   A derivative work of two MIT-licensed projects, released under the MIT License:
     * Tabler Icons   - Copyright (c) Pawel Kuna,      MIT License.
     * Open Color      - Copyright (c) Heeyeun Jeong,   MIT License.
