@@ -16,6 +16,7 @@
 // / docking native-window plumbing) is guarded behind #ifdef _WIN32 and left inert off-Windows.
 #include "nib.h"
 #include "PluginInterface.h"   // NppData, FuncItem, PFUNC* - the Notepad++ ABI this bridge targets
+#include "menuCmdID.h"         // IDM_* built-in command ids (== the host's frozen kCmd* values) - for NPPM actions
 #include "Docking.h"           // tTbData / DWS_DF_* / CONT_* - the N++ docking-registration ABI
 #include "abi_layout_asserts.h"  // compile-time guard: catches accidental ABI struct-layout drift
 #include "shim/npp_shim.h"     // NppHostBridge / npp_shim_bind - the shim<->bridge contract (CONTRACT 2)
@@ -67,6 +68,7 @@ static const NibDocumentsApi* g_docs  = nullptr;  // nib.documents - serves the 
 static const NibWin32Api*     g_win32 = nullptr;  // nib.win32 - serves docking (NPPM_DMM*); NULL off-Windows
 static const NibSciApi*       g_sci   = nullptr;  // nib.sci - the portable SCI_* passthrough (every OS)
 static const NibPathsApi*     g_paths = nullptr;  // nib.paths - user-data dir; the off-Windows plugins base
+static const NibCommandsApi*  g_cmds  = nullptr;  // nib.commands - invoke a built-in command by id (NPPM_MENUCOMMAND)
 
 struct NppPlugin {              // a loaded N++ plugin (kept alive for its FuncItem pointers + Stage-3 notifications)
     DllHandle    lib;
@@ -196,6 +198,18 @@ static void npp_cmd_thunk(NibHost*, NibQueryFn, void* user)
     if (fi && fi->_pFunc) fi->_pFunc();
 }
 
+// Fire a bare NPPN_* application notification (the Notepad++ frame is its source, per the ABI) at every
+// loaded plugin's beNotified. Used for lifecycle events that have no Scintilla-editor origin
+// (NPPN_READY / NPPN_SHUTDOWN / NPPN_FILESAVED).
+static void notifyNpp(unsigned code, uptr_t idFrom = 0)
+{
+    SCNotification scn = {};
+    scn.nmhdr.hwndFrom = g_npp._nppHandle;   // NPPN_ notifications come from the frame, not an editor
+    scn.nmhdr.code     = code;
+    scn.nmhdr.idFrom   = idFrom;
+    for (const auto& p : g_plugins) if (p.beNotified) p.beNotified(&scn);
+}
+
 // Stage 3: forward host editor events to every loaded N++ plugin's beNotified, as Scintilla notifications.
 static void on_nib_event(NibHost*, const NibEvent* ev, void*)
 {
@@ -214,11 +228,27 @@ static void on_nib_event(NibHost*, const NibEvent* ev, void*)
             break;
         case NIB_EV_DOCUMENT_SAVED:
             scn.nmhdr.code = SCN_SAVEPOINTREACHED;
+            // Also fire the application-level NPPN_FILESAVED: plugins that track saves listen for that,
+            // not the editor's save-point notification. idFrom is the saved buffer id when the host
+            // exposes it (the active doc, which is the one just saved).
+            notifyNpp(NPPN_FILESAVED,
+                      (g_docs && g_docs->version >= 2 && g_docs->active_id)
+                          ? static_cast<uptr_t>(g_docs->active_id(g_host)) : 0);
             break;
         case NIB_EV_DOCUMENT_ACTIVATED:
             scn.nmhdr.hwndFrom = g_npp._nppHandle;   // an NPPN_ notification comes from the frame, not the editor
             scn.nmhdr.code     = NPPN_BUFFERACTIVATED;
             scn.nmhdr.idFrom   = static_cast<uptr_t>(ev->as.document.id);   // the now-active buffer id
+            break;
+        case NIB_EV_DOCUMENT_OPENED:
+            scn.nmhdr.hwndFrom = g_npp._nppHandle;
+            scn.nmhdr.code     = NPPN_FILEOPENED;
+            scn.nmhdr.idFrom   = static_cast<uptr_t>(ev->as.document.id);   // the opened file's buffer id
+            break;
+        case NIB_EV_DOCUMENT_CLOSED:
+            scn.nmhdr.hwndFrom = g_npp._nppHandle;
+            scn.nmhdr.code     = NPPN_FILECLOSED;
+            scn.nmhdr.idFrom   = static_cast<uptr_t>(ev->as.document.id);   // the closing file's buffer id (still valid)
             break;
         default: return;
     }
@@ -405,6 +435,19 @@ static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& o
         case NPPM_GETCURRENTLANGTYPE:  if (lParam) *reinterpret_cast<int*>(lParam) = langTypeForPath(activePathW()); out = TRUE; return true;
         case NPPM_GETNPPVERSION:       out = MAKELONG(96, 8); return true;
         case NPPM_GETNBOPENFILES:      out = g_docs ? g_docs->count(g_host) : 1; return true;
+        case NPPM_GETOPENFILENAMES_DEPRECATED: {   // classic "list every open file's path" (the value plugins still send)
+            wchar_t** names = reinterpret_cast<wchar_t**>(wParam);
+            const int nb = static_cast<int>(lParam);
+            if (!names || !g_docs || g_docs->version < 4 || !g_docs->doc_path_at) { out = 0; return true; }
+            const int total = g_docs->count(g_host);
+            int filled = 0;
+            for (; filled < nb && filled < total; ++filled) {
+                char utf8[MAX_PATH * 3] = {0};
+                g_docs->doc_path_at(g_host, filled, utf8, static_cast<int>(sizeof(utf8)));
+                if (names[filled]) copyWideZ(names[filled], wFromUtf8(utf8).c_str(), MAX_PATH);
+            }
+            out = filled; return true;
+        }
         case NPPM_GETMENUHANDLE:
 #ifdef _WIN32
             out = reinterpret_cast<LRESULT>(g_pluginsMenu);
@@ -413,10 +456,14 @@ static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& o
 #endif
             return true;
         case NPPM_MENUCOMMAND:
+            // Invoke the built-in command by id through nib.commands (portable, and it routes via the wx
+            // menu dispatcher so large frozen ids don't wrap in a 16-bit WM_COMMAND). Fall back to a raw
+            // WM_COMMAND on Windows only if the host predates nib.commands v2.
+            if (g_cmds && g_cmds->version >= 2 && g_cmds->invoke_command)
+                g_cmds->invoke_command(g_host, static_cast<int>(lParam));
 #ifdef _WIN32
-            ::SendMessageW(g_npp._nppHandle, WM_COMMAND, static_cast<WPARAM>(lParam), 0);
-#else
-            (void)lParam;   // off-Windows N++ menu commands route via the Nib command table (future), not WM_COMMAND
+            else
+                ::SendMessageW(g_npp._nppHandle, WM_COMMAND, static_cast<WPARAM>(lParam), 0);
 #endif
             out = TRUE; return true;
         case NPPM_GETNPPDIRECTORY:     if (lParam) copyWideZ(reinterpret_cast<wchar_t*>(lParam), exeDir().c_str(), MAX_PATH); out = TRUE; return true;
@@ -429,6 +476,9 @@ static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& o
         case NPPM_GETEXTPART:          { const std::wstring p = activePathW(); const size_t d = p.find_last_of(L'.'); const size_t s = p.find_last_of(L"\\/"); out = putPath(wParam, lParam, (d != std::wstring::npos && (s == std::wstring::npos || d > s)) ? p.substr(d) : L""); return true; }
         case NPPM_DOOPEN:              if (g_docs && lParam) g_docs->open(g_host, toUtf8(reinterpret_cast<const wchar_t*>(lParam)).c_str()); out = TRUE; return true;
         case NPPM_SAVECURRENTFILE:     out = (g_docs && g_docs->save_active(g_host)) ? TRUE : FALSE; return true;
+        case NPPM_SAVEALLFILES:        // "save every open file" -> the host's own Save All command (frozen id)
+            if (g_cmds && g_cmds->version >= 2 && g_cmds->invoke_command) g_cmds->invoke_command(g_host, IDM_FILE_SAVEALL);
+            out = TRUE; return true;
         // docking: the plugin owns a native window and asks us to host it in a dock pane (nib.win32; NULL off-Windows -> inert)
         case NPPM_DMMREGASDCKDLG:      if (g_win32 && lParam) {
                                            const tTbData* d = reinterpret_cast<const tTbData*>(lParam);
@@ -448,6 +498,16 @@ static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& o
         // ---- additional coverage, served from existing nib.* + the frame's native children ----
         case NPPM_SWITCHTOFILE:        if (g_docs && lParam) g_docs->open(g_host, toUtf8(reinterpret_cast<const wchar_t*>(lParam)).c_str()); out = TRUE; return true;   // open-or-switch
         case NPPM_GETCURRENTVIEW:      out = activeView(); return true;   // 0=main, 1=sub
+        // cursor position, via nib.sci (the portable SCI_* passthrough) - some plugins query these
+        // rather than calling Scintilla directly. Both 0-based, as in Notepad++.
+        case NPPM_GETCURRENTLINE:
+            out = g_sci ? static_cast<LRESULT>(g_sci->sci_call(g_host, activeView(), SCI_LINEFROMPOSITION,
+                      static_cast<uintptr_t>(g_sci->sci_call(g_host, activeView(), SCI_GETCURRENTPOS, 0, 0)), 0)) : 0;
+            return true;
+        case NPPM_GETCURRENTCOLUMN:
+            out = g_sci ? static_cast<LRESULT>(g_sci->sci_call(g_host, activeView(), SCI_GETCOLUMN,
+                      static_cast<uintptr_t>(g_sci->sci_call(g_host, activeView(), SCI_GETCURRENTPOS, 0, 0)), 0)) : 0;
+            return true;
         case NPPM_GETBUFFERLANGTYPE:   out = langTypeForPath(pathFromIdW(static_cast<intptr_t>(wParam))); return true;   // by file extension
         case NPPM_GETPLUGINHOMEPATH:   if (lParam) copyWideZ(reinterpret_cast<wchar_t*>(lParam), pluginsRootW().c_str(), wParam ? static_cast<int>(wParam) : MAX_PATH); out = TRUE; return true;
         case NPPM_SETSTATUSBAR:
@@ -559,6 +619,7 @@ static void activate(NibHost* host, NibQueryFn query)
 #endif
     const NibCommandsApi* cmds = static_cast<const NibCommandsApi*>(query(host, NIB_IFACE_COMMANDS, 1));
     if (!cmds) return;
+    g_cmds = cmds;   // stash for NPPM_MENUCOMMAND (invoke a built-in command by id)
     cmds->register_command(host, "org.wxn.npp-bridge.info", "N++ Bridge: NppData Info", cmd_info, nullptr);
 #ifdef _WIN32
     if (w) loadNppPlugins(host, cmds);
@@ -578,11 +639,19 @@ static void activate(NibHost* host, NibQueryFn query)
         events->subscribe(host, NIB_EV_SELECTION_CHANGED,  on_nib_event, nullptr);
         events->subscribe(host, NIB_EV_DOCUMENT_SAVED,     on_nib_event, nullptr);
         events->subscribe(host, NIB_EV_DOCUMENT_ACTIVATED, on_nib_event, nullptr);   // -> NPPN_BUFFERACTIVATED
+        events->subscribe(host, NIB_EV_DOCUMENT_OPENED,    on_nib_event, nullptr);   // -> NPPN_FILEOPENED
+        events->subscribe(host, NIB_EV_DOCUMENT_CLOSED,    on_nib_event, nullptr);   // -> NPPN_FILECLOSED
     }
+
+    // Real Notepad++ sends NPPN_READY once its UI is up; the bridge sends it after finishing loading +
+    // wiring the plugins, which is the point at which they can safely query the environment. Plugins
+    // commonly do first-run init (toolbar buttons, docking dialogs, menu state) in this handler.
+    notifyNpp(NPPN_READY);
 }
 
 static void deactivate(NibHost*)
 {
+    notifyNpp(NPPN_SHUTDOWN);   // let plugins persist state / release resources while still loaded
 #ifdef _WIN32
     // RemoveWindowSubclass here relies on the host calling deactivate()/unload OUTSIDE the frame's own
     // WM_CLOSE/WM_DESTROY dispatch (see the host's onCloseWindow: it defers unloadNibPlugins() via

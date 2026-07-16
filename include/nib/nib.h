@@ -93,6 +93,10 @@ typedef struct NibDocumentsApi {
     // ---- v3 ---- which editor view holds the active document: 0 = main, 1 = sub. Lets NPPM_GETCURRENTVIEW
     // / NPPM_GETCURRENTSCINTILLA report the focused pane so view-aware plugins target the right editor.
     int  (*active_view)(NibHost*);
+    // ---- v4 ---- copy the UTF-8 path of the open document at flat `index` (0-based, across every view/tab,
+    // matching count()) into buf; returns the byte length (0 if untitled or index out of range). Pairs with
+    // count() to enumerate every open file (e.g. NPPM_GETOPENFILENAMES).
+    int  (*doc_path_at)(NibHost*, int index, char* buf, int cap);
 } NibDocumentsApi;
 
 // ---- nib.commands/1 : register + run commands ----------------------------------------------------
@@ -104,6 +108,9 @@ typedef struct NibCommandsApi {
     uint32_t struct_size;
     // Register a command; the host surfaces it (e.g. in the Plugins menu) and calls fn when invoked.
     void (*register_command)(NibHost*, const char* id, const char* title, NibCommandFn fn, void* user);
+    // v2: invoke one of the host's OWN commands by its numeric menu/command id. Lets a plugin trigger a
+    // built-in action (e.g. the N++ bridge serving NPPM_MENUCOMMAND) portably, with no window message.
+    void (*invoke_command)(NibHost*, int id);
 } NibCommandsApi;
 
 // ---- nib.events/1 : subscribe to editor / document events ----------------------------------------
@@ -112,7 +119,9 @@ typedef enum {
     NIB_EV_TEXT_CHANGED = 1,    // as.text:      pos, added, removed (bytes)
     NIB_EV_SELECTION_CHANGED,   // as.selection: anchor, caret
     NIB_EV_DOCUMENT_SAVED,      // (no payload)
-    NIB_EV_DOCUMENT_ACTIVATED   // as.document:   id (the now-active document's buffer id)
+    NIB_EV_DOCUMENT_ACTIVATED,  // as.document:   id (the now-active document's buffer id)
+    NIB_EV_DOCUMENT_OPENED,     // as.document:   id (a document just opened/loaded)
+    NIB_EV_DOCUMENT_CLOSED      // as.document:   id (a document about to close)
 } NibEventKind;
 typedef struct NibEvent {
     NibEventKind kind;
