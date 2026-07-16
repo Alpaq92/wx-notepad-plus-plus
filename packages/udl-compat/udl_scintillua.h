@@ -30,9 +30,17 @@ struct UdlDef {
         std::string escape;            // empty => no escape char
     };
 
+    struct FoldMarkers {               // N++ "Folders in code/comment": literals that bound a fold
+        std::vector<std::string> open;     // each raises the fold depth (+1)
+        std::vector<std::string> middle;   // else/elif-style; styled but depth-neutral in this version
+        std::vector<std::string> close;    // each lowers the fold depth (-1)
+        bool empty() const { return open.empty() && middle.empty() && close.empty(); }
+    };
+
     std::string              name;                 // language name (Scintillua lexer name)
     std::string              ext;                  // space-separated file extensions (no dots), e.g. "ini conf"
     std::vector<std::string> keywords[8];          // Keywords1..8
+    bool                     keywordPrefix[8] = {}; // N++ "Prefix mode" per group: words match as prefixes
     bool                     keywordsCaseInsensitive = false;
     std::string              lineComment;           // e.g. "//"  (empty => none)
     std::string              blockCommentOpen;      // e.g. "/*"
@@ -40,6 +48,9 @@ struct UdlDef {
     std::vector<Delimiter>   delimiters;            // string/char spans
     std::string              operators;             // literal operator chars, e.g. "+-*/=<>"
     bool                     hasNumbers = true;     // emit a lexer.number rule
+    FoldMarkers              foldCode1;             // "Folders in code1" (matches anywhere)
+    FoldMarkers              foldCode2;             // "Folders in code2" (N++ word-boundary group)
+    FoldMarkers              foldComment;           // "Folders in comment" (inside comment spans)
 };
 
 // Produce a Scintillua lexer (Lua source) that reproduces the UDL's highlighting.

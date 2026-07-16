@@ -113,24 +113,30 @@ void decodeDelimiters(const std::string& packed, UdlDef& out)
 
 }  // namespace
 
-bool parseUserDefineLangXml(const std::string& xml, UdlDef& out, std::string* err)
+namespace {
+
+// Parse one <UserLang> element (whose "<UserLang" begins at `ul`) into `out`. Sets `nextPos` to the
+// index just past its </UserLang>, or npos if this element runs to EOF (so no more can follow).
+bool parseOneUserLang(const std::string& xml, size_t ul, UdlDef& out, size_t& nextPos, std::string* err)
 {
     out = UdlDef{};
-    const size_t ul = xml.find("<UserLang");
-    if (ul == std::string::npos) { if (err) *err = "no <UserLang> element"; return false; }
+    nextPos = std::string::npos;
     const size_t tagEnd = xml.find('>', ul);
     if (tagEnd == std::string::npos) { if (err) *err = "malformed <UserLang> tag"; return false; }
     const std::string openTag = xml.substr(ul, tagEnd - ul);
+
+    // Compute this element's extent + nextPos BEFORE validating its content: a skipped element (e.g.
+    // one with no name) must still advance the multi-language loop past its </UserLang>, otherwise a
+    // single nameless <UserLang> would abort parsing and silently drop every later sibling.
+    const size_t close = xml.find("</UserLang>", tagEnd);
+    const std::string body = xml.substr(tagEnd + 1,
+        (close == std::string::npos ? xml.size() : close) - tagEnd - 1);
+    nextPos = (close == std::string::npos) ? std::string::npos : close + 11;   // 11 = strlen("</UserLang>")
 
     out.name = attr(openTag, "name");
     out.ext = attr(openTag, "ext");
     out.keywordsCaseInsensitive = false;
     if (out.name.empty()) { if (err) *err = "<UserLang> has no name"; return false; }
-
-    // Extent of this UserLang element (bare-root files have no closing tag; use EOF).
-    const size_t close = xml.find("</UserLang>", tagEnd);
-    const std::string body = xml.substr(tagEnd + 1,
-        (close == std::string::npos ? xml.size() : close) - tagEnd - 1);
 
     // <Global caseIgnored="yes"/>
     {
@@ -140,6 +146,21 @@ bool parseUserDefineLangXml(const std::string& xml, UdlDef& out, std::string* er
             if (ge != std::string::npos) {
                 const std::string ci = attr(body.substr(g, ge - g), "caseIgnored");
                 out.keywordsCaseInsensitive = (ci == "yes" || ci == "1");
+            }
+        }
+    }
+
+    // <Prefix Keywords1="yes" ... Keywords8="no" /> : per-group "prefix mode" (words match as prefixes).
+    {
+        const size_t pf = body.find("<Prefix");
+        if (pf != std::string::npos) {
+            const size_t pe = body.find('>', pf);
+            if (pe != std::string::npos) {
+                const std::string tag = body.substr(pf, pe - pf);
+                for (int i = 0; i < 8; ++i) {
+                    const std::string v = attr(tag, "Keywords" + std::to_string(i + 1));
+                    out.keywordPrefix[i] = (v == "yes" || v == "1");
+                }
             }
         }
     }
@@ -168,10 +189,50 @@ bool parseUserDefineLangXml(const std::string& xml, UdlDef& out, std::string* er
                     if (ops.find(c) == std::string::npos) ops += c;   // single-char operators, deduped
             out.operators = ops;
         }
+        // Fold keywords: N++ stores them as "Folders in code1/2, open|middle|close" and
+        // "Folders in comment, open|middle|close". Space-separated literal lists (not styled here;
+        // the translator emits Scintillua fold points from them).
+        else if (name == "Folders in code1, open")    out.foldCode1.open    = splitWhitespace(text);
+        else if (name == "Folders in code1, middle")  out.foldCode1.middle  = splitWhitespace(text);
+        else if (name == "Folders in code1, close")   out.foldCode1.close   = splitWhitespace(text);
+        else if (name == "Folders in code2, open")    out.foldCode2.open    = splitWhitespace(text);
+        else if (name == "Folders in code2, middle")  out.foldCode2.middle  = splitWhitespace(text);
+        else if (name == "Folders in code2, close")   out.foldCode2.close   = splitWhitespace(text);
+        else if (name == "Folders in comment, open")  out.foldComment.open  = splitWhitespace(text);
+        else if (name == "Folders in comment, middle")out.foldComment.middle= splitWhitespace(text);
+        else if (name == "Folders in comment, close") out.foldComment.close = splitWhitespace(text);
     }
 
     out.hasNumbers = true;   // UDL languages always style numbers
     return true;
+}
+
+}  // namespace
+
+bool parseUserDefineLangXml(const std::string& xml, UdlDef& out, std::string* err)
+{
+    const size_t ul = xml.find("<UserLang");
+    if (ul == std::string::npos) { if (err) *err = "no <UserLang> element"; return false; }
+    size_t next = std::string::npos;
+    return parseOneUserLang(xml, ul, out, next, err);
+}
+
+std::vector<UdlDef> parseAllUserDefineLangs(const std::string& xml)
+{
+    // Notepad++'s main userDefineLang.xml bundles every user language as a sibling <UserLang> under
+    // <NotepadPlus>; iterate them all (parseUserDefineLangXml only returns the first, for callers that
+    // want a single definition). A malformed or nameless element is skipped, not fatal to the rest.
+    std::vector<UdlDef> all;
+    size_t pos = 0;
+    while ((pos = xml.find("<UserLang", pos)) != std::string::npos) {
+        UdlDef d;
+        size_t next = std::string::npos;
+        const bool ok = parseOneUserLang(xml, pos, d, next, nullptr);
+        if (ok) all.push_back(std::move(d));
+        if (next == std::string::npos) break;      // this element ran to EOF - nothing can follow
+        pos = (next > pos) ? next : pos + 9;        // advance past </UserLang> (or the tag, to make progress)
+    }
+    return all;
 }
 
 std::string readFileToString(const std::string& path)

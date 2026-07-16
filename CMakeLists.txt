@@ -118,7 +118,11 @@ endif()
 # ---- the wxNote executable --------------------------------------------------------------------
 # WIN32 = GUI-subsystem app on Windows; a plain executable elsewhere (GTK on Linux, Cocoa on macOS).
 if(WIN32)
-    add_executable(wxnote WIN32 src/main.cpp src/scintillua_engine.cpp resources/app.rc)   # .rc embeds wxnote.ico as the exe's shell icon
+    # Generate the version resource from project(... VERSION ...) so the exe's file/product version can
+    # never drift from the release version (it silently shipped 0.7.0 for 0.8.0 when hand-maintained).
+    # The .rc also embeds wxnote.ico as the exe's shell icon.
+    configure_file("${CMAKE_SOURCE_DIR}/resources/app.rc.in" "${CMAKE_BINARY_DIR}/app.rc" @ONLY)
+    add_executable(wxnote WIN32 src/main.cpp src/scintillua_engine.cpp "${CMAKE_BINARY_DIR}/app.rc")
 else()
     add_executable(wxnote src/main.cpp src/scintillua_engine.cpp)
 endif()
@@ -126,6 +130,10 @@ set_target_properties(wxnote PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+# Surface the single source of truth for the version (project(... VERSION)) to the code, so the
+# About dialog can show it without a second hardcoded string drifting out of sync.
+target_compile_definitions(wxnote PRIVATE WXN_VERSION="${PROJECT_VERSION}")
 
 # macOS-native shim wxWidgets doesn't expose (blank the native title bar via NSWindow.titleVisibility).
 # Objective-C++ (.mm) compiled only on Apple; needs AppKit (wx::core links Cocoa transitively, but be

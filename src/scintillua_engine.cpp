@@ -35,6 +35,33 @@ const char* kBootstrap =
     "  local ok, res = pcall(function() return require('lexer').load(name) end)\n"
     "  if ok then _cache[name] = res end\n"
     "  return ok, (ok and '' or tostring(res))\n"
+    "end\n"
+    // _wxn_lexfold(name, text) -> tokens, folds. Same token list as _wxn_lex, plus (when the
+    // grammar declares fold points or indentation folding) a {line -> Scintilla-fold-level} table
+    // from Scintillua's lex:fold(). Scintillua's standalone library populates neither `fold`
+    // (defaults off) nor `style_at` (the byte->tag lookup fold() needs to reject fold symbols that
+    // land inside strings/comments), so wire both here from the single lex pass before folding.
+    "function _wxn_lexfold(name, text)\n"
+    "  local L = require('lexer')\n"
+    "  local lex = _cache[name]\n"
+    "  if not lex then lex = L.load(name); _cache[name] = lex end\n"
+    "  local tokens = lex:lex(text, 1)\n"
+    "  local folds = nil\n"
+    "  if lex._fold_points or lex._fold_by_indentation then\n"
+    "    L.property['fold'] = '1'\n"
+    "    local n = #tokens\n"
+    "    L.style_at = setmetatable({}, { __index = function(_, pos)\n"
+    "      local lo, hi, ans = 1, n // 2, 'default'\n"        // token k: tag=tokens[2k-1], one-past-end=tokens[2k]
+    "      while lo <= hi do\n"
+    "        local mid = (lo + hi) // 2\n"
+    "        if tokens[mid * 2] > pos then ans = tokens[mid * 2 - 1]; hi = mid - 1 else lo = mid + 1 end\n"
+    "      end\n"
+    "      return ans\n"
+    "    end })\n"
+    "    L.fold_level = setmetatable({}, { __index = function() return L.FOLD_BASE end })\n"
+    "    folds = lex:fold(text, 1, L.FOLD_BASE)\n"
+    "  end\n"
+    "  return tokens, folds\n"
     "end\n";
 
 // Lua's package.path matches with forward slashes on every platform; normalize so a Windows
@@ -183,6 +210,46 @@ std::vector<Token> Engine::lex(const std::string& name, const char* data, size_t
         lua_pop(L_, 1);
         return out;
     }
+    readTokenTableTop(out);
+    return out;
+}
+
+std::vector<Token> Engine::lexAndFold(const std::string& name, const char* data, size_t len,
+                                      std::vector<int>* foldLevels)
+{
+    std::vector<Token> out;
+    if (foldLevels) foldLevels->clear();
+    if (!ready_ || !data) return out;
+    const std::string safe = lexerKey(name, /*create=*/false);
+    if (safe.empty()) return out;
+    lua_getglobal(L_, "_wxn_lexfold");
+    lua_pushstring(L_, safe.c_str());
+    lua_pushlstring(L_, data, len);
+    if (lua_pcall(L_, 2, 2, 0) != LUA_OK) {       // -> tokens, folds (folds may be nil)
+        const char* e = lua_tostring(L_, -1);
+        err_ = e ? e : "lexfold failed";
+        lua_pop(L_, 1);
+        return out;
+    }
+    // The fold table (top of stack) maps 1-based line -> Scintilla fold-level; it is a dense
+    // sequence for every line the buffer spans, so read it as line i -> foldLevels[i - 1].
+    if (foldLevels && lua_istable(L_, -1)) {
+        const lua_Integer n = luaL_len(L_, -1);
+        foldLevels->reserve(static_cast<size_t>(n));
+        for (lua_Integer i = 1; i <= n; ++i) {
+            lua_rawgeti(L_, -1, i);
+            foldLevels->push_back(static_cast<int>(lua_tointeger(L_, -1)));
+            lua_pop(L_, 1);
+        }
+    }
+    lua_pop(L_, 1);                               // pop folds; tokens table now on top
+    readTokenTableTop(out);
+    return out;
+}
+
+// Reads the {tag, endpos, ...} pairs of the token table on top of the stack, then pops it.
+void Engine::readTokenTableTop(std::vector<Token>& out)
+{
     if (lua_istable(L_, -1)) {
         const lua_Integer n = luaL_len(L_, -1);
         for (lua_Integer i = 1; i + 1 <= n; i += 2) {
@@ -197,7 +264,6 @@ std::vector<Token> Engine::lex(const std::string& name, const char* data, size_t
         }
     }
     lua_pop(L_, 1);
-    return out;
 }
 
 }  // namespace scintillua
