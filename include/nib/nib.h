@@ -195,6 +195,21 @@ typedef struct NibWin32Api {
     void  (*show_dock)(NibHost*, void* hwnd, int visible);
 } NibWin32Api;
 
+// ---- nib.sci/1 : generic Scintilla passthrough ---------------------------------------------------
+// A single, portable escape hatch to the host's editor(s): the plugin sends a raw Scintilla message
+// and gets the raw result back. Unlike nib.win32 this carries no platform handles, so it is offered on
+// EVERY OS - it is how the optional npp-bridge routes a recompiled Notepad++ plugin's SendMessage(SCI_*)
+// into wxNote's wxStyledTextCtrl on Linux/macOS as well as Windows. The message numbers are Scintilla's
+// own (SCI_*/Lexilla), which are cross-platform and not Notepad++-specific, so this stays clean-sheet.
+#define NIB_IFACE_SCI "nib.sci/1"
+typedef struct NibSciApi {
+    uint32_t version;
+    uint32_t struct_size;
+    // Generic Scintilla passthrough. view: 0=main, 1=sub, -1=active. Returns the SCI result (0 if the
+    // target view does not exist).
+    intptr_t (*sci_call)(NibHost* host, int view, unsigned msg, uintptr_t wparam, intptr_t lparam);
+} NibSciApi;
+
 // ---- the plugin's lifecycle vtable ---------------------------------------------------------------
 typedef struct NibPluginApi {
     uint32_t    abi_version;                          // the ABI the plugin was built against

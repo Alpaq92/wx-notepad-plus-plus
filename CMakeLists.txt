@@ -225,8 +225,16 @@ add_dependencies(wxnote nib_test_plugin)
 add_subdirectory(packages/udl-compat)
 add_dependencies(wxnote udl_compat_plugin)
 
-# ---- optional GPL Notepad++ binary-plugin bridge (Windows-only; itself a Nib plugin) ---------------
-if(WIN32)
-    add_subdirectory(packages/npp-bridge)
-    add_dependencies(wxnote npp_bridge)
+# ---- optional GPL Notepad++ binary-plugin bridge (every OS now; itself a Nib plugin) ---------------
+# Phase 1 of docs/ARCHITECTURE.md: the bridge builds on Linux/macOS too (its Win32-only
+# machinery is #ifdef'd internally), so abi_layout_asserts.h compile-verifies the N++ ABI layout on
+# every CI runner and the portable dispatch core is exercised by the build everywhere. The bridge is
+# still only a live plugin host on Windows; off-Windows it is the compile target for the shim SDK path.
+add_subdirectory(packages/npp-bridge)
+add_dependencies(wxnote npp_bridge)
+# Off-Windows, also pull the recompiled-plugin example (which links libnpp_shim) into wxnote's build
+# graph, so `cmake --build --target wxnote` on the Linux/macOS CI runners actually compiles npp_shim.cpp
+# + example_plugin.cpp - the shim SDK path that Windows can't verify. (Windows uses the OS ::SendMessage.)
+if(NOT WIN32)
+    add_dependencies(wxnote npp_example_plugin)
 endif()

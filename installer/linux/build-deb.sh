@@ -11,7 +11,8 @@ cd "$(dirname "$0")/../.."   # repo root
 # out of sync with it again (every packaging script independently hardcoded its own version string
 # and 0.4.0 shipped labeled 0.3.0 everywhere as a result).
 VERSION="$(sed -n 's/.*project(wxNote VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
-DEB_ARCH="$(dpkg --print-architecture)"   # amd64 / arm64 - Debian's own name for the build host
+DEB_ARCH="${DEB_ARCH_OVERRIDE:-$(dpkg --print-architecture)}"   # amd64 / arm64 (build host), or an explicit
+                                                               # target for cross builds (e.g. riscv64)
 PKGDIR="build/deb-pkg"
 OUTDIR="build/installer"
 
@@ -26,7 +27,7 @@ mkdir -p "$PKGDIR/DEBIAN" "$PKGDIR/opt/wxnote" "$PKGDIR/usr/bin" \
 # this layout needs no runtime code changes to work, which matters given this project has no
 # Linux machine to verify a code change against - only CI.
 cp -r build/bin/. "$PKGDIR/opt/wxnote/"
-rm -rf "$PKGDIR/opt/wxnote/nib/nib_test_plugin.so" "$PKGDIR/opt/wxnote/plugins"   # dev-only test artifacts
+rm -rf "$PKGDIR/opt/wxnote/nib/nib_test_plugin.so" "$PKGDIR/opt/wxnote/nib/example" "$PKGDIR/opt/wxnote/plugins"   # dev-only test artifacts (nib/example is the compile-only recompiled-plugin proof)
 ln -s /opt/wxnote/wxnote "$PKGDIR/usr/bin/wxnote"
 cp installer/linux/wxnote.desktop "$PKGDIR/usr/share/applications/wxnote.desktop"
 cp resources/wxnote.svg "$PKGDIR/usr/share/icons/hicolor/scalable/apps/wxnote.svg"

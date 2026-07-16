@@ -28,7 +28,7 @@ Windows compatibility bridge for legacy Notepad++ plugin binaries.
 rm -rf %{buildroot}
 mkdir -p %{buildroot}/opt/wxnote
 cp -r %{_srcdir}/build/bin/. %{buildroot}/opt/wxnote/
-rm -rf %{buildroot}/opt/wxnote/nib/nib_test_plugin.so %{buildroot}/opt/wxnote/plugins
+rm -rf %{buildroot}/opt/wxnote/nib/nib_test_plugin.so %{buildroot}/opt/wxnote/nib/example %{buildroot}/opt/wxnote/plugins
 mkdir -p %{buildroot}/usr/bin
 ln -s /opt/wxnote/wxnote %{buildroot}/usr/bin/wxnote
 mkdir -p %{buildroot}/usr/share/applications
