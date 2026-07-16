@@ -72,6 +72,9 @@ foreach(u lpcap lpcode lpcset lpprint lptree lpvm)
 endforeach()
 add_library(lua_lpeg STATIC ${LUA_LPEG_SRC})
 target_include_directories(lua_lpeg PUBLIC "${lua54_SOURCE_DIR}/src")
+# Linked into the wxnote executable (PIE on modern Linux) and, transitively, tools; on ELF a static
+# lib pulled into a PIE/shared target must be position-independent, so force -fPIC (no-op on MSVC).
+set_target_properties(lua_lpeg PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
     target_compile_definitions(lua_lpeg PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()

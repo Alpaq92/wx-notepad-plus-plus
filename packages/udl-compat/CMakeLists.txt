@@ -14,7 +14,11 @@ project(udl_compat CXX)
 # The parser + translator library - used by both the standalone tools and the runtime plugin.
 add_library(udl_compat_core STATIC udl_scintillua.cpp udl_parse.cpp)
 target_include_directories(udl_compat_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-set_target_properties(udl_compat_core PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+# In-tree, this static lib is linked into the udl_compat shared module (bin/nib/udl_compat.so);
+# on ELF that requires position-independent code, so force -fPIC (harmless on MSVC / for the
+# standalone CLI + test executables).
+set_target_properties(udl_compat_core PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
     target_compile_options(udl_compat_core PRIVATE /EHsc /utf-8 /W4)
 endif()
