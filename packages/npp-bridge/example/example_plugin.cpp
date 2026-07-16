@@ -42,7 +42,11 @@ namespace {
 NppData g_npp{};
 
 // The plugin's menu commands, returned verbatim from getFuncsArray().
-FuncItem g_funcs[2] = {};
+FuncItem g_funcs[3] = {};
+
+// Maintained from the host's file lifecycle notifications (NPPN_FILEOPENED / NPPN_FILECLOSED),
+// demonstrating that a recompiled plugin receives the same beNotified stream on every OS.
+int g_openFileCount = 0;
 
 // --- the actual work: pure NPPM_*/SCI_* message passing, zero platform code ----
 
@@ -79,6 +83,25 @@ void showHostVersion()
     (void)ver;   // a UI-free plugin would surface this; the template just proves the call links.
 }
 
+// Command 3: enumerate every open file's path - the exact pattern a file-list / session plugin uses:
+// ask NPPM_GETNBOPENFILES for the count, allocate the array N++ fills, then NPPM_GETOPENFILENAMES.
+// UI-free: it just performs the round-trip (a real plugin would display or persist the names).
+void listOpenFiles()
+{
+    const int nb = static_cast<int>(::SendMessage(g_npp._nppHandle, NPPM_GETNBOPENFILES, 0, 0));
+    if (nb <= 0)
+        return;
+    wchar_t** names = new wchar_t*[nb];
+    for (int i = 0; i < nb; ++i)
+        names[i] = new wchar_t[MAX_PATH]();
+    ::SendMessage(g_npp._nppHandle, NPPM_GETOPENFILENAMES_DEPRECATED,
+                  reinterpret_cast<WPARAM>(names), static_cast<LPARAM>(nb));
+    // names[0..nb-1] now hold each open document's path; a real plugin would use them here.
+    for (int i = 0; i < nb; ++i)
+        delete[] names[i];
+    delete[] names;
+}
+
 } // namespace
 
 // ===========================================================================
@@ -111,16 +134,27 @@ NPP_EXPORT FuncItem* getFuncsArray(int* count)
     g_funcs[0]._pFunc = wrapSelection;
     std::wcscpy(g_funcs[1]._itemName, L"Show host version");
     g_funcs[1]._pFunc = showHostVersion;
+    std::wcscpy(g_funcs[2]._itemName, L"List open files");
+    g_funcs[2]._pFunc = listOpenFiles;
 
     if (count)
-        *count = 2;
+        *count = 3;
     return g_funcs;
 }
 
-// Editor/host notifications. A text-transformer template ignores them; a real
-// plugin would switch on scn->nmhdr.code (NPPN_* / SCN_*).
-NPP_EXPORT void beNotified(SCNotification* /*scn*/)
+// Editor/host notifications. Switch on scn->nmhdr.code, exactly as a real plugin does - here we track
+// the open-document count from the file lifecycle notifications to demonstrate that the same NPPN_*
+// stream reaches a recompiled plugin on every OS (the SCN_* editor notifications are ignored).
+NPP_EXPORT void beNotified(SCNotification* scn)
 {
+    if (!scn)
+        return;
+    switch (scn->nmhdr.code) {
+        case NPPN_READY:       g_openFileCount = 0; break;   // host is up; safe to query the environment
+        case NPPN_FILEOPENED:  ++g_openFileCount; break;
+        case NPPN_FILECLOSED:  if (g_openFileCount > 0) --g_openFileCount; break;
+        default:               break;
+    }
 }
 
 // Direct host->plugin messages. Not used by this template (Phase 2 territory).
