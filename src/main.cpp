@@ -139,6 +139,12 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 #include <cstring>             // strcmp / memcpy (Nib host)
 #include "command_ids.h"
 #include "app_icon_svg.h"
+
+// Set from the project() version by CMake (see CMakeLists.txt); fall back so a stray standalone
+// compile still builds. Shown in the About dialog.
+#ifndef WXN_VERSION
+#define WXN_VERSION "dev"
+#endif
 #include "nib.h"               // our own permissive, cross-platform plugin API (Nib)
 #include "terminal_panel.h"    // View > Show Terminal - bottom multi-tab shell panel (defines myID_VIEW_TERMINAL, used by menu_data_view.h below)
 #include "menu_builder.h"      // data-driven menu bar builder (menu_model.h/menu_data_*.h) - replaces the old inline menu construction
@@ -1407,9 +1413,11 @@ static int64_t nibEdGetText(NibHost*, int64_t s, int64_t e, char* b, int64_t bs)
     if (b && bs > 0) { int64_t n = (doc && len < bs - 1) ? len : 0; if (n) std::memcpy(b, doc + s, static_cast<size_t>(n)); b[n] = 0; }
     return len;
 }
-// nib.commands/1
+// nib.commands/1 (+v2 invoke_command)
+static std::function<void(int)> g_nibInvokeCommand;   // frame installs this (needs onCommand); dispatches a command id
 static void nibCmdRegister(NibHost*, const char* id, const char* title, NibCommandFn fn, void* u)
 { g_nibCommands.push_back({ id ? id : "", title ? title : "", fn, u }); }
+static void nibInvokeCommand(NibHost*, int id) { if (g_nibInvokeCommand) g_nibInvokeCommand(id); }
 // nib.events/1
 struct NibSub { NibEventKind kind; NibEventFn fn; void* user; };
 static std::vector<NibSub> g_nibSubs;
@@ -1433,6 +1441,7 @@ static std::function<int()>            g_nibDocSave;         // save the active 
 static std::function<intptr_t()>              g_nibDocActiveId;    // v2: stable opaque id of the active document; 0 if none
 static std::function<int(intptr_t,char*,int)> g_nibDocPathFromId;  // v2: copy a document id's UTF-8 path -> length, 0 if no such id
 static std::function<int()>                   g_nibDocActiveView;  // v3: which view holds the active doc (0=main, 1=sub)
+static std::function<int(int,char*,int)>      g_nibDocPathAt;      // v4: UTF-8 path of the open doc at a flat index
 static int nibDocCount(NibHost*)                      { return g_nibDocCount ? g_nibDocCount() : 0; }
 static int nibDocActivePath(NibHost*, char* b, int c) { return g_nibDocActivePath ? g_nibDocActivePath(b, c) : 0; }
 static int nibDocOpen(NibHost*, const char* p)        { return g_nibDocOpen ? g_nibDocOpen(p) : 0; }
@@ -1440,6 +1449,7 @@ static int nibDocSave(NibHost*)                       { return g_nibDocSave ? g_
 static intptr_t nibDocActiveId(NibHost*)                              { return g_nibDocActiveId ? g_nibDocActiveId() : 0; }
 static int      nibDocPathFromId(NibHost*, intptr_t id, char* b, int c) { return g_nibDocPathFromId ? g_nibDocPathFromId(id, b, c) : 0; }
 static int      nibDocActiveView(NibHost*)                             { return g_nibDocActiveView ? g_nibDocActiveView() : 0; }
+static int      nibDocPathAt(NibHost*, int index, char* b, int c)       { return g_nibDocPathAt ? g_nibDocPathAt(index, b, c) : 0; }
 #ifdef __WXMSW__
 // nib.win32/1 - Windows-only native-handle capability (the GPL npp-bridge uses it to rebuild NppData).
 static std::function<void*()> g_nibMainWindow, g_nibEditorMain, g_nibEditorSecond, g_nibPluginsMenu;
@@ -1476,10 +1486,10 @@ static uint32_t     nibHostAbi(NibHost*) { return NIB_ABI_VERSION; }
 
 static const NibHostApi     g_nibHostApi     = { 1, sizeof(NibHostApi),     nibHostName, nibHostAbi };
 static const NibEditorApi   g_nibEditorApi   = { 1, sizeof(NibEditorApi),   nibEdLength, nibEdInsert, nibEdReplSel, nibEdSelStart, nibEdSelEnd, nibEdGetText };
-static const NibCommandsApi g_nibCommandsApi = { 1, sizeof(NibCommandsApi), nibCmdRegister };
+static const NibCommandsApi g_nibCommandsApi = { 2, sizeof(NibCommandsApi), nibCmdRegister, nibInvokeCommand };
 static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibSubscribe };
 static const NibPanelsApi   g_nibPanelsApi   = { 1, sizeof(NibPanelsApi),   nibPanelRegister, nibPanelSetText, nibPanelAppend, nibPanelShow };
-static const NibDocumentsApi g_nibDocumentsApi = { 3, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen, nibDocSave, nibDocActiveId, nibDocPathFromId, nibDocActiveView };
+static const NibDocumentsApi g_nibDocumentsApi = { 4, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen, nibDocSave, nibDocActiveId, nibDocPathFromId, nibDocActiveView, nibDocPathAt };
 
 static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
 {
@@ -1952,6 +1962,15 @@ public:
             return 0;
         };
         g_nibDocActiveView = [this]() -> int { return m_active == &m_sub ? 1 : 0; };   // 0 = main, 1 = sub
+        g_nibDocPathAt = [this](int index, char* b, int c) -> int {   // v4: path of the open doc at a flat index (main view's tabs, then sub view's - matching g_nibDocCount)
+            int i = 0;
+            for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs }) {
+                if (!nb) continue;
+                for (size_t k = 0; k < nb->GetPageCount(); ++k, ++i)
+                    if (i == index) return nibCopyUtf8(static_cast<EditorPage*>(nb->GetPage(k))->path.utf8_string(), b, c);
+            }
+            return 0;
+        };
 #ifdef __WXMSW__   // nib.win32: hand the (optional, GPL) N++ bridge the native handles it needs
         g_nibMainWindow   = [this]() -> void* { return static_cast<HWND>(GetHandle()); };
         g_nibEditorMain   = [this]() -> void* { return m_main.sci; };   // _scintillaMainHandle is always the MAIN view (not the active alias)
@@ -2197,6 +2216,9 @@ private:
             wxStyledTextCtrl* stc = (view == 0) ? m_main.stc : (view == 1) ? m_sub.stc : m_stc;
             return stc ? static_cast<intptr_t>(stc->SendMsg(static_cast<int>(msg), static_cast<wxUIntPtr>(w), static_cast<wxIntPtr>(l))) : 0;
         };
+        // Let plugins invoke a built-in command by id (nib.commands v2 -> the N++ bridge's NPPM_MENUCOMMAND),
+        // through the same dispatcher as menu/toolbar clicks so large frozen ids don't wrap in WM_COMMAND.
+        g_nibInvokeCommand = [this](int id){ wxCommandEvent ce(wxEVT_MENU, id); onCommand(ce); };
 #ifdef __WXMSW__
         m_sci = m_main.sci;
 #endif
@@ -3618,6 +3640,12 @@ private:
         if (!path.empty()) { loadFile(path); addToMRU(path); } else { sci(SCI_SETSAVEPOINT); setLexerForFile(""); }
         setWindowTitle(title);
         updateStatus();
+        // Notify subscribers (e.g. the N++ bridge -> NPPN_FILEOPENED) that a file document just opened.
+        // Only for real files, not new empty tabs - matching Notepad++'s NPPN_FILEOPENED semantics.
+        if (!path.empty()) {
+            NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_OPENED; ev.struct_size = sizeof(NibEvent);
+            ev.as.document.id = reinterpret_cast<intptr_t>(page); nibFireEvent(ev);
+        }
         return page;
     }
 
@@ -4134,6 +4162,10 @@ private:
         // Remove the page ourselves (after this event) so the collapse check sees the real count - wxAui's
         // own removal races a CallAfter, which would leave an empty pane behind.
         e.Veto();
+        // Notify subscribers (e.g. the N++ bridge -> NPPN_FILECLOSED) BEFORE the page is destroyed, so a
+        // plugin can still resolve its path/buffer id from `p` (deletion is deferred to the CallAfter).
+        { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_CLOSED; ev.struct_size = sizeof(NibEvent);
+          ev.as.document.id = reinterpret_cast<intptr_t>(p); nibFireEvent(ev); }
         this->CallAfter([this, p]{
             if (ViewPane* v = viewOf(p)) {
                 const int i = v->tabs->GetPageIndex(p);
@@ -5170,7 +5202,7 @@ private:
         {
             applyScintilluaStyles(m_stc);
             page->lang = page->sciLang;
-            m_stc->Colourise(0, -1);
+            m_stc->Colourise(0, -1);   // fires STYLENEEDED -> scintilluaStyle, which sets every fold level
             return;
         }
         // A manual Language pick forces its lexer directly; otherwise auto-detect from the file extension.
@@ -6346,11 +6378,18 @@ private:
         }
         if (tag.rfind("string", 0) == 0 || tag == "character")   return 2;
         if (tag.rfind("comment", 0) == 0)                        return 3;
-        if (tag == "number")                                     return 4;
-        if (tag == "operator")                                   return 5;
+        if (tag.rfind("number", 0) == 0)                         return 4;   // number, number.float, ...
+        if (tag.rfind("operator", 0) == 0)                       return 5;
         if (tag.rfind("preprocessor", 0) == 0)                   return 13;
-        if (tag == "type" || tag == "function" || tag == "class")return 14;
-        if (tag == "constant" || tag == "variable")              return 15;
+        // Prefix-match so Scintillua's dot-namespaced sub-tags land on the right style, not default:
+        // function.builtin / function.method / type.builtin / class.* / constant.builtin / variable.*
+        if (tag.rfind("type", 0) == 0 || tag.rfind("function", 0) == 0 || tag.rfind("class", 0) == 0)
+            return 14;
+        if (tag.rfind("constant", 0) == 0 || tag.rfind("variable", 0) == 0 || tag == "label")
+            return 15;
+        if (tag == "regex")                                      return 2;   // regex literals -> string colour
+        if (tag == "foldkw")                                     return 1;   // udl-compat word fold markers (if/end) -> keyword
+        if (tag == "foldsym")                                    return 5;   // udl-compat symbol fold markers ({ }) -> operator
         return 0;   // whitespace.*, default, identifier, and anything unmapped
     }
     // Colour the container styles a Scintillua-lexed buffer uses. A small fixed palette (light + dark),
@@ -6377,7 +6416,19 @@ private:
             stc->StyleSetItalic(id, italic);
         };
         for (const Sty& s : P) set(s.id, s.lightFg, s.darkFg, s.bold, s.italic);
-        for (int id = 6; id <= 12; ++id) set(id, 0x0000FF, 0x569CD6, false, false);   // keyword2..8 share the keyword colour
+        // keyword2..8 (styles 6..12): distinct hues so a UDL's separate keyword groups are visually
+        // told apart (Notepad++ colours each group; until we carry the UDL's own per-slot colours we
+        // pick a sensible fixed palette instead of painting them all the keyword1 blue).
+        static const Sty KW[] = {
+            { 6, 0x267F99, 0x4EC9B0, true, false },   // keyword2 - teal
+            { 7, 0xAF00DB, 0xC586C0, true, false },   // keyword3 - purple
+            { 8, 0xB55305, 0xCE9178, true, false },   // keyword4 - orange
+            { 9, 0xC72D6E, 0xD16D9E, true, false },   // keyword5 - magenta
+            {10, 0x098658, 0x6A9955, true, false },   // keyword6 - green
+            {11, 0x0070C1, 0x9CDCFE, true, false },   // keyword7 - light blue
+            {12, 0x8B6D00, 0xD7BA7D, true, false },   // keyword8 - gold
+        };
+        for (const Sty& s : KW) set(s.id, s.lightFg, s.darkFg, s.bold, s.italic);
     }
     // Lex the whole buffer with the named Scintillua lexer and apply the styles (called from STYLENEEDED).
     void scintilluaStyle(wxStyledTextCtrl* stc, const wxString& langName)
@@ -6387,7 +6438,9 @@ private:
         const int len = static_cast<int>(stc->GetLength());
         const char* buf = stc->GetRangePointer(0, len);   // zero-copy view into Scintilla's buffer (valid until the doc changes; we only read it here)
         if (!buf) return;
-        const auto toks = eng->lex(std::string(langName.utf8_string()), buf, static_cast<size_t>(len));
+        std::vector<int> folds;
+        const auto toks = eng->lexAndFold(std::string(langName.utf8_string()), buf,
+                                          static_cast<size_t>(len), &folds);
         int prev = 0;
         stc->StartStyling(0);
         for (const auto& t : toks)
@@ -6397,10 +6450,24 @@ private:
             if (end > prev) { stc->SetStyling(end - prev, sciTagToStyle(t.tag)); prev = end; }
         }
         if (prev < len) stc->SetStyling(len - prev, 0);   // any trailing bytes -> default
-        // NOTE: fold levels are not set here yet - Scintillua-lexed languages currently style but do
-        // not fold (the retired UDL engine drove SCI_SETFOLDLEVEL via udlFoldRange). Wiring Scintillua's
-        // lexer:fold() through the container lexer is a tracked follow-up; margin folding stays inert
-        // for these languages until then rather than shipping an untested fold integration.
+        // Fold levels from Scintillua's lexer:fold() (same single lex pass). Set EVERY line each pass so
+        // the result is idempotent across re-lexes (tab switch, Preferences apply, theme toggle): re-
+        // setting a line to the level it already has is a no-op in Scintilla, so the user's collapsed/
+        // expanded fold state survives. Each fold value is already a Scintilla bitmask (base/header/white
+        // flags). A grammar with no fold points returns an empty `folds`; flatten to base then, which
+        // also clears any stale fold headers a previous Lexilla lexer left on this buffer.
+        // Known limitation: Scintillua's fold() splits lines on \r?\n, so a lone-CR (classic-Mac) file is
+        // seen as one line and does not fold (degrades to no folding; highlighting is unaffected).
+        const int nLines = static_cast<int>(stc->GetLineCount());
+        if (!folds.empty())
+        {
+            const int m = wxMin(static_cast<int>(folds.size()), nLines);
+            for (int line = 0; line < m; ++line) stc->SetFoldLevel(line, folds[line]);
+        }
+        else
+        {
+            for (int line = 0; line < nLines; ++line) stc->SetFoldLevel(line, wxSTC_FOLDLEVELBASE);
+        }
     }
     // Put the active buffer under a registered Scintillua language (Language-menu pick). Mirrors
     // route through setLexerForFile so tab switches re-apply it.
@@ -8029,7 +8096,12 @@ private:
                    _("wxNote\n\n"
                      "A fast, cross-platform text editor built on wxWidgets:\n"
                      "a native Scintilla editor with dark/light themes and plugin support.")),
-               0, wxALL, 16);
+               0, wxLEFT | wxRIGHT | wxTOP, 16);
+        // Version, from the project() version via CMake. Kept as a bare "vX.Y.Z" line (no translatable
+        // word) so it needs no per-language string and never drifts from a hardcoded copy.
+        auto* ver = new wxStaticText(&dlg, wxID_ANY, wxString::Format("v%s", WXN_VERSION));
+        ver->SetForegroundColour(wxColour(m_dark ? 0x9A9A9A : 0x707070));
+        s->Add(ver, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16);
         s->Add(dlg.CreateButtonSizer(wxOK), 0, wxALL | wxALIGN_RIGHT, 10);
         dlg.SetSizerAndFit(s);
         themeDialog(&dlg);

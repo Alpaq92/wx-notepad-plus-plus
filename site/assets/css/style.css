@@ -1818,3 +1818,83 @@ main {
   .timeline-text { max-width: 700px; }
 
 }
+
+
+
+
+
+/*-----------------------------------*\
+  #COMPARISON
+\*-----------------------------------*/
+
+.comparison { margin-block-start: 4px; }
+
+.compare-intro {
+  color: var(--light-gray);
+  font-size: var(--fs-6);
+  font-weight: var(--fw-300);
+  line-height: 1.7;
+  margin-block-end: 22px;
+}
+
+.compare-intro em { color: var(--white-2); font-style: normal; font-weight: var(--fw-500); }
+
+.compare-wrap { overflow-x: auto; }
+
+.compare-table {
+  width: 100%;
+  min-width: 460px;
+  border-collapse: collapse;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 13px 16px;
+  text-align: left;
+  font-size: var(--fs-6);
+  border-block-end: 1px solid var(--jet);
+}
+
+.compare-table thead th {
+  font-size: var(--fs-5);
+  font-weight: var(--fw-600);
+  color: var(--light-gray);
+  border-block-end: 2px solid var(--jet);
+}
+
+.compare-table tbody th {
+  font-weight: var(--fw-400);
+  color: var(--light-gray-70);
+  width: 36%;
+}
+
+.compare-table .c-wx {
+  color: var(--white-2);
+  font-weight: var(--fw-500);
+  background: hsla(134, 52%, 55%, 0.07);
+}
+
+.compare-table thead .c-head-wx {
+  color: var(--accent);
+  background: hsla(134, 52%, 55%, 0.07);
+  border-radius: 8px 8px 0 0;
+}
+
+.compare-table tbody tr:last-child .c-wx { border-block-end: none; border-radius: 0 0 8px 8px; }
+
+.compare-table .c-npp { color: var(--light-gray-70); }
+
+.c-plus { color: var(--accent); font-weight: var(--fw-600); }
+
+.compare-note {
+  margin-block-start: 24px;
+  padding: 16px 18px;
+  border: 1px solid var(--jet);
+  border-radius: 14px;
+  color: var(--light-gray);
+  font-size: var(--fs-6);
+  font-weight: var(--fw-300);
+  line-height: 1.7;
+}
+
+.compare-note strong { color: var(--white-2); font-weight: var(--fw-600); }

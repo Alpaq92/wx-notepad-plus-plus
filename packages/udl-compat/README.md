@@ -47,16 +47,22 @@ Only Scintillua constructs confirmed against real bundled lexers are emitted:
 | `Keywords1` | `M:add_rule('keyword1', M:tag(lexer.KEYWORD, lexer.word_match(...)))` |
 | `Keywords2`..`Keywords8` | same, each tagged `keyword2`..`keyword8` so themes colour the eight groups apart |
 | case-insensitive keywords | `lexer.word_match('…', true)` |
+| keyword prefix mode (`<Prefix>`) | `lpeg.Cmt` whole-word matcher testing the listed prefixes |
 | line comment (`Comments` pack) | `lexer.to_eol('//')` |
 | block comment (`Comments` pack) | `lexer.range('/*', '*/')` |
 | `Delimiters` set (open/close) | `lexer.range(open, close)` (string tag) |
 | `Delimiters` single-line set | `lexer.range(open, '\n', true)` |
 | numbers | `lexer.number` |
 | operators | `lpeg.S('+-*/…')` (LPeg char set) |
+| `Folders in code 1/2` (open/close) | a tagged `fold` rule + `M:add_fold_point('fold', marker, ±1)` → margin folding |
+| `Folders in comment` (open/close) | `M:add_fold_point(lexer.COMMENT, marker, ±1)` |
 
-Not every UDL feature has a clean Scintillua equivalent (nested delimiters, the
-`Folders in code` fold keywords, per-slot font styling); those are the subject of
-ongoing translation-fidelity work in this plugin.
+Not every UDL feature has a clean Scintillua equivalent (nested delimiters, per-slot
+font styling); those are the subject of ongoing translation-fidelity work in this plugin.
+The `Folders in code`/`in comment` fold keywords **do** translate now — code folding works
+for UDL-derived languages — with one known simplification: the `middle` keyword group
+(else/elif-style) is styled but treated as depth-neutral (full same-level-header behaviour
+would need Scintillua's `fold.scintillua.on.zero.sum.lines`).
 The translator's Lua-escaping and name-sanitizing are covered by the self-test, which
 also documents the exact expected output for a representative UDL.
 
@@ -113,12 +119,15 @@ use `lpeg.S`. The translator emits only constructs confirmed to run under real S
 
 **The runtime plugin (this package, done):**
 - `udl_compat_plugin.cpp` — on load it asks the host (`nib.paths`) for the user-data dir,
-  scans `userDefineLangs/`, parses each `userDefineLang.xml`, translates it, and registers
-  the result via `nib.langdef`. Built as `bin/nib/udl_compat.dll` (`.so`/`.dylib`) when
-  compiled as part of the wxNote build (top-level `add_subdirectory(packages/udl-compat)`).
+  scans `userDefineLangs/`, and for each `userDefineLang.xml` translates **every** `<UserLang>`
+  it contains (Notepad++'s main `userDefineLang.xml` bundles all of the user's languages as
+  siblings) and registers each via `nib.langdef`. Built as `bin/nib/udl_compat.dll`
+  (`.so`/`.dylib`) when compiled as part of the wxNote build (top-level
+  `add_subdirectory(packages/udl-compat)`).
 
-Ongoing fidelity work (constructs without a clean Scintillua equivalent — nested delimiters,
-`Folders in code` fold keywords, per-slot font styling) is tracked in
-[`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md). This package is deliberately
+`Folders in code`/`in comment` fold keywords now translate to Scintillua fold points, so
+UDL-derived languages fold. Ongoing fidelity work (the remaining constructs without a clean
+Scintillua equivalent — nested delimiters, per-slot font styling, and depth-neutral `middle`
+fold keywords) is tracked in [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md). This package is deliberately
 isolated as the one place that both knows the Notepad++ UDL format and emits Scintillua, and
 is scoped to eventually move to its own repository.

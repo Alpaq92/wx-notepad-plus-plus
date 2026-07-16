@@ -14,6 +14,7 @@
 
 #include "udl_scintillua.h"
 #include <string>
+#include <vector>
 
 namespace udlcompat {
 
@@ -22,6 +23,10 @@ namespace udlcompat {
 // Tolerates the two real container shapes: a <NotepadPlus> (or <wxNote>) root with
 // <UserLang> children, or a bare <UserLang> root.
 bool parseUserDefineLangXml(const std::string& xml, UdlDef& out, std::string* err = nullptr);
+
+// Parse EVERY <UserLang> element in the document (Notepad++'s main userDefineLang.xml holds all of
+// the user's languages as siblings). Skips malformed/nameless elements; empty result = none found.
+std::vector<UdlDef> parseAllUserDefineLangs(const std::string& xml);
 
 // Read an entire file into a string (binary). Returns "" if it cannot be opened.
 std::string readFileToString(const std::string& path);

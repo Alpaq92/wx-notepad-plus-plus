@@ -38,10 +38,13 @@ static void activate(NibHost* host, NibQueryFn query)
         const std::string xml = udlcompat::readFileToString(entry.path().string());
         if (xml.empty()) continue;
 
-        udlcompat::UdlDef udl;
-        if (!udlcompat::parseUserDefineLangXml(xml, udl)) continue;
-        const std::string lua = udlcompat::translateUdlToScintillua(udl);
-        langs->register_language(host, udl.name.c_str(), udl.ext.c_str(), lua.c_str());
+        // One file may define several languages (N++'s main userDefineLang.xml holds them all as
+        // sibling <UserLang> elements), so register each rather than just the first.
+        for (const udlcompat::UdlDef& udl : udlcompat::parseAllUserDefineLangs(xml))
+        {
+            const std::string lua = udlcompat::translateUdlToScintillua(udl);
+            langs->register_language(host, udl.name.c_str(), udl.ext.c_str(), lua.c_str());
+        }
     }
 }
 

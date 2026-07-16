@@ -53,12 +53,25 @@ public:
     // copying the whole buffer into a std::string on the STYLENEEDED hot path.
     std::vector<Token> lex(const std::string& name, const char* data, size_t len);
 
+    // Lex AND compute per-line fold levels in a single pass (one grammar match reused for both).
+    // Returns the tokens exactly like lex(); additionally, when `foldLevels` is non-null it is
+    // filled with one fold-level per line (index 0 = document line 0). It is left EMPTY when the
+    // lexer declares no fold points, so a caller can distinguish "this language doesn't fold" from
+    // "every line is at the base level". Each value is already in Scintilla's SC_FOLDLEVEL* bit
+    // layout (base 0x400, header 0x2000, white 0x1000) - pass it straight to SCI_SETFOLDLEVEL.
+    std::vector<Token> lexAndFold(const std::string& name, const char* data, size_t len,
+                                  std::vector<int>* foldLevels);
+
 private:
     // Map a display name to a collision-free lexer key (its `<key>.lua` filename and require()/cache
     // key). Distinct names that would sanitize to the same identifier (e.g. "C++" and "C--") get
     // distinct keys, so they never share a file or cached grammar. `create` mints a new unique key
     // for an unseen name; when false, an unregistered name returns "" (its lexer doesn't exist).
     std::string lexerKey(const std::string& name, bool create);
+
+    // Read a {tag, endpos, tag, endpos, ...} token table sitting on top of the Lua stack into
+    // `out` (in document order), then pop it. Shared by lex() and lexAndFold().
+    void readTokenTableTop(std::vector<Token>& out);
 
     lua_State*  L_ = nullptr;
     std::string writableDir_;
