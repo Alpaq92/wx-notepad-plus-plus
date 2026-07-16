@@ -57,7 +57,7 @@ inline wxMenu* buildMenuFromDefs(const MenuItemDef* items, size_t count, MenuReg
 // Builds the whole menu bar and populates `reg`. Eleven top-level menus: File, Edit, Selection, Go,
 // View, Document, Automation, Extensions, Settings, Window, Help. (The Phase B reshape had merged
 // Settings into Window for a round 10; it was split back out after user feedback that Preferences
-// under "Window" was a weird home.) Every IDM_* id and every item's internal wording/nesting is
+// under "Window" was a weird home.) Every command id and every item's internal wording/nesting is
 // unchanged; only which top-level menu owns what changed.
 inline void buildWxnMainMenu(wxMenuBar* mb, MenuRegistry& reg)
 {

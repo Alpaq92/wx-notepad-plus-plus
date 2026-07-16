@@ -42,7 +42,10 @@ Notepad++ is not a cross-platform program with a Windows build — it is a
 - It leans on Windows-only services throughout: the registry, shell
   integration, `SendMessage`-based IPC, Windows-specific file semantics.
 - The only genuinely portable pieces are the ones Notepad++ itself borrowed:
-  **Scintilla** (editing) and **Lexilla** (highlighting).
+  **Scintilla** (editing) and **Lexilla** (highlighting). wxNote adds one
+  more portable, permissively-licensed engine of its own for custom
+  languages — **Scintillua** (Lua + LPeg lexer grammars, MIT) — in place of
+  Notepad++'s Win32-era User-Defined-Language subsystem.
 
 A faithful port therefore means rewriting essentially every UI and platform
 file while keeping behavior identical — which *is* writing a new editor,
@@ -138,9 +141,11 @@ possible strings attached — including in places copyleft makes awkward,
 like other permissively-licensed projects. The relicense changed what
 *others* are allowed to do with the code; it changed nothing about what the
 project itself is: free, open source, and non-commercial in spirit either
-way. The one exception in what ships is the optional Notepad++ plugin
-bridge (and its never-shipped test fixture), which stay GPL because of what
-they reproduce — see "The plugin system" below and
+way. The exceptions in what ships are the two optional interoperability
+modules — the Notepad++ plugin bridge (`packages/npp-bridge/`, plus its
+never-shipped test fixture) and the Notepad++ UDL compatibility plugin
+(`packages/udl-compat/`) — which stay GPL because of the Notepad++ formats
+and ABIs they reproduce; see "The plugin system" below and
 [`LICENSING.md`](../LICENSING.md) for the precise per-component record.
 
 ## The plugin system
@@ -155,15 +160,24 @@ Plugins are first-class, and they are two-tier by design:
   an optional, Windows-only plugin (itself just a Nib plugin) that loads
   real, compiled Notepad++ plugin binaries by reproducing Notepad++'s plugin
   ABI and translating it to Nib calls. Because it is a Notepad++-ABI
-  derivative, it is the **only GPL part of the shipped application** — the
-  core never depends on it, ships and runs fine without it, and the module
-  is slated to move into its own repository. Delete `npp_bridge.dll` and
-  nothing else changes. (A never-shipped, Windows-only dev test fixture,
-  `packages/test_plugin/`, tracks the same GPL — see
-  [`LICENSING.md`](../LICENSING.md).)
+  derivative, it is **GPL** — the core never depends on it, ships and runs
+  fine without it, and the module is slated to move into its own repository.
+  Delete `npp_bridge.dll` and nothing else changes. (A never-shipped,
+  Windows-only dev test fixture, `packages/test_plugin/`, tracks the same GPL
+  — see [`LICENSING.md`](../LICENSING.md).)
+- **udl-compat** (`packages/udl-compat/`) is the other optional GPL Nib
+  plugin. wxNote's native custom-language engine is **Scintillua** (Lua/LPeg
+  lexer grammars, MIT), embedded in the Apache core; udl-compat is the
+  separate, cross-platform compatibility path that reads a user's legacy
+  Notepad++ `userDefineLang.xml` files, translates each into a Scintillua
+  lexer, and registers it via the new `nib.langdef` API. Because it is the
+  one place that reproduces Notepad++'s UDL format, it is **GPL-3.0-or-later**
+  and lives outside the Apache core; like npp-bridge it is optional and
+  scoped to move to its own repository (see
+  [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)).
 
 That split is the licensing strategy in miniature: everything original is
-permissive; the one deliberately Notepad++-shaped piece is isolated,
+permissive; the deliberately Notepad++-shaped pieces are isolated,
 optional, and honestly labeled.
 
 ## The goals, in short
@@ -173,8 +187,12 @@ optional, and honestly labeled.
   afterthoughts.
 - **No Notepad++ code.** Behavior compatibility (file formats, command ids,
   plugin loading) comes from clean-room reimplementation, never from copying.
+  Even the menus are wxNote's own: the item ordering follows its own
+  frequency/affinity scheme, and only the frozen command ids and shared
+  command labels coincide with Notepad++.
 - **Permissive by default.** Apache-2.0 core; in everything that ships, GPL
-  is confined to the one optional interoperability module.
+  is confined to the optional interoperability modules (the Notepad++
+  plugin bridge and the UDL-compatibility plugin).
 - **Plugins everywhere.** A first-class, cross-platform plugin API, with
   legacy Notepad++ plugin support as an optional Windows bonus rather than
   an architectural constraint.

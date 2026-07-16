@@ -7,7 +7,7 @@
 // or regrouping items is now a matter of moving table rows/pointers around
 // in the per-menu menu_data_*.h files, not restructuring nested C++ calls.
 //
-// Every IDM_* id here is an existing constant from src/command_ids.h, the
+// Every kCmd* id here is an existing constant from src/command_ids.h, the
 // core's own authoritative id table. Those values are FROZEN, not free to
 // renumber: real Notepad++ plugin binaries invoke commands by posting these
 // exact numeric ids via NPPM_MENUCOMMAND through the optional GPL bridge's
@@ -44,7 +44,7 @@ using LabelFn = const wxString (*)();
 struct MenuItemDef
 {
     MenuItemKind kind = MenuItemKind::Normal;
-    int id = 0;                                // IDM_*/wxID_*; unused for Separator/DynamicSlot
+    int id = 0;                                // kCmd*/wxID_*; unused for Separator/DynamicSlot
     LabelFn label = nullptr;                   // unused for Separator/DynamicSlot
     const char* symbolicName = nullptr;        // stable ascii key; required on Submenu and
                                                 // DynamicSlot rows, optional (but recommended)

@@ -4,26 +4,29 @@
 #include "command_ids.h"
 
 static const MenuItemDef kToolsMd5Items[] = {
-    { MenuItemKind::Normal, IDM_TOOL_MD5_GENERATE,               &Label::ToolsGenerate,             "tools.md5.generate" },
-    { MenuItemKind::Normal, IDM_TOOL_MD5_GENERATEFROMFILE,       &Label::ToolsGenerateFromFile,      "tools.md5.generateFromFile" },
-    { MenuItemKind::Normal, IDM_TOOL_MD5_GENERATEINTOCLIPBOARD,  &Label::ToolsGenerateIntoClipboard, "tools.md5.generateIntoClipboard" },
+    { MenuItemKind::Normal, kCmdToolMd5Generate,               &Label::ToolsGenerate,             "tools.md5.generate" },
+    { MenuItemKind::Normal, kCmdToolMd5GenerateFromFile,       &Label::ToolsGenerateFromFile,      "tools.md5.generateFromFile" },
+    { MenuItemKind::Normal, kCmdToolMd5GenerateIntoClipboard,  &Label::ToolsGenerateIntoClipboard, "tools.md5.generateIntoClipboard" },
 };
 static const MenuItemDef kToolsSha1Items[] = {
-    { MenuItemKind::Normal, IDM_TOOL_SHA1_GENERATE,               &Label::ToolsGenerate,             "tools.sha1.generate" },
-    { MenuItemKind::Normal, IDM_TOOL_SHA1_GENERATEFROMFILE,       &Label::ToolsGenerateFromFile,      "tools.sha1.generateFromFile" },
-    { MenuItemKind::Normal, IDM_TOOL_SHA1_GENERATEINTOCLIPBOARD,  &Label::ToolsGenerateIntoClipboard, "tools.sha1.generateIntoClipboard" },
+    { MenuItemKind::Normal, kCmdToolSha1Generate,               &Label::ToolsGenerate,             "tools.sha1.generate" },
+    { MenuItemKind::Normal, kCmdToolSha1GenerateFromFile,       &Label::ToolsGenerateFromFile,      "tools.sha1.generateFromFile" },
+    { MenuItemKind::Normal, kCmdToolSha1GenerateIntoClipboard,  &Label::ToolsGenerateIntoClipboard, "tools.sha1.generateIntoClipboard" },
 };
 static const MenuItemDef kToolsSha256Items[] = {
-    { MenuItemKind::Normal, IDM_TOOL_SHA256_GENERATE,               &Label::ToolsGenerate,             "tools.sha256.generate" },
-    { MenuItemKind::Normal, IDM_TOOL_SHA256_GENERATEFROMFILE,       &Label::ToolsGenerateFromFile,      "tools.sha256.generateFromFile" },
-    { MenuItemKind::Normal, IDM_TOOL_SHA256_GENERATEINTOCLIPBOARD,  &Label::ToolsGenerateIntoClipboard, "tools.sha256.generateIntoClipboard" },
+    { MenuItemKind::Normal, kCmdToolSha256Generate,               &Label::ToolsGenerate,             "tools.sha256.generate" },
+    { MenuItemKind::Normal, kCmdToolSha256GenerateFromFile,       &Label::ToolsGenerateFromFile,      "tools.sha256.generateFromFile" },
+    { MenuItemKind::Normal, kCmdToolSha256GenerateIntoClipboard,  &Label::ToolsGenerateIntoClipboard, "tools.sha256.generateIntoClipboard" },
 };
 static const MenuItemDef kToolsSha512Items[] = {
-    { MenuItemKind::Normal, IDM_TOOL_SHA512_GENERATE,               &Label::ToolsGenerate,             "tools.sha512.generate" },
-    { MenuItemKind::Normal, IDM_TOOL_SHA512_GENERATEFROMFILE,       &Label::ToolsGenerateFromFile,      "tools.sha512.generateFromFile" },
-    { MenuItemKind::Normal, IDM_TOOL_SHA512_GENERATEINTOCLIPBOARD,  &Label::ToolsGenerateIntoClipboard, "tools.sha512.generateIntoClipboard" },
+    { MenuItemKind::Normal, kCmdToolSha512Generate,               &Label::ToolsGenerate,             "tools.sha512.generate" },
+    { MenuItemKind::Normal, kCmdToolSha512GenerateFromFile,       &Label::ToolsGenerateFromFile,      "tools.sha512.generateFromFile" },
+    { MenuItemKind::Normal, kCmdToolSha512GenerateIntoClipboard,  &Label::ToolsGenerateIntoClipboard, "tools.sha512.generateIntoClipboard" },
 };
 
-// Phase B reshape: Tools is no longer a standalone top-level menu - it had no items of its own
-// besides these 4 hash submenus, which now lift directly into the new Automation menu (see
-// menu_data_automation.h) instead of nesting behind a now-redundant "Tools" wrapper.
+// Hash generators for the Automation menu. wxNote surfaces these strongest-first:
+// the presentation order (SHA-256, SHA-512, SHA-1, MD5) is set where these arrays are
+// listed in menu_data_automation.h, leading with the algorithms wxNote recommends today
+// and demoting the legacy digests. Array-definition order here is irrelevant to that
+// ordering - it only supplies the four submenus' contents. Each submenu keeps the
+// canonical generate / from-file / into-clipboard sequence untouched.

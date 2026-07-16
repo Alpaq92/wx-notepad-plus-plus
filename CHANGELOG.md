@@ -3,6 +3,51 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.0] - 2026-07-16
+
+### Added
+- **Native custom-language engine (Scintillua).** wxNote now has its own language engine
+  (`src/scintillua_engine.{h,cpp}`, `scintillua::Engine`, Apache-2.0) that embeds Lua 5.4.7 +
+  LPeg 1.1.0 + Scintillua's `lexer.lua` (all MIT), built as a `lua_lpeg` static library fetched and
+  compiled by CMake on first configure. Custom languages are defined as Scintillua Lua/LPeg lexer
+  grammars run through a Scintilla container lexer whose tags map to editor styles - a permissively
+  licensed, cross-platform replacement for the Notepad++-style built-in UDL engine (removed below).
+  See `docs/ARCHITECTURE.md`.
+- **Two new Nib plugin capabilities.** `nib.langdef/1` lets a plugin register a language
+  (`register_language(host, name, exts, scintillua_lua)`); `nib.paths/1` exposes the user-data
+  directory (`user_data_dir(host, buf, cap)`) so a plugin can find `userDefineLangs/`. Both are in
+  `include/nib/nib.h`.
+- **Legacy UDL import via the optional `udl-compat` plugin.** Existing Notepad++
+  `userDefineLang.xml` files are supported through a new optional **GPL-3.0-or-later** module,
+  `packages/udl-compat`: it parses each UDL, translates it into a Scintillua lexer, and registers it
+  with the core through `nib.langdef` (built as `bin/nib/udl_compat.dll`). It also ships a standalone
+  `udl2scintillua` converter CLI and unit + round-trip tests. Because it is the one place that knows
+  the Notepad++ UDL format, it is kept GPL and isolated from the Apache-2.0 core (and is scoped to
+  move to its own repository).
+
+### Changed
+- **Menu ordering is now wxNote's own.** The within-menu item ordering and grouping across
+  `src/menu_data_*.h` were reorganized into wxNote's own frequency/affinity scheme instead of
+  mirroring Notepad++'s resource-file order (e.g. the View menu now leads with the panels; Edit's
+  submenus are ordered by everyday frequency; the Go menu is re-clustered find→navigate→go-to). This
+  is a pure presentation change: every command id and label is preserved (verified as an identical
+  470-entry set) and command dispatch is id-based, so nothing behaves differently - only the on-screen
+  order does. Universal editor conventions (Undo/Redo, Cut/Copy/Paste, EOL order) are kept as-is. See
+  `docs/ARCHITECTURE.md`.
+- **Command-id table regenerated as original constants.** `src/command_ids.h` was rewritten as an
+  original table of `kCmd*` constants (grouped by wxNote's own menus, frozen numeric values pinned by
+  `static_assert`) rather than reproducing Notepad++'s `menuCmdID.h` layout. The numeric values stay
+  identical because the GPL `npp-bridge` forwards plugin `NPPM_MENUCOMMAND` requests by those ids; the
+  names, formatting, and organization are now wxNote's own (`docs/ARCHITECTURE.md`).
+
+### Removed
+- **The built-in Notepad++-style User-Defined Language subsystem.** The in-app multi-tab "Define your
+  language..." editor dialog, the per-style Styler popups, and all `userDefineLang.xml`
+  loading/persistence were removed from the Apache-2.0 core (`src/udl.h` and `src/udl_lexer.h`
+  deleted). Custom syntax highlighting is now provided by the Scintillua engine above; users who have
+  existing Notepad++ UDL files can keep them via the optional `udl-compat` plugin. The core no longer
+  contains any Notepad++ UDL-format code.
+
 ## [0.7.0] - 2026-07-11
 
 ### Added

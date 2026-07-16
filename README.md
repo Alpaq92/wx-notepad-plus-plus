@@ -5,8 +5,9 @@
 > ⚠️ Experimental software, under active development.
 
 wxNote is built on wxWidgets' `wxStyledTextCtrl` (**Scintilla + Lexilla**) and runs natively on
-Windows, Linux, and macOS from one codebase: tabbed editing, split views, theming, User-Defined
-Languages, macros, an integrated terminal, session restore, and full UI localization. Plugins are
+Windows, Linux, and macOS from one codebase: tabbed editing, split views, theming, a native
+custom-language engine (Scintillua), macros, an integrated terminal, session restore, and full UI
+localization. Plugins are
 first-class via the project's own permissive, cross-platform **Nib API**; legacy Win32 Notepad++-ABI
 plugin binaries are additionally supported on Windows through an optional GPL bridge plugin (see
 [Plugins](#plugins) below).
@@ -24,8 +25,10 @@ Linux/macOS builds are structured and CI-wired but still being validated.
 
 **Implemented:** tabbed editor with per-tab Scintilla documents, a **split second view**
 (MAIN | SUB — Move/Clone to Other View, with the split collapsing when a pane empties), syntax
-highlighting (Lexilla), a full **User-Defined Language** system (multi-tab dialog, per-style Styler
-popups, `userDefineLangs/` persistence, `userDefineLang.xml`-compatible), find/replace and
+highlighting (Lexilla), a **native custom-language engine** — **Scintillua** (Lua 5.4.7 + LPeg 1.1.0
+lexer grammars run through a Scintilla container lexer; see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)), with legacy Notepad++ `userDefineLang.xml`
+files importable via the optional GPL `udl-compat` plugin (see [Plugins](#plugins)), find/replace and
 find/replace-in-files, an **incremental search bar** (match-case / whole-word / regex toggles, live
 highlight-all, and an n-of-m match counter), **find-driven multi-cursor** (Select All Occurrences / Add
 Next), Go-to-line, dark mode, auto-indent / brace-match / smart-highlight, bookmarks, a **Document Map**
@@ -55,10 +58,20 @@ menu, and translates `NPPM_*` / `FuncItem` / `SCNotification` to and from Nib on
 this bridge reproduces Notepad++'s ABI, it is licensed **GPL-3.0-or-later**, kept isolated from the
 otherwise Apache-2.0 core (see [`LICENSING.md`](LICENSING.md)).
 
+Legacy Notepad++ **User-Defined Languages** (`userDefineLang.xml`) are supported through a second
+optional plugin, `packages/udl-compat`: it parses your existing UDL files, translates each into a
+Scintillua Lua/LPeg lexer, and registers it with the core via the new `nib.langdef` API (it also
+ships a standalone `udl2scintillua` converter CLI). Because it knows the Notepad++ UDL format it is
+licensed **GPL-3.0-or-later** and kept isolated from the Apache-2.0 core, and is built as
+`bin/nib/udl_compat.dll` (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)).
+
 ## Building
 
 Requires CMake ≥ 3.20, a C++17 compiler, and Ninja. wxWidgets 3.3.1 is fetched and built
 automatically on first configure (expect that one to take a while; builds are incremental after).
+The native language engine's runtime — Lua 5.4.7 + LPeg 1.1.0 (built as a `lua_lpeg` static
+library) plus Scintillua's `lexer.lua` — is likewise fetched automatically on first configure, so
+the initial configure needs network access.
 
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -81,17 +94,18 @@ Plugins:
 ## Layout
 
 ```
-src/                 the wxNote application (main.cpp + the data-driven menu engine, UDL system,
-                     terminal panel, command_ids.h, platform shims; src/plugins/nib_test_plugin is
-                     a Nib-native test plugin)
+src/                 the wxNote application (main.cpp + the data-driven menu engine, the Scintillua
+                     language engine (scintillua_engine.{h,cpp}), terminal panel, command_ids.h,
+                     platform shims; src/plugins/nib_test_plugin is a Nib-native test plugin)
 packages/            npp-bridge (optional GPL Notepad++-ABI bridge, Windows-only, itself a Nib plugin),
+                     udl-compat (optional GPL Nib plugin: imports legacy Notepad++ UDLs as Scintillua lexers),
                      test_plugin (a Notepad++-ABI test fixture, Windows-only, never shipped)
 include/nib/         the project's own permissive, cross-platform plugin API (nib.h)
 include/npp-compat/  clean-room Notepad++-ABI headers (consumed only by packages/npp-bridge and
                      packages/test_plugin — the core includes nothing from here)
 resources/           toolbar icons (icons/ = Tabler default, icons-solar/, icons-iconpark/), themes,
                      default styler, fonts, locale/ (8-language i18n catalogs)
-third_party/         scintilla + lexilla (both permissive, HPND), wxbf (wxBorderlessFrame, wxWindows Licence)
+third_party/         scintilla + lexilla (both permissive, HPND), lua + lpeg + scintillua (the custom-language engine, all MIT), wxbf (wxBorderlessFrame, wxWindows Licence)
 installer/           packaging scripts: windows/ (NSIS), linux/ (AppImage, .deb, .rpm, Flatpak), macos/ (.dmg)
 docs/                GOALS.md (why the project exists), ARCHITECTURE.md (how the editor is put
                      together), CREDITS.md (everything used or consulted during development)
@@ -139,10 +153,13 @@ code/licensing ground rules.
 
 ## License
 
-**Apache License 2.0**, with one exception in what ships: the optional `packages/npp-bridge/` plugin
-(which lets real compiled Notepad++ plugins load) stays **GPL-3.0-or-later**, since it reproduces
-Notepad++'s plugin ABI for interoperability — its never-shipped, Windows-only test fixture
-`packages/test_plugin/` tracks the same GPL license for the same reason. wxNote is an
+**Apache License 2.0**, with two exceptions in what ships: the optional `packages/npp-bridge/` plugin
+(which lets real compiled Notepad++ plugins load) and the optional `packages/udl-compat/` plugin
+(which imports legacy Notepad++ `userDefineLang.xml` files by translating them to Scintillua lexers)
+both stay **GPL-3.0-or-later** — npp-bridge because it reproduces Notepad++'s plugin ABI, udl-compat
+because it knows the Notepad++ UDL format — kept isolated from the otherwise Apache-2.0 core; the
+never-shipped, Windows-only test fixture `packages/test_plugin/` tracks the same GPL license for the
+same reason. wxNote is an
 **independent project** — it copies no Notepad++ source
 code; Notepad++ was used only as a behavioral reference and a test target, and wxNote is not
 affiliated with or endorsed by it (see [`NOTICE`](NOTICE)). The project started on GPL v3 and
@@ -158,6 +175,7 @@ design references — is in [`docs/CREDITS.md`](docs/CREDITS.md). The headliners
 
 - [Notepad++](https://github.com/notepad-plus-plus/notepad-plus-plus) — Don Ho (GPL v3): the editor whose behavior served as the original reference and test target. Its plugin ABI is reimplemented **clean-room and cross-platform** in our own `include/npp-compat/`, consumed only by the optional `packages/npp-bridge` bridge — no Notepad++ source is used (see [`LICENSING.md`](LICENSING.md)).
 - [Scintilla & Lexilla](https://www.scintilla.org/) — Neil Hodgson (permissive): the editing / syntax-highlighting engine.
+- [Lua](https://www.lua.org/) 5.4.7 (MIT), [LPeg](http://www.inf.puc-rio.br/~roberto/lpeg/) 1.1.0 (MIT), and [Scintillua](https://github.com/orbitalquark/scintillua) — © Mitchell (MIT): embedded to power wxNote's native custom-language engine.
 - [wxWidgets](https://www.wxwidgets.org/): the cross-platform UI toolkit.
 - Toolbar icon sets (Settings > Preferences > General > Toolbar icon style — see each set's own CREDITS.md for exact modifications):
   - [Tabler Icons](https://tabler.io/icons) (MIT) + [Open Color](https://yeun.github.io/open-color/) (MIT) — the default line-icon set (`resources/icons/CREDITS.md`).

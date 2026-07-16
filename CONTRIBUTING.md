@@ -31,9 +31,12 @@ both are short and will save you time.
 
 ## Building from source
 
-Requires CMake ≥ 3.20, a C++17 compiler, and Ninja. The first configure
-fetches and builds wxWidgets 3.3.1 from source — expect it to take a while;
-afterwards builds are incremental.
+Requires CMake ≥ 3.20, a C and C++17 compiler, and Ninja. The first
+configure fetches and builds wxWidgets 3.3.1 from source, and also fetches
+Lua 5.4.7 + LPeg 1.1.0 (built as the `lua_lpeg` static library for the
+Scintillua language engine) and downloads Scintillua's `lexer.lua` — so the
+first configure needs network access. Expect it to take a while; afterwards
+builds are incremental.
 
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -60,11 +63,16 @@ on CI), cap parallelism: `cmake --build build --target wxnote --parallel 2`.
   legs; the ARM legs build on every PR but aren't merge-blocking yet).
 - Keep PRs focused: one fix or feature per PR. Mechanical churn (renames,
   reformatting) separate from behavior changes.
-- Describe what you changed and *how you verified it* — there is no unit-test
-  suite; verification means building and exercising the affected feature in
-  the running app on at least your own platform. Cross-platform behavior you
-  can't test locally is what the CI matrix and review are for; say what you
-  couldn't test.
+- Describe what you changed and *how you verified it*. The app itself has no
+  unit-test suite, so for UI/editor work verification means building and
+  exercising the affected feature in the running app on at least your own
+  platform. The `packages/udl-compat` translator is the exception: it has
+  unit + roundtrip tests you should run/extend when touching it —
+  `cmake -S packages/udl-compat -B build-udltest && cmake --build build-udltest`
+  then `ctest --test-dir build-udltest --output-on-failure` (add
+  `-DUDL_COMPAT_SCINTILLUA_TEST=ON` to also run the end-to-end
+  Lua/LPeg/Scintillua lexing test). Cross-platform behavior you can't test
+  locally is what the CI matrix and review are for; say what you couldn't test.
 
 ## Code guidelines
 
@@ -92,7 +100,7 @@ on CI), cap parallelism: `cmake --build build --target wxnote --parallel 2`.
   strings fall back to English, so a missing translation degrades
   gracefully — but please don't ship new UI strings without at least the
   `.pot` entry.
-- **Files the app writes at runtime** (settings, recovery, UDLs) go through
+- **Files the app writes at runtime** (settings, recovery, session) go through
   `wxConfig` or the user-data directory — never next to the executable,
   which is read-only on installed builds.
 
@@ -115,9 +123,9 @@ for both header styles (kept third-party and first-party regenerated).
 
 ## Licensing of contributions
 
-wxNote's core is **Apache-2.0**; the optional `packages/npp-bridge/` and
-`packages/test_plugin/` modules are **GPL-3.0-or-later** (see
-[`LICENSING.md`](LICENSING.md) for why). Contributions are accepted under
+wxNote's core is **Apache-2.0**; the optional `packages/npp-bridge/`,
+`packages/test_plugin/`, and `packages/udl-compat/` modules are
+**GPL-3.0-or-later** (see [`LICENSING.md`](LICENSING.md) for why). Contributions are accepted under
 the license of the component they touch — inbound = outbound. By submitting
 a PR you agree your contribution is licensed accordingly; no CLA, no
 copyright assignment.

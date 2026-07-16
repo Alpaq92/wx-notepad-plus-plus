@@ -142,8 +142,7 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 #include "nib.h"               // our own permissive, cross-platform plugin API (Nib)
 #include "terminal_panel.h"    // View > Show Terminal - bottom multi-tab shell panel (defines myID_VIEW_TERMINAL, used by menu_data_view.h below)
 #include "menu_builder.h"      // data-driven menu bar builder (menu_model.h/menu_data_*.h) - replaces the old inline menu construction
-#include "udl.h"               // User-Defined Language data model + userDefineLang.xml (de)serialization
-#include "udl_lexer.h"         // User-Defined Language: live container-lexer styling/folding engine
+#include "scintillua_engine.h" // embedded Lua+LPeg+Scintillua engine (the native language-definition engine)
 
 static const int  MARK_BOOKMARK = 2;      // a free Scintilla marker number for bookmarks
 static const int  MARK_INDIC    = 9;      // indicator number for "Mark All" highlights (Find dialog)
@@ -151,7 +150,7 @@ static const int  SMART_INDIC   = 10;     // indicator number for smart-highligh
 static const int  MARK_STYLE_BASE = 21;   // "Mark All Ext 1-5" style indicators (21..25) - the 5 mark-style colours
 static const unsigned MARK_STYLE_COLOUR[5] = { 0x1F90FF, 0xE0A020, 0x50B050, 0xC060C0, 0x30B0C0 };  // BGR: orange, blue, green, purple, olive
 static const int  URL_INDIC = 11;         // clickable-URL underline indicator
-enum { myID_TIMER = 60000, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER, myID_MONTIMER };   // fixed ids, above the IDM_* range
+enum { myID_TIMER = 60000, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER, myID_MONTIMER };   // fixed ids, above the kCmd* range
 // UI language selection - shared by the top-level Localization menu and Preferences > General.
 // Endonyms are ALWAYS shown in their own language (never translated); index 0 is "System default".
 static const int myID_UILANG_FIRST = 60100;   // 10 radio items (myID_UILANG_FIRST + 0..9), clear of the 61xxx/62xxx/63xxx bases
@@ -228,7 +227,7 @@ public:
     bool     langForced = false;           // true once the user picks a language from the Language menu
     wxString forcedLexer;                  // that pick's Lexilla lexer name ("" = forced Normal Text)
     wxString forcedName;                   // that pick's display label for the status bar, e.g. "C++"
-    int      udlIndex = -1;                // index into MainFrame::m_udls when a User-Defined Language is active (-1 = none)
+    wxString sciLang;                      // name of a registered Scintillua language when active ("" = none); container-lexed via m_scintillua
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
@@ -1373,7 +1372,8 @@ struct NibCmd { std::string id, title; NibCommandFn fn; void* user; };
 static std::vector<NibCmd>            g_nibCommands;
 struct NibLoaded { const NibPluginApi* api; wxDynamicLibrary* lib; };   // a loaded Nib plugin (kept for teardown)
 static std::vector<NibLoaded> g_nibLibs;
-static const int NIB_CMD_BASE = 63000;   // Nib command menu ids (clear of IDM_*, doc-list 61xxx, bridge plugins 62xxx)
+static const int NIB_CMD_BASE = 63000;   // Nib command menu ids (clear of kCmd*, doc-list 61xxx, bridge plugins 62xxx)
+static const int kSciLangMenuBase = 63500;   // Language-menu ids for registered Scintillua languages (clear of NIB_CMD_BASE)
 
 static sptr_t nibSci(UINT m, uptr_t w = 0, sptr_t l = 0)
 { return g_view ? static_cast<sptr_t>(g_view->SendMsg(static_cast<int>(m), static_cast<wxUIntPtr>(w), static_cast<wxIntPtr>(l))) : 0; }
@@ -1437,6 +1437,17 @@ static void  nibW32Dock(NibHost*, void* h, const char* t, int e) { if (g_nibDock
 static void  nibW32ShowDock(NibHost*, void* h, int v)            { if (g_nibShowDock)   g_nibShowDock(h, v != 0); }
 static const NibWin32Api g_nibWin32Api = { 1, sizeof(NibWin32Api), nibW32Main, nibW32EdMain, nibW32EdSec, nibW32Menu, nibW32Dock, nibW32ShowDock };
 #endif
+// nib.langdef/1 - a plugin registers a language by handing the host Scintillua lexer source.
+static std::function<int(const char*, const char*, const char*)> g_nibRegisterLanguage;
+static int nibLangRegister(NibHost*, const char* name, const char* exts, const char* lua)
+{ return (g_nibRegisterLanguage && name && lua) ? g_nibRegisterLanguage(name, exts ? exts : "", lua) : 0; }
+static const NibLangDefApi g_nibLangDefApi = { 1, sizeof(NibLangDefApi), nibLangRegister };
+
+// nib.paths/1 - well-known host directories.
+static std::function<int(char*, int)> g_nibUserDataDir;
+static int nibPathsUserData(NibHost*, char* b, int c) { return g_nibUserDataDir ? g_nibUserDataDir(b, c) : 0; }
+static const NibPathsApi g_nibPathsApi = { 1, sizeof(NibPathsApi), nibPathsUserData };
+
 // nib.host/1
 static const char* nibHostName(NibHost*) { return "wxNote"; }
 static uint32_t     nibHostAbi(NibHost*) { return NIB_ABI_VERSION; }
@@ -1457,12 +1468,22 @@ static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_COMMANDS) == 0) return &g_nibCommandsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_EVENTS)   == 0) return &g_nibEventsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PANELS)   == 0) return &g_nibPanelsApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_LANGDEF)  == 0) return &g_nibLangDefApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PATHS)    == 0) return &g_nibPathsApi;
 #ifdef __WXMSW__
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_WIN32)    == 0) return &g_nibWin32Api;
 #endif
     return nullptr;
 }
 static void nibLog(NibHost*, int, const char* msg) { if (msg) wxLogDebug("[nib] %s", msg); }
+
+// Copy a UTF-8 string into a (buf, cap) out-param (NUL-terminated if it fits); returns the byte
+// length excluding the NUL. The shared shape of the nib.* "give me a path/dir" callbacks.
+static int nibCopyUtf8(const std::string& s, char* b, int c)
+{
+    if (b && c > 0) { int n = static_cast<int>(s.size()); if (n > c - 1) n = c - 1; std::memcpy(b, s.data(), static_cast<size_t>(n)); b[n] = 0; }
+    return static_cast<int>(s.size());
+}
 
 // Load Nib plugins from <exe>/nib/ via wxDynamicLibrary (portable: .dll / .so / .dylib).
 static void loadNibPlugins()
@@ -1817,7 +1838,6 @@ public:
         m_dark = dark;          // chrome darkness is fixed for this process (restart-to-apply)
         loadSettings();         // restore preferences incl. the chosen editor theme (before loadTheme reads m_themeName)
         loadTheme();            // parse the active theme XML for exact colours
-        loadAllUdls();          // parse any saved User-Defined Languages (Language > User Defined Language)
         { long z = 0; wxConfigBase::Get()->Read("Zoom", &z, 0L); m_zoom = static_cast<int>(z); }   // restore zoom
         // Seed a concrete paper size/orientation so File > Print's page geometry is never (0,0) before the
         // user has ever opened the print dialog - a fresh wxPrintData's paper id doesn't resolve to a size
@@ -1880,13 +1900,16 @@ public:
         g_nibPanelShow = [this](void* p, bool v) {
             wxAuiPaneInfo& pi = m_aui.GetPane(static_cast<wxWindow*>(p)); if (pi.IsOk()) { pi.Show(v); m_aui.Update(); }
         };
+        g_nibRegisterLanguage = [this](const char* n, const char* e, const char* lua) -> int {
+            return registerScintilluaLanguage(wxString::FromUTF8(n), wxString::FromUTF8(e ? e : ""), wxString::FromUTF8(lua ? lua : ""));
+        };
+        g_nibUserDataDir = [this](char* b, int c) -> int { return nibCopyUtf8(userDataDir().utf8_string(), b, c); };
         g_nibDocCount      = [this]() -> int { const int n = (m_main.tabs ? (int)m_main.tabs->GetPageCount() : 0) + (m_sub.tabs ? (int)m_sub.tabs->GetPageCount() : 0); return n > 0 ? n : 1; };   // across BOTH views
         g_nibDocActivePath = [this](char* b, int c) -> int {   // active document's full path (UTF-8); 0 if untitled
             EditorPage* p = activePage();
             const std::string u = (p ? p->path : wxString()).utf8_string();
             if (u.empty()) return 0;
-            if (b && c > 0) { int n = static_cast<int>(u.size()); if (n > c - 1) n = c - 1; std::memcpy(b, u.data(), static_cast<size_t>(n)); b[n] = 0; }
-            return static_cast<int>(u.size());
+            return nibCopyUtf8(u, b, c);
         };
         g_nibDocOpen = [this](const char* p) -> int { if (!p) return 0; openPath(wxString::FromUTF8(p)); return 1; };
         g_nibDocSave = [this]() -> int { onSave(); return 1; };
@@ -1897,9 +1920,7 @@ public:
                 for (size_t i = 0; i < nb->GetPageCount(); ++i) {
                     EditorPage* pg = static_cast<EditorPage*>(nb->GetPage(i));
                     if (reinterpret_cast<intptr_t>(pg) != id) continue;
-                    const std::string u = pg->path.utf8_string();
-                    if (b && c > 0) { int n = static_cast<int>(u.size()); if (n > c - 1) n = c - 1; std::memcpy(b, u.data(), static_cast<size_t>(n)); b[n] = 0; }
-                    return static_cast<int>(u.size());
+                    return nibCopyUtf8(pg->path.utf8_string(), b, c);
                 }
             }
             return 0;
@@ -2207,7 +2228,7 @@ private:
         v.stc->Bind(wxEVT_STC_ZOOM,             &WxnShellFrameT::onStcZoom,        this);
         v.stc->Bind(wxEVT_STC_MODIFIED,         &WxnShellFrameT::onStcModified,    this);
         v.stc->Bind(wxEVT_STC_MACRORECORD,      &WxnShellFrameT::onMacroRecord,    this);   // capture commands while recording a macro
-        v.stc->Bind(wxEVT_STC_STYLENEEDED,      &WxnShellFrameT::onStcStyleNeeded, this);   // container-lexed User-Defined Language buffers only (see udl_lexer.h)
+        v.stc->Bind(wxEVT_STC_STYLENEEDED,      &WxnShellFrameT::onStcStyleNeeded, this);   // container-lexed Scintillua-language buffers only
         v.stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev); e.Skip(); });
         v.stc->Bind(wxEVT_CONTEXT_MENU,         &WxnShellFrameT::onStcContextMenu, this);
         v.stc->Bind(wxEVT_SET_FOCUS, [this, vp = &v](wxFocusEvent& e) { onViewFocus(vp); e.Skip(); });   // focus -> this view becomes active
@@ -2748,7 +2769,7 @@ private:
     void saveProjectXml(const wxString& path)
     {
         wxXmlDocument doc;
-        auto* npp = new wxXmlNode(wxXML_ELEMENT_NODE, "NotepadPlus");   // the workspace XML root tag (existing workspace files keep loading)
+        auto* npp = new wxXmlNode(wxXML_ELEMENT_NODE, "wxNote");   // loadProjectXml never checks the root's own name, so old <NotepadPlus>-rooted workspace files still load
         doc.SetRoot(npp);
         auto* proj = new wxXmlNode(wxXML_ELEMENT_NODE, "Project");
         proj->AddAttribute("name", m_projPanel->GetItemText(m_projPanel->GetRootItem()));
@@ -2926,12 +2947,12 @@ private:
         if (pi.IsOk()) { pi.Show(); m_aui.Update(); }
         setStatus(0, wxString::Format(_("Workspace: %s"), root)); m_hint = true;
     }
-    void openFolderAsWorkspace()   // IDM_FILE_OPENFOLDERASWORKSPACE - pick any folder
+    void openFolderAsWorkspace()   // kCmdFileOpenFolderAsWorkspace - pick any folder
     {
         wxDirDialog dlg(this, _("Select Folder as Workspace"), curPath().empty() ? wxString() : wxFileName(curPath()).GetPath());
         if (dlg.ShowModal() == wxID_OK) showFileBrowserRooted(dlg.GetPath());
     }
-    void containingFolderAsWorkspace()   // IDM_FILE_CONTAININGFOLDERASWORKSPACE - the active file's own folder
+    void containingFolderAsWorkspace()   // kCmdFileContainingFolderAsWorkspace - the active file's own folder
     {
         // Untitled buffer: root the workspace at the working directory (same fallback as the rest of the
         // Open Containing Folder submenu) rather than nagging about saving first.
@@ -3192,7 +3213,8 @@ private:
     }
 
     // ----- sessions (File > Save / Load Session) ------------------------
-    // Session XML: <NotepadPlus><Session><mainView><File .../></mainView></Session>.
+    // Session XML: <wxNote><Session><mainView><File .../></mainView></Session>. loadSession never
+    // checks the root's own tag name, so old <NotepadPlus>-rooted session files still load fine.
     // Beyond the file list, each entry persists what's needed to restore the *editing position*, not
     // just the document set: caret position, first-visible line (scroll), and bookmark lines.
     void saveSession()
@@ -3202,7 +3224,7 @@ private:
         if (d.ShowModal() != wxID_OK) return;
         const int active = m_tabs->GetSelection();
         wxXmlDocument doc;
-        auto* root = new wxXmlNode(wxXML_ELEMENT_NODE, "NotepadPlus");
+        auto* root = new wxXmlNode(wxXML_ELEMENT_NODE, "wxNote");
         auto* sess = new wxXmlNode(wxXML_ELEMENT_NODE, "Session"); sess->AddAttribute("activeView", "0");
         auto* view = new wxXmlNode(wxXML_ELEMENT_NODE, "mainView");
         int saved = 0, sessActive = 0;
@@ -3908,7 +3930,7 @@ private:
         if (keepActive) { const int idx = m_tabs->GetPageIndex(keepActive); if (idx != wxNOT_FOUND) m_tabs->SetSelection(idx); }
         setStatus(0, _("Tabs sorted")); m_hint = true;
     }
-    enum { IDM_TABCOLOUR_NONE = 7100, IDM_TABCOLOUR_BASE = 7101 };   // local ids for the tab "Apply Colour" submenu
+    enum { kTabColourNone = 7100, kTabColourBase = 7101 };   // local ids for the tab "Apply Colour" submenu
     static wxColour tabPaletteColour(int i)
     { static const wxColour c[] = { wxColour(0xC8,0x3E,0x3E), wxColour(0xCF,0x8A,0x2E), wxColour(0x3F,0x9C,0x42), wxColour(0x37,0x7D,0xC8), wxColour(0x8A,0x4F,0xBE) };
       return (i >= 0 && i < 5) ? c[i] : wxColour(); }
@@ -4236,28 +4258,28 @@ private:
         setActiveView(viewOfEvent(e));   // the right-clicked tab's view
         if (e.GetSelection() != wxNOT_FOUND) m_tabs->SetSelection(e.GetSelection());
         wxMenu menu;
-        menu.Append(IDM_FILE_CLOSE, _("Close"));
-        menu.Append(IDM_FILE_CLOSEALL_BUT_CURRENT, _("Close All BUT This"));
-        menu.Append(IDM_FILE_CLOSEALL, _("Close All"));
+        menu.Append(kCmdFileClose, _("Close"));
+        menu.Append(kCmdFileCloseallButCurrent, _("Close All BUT This"));
+        menu.Append(kCmdFileCloseall, _("Close All"));
         menu.AppendSeparator();
-        menu.Append(IDM_FILE_SAVE, _("Save"));
-        menu.Append(IDM_FILE_SAVEAS, _("Save As..."));
+        menu.Append(kCmdFileSave, _("Save"));
+        menu.Append(kCmdFileSaveas, _("Save As..."));
         menu.AppendSeparator();
-        menu.Append(IDM_VIEW_GOTO_ANOTHER_VIEW,     _("Move to Other View"));
-        menu.Append(IDM_VIEW_CLONE_TO_ANOTHER_VIEW, _("Clone to Other View"));
+        menu.Append(kCmdViewGotoAnotherView,     _("Move to Other View"));
+        menu.Append(kCmdViewCloneToAnotherView, _("Clone to Other View"));
         menu.AppendSeparator();
         // Tab colours in an "Apply Colour" submenu. We read the pick via GetPopupMenuSelectionFromUser (below),
         // which returns the chosen id directly - including submenu items - so it sidesteps the MSW quirk where
         // PopupMenu silently drops submenu-item command events (that was why earlier picks did nothing).
         wxMenu* cm = new wxMenu;
-        cm->Append(IDM_TABCOLOUR_NONE, _("None"));
+        cm->Append(kTabColourNone, _("None"));
         cm->AppendSeparator();
-        for (int k = 0; k < 5; ++k) cm->Append(IDM_TABCOLOUR_BASE + k, tabPaletteName(k));
+        for (int k = 0; k < 5; ++k) cm->Append(kTabColourBase + k, tabPaletteName(k));
         menu.AppendSubMenu(cm, _("Apply Colour"));
         const int sel = this->GetPopupMenuSelectionFromUser(menu);
         if (sel == wxID_NONE) return;
-        if (sel == IDM_TABCOLOUR_NONE) { applyTabColour(-1); return; }
-        if (sel >= IDM_TABCOLOUR_BASE && sel < IDM_TABCOLOUR_BASE + 5) { applyTabColour(sel - IDM_TABCOLOUR_BASE); return; }
+        if (sel == kTabColourNone) { applyTabColour(-1); return; }
+        if (sel >= kTabColourBase && sel < kTabColourBase + 5) { applyTabColour(sel - kTabColourBase); return; }
         wxCommandEvent ce(wxEVT_MENU, sel); onCommand(ce);   // Close / Save / Move / Clone via the normal dispatcher
     }
 
@@ -4339,7 +4361,7 @@ private:
 
     // Popup (right-click) context menu, user-editable via Settings > Edit Popup ContextMenu ->
     // the per-user contextMenu.xml (see contextMenuFilePath()/loadPopupContextMenu()/editContextMenu()).
-    // Item ids are the same IDM_* the main menu uses, so onCommand handles them unchanged; labels are pulled
+    // Item ids are the same kCmd* the main menu uses, so onCommand handles them unchanged; labels are pulled
     // live from the real menu bar entry so they follow the current UI language, and enable state
     // mirrors the editor for the handful of ids that need it (undo/redo/paste/selection-dependent).
     struct PopupMenuEntry { int id = 0; bool separator = false; };
@@ -4372,10 +4394,10 @@ private:
         if (!out.empty()) return out;
         // contextMenu.xml missing/unparsable - built-in fallback, kept in sync with the bundled
         // resources/contextMenu.xml default, so a bad hand-edit can't leave the menu empty.
-        return { { IDM_EDIT_UNDO, false }, { IDM_EDIT_REDO, false }, { 0, true },
-                 { IDM_EDIT_CUT, false }, { IDM_EDIT_COPY, false }, { IDM_EDIT_PASTE, false }, { IDM_EDIT_DELETE, false }, { 0, true },
-                 { IDM_EDIT_SELECTALL, false }, { 0, true },
-                 { IDM_SEARCH_TOGGLE_BOOKMARK, false } };
+        return { { kCmdEditUndo, false }, { kCmdEditRedo, false }, { 0, true },
+                 { kCmdEditCut, false }, { kCmdEditCopy, false }, { kCmdEditPaste, false }, { kCmdEditDelete, false }, { 0, true },
+                 { kCmdEditSelectall, false }, { 0, true },
+                 { kCmdSearchToggleBookmark, false } };
     }
     // Settings > Edit Popup ContextMenu: open the PER-USER contextMenu.xml in the editor to hand-edit.
     // The shipped default sits in the read-only install dir, so on first edit we seed the per-user copy
@@ -4406,10 +4428,10 @@ private:
             bool enabled = true;
             switch (entry.id)
             {
-                case IDM_EDIT_UNDO: enabled = sci(SCI_CANUNDO) != 0; break;
-                case IDM_EDIT_REDO: enabled = sci(SCI_CANREDO) != 0; break;
-                case IDM_EDIT_PASTE: enabled = sci(SCI_CANPASTE) != 0; break;
-                case IDM_EDIT_CUT: case IDM_EDIT_COPY: case IDM_EDIT_DELETE: enabled = hasSel; break;
+                case kCmdEditUndo: enabled = sci(SCI_CANUNDO) != 0; break;
+                case kCmdEditRedo: enabled = sci(SCI_CANREDO) != 0; break;
+                case kCmdEditPaste: enabled = sci(SCI_CANPASTE) != 0; break;
+                case kCmdEditCut: case kCmdEditCopy: case kCmdEditDelete: enabled = hasSel; break;
                 default: break;
             }
             menu.Append(entry.id, src->GetItemLabel())->Enable(enabled);
@@ -4862,43 +4884,42 @@ private:
         auto T  = [&](int id, const wxString& svg, const wxString& tip) { const wxBitmapBundle bmp = icon(svg, isz); tb->AddTool(id, tip, bmp, iconDisabled(bmp, isz), wxITEM_NORMAL, tip); };
         auto TC = [&](int id, const wxString& svg, const wxString& tip) { tb->AddCheckTool(id, tip, icon(svg, isz), wxNullBitmap, tip); };
 
-        T(IDM_FILE_NEW, "new", _("New"));           T(IDM_FILE_OPEN, "open", _("Open"));
-        T(IDM_FILE_SAVE, "save", _("Save"));        T(IDM_FILE_SAVEALL, "save-all", _("Save All"));
-        T(IDM_FILE_CLOSE, "close", _("Close"));     T(IDM_FILE_CLOSEALL, "close-all", _("Close All"));
-        T(IDM_FILE_PRINT, "print", _("Print"));
+        T(kCmdFileNew, "new", _("New"));           T(kCmdFileOpen, "open", _("Open"));
+        T(kCmdFileSave, "save", _("Save"));        T(kCmdFileSaveall, "save-all", _("Save All"));
+        T(kCmdFileClose, "close", _("Close"));     T(kCmdFileCloseall, "close-all", _("Close All"));
+        T(kCmdFilePrint, "print", _("Print"));
         tb->AddSeparator();
-        T(IDM_EDIT_CUT, "cut", _("Cut"));           T(IDM_EDIT_COPY, "copy", _("Copy"));           T(IDM_EDIT_PASTE, "paste", _("Paste"));
+        T(kCmdEditCut, "cut", _("Cut"));           T(kCmdEditCopy, "copy", _("Copy"));           T(kCmdEditPaste, "paste", _("Paste"));
         tb->AddSeparator();
-        T(IDM_EDIT_UNDO, "undo", _("Undo"));        T(IDM_EDIT_REDO, "redo", _("Redo"));
+        T(kCmdEditUndo, "undo", _("Undo"));        T(kCmdEditRedo, "redo", _("Redo"));
         tb->AddSeparator();
-        T(IDM_SEARCH_FIND, "find", _("Find"));      T(IDM_SEARCH_REPLACE, "replace", _("Replace"));
+        T(kCmdSearchFind, "find", _("Find"));      T(kCmdSearchReplace, "replace", _("Replace"));
         tb->AddSeparator();
-        T(IDM_VIEW_ZOOMIN, "zoom-in", _("Zoom In"));  T(IDM_VIEW_ZOOMOUT, "zoom-out", _("Zoom Out"));
+        T(kCmdViewZoomin, "zoom-in", _("Zoom In"));  T(kCmdViewZoomout, "zoom-out", _("Zoom Out"));
         tb->AddSeparator();
-        TC(IDM_VIEW_WRAP, "word-wrap", _("Word Wrap"));
-        TC(IDM_VIEW_ALL_CHARACTERS, "all-chars", _("Show All Characters"));
-        TC(IDM_VIEW_INDENT_GUIDE, "indent-guide", _("Show Indent Guide"));
+        TC(kCmdViewWrap, "word-wrap", _("Word Wrap"));
+        TC(kCmdViewAllCharacters, "all-chars", _("Show All Characters"));
+        TC(kCmdViewIndentGuide, "indent-guide", _("Show Indent Guide"));
         tb->AddSeparator();
-        T(IDM_LANG_USER_DLG, "udl-dlg", _("User-Defined Language Dialogue"));
-        T(IDM_VIEW_DOC_MAP, "doc-map", _("Document Map"));
-        T(IDM_VIEW_DOCLIST, "doc-list", _("Document List"));
-        T(IDM_VIEW_FUNC_LIST, "function-list", _("Function List"));
-        T(IDM_VIEW_FILEBROWSER, "folder-as-workspace", _("Folder as Workspace"));
+        T(kCmdViewDocMap, "doc-map", _("Document Map"));
+        T(kCmdViewDoclist, "doc-list", _("Document List"));
+        T(kCmdViewFuncList, "function-list", _("Function List"));
+        T(kCmdViewFilebrowser, "folder-as-workspace", _("Folder as Workspace"));
         tb->AddSeparator();
-        TC(IDM_VIEW_MONITORING, "monitoring", _("Monitoring (tail -f)"));
+        TC(kCmdViewMonitoring, "monitoring", _("Monitoring (tail -f)"));
         tb->AddSeparator();
-        T(IDM_MACRO_STARTRECORDINGMACRO, "record", _("Start Recording"));
-        T(IDM_MACRO_STOPRECORDINGMACRO, "stop-record", _("Stop Recording"));
-        T(IDM_MACRO_PLAYBACKRECORDEDMACRO, "playback", _("Playback"));
-        T(IDM_MACRO_RUNMULTIMACRODLG, "playback-multiple", _("Run a Macro Multiple Times"));
-        T(IDM_MACRO_SAVECURRENTMACRO, "save-macro", _("Save Current Recorded Macro"));
+        T(kCmdMacroStartRecordingMacro, "record", _("Start Recording"));
+        T(kCmdMacroStopRecordingMacro, "stop-record", _("Stop Recording"));
+        T(kCmdMacroPlaybackRecordedMacro, "playback", _("Playback"));
+        T(kCmdMacroRunMultiMacroDlg, "playback-multiple", _("Run a Macro Multiple Times"));
+        T(kCmdMacroSaveCurrentMacro, "save-macro", _("Save Current Recorded Macro"));
         tb->Realize();
         // Macro idle state (nothing recording, no macro stored): only "Start Recording"
         // is enabled; Stop / Playback / Run-Multiple / Save stay greyed until a macro is being/been recorded.
-        tb->EnableTool(IDM_MACRO_STOPRECORDINGMACRO, false);
-        tb->EnableTool(IDM_MACRO_PLAYBACKRECORDEDMACRO, false);
-        tb->EnableTool(IDM_MACRO_RUNMULTIMACRODLG, false);
-        tb->EnableTool(IDM_MACRO_SAVECURRENTMACRO, false);
+        tb->EnableTool(kCmdMacroStopRecordingMacro, false);
+        tb->EnableTool(kCmdMacroPlaybackRecordedMacro, false);
+        tb->EnableTool(kCmdMacroRunMultiMacroDlg, false);
+        tb->EnableTool(kCmdMacroSaveCurrentMacro, false);
 #ifdef __WXMSW__
         ::SendMessageW(static_cast<HWND>(tb->GetHandle()), TB_SETINDENT, 4, 0);  // small left margin before the first button
 #endif
@@ -5101,24 +5122,24 @@ private:
     {
         applyEditorTheme(m_dark);          // reset every style to the theme base (incl. line numbers)
         auto* page = activePage();
-        if (page && !page->langForced && page->udlIndex < 0)   // auto-detect: a UDL's ext list wins over the built-in lexerForExt table
+        // Registered Scintillua language: auto-detect by extension (unless one is already chosen/forced),
+        // then container-lex it via the embedded engine.
+        if (page && page->sciLang.empty() && !page->langForced)
         {
             const wxString ext = path.AfterLast('.').Lower();
-            for (size_t i = 0; !ext.empty() && i < m_udls.size(); ++i)
+            for (const auto& l : m_sciLangs)
             {
-                wxStringTokenizer tk(m_udls[i].ext, " ", wxTOKEN_STRTOK);
                 bool matched = false;
-                while (tk.HasMoreTokens()) if (tk.GetNextToken().Lower() == ext) { matched = true; break; }
-                if (matched) { page->udlIndex = (int)i; break; }
+                wxStringTokenizer tk(l.exts, " ", wxTOKEN_STRTOK);
+                while (!ext.empty() && tk.HasMoreTokens()) if (tk.GetNextToken().Lower() == ext) { matched = true; break; }
+                if (matched) { page->sciLang = l.name; break; }
             }
         }
-        if (page && page->udlIndex >= 0 && page->udlIndex < (int)m_udls.size())   // User-Defined Language: container-lexed, not Lexilla
+        if (page && !page->sciLang.empty())   // Scintillua: container-lexed by the embedded engine
         {
-            const UdlLanguage& lang = m_udls[page->udlIndex];
-            udlApplyStyles(m_stc, lang);
-            page->lang = lang.name;
+            applyScintilluaStyles(m_stc);
+            page->lang = page->sciLang;
             m_stc->Colourise(0, -1);
-            udlFoldRange(m_stc, lang, 0, m_stc->GetLineCount() - 1);
             return;
         }
         // A manual Language pick forces its lexer directly; otherwise auto-detect from the file extension.
@@ -5300,22 +5321,22 @@ private:
     {
         switch (id)
         {
-            case IDM_FORMAT_WIN_1250: return 1250; case IDM_FORMAT_WIN_1251: return 1251; case IDM_FORMAT_WIN_1252: return 1252;
-            case IDM_FORMAT_WIN_1253: return 1253; case IDM_FORMAT_WIN_1254: return 1254; case IDM_FORMAT_WIN_1255: return 1255;
-            case IDM_FORMAT_WIN_1256: return 1256; case IDM_FORMAT_WIN_1257: return 1257; case IDM_FORMAT_WIN_1258: return 1258;
-            case IDM_FORMAT_ISO_8859_1: return 28591; case IDM_FORMAT_ISO_8859_2: return 28592; case IDM_FORMAT_ISO_8859_3: return 28593;
-            case IDM_FORMAT_ISO_8859_4: return 28594; case IDM_FORMAT_ISO_8859_5: return 28595; case IDM_FORMAT_ISO_8859_6: return 28596;
-            case IDM_FORMAT_ISO_8859_7: return 28597; case IDM_FORMAT_ISO_8859_8: return 28598; case IDM_FORMAT_ISO_8859_9: return 28599;
-            case IDM_FORMAT_ISO_8859_13: return 28603; case IDM_FORMAT_ISO_8859_14: return 28604; case IDM_FORMAT_ISO_8859_15: return 28605;
-            case IDM_FORMAT_DOS_437: return 437; case IDM_FORMAT_DOS_720: return 720; case IDM_FORMAT_DOS_737: return 737;
-            case IDM_FORMAT_DOS_775: return 775; case IDM_FORMAT_DOS_850: return 850; case IDM_FORMAT_DOS_852: return 852;
-            case IDM_FORMAT_DOS_855: return 855; case IDM_FORMAT_DOS_857: return 857; case IDM_FORMAT_DOS_858: return 858;
-            case IDM_FORMAT_DOS_860: return 860; case IDM_FORMAT_DOS_861: return 861; case IDM_FORMAT_DOS_862: return 862;
-            case IDM_FORMAT_DOS_863: return 863; case IDM_FORMAT_DOS_865: return 865; case IDM_FORMAT_DOS_866: return 866;
-            case IDM_FORMAT_DOS_869: return 869;
-            case IDM_FORMAT_KOI8R_CYRILLIC: return 20866; case IDM_FORMAT_KOI8U_CYRILLIC: return 21866; case IDM_FORMAT_MAC_CYRILLIC: return 10007;
-            case IDM_FORMAT_BIG5: return 950; case IDM_FORMAT_GB2312: return 936; case IDM_FORMAT_SHIFT_JIS: return 932;
-            case IDM_FORMAT_EUC_KR: return 51949; case IDM_FORMAT_KOREAN_WIN: return 949; case IDM_FORMAT_TIS_620: return 874;
+            case kCmdFormatWin1250: return 1250; case kCmdFormatWin1251: return 1251; case kCmdFormatWin1252: return 1252;
+            case kCmdFormatWin1253: return 1253; case kCmdFormatWin1254: return 1254; case kCmdFormatWin1255: return 1255;
+            case kCmdFormatWin1256: return 1256; case kCmdFormatWin1257: return 1257; case kCmdFormatWin1258: return 1258;
+            case kCmdFormatIso88591: return 28591; case kCmdFormatIso88592: return 28592; case kCmdFormatIso88593: return 28593;
+            case kCmdFormatIso88594: return 28594; case kCmdFormatIso88595: return 28595; case kCmdFormatIso88596: return 28596;
+            case kCmdFormatIso88597: return 28597; case kCmdFormatIso88598: return 28598; case kCmdFormatIso88599: return 28599;
+            case kCmdFormatIso885913: return 28603; case kCmdFormatIso885914: return 28604; case kCmdFormatIso885915: return 28605;
+            case kCmdFormatDos437: return 437; case kCmdFormatDos720: return 720; case kCmdFormatDos737: return 737;
+            case kCmdFormatDos775: return 775; case kCmdFormatDos850: return 850; case kCmdFormatDos852: return 852;
+            case kCmdFormatDos855: return 855; case kCmdFormatDos857: return 857; case kCmdFormatDos858: return 858;
+            case kCmdFormatDos860: return 860; case kCmdFormatDos861: return 861; case kCmdFormatDos862: return 862;
+            case kCmdFormatDos863: return 863; case kCmdFormatDos865: return 865; case kCmdFormatDos866: return 866;
+            case kCmdFormatDos869: return 869;
+            case kCmdFormatKoi8rCyrillic: return 20866; case kCmdFormatKoi8uCyrillic: return 21866; case kCmdFormatMacCyrillic: return 10007;
+            case kCmdFormatBig5: return 950; case kCmdFormatGb2312: return 936; case kCmdFormatShiftJis: return 932;
+            case kCmdFormatEucKr: return 51949; case kCmdFormatKoreanWin: return 949; case kCmdFormatTis620: return 874;
             default: return 0;
         }
     }
@@ -5347,8 +5368,8 @@ private:
         auto* mb = menuBar(); if (!mb) return;
         const int enc = activePage() ? activePage()->encoding : ENC_UTF8;
         auto chk = [&](int id, bool on){ if (auto* it = mb->FindItem(id)) if (it->IsCheckable()) it->Check(on); };
-        chk(IDM_FORMAT_ANSI, enc == ENC_ANSI); chk(IDM_FORMAT_AS_UTF_8, enc == ENC_UTF8); chk(IDM_FORMAT_UTF_8, enc == ENC_UTF8_BOM);
-        chk(IDM_FORMAT_UTF_16LE, enc == ENC_UTF16_LE); chk(IDM_FORMAT_UTF_16BE, enc == ENC_UTF16_BE);
+        chk(kCmdFormatAnsi, enc == ENC_ANSI); chk(kCmdFormatAsUtf8, enc == ENC_UTF8); chk(kCmdFormatUtf8, enc == ENC_UTF8_BOM);
+        chk(kCmdFormatUtf16le, enc == ENC_UTF16_LE); chk(kCmdFormatUtf16be, enc == ENC_UTF16_BE);
     }
     void convertTo(int enc)   // change the on-disk encoding; text is unchanged, written on next save
     {
@@ -5424,7 +5445,7 @@ private:
 #endif
         return true;
     }
-    void syncMonitoringUi(EditorPage* p) { setToggleUi(IDM_VIEW_MONITORING, p && p->monitored); }
+    void syncMonitoringUi(EditorPage* p) { setToggleUi(kCmdViewMonitoring, p && p->monitored); }
     void updateMonTimer()   // the one shared 1s poll timer runs only while at least one tab is monitored
     {
         bool any = false; for (EditorPage* q : allPages()) if (q && q->monitored) { any = true; break; }
@@ -5799,7 +5820,7 @@ private:
 #endif
     }
 #ifdef __WXMSW__
-    // Windows only: the two ABI-frozen static entries (cmd/PowerShell, original IDM_* ids - see
+    // Windows only: the two ABI-frozen static entries (cmd/PowerShell, original command ids - see
     // menu_data_file.h). Everything genuinely dynamic (pwsh/Cygwin/WSL, and the whole Linux/macOS
     // terminal-app list) goes through openHereToolAt() below instead.
     void openShellHere(bool powershell)
@@ -6161,37 +6182,132 @@ private:
     void setForcedLang(const wxString& lexer, const wxString& name)
     {
         auto* p = activePage(); if (!p) return;
-        p->langForced = true; p->forcedLexer = lexer; p->forcedName = name; p->udlIndex = -1;
+        p->langForced = true; p->forcedLexer = lexer; p->forcedName = name; p->sciLang.clear();
         setLexerForFile(p->path);
         updateStatus();
         if (m_stc) m_stc->Refresh();
     }
-    // Manually force a User-Defined Language on the active buffer (the Language menu's dynamic UDL
-    // section - see rebuildUserLangMenu). Mirrors setForcedLang's "sticks across tab switches" contract.
-    void applyUdlToActiveBuffer(int udlIndex)
-    {
-        auto* p = activePage(); if (!p) return;
-        if (udlIndex < 0 || udlIndex >= (int)m_udls.size()) return;
-        p->langForced = true; p->udlIndex = udlIndex;
-        setLexerForFile(p->path);
-        updateStatus();
-        if (m_stc) m_stc->Refresh();
-    }
-    // Rebuild the Language menu's dynamic per-UDL section from m_udls (ids IDM_LANG_USER..IDM_LANG_USER_LIMIT-1,
-    // the frozen range src/command_ids.h reserves for UDL entries). Called once at startup (after loadAllUdls) and
-    // again whenever the UDL dialog adds/renames/removes a language, so the menu never needs a restart to catch up.
+    // Rebuild the Language menu's dynamic section: one entry per registered Scintillua language
+    // (from nib.langdef, e.g. the udl-compat plugin). Called at startup and whenever a language is
+    // registered, so the menu never needs a restart to catch up.
     void rebuildUserLangMenu()
     {
         auto* mb = menuBar(); if (!mb) return;
         wxMenu* lang = nullptr;
-        mb->FindItem(IDM_LANG_TEXT, &lang);   // IDM_LANG_TEXT ("Normal text file") lives directly on the top-level Language menu
+        mb->FindItem(kCmdLangText, &lang);   // kCmdLangText ("Normal text file") lives directly on the top-level Language menu
         if (!lang) return;
-        for (int id = IDM_LANG_USER; id < IDM_LANG_USER_LIMIT; ++id)
-            if (wxMenuItem* it = lang->FindItem(id)) lang->Destroy(it);
+        for (size_t i = 0; i < m_sciLangs.size(); ++i)
+            if (wxMenuItem* it = lang->FindItem(kSciLangMenuBase + (int)i)) lang->Destroy(it);
         const size_t insertPos = lang->GetMenuItemCount();
-        const size_t limit = wxMin(m_udls.size(), (size_t)(IDM_LANG_USER_LIMIT - IDM_LANG_USER));
-        for (size_t i = 0; i < limit; ++i)
-            lang->Insert(insertPos + i, IDM_LANG_USER + (int)i, m_udls[i].name);
+        for (size_t i = 0; i < m_sciLangs.size(); ++i)
+            lang->Insert(insertPos + i, kSciLangMenuBase + (int)i, m_sciLangs[i].name);
+    }
+
+    // ----- Scintillua: wxNote's native language engine (embedded Lua+LPeg+Scintillua) --------------
+    scintillua::Engine* scintilluaEngine()
+    {
+        if (!m_scintillua)
+        {
+            const wxString lexerDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "lexers";
+            const wxString writable = userDataDir() + wxFILE_SEP_PATH + "scintillua-lexers";
+            { wxLogNull noLog; if (!wxDirExists(writable)) wxFileName::Mkdir(writable, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL); }
+            m_scintillua = std::make_unique<scintillua::Engine>(
+                std::string(lexerDir.utf8_string()), std::string(writable.utf8_string()));
+            if (!m_scintillua->ok())
+                wxLogDebug("[scintillua] engine unavailable: %s", wxString::FromUTF8(m_scintillua->lastError()));
+        }
+        return m_scintillua.get();
+    }
+    // Register (or replace) a Scintillua language from lexer Lua source; 1 on success (drives nib.langdef).
+    int registerScintilluaLanguage(const wxString& name, const wxString& exts, const wxString& lua)
+    {
+        auto* eng = scintilluaEngine();
+        if (!eng || !eng->ok() || name.empty()) return 0;
+        if (!eng->registerLexer(std::string(name.utf8_string()), std::string(lua.utf8_string())))
+        { wxLogDebug("[scintillua] register '%s' failed: %s", name, wxString::FromUTF8(eng->lastError())); return 0; }
+        bool replaced = false;
+        for (auto& l : m_sciLangs) if (l.name == name) { l.exts = exts; replaced = true; break; }
+        if (!replaced && (int)m_sciLangs.size() < 400) m_sciLangs.push_back({name, exts});
+        rebuildUserLangMenu();
+        return 1;
+    }
+    // Scintillua tag name -> container-lexer style number (kept < 32, disjoint from UDL's own 0..20 use is fine:
+    // a buffer is never both UDL- and Scintillua-lexed). 0=default/whitespace, 1=keyword, 2=string, 3=comment,
+    // 4=number, 5=operator, 6..12=keyword2..8, 13=preprocessor, 14=type/function, 15=constant.
+    static int sciTagToStyle(const std::string& tag)
+    {
+        if (tag.rfind("keyword", 0) == 0)
+        {
+            if (tag.size() == 8 && tag[7] >= '2' && tag[7] <= '8') return 6 + (tag[7] - '2');
+            return 1;
+        }
+        if (tag.rfind("string", 0) == 0 || tag == "character")   return 2;
+        if (tag.rfind("comment", 0) == 0)                        return 3;
+        if (tag == "number")                                     return 4;
+        if (tag == "operator")                                   return 5;
+        if (tag.rfind("preprocessor", 0) == 0)                   return 13;
+        if (tag == "type" || tag == "function" || tag == "class")return 14;
+        if (tag == "constant" || tag == "variable")              return 15;
+        return 0;   // whitespace.*, default, identifier, and anything unmapped
+    }
+    // Colour the container styles a Scintillua-lexed buffer uses. A small fixed palette (light + dark),
+    // pending a proper themable "genericLangDef" block.
+    void applyScintilluaStyles(wxStyledTextCtrl* stc)
+    {
+        if (!stc) return;
+        stc->SetLexer(wxSTC_LEX_CONTAINER);
+        struct Sty { int id; unsigned lightFg, darkFg; bool bold, italic; };
+        static const Sty P[] = {
+            { 1, 0x0000FF, 0x569CD6, true,  false },   // keyword
+            { 2, 0x008000, 0xCE9178, false, false },   // string
+            { 3, 0x808080, 0x6A9955, false, true  },   // comment
+            { 4, 0x098658, 0xB5CEA8, false, false },   // number
+            { 5, 0x000000, 0xD4D4D4, false, false },   // operator
+            {13, 0xAF00DB, 0xC586C0, false, false },   // preprocessor
+            {14, 0x267F99, 0x4EC9B0, false, false },   // type/function/class
+            {15, 0x0070C1, 0x9CDCFE, false, false },   // constant/variable
+        };
+        auto rgb = [](unsigned c){ return wxColour((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF); };
+        auto set = [&](int id, unsigned light, unsigned dark, bool bold, bool italic) {
+            stc->StyleSetForeground(id, rgb(m_dark ? dark : light));
+            stc->StyleSetBold(id, bold);
+            stc->StyleSetItalic(id, italic);
+        };
+        for (const Sty& s : P) set(s.id, s.lightFg, s.darkFg, s.bold, s.italic);
+        for (int id = 6; id <= 12; ++id) set(id, 0x0000FF, 0x569CD6, false, false);   // keyword2..8 share the keyword colour
+    }
+    // Lex the whole buffer with the named Scintillua lexer and apply the styles (called from STYLENEEDED).
+    void scintilluaStyle(wxStyledTextCtrl* stc, const wxString& langName)
+    {
+        auto* eng = scintilluaEngine();
+        if (!stc || !eng || !eng->ok()) return;
+        const int len = static_cast<int>(stc->GetLength());
+        const char* buf = stc->GetRangePointer(0, len);   // zero-copy view into Scintilla's buffer (valid until the doc changes; we only read it here)
+        if (!buf) return;
+        const auto toks = eng->lex(std::string(langName.utf8_string()), buf, static_cast<size_t>(len));
+        int prev = 0;
+        stc->StartStyling(0);
+        for (const auto& t : toks)
+        {
+            int end = t.endPos - 1;   // Scintillua positions are 1-based and point one past the token
+            if (end > len) end = len;
+            if (end > prev) { stc->SetStyling(end - prev, sciTagToStyle(t.tag)); prev = end; }
+        }
+        if (prev < len) stc->SetStyling(len - prev, 0);   // any trailing bytes -> default
+        // NOTE: fold levels are not set here yet - Scintillua-lexed languages currently style but do
+        // not fold (the retired UDL engine drove SCI_SETFOLDLEVEL via udlFoldRange). Wiring Scintillua's
+        // lexer:fold() through the container lexer is a tracked follow-up; margin folding stays inert
+        // for these languages until then rather than shipping an untested fold integration.
+    }
+    // Put the active buffer under a registered Scintillua language (Language-menu pick). Mirrors
+    // route through setLexerForFile so tab switches re-apply it.
+    void applyScintilluaToActiveBuffer(const wxString& name)
+    {
+        auto* p = activePage(); if (!p || name.empty()) return;
+        p->langForced = true; p->sciLang = name;
+        setLexerForFile(p->path);
+        updateStatus();
+        if (m_stc) m_stc->Refresh();
     }
 
     // ----- search engine (drives the Find/Replace dialog) ----------------
@@ -6698,9 +6814,9 @@ private:
     // ----- view toggles --------------------------------------------------
     void setToggleUi(int id, bool on) { if (menuBar()) menuBar()->Check(id, on); if (toolBar()) toolBar()->ToggleTool(id, on); }   // keep menu + toolbar checks in step
     void syncToggle(int id, bool& flag) { flag = !flag; setToggleUi(id, flag); }
-    void toggleWrap()  { syncToggle(IDM_VIEW_WRAP, m_wrap); sci(SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE); }
-    void toggleWs()    { syncToggle(IDM_VIEW_ALL_CHARACTERS, m_ws); if (menuBar()) menuBar()->Check(IDM_VIEW_NPC, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
-    void toggleGuides(){ syncToggle(IDM_VIEW_INDENT_GUIDE, m_guides); sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE); }
+    void toggleWrap()  { syncToggle(kCmdViewWrap, m_wrap); sci(SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE); }
+    void toggleWs()    { syncToggle(kCmdViewAllCharacters, m_ws); if (menuBar()) menuBar()->Check(kCmdViewNpc, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
+    void toggleGuides(){ syncToggle(kCmdViewIndentGuide, m_guides); sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE); }
 
     // ----- persisted preferences (Settings > Preferences) ---------------
     static size_t recentMaxFromConfig()   // Recent Files max, read straight from config so the m_fileHistory member init can use it
@@ -6802,8 +6918,8 @@ private:
             sci(SCI_SETMULTIPLESELECTION, m_multiEdit ? 1 : 0);
             if (m_lineNumbers) updateLineMargin(); else sci(SCI_SETMARGINWIDTHN, 0, 0);
         }
-        if (auto* mb = menuBar()) { mb->Check(IDM_VIEW_WRAP, m_wrap); mb->Check(IDM_VIEW_ALL_CHARACTERS, m_ws); mb->Check(IDM_VIEW_NPC, m_ws); mb->Check(IDM_VIEW_INDENT_GUIDE, m_guides); }
-        if (auto* tb = toolBar()) tb->ToggleTool(IDM_VIEW_WRAP, m_wrap);
+        if (auto* mb = menuBar()) { mb->Check(kCmdViewWrap, m_wrap); mb->Check(kCmdViewAllCharacters, m_ws); mb->Check(kCmdViewNpc, m_ws); mb->Check(kCmdViewIndentGuide, m_guides); }
+        if (auto* tb = toolBar()) tb->ToggleTool(kCmdViewWrap, m_wrap);
         showToolBar(m_showToolbar);   // aui-aware: hides the pane in integrated mode, the frame toolbar in native
         if (auto* sb = GetStatusBar()) sb->Show(m_showStatusbar);
         SendSizeEvent();
@@ -6971,7 +7087,7 @@ private:
 
         // ---- New Document ---------------------------------------------------------------------
         auto* nd = pg(_("New Document")); auto* nds = new wxBoxSizer(wxVERTICAL);
-        // Reuses the same 3 msgids as the Edit > EOL Conversion menu (IDM_FORMAT_TODOS/TOUNIX/TOMAC) -
+        // Reuses the same 3 msgids as the Edit > EOL Conversion menu (kCmdFormatTodos/TOUNIX/TOMAC) -
         // eolName() itself stays untranslated (the status bar's EOL indicator is deliberately
         // English-always), so translate it here rather than in the shared helper. Calling
         // wxGetTranslation() directly (not the _() macro) because _() requires a compile-time string
@@ -7163,29 +7279,32 @@ private:
         { const char* t = reinterpret_cast<const char*>(lp); s.text = (msg == SCI_ADDTEXT) ? std::string(t, (size_t)wp) : std::string(t); s.hasText = true; }
         m_macro.push_back(s);
     }
-    // Fires only for a buffer whose lexer is wxSTC_LEX_CONTAINER (a User-Defined Language - see
-    // udlApplyStyles); a real Lexilla lexer (SCI_SETILEXER) styles itself and never triggers this.
+    // Fires only for a buffer whose lexer is wxSTC_LEX_CONTAINER - a Scintillua-lexed language;
+    // a real Lexilla lexer (SCI_SETILEXER) styles itself and never triggers this.
     void onStcStyleNeeded(wxStyledTextEvent& e)
     {
         wxStyledTextCtrl* stc = wxDynamicCast(e.GetEventObject(), wxStyledTextCtrl);
-        auto* p = activePage();
-        if (!stc || !p || p->udlIndex < 0 || p->udlIndex >= (int)m_udls.size()) { e.Skip(); return; }
-        const UdlLanguage& lang = m_udls[p->udlIndex];
-        const int startPos = stc->GetEndStyled();
-        const int endPos = static_cast<int>(e.GetPosition());
-        udlStyleRange(stc, lang, startPos, endPos);
-        udlFoldRange(stc, lang, stc->LineFromPosition(startPos), stc->LineFromPosition(endPos));
+        if (!stc) { e.Skip(); return; }
+        // Style the document shown in the VIEW that fired, NOT the globally-active view: in a split,
+        // the non-focused pane also fires STYLENEEDED and must be lexed with ITS OWN page's language.
+        ViewPane* v = (stc == m_sub.stc) ? &m_sub : &m_main;
+        wxAuiNotebook* nb = v->tabs;
+        const int sel = nb ? nb->GetSelection() : wxNOT_FOUND;
+        auto* p = (sel == wxNOT_FOUND) ? nullptr : static_cast<EditorPage*>(nb->GetPage(sel));
+        if (!p) { e.Skip(); return; }
+        if (!p->sciLang.empty()) { scintilluaStyle(stc, p->sciLang); return; }   // Scintillua-lexed buffer
+        e.Skip();
     }
     void macroToolStates()
     {
         const bool has = !m_macro.empty();
         auto* tb = toolBar(); auto* mb = menuBar();
         auto en = [&](int id, bool on){ if (tb) tb->EnableTool(id, on); if (mb) if (auto* it = mb->FindItem(id)) it->Enable(on); };
-        en(IDM_MACRO_STARTRECORDINGMACRO, !m_recording);
-        en(IDM_MACRO_STOPRECORDINGMACRO, m_recording);
-        en(IDM_MACRO_PLAYBACKRECORDEDMACRO, !m_recording && has);
-        en(IDM_MACRO_RUNMULTIMACRODLG, !m_recording && has);
-        en(IDM_MACRO_SAVECURRENTMACRO, !m_recording && has);
+        en(kCmdMacroStartRecordingMacro, !m_recording);
+        en(kCmdMacroStopRecordingMacro, m_recording);
+        en(kCmdMacroPlaybackRecordedMacro, !m_recording && has);
+        en(kCmdMacroRunMultiMacroDlg, !m_recording && has);
+        en(kCmdMacroSaveCurrentMacro, !m_recording && has);
     }
     void startMacroRecord() { if (m_recording) return; m_macro.clear(); m_recording = true; sci(SCI_STARTRECORD); macroToolStates(); setStatus(0, _("Recording macro...")); m_hint = true; }
     void stopMacroRecord()  { if (!m_recording) return; sci(SCI_STOPRECORD); m_recording = false; macroToolStates(); setStatus(0, wxString::Format(_("Macro recorded - %d step(s)"), (int)m_macro.size())); m_hint = true; }
@@ -7243,27 +7362,9 @@ private:
         if (name.empty() || name == "Default") return dir + wxFILE_SEP_PATH + "stylers.model.xml";
         return dir + wxFILE_SEP_PATH + "themes" + wxFILE_SEP_PATH + name + ".xml";
     }
-    // ----- User-Defined Language (UDL) persistence -------------------------------------------
-    // One <name>.xml (a bare <UserLang> root, the shape a single-language export writes) per language
-    // in the per-user userDefineLangs/ folder (under wxStandardPaths' user-data dir - NOT next to the
-    // exe, which is read-only on an installed build). IDM_LANG_OPENUDLDIR opens this folder; the
-    // one-file-per-language layout matches how shared UDL collections distribute definitions
-    // (Notepad++-compatible format), so downloaded files drop in as-is.
+    // The per-user folder where the optional GPL udl-compat plugin reads Notepad++
+    // userDefineLang.xml files (see packages/udl-compat); kCmdLangOpenudldir opens it.
     wxString udlDir() { return userDataDir() + wxFILE_SEP_PATH + "userDefineLangs"; }
-    void loadAllUdls()
-    {
-        m_udls.clear();
-        wxDir d(udlDir());
-        if (!d.IsOpened()) return;
-        wxString f; bool more = d.GetFirst(&f, "*.xml", wxDIR_FILES);
-        while (more) { for (auto& u : loadUdlFile(udlDir() + wxFILE_SEP_PATH + f)) m_udls.push_back(std::move(u)); more = d.GetNext(&f); }
-    }
-    void saveUdlToDisk(const UdlLanguage& u)
-    {
-        wxLogNull noLog;   // best-effort persist: a non-writable data dir must not pop an error dialog
-        if (!wxDirExists(udlDir())) wxFileName::Mkdir(udlDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-        saveUdlFile(udlDir() + wxFILE_SEP_PATH + u.name + ".xml", { u });
-    }
     wxArrayString availableThemes()   // "Default" + every themes/*.xml (the 22 bundled themes)
     {
         wxArrayString out; out.Add("Default");
@@ -7429,351 +7530,6 @@ private:
         const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "themes";
         int n = 0; for (const auto& p : paths) if (wxCopyFile(p, dir + wxFILE_SEP_PATH + wxFileNameFromPath(p))) ++n;
         setStatus(0, wxString::Format(_("Imported %d theme(s) - choose them in Style Configurator"), n)); m_hint = true;
-    }
-    // Reused by every "Style..." button in the UDL dialog below: fg/bg colour, font/size,
-    // bold/italic/underline, and the Nesting checkboxes (which other token categories still get
-    // coloured while this style's region is active - see UdlNestBit). Edits `style` in place;
-    // returns false (leaving it untouched) if the user cancels.
-    bool showUdlStylerDialog(const wxString& title, UdlStyle& style)
-    {
-        wxDialog dlg(this, wxID_ANY, title, wxDefaultPosition, wxSize(460, 480));
-        auto* fgPick = new wxColourPickerCtrl(&dlg, wxID_ANY, style.fgColor);
-        auto* bgPick = new wxColourPickerCtrl(&dlg, wxID_ANY, style.bgColor);
-        auto* fontPick = new wxTextCtrl(&dlg, wxID_ANY, style.fontName);
-        auto* sizePick = new wxSpinCtrl(&dlg, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1), wxSP_ARROW_KEYS, 0, 72, style.fontSize);
-        auto* cbBold = new wxCheckBox(&dlg, wxID_ANY, _("Bold")); cbBold->SetValue(style.bold);
-        auto* cbItalic = new wxCheckBox(&dlg, wxID_ANY, _("Italic")); cbItalic->SetValue(style.italic);
-        auto* cbUnderline = new wxCheckBox(&dlg, wxID_ANY, _("Underline")); cbUnderline->SetValue(style.underline);
-
-        auto* grid = new wxFlexGridSizer(2, 8, 10);
-        grid->Add(new wxStaticText(&dlg, wxID_ANY, _("Foreground colour:")), 0, wxALIGN_CENTRE_VERTICAL); grid->Add(fgPick);
-        grid->Add(new wxStaticText(&dlg, wxID_ANY, _("Background colour:")), 0, wxALIGN_CENTRE_VERTICAL); grid->Add(bgPick);
-        grid->Add(new wxStaticText(&dlg, wxID_ANY, _("Font name (blank = inherit):")), 0, wxALIGN_CENTRE_VERTICAL); grid->Add(fontPick, 0, wxEXPAND);
-        grid->Add(new wxStaticText(&dlg, wxID_ANY, _("Font size (0 = inherit):")), 0, wxALIGN_CENTRE_VERTICAL); grid->Add(sizePick);
-        auto* fontRow = new wxBoxSizer(wxHORIZONTAL);
-        fontRow->Add(cbBold, 0, wxRIGHT, 12); fontRow->Add(cbItalic, 0, wxRIGHT, 12); fontRow->Add(cbUnderline);
-
-        static const std::pair<uint32_t, const char*> kNestBits[] = {
-            { NEST_KEYWORD1, "Keyword1" }, { NEST_KEYWORD2, "Keyword2" }, { NEST_KEYWORD3, "Keyword3" }, { NEST_KEYWORD4, "Keyword4" },
-            { NEST_KEYWORD5, "Keyword5" }, { NEST_KEYWORD6, "Keyword6" }, { NEST_KEYWORD7, "Keyword7" }, { NEST_KEYWORD8, "Keyword8" },
-            { NEST_COMMENT, "Comment" }, { NEST_COMMENT_LINE, "Line comment" }, { NEST_NUMBER, "Number" },
-            { NEST_OPERATOR1, "Operator1" }, { NEST_OPERATOR2, "Operator2" },
-            { NEST_DELIM1, "Delimiter1" }, { NEST_DELIM2, "Delimiter2" }, { NEST_DELIM3, "Delimiter3" }, { NEST_DELIM4, "Delimiter4" },
-            { NEST_DELIM5, "Delimiter5" }, { NEST_DELIM6, "Delimiter6" }, { NEST_DELIM7, "Delimiter7" }, { NEST_DELIM8, "Delimiter8" },
-        };
-        std::vector<wxCheckBox*> nestBoxes;
-        auto* nestGrid = new wxGridSizer(0, 4, 4, 4);
-        for (auto& nb : kNestBits)
-        {
-            auto* cb = new wxCheckBox(&dlg, wxID_ANY, wxGetTranslation(nb.second));
-            cb->SetValue((style.nesting & nb.first) != 0);
-            nestGrid->Add(cb);
-            nestBoxes.push_back(cb);
-        }
-        auto* nestBox = new wxStaticBoxSizer(wxVERTICAL, &dlg, _("Nesting: also colour these inside this style"));
-        nestBox->Add(nestGrid, 0, wxALL, 6);
-
-        auto* btnRow = new wxBoxSizer(wxHORIZONTAL); btnRow->AddStretchSpacer();
-        btnRow->Add(new wxButton(&dlg, wxID_OK, _("OK")), 0, wxRIGHT, 6);
-        btnRow->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")));
-
-        auto* top = new wxBoxSizer(wxVERTICAL);
-        top->Add(grid, 0, wxALL, 12);
-        top->Add(fontRow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
-        top->Add(nestBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
-        top->Add(btnRow, 0, wxEXPAND | wxALL, 12);
-        dlg.SetSizerAndFit(top);
-        themeDialog(&dlg);
-        if (dlg.ShowModal() != wxID_OK) return false;
-        style.fgColor = fgPick->GetColour(); style.bgColor = bgPick->GetColour();
-        style.fontName = fontPick->GetValue(); style.fontSize = sizePick->GetValue();
-        style.bold = cbBold->GetValue(); style.italic = cbItalic->GetValue(); style.underline = cbUnderline->GetValue();
-        style.nesting = 0;
-        for (size_t i = 0; i < nestBoxes.size(); ++i) if (nestBoxes[i]->GetValue()) style.nesting |= kNestBits[i].first;
-        return true;
-    }
-    // Language > User Defined Language > Define your language...: the full UDL
-    // dialog - Folder & Default / Comment & Number / Operator & Delimiter / Keywords tabs, each field
-    // pairable with a Style... button (see showUdlStylerDialog) for the 24 style slots (UdlStyleIndex).
-    // Edits a UdlLanguage in memory; Save commits it into m_udls and to disk (saveUdlToDisk) so it
-    // survives a restart and can be shared as a plain XML file (see udl.h for the exchange format).
-    void onUserDefineLang()
-    {
-        int curIndex = m_udls.empty() ? -1 : 0;
-        UdlLanguage cur = m_udls.empty() ? UdlLanguage{} : m_udls[0];
-        if (m_udls.empty()) cur.name = _("NewLanguage");
-
-        wxDialog dlg(this, wxID_ANY, _("User Defined Language"), wxDefaultPosition, wxSize(780, 680));
-
-        // ---- language picker + name/ext rows -------------------------------------------------
-        auto* langCombo = new wxChoice(&dlg, wxID_ANY, wxDefaultPosition, wxSize(220, -1));
-        auto* btnNew    = new wxButton(&dlg, wxID_ANY, _("New"));
-        auto* btnRemove = new wxButton(&dlg, wxID_ANY, _("Remove"));
-        auto* nameField = new wxTextCtrl(&dlg, wxID_ANY);
-        auto* extField  = new wxTextCtrl(&dlg, wxID_ANY);
-        auto* pickRow = new wxBoxSizer(wxHORIZONTAL);
-        pickRow->Add(new wxStaticText(&dlg, wxID_ANY, _("Existing:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6);
-        pickRow->Add(langCombo, 0, wxRIGHT, 6);
-        pickRow->Add(btnNew, 0, wxRIGHT, 6); pickRow->Add(btnRemove, 0);
-        auto* nameRow = new wxBoxSizer(wxHORIZONTAL);
-        nameRow->Add(new wxStaticText(&dlg, wxID_ANY, _("Name:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6);
-        nameRow->Add(nameField, 1, wxRIGHT, 16);
-        nameRow->Add(new wxStaticText(&dlg, wxID_ANY, _("Ext:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6);
-        nameRow->Add(extField, 1);
-
-        auto* nb = new wxNotebook(&dlg, wxID_ANY);
-
-        // ---- Tab 1: Folder & Default ----------------------------------------------------------
-        auto* pgFolder = new wxPanel(nb); nb->AddPage(pgFolder, _("Folder && Default"));
-        auto* cbCaseIgnored  = new wxCheckBox(pgFolder, wxID_ANY, _("Ignore case"));
-        auto* cbFoldComments = new wxCheckBox(pgFolder, wxID_ANY, _("Allow folding of comments"));
-        auto* cbFoldCompact  = new wxCheckBox(pgFolder, wxID_ANY, _("Fold compact"));
-        auto* btnDefaultStyle = new wxButton(pgFolder, wxID_ANY, _("Style Default..."));
-        auto foldRow = [&](const wxString& caption, wxTextCtrl*& open_, wxTextCtrl*& mid_, wxTextCtrl*& close_, wxButton*& styleBtn) {
-            auto* box = new wxStaticBoxSizer(wxHORIZONTAL, pgFolder, caption);
-            open_  = new wxTextCtrl(pgFolder, wxID_ANY, "", wxDefaultPosition, wxSize(90, -1));
-            mid_   = new wxTextCtrl(pgFolder, wxID_ANY, "", wxDefaultPosition, wxSize(90, -1));
-            close_ = new wxTextCtrl(pgFolder, wxID_ANY, "", wxDefaultPosition, wxSize(90, -1));
-            styleBtn = new wxButton(pgFolder, wxID_ANY, _("Style..."));
-            box->Add(new wxStaticText(pgFolder, wxID_ANY, _("Open:")), 0, wxALIGN_CENTRE_VERTICAL | wxLEFT, 6); box->Add(open_, 0, wxLEFT, 4);
-            box->Add(new wxStaticText(pgFolder, wxID_ANY, _("Middle:")), 0, wxALIGN_CENTRE_VERTICAL | wxLEFT, 10); box->Add(mid_, 0, wxLEFT, 4);
-            box->Add(new wxStaticText(pgFolder, wxID_ANY, _("Close:")), 0, wxALIGN_CENTRE_VERTICAL | wxLEFT, 10); box->Add(close_, 0, wxLEFT, 4);
-            box->AddStretchSpacer();
-            box->Add(styleBtn, 0, wxALL, 4);
-            return box;
-        };
-        wxTextCtrl *fc1o, *fc1m, *fc1c, *fc2o, *fc2m, *fc2c, *fco, *fcm, *fcc;
-        wxButton *btnFc1Style, *btnFc2Style, *btnFcStyle;
-        auto* fc1Box = foldRow(_("Folder in code1:"), fc1o, fc1m, fc1c, btnFc1Style);
-        auto* fc2Box = foldRow(_("Folder in code2:"), fc2o, fc2m, fc2c, btnFc2Style);
-        auto* fcBox  = foldRow(_("Folder in comment:"), fco, fcm, fcc, btnFcStyle);
-        auto* checkRow = new wxBoxSizer(wxHORIZONTAL);
-        checkRow->Add(cbCaseIgnored, 0, wxRIGHT, 16); checkRow->Add(cbFoldComments, 0, wxRIGHT, 16); checkRow->Add(cbFoldCompact, 0, wxRIGHT, 16);
-        checkRow->AddStretchSpacer(); checkRow->Add(btnDefaultStyle);
-        auto* folderTop = new wxBoxSizer(wxVERTICAL);
-        folderTop->Add(checkRow, 0, wxEXPAND | wxALL, 10);
-        folderTop->Add(fc1Box, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
-        folderTop->Add(fc2Box, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
-        folderTop->Add(fcBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
-        pgFolder->SetSizer(folderTop);
-
-        // ---- Tab 2: Comment & Number -----------------------------------------------------------
-        auto* pgComment = new wxPanel(nb); nb->AddPage(pgComment, _("Comment && Number"));
-        auto* cmtBox = new wxStaticBoxSizer(wxVERTICAL, pgComment, _("Comment"));
-        auto* cmtGrid = new wxFlexGridSizer(2, 8, 8);
-        auto* cmtLineOpen = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(120, -1));
-        auto* cmtOpen  = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(120, -1));
-        auto* cmtClose = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(120, -1));
-        cmtGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Line comment open:")), 0, wxALIGN_CENTRE_VERTICAL); cmtGrid->Add(cmtLineOpen);
-        cmtGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Block comment open:")), 0, wxALIGN_CENTRE_VERTICAL); cmtGrid->Add(cmtOpen);
-        cmtGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Block comment close:")), 0, wxALIGN_CENTRE_VERTICAL); cmtGrid->Add(cmtClose);
-        auto* btnStyleLineComment = new wxButton(pgComment, wxID_ANY, _("Style Line Comment..."));
-        auto* btnStyleComment = new wxButton(pgComment, wxID_ANY, _("Style Comment..."));
-        auto* cmtBtnRow = new wxBoxSizer(wxHORIZONTAL); cmtBtnRow->Add(btnStyleLineComment, 0, wxRIGHT, 8); cmtBtnRow->Add(btnStyleComment);
-        cmtBox->Add(cmtGrid, 0, wxALL, 8); cmtBox->Add(cmtBtnRow, 0, wxALL, 8);
-
-        auto* numBox = new wxStaticBoxSizer(wxVERTICAL, pgComment, _("Number"));
-        auto* numGrid = new wxFlexGridSizer(4, 8, 8);   // 4 cols (label,field) x2 per row - keeps the box short enough to fit the tab
-        auto* numPrefix1 = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
-        auto* numPrefix2 = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
-        auto* numExtras1 = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
-        auto* numExtras2 = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
-        auto* numSuffix1 = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
-        auto* numSuffix2 = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
-        auto* numRange   = new wxTextCtrl(pgComment, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1));
-        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Prefix 1:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numPrefix1);
-        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Prefix 2:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numPrefix2);
-        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Extras 1:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numExtras1);
-        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Extras 2:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numExtras2);
-        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Suffix 1:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numSuffix1);
-        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Suffix 2:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numSuffix2);
-        numGrid->Add(new wxStaticText(pgComment, wxID_ANY, _("Range:")), 0, wxALIGN_CENTRE_VERTICAL); numGrid->Add(numRange);
-        auto* btnStyleNumber = new wxButton(pgComment, wxID_ANY, _("Style Number..."));
-        numBox->Add(numGrid, 0, wxALL, 8); numBox->Add(btnStyleNumber, 0, wxALL, 8);
-
-        wxString decOpts[3] = { _(". (dot)"), _(", (comma)"), _("both") };
-        auto* decimalChoice = new wxRadioBox(pgComment, wxID_ANY, _("Decimal separator"), wxDefaultPosition, wxDefaultSize, 3, decOpts, 1, wxRA_SPECIFY_COLS);
-        wxString lcOpts[3] = { _("Off"), _("Force lowercase before matching"), _("Force lowercase in keyword lists too") };
-        auto* forcePureLCChoice = new wxRadioBox(pgComment, wxID_ANY, _("Force pure LC"), wxDefaultPosition, wxDefaultSize, 3, lcOpts, 1, wxRA_SPECIFY_COLS);
-        auto* radioRow = new wxBoxSizer(wxHORIZONTAL); radioRow->Add(decimalChoice, 0, wxRIGHT, 10); radioRow->Add(forcePureLCChoice, 0);
-
-        auto* commentTop = new wxBoxSizer(wxVERTICAL);
-        commentTop->Add(cmtBox, 0, wxEXPAND | wxALL, 10);
-        commentTop->Add(numBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
-        commentTop->Add(radioRow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
-        pgComment->SetSizer(commentTop);
-
-        // ---- Tab 3: Operator & Delimiter -------------------------------------------------------
-        auto* pgOpDelim = new wxPanel(nb); nb->AddPage(pgOpDelim, _("Operator && Delimiter"));
-        auto* opBox = new wxStaticBoxSizer(wxVERTICAL, pgOpDelim, _("Operators"));
-        auto* op1 = new wxTextCtrl(pgOpDelim, wxID_ANY);
-        auto* op2 = new wxTextCtrl(pgOpDelim, wxID_ANY);
-        auto* opGrid = new wxFlexGridSizer(2, 8, 8);
-        opGrid->AddGrowableCol(1, 1);
-        opGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, _("Operators 1:")), 0, wxALIGN_CENTRE_VERTICAL); opGrid->Add(op1, 1, wxEXPAND);
-        opGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, _("Operators 2:")), 0, wxALIGN_CENTRE_VERTICAL); opGrid->Add(op2, 1, wxEXPAND);
-        auto* btnStyleOperators = new wxButton(pgOpDelim, wxID_ANY, _("Style Operators..."));
-        opBox->Add(opGrid, 0, wxEXPAND | wxALL, 8); opBox->Add(btnStyleOperators, 0, wxALL, 8);
-
-        auto* delimBox = new wxStaticBoxSizer(wxVERTICAL, pgOpDelim, _("Delimiters (8 sets)"));
-        auto* delimGrid = new wxFlexGridSizer(5, 6, 6);
-        std::array<wxTextCtrl*, 8> delimOpenCtl{}, delimEscCtl{}, delimCloseCtl{};
-        std::array<wxButton*, 8> delimStyleBtn{};
-        delimGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, _("Set")));
-        delimGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, _("Open")));
-        delimGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, _("Escape")));
-        delimGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, _("Close")));
-        delimGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, ""));
-        for (int i = 0; i < 8; ++i)
-        {
-            delimGrid->Add(new wxStaticText(pgOpDelim, wxID_ANY, wxString::Format("%d", i + 1)), 0, wxALIGN_CENTRE_VERTICAL);
-            delimOpenCtl[i]  = new wxTextCtrl(pgOpDelim, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1));
-            delimEscCtl[i]   = new wxTextCtrl(pgOpDelim, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1));
-            delimCloseCtl[i] = new wxTextCtrl(pgOpDelim, wxID_ANY, "", wxDefaultPosition, wxSize(70, -1));
-            delimStyleBtn[i] = new wxButton(pgOpDelim, wxID_ANY, _("Style..."));
-            delimGrid->Add(delimOpenCtl[i]); delimGrid->Add(delimEscCtl[i]); delimGrid->Add(delimCloseCtl[i]); delimGrid->Add(delimStyleBtn[i]);
-        }
-        delimBox->Add(delimGrid, 0, wxALL, 8);
-        auto* opDelimTop = new wxBoxSizer(wxVERTICAL);
-        opDelimTop->Add(opBox, 0, wxEXPAND | wxALL, 10);
-        opDelimTop->Add(delimBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
-        pgOpDelim->SetSizer(opDelimTop);
-
-        // ---- Tab 4: Keywords --------------------------------------------------------------------
-        auto* pgKeywords = new wxPanel(nb); nb->AddPage(pgKeywords, _("Keywords"));
-        auto* kwGrid = new wxFlexGridSizer(2, 8, 8);
-        kwGrid->AddGrowableCol(1, 1);
-        std::array<wxTextCtrl*, 8> kwCtl{};
-        std::array<wxCheckBox*, 8> kwPrefixCtl{};
-        std::array<wxButton*, 8> kwStyleBtn{};
-        for (int i = 0; i < 8; ++i)
-        {
-            auto* row = new wxBoxSizer(wxHORIZONTAL);
-            kwCtl[i] = new wxTextCtrl(pgKeywords, wxID_ANY);
-            kwPrefixCtl[i] = new wxCheckBox(pgKeywords, wxID_ANY, _("Prefix mode"));
-            kwStyleBtn[i] = new wxButton(pgKeywords, wxID_ANY, _("Style..."));
-            row->Add(kwCtl[i], 1, wxEXPAND | wxRIGHT, 8);
-            row->Add(kwPrefixCtl[i], 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
-            row->Add(kwStyleBtn[i], 0);
-            kwGrid->Add(new wxStaticText(pgKeywords, wxID_ANY, wxString::Format(_("Keywords %d:"), i + 1)), 0, wxALIGN_CENTRE_VERTICAL);
-            kwGrid->Add(row, 1, wxEXPAND);
-        }
-        auto* kwTop = new wxBoxSizer(wxVERTICAL); kwTop->Add(kwGrid, 1, wxEXPAND | wxALL, 10);
-        pgKeywords->SetSizer(kwTop);
-
-        // ---- bottom buttons + overall layout ----------------------------------------------------
-        auto* btnSave  = new wxButton(&dlg, wxID_ANY, _("Save"));
-        auto* btnClose = new wxButton(&dlg, wxID_CANCEL, _("Close"));
-        auto* bottomRow = new wxBoxSizer(wxHORIZONTAL); bottomRow->AddStretchSpacer(); bottomRow->Add(btnSave, 0, wxRIGHT, 8); bottomRow->Add(btnClose);
-        auto* top = new wxBoxSizer(wxVERTICAL);
-        top->Add(pickRow, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 10);
-        top->Add(nameRow, 0, wxEXPAND | wxALL, 10);
-        top->Add(nb, 1, wxEXPAND | wxLEFT | wxRIGHT, 10);
-        top->Add(bottomRow, 0, wxEXPAND | wxALL, 10);
-        dlg.SetSizer(top);
-
-        // ---- data binding -----------------------------------------------------------------------
-        auto pushToControls = [&]{
-            nameField->SetValue(cur.name); extField->SetValue(cur.ext);
-            cbCaseIgnored->SetValue(cur.caseIgnored); cbFoldComments->SetValue(cur.allowFoldOfComments); cbFoldCompact->SetValue(cur.foldCompact);
-            fc1o->SetValue(cur.foldCode1.open); fc1m->SetValue(cur.foldCode1.middle); fc1c->SetValue(cur.foldCode1.close);
-            fc2o->SetValue(cur.foldCode2.open); fc2m->SetValue(cur.foldCode2.middle); fc2c->SetValue(cur.foldCode2.close);
-            fco->SetValue(cur.foldComment.open); fcm->SetValue(cur.foldComment.middle); fcc->SetValue(cur.foldComment.close);
-            cmtLineOpen->SetValue(cur.commentLineOpen); cmtOpen->SetValue(cur.commentOpen); cmtClose->SetValue(cur.commentClose);
-            numPrefix1->SetValue(cur.numPrefix1); numPrefix2->SetValue(cur.numPrefix2);
-            numExtras1->SetValue(cur.numExtras1); numExtras2->SetValue(cur.numExtras2);
-            numSuffix1->SetValue(cur.numSuffix1); numSuffix2->SetValue(cur.numSuffix2);
-            numRange->SetValue(cur.numRange);
-            decimalChoice->SetSelection(cur.decimalSeparator); forcePureLCChoice->SetSelection(cur.forcePureLC);
-            op1->SetValue(cur.operators1); op2->SetValue(cur.operators2);
-            for (int i = 0; i < 8; ++i)
-            {
-                delimOpenCtl[i]->SetValue(cur.delimiters[i].open);
-                delimEscCtl[i]->SetValue(cur.delimiters[i].escape);
-                delimCloseCtl[i]->SetValue(cur.delimiters[i].close);
-                kwCtl[i]->SetValue(cur.keywords[i]);
-                kwPrefixCtl[i]->SetValue(cur.prefixMode[i]);
-            }
-        };
-        auto pullFromControls = [&]{
-            cur.name = nameField->GetValue(); cur.ext = extField->GetValue();
-            cur.caseIgnored = cbCaseIgnored->GetValue(); cur.allowFoldOfComments = cbFoldComments->GetValue(); cur.foldCompact = cbFoldCompact->GetValue();
-            cur.foldCode1 = { fc1o->GetValue(), fc1m->GetValue(), fc1c->GetValue() };
-            cur.foldCode2 = { fc2o->GetValue(), fc2m->GetValue(), fc2c->GetValue() };
-            cur.foldComment = { fco->GetValue(), fcm->GetValue(), fcc->GetValue() };
-            cur.commentLineOpen = cmtLineOpen->GetValue(); cur.commentOpen = cmtOpen->GetValue(); cur.commentClose = cmtClose->GetValue();
-            cur.numPrefix1 = numPrefix1->GetValue(); cur.numPrefix2 = numPrefix2->GetValue();
-            cur.numExtras1 = numExtras1->GetValue(); cur.numExtras2 = numExtras2->GetValue();
-            cur.numSuffix1 = numSuffix1->GetValue(); cur.numSuffix2 = numSuffix2->GetValue();
-            cur.numRange = numRange->GetValue();
-            cur.decimalSeparator = decimalChoice->GetSelection(); cur.forcePureLC = forcePureLCChoice->GetSelection();
-            cur.operators1 = op1->GetValue(); cur.operators2 = op2->GetValue();
-            for (int i = 0; i < 8; ++i)
-            {
-                cur.delimiters[i] = { delimOpenCtl[i]->GetValue(), delimEscCtl[i]->GetValue(), delimCloseCtl[i]->GetValue() };
-                cur.keywords[i] = kwCtl[i]->GetValue();
-                cur.prefixMode[i] = kwPrefixCtl[i]->GetValue();
-            }
-        };
-        auto refreshLangCombo = [&]{
-            langCombo->Clear();
-            for (auto& u : m_udls) langCombo->Append(u.name);
-            if (curIndex >= 0 && curIndex < (int)m_udls.size()) langCombo->SetSelection(curIndex);
-        };
-        refreshLangCombo();
-        pushToControls();
-
-        langCombo->Bind(wxEVT_CHOICE, [&](wxCommandEvent&){
-            curIndex = langCombo->GetSelection();
-            if (curIndex >= 0 && curIndex < (int)m_udls.size()) { cur = m_udls[curIndex]; pushToControls(); }
-        });
-        btnNew->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
-            curIndex = -1; cur = UdlLanguage{}; cur.name = _("NewLanguage");
-            langCombo->SetSelection(wxNOT_FOUND);
-            pushToControls();
-        });
-        btnRemove->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
-            if (curIndex < 0 || curIndex >= (int)m_udls.size()) return;
-            if (wxMessageBox(wxString::Format(_("Remove user-defined language \"%s\"?"), m_udls[curIndex].name),
-                              "wxNote", wxYES_NO | wxICON_QUESTION, &dlg) != wxYES) return;
-            { wxLogNull noLog; wxRemoveFile(udlDir() + wxFILE_SEP_PATH + m_udls[curIndex].name + ".xml"); }
-            m_udls.erase(m_udls.begin() + curIndex);
-            curIndex = m_udls.empty() ? -1 : 0;
-            cur = curIndex >= 0 ? m_udls[curIndex] : UdlLanguage{};
-            refreshLangCombo(); pushToControls();
-            rebuildUserLangMenu();
-        });
-
-        auto styleBtnHandler = [&](wxButton* btn, int styleIdx, const wxString& title) {
-            btn->Bind(wxEVT_BUTTON, [this, &cur, styleIdx, title](wxCommandEvent&){ showUdlStylerDialog(title, cur.styles[styleIdx]); });
-        };
-        styleBtnHandler(btnDefaultStyle, UDL_STYLE_DEFAULT, _("Style: Default"));
-        styleBtnHandler(btnFc1Style, UDL_STYLE_FOLDER_IN_CODE1, _("Style: Folder in code1"));
-        styleBtnHandler(btnFc2Style, UDL_STYLE_FOLDER_IN_CODE2, _("Style: Folder in code2"));
-        styleBtnHandler(btnFcStyle, UDL_STYLE_FOLDER_IN_COMMENT, _("Style: Folder in comment"));
-        styleBtnHandler(btnStyleLineComment, UDL_STYLE_LINE_COMMENTS, _("Style: Line Comment"));
-        styleBtnHandler(btnStyleComment, UDL_STYLE_COMMENTS, _("Style: Comment"));
-        styleBtnHandler(btnStyleNumber, UDL_STYLE_NUMBERS, _("Style: Number"));
-        styleBtnHandler(btnStyleOperators, UDL_STYLE_OPERATORS, _("Style: Operators"));
-        for (int i = 0; i < 8; ++i) styleBtnHandler(delimStyleBtn[i], UDL_STYLE_DELIMITERS1 + i, wxString::Format(_("Style: Delimiter %d"), i + 1));
-        for (int i = 0; i < 8; ++i) styleBtnHandler(kwStyleBtn[i], UDL_STYLE_KEYWORDS1 + i, wxString::Format(_("Style: Keywords %d"), i + 1));
-
-        btnSave->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
-            const wxString oldName = (curIndex >= 0 && curIndex < (int)m_udls.size()) ? m_udls[curIndex].name : wxString();
-            pullFromControls();
-            if (cur.name.empty()) { wxMessageBox(_("Please give the language a name."), "wxNote", wxOK | wxICON_WARNING, &dlg); return; }
-            if (curIndex < 0) { m_udls.push_back(cur); curIndex = (int)m_udls.size() - 1; }
-            else m_udls[curIndex] = cur;
-            if (!oldName.empty() && oldName != cur.name) { wxLogNull noLog; wxRemoveFile(udlDir() + wxFILE_SEP_PATH + oldName + ".xml"); }
-            saveUdlToDisk(m_udls[curIndex]);
-            refreshLangCombo();
-            rebuildUserLangMenu();
-            if (auto* p = activePage(); p && p->udlIndex == curIndex) setLexerForFile(p->path);   // live-refresh if this UDL is on screen right now
-            setStatus(0, wxString::Format(_("User-Defined Language \"%s\" saved"), cur.name)); m_hint = true;
-        });
-
-        themeDialog(&dlg);
-        dlg.ShowModal();
     }
     // Settings > Import > Import plugin(s)...: on Windows, .dll can be EITHER a real Notepad++-ABI plugin
     // (the GPL npp-bridge scans <exe>/plugins/<Name>/<Name>.dll - see packages/npp-bridge) or one of our own
@@ -8077,7 +7833,7 @@ private:
         return s;
     }
     // File > Print... (prompt=true, shows the Print dialog) / Print Now (prompt=false, uses the last settings).
-    // Re-entrancy guarded: wxPrinter::Print() pumps a nested modal loop, and a second IDM_FILE_PRINT delivered
+    // Re-entrancy guarded: wxPrinter::Print() pumps a nested modal loop, and a second kCmdFilePrint delivered
     // while that loop is running (e.g. a held/repeated Ctrl+P) would race two SciPrintout jobs over the same
     // wxStyledTextCtrl/DC.
     void doPrint(bool prompt)
@@ -8122,42 +7878,42 @@ private:
     void showEolMenu()   // small popup at the cursor: convert the document's line endings
     {
         wxMenu m;
-        m.Append(IDM_FORMAT_TODOS,  _("Windows (CR LF)"));
-        m.Append(IDM_FORMAT_TOUNIX, _("Unix (LF)"));
-        m.Append(IDM_FORMAT_TOMAC,  _("Macintosh (CR)"));
+        m.Append(kCmdFormatTodos,  _("Windows (CR LF)"));
+        m.Append(kCmdFormatTounix, _("Unix (LF)"));
+        m.Append(kCmdFormatTomac,  _("Macintosh (CR)"));
         switch (this->GetPopupMenuSelectionFromUser(m))
         {
-            case IDM_FORMAT_TODOS:  setEol(SC_EOL_CRLF); break;
-            case IDM_FORMAT_TOUNIX: setEol(SC_EOL_LF);   break;
-            case IDM_FORMAT_TOMAC:  setEol(SC_EOL_CR);   break;
+            case kCmdFormatTodos:  setEol(SC_EOL_CRLF); break;
+            case kCmdFormatTounix: setEol(SC_EOL_LF);   break;
+            case kCmdFormatTomac:  setEol(SC_EOL_CR);   break;
         }
     }
     void showEncodingMenu()   // status-bar encoding field: re-interpret (fix a misread file) or convert the encoding
     {
         wxMenu m;
-        m.Append(IDM_FORMAT_ANSI,      _("Encode as ANSI"));
-        m.Append(IDM_FORMAT_AS_UTF_8,  _("Encode as UTF-8"));
-        m.Append(IDM_FORMAT_UTF_8,     _("Encode as UTF-8 BOM"));
-        m.Append(IDM_FORMAT_UTF_16LE,  _("Encode as UTF-16 LE BOM"));
-        m.Append(IDM_FORMAT_UTF_16BE,  _("Encode as UTF-16 BE BOM"));
+        m.Append(kCmdFormatAnsi,      _("Encode as ANSI"));
+        m.Append(kCmdFormatAsUtf8,  _("Encode as UTF-8"));
+        m.Append(kCmdFormatUtf8,     _("Encode as UTF-8 BOM"));
+        m.Append(kCmdFormatUtf16le,  _("Encode as UTF-16 LE BOM"));
+        m.Append(kCmdFormatUtf16be,  _("Encode as UTF-16 BE BOM"));
         m.AppendSeparator();
-        m.Append(IDM_FORMAT_CONV2_ANSI,     _("Convert to ANSI"));
-        m.Append(IDM_FORMAT_CONV2_AS_UTF_8, _("Convert to UTF-8"));
-        m.Append(IDM_FORMAT_CONV2_UTF_8,    _("Convert to UTF-8 BOM"));
-        m.Append(IDM_FORMAT_CONV2_UTF_16LE, _("Convert to UTF-16 LE BOM"));
-        m.Append(IDM_FORMAT_CONV2_UTF_16BE, _("Convert to UTF-16 BE BOM"));
+        m.Append(kCmdFormatConv2Ansi,     _("Convert to ANSI"));
+        m.Append(kCmdFormatConv2AsUtf8, _("Convert to UTF-8"));
+        m.Append(kCmdFormatConv2Utf8,    _("Convert to UTF-8 BOM"));
+        m.Append(kCmdFormatConv2Utf16le, _("Convert to UTF-16 LE BOM"));
+        m.Append(kCmdFormatConv2Utf16be, _("Convert to UTF-16 BE BOM"));
         switch (this->GetPopupMenuSelectionFromUser(m))
         {
-            case IDM_FORMAT_ANSI:      interpretAs(ENC_ANSI);     break;
-            case IDM_FORMAT_AS_UTF_8:  interpretAs(ENC_UTF8);     break;
-            case IDM_FORMAT_UTF_8:     interpretAs(ENC_UTF8_BOM); break;
-            case IDM_FORMAT_UTF_16LE:  interpretAs(ENC_UTF16_LE); break;
-            case IDM_FORMAT_UTF_16BE:  interpretAs(ENC_UTF16_BE); break;
-            case IDM_FORMAT_CONV2_ANSI:     convertTo(ENC_ANSI);     break;
-            case IDM_FORMAT_CONV2_AS_UTF_8: convertTo(ENC_UTF8);     break;
-            case IDM_FORMAT_CONV2_UTF_8:    convertTo(ENC_UTF8_BOM); break;
-            case IDM_FORMAT_CONV2_UTF_16LE: convertTo(ENC_UTF16_LE); break;
-            case IDM_FORMAT_CONV2_UTF_16BE: convertTo(ENC_UTF16_BE); break;
+            case kCmdFormatAnsi:      interpretAs(ENC_ANSI);     break;
+            case kCmdFormatAsUtf8:  interpretAs(ENC_UTF8);     break;
+            case kCmdFormatUtf8:     interpretAs(ENC_UTF8_BOM); break;
+            case kCmdFormatUtf16le:  interpretAs(ENC_UTF16_LE); break;
+            case kCmdFormatUtf16be:  interpretAs(ENC_UTF16_BE); break;
+            case kCmdFormatConv2Ansi:     convertTo(ENC_ANSI);     break;
+            case kCmdFormatConv2AsUtf8: convertTo(ENC_UTF8);     break;
+            case kCmdFormatConv2Utf8:    convertTo(ENC_UTF8_BOM); break;
+            case kCmdFormatConv2Utf16le: convertTo(ENC_UTF16_LE); break;
+            case kCmdFormatConv2Utf16be: convertTo(ENC_UTF16_BE); break;
         }
     }
     void showAbout()
@@ -8179,7 +7935,7 @@ private:
 
 #ifdef __WXMSW__
     // wxToolBar::MSWCommand sign-extends the 16-bit WM_COMMAND id to a signed short, so command ids
-    // above 32767 (e.g. IDM_FILE_NEW = 41001) wrap negative and its FindById() can't match the tool - the
+    // above 32767 (e.g. kCmdFileNew = 41001) wrap negative and its FindById() can't match the tool - the
     // click is silently dropped (this also breaks the native frame toolbar, not just the aui one). Catch a
     // toolbar's WM_COMMAND here and redispatch it through onCommand with the correct, unsigned id.
     WXLRESULT MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam) override
@@ -8247,361 +8003,360 @@ private:
         if (cmd >= myID_DOCLIST_ITEM && cmd < myID_DOCLIST_ITEM + 1000)   // document-list dropdown entry
         { const size_t n = (size_t)(cmd - myID_DOCLIST_ITEM); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); return; }
         if (const WxnLang* L = wxnLangFind(cmd)) { setForcedLang(L->lexer, L->name); return; }   // Language menu: force that lexer on the active buffer
-        if (cmd >= IDM_LANG_USER && cmd < IDM_LANG_USER_LIMIT)   // Language menu: a user-defined language's dynamic entry (rebuildUserLangMenu)
-        { applyUdlToActiveBuffer(cmd - IDM_LANG_USER); return; }
+        if (cmd >= kSciLangMenuBase && cmd < kSciLangMenuBase + (int)m_sciLangs.size())   // Language menu: a registered Scintillua language
+        { applyScintilluaToActiveBuffer(m_sciLangs[cmd - kSciLangMenuBase].name); return; }
         if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + 200)        // a saved macro from the Macro menu
         { const size_t n = (size_t)(cmd - myID_MACRO_ITEM); if (n < m_savedMacros.size()) playMacro(m_savedMacros[n].second); return; }
         if (cmd >= myID_OPENFOLDER_TOOL_BASE && cmd < myID_OPENFOLDER_TOOL_BASE + (int)m_openFolderTools.size())
         { openHereToolAt(cmd - myID_OPENFOLDER_TOOL_BASE); return; }   // a dynamically-detected File > Open Containing Folder entry
         // Win32 WM_COMMAND carries only a 16-bit id and wx sign-extends it, so command ids
-        // above 32767 (all of the IDM_* range) arrive negative. Read it as unsigned 16-bit
+        // above 32767 (all of the kCmd* range) arrive negative. Read it as unsigned 16-bit
         // (LOWORD(wParam) semantics).
         switch (e.GetId() & 0xFFFF)
         {
-            case IDM_FILE_NEW: doNew(); break;
-            case IDM_FILE_OPEN: onOpen(); break;
-            case IDM_FILE_RELOAD: onReload(); break;
-            case IDM_FILE_SAVE: case IDM_FILE_SAVEALL: onSave(); break;
-            case IDM_FILE_SAVEAS: onSaveAs(); break;
-            case IDM_FILE_CLOSE: closeActive(); break;
-            case IDM_FILE_RESTORELASTCLOSEDFILE: restoreLastClosed(); break;
-            case IDM_FILE_CLOSEALL: closeAll(); break;
-            case IDM_FILE_CLOSEALL_BUT_CURRENT: closeAllBut(activePage()); break;
-            case IDM_FILE_EXIT: Close(true); break;
+            case kCmdFileNew: doNew(); break;
+            case kCmdFileOpen: onOpen(); break;
+            case kCmdFileReload: onReload(); break;
+            case kCmdFileSave: case kCmdFileSaveall: onSave(); break;
+            case kCmdFileSaveas: onSaveAs(); break;
+            case kCmdFileClose: closeActive(); break;
+            case kCmdFileRestoreLastClosedFile: restoreLastClosed(); break;
+            case kCmdFileCloseall: closeAll(); break;
+            case kCmdFileCloseallButCurrent: closeAllBut(activePage()); break;
+            case kCmdFileExit: Close(true); break;
 
-            case IDM_VIEW_GOTO_ANOTHER_VIEW:     openInOtherView(false); break;   // move the active doc to the other view
-            case IDM_VIEW_CLONE_TO_ANOTHER_VIEW: openInOtherView(true);  break;   // clone it there (shared document)
+            case kCmdViewGotoAnotherView:     openInOtherView(false); break;   // move the active doc to the other view
+            case kCmdViewCloneToAnotherView: openInOtherView(true);  break;   // clone it there (shared document)
 
-            case IDM_EDIT_UNDO: sci(SCI_UNDO); break;
-            case IDM_EDIT_REDO: sci(SCI_REDO); break;
-            case IDM_EDIT_CUT: sci(SCI_CUT); recordClip(); break;
-            case IDM_EDIT_COPY: sci(SCI_COPY); recordClip(); break;
-            case IDM_EDIT_PASTE: sci(SCI_PASTE); break;
-            case IDM_EDIT_DELETE: sci(SCI_CLEAR); break;
-            case IDM_EDIT_SELECTALL: sci(SCI_SELECTALL); break;
-            case IDM_EDIT_MULTISELECTALL:                   multiSelectAll(0); break;
-            case IDM_EDIT_MULTISELECTALLMATCHCASE:          multiSelectAll(SCFIND_MATCHCASE); break;
-            case IDM_EDIT_MULTISELECTALLWHOLEWORD:          multiSelectAll(SCFIND_WHOLEWORD); break;
-            case IDM_EDIT_MULTISELECTALLMATCHCASEWHOLEWORD: multiSelectAll(SCFIND_MATCHCASE | SCFIND_WHOLEWORD); break;
-            case IDM_EDIT_MULTISELECTNEXT:                   multiSelectNext(0); break;
-            case IDM_EDIT_MULTISELECTNEXTMATCHCASE:          multiSelectNext(SCFIND_MATCHCASE); break;
-            case IDM_EDIT_MULTISELECTNEXTWHOLEWORD:          multiSelectNext(SCFIND_WHOLEWORD); break;
-            case IDM_EDIT_MULTISELECTNEXTMATCHCASEWHOLEWORD: multiSelectNext(SCFIND_MATCHCASE | SCFIND_WHOLEWORD); break;
-            case IDM_EDIT_MULTISELECTUNDO:                   multiSelectUndo(); break;
-            case IDM_EDIT_MULTISELECTSSKIP:                  multiSelectSkip(0); break;
-            case IDM_EDIT_UPPERCASE: sci(SCI_UPPERCASE); break;
-            case IDM_EDIT_LOWERCASE: sci(SCI_LOWERCASE); break;
-            case IDM_EDIT_INVERTCASE: transformSel([](std::string& s){ for (char& c : s) c = (char)(std::isupper((unsigned char)c) ? std::tolower((unsigned char)c) : std::toupper((unsigned char)c)); }); break;
-            case IDM_EDIT_PROPERCASE_FORCE: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ c = (char)(st ? std::toupper((unsigned char)c) : std::tolower((unsigned char)c)); st = false; } else st = true; } }); break;
-            case IDM_EDIT_SENTENCECASE_FORCE: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ c = (char)(st ? std::toupper((unsigned char)c) : std::tolower((unsigned char)c)); st = false; } else if (c=='.'||c=='!'||c=='?') st = true; } }); break;
-            case IDM_EDIT_DUP_LINE: sci(SCI_LINEDUPLICATE); break;
-            case IDM_EDIT_LINE_UP: sci(SCI_MOVESELECTEDLINESUP); break;
-            case IDM_EDIT_LINE_DOWN: sci(SCI_MOVESELECTEDLINESDOWN); break;
-            case IDM_EDIT_REMOVEEMPTYLINES: removeEmptyLines(); break;
-            case IDM_EDIT_TRIMTRAILING: trimTrailing(); break;
-            case IDM_EDIT_TRIMLINEHEAD: trimLeading(); break;
-            case IDM_EDIT_TRIM_BOTH: trimBoth(); break;
-            case IDM_EDIT_EOL2WS: eolToSpace(); break;
-            case IDM_EDIT_TRIMALL: trimBoth(); eolToSpace(); break;
-            case IDM_EDIT_TAB2SW: tabsToSpaces(); break;
-            case IDM_EDIT_INS_TAB: sci(SCI_TAB); break;
-            case IDM_EDIT_RMV_TAB: sci(SCI_BACKTAB); break;
-            case IDM_EDIT_JOIN_LINES: linesJoin(); break;
-            case IDM_EDIT_SPLIT_LINES: linesSplit(); break;
-            case IDM_EDIT_BLANKLINEABOVECURRENT: blankLine(false); break;
-            case IDM_EDIT_BLANKLINEBELOWCURRENT: blankLine(true); break;
-            case IDM_EDIT_REMOVE_ANY_DUP_LINES: removeDuplicateLines(false); break;
-            case IDM_EDIT_REMOVE_CONSECUTIVE_DUP_LINES: removeDuplicateLines(true); break;
-            case IDM_EDIT_SORTLINES_REVERSE_ORDER: reverseLines(); break;
-            case IDM_EDIT_SORTLINES_LEXICOGRAPHIC_ASCENDING: sortLines(0, false); break;
-            case IDM_EDIT_SORTLINES_LEXICOGRAPHIC_DESCENDING: sortLines(0, true); break;
-            case IDM_EDIT_SORTLINES_LEXICO_CASE_INSENS_ASCENDING: sortLines(1, false); break;
-            case IDM_EDIT_SORTLINES_LEXICO_CASE_INSENS_DESCENDING: sortLines(1, true); break;
-            case IDM_EDIT_SORTLINES_INTEGER_ASCENDING: sortLines(2, false); break;
-            case IDM_EDIT_SORTLINES_INTEGER_DESCENDING: sortLines(2, true); break;
-            case IDM_EDIT_INSERT_DATETIME_SHORT: insertDateTime(false); break;
-            case IDM_EDIT_INSERT_DATETIME_LONG: insertDateTime(true); break;
-            case IDM_EDIT_BLOCK_COMMENT: toggleLineComment(); break;
-            case IDM_FORMAT_TODOS: setEol(SC_EOL_CRLF); break;
-            case IDM_FORMAT_TOUNIX: setEol(SC_EOL_LF); break;
-            case IDM_FORMAT_TOMAC: setEol(SC_EOL_CR); break;
+            case kCmdEditUndo: sci(SCI_UNDO); break;
+            case kCmdEditRedo: sci(SCI_REDO); break;
+            case kCmdEditCut: sci(SCI_CUT); recordClip(); break;
+            case kCmdEditCopy: sci(SCI_COPY); recordClip(); break;
+            case kCmdEditPaste: sci(SCI_PASTE); break;
+            case kCmdEditDelete: sci(SCI_CLEAR); break;
+            case kCmdEditSelectall: sci(SCI_SELECTALL); break;
+            case kCmdEditMultiSelectAll:                   multiSelectAll(0); break;
+            case kCmdEditMultiSelectAllMatchCase:          multiSelectAll(SCFIND_MATCHCASE); break;
+            case kCmdEditMultiSelectAllWholeWord:          multiSelectAll(SCFIND_WHOLEWORD); break;
+            case kCmdEditMultiSelectAllMatchCaseWholeWord: multiSelectAll(SCFIND_MATCHCASE | SCFIND_WHOLEWORD); break;
+            case kCmdEditMultiSelectNext:                   multiSelectNext(0); break;
+            case kCmdEditMultiSelectNextMatchCase:          multiSelectNext(SCFIND_MATCHCASE); break;
+            case kCmdEditMultiSelectNextWholeWord:          multiSelectNext(SCFIND_WHOLEWORD); break;
+            case kCmdEditMultiSelectNextMatchCaseWholeWord: multiSelectNext(SCFIND_MATCHCASE | SCFIND_WHOLEWORD); break;
+            case kCmdEditMultiSelectUndo:                   multiSelectUndo(); break;
+            case kCmdEditMultiSelectSkip:                  multiSelectSkip(0); break;
+            case kCmdEditUppercase: sci(SCI_UPPERCASE); break;
+            case kCmdEditLowercase: sci(SCI_LOWERCASE); break;
+            case kCmdEditInvertcase: transformSel([](std::string& s){ for (char& c : s) c = (char)(std::isupper((unsigned char)c) ? std::tolower((unsigned char)c) : std::toupper((unsigned char)c)); }); break;
+            case kCmdEditPropercaseForce: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ c = (char)(st ? std::toupper((unsigned char)c) : std::tolower((unsigned char)c)); st = false; } else st = true; } }); break;
+            case kCmdEditSentenceCaseForce: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ c = (char)(st ? std::toupper((unsigned char)c) : std::tolower((unsigned char)c)); st = false; } else if (c=='.'||c=='!'||c=='?') st = true; } }); break;
+            case kCmdEditDupLine: sci(SCI_LINEDUPLICATE); break;
+            case kCmdEditLineUp: sci(SCI_MOVESELECTEDLINESUP); break;
+            case kCmdEditLineDown: sci(SCI_MOVESELECTEDLINESDOWN); break;
+            case kCmdEditRemoveEmptyLines: removeEmptyLines(); break;
+            case kCmdEditTrimTrailing: trimTrailing(); break;
+            case kCmdEditTrimLineHead: trimLeading(); break;
+            case kCmdEditTrimBoth: trimBoth(); break;
+            case kCmdEditEol2ws: eolToSpace(); break;
+            case kCmdEditTrimall: trimBoth(); eolToSpace(); break;
+            case kCmdEditTab2sw: tabsToSpaces(); break;
+            case kCmdEditInsTab: sci(SCI_TAB); break;
+            case kCmdEditRmvTab: sci(SCI_BACKTAB); break;
+            case kCmdEditJoinLines: linesJoin(); break;
+            case kCmdEditSplitLines: linesSplit(); break;
+            case kCmdEditBlankLineAboveCurrent: blankLine(false); break;
+            case kCmdEditBlankLineBelowCurrent: blankLine(true); break;
+            case kCmdEditRemoveAnyDupLines: removeDuplicateLines(false); break;
+            case kCmdEditRemoveConsecutiveDupLines: removeDuplicateLines(true); break;
+            case kCmdEditSortlinesReverseOrder: reverseLines(); break;
+            case kCmdEditSortlinesLexicographicAscending: sortLines(0, false); break;
+            case kCmdEditSortlinesLexicographicDescending: sortLines(0, true); break;
+            case kCmdEditSortlinesLexicoCaseInsensAscending: sortLines(1, false); break;
+            case kCmdEditSortlinesLexicoCaseInsensDescending: sortLines(1, true); break;
+            case kCmdEditSortlinesIntegerAscending: sortLines(2, false); break;
+            case kCmdEditSortlinesIntegerDescending: sortLines(2, true); break;
+            case kCmdEditInsertDatetimeShort: insertDateTime(false); break;
+            case kCmdEditInsertDatetimeLong: insertDateTime(true); break;
+            case kCmdEditBlockComment: toggleLineComment(); break;
+            case kCmdFormatTodos: setEol(SC_EOL_CRLF); break;
+            case kCmdFormatTounix: setEol(SC_EOL_LF); break;
+            case kCmdFormatTomac: setEol(SC_EOL_CR); break;
 
-            case IDM_SEARCH_FIND: onFind(); break;
-            case IDM_SEARCH_FINDINFILES: onFindInFiles(); break;
-            case IDM_SEARCH_FINDNEXT: findNext(true); break;
-            case IDM_SEARCH_FINDPREV: findNext(false); break;
-            case IDM_SEARCH_REPLACE: onReplace(); break;
-            case IDM_SEARCH_GOTOLINE: onGoTo(); break;
-            case IDM_SEARCH_GOTOMATCHINGBRACE: gotoMatchingBrace(); break;
-            case IDM_SEARCH_TOGGLE_BOOKMARK: toggleBookmark(); break;
-            case IDM_SEARCH_NEXT_BOOKMARK: gotoBookmark(true); break;
-            case IDM_SEARCH_PREV_BOOKMARK: gotoBookmark(false); break;
-            case IDM_SEARCH_CLEAR_BOOKMARKS: sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); break;
+            case kCmdSearchFind: onFind(); break;
+            case kCmdSearchFindinfiles: onFindInFiles(); break;
+            case kCmdSearchFindnext: findNext(true); break;
+            case kCmdSearchFindprev: findNext(false); break;
+            case kCmdSearchReplace: onReplace(); break;
+            case kCmdSearchGotoline: onGoTo(); break;
+            case kCmdSearchGotoMatchingBrace: gotoMatchingBrace(); break;
+            case kCmdSearchToggleBookmark: toggleBookmark(); break;
+            case kCmdSearchNextBookmark: gotoBookmark(true); break;
+            case kCmdSearchPrevBookmark: gotoBookmark(false); break;
+            case kCmdSearchClearBookmarks: sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); break;
             // Change History: SCI_SETCHANGEHISTORY was added in upstream Scintilla 5.3.0; wx vendors its
             // own Scintilla fork (github.com/wxWidgets/scintilla, "wx" branch) at 5.0.0 - confirmed still
             // true as of the latest wx release (3.3.2, 2026-03) by checking that fork's pinned commit
             // directly, not just our own currently-built 3.3.1. This isn't a "bump our pinned version"
             // fix - there is currently no wxWidgets release whose vendored Scintilla is new enough, so
             // there's nothing to bump TO. Revisit if/when wx's own Scintilla fork catches up upstream.
-            case IDM_SEARCH_CHANGED_NEXT:
-            case IDM_SEARCH_CHANGED_PREV:
-            case IDM_SEARCH_CLEAR_CHANGE_HISTORY: notImpl(_("Change History (needs a newer Scintilla than this wx build carries)")); break;
+            case kCmdSearchChangedNext:
+            case kCmdSearchChangedPrev:
+            case kCmdSearchClearChangeHistory: notImpl(_("Change History (needs a newer Scintilla than this wx build carries)")); break;
 
-            case IDM_VIEW_ZOOMIN: sci(SCI_ZOOMIN); break;
-            case IDM_VIEW_ZOOMOUT: sci(SCI_ZOOMOUT); break;
-            case IDM_VIEW_ZOOMRESTORE: sci(SCI_SETZOOM, 0); break;
-            case IDM_VIEW_WRAP: toggleWrap(); break;
-            case IDM_VIEW_ALL_CHARACTERS: toggleWs(); break;
-            case IDM_VIEW_INDENT_GUIDE: toggleGuides(); break;
-            case IDM_VIEW_TAB_SPACE: toggleWs(); break;            // "Show Space and Tab"
-            case IDM_VIEW_EOL: sci(SCI_SETVIEWEOL, sci(SCI_GETVIEWEOL) ? 0 : 1); break;
-            case IDM_VIEW_NPC: toggleWs(); break;   // "Show Non-Printing Characters" == show whitespace + EOL
-            case IDM_VIEW_NPC_CCUNIEOL: { const bool on = sci(SCI_GETLINEENDTYPESALLOWED) == 0; sci(SCI_SETLINEENDTYPESALLOWED, on ? SC_LINE_END_TYPE_UNICODE : 0); if (menuBar()) menuBar()->Check(IDM_VIEW_NPC_CCUNIEOL, on); break; }
-            case IDM_VIEW_GOTO_START: sci(SCI_DOCUMENTSTART); break;
-            case IDM_VIEW_GOTO_END:   sci(SCI_DOCUMENTEND);   break;
-            case IDM_VIEW_TAB_COLOUR_1: applyTabColour(0); break;
-            case IDM_VIEW_TAB_COLOUR_2: applyTabColour(1); break;
-            case IDM_VIEW_TAB_COLOUR_3: applyTabColour(2); break;
-            case IDM_VIEW_TAB_COLOUR_4: applyTabColour(3); break;
-            case IDM_VIEW_TAB_COLOUR_5: applyTabColour(4); break;
-            case IDM_VIEW_TAB_COLOUR_NONE: applyTabColour(-1); break;
-            case IDM_EDIT_RTL: if (m_stc) m_stc->SetLayoutDirection(wxLayout_RightToLeft); break;
-            case IDM_EDIT_LTR: if (m_stc) m_stc->SetLayoutDirection(wxLayout_LeftToRight); break;
-            case IDM_VIEW_TAB_NEXT: mruSwitch(); break;   // Ctrl+Tab -> most-recently-used switch
-            case IDM_VIEW_TAB_PREV: m_tabs->AdvanceSelection(false); break;
-            case IDM_VIEW_TAB_MOVEFORWARD:  moveTab(true);  break;
-            case IDM_VIEW_TAB_MOVEBACKWARD: moveTab(false); break;
+            case kCmdViewZoomin: sci(SCI_ZOOMIN); break;
+            case kCmdViewZoomout: sci(SCI_ZOOMOUT); break;
+            case kCmdViewZoomrestore: sci(SCI_SETZOOM, 0); break;
+            case kCmdViewWrap: toggleWrap(); break;
+            case kCmdViewAllCharacters: toggleWs(); break;
+            case kCmdViewIndentGuide: toggleGuides(); break;
+            case kCmdViewTabSpace: toggleWs(); break;            // "Show Space and Tab"
+            case kCmdViewEol: sci(SCI_SETVIEWEOL, sci(SCI_GETVIEWEOL) ? 0 : 1); break;
+            case kCmdViewNpc: toggleWs(); break;   // "Show Non-Printing Characters" == show whitespace + EOL
+            case kCmdViewNpcCcunieol: { const bool on = sci(SCI_GETLINEENDTYPESALLOWED) == 0; sci(SCI_SETLINEENDTYPESALLOWED, on ? SC_LINE_END_TYPE_UNICODE : 0); if (menuBar()) menuBar()->Check(kCmdViewNpcCcunieol, on); break; }
+            case kCmdViewGotoStart: sci(SCI_DOCUMENTSTART); break;
+            case kCmdViewGotoEnd:   sci(SCI_DOCUMENTEND);   break;
+            case kCmdViewTabColour1: applyTabColour(0); break;
+            case kCmdViewTabColour2: applyTabColour(1); break;
+            case kCmdViewTabColour3: applyTabColour(2); break;
+            case kCmdViewTabColour4: applyTabColour(3); break;
+            case kCmdViewTabColour5: applyTabColour(4); break;
+            case kCmdViewTabColourNone: applyTabColour(-1); break;
+            case kCmdEditRtl: if (m_stc) m_stc->SetLayoutDirection(wxLayout_RightToLeft); break;
+            case kCmdEditLtr: if (m_stc) m_stc->SetLayoutDirection(wxLayout_LeftToRight); break;
+            case kCmdViewTabNext: mruSwitch(); break;   // Ctrl+Tab -> most-recently-used switch
+            case kCmdViewTabPrev: m_tabs->AdvanceSelection(false); break;
+            case kCmdViewTabMoveforward:  moveTab(true);  break;
+            case kCmdViewTabMoveBackward: moveTab(false); break;
             // (tab "Apply Colour" picks are dispatched straight to applyTabColour() in onTabContext)
-            case IDM_VIEW_TAB_START: if (m_tabs->GetPageCount()) m_tabs->SetSelection(0); break;
-            case IDM_VIEW_TAB_END:   if (m_tabs->GetPageCount()) m_tabs->SetSelection(m_tabs->GetPageCount() - 1); break;
-            case IDM_VIEW_TAB1: case IDM_VIEW_TAB2: case IDM_VIEW_TAB3: case IDM_VIEW_TAB4: case IDM_VIEW_TAB5:
-            case IDM_VIEW_TAB6: case IDM_VIEW_TAB7: case IDM_VIEW_TAB8: case IDM_VIEW_TAB9:
-                { const size_t n = (size_t)((e.GetId() & 0xFFFF) - IDM_VIEW_TAB1); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); break; }
+            case kCmdViewTabStart: if (m_tabs->GetPageCount()) m_tabs->SetSelection(0); break;
+            case kCmdViewTabEnd:   if (m_tabs->GetPageCount()) m_tabs->SetSelection(m_tabs->GetPageCount() - 1); break;
+            case kCmdViewTab1: case kCmdViewTab2: case kCmdViewTab3: case kCmdViewTab4: case kCmdViewTab5:
+            case kCmdViewTab6: case kCmdViewTab7: case kCmdViewTab8: case kCmdViewTab9:
+                { const size_t n = (size_t)((e.GetId() & 0xFFFF) - kCmdViewTab1); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); break; }
             case myID_VIEW_TERMINAL: toggleTerminal(); break;      // View > Show Terminal
             case myID_CAP_NEW: doNew(); break;                      // "+" caption button
             case myID_CAP_CLOSE: closeActive(); break;             // "x" caption button
             case myID_DOCLIST: onDocList(); break;                 // "v" caption dropdown
-            case IDM_VIEW_FULLSCREENTOGGLE: toggleFullScreen(); break;
-            case IDM_VIEW_FOLDALL: sci(SCI_FOLDALL, SC_FOLDACTION_CONTRACT); break;
-            case IDM_VIEW_UNFOLDALL: sci(SCI_FOLDALL, SC_FOLDACTION_EXPAND); break;
-            case IDM_VIEW_FOLD_CURRENT: foldCurrent(true); break;
-            case IDM_VIEW_UNFOLD_CURRENT: foldCurrent(false); break;
-            case IDM_VIEW_FOLD_1: case IDM_VIEW_FOLD_2: case IDM_VIEW_FOLD_3: case IDM_VIEW_FOLD_4:
-            case IDM_VIEW_FOLD_5: case IDM_VIEW_FOLD_6: case IDM_VIEW_FOLD_7: case IDM_VIEW_FOLD_8:
-                foldToLevel((e.GetId() & 0xFFFF) - IDM_VIEW_FOLD_1 + 1, true); break;
-            case IDM_VIEW_UNFOLD_1: case IDM_VIEW_UNFOLD_2: case IDM_VIEW_UNFOLD_3: case IDM_VIEW_UNFOLD_4:
-            case IDM_VIEW_UNFOLD_5: case IDM_VIEW_UNFOLD_6: case IDM_VIEW_UNFOLD_7: case IDM_VIEW_UNFOLD_8:
-                foldToLevel((e.GetId() & 0xFFFF) - IDM_VIEW_UNFOLD_1 + 1, false); break;
+            case kCmdViewFullScreenToggle: toggleFullScreen(); break;
+            case kCmdViewFoldall: sci(SCI_FOLDALL, SC_FOLDACTION_CONTRACT); break;
+            case kCmdViewUnfoldall: sci(SCI_FOLDALL, SC_FOLDACTION_EXPAND); break;
+            case kCmdViewFoldCurrent: foldCurrent(true); break;
+            case kCmdViewUnfoldCurrent: foldCurrent(false); break;
+            case kCmdViewFold1: case kCmdViewFold2: case kCmdViewFold3: case kCmdViewFold4:
+            case kCmdViewFold5: case kCmdViewFold6: case kCmdViewFold7: case kCmdViewFold8:
+                foldToLevel((e.GetId() & 0xFFFF) - kCmdViewFold1 + 1, true); break;
+            case kCmdViewUnfold1: case kCmdViewUnfold2: case kCmdViewUnfold3: case kCmdViewUnfold4:
+            case kCmdViewUnfold5: case kCmdViewUnfold6: case kCmdViewUnfold7: case kCmdViewUnfold8:
+                foldToLevel((e.GetId() & 0xFFFF) - kCmdViewUnfold1 + 1, false); break;
 
-            case wxID_ABOUT: case IDM_ABOUT: showAbout(); break;
+            case wxID_ABOUT: case kCmdAboutBase: showAbout(); break;
 
-            case IDM_FILE_PRINT: doPrint(true); break;
-            case IDM_FILE_PRINTNOW: doPrint(false); break;
-            case IDM_VIEW_DOC_MAP: toggleDocMap(); break;
-            case IDM_VIEW_FUNC_LIST: toggleFuncList(); break;
-            case IDM_VIEW_DOCLIST: toggleDocList(); break;
-            case IDM_VIEW_PROJECT_PANEL_1:
-            case IDM_VIEW_PROJECT_PANEL_2:
-            case IDM_VIEW_PROJECT_PANEL_3: toggleProjectPanel(); break;
-            case IDM_EDIT_CLIPBOARDHISTORY_PANEL: toggleClipHistory(); break;
-            case IDM_EDIT_CHAR_PANEL: toggleCharPanel(); break;
-            case IDM_VIEW_FILEBROWSER: toggleFileBrowser(); break;
-            case IDM_SEARCH_FINDINCREMENT: showIncBar(); break;
-            case IDM_EDIT_COLUMNMODE: columnEditor(); break;
-            case IDM_EDIT_COLUMNMODETIP:
+            case kCmdFilePrint: doPrint(true); break;
+            case kCmdFilePrintnow: doPrint(false); break;
+            case kCmdViewDocMap: toggleDocMap(); break;
+            case kCmdViewFuncList: toggleFuncList(); break;
+            case kCmdViewDoclist: toggleDocList(); break;
+            case kCmdViewProjectPanel1:
+            case kCmdViewProjectPanel2:
+            case kCmdViewProjectPanel3: toggleProjectPanel(); break;
+            case kCmdEditClipboardHistoryPanel: toggleClipHistory(); break;
+            case kCmdEditCharPanel: toggleCharPanel(); break;
+            case kCmdViewFilebrowser: toggleFileBrowser(); break;
+            case kCmdSearchFindIncrement: showIncBar(); break;
+            case kCmdEditColumnmode: columnEditor(); break;
+            case kCmdEditColumnModeTip:
                 wxMessageBox(_("Column (rectangular) selection:\n\n- Alt + drag the mouse\n- Alt + Shift + Arrow keys\n- Alt + Shift + Click\n\nTyping or pasting applies to every line of the block at once."),
                              _("Column Mode"), wxOK | wxICON_INFORMATION, this);
                 break;
-            case IDM_VIEW_MONITORING: toggleMonitoring(); break;
-            case IDM_MACRO_STARTRECORDINGMACRO: startMacroRecord(); break;
-            case IDM_MACRO_STOPRECORDINGMACRO: stopMacroRecord(); break;
-            case IDM_MACRO_PLAYBACKRECORDEDMACRO: playMacro(m_macro); break;
-            case IDM_MACRO_RUNMULTIMACRODLG: runMultiple(); break;
-            case IDM_MACRO_SAVECURRENTMACRO: saveMacro(); break;
-            case IDM_LANG_USER_DLG: onUserDefineLang(); break;
+            case kCmdViewMonitoring: toggleMonitoring(); break;
+            case kCmdMacroStartRecordingMacro: startMacroRecord(); break;
+            case kCmdMacroStopRecordingMacro: stopMacroRecord(); break;
+            case kCmdMacroPlaybackRecordedMacro: playMacro(m_macro); break;
+            case kCmdMacroRunMultiMacroDlg: runMultiple(); break;
+            case kCmdMacroSaveCurrentMacro: saveMacro(); break;
 
             // ---- File: shell integration + file ops ----
-            case IDM_FILE_SAVECOPYAS: saveCopyAs(); break;
-            case IDM_FILE_SAVESESSION: saveSession(); break;
-            case IDM_FILE_LOADSESSION: loadSession(); break;
-            case IDM_FILE_RENAME: renameFile(); break;
-            case IDM_FILE_DELETE: recycleFile(); break;
-            case IDM_FILE_OPEN_FOLDER: revealInFolder(); break;
+            case kCmdFileSavecopyas: saveCopyAs(); break;
+            case kCmdFileSavesession: saveSession(); break;
+            case kCmdFileLoadsession: loadSession(); break;
+            case kCmdFileRename: renameFile(); break;
+            case kCmdFileDelete: recycleFile(); break;
+            case kCmdFileOpenFolder: revealInFolder(); break;
 #ifdef __WXMSW__
-            case IDM_FILE_OPEN_CMD: openShellHere(false); break;
-            case IDM_FILE_OPEN_POWERSHELL: openShellHere(true); break;
+            case kCmdFileOpenCmd: openShellHere(false); break;
+            case kCmdFileOpenPowershell: openShellHere(true); break;
 #endif
-            case IDM_FILE_OPEN_DEFAULT_VIEWER: openInDefaultViewer(); break;
-            case IDM_FILE_OPENFOLDERASWORKSPACE: openFolderAsWorkspace(); break;
-            case IDM_FILE_CONTAININGFOLDERASWORKSPACE: containingFolderAsWorkspace(); break;
-            case IDM_FILE_CLOSEALL_BUT_PINNED: closeAllButPinned(); break;
-            case IDM_FILE_CLOSEALL_TOLEFT: closeAllSide(false); break;
-            case IDM_FILE_CLOSEALL_TORIGHT: closeAllSide(true); break;
-            case IDM_FILE_CLOSEALL_UNCHANGED: closeAllUnchanged(); break;
+            case kCmdFileOpenDefaultViewer: openInDefaultViewer(); break;
+            case kCmdFileOpenFolderAsWorkspace: openFolderAsWorkspace(); break;
+            case kCmdFileContainingFolderAsWorkspace: containingFolderAsWorkspace(); break;
+            case kCmdFileCloseallButPinned: closeAllButPinned(); break;
+            case kCmdFileCloseallToleft: closeAllSide(false); break;
+            case kCmdFileCloseallToright: closeAllSide(true); break;
+            case kCmdFileCloseallUnchanged: closeAllUnchanged(); break;
 
             // ---- Edit: clipboard paths, case, comments, read-only, sorts, conversions ----
-            case IDM_EDIT_FULLPATHTOCLIP: copyToClip(curPath()); break;
-            case IDM_EDIT_FILENAMETOCLIP: copyToClip(wxFileNameFromPath(curPath())); break;
-            case IDM_EDIT_CURRENTDIRTOCLIP: copyToClip(wxFileName(curPath()).GetPath()); break;
-            case IDM_EDIT_COPY_ALL_NAMES: copyToClip(allOpenPaths(true)); break;
-            case IDM_EDIT_COPY_ALL_PATHS: copyToClip(allOpenPaths(false)); break;
-            case IDM_EDIT_COPY_BINARY: copyCutBinary(false); break;
-            case IDM_EDIT_CUT_BINARY: copyCutBinary(true); break;
-            case IDM_EDIT_PASTE_BINARY: pasteBinary(); break;
-            case IDM_EDIT_PASTE_AS_HTML: pasteRichFormat("HTML Format"); break;
-            case IDM_EDIT_PASTE_AS_RTF: pasteRichFormat("Rich Text Format"); break;
-            case IDM_EDIT_RANDOMCASE: transformSel([](std::string& s){ std::mt19937 g{ std::random_device{}() }; for (char& c : s) if (std::isalpha((unsigned char)c)) c = (char)((g() & 1) ? std::toupper((unsigned char)c) : std::tolower((unsigned char)c)); }); break;
-            case IDM_EDIT_PROPERCASE_BLEND: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ if (st) c = (char)std::toupper((unsigned char)c); st = false; } else st = true; } }); break;
-            case IDM_EDIT_SENTENCECASE_BLEND: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ if (st) c = (char)std::toupper((unsigned char)c); st = false; } else if (c=='.'||c=='!'||c=='?') st = true; } }); break;
-            case IDM_EDIT_STREAM_COMMENT: streamComment(true); break;
-            case IDM_EDIT_STREAM_UNCOMMENT: streamComment(false); break;
-            case IDM_EDIT_BLOCK_COMMENT_SET: setLineComment(true); break;
-            case IDM_EDIT_BLOCK_UNCOMMENT: setLineComment(false); break;
-            case IDM_EDIT_TOGGLEREADONLY: toggleReadOnly(); break;
-            case IDM_EDIT_TOGGLESYSTEMREADONLY: toggleSystemReadOnly(); break;
-            case IDM_EDIT_SETREADONLYFORALLDOCS: setReadOnlyAllDocs(true); break;
-            case IDM_EDIT_CLEARREADONLYFORALLDOCS: setReadOnlyAllDocs(false); break;
-            case IDM_EDIT_BEGINENDSELECT: toggleBeginEndSelect(false); break;
-            case IDM_EDIT_BEGINENDSELECT_COLUMNMODE: toggleBeginEndSelect(true); break;
-            case IDM_EDIT_SORTLINES_LENGTH_ASCENDING: sortLines(3, false); break;
-            case IDM_EDIT_SORTLINES_LENGTH_DESCENDING: sortLines(3, true); break;
-            case IDM_EDIT_SORTLINES_DECIMALDOT_ASCENDING: sortLines(4, false); break;
-            case IDM_EDIT_SORTLINES_DECIMALDOT_DESCENDING: sortLines(4, true); break;
-            case IDM_EDIT_SORTLINES_DECIMALCOMMA_ASCENDING: sortLines(5, false); break;
-            case IDM_EDIT_SORTLINES_DECIMALCOMMA_DESCENDING: sortLines(5, true); break;
-            case IDM_EDIT_SORTLINES_LOCALE_ASCENDING: sortLines(0, false); break;
-            case IDM_EDIT_SORTLINES_LOCALE_DESCENDING: sortLines(0, true); break;
-            case IDM_EDIT_SORTLINES_RANDOMLY: shuffleLines(); break;
-            case IDM_EDIT_REMOVEEMPTYLINESWITHBLANK: removeEmptyLinesBlank(); break;
-            case IDM_EDIT_SW2TAB_ALL: spacesToTabs(false); break;
-            case IDM_EDIT_SW2TAB_LEADING: spacesToTabs(true); break;
-            case IDM_EDIT_OPENSELECTEDFILEFOLDERINEXPLORER: revealInFolder(); break;
-            case IDM_EDIT_OPENSELECTEDFILETOEDIT: openSelectedFile(); break;
-            case IDM_EDIT_SEARCHONINTERNET: searchOnInternet(); break;
-            case IDM_EDIT_CHANGESEARCHENGINE: changeSearchEngine(); break;
-            case IDM_EDIT_REDACT_SELECTION: redactSelection(); break;
-            case IDM_EDIT_INSERT_DATETIME_CUSTOMIZED: insertDateTime(true); break;
-            case IDM_EDIT_AUTOCOMPLETE: autoComplete(true); break;               // Function/keyword completion (Ctrl+Space)
-            case IDM_EDIT_FUNCCALLTIP: funcCallTip(); break;
-            case IDM_EDIT_FUNCCALLTIP_NEXT:     if (!m_ctSigs.empty()) { ++m_ctIdx; renderCallTip(); } else funcCallTip(); break;
-            case IDM_EDIT_FUNCCALLTIP_PREVIOUS: if (!m_ctSigs.empty()) { --m_ctIdx; renderCallTip(); } else funcCallTip(); break;
-            case IDM_EDIT_AUTOCOMPLETE_CURRENTFILE: autoComplete(false); break;  // Word completion (document words)
-            case IDM_EDIT_AUTOCOMPLETE_PATH: autoCompletePath(); break;          // Path completion
+            case kCmdEditFullPathToClip: copyToClip(curPath()); break;
+            case kCmdEditFileNameToClip: copyToClip(wxFileNameFromPath(curPath())); break;
+            case kCmdEditCurrentDirToClip: copyToClip(wxFileName(curPath()).GetPath()); break;
+            case kCmdEditCopyAllNames: copyToClip(allOpenPaths(true)); break;
+            case kCmdEditCopyAllPaths: copyToClip(allOpenPaths(false)); break;
+            case kCmdEditCopyBinary: copyCutBinary(false); break;
+            case kCmdEditCutBinary: copyCutBinary(true); break;
+            case kCmdEditPasteBinary: pasteBinary(); break;
+            case kCmdEditPasteAsHtml: pasteRichFormat("HTML Format"); break;
+            case kCmdEditPasteAsRtf: pasteRichFormat("Rich Text Format"); break;
+            case kCmdEditRandomcase: transformSel([](std::string& s){ std::mt19937 g{ std::random_device{}() }; for (char& c : s) if (std::isalpha((unsigned char)c)) c = (char)((g() & 1) ? std::toupper((unsigned char)c) : std::tolower((unsigned char)c)); }); break;
+            case kCmdEditPropercaseBlend: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ if (st) c = (char)std::toupper((unsigned char)c); st = false; } else st = true; } }); break;
+            case kCmdEditSentenceCaseBlend: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ if (st) c = (char)std::toupper((unsigned char)c); st = false; } else if (c=='.'||c=='!'||c=='?') st = true; } }); break;
+            case kCmdEditStreamComment: streamComment(true); break;
+            case kCmdEditStreamUncomment: streamComment(false); break;
+            case kCmdEditBlockCommentSet: setLineComment(true); break;
+            case kCmdEditBlockUncomment: setLineComment(false); break;
+            case kCmdEditToggleReadOnly: toggleReadOnly(); break;
+            case kCmdEditToggleSystemReadOnly: toggleSystemReadOnly(); break;
+            case kCmdEditSetReadOnlyForAllDocs: setReadOnlyAllDocs(true); break;
+            case kCmdEditClearReadOnlyForAllDocs: setReadOnlyAllDocs(false); break;
+            case kCmdEditBeginEndSelect: toggleBeginEndSelect(false); break;
+            case kCmdEditBeginEndSelectColumnmode: toggleBeginEndSelect(true); break;
+            case kCmdEditSortlinesLengthAscending: sortLines(3, false); break;
+            case kCmdEditSortlinesLengthDescending: sortLines(3, true); break;
+            case kCmdEditSortlinesDecimaldotAscending: sortLines(4, false); break;
+            case kCmdEditSortlinesDecimaldotDescending: sortLines(4, true); break;
+            case kCmdEditSortlinesDecimalCommaAscending: sortLines(5, false); break;
+            case kCmdEditSortlinesDecimalCommaDescending: sortLines(5, true); break;
+            case kCmdEditSortlinesLocaleAscending: sortLines(0, false); break;
+            case kCmdEditSortlinesLocaleDescending: sortLines(0, true); break;
+            case kCmdEditSortlinesRandomly: shuffleLines(); break;
+            case kCmdEditRemoveEmptyLinesWithBlank: removeEmptyLinesBlank(); break;
+            case kCmdEditSw2tabAll: spacesToTabs(false); break;
+            case kCmdEditSw2tabLeading: spacesToTabs(true); break;
+            case kCmdEditOpenSelectedFileFolderInExplorer: revealInFolder(); break;
+            case kCmdEditOpenSelectedFileToEdit: openSelectedFile(); break;
+            case kCmdEditSearchOnInternet: searchOnInternet(); break;
+            case kCmdEditChangeSearchEngine: changeSearchEngine(); break;
+            case kCmdEditRedactSelection: redactSelection(); break;
+            case kCmdEditInsertDatetimeCustomized: insertDateTime(true); break;
+            case kCmdEditAutoComplete: autoComplete(true); break;               // Function/keyword completion (Ctrl+Space)
+            case kCmdEditFunccalltip: funcCallTip(); break;
+            case kCmdEditFunccalltipNext:     if (!m_ctSigs.empty()) { ++m_ctIdx; renderCallTip(); } else funcCallTip(); break;
+            case kCmdEditFunccalltipPrevious: if (!m_ctSigs.empty()) { --m_ctIdx; renderCallTip(); } else funcCallTip(); break;
+            case kCmdEditAutoCompleteCurrentfile: autoComplete(false); break;  // Word completion (document words)
+            case kCmdEditAutoCompletePath: autoCompletePath(); break;          // Path completion
 
             // ---- Search: select-and-find, results nav, bookmarked lines ----
-            case IDM_SEARCH_SETANDFINDNEXT: findSel(true, true); break;
-            case IDM_SEARCH_SETANDFINDPREV: findSel(false, true); break;
-            case IDM_SEARCH_VOLATILE_FINDNEXT: findSel(true, true); break;
-            case IDM_SEARCH_VOLATILE_FINDPREV: findSel(false, true); break;
-            case IDM_SEARCH_GOTONEXTFOUND: stepFoundResult(true); break;
-            case IDM_SEARCH_GOTOPREVFOUND: stepFoundResult(false); break;
-            case IDM_FOCUS_ON_FOUND_RESULTS: focusFoundResults(); break;
-            case IDM_SEARCH_SELECTMATCHINGBRACES: selectBetweenBraces(); break;
-            case IDM_SEARCH_FINDCHARINRANGE: findCharInRange(); break;
-            case IDM_SEARCH_MARK: onMarkDlg(); break;
-            case IDM_SEARCH_MARKALLEXT1: findResult(wxString::Format(_("Marked %d - style 1"), markExt(0, true))); break;
-            case IDM_SEARCH_MARKALLEXT2: findResult(wxString::Format(_("Marked %d - style 2"), markExt(1, true))); break;
-            case IDM_SEARCH_MARKALLEXT3: findResult(wxString::Format(_("Marked %d - style 3"), markExt(2, true))); break;
-            case IDM_SEARCH_MARKALLEXT4: findResult(wxString::Format(_("Marked %d - style 4"), markExt(3, true))); break;
-            case IDM_SEARCH_MARKALLEXT5: findResult(wxString::Format(_("Marked %d - style 5"), markExt(4, true))); break;
-            case IDM_SEARCH_MARKONEEXT1: markExt(0, false); break;
-            case IDM_SEARCH_MARKONEEXT2: markExt(1, false); break;
-            case IDM_SEARCH_MARKONEEXT3: markExt(2, false); break;
-            case IDM_SEARCH_MARKONEEXT4: markExt(3, false); break;
-            case IDM_SEARCH_MARKONEEXT5: markExt(4, false); break;
-            case IDM_SEARCH_UNMARKALLEXT1: unmarkExt(0); break;
-            case IDM_SEARCH_UNMARKALLEXT2: unmarkExt(1); break;
-            case IDM_SEARCH_UNMARKALLEXT3: unmarkExt(2); break;
-            case IDM_SEARCH_UNMARKALLEXT4: unmarkExt(3); break;
-            case IDM_SEARCH_UNMARKALLEXT5: unmarkExt(4); break;
-            case IDM_SEARCH_CLEARALLMARKS: clearAllMarks(); break;
-            case IDM_SEARCH_GONEXTMARKER1: case IDM_SEARCH_GONEXTMARKER2: case IDM_SEARCH_GONEXTMARKER3:
-            case IDM_SEARCH_GONEXTMARKER4: case IDM_SEARCH_GONEXTMARKER5: case IDM_SEARCH_GONEXTMARKER_DEF: jumpMark(true); break;
-            case IDM_SEARCH_GOPREVMARKER1: case IDM_SEARCH_GOPREVMARKER2: case IDM_SEARCH_GOPREVMARKER3:
-            case IDM_SEARCH_GOPREVMARKER4: case IDM_SEARCH_GOPREVMARKER5: case IDM_SEARCH_GOPREVMARKER_DEF: jumpMark(false); break;
-            case IDM_SEARCH_STYLE1TOCLIP: copyMarkedToClipboard({ MARK_STYLE_BASE + 0 }); break;
-            case IDM_SEARCH_STYLE2TOCLIP: copyMarkedToClipboard({ MARK_STYLE_BASE + 1 }); break;
-            case IDM_SEARCH_STYLE3TOCLIP: copyMarkedToClipboard({ MARK_STYLE_BASE + 2 }); break;
-            case IDM_SEARCH_STYLE4TOCLIP: copyMarkedToClipboard({ MARK_STYLE_BASE + 3 }); break;
-            case IDM_SEARCH_STYLE5TOCLIP: copyMarkedToClipboard({ MARK_STYLE_BASE + 4 }); break;
-            case IDM_SEARCH_ALLSTYLESTOCLIP: copyMarkedToClipboard({ MARK_STYLE_BASE, MARK_STYLE_BASE + 1, MARK_STYLE_BASE + 2, MARK_STYLE_BASE + 3, MARK_STYLE_BASE + 4 }); break;
-            case IDM_SEARCH_MARKEDTOCLIP: copyMarkedToClipboard({ MARK_INDIC }); break;
-            case IDM_SEARCH_COPYMARKEDLINES: bookmarkLinesOp(0); break;
-            case IDM_SEARCH_CUTMARKEDLINES: bookmarkLinesOp(1); break;
-            case IDM_SEARCH_DELETEMARKEDLINES: bookmarkLinesOp(2); break;
-            case IDM_SEARCH_DELETEUNMARKEDLINES: bookmarkLinesOp(3); break;
-            case IDM_SEARCH_PASTEMARKEDLINES: bookmarkLinesOp(4); break;
-            case IDM_SEARCH_INVERSEMARKS: bookmarkLinesOp(5); break;
+            case kCmdSearchSetAndFindNext: findSel(true, true); break;
+            case kCmdSearchSetAndFindPrev: findSel(false, true); break;
+            case kCmdSearchVolatileFindnext: findSel(true, true); break;
+            case kCmdSearchVolatileFindprev: findSel(false, true); break;
+            case kCmdSearchGotoNextFound: stepFoundResult(true); break;
+            case kCmdSearchGotoPrevFound: stepFoundResult(false); break;
+            case kCmdFocusOnFoundResults: focusFoundResults(); break;
+            case kCmdSearchSelectMatchingBraces: selectBetweenBraces(); break;
+            case kCmdSearchFindCharInRange: findCharInRange(); break;
+            case kCmdSearchMark: onMarkDlg(); break;
+            case kCmdSearchMarkallext1: findResult(wxString::Format(_("Marked %d - style 1"), markExt(0, true))); break;
+            case kCmdSearchMarkallext2: findResult(wxString::Format(_("Marked %d - style 2"), markExt(1, true))); break;
+            case kCmdSearchMarkallext3: findResult(wxString::Format(_("Marked %d - style 3"), markExt(2, true))); break;
+            case kCmdSearchMarkallext4: findResult(wxString::Format(_("Marked %d - style 4"), markExt(3, true))); break;
+            case kCmdSearchMarkallext5: findResult(wxString::Format(_("Marked %d - style 5"), markExt(4, true))); break;
+            case kCmdSearchMarkoneext1: markExt(0, false); break;
+            case kCmdSearchMarkoneext2: markExt(1, false); break;
+            case kCmdSearchMarkoneext3: markExt(2, false); break;
+            case kCmdSearchMarkoneext4: markExt(3, false); break;
+            case kCmdSearchMarkoneext5: markExt(4, false); break;
+            case kCmdSearchUnmarkAllExt1: unmarkExt(0); break;
+            case kCmdSearchUnmarkAllExt2: unmarkExt(1); break;
+            case kCmdSearchUnmarkAllExt3: unmarkExt(2); break;
+            case kCmdSearchUnmarkAllExt4: unmarkExt(3); break;
+            case kCmdSearchUnmarkAllExt5: unmarkExt(4); break;
+            case kCmdSearchClearAllMarks: clearAllMarks(); break;
+            case kCmdSearchGoNextMarker1: case kCmdSearchGoNextMarker2: case kCmdSearchGoNextMarker3:
+            case kCmdSearchGoNextMarker4: case kCmdSearchGoNextMarker5: case kCmdSearchGoNextMarkerDef: jumpMark(true); break;
+            case kCmdSearchGoPrevMarker1: case kCmdSearchGoPrevMarker2: case kCmdSearchGoPrevMarker3:
+            case kCmdSearchGoPrevMarker4: case kCmdSearchGoPrevMarker5: case kCmdSearchGoPrevMarkerDef: jumpMark(false); break;
+            case kCmdSearchStyle1ToClip: copyMarkedToClipboard({ MARK_STYLE_BASE + 0 }); break;
+            case kCmdSearchStyle2ToClip: copyMarkedToClipboard({ MARK_STYLE_BASE + 1 }); break;
+            case kCmdSearchStyle3ToClip: copyMarkedToClipboard({ MARK_STYLE_BASE + 2 }); break;
+            case kCmdSearchStyle4ToClip: copyMarkedToClipboard({ MARK_STYLE_BASE + 3 }); break;
+            case kCmdSearchStyle5ToClip: copyMarkedToClipboard({ MARK_STYLE_BASE + 4 }); break;
+            case kCmdSearchAllStylesToClip: copyMarkedToClipboard({ MARK_STYLE_BASE, MARK_STYLE_BASE + 1, MARK_STYLE_BASE + 2, MARK_STYLE_BASE + 3, MARK_STYLE_BASE + 4 }); break;
+            case kCmdSearchMarkedToClip: copyMarkedToClipboard({ MARK_INDIC }); break;
+            case kCmdSearchCopyMarkedLines: bookmarkLinesOp(0); break;
+            case kCmdSearchCutMarkedLines: bookmarkLinesOp(1); break;
+            case kCmdSearchDeleteMarkedLines: bookmarkLinesOp(2); break;
+            case kCmdSearchDeleteUnmarkedLines: bookmarkLinesOp(3); break;
+            case kCmdSearchPasteMarkedLines: bookmarkLinesOp(4); break;
+            case kCmdSearchInverseMarks: bookmarkLinesOp(5); break;
 
             // ---- View: always-on-top, wrap symbol, hide lines, summary, browsers, new instance ----
-            case IDM_VIEW_ALWAYSONTOP: toggleAlwaysOnTop(); break;
-            case IDM_VIEW_WRAP_SYMBOL: toggleWrapSymbol(); break;
-            case IDM_VIEW_HIDELINES: hideSelectedLines(); break;
-            case IDM_VIEW_SUMMARY: showSummary(); break;
-            case IDM_VIEW_IN_FIREFOX: openInBrowser("firefox"); break;
-            case IDM_VIEW_IN_CHROME: openInBrowser("chrome"); break;
-            case IDM_VIEW_IN_EDGE: openInBrowser(""); break;
-            case IDM_VIEW_IN_IE: openInBrowser("iexplore"); break;
-            case IDM_VIEW_LOAD_IN_NEW_INSTANCE: case IDM_VIEW_GOTO_NEW_INSTANCE: newInstance(true); break;
-            case IDM_VIEW_POSTIT: case IDM_VIEW_DISTRACTIONFREE: toggleFullScreen(); break;
+            case kCmdViewAlwaysontop: toggleAlwaysOnTop(); break;
+            case kCmdViewWrapSymbol: toggleWrapSymbol(); break;
+            case kCmdViewHidelines: hideSelectedLines(); break;
+            case kCmdViewSummary: showSummary(); break;
+            case kCmdViewInFirefox: openInBrowser("firefox"); break;
+            case kCmdViewInChrome: openInBrowser("chrome"); break;
+            case kCmdViewInEdge: openInBrowser(""); break;
+            case kCmdViewInIe: openInBrowser("iexplore"); break;
+            case kCmdViewLoadInNewInstance: case kCmdViewGotoNewInstance: newInstance(true); break;
+            case kCmdViewPostit: case kCmdViewDistractionFree: toggleFullScreen(); break;
 
             // ---- Tools: MD5 / SHA digests ----
-            case IDM_TOOL_MD5_GENERATEINTOCLIPBOARD: hashSelection(L"MD5", "MD5", true); break;
-            case IDM_TOOL_SHA1_GENERATEINTOCLIPBOARD: hashSelection(L"SHA1", "SHA-1", true); break;
-            case IDM_TOOL_SHA256_GENERATEINTOCLIPBOARD: hashSelection(L"SHA256", "SHA-256", true); break;
-            case IDM_TOOL_SHA512_GENERATEINTOCLIPBOARD: hashSelection(L"SHA512", "SHA-512", true); break;
-            case IDM_TOOL_MD5_GENERATE: hashSelection(L"MD5", "MD5", false); break;
-            case IDM_TOOL_SHA1_GENERATE: hashSelection(L"SHA1", "SHA-1", false); break;
-            case IDM_TOOL_SHA256_GENERATE: hashSelection(L"SHA256", "SHA-256", false); break;
-            case IDM_TOOL_SHA512_GENERATE: hashSelection(L"SHA512", "SHA-512", false); break;
-            case IDM_TOOL_MD5_GENERATEFROMFILE: hashFiles(L"MD5", "MD5"); break;
-            case IDM_TOOL_SHA1_GENERATEFROMFILE: hashFiles(L"SHA1", "SHA-1"); break;
-            case IDM_TOOL_SHA256_GENERATEFROMFILE: hashFiles(L"SHA256", "SHA-256"); break;
-            case IDM_TOOL_SHA512_GENERATEFROMFILE: hashFiles(L"SHA512", "SHA-512"); break;
+            case kCmdToolMd5GenerateIntoClipboard: hashSelection(L"MD5", "MD5", true); break;
+            case kCmdToolSha1GenerateIntoClipboard: hashSelection(L"SHA1", "SHA-1", true); break;
+            case kCmdToolSha256GenerateIntoClipboard: hashSelection(L"SHA256", "SHA-256", true); break;
+            case kCmdToolSha512GenerateIntoClipboard: hashSelection(L"SHA512", "SHA-512", true); break;
+            case kCmdToolMd5Generate: hashSelection(L"MD5", "MD5", false); break;
+            case kCmdToolSha1Generate: hashSelection(L"SHA1", "SHA-1", false); break;
+            case kCmdToolSha256Generate: hashSelection(L"SHA256", "SHA-256", false); break;
+            case kCmdToolSha512Generate: hashSelection(L"SHA512", "SHA-512", false); break;
+            case kCmdToolMd5GenerateFromFile: hashFiles(L"MD5", "MD5"); break;
+            case kCmdToolSha1GenerateFromFile: hashFiles(L"SHA1", "SHA-1"); break;
+            case kCmdToolSha256GenerateFromFile: hashFiles(L"SHA256", "SHA-256"); break;
+            case kCmdToolSha512GenerateFromFile: hashFiles(L"SHA512", "SHA-512"); break;
 
             // ---- Window / Settings / Language: list, folders, normal text ----
-            case IDM_WINDOW_WINDOWS: showWindowsList(); break;
-            case IDM_WINDOW_SORT_FN_ASC: sortTabs(TabSortKey::Name, true); break;
-            case IDM_WINDOW_SORT_FN_DSC: sortTabs(TabSortKey::Name, false); break;
-            case IDM_WINDOW_SORT_FP_ASC: sortTabs(TabSortKey::Path, true); break;
-            case IDM_WINDOW_SORT_FP_DSC: sortTabs(TabSortKey::Path, false); break;
-            case IDM_WINDOW_SORT_FT_ASC: sortTabs(TabSortKey::Type, true); break;
-            case IDM_WINDOW_SORT_FT_DSC: sortTabs(TabSortKey::Type, false); break;
-            case IDM_WINDOW_SORT_FS_ASC: sortTabs(TabSortKey::Size, true); break;
-            case IDM_WINDOW_SORT_FS_DSC: sortTabs(TabSortKey::Size, false); break;
-            case IDM_WINDOW_SORT_FD_ASC: sortTabs(TabSortKey::Modified, true); break;
-            case IDM_WINDOW_SORT_FD_DSC: sortTabs(TabSortKey::Modified, false); break;
-            case IDM_SETTING_PREFERENCE: onPreferences(); break;
-            case IDM_LANGSTYLE_CONFIG_DLG: onStyleConfig(); break;
-            case IDM_SETTING_IMPORTPLUGIN: importPlugin(); break;
-            case IDM_SETTING_IMPORTSTYLETHEMES: importStyleTheme(); break;
-            case IDM_SETTING_OPENPLUGINSDIR: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "plugins"); break;
-            case IDM_SETTING_EDITCONTEXTMENU: editContextMenu(); break;
-            case IDM_LANG_TEXT: setForcedLang("", _("Normal text file")); break;   // force Normal Text (a manual pick, like the languages)
-            case IDM_LANG_OPENUDLDIR: { wxLogNull noLog; wxFileName::Mkdir(udlDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL); openFolder(udlDir()); break; }   // create-then-open the per-user dir
+            case kCmdWindowWindows: showWindowsList(); break;
+            case kCmdWindowSortFnAsc: sortTabs(TabSortKey::Name, true); break;
+            case kCmdWindowSortFnDsc: sortTabs(TabSortKey::Name, false); break;
+            case kCmdWindowSortFpAsc: sortTabs(TabSortKey::Path, true); break;
+            case kCmdWindowSortFpDsc: sortTabs(TabSortKey::Path, false); break;
+            case kCmdWindowSortFtAsc: sortTabs(TabSortKey::Type, true); break;
+            case kCmdWindowSortFtDsc: sortTabs(TabSortKey::Type, false); break;
+            case kCmdWindowSortFsAsc: sortTabs(TabSortKey::Size, true); break;
+            case kCmdWindowSortFsDsc: sortTabs(TabSortKey::Size, false); break;
+            case kCmdWindowSortFdAsc: sortTabs(TabSortKey::Modified, true); break;
+            case kCmdWindowSortFdDsc: sortTabs(TabSortKey::Modified, false); break;
+            case kCmdSettingPreference: onPreferences(); break;
+            case kCmdLangstyleConfigDlg: onStyleConfig(); break;
+            case kCmdSettingImportPlugin: importPlugin(); break;
+            case kCmdSettingImportStyleThemes: importStyleTheme(); break;
+            case kCmdSettingOpenPluginsDir: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "plugins"); break;
+            case kCmdSettingEditContextMenu: editContextMenu(); break;
+            case kCmdLangText: setForcedLang("", _("Normal text file")); break;   // force Normal Text (a manual pick, like the languages)
+            case kCmdLangOpenudldir: { wxLogNull noLog; wxFileName::Mkdir(udlDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL); openFolder(udlDir()); break; }   // create-then-open the per-user dir
 
             // ---- Help: external links + info ----
-            case IDM_HOMESWEETHOME: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus"); break;
-            case IDM_PROJECTPAGE: case IDM_UPDATE_NPP: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/releases"); break;
-            case IDM_ONLINEDOCUMENT: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/tree/master/docs"); break;
-            case IDM_FORUM: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/issues"); break;
-            case IDM_DEBUGINFO: themedInfo(wxString::Format(_("wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"),
+            case kCmdHomeSweetHome: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus"); break;
+            case kCmdProjectpage: case kCmdUpdateNpp: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/releases"); break;
+            case kCmdOnlineDocument: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/tree/master/docs"); break;
+            case kCmdForum: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/issues"); break;
+            case kCmdDebuginfo: themedInfo(wxString::Format(_("wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"),
                 wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER, wxGetOsDescription(), wxStandardPaths::Get().GetExecutablePath()), _("Debug Info")); break;
-            case IDM_CMDLINEARGUMENTS: themedInfo(_("Usage: wxnote [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."), _("Command Line Arguments")); break;
+            case kCmdCmdLineArguments: themedInfo(_("Usage: wxnote [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."), _("Command Line Arguments")); break;
 
-            case IDM_EXECUTE: onRun(); break;   // Run... (F5)
+            case kCmdExecuteBase: onRun(); break;   // Run... (F5)
 
             // ---- Encoding: interpret-as (re-decode the file) + convert-to (re-encode on save) ----
-            case IDM_FORMAT_ANSI: interpretAs(ENC_ANSI); break;
-            case IDM_FORMAT_AS_UTF_8: interpretAs(ENC_UTF8); break;
-            case IDM_FORMAT_UTF_8: interpretAs(ENC_UTF8_BOM); break;
-            case IDM_FORMAT_UTF_16LE: interpretAs(ENC_UTF16_LE); break;
-            case IDM_FORMAT_UTF_16BE: interpretAs(ENC_UTF16_BE); break;
-            case IDM_FORMAT_CONV2_ANSI: convertTo(ENC_ANSI); break;
-            case IDM_FORMAT_CONV2_AS_UTF_8: convertTo(ENC_UTF8); break;
-            case IDM_FORMAT_CONV2_UTF_8: convertTo(ENC_UTF8_BOM); break;
-            case IDM_FORMAT_CONV2_UTF_16LE: convertTo(ENC_UTF16_LE); break;
-            case IDM_FORMAT_CONV2_UTF_16BE: convertTo(ENC_UTF16_BE); break;
+            case kCmdFormatAnsi: interpretAs(ENC_ANSI); break;
+            case kCmdFormatAsUtf8: interpretAs(ENC_UTF8); break;
+            case kCmdFormatUtf8: interpretAs(ENC_UTF8_BOM); break;
+            case kCmdFormatUtf16le: interpretAs(ENC_UTF16_LE); break;
+            case kCmdFormatUtf16be: interpretAs(ENC_UTF16_BE); break;
+            case kCmdFormatConv2Ansi: convertTo(ENC_ANSI); break;
+            case kCmdFormatConv2AsUtf8: convertTo(ENC_UTF8); break;
+            case kCmdFormatConv2Utf8: convertTo(ENC_UTF8_BOM); break;
+            case kCmdFormatConv2Utf16le: convertTo(ENC_UTF16_LE); break;
+            case kCmdFormatConv2Utf16be: convertTo(ENC_UTF16_BE); break;
 
             default: {
                 const int mid = e.GetId() & 0xFFFF;
@@ -8692,23 +8447,23 @@ private:
         m_stSel = hasSel; m_stPaste = canPaste; m_stHasPath = hasPath;
         if (auto* tb = toolBar())
         {
-            tb->EnableTool(IDM_FILE_SAVE, dirty);   tb->EnableTool(IDM_FILE_SAVEALL, anyDirty);
-            tb->EnableTool(IDM_EDIT_UNDO, canUndo); tb->EnableTool(IDM_EDIT_REDO, canRedo);
-            tb->EnableTool(IDM_EDIT_CUT, hasSel);   tb->EnableTool(IDM_EDIT_COPY, hasSel);
-            tb->EnableTool(IDM_EDIT_PASTE, canPaste);
+            tb->EnableTool(kCmdFileSave, dirty);   tb->EnableTool(kCmdFileSaveall, anyDirty);
+            tb->EnableTool(kCmdEditUndo, canUndo); tb->EnableTool(kCmdEditRedo, canRedo);
+            tb->EnableTool(kCmdEditCut, hasSel);   tb->EnableTool(kCmdEditCopy, hasSel);
+            tb->EnableTool(kCmdEditPaste, canPaste);
         }
         if (auto* mb = menuBar())
         {
-            mb->Enable(IDM_FILE_SAVE, dirty);   mb->Enable(IDM_FILE_SAVEALL, anyDirty);
-            mb->Enable(IDM_EDIT_UNDO, canUndo); mb->Enable(IDM_EDIT_REDO, canRedo);
-            mb->Enable(IDM_EDIT_CUT, hasSel);   mb->Enable(IDM_EDIT_COPY, hasSel);
-            mb->Enable(IDM_EDIT_PASTE, canPaste); mb->Enable(IDM_EDIT_DELETE, hasSel);
+            mb->Enable(kCmdFileSave, dirty);   mb->Enable(kCmdFileSaveall, anyDirty);
+            mb->Enable(kCmdEditUndo, canUndo); mb->Enable(kCmdEditRedo, canRedo);
+            mb->Enable(kCmdEditCut, hasSel);   mb->Enable(kCmdEditCopy, hasSel);
+            mb->Enable(kCmdEditPaste, canPaste); mb->Enable(kCmdEditDelete, hasSel);
             // Items that TRULY need the document to exist on disk: nothing to reload, nothing a default
             // viewer could open - grey them out instead of a dead click. The Open
             // Containing Folder submenu stays fully enabled: its entries all fall back to the working
             // directory for untitled buffers.
-            mb->Enable(IDM_FILE_OPEN_DEFAULT_VIEWER, hasPath);
-            mb->Enable(IDM_FILE_RELOAD, hasPath);
+            mb->Enable(kCmdFileOpenDefaultViewer, hasPath);
+            mb->Enable(kCmdFileReload, hasPath);
         }
     }
 
@@ -8773,7 +8528,7 @@ private:
     bool        m_autocomplete = true;                            // auto word/keyword completion while typing
     bool        m_caretLine = true, m_autoindent = true;          // highlight the current line; auto-indent new lines
     int         m_caretWidth = 1, m_edgeColumn = 0;               // caret thickness (px); long-line marker column (0 = off)
-    int         m_defaultEol = SC_EOL_CRLF, m_defaultLangId = -1; // New Document: default line-ending + language (IDM_LANG_*; -1 = Normal Text)
+    int         m_defaultEol = SC_EOL_CRLF, m_defaultLangId = -1; // New Document: default line-ending + language (kCmdLang*; -1 = Normal Text)
     int         m_defaultEncoding = ENC_UTF8;                     // New Document: default on-disk encoding (Enc enum)
     int         m_maxRecent = 10;                                // Recent Files: max entries (restart-to-apply; see recentMaxFromConfig)
     bool        m_tabCloseBtn = true;                            // Tab Bar: a close button on each tab (restart-to-apply)
@@ -8782,7 +8537,9 @@ private:
     int         m_autoCompFrom = 3;                              // auto-completion triggers from the Nth typed character
     bool        m_autoInsertPairs = false;                       // auto-insert matching brackets/quotes while typing
     wxString    m_themeName;                                      // active editor theme (empty = dark/light default); Style Configurator
-    std::vector<UdlLanguage> m_udls;                              // loaded User-Defined Languages (see loadAllUdls / onUserDefineLang)
+    std::unique_ptr<scintillua::Engine>        m_scintillua;     // native language engine (embedded Lua+LPeg+Scintillua), lazy-created
+    struct SciLang { wxString name, exts; };                     // exts = space-separated file extensions
+    std::vector<SciLang>                       m_sciLangs;       // languages registered via nib.langdef
     wxPrintData m_printData;                                      // File > Print: remembers the chosen printer/paper for the session
     bool        m_printing = false;                               // re-entrancy guard around wxPrinter::Print()'s nested modal loop
     wxString    m_printHeader, m_printFooter;                     // Preferences > Print: optional header/footer text (macros resolved at print time)
@@ -8808,61 +8565,6 @@ using WxnShellFrame = WxnShellFrameT<wxFrame>;
 using WxnIntegratedFrame = WxnShellFrameT<wxBorderlessFrame>;
 #endif
 
-// Recursively copy every entry and group at the two configs' current paths (wxConfigBase's
-// enumeration API is cursor-based per path level, hence the explicit recursion).
-static void copyConfigGroup(wxConfigBase& src, wxConfigBase& dst)
-{
-    wxString name; long cookie;
-    for (bool ok = src.GetFirstEntry(name, cookie); ok; ok = src.GetNextEntry(name, cookie))
-    {
-        switch (src.GetEntryType(name))
-        {
-            case wxConfigBase::Type_Boolean: { bool v = false;   if (src.Read(name, &v)) dst.Write(name, v); break; }
-            case wxConfigBase::Type_Integer: { long v = 0;       if (src.Read(name, &v)) dst.Write(name, v); break; }
-            case wxConfigBase::Type_Float:   { double v = 0;     if (src.Read(name, &v)) dst.Write(name, v); break; }
-            default:                         { wxString v;       if (src.Read(name, &v)) dst.Write(name, v); break; }
-        }
-    }
-    for (bool ok = src.GetFirstGroup(name, cookie); ok; ok = src.GetNextGroup(name, cookie))
-    {
-        src.SetPath(name); dst.SetPath(name);
-        copyConfigGroup(src, dst);
-        src.SetPath(".."); dst.SetPath("..");
-    }
-}
-
-// One-time migration from the app's pre-rename identity ("wxNotepadPlusPlus_spike"): without this,
-// renaming SetAppName would silently orphan every existing install's settings (wxConfig tree) and
-// per-user data dir (recovery backups, UDLs, contextMenu.xml). Copies settings only while the new
-// tree is still empty (so an already-migrated or freshly-used install is never overwritten) and
-// moves the data dir only if the new location doesn't exist yet. Best-effort: the old tree is left
-// in place, and any failure is silently ignored rather than allowed to block startup.
-static void migrateLegacyIdentity()
-{
-    wxLogNull noLog;
-    {
-        wxConfig newCfg("wxNote");   // same identity SetAppName just established
-        if (newCfg.GetNumberOfEntries(true) == 0 && newCfg.GetNumberOfGroups(true) == 0)
-        {
-            wxConfig oldCfg("wxNotepadPlusPlus_spike");
-            if (oldCfg.GetNumberOfEntries(true) > 0 || oldCfg.GetNumberOfGroups(true) > 0)
-            {
-                copyConfigGroup(oldCfg, newCfg);
-                newCfg.Flush();
-            }
-        }
-    }
-    // Derive the old dir by asking wxStandardPaths under the old app name rather than composing a
-    // sibling path by hand: the per-platform shapes differ in more than the last component (classic
-    // Linux layout is dot-prefixed "~/.<appname>", so a hand-built sibling would miss the dot).
-    const wxString newDir = wxStandardPaths::Get().GetUserDataDir();
-    wxTheApp->SetAppName("wxNotepadPlusPlus_spike");
-    const wxString oldDir = wxStandardPaths::Get().GetUserDataDir();
-    wxTheApp->SetAppName("wxNote");
-    if (!wxDirExists(newDir) && wxDirExists(oldDir))
-        wxRenameFile(oldDir, newDir);
-}
-
 class WxnApp : public wxApp
 {
 public:
@@ -8879,7 +8581,6 @@ public:
         }
 #endif
         SetAppName("wxNote");             // the identity wxConfig + GetUserDataDir() key everything under
-        migrateLegacyIdentity();          // one-time settings + data-dir carry-over from the old identity
 
         // ---- command line: -g/--goto, -e/--encoding, -n/--new-instance, -r/--reuse-instance, file... ----
         wxCmdLineParser parser(argc, argv);

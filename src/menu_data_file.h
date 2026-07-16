@@ -4,9 +4,13 @@
 #include "command_ids.h"
 
 // ----------------------------------------------------------------- File
-// Mechanical, zero-behavior-change port of the File menu from the old
-// inline buildWxnMainMenu() (since replaced by this table). Same items, same order,
-// same IDM_* ids, same labels, same shortcuts.
+// wxNote's File menu is organized by object lifecycle, most-frequent clusters first:
+// OPEN (create/bring-in a document) leads, then SAVE, then CLOSE. A wxNote-distinct
+// FILE-SYSTEM group (Rename, Delete) is pulled out on its own instead of being buried
+// among the close actions, since acting on the file-on-disk is a different intent than
+// closing a tab. Session, Print, and the recent-files + Exit tail follow as lower-frequency
+// groups. Numbered/paired sequences keep their canonical CUA order (New before Open,
+// Save before Save As, Load before Save session).
 
 // Dynamically filled per what THIS machine actually has (see terminal_panel.h's detectWindowsExtra-
 // OpenHereTools/detectLinuxTerminalEmulators/detectMacTerminalApps, populated in buildMenuBar() at the
@@ -18,60 +22,69 @@ static const MenuItemDef kFileOpenContainingFolderItems[] = {
     // cmd/PowerShell stay STATIC with their original frozen ids: this is Windows, where real Notepad++
     // plugins exist and may invoke them via NPPM_MENUCOMMAND - every IDM_* must keep landing on a real
     // menu item. The DynamicSlot below adds only what's genuinely new to this machine (pwsh/Cygwin/WSL).
-    { MenuItemKind::Normal, IDM_FILE_OPEN_FOLDER,     &Label::FileOpenExplorer,   "file.openContainingFolder.explorer" },
-    { MenuItemKind::Normal, IDM_FILE_OPEN_CMD,        &Label::FileOpenCmd,       "file.openContainingFolder.cmd" },
-    { MenuItemKind::Normal, IDM_FILE_OPEN_POWERSHELL, &Label::FileOpenPowerShell,"file.openContainingFolder.powerShell" },
+    { MenuItemKind::Normal, kCmdFileOpenFolder,     &Label::FileOpenExplorer,   "file.openContainingFolder.explorer" },
+    { MenuItemKind::Normal, kCmdFileOpenCmd,        &Label::FileOpenCmd,       "file.openContainingFolder.cmd" },
+    { MenuItemKind::Normal, kCmdFileOpenPowershell, &Label::FileOpenPowerShell,"file.openContainingFolder.powerShell" },
 #else
     // Linux/macOS: no legacy plugin ABI to preserve (packages/npp-bridge is Windows-only), so the whole
     // terminal cluster is free to be built from what this machine actually has.
-    { MenuItemKind::Normal, IDM_FILE_OPEN_FOLDER, &Label::FileOpenFileManager, "file.openContainingFolder.fileManager" },
+    { MenuItemKind::Normal, kCmdFileOpenFolder, &Label::FileOpenFileManager, "file.openContainingFolder.fileManager" },
 #endif
     { MenuItemKind::DynamicSlot, 0, nullptr, "slot.openContainingFolderTools" },
     // No "Folder as Workspace" entry here - it would duplicate the top-level "Open Folder as
     // Workspace..." item below, which already pre-selects the current file's folder in its dialog
     // (see openFolderAsWorkspace()), so it covers both the "quick, current file" and "pick any folder"
-    // cases with one menu item instead of two near-identical ones. IDM_FILE_CONTAININGFOLDERASWORKSPACE
+    // cases with one menu item instead of two near-identical ones. kCmdFileContainingFolderAsWorkspace
     // itself is intentionally left wired in the dispatcher (containingFolderAsWorkspace()) even though
     // no menu item fires it anymore, so a plugin invoking the id via NPPM_MENUCOMMAND still works.
 };
 
 static const MenuItemDef kFileCloseMultipleDocumentsItems[] = {
-    { MenuItemKind::Normal, IDM_FILE_CLOSEALL_BUT_CURRENT, &Label::FileCloseAllButCurrent, "file.closeMultipleDocuments.butCurrent" },
-    { MenuItemKind::Normal, IDM_FILE_CLOSEALL_BUT_PINNED,  &Label::FileCloseAllButPinned,  "file.closeMultipleDocuments.butPinned" },
-    { MenuItemKind::Normal, IDM_FILE_CLOSEALL_TOLEFT,      &Label::FileCloseAllToLeft,     "file.closeMultipleDocuments.toLeft" },
-    { MenuItemKind::Normal, IDM_FILE_CLOSEALL_TORIGHT,     &Label::FileCloseAllToRight,    "file.closeMultipleDocuments.toRight" },
-    { MenuItemKind::Normal, IDM_FILE_CLOSEALL_UNCHANGED,   &Label::FileCloseAllUnchanged,  "file.closeMultipleDocuments.unchanged" },
+    { MenuItemKind::Normal, kCmdFileCloseallButCurrent, &Label::FileCloseAllButCurrent, "file.closeMultipleDocuments.butCurrent" },
+    { MenuItemKind::Normal, kCmdFileCloseallButPinned,  &Label::FileCloseAllButPinned,  "file.closeMultipleDocuments.butPinned" },
+    { MenuItemKind::Normal, kCmdFileCloseallToleft,      &Label::FileCloseAllToLeft,     "file.closeMultipleDocuments.toLeft" },
+    { MenuItemKind::Normal, kCmdFileCloseallToright,     &Label::FileCloseAllToRight,    "file.closeMultipleDocuments.toRight" },
+    { MenuItemKind::Normal, kCmdFileCloseallUnchanged,   &Label::FileCloseAllUnchanged,  "file.closeMultipleDocuments.unchanged" },
 };
 
 static const MenuItemDef kFileMenuItems[] = {
-    { MenuItemKind::Normal,  IDM_FILE_NEW,                   &Label::FileNew,                   "file.new" },
-    { MenuItemKind::Normal,  IDM_FILE_OPEN,                  &Label::FileOpen,                  "file.open" },
+    // OPEN group - create or bring a document into the editor.
+    { MenuItemKind::Normal,  kCmdFileNew,                   &Label::FileNew,                   "file.new" },
+    { MenuItemKind::Normal,  kCmdFileOpen,                  &Label::FileOpen,                  "file.open" },
     { MenuItemKind::Submenu, 0, &Label::FileOpenContainingFolder, "file.openContainingFolder",
       kFileOpenContainingFolderItems, WXSIZEOF(kFileOpenContainingFolderItems) },
-    { MenuItemKind::Normal,  IDM_FILE_OPEN_DEFAULT_VIEWER,   &Label::FileOpenDefaultViewer,     "file.openDefaultViewer" },
-    { MenuItemKind::Normal,  IDM_FILE_OPENFOLDERASWORKSPACE, &Label::FileOpenFolderAsWorkspace, "file.openFolderAsWorkspace" },
-    { MenuItemKind::Normal,  IDM_FILE_RELOAD,                &Label::FileReload,                "file.reload" },
-    { MenuItemKind::Normal,  IDM_FILE_SAVE,                  &Label::FileSave,                  "file.save" },
-    { MenuItemKind::Normal,  IDM_FILE_SAVEAS,                &Label::FileSaveAs,                "file.saveAs" },
-    { MenuItemKind::Normal,  IDM_FILE_SAVECOPYAS,            &Label::FileSaveCopyAs,            "file.saveCopyAs" },
-    { MenuItemKind::Normal,  IDM_FILE_SAVEALL,               &Label::FileSaveAll,               "file.saveAll" },
-    { MenuItemKind::Normal,  IDM_FILE_RENAME,                &Label::FileRename,                "file.rename" },
-    { MenuItemKind::Normal,  IDM_FILE_CLOSE,                 &Label::FileClose,                 "file.close" },
-    { MenuItemKind::Normal,  IDM_FILE_CLOSEALL,              &Label::FileCloseAll,              "file.closeAll" },
+    { MenuItemKind::Normal,  kCmdFileOpenDefaultViewer,   &Label::FileOpenDefaultViewer,     "file.openDefaultViewer" },
+    { MenuItemKind::Normal,  kCmdFileOpenFolderAsWorkspace, &Label::FileOpenFolderAsWorkspace, "file.openFolderAsWorkspace" },
+    { MenuItemKind::Normal,  kCmdFileReload,                &Label::FileReload,                "file.reload" },
+    { MenuItemKind::Separator },
+    // SAVE group.
+    { MenuItemKind::Normal,  kCmdFileSave,                  &Label::FileSave,                  "file.save" },
+    { MenuItemKind::Normal,  kCmdFileSaveas,                &Label::FileSaveAs,                "file.saveAs" },
+    { MenuItemKind::Normal,  kCmdFileSavecopyas,            &Label::FileSaveCopyAs,            "file.saveCopyAs" },
+    { MenuItemKind::Normal,  kCmdFileSaveall,               &Label::FileSaveAll,               "file.saveAll" },
+    { MenuItemKind::Separator },
+    // CLOSE group - dismiss open documents/tabs.
+    { MenuItemKind::Normal,  kCmdFileClose,                 &Label::FileClose,                 "file.close" },
+    { MenuItemKind::Normal,  kCmdFileCloseall,              &Label::FileCloseAll,              "file.closeAll" },
     { MenuItemKind::Submenu, 0, &Label::FileCloseMultipleDocuments, "file.closeMultipleDocuments",
       kFileCloseMultipleDocumentsItems, WXSIZEOF(kFileCloseMultipleDocumentsItems) },
-    { MenuItemKind::Normal,  IDM_FILE_RESTORELASTCLOSEDFILE, &Label::FileRestoreLastClosed,     "file.restoreLastClosed" },
-    { MenuItemKind::Normal,  IDM_FILE_DELETE,                &Label::FileDelete,                "file.delete" },
+    { MenuItemKind::Normal,  kCmdFileRestoreLastClosedFile, &Label::FileRestoreLastClosed,     "file.restoreLastClosed" },
     { MenuItemKind::Separator },
-    { MenuItemKind::Normal,  IDM_FILE_LOADSESSION,           &Label::FileLoadSession,           "file.loadSession" },
-    { MenuItemKind::Normal,  IDM_FILE_SAVESESSION,           &Label::FileSaveSession,           "file.saveSession" },
+    // FILE-SYSTEM group - act on the file on disk, not the tab.
+    { MenuItemKind::Normal,  kCmdFileRename,                &Label::FileRename,                "file.rename" },
+    { MenuItemKind::Normal,  kCmdFileDelete,                &Label::FileDelete,                "file.delete" },
     { MenuItemKind::Separator },
-    { MenuItemKind::Normal,  IDM_FILE_PRINT,                 &Label::FilePrint,                 "file.print" },
-    { MenuItemKind::Normal,  IDM_FILE_PRINTNOW,              &Label::FilePrintNow,              "file.printNow" },
+    // Session.
+    { MenuItemKind::Normal,  kCmdFileLoadsession,           &Label::FileLoadSession,           "file.loadSession" },
+    { MenuItemKind::Normal,  kCmdFileSavesession,           &Label::FileSaveSession,           "file.saveSession" },
+    { MenuItemKind::Separator },
+    // Print.
+    { MenuItemKind::Normal,  kCmdFilePrint,                 &Label::FilePrint,                 "file.print" },
+    { MenuItemKind::Normal,  kCmdFilePrintnow,              &Label::FilePrintNow,              "file.printNow" },
     { MenuItemKind::Separator },
     // The "Recent Files" submenu (wxFileHistory) is inserted here at runtime by buildMenuBar().
     { MenuItemKind::DynamicSlot, 0, nullptr, "slot.recentFiles" },
-    { MenuItemKind::Normal,  IDM_FILE_EXIT,                  &Label::FileExit,                  "file.exit" },
+    { MenuItemKind::Normal,  kCmdFileExit,                  &Label::FileExit,                  "file.exit" },
 };
 
 static const MenuDef kFileMenu = { "menu.file", &Label::MenuFile, kFileMenuItems, WXSIZEOF(kFileMenuItems) };
