@@ -25,7 +25,7 @@ mkdir -p "$APPDIR/usr/bin" "$OUTDIR"
 # zero runtime code changes to work, which matters since this project has no Linux machine to
 # verify a code change against - only CI.
 cp -r build/bin/. "$APPDIR/usr/bin/"
-rm -rf "$APPDIR/usr/bin/nib/nib_test_plugin.so" "$APPDIR/usr/bin/plugins"   # dev-only test artifacts
+rm -rf "$APPDIR/usr/bin/nib/nib_test_plugin.so" "$APPDIR/usr/bin/nib/example" "$APPDIR/usr/bin/plugins"   # dev-only test artifacts
 cp installer/linux/wxnote.desktop "$APPDIR/wxnote.desktop"
 cp resources/wxnote.svg "$APPDIR/wxnote.svg"
 

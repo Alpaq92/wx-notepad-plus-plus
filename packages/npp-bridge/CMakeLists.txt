@@ -1,21 +1,64 @@
-# npp-bridge - the optional, GPL, Windows-only Notepad++ binary-plugin compatibility bridge.
+# npp-bridge - the optional, GPL Notepad++ binary-plugin compatibility bridge.
 # It is itself a Nib plugin (built to <build>/bin/nib/), so the core loads it like any other plugin.
+#
+# Phase 1 (docs/ARCHITECTURE.md): the bridge builds on EVERY OS. Its central mechanism is
+# still Win32-only (SetWindowSubclass on the frame HWND) and is #ifdef _WIN32'd inside npp_bridge.cpp;
+# off-Windows the bridge compiles down to its portable dispatch spine (bridge_dispatch/bridge_handleNppm)
+# plus the nib.sci/1 seam, which is the router the recompiled-plugin path drives via libnpp_shim. Only
+# Windows can host a real N++ plugin *binary*; building elsewhere is what compile-verifies the ABI and
+# the dispatch core on CI.
 add_library(npp_bridge MODULE npp_bridge.cpp)
 
 set_target_properties(npp_bridge PROPERTIES
-    PREFIX ""                                   # -> npp_bridge.dll (no "lib" prefix)
+    PREFIX ""                                   # -> npp_bridge.dll / npp_bridge.so / npp_bridge.dylib
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/nib"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/nib")
 
 target_include_directories(npp_bridge PRIVATE
-    "${CMAKE_SOURCE_DIR}/include/nib"                    # nib.h (the permissive host API)
+    "${CMAKE_SOURCE_DIR}/include/nib"                    # nib.h (the permissive host API + nib.sci/1)
     "${CMAKE_SOURCE_DIR}/include/npp-compat"             # PluginInterface.h / Notepad_plus_msgs.h / Docking.h (the N++ ABI)
-    "${CMAKE_SOURCE_DIR}/third_party/scintilla/include") # Scintilla.h (SCNotification, pulled in by PluginInterface.h)
+    "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"  # Scintilla.h (SCNotification, pulled in by PluginInterface.h)
+    "${CMAKE_CURRENT_SOURCE_DIR}/shim")                  # npp_shim.h (NppHostBridge - the host->plugin dispatch seam)
 
-target_link_libraries(npp_bridge PRIVATE comctl32)       # SetWindowSubclass / DefSubclassProc (NPPM_* router)
+# comctl32 is the Win32 subclass transport (SetWindowSubclass / DefSubclassProc) -> Windows only.
+# Off-Windows the bridge dlopen()s plugins via wxDynamicLibrary/dlopen, which needs libdl on some libc's.
+if(WIN32)
+    target_link_libraries(npp_bridge PRIVATE comctl32)
+else()
+    target_link_libraries(npp_bridge PRIVATE ${CMAKE_DL_LIBS})
+endif()
 
 if(MSVC)
     target_compile_options(npp_bridge PRIVATE /EHsc /utf-8)
+endif()
+
+# ---- libnpp_shim : the GPL SDK artifact a PLUGIN AUTHOR links (NOT linked into wxnote or the bridge) --
+# A recompiled N++ plugin links this static lib so its own ::SendMessage()/SendMessageW() calls resolve
+# to the shim's forwarders (there is no Win32 to provide them off-Windows), which route into the bridge's
+# bridge_dispatch via the NppHostBridge table handed over by npp_shim_bind(). On Windows the plugin uses
+# the OS ::SendMessage, so npp_shim.cpp's body is #ifndef _WIN32'd out and this target links to nothing.
+add_library(npp_shim STATIC shim/npp_shim.cpp)
+set_target_properties(npp_shim PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    POSITION_INDEPENDENT_CODE ON)               # linked into each plugin's .so/.dylib (a shared object)
+target_include_directories(npp_shim PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/shim"                   # npp_shim.h (NppHostBridge, npp_shim_bind)
+    "${CMAKE_SOURCE_DIR}/include/npp-compat"             # PluginInterface.h + npp_plugin_port.h (HWND/LRESULT/... + NPP_EXPORT)
+    "${CMAKE_SOURCE_DIR}/third_party/scintilla/include") # Scintilla.h (SCI_* ids + SCNotification, #included by PluginInterface.h)
+if(MSVC)
+    target_compile_options(npp_shim PRIVATE /EHsc /utf-8)
+endif()
+
+# ---- CI compile-only proof: a recompiled-plugin template linked against libnpp_shim -----------------
+# The example builds a real N++-shaped plugin .so/.dylib using ONLY NPPM_*/SCI_* via ::SendMessage, and
+# links libnpp_shim -> a link-only proof of the six-symbol entry contract + the shim's SendMessage seam.
+# Built off-Windows always (a tiny target; on Windows the plugin uses the OS ::SendMessage and the real
+# packages/test_plugin already exercises the loader). It is what actually compiles npp_shim.cpp +
+# example_plugin.cpp, so the top-level CMakeLists makes wxnote DEPEND on npp_example_plugin off-Windows -
+# otherwise CI's `cmake --build --target wxnote` would never reach this path and it would go unverified.
+if(NOT WIN32)
+    add_subdirectory(example)
 endif()

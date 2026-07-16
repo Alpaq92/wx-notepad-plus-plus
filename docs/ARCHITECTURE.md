@@ -90,12 +90,11 @@ is the opposite by design: a versioned, capability-negotiated C ABI where a
 plugin queries the host for interface tables by *string id* (`nib.editor`,
 `nib.commands`, `nib.langdef`, …) and no `HWND` or window message appears in
 the contract. Nib plugins are ordinary shared libraries loaded by `dlopen`
-on all three platforms. Real, compiled Notepad++ plugins are still supported —
-but only through the optional, Windows-only, GPL **npp-bridge**, itself just a
-Nib plugin, which rebuilds the `NppData` environment and translates `NPPM_*`
-⇄ Nib on the plugins' behalf (see "Plugins" below). Extending that
-compatibility to *recompiled* N++ plugins on Linux/macOS is a designed, future
-step — [`NPP_PLUGINS_CROSS_PLATFORM.md`](NPP_PLUGINS_CROSS_PLATFORM.md).
+on all three platforms. Real Notepad++ plugins are supported through the
+optional GPL **npp-bridge** (itself just a Nib plugin): on Windows it loads the
+compiled plugin DLLs unchanged; on Linux/macOS it runs plugins **recompiled**
+against a small shim (Phase 1 — see "Plugins" below). Either way it rebuilds the
+`NppData` environment and translates `NPPM_*` ⇄ Nib on the plugins' behalf.
 
 ### Custom-language definitions — Scintillua replacing UDL
 
@@ -314,18 +313,45 @@ length-prefixed interface tables by string id (`nib.host`, `nib.editor`,
 capability-gated, Windows-only `nib.win32`). Interfaces grow additively;
 plugins load from `<exe>/nib/`.
 
-**npp-bridge** (`packages/npp-bridge/`, GPL, Windows-only) makes real
-compiled Notepad++ plugins work: it is itself a Nib plugin that uses
-`nib.win32` to obtain native handles, rebuilds the `NppData` environment,
-loads `<exe>/plugins/<Name>/<Name>.dll` via `LoadLibrary`, surfaces each
-`FuncItem` as a Nib command, answers `NPPM_*` messages by translating them to
-Nib calls, and forwards Nib events back as `SCNotification`s. The dependency
-rule that keeps the license boundary clean: the core knows nothing about the
-N++ ABI — it includes nothing from `include/npp-compat/`, and its own
-`src/command_ids.h` merely keeps its id *values* aligned with the ABI's; all
-N++-derived knowledge flows downward into the bridge, and new plugin needs
-are met by adding *generic* Nib capabilities the bridge then adapts. The
-bridge is slated to move into its own repository.
+**npp-bridge** (`packages/npp-bridge/`, GPL) makes real Notepad++ plugins work.
+It is itself a Nib plugin that surfaces each `FuncItem` as a Nib command,
+answers `NPPM_*` messages by translating them to Nib calls, and forwards Nib
+events back as `SCNotification`s. The dependency rule that keeps the license
+boundary clean: the core knows nothing about the N++ ABI — it includes nothing
+from `include/npp-compat/`, and its own `src/command_ids.h` merely keeps its id
+*values* aligned with the ABI's; all N++-derived knowledge flows downward into
+the bridge, and new plugin needs are met by adding *generic* Nib capabilities
+the bridge then adapts. The bridge is slated to move into its own repository.
+
+The bridge reaches a plugin two ways:
+
+- **Windows — load the compiled DLL.** It uses `nib.win32` to obtain native
+  handles, rebuilds the `NppData` environment, `LoadLibrary`s
+  `<exe>/plugins/<Name>/<Name>.dll`, and intercepts the plugin's own
+  `SendMessage(hwnd, NPPM_*/SCI_*)` calls by subclassing the frame HWND. This
+  is the mature path — real binary plugins run unmodified.
+
+- **Linux/macOS — recompile against a shim** (*cross-platform plugins, Phase 1,
+  in progress*). A Windows PE DLL can't load off-Windows, so instead the plugin
+  author recompiles their **source** against a small GPL static lib,
+  `libnpp_shim` (`packages/npp-bridge/shim/`). The plugin's unchanged
+  `SendMessage(handle, msg, w, l)` links to the shim, which routes into the same
+  portable dispatcher the Windows path now uses: `SCI_*`/Lexilla ranges go
+  through the core's generic `nib.sci/1` capability into
+  `wxStyledTextCtrl::SendMsg`, and `NPPM_*` messages go through the same
+  `bridge_handleNppm` switch. The core exposes **no** Win32 or N++ concepts for
+  this — `nib.sci/1` is a plain "run a Scintilla message" passthrough offered on
+  every OS. Scope note: this covers plugins whose host interaction is the
+  `NPPM_*`/`SCI_*` message surface (the portable majority). Plugins that draw
+  raw Win32 dialogs / GDI, or that vendor Notepad++'s `DockingFeature`
+  framework, are out of Phase 1 — their UI layer needs a separate port.
+
+  Because the dev toolchain is Windows-only, most of this is verified by
+  **CI compilation** on the Linux/macOS legs plus the fact that the *Windows*
+  bridge now runs through the identical `nib.sci/1` tail (so real Windows
+  plugins exercise the shared dispatch). The remaining unverified step — a real
+  recompiled `.so`/`.dylib` resolving the shim symbol and driving the editor at
+  runtime — needs an actual Linux/macOS machine and a real ported plugin.
 
 ## Platform shims
 
