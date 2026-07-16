@@ -139,6 +139,12 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 #include <cstring>             // strcmp / memcpy (Nib host)
 #include "command_ids.h"
 #include "app_icon_svg.h"
+
+// Set from the project() version by CMake (see CMakeLists.txt); fall back so a stray standalone
+// compile still builds. Shown in the About dialog.
+#ifndef WXN_VERSION
+#define WXN_VERSION "dev"
+#endif
 #include "nib.h"               // our own permissive, cross-platform plugin API (Nib)
 #include "terminal_panel.h"    // View > Show Terminal - bottom multi-tab shell panel (defines myID_VIEW_TERMINAL, used by menu_data_view.h below)
 #include "menu_builder.h"      // data-driven menu bar builder (menu_model.h/menu_data_*.h) - replaces the old inline menu construction
@@ -5139,7 +5145,7 @@ private:
         {
             applyScintilluaStyles(m_stc);
             page->lang = page->sciLang;
-            m_stc->Colourise(0, -1);
+            m_stc->Colourise(0, -1);   // fires STYLENEEDED -> scintilluaStyle, which sets every fold level
             return;
         }
         // A manual Language pick forces its lexer directly; otherwise auto-detect from the file extension.
@@ -6243,11 +6249,18 @@ private:
         }
         if (tag.rfind("string", 0) == 0 || tag == "character")   return 2;
         if (tag.rfind("comment", 0) == 0)                        return 3;
-        if (tag == "number")                                     return 4;
-        if (tag == "operator")                                   return 5;
+        if (tag.rfind("number", 0) == 0)                         return 4;   // number, number.float, ...
+        if (tag.rfind("operator", 0) == 0)                       return 5;
         if (tag.rfind("preprocessor", 0) == 0)                   return 13;
-        if (tag == "type" || tag == "function" || tag == "class")return 14;
-        if (tag == "constant" || tag == "variable")              return 15;
+        // Prefix-match so Scintillua's dot-namespaced sub-tags land on the right style, not default:
+        // function.builtin / function.method / type.builtin / class.* / constant.builtin / variable.*
+        if (tag.rfind("type", 0) == 0 || tag.rfind("function", 0) == 0 || tag.rfind("class", 0) == 0)
+            return 14;
+        if (tag.rfind("constant", 0) == 0 || tag.rfind("variable", 0) == 0 || tag == "label")
+            return 15;
+        if (tag == "regex")                                      return 2;   // regex literals -> string colour
+        if (tag == "foldkw")                                     return 1;   // udl-compat word fold markers (if/end) -> keyword
+        if (tag == "foldsym")                                    return 5;   // udl-compat symbol fold markers ({ }) -> operator
         return 0;   // whitespace.*, default, identifier, and anything unmapped
     }
     // Colour the container styles a Scintillua-lexed buffer uses. A small fixed palette (light + dark),
@@ -6274,7 +6287,19 @@ private:
             stc->StyleSetItalic(id, italic);
         };
         for (const Sty& s : P) set(s.id, s.lightFg, s.darkFg, s.bold, s.italic);
-        for (int id = 6; id <= 12; ++id) set(id, 0x0000FF, 0x569CD6, false, false);   // keyword2..8 share the keyword colour
+        // keyword2..8 (styles 6..12): distinct hues so a UDL's separate keyword groups are visually
+        // told apart (Notepad++ colours each group; until we carry the UDL's own per-slot colours we
+        // pick a sensible fixed palette instead of painting them all the keyword1 blue).
+        static const Sty KW[] = {
+            { 6, 0x267F99, 0x4EC9B0, true, false },   // keyword2 - teal
+            { 7, 0xAF00DB, 0xC586C0, true, false },   // keyword3 - purple
+            { 8, 0xB55305, 0xCE9178, true, false },   // keyword4 - orange
+            { 9, 0xC72D6E, 0xD16D9E, true, false },   // keyword5 - magenta
+            {10, 0x098658, 0x6A9955, true, false },   // keyword6 - green
+            {11, 0x0070C1, 0x9CDCFE, true, false },   // keyword7 - light blue
+            {12, 0x8B6D00, 0xD7BA7D, true, false },   // keyword8 - gold
+        };
+        for (const Sty& s : KW) set(s.id, s.lightFg, s.darkFg, s.bold, s.italic);
     }
     // Lex the whole buffer with the named Scintillua lexer and apply the styles (called from STYLENEEDED).
     void scintilluaStyle(wxStyledTextCtrl* stc, const wxString& langName)
@@ -6284,7 +6309,9 @@ private:
         const int len = static_cast<int>(stc->GetLength());
         const char* buf = stc->GetRangePointer(0, len);   // zero-copy view into Scintilla's buffer (valid until the doc changes; we only read it here)
         if (!buf) return;
-        const auto toks = eng->lex(std::string(langName.utf8_string()), buf, static_cast<size_t>(len));
+        std::vector<int> folds;
+        const auto toks = eng->lexAndFold(std::string(langName.utf8_string()), buf,
+                                          static_cast<size_t>(len), &folds);
         int prev = 0;
         stc->StartStyling(0);
         for (const auto& t : toks)
@@ -6294,10 +6321,24 @@ private:
             if (end > prev) { stc->SetStyling(end - prev, sciTagToStyle(t.tag)); prev = end; }
         }
         if (prev < len) stc->SetStyling(len - prev, 0);   // any trailing bytes -> default
-        // NOTE: fold levels are not set here yet - Scintillua-lexed languages currently style but do
-        // not fold (the retired UDL engine drove SCI_SETFOLDLEVEL via udlFoldRange). Wiring Scintillua's
-        // lexer:fold() through the container lexer is a tracked follow-up; margin folding stays inert
-        // for these languages until then rather than shipping an untested fold integration.
+        // Fold levels from Scintillua's lexer:fold() (same single lex pass). Set EVERY line each pass so
+        // the result is idempotent across re-lexes (tab switch, Preferences apply, theme toggle): re-
+        // setting a line to the level it already has is a no-op in Scintilla, so the user's collapsed/
+        // expanded fold state survives. Each fold value is already a Scintilla bitmask (base/header/white
+        // flags). A grammar with no fold points returns an empty `folds`; flatten to base then, which
+        // also clears any stale fold headers a previous Lexilla lexer left on this buffer.
+        // Known limitation: Scintillua's fold() splits lines on \r?\n, so a lone-CR (classic-Mac) file is
+        // seen as one line and does not fold (degrades to no folding; highlighting is unaffected).
+        const int nLines = static_cast<int>(stc->GetLineCount());
+        if (!folds.empty())
+        {
+            const int m = wxMin(static_cast<int>(folds.size()), nLines);
+            for (int line = 0; line < m; ++line) stc->SetFoldLevel(line, folds[line]);
+        }
+        else
+        {
+            for (int line = 0; line < nLines; ++line) stc->SetFoldLevel(line, wxSTC_FOLDLEVELBASE);
+        }
     }
     // Put the active buffer under a registered Scintillua language (Language-menu pick). Mirrors
     // route through setLexerForFile so tab switches re-apply it.
@@ -7926,7 +7967,12 @@ private:
                    _("wxNote\n\n"
                      "A fast, cross-platform text editor built on wxWidgets:\n"
                      "a native Scintilla editor with dark/light themes and plugin support.")),
-               0, wxALL, 16);
+               0, wxLEFT | wxRIGHT | wxTOP, 16);
+        // Version, from the project() version via CMake. Kept as a bare "vX.Y.Z" line (no translatable
+        // word) so it needs no per-language string and never drifts from a hardcoded copy.
+        auto* ver = new wxStaticText(&dlg, wxID_ANY, wxString::Format("v%s", WXN_VERSION));
+        ver->SetForegroundColour(wxColour(m_dark ? 0x9A9A9A : 0x707070));
+        s->Add(ver, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16);
         s->Add(dlg.CreateButtonSizer(wxOK), 0, wxALL | wxALIGN_RIGHT, 10);
         dlg.SetSizerAndFit(s);
         themeDialog(&dlg);

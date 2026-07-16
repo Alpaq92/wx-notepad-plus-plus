@@ -110,6 +110,13 @@ int main()
         "      <Keywords name=\"Delimiters\">00&quot; 01\\ 02&quot; 03&apos; 04 05&apos;</Keywords>\n"
         "      <Keywords name=\"Keywords1\">if else while for</Keywords>\n"
         "      <Keywords name=\"Keywords2\">true false null</Keywords>\n"
+        "      <Keywords name=\"Folders in code1, open\">{</Keywords>\n"
+        "      <Keywords name=\"Folders in code1, close\">}</Keywords>\n"
+        "      <Keywords name=\"Folders in code2, open\">if</Keywords>\n"
+        "      <Keywords name=\"Folders in code2, middle\">else</Keywords>\n"
+        "      <Keywords name=\"Folders in code2, close\">endif</Keywords>\n"
+        "      <Keywords name=\"Folders in comment, open\">{{{</Keywords>\n"
+        "      <Keywords name=\"Folders in comment, close\">}}}</Keywords>\n"
         "    </KeywordLists>\n"
         "    <Styles><WordsStyle name=\"DEFAULT\" fgColor=\"000000\" bgColor=\"FFFFFF\" /></Styles>\n"
         "  </UserLang>\n"
@@ -147,6 +154,50 @@ int main()
           "e2e: two string delimiters (backslash-escaped double-quote, plain single-quote)");
     check(contains(lua2, "lpeg.S('+-*/=<>')"), "e2e: operators");
 
+    // Fold keywords: parsed into the fold model, then emitted as a 'fold' tagging rule + +1/-1 points.
+    check(parsed.foldCode1.open.size() == 1 && parsed.foldCode1.open[0] == "{", "parsed Folders in code1 open");
+    check(parsed.foldCode1.close.size() == 1 && parsed.foldCode1.close[0] == "}", "parsed Folders in code1 close");
+    check(parsed.foldCode2.open.size() == 1 && parsed.foldCode2.open[0] == "if", "parsed Folders in code2 open");
+    check(parsed.foldCode2.middle.size() == 1 && parsed.foldCode2.middle[0] == "else", "parsed Folders in code2 middle");
+    check(parsed.foldComment.open.size() == 1 && parsed.foldComment.open[0] == "{{{", "parsed Folders in comment open");
+    // Fold markers are split into two tags so the host colours them apart: symbol markers ({ }) as
+    // operators (foldsym), word markers (if/end) as keywords (foldkw).
+    check(contains(lua2, "M:add_rule('foldsym', M:tag('foldsym', "), "e2e: symbol fold rule emitted");
+    check(contains(lua2, "M:add_rule('foldkw', M:tag('foldkw', "), "e2e: word fold rule emitted");
+    check(contains(lua2, "M:add_fold_point('foldsym', '{', 1)"), "e2e: code1 open -> +1 fold point");
+    check(contains(lua2, "M:add_fold_point('foldsym', '}', -1)"), "e2e: code1 close -> -1 fold point");
+    check(contains(lua2, "M:add_fold_point('foldkw', 'if', 1)"), "e2e: code2 open -> +1 fold point");
+    check(contains(lua2, "M:add_fold_point('foldkw', 'endif', -1)"), "e2e: code2 close -> -1 fold point");
+    // Word markers go through word_match (whole-word) so they never fire inside a larger identifier;
+    // symbol markers stay lpeg.P.
+    check(contains(lua2, "M:tag('foldkw', lexer.word_match('if else endif'))"), "e2e: word markers via whole-word word_match");
+    check(contains(lua2, "M:tag('foldsym', lpeg.P('{') + lpeg.P('}'))"), "e2e: symbol markers via lpeg.P");
+    check(!contains(lua2, "lpeg.P('if')") && !contains(lua2, "lpeg.P('else')"),
+          "e2e: word markers are NOT emitted as boundary-less lpeg.P");
+    check(!contains(lua2, "M:add_fold_point('foldkw', 'else'"), "e2e: middle keyword carries no fold delta (depth-neutral)");
+    check(contains(lua2, "M:add_fold_point(lexer.COMMENT, '{{{', 1)"), "e2e: comment fold open under lexer.COMMENT");
+    check(contains(lua2, "M:add_fold_point(lexer.COMMENT, '}}}', -1)"), "e2e: comment fold close under lexer.COMMENT");
+    // Rule order (first match wins): comment/string BEFORE the fold rules (so a marker inside a
+    // comment/string is not stolen), fold BEFORE keywords (so a code marker that is also a keyword
+    // still tags as a fold tag).
+    check(lua2.find("M:add_rule('comment'") < lua2.find("M:add_rule('foldsym'"), "e2e: comment rule precedes fold rules");
+    check(lua2.find("M:add_rule('foldsym'") < lua2.find("M:add_rule('keyword"), "e2e: fold rules precede keyword rules");
+    // Fold points registered longest-symbol-first, so a longer comment marker ('{{{') is not shadowed
+    // by a shorter code marker ('{') via fold()'s per-line range guard.
+    check(lua2.find("M:add_fold_point(lexer.COMMENT, '{{{'") < lua2.find("M:add_fold_point('foldsym', '{'"),
+          "e2e: longer fold symbol registered before shorter one");
+
+    // A UDL with no fold keywords must emit neither a fold rule nor fold points.
+    check(!contains(bare, "add_fold_point") && !contains(bare, "M:add_rule('fold"),
+          "empty UDL emits no fold rule or fold points");
+    // Direct fold model (braces only, no keywords): the simplest foldable language -> symbol fold rule.
+    UdlDef braces; braces.name = "braces"; braces.hasNumbers = false;
+    braces.foldCode1.open = {"{"}; braces.foldCode1.close = {"}"};
+    const std::string bl = translateUdlToScintillua(braces);
+    check(contains(bl, "M:add_rule('foldsym', M:tag('foldsym', lpeg.P('{') + lpeg.P('}')))"), "braces: symbol fold rule");
+    check(contains(bl, "M:add_fold_point('foldsym', '{', 1)") && contains(bl, "M:add_fold_point('foldsym', '}', -1)"),
+          "braces: +1/-1 fold points");
+
     // Bare <UserLang> root (single-language export) must also parse.
     UdlDef bareParsed;
     check(parseUserDefineLangXml("<UserLang name=\"Solo\" ext=\"s\"><KeywordLists>"
@@ -154,6 +205,61 @@ int main()
                                  bareParsed) &&
               bareParsed.name == "Solo" && bareParsed.keywords[0].size() == 2,
           "bare <UserLang> root parses");
+
+    // Multiple <UserLang> in one file (N++'s main userDefineLang.xml shape): parse them ALL.
+    const std::string multi =
+        "<NotepadPlus>\n"
+        "  <UserLang name=\"Alpha\" ext=\"a\"><KeywordLists>"
+        "<Keywords name=\"Keywords1\">one two</Keywords></KeywordLists></UserLang>\n"
+        "  <UserLang name=\"Beta\" ext=\"b\"><KeywordLists>"
+        "<Keywords name=\"Keywords1\">three</Keywords></KeywordLists></UserLang>\n"
+        "</NotepadPlus>\n";
+    const auto many = parseAllUserDefineLangs(multi);
+    check(many.size() == 2, "parseAll: two <UserLang> -> two defs");
+    if (many.size() == 2) {
+        check(many[0].name == "Alpha" && many[0].ext == "a" && many[0].keywords[0].size() == 2, "parseAll: first def parsed");
+        check(many[1].name == "Beta" && many[1].keywords[0].size() == 1 && many[1].keywords[0][0] == "three",
+              "parseAll: second def parsed (not dropped)");
+    }
+    // parseUserDefineLangXml still returns only the first (back-compat for single-def callers).
+    UdlDef firstOnly;
+    check(parseUserDefineLangXml(multi, firstOnly) && firstOnly.name == "Alpha", "single-parse still returns first def");
+    check(parseAllUserDefineLangs("<NotepadPlus></NotepadPlus>").empty(), "parseAll: no <UserLang> -> empty");
+    // A nameless <UserLang> must be skipped, not abort the loop and drop its (valid) later siblings.
+    {
+        const auto af = parseAllUserDefineLangs(
+            "<NotepadPlus>"
+            "<UserLang ext=\"x\"><KeywordLists><Keywords name=\"Keywords1\">a</Keywords></KeywordLists></UserLang>"
+            "<UserLang name=\"Good\" ext=\"g\"><KeywordLists><Keywords name=\"Keywords1\">b</Keywords></KeywordLists></UserLang>"
+            "</NotepadPlus>");
+        check(af.size() == 1 && af[0].name == "Good", "parseAll: nameless <UserLang> skipped, later sibling still parsed");
+    }
+
+    // Keyword "prefix mode": a prefix group emits a Cmt whole-word prefix matcher, not word_match.
+    UdlDef pfx; pfx.name = "pfx"; pfx.hasNumbers = false;
+    pfx.keywords[0] = {"IDM_", "IDD_"}; pfx.keywordPrefix[0] = true;
+    pfx.keywords[1] = {"if", "else"};   // group 2 stays normal (word_match)
+    const std::string pl = translateUdlToScintillua(pfx);
+    check(contains(pl, "lpeg.Cmt((lexer.alnum + '_')^1, function(_, _, w) return w:sub(1, 4) == 'IDM_' or w:sub(1, 4) == 'IDD_' end)"),
+          "prefix-mode group -> Cmt whole-word prefix matcher");
+    check(!contains(pl, "word_match('IDM_"), "prefix-mode group does NOT use word_match");
+    check(contains(pl, "lexer.word_match('if else')"), "non-prefix group still uses word_match");
+    // Case-insensitive prefix compares lowercased.
+    UdlDef pfi; pfi.name = "pfi"; pfi.hasNumbers = false;
+    pfi.keywords[0] = {"REM"}; pfi.keywordPrefix[0] = true; pfi.keywordsCaseInsensitive = true;
+    check(contains(translateUdlToScintillua(pfi), "w:sub(1, 3):lower() == 'rem'"), "case-insensitive prefix lowercases");
+    // A prefix with non-word chars ("gl-", "$") must extend the captured word class, else it can never match.
+    UdlDef pfsym; pfsym.name = "pfsym"; pfsym.hasNumbers = false;
+    pfsym.keywords[0] = {"gl-", "$"}; pfsym.keywordPrefix[0] = true;
+    check(contains(translateUdlToScintillua(pfsym), "lpeg.Cmt((lexer.alnum + '_' + lpeg.S('-$'))^1"),
+          "symbol-containing prefix extends the Cmt word class");
+    // <Prefix> parsing populates the per-group flags.
+    UdlDef pp;
+    check(parseUserDefineLangXml(
+              "<UserLang name=\"P\"><Settings><Prefix Keywords1=\"yes\" Keywords2=\"no\"/></Settings>"
+              "<KeywordLists><Keywords name=\"Keywords1\">a b</Keywords></KeywordLists></UserLang>", pp) &&
+              pp.keywordPrefix[0] && !pp.keywordPrefix[1],
+          "parsed <Prefix> per-group flags");
 
     // Malformed input fails cleanly.
     UdlDef junk;

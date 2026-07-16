@@ -11,25 +11,35 @@ UDL import) are GPL-3.0-or-later (see [`LICENSING.md`](../LICENSING.md)).
 ```mermaid
 flowchart TB
     core("<b>wxnote</b> — the portable core<br/>wxWidgets + wxStyledTextCtrl (Scintilla + Lexilla)<br/>+ the Nib plugin API · <code>include/nib/nib.h</code><br/><i>all platforms · Apache-2.0</i>")
-    nib("<b>native Nib plugins</b><br/>&lt;exe&gt;/nib/*.dll · *.so · *.dylib<br/><i>all platforms · author's own licence</i>")
-    bridge("<b>npp-bridge</b><br/>loads real Notepad++ plugin DLLs,<br/>translates NPPM_* ⇄ Nib<br/><i>Windows only · GPL-3.0-or-later</i>")
-    core -->|"loads · dlopen"| nib
-    core -->|"loads · Windows only"| bridge
 
-    classDef apache fill:#0b7285,stroke:#08525e,color:#ffffff;
-    classDef neutral fill:#495057,stroke:#343a40,color:#ffffff;
-    classDef gpl fill:#5f3dc4,stroke:#432aa0,color:#ffffff;
-    class core apache;
-    class nib neutral;
-    class bridge gpl;
+    subgraph nibplugins["Nib plugins — loaded via dlopen on every OS"]
+        direction TB
+        native("<b>native Nib plugins</b><br/>&lt;exe&gt;/nib/*.dll · *.so · *.dylib · speak the Nib API directly<br/><i>author's own licence</i>")
+        bridge("<b>npp-bridge</b><br/>hosts Notepad++ plugins — real DLLs on Windows,<br/>recompiled against <code>libnpp_shim</code> on Linux/macOS ·<br/>translates NPPM_* ⇄ Nib<br/><i>all platforms · GPL-3.0-or-later</i>")
+        udl("<b>udl-compat</b><br/>translates legacy userDefineLang.xml<br/>into Scintillua lexers<br/><i>all platforms · GPL-3.0-or-later</i>")
+    end
+
+    core -->|"loads · dlopen"| nibplugins
+
+    classDef cCore   fill:#0ca678,stroke:#087f5b,color:#ffffff;
+    classDef cNative fill:#e8590c,stroke:#c92a2a,color:#ffffff;
+    classDef cBridge fill:#7048e8,stroke:#5f3dc4,color:#ffffff;
+    classDef cUdl    fill:#ae3ec9,stroke:#862e9c,color:#ffffff;
+    class core cCore;
+    class native cNative;
+    class bridge cBridge;
+    class udl cUdl;
+    style nibplugins fill:#141726,stroke:#4dabf7,stroke-width:2px,color:#dbe4ff;
+    linkStyle 0 stroke:#4dabf7,stroke-width:2px;
 ```
 
-One portable core and one portable plugin API on every OS; the Notepad++
-binary-compatibility layer is a separate, optional, Windows-only, GPL module
-that is itself just another Nib plugin. (A second optional GPL module,
-`packages/udl-compat/`, exists on the same pattern — it translates legacy
-Notepad++ UDL files into the core's Scintillua engine, covered under *Custom
-languages* below.)
+One portable core and one portable plugin API on every OS. The two
+Notepad++-compat modules are **themselves just Nib plugins**, loaded like any
+other: **`npp-bridge`** hosts Notepad++ plugins — real compiled DLLs on Windows,
+plugins recompiled against `libnpp_shim` on Linux/macOS — and translates
+`NPPM_*` ⇄ Nib; **`udl-compat`** translates legacy `userDefineLang.xml` into the
+core's Scintillua engine (see *Custom languages* below). Both are optional and
+GPL-3.0-or-later, so the Apache-2.0 core never depends on either.
 
 ## How wxNote differs from Notepad++
 
@@ -55,9 +65,8 @@ Architecturally, the two programs diverge on nearly every axis:
 | Platforms | Windows only (a Win32 program) | Windows, Linux, macOS from one codebase |
 | UI toolkit | raw Win32 / GDI, resource-script dialogs, the Windows message loop | wxWidgets — real native controls on each OS |
 | Editing engine | Scintilla + Lexilla | **the same**, via `wxStyledTextCtrl` |
-| Plugin ABI | Win32 DLLs speaking `NPPM_*` window messages over real `HWND`s | **Nib** — an original, portable C ABI; N++ binary plugins only via an optional GPL bridge (Windows) |
+| Plugin ABI | Win32 DLLs speaking `NPPM_*` window messages over real `HWND`s | **Nib** — an original, portable C ABI; N++ plugins via an optional GPL bridge (real DLLs on Windows, recompiled against a shim on Linux/macOS) |
 | Custom languages | UDL: flat keyword lists + delimiter pairs | **Scintillua** (Lua LPeg grammars) as the native engine; UDL demoted to an optional GPL compat plugin |
-| Menu / commands | 13 accreted top-level menus | an original 11-menu hierarchy; only id *values* kept identical, for bridge interop |
 | Licence | GPL v3 | Apache-2.0 core; GPL confined to the optional interop modules |
 | Build / config | MSBuild + Visual Studio solution; `config.xml` | CMake + Ninja; `wxConfig` (registry / dotfile) |
 
@@ -110,14 +119,22 @@ MIT Lua LPeg lexers, a real grammar engine (regex, nested/embedded languages,
 ~160 bundled lexers) purpose-built for Scintilla, far more capable than UDL's
 flat lists. The Apache-2.0 core (`src/scintillua_engine.{h,cpp}`, embedding Lua
 + LPeg + Scintillua) now contains **no UDL format code at all**; it just
-container-lexes registered Scintillua languages on `STYLENEEDED`. Legacy
-Notepad++ `userDefineLang.xml` files are supported only through the optional GPL
-**`packages/udl-compat/`** plugin, which translates each into a Scintillua lexer
-and registers it via `nib.langdef`. *Status:* **implemented and building green;
-the core's own legacy UDL engine (`udl.h`/`udl_lexer.h`) and its editor dialog
-have been removed.** Every runtime component is verified headlessly (engine
-lexes a translated UDL; the built plugin DLL loads, scans, translates and
-registers; the generated Lua lexes under real Scintillua). The one thing not
+container-lexes registered Scintillua languages on `STYLENEEDED`. That same pass
+also drives **code folding**: `Engine::lexAndFold()` reuses the single lex to run
+Scintillua's `lexer:fold()`, and the host applies the returned per-line levels
+via `SCI_SETFOLDLEVEL` (idempotently, so re-lexing on a tab switch preserves the
+user's collapse state). Grammars that declare no fold points simply don't fold.
+Legacy Notepad++ `userDefineLang.xml` files are supported only through the
+optional GPL **`packages/udl-compat/`** plugin, which translates each into a
+Scintillua lexer and registers it via `nib.langdef`; its translator emits fold
+points from N++'s `Folders in code`/`in comment` keywords, so UDL-derived
+languages fold too. *Status:* **implemented and building green; the core's own
+legacy UDL engine (`udl.h`/`udl_lexer.h`) and its editor dialog have been
+removed.** Every runtime component is verified headlessly (engine lexes *and
+folds* a translated UDL; the built plugin DLL loads, scans, translates and
+registers; the generated Lua lexes under real Scintillua). Remaining
+translator-fidelity gaps: nested delimiters, per-slot font styling, and
+depth-neutral `middle` fold keywords (else/elif sub-folding). The one thing not
 eyeball-confirmed is the rendered colours in a live GUI.
 
 Scintillua was chosen after surveying nine candidate formats (GtkSourceView,

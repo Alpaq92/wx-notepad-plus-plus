@@ -5,7 +5,11 @@
 
 #include "udl_scintillua.h"
 
+#include <algorithm>
+#include <cctype>
+#include <set>
 #include <sstream>
+#include <utility>
 
 namespace udlcompat {
 namespace {
@@ -44,6 +48,23 @@ bool anyKeywords(const UdlDef& u)
     return false;
 }
 
+// ASCII lowercase (UDL prefix comparison for case-insensitive languages; markers are ASCII).
+std::string toLower(std::string s)
+{
+    for (char& c : s) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+    return s;
+}
+
+// A "word-like" literal is all identifier chars (begin/end/if) vs a symbol literal (braces, etc.).
+// Fold markers are split by this so word markers colour as keywords and symbol markers as operators.
+bool isWordLike(const std::string& s)
+{
+    if (s.empty()) return false;
+    for (char c : s)
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '_')) return false;
+    return true;
+}
+
 }  // namespace
 
 // Construct provenance (all confirmed against real Scintillua lexers / the API docs):
@@ -75,20 +96,9 @@ std::string translateUdlToScintillua(const UdlDef& udl)
     // Whitespace first so runs of blanks don't get retried by later rules.
     o << "M:add_rule('whitespace', M:tag(lexer.WHITESPACE, lexer.space^1))\n\n";
 
-    // Keywords1..8, each its own rule + tag so themes can colour the groups apart.
-    for (int i = 0; i < 8; ++i) {
-        if (udl.keywords[i].empty()) continue;
-        std::string words;
-        for (size_t k = 0; k < udl.keywords[i].size(); ++k) {
-            if (k) words += ' ';
-            words += udl.keywords[i][k];
-        }
-        const std::string rule = "keyword" + std::to_string(i + 1);
-        const std::string tag  = (i == 0) ? "lexer.KEYWORD" : luaStr(rule);
-        o << "M:add_rule('" << rule << "', M:tag(" << tag << ", lexer.word_match("
-          << luaStr(words) << (udl.keywordsCaseInsensitive ? ", true" : "") << ")))\n";
-    }
-    if (anyKeywords(udl)) o << '\n';
+    // Comments and strings come BEFORE the fold / keyword / operator rules: add_rule builds an ordered
+    // choice where the first match wins, and a comment/string range must consume its whole span so a
+    // fold marker or keyword that happens to sit inside a comment or string is never re-tagged.
 
     // Comments: line (to_eol) and/or block (range), combined into one rule. Emit only when there is
     // an actual pattern: a block-comment OPEN marker with no matching CLOSE (or a close with no open)
@@ -128,6 +138,116 @@ std::string translateUdlToScintillua(const UdlDef& udl)
         }
         o << "))\n";
     }
+    if (hasLineComment || hasBlockComment || !udl.delimiters.empty()) o << '\n';
+
+    // Fold points, from N++ "Folders in code 1/2" (+ "Folders in comment"). Scintillua's fold() only
+    // counts a fold symbol whose byte is styled with the fold point's tag, so every code fold literal
+    // must be TAGGED. Emit one 'fold' rule here - AFTER comment/string (so a marker inside a comment or
+    // string is not stolen) but BEFORE the keyword/operator rules (so a code marker that is also a
+    // keyword still tags as 'fold' and folds). Word-like markers (begin/end/if) go through word_match so
+    // they only match whole words - a bare lpeg.P('begin') would also fire inside 'beginner'; symbol
+    // markers (braces etc.) stay lpeg.P. "Middle" keywords (else/elif) are tagged but carry no delta,
+    // so they stay depth-neutral (matched-header behaviour would need fold.scintillua.on.zero.sum.lines).
+    std::vector<std::string> codeLits;
+    {
+        std::set<std::string> seen;
+        auto gather = [&](const std::vector<std::string>& v) {
+            for (const auto& s : v) if (!s.empty() && seen.insert(s).second) codeLits.push_back(s);
+        };
+        gather(udl.foldCode1.open); gather(udl.foldCode1.middle); gather(udl.foldCode1.close);
+        gather(udl.foldCode2.open); gather(udl.foldCode2.middle); gather(udl.foldCode2.close);
+    }
+    if (!codeLits.empty()) {
+        std::vector<std::string> symbolLits, wordLits;
+        for (const auto& s : codeLits)
+            (isWordLike(s) ? wordLits : symbolLits).push_back(s);
+        // Two tagged rules so the host colours them faithfully: symbol markers ({ } etc.) as operators,
+        // word markers (if/end) as keywords. Both are emitted before the keyword/operator rules so a
+        // fold marker still tags as its fold tag (fold() needs that at the marker's byte).
+        if (!symbolLits.empty()) {
+            // Longest symbol first so a longer marker wins over a shorter one that is its prefix.
+            std::stable_sort(symbolLits.begin(), symbolLits.end(),
+                             [](const std::string& a, const std::string& b) { return a.size() > b.size(); });
+            o << "M:add_rule('foldsym', M:tag('foldsym', ";
+            for (size_t i = 0; i < symbolLits.size(); ++i) { if (i) o << " + "; o << "lpeg.P(" << luaStr(symbolLits[i]) << ")"; }
+            o << "))\n";
+        }
+        if (!wordLits.empty()) {
+            std::string words;
+            for (size_t i = 0; i < wordLits.size(); ++i) { if (i) words += ' '; words += wordLits[i]; }
+            o << "M:add_rule('foldkw', M:tag('foldkw', lexer.word_match(" << luaStr(words) << ")))\n";   // whole-word
+        }
+    }
+    // Register the +1/-1 depth deltas. Order by DESCENDING symbol length across code AND comment
+    // points: fold() reserves a per-line character range for every symbol it scans, in registration
+    // order, so a shorter symbol scanned first (code '{') would claim the span of a longer one
+    // (comment '{{{') and shadow it. Dedup per (tag, symbol) so a literal listed as both open and
+    // close does not register two contradictory deltas.
+    {
+        struct FoldPt { const char* tagExpr; std::string sym; int delta; };
+        std::vector<FoldPt> pts;
+        std::set<std::pair<std::string, std::string>> seen;
+        auto add = [&](const char* tagExpr, const std::vector<std::string>& open, const std::vector<std::string>& close) {
+            for (const auto& s : open)  if (!s.empty() && seen.insert({tagExpr, s}).second) pts.push_back({tagExpr, s, 1});
+            for (const auto& s : close) if (!s.empty() && seen.insert({tagExpr, s}).second) pts.push_back({tagExpr, s, -1});
+        };
+        // Code fold points get 'foldkw'/'foldsym' by marker shape (matching the two rules above).
+        auto addCode = [&](const std::vector<std::string>& open, const std::vector<std::string>& close) {
+            for (const auto& s : open)  { const char* t = isWordLike(s) ? "'foldkw'" : "'foldsym'"; if (!s.empty() && seen.insert({t, s}).second) pts.push_back({t, s, 1}); }
+            for (const auto& s : close) { const char* t = isWordLike(s) ? "'foldkw'" : "'foldsym'"; if (!s.empty() && seen.insert({t, s}).second) pts.push_back({t, s, -1}); }
+        };
+        addCode(udl.foldCode1.open, udl.foldCode1.close);
+        addCode(udl.foldCode2.open, udl.foldCode2.close);
+        add("lexer.COMMENT", udl.foldComment.open, udl.foldComment.close);
+        std::stable_sort(pts.begin(), pts.end(),
+                         [](const FoldPt& a, const FoldPt& b) { return a.sym.size() > b.sym.size(); });
+        for (const auto& p : pts)
+            o << "M:add_fold_point(" << p.tagExpr << ", " << luaStr(p.sym) << ", " << p.delta << ")\n";
+        if (!codeLits.empty() || !pts.empty()) o << '\n';
+    }
+
+    // Keywords1..8, each its own rule + tag so themes can colour the groups apart.
+    for (int i = 0; i < 8; ++i) {
+        if (udl.keywords[i].empty()) continue;
+        const std::string rule = "keyword" + std::to_string(i + 1);
+        const std::string tag  = (i == 0) ? "lexer.KEYWORD" : luaStr(rule);
+        if (udl.keywordPrefix[i]) {
+            // N++ "prefix mode": a whole word is highlighted if it STARTS WITH any listed string.
+            // Match the whole identifier with Cmt (so word boundaries are correct) then test the
+            // prefix by a plain substring compare (no Lua-pattern escaping needed). The captured word
+            // is alnum+_ PLUS any non-word chars that appear in this group's prefixes (e.g. '-', '$',
+            // '.') - otherwise a prefix like "gl-" or "$" could never match, since the run would stop
+            // at the sigil.
+            std::string extra;
+            for (const std::string& p : udl.keywords[i])
+                for (char c : p)
+                    if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '_') && extra.find(c) == std::string::npos)
+                        extra += c;
+            const std::string wordChars = extra.empty()
+                ? std::string("(lexer.alnum + '_')")
+                : "(lexer.alnum + '_' + lpeg.S(" + luaStr(extra) + "))";
+            o << "M:add_rule('" << rule << "', M:tag(" << tag
+              << ", lpeg.Cmt(" << wordChars << "^1, function(_, _, w) return ";
+            for (size_t k = 0; k < udl.keywords[i].size(); ++k) {
+                const std::string& p = udl.keywords[i][k];
+                if (k) o << " or ";
+                if (udl.keywordsCaseInsensitive)
+                    o << "w:sub(1, " << p.size() << "):lower() == " << luaStr(toLower(p));
+                else
+                    o << "w:sub(1, " << p.size() << ") == " << luaStr(p);
+            }
+            o << " end)))\n";
+        } else {
+            std::string words;
+            for (size_t k = 0; k < udl.keywords[i].size(); ++k) {
+                if (k) words += ' ';
+                words += udl.keywords[i][k];
+            }
+            o << "M:add_rule('" << rule << "', M:tag(" << tag << ", lexer.word_match("
+              << luaStr(words) << (udl.keywordsCaseInsensitive ? ", true" : "") << ")))\n";
+        }
+    }
+    if (anyKeywords(udl)) o << '\n';
 
     if (udl.hasNumbers)
         o << "M:add_rule('number', M:tag(lexer.NUMBER, lexer.number))\n";
