@@ -3,6 +3,40 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.6] - 2026-07-16
+
+### Added
+- **Code folding for custom (Scintillua) languages.** The Scintillua engine now computes
+  per-line fold levels in the same pass it lexes (`scintillua::Engine::lexAndFold()` in
+  `src/scintillua_engine.{h,cpp}`), wiring up the `fold`/`style_at`/`fold_level` state that
+  Scintillua's standalone library leaves unset, and the host applies those levels idempotently so
+  collapse state survives tab switches. Custom languages defined through the Scintillua engine (and
+  imported UDLs, below) can now be collapsed/expanded like the built-in lexers.
+- **Cross-platform Notepad++ plugin support, Phase 2.** Three Nib capabilities were extended so the
+  GPL `npp-bridge` can service more of the Notepad++ plugin ABI on every platform:
+  `nib.events` now emits `DOCUMENT_OPENED`/`DOCUMENT_CLOSED`; `nib.commands` v2 adds
+  `invoke_command(host, id)`; `nib.documents` v4 adds `doc_path_at(host, index, buf, cap)`
+  (`include/nib/nib.h`). `npp-bridge` uses them to deliver `NPPN_FILESAVED`/`READY`/`SHUTDOWN`/
+  `FILEOPENED`/`FILECLOSED` notifications and to implement `NPPM_MENUCOMMAND`, `NPPM_SAVEALLFILES`,
+  `NPPM_GETCURRENTLINE`/`COLUMN`, and open-file enumeration without depending on Win32 window
+  messages.
+- **Version number in the About dialog.** Help > About now shows `v<version>`, compiled in from the
+  CMake project version via a new `WXN_VERSION` define (and the Windows `.rc` version block is now
+  generated from the same single source, `resources/app.rc.in`).
+- **Download page: RISC-V and a Notepad++ comparison tab.** The project site's download page offers a
+  `riscv64` Linux `.deb`, and a new "Differences" tab summarizes how wxNote differs from Notepad++.
+
+### Changed
+- **UDL import fidelity (`udl-compat`).** Imported Notepad++ User-Defined Languages now translate their
+  fold markers ("Folders in code/comment", open/middle/close) into real Scintillua fold points, honor
+  per-keyword-group **Prefix mode**, and correctly handle a `userDefineLang.xml` that defines multiple
+  languages (a nameless `<UserLang>` no longer aborts the rest of the file). Comment/string rules are
+  ordered ahead of fold rules so fold symbols inside comments and strings are not mis-detected.
+
+### Fixed
+- **Save All now saves every document.** `File > Save All` previously only wrote the active document;
+  it now iterates and writes all modified files across both views.
+
 ## [0.8.0] - 2026-07-16
 
 ### Added
