@@ -17,17 +17,20 @@ this list. It was used throughout development as:
   studying what Notepad++ *does* (command semantics, defaults, layout
   conventions) and comparing the result against a real installation;
 - **a source of inspiration** — the feature set itself (Function List,
-  Document Map, User-Defined Languages, session handling, the Mark styles,
-  macro recording, and much more) is Notepad++'s feature set, rebuilt;
-- **a file-format compatibility target** — wxNote reads and writes Notepad++'s
-  own formats: the `<NotepadPlus>` theme/styler XML (real N++ theme files
-  load unmodified), `userDefineLang.xml` UDL exports (verified
-  field-for-field against a real export, full interchange), the
-  `<NotepadPlus><Session>` session XML (file list, scroll position and
-  bookmarks interchange; caret position uses a wxNote-specific attribute and
-  N++ second-view files are not restored), and `contextMenu.xml` (same
-  schema, id-based entries; N++'s name-based/folder/plugin entries are not
-  interpreted);
+  Document Map, custom/user-defined languages, session handling, the Mark
+  styles, macro recording, and much more) is Notepad++'s feature set, rebuilt;
+- **a file-format compatibility target** — wxNote reads Notepad++'s own
+  formats and writes compatible ones under its own root tag: the
+  `<NotepadPlus>` theme/styler XML (real N++ theme files load unmodified;
+  wxNote only reads these, it never writes a theme file), session XML (file
+  list, scroll position and bookmarks interchange; caret position uses a
+  wxNote-specific attribute and N++ second-view files are not restored; read
+  from a `<wxNote>` or `<NotepadPlus>` root and written as `<wxNote>`), and
+  `contextMenu.xml` (same schema, id-based entries; N++'s
+  name-based/folder/plugin entries are not interpreted); legacy
+  `userDefineLang.xml` UDL files are no longer read by the core — the optional
+  GPL `packages/udl-compat/` plugin translates them into Scintillua lexers (see
+  the native-language-engine section above);
 - **a plugin-ABI fact source** — the numeric `IDM_*`/`NPPM_*` ids, struct
   layouts, and entry-point names a compiled Notepad++ plugin expects are
   reproduced clean-room (from public documentation) in `include/npp-compat/`,
@@ -65,6 +68,25 @@ Scintilla runs inside wxWidgets' `wxStyledTextCtrl`; Lexilla is vendored in
 `third_party/lexilla/` and compiled in for its full lexer collection. Four of
 those vendored lexers (Dart, Nix, TOML, Zig) are themselves based on **Zufu
 Liu's Notepad4** lexers, adapted for Scintilla by Jiri Techet — see below.
+
+## Scintillua, Lua & LPeg — the native language engine
+
+wxNote's own cross-platform custom-language engine (`src/scintillua_engine.{h,cpp}`,
+Apache-2.0) embeds three MIT-licensed components, fetched at build time and statically
+linked as a `lua_lpeg` library:
+
+- **[Scintillua](https://github.com/orbitalquark/scintillua)** (Mitchell / orbitalquark,
+  MIT) — its `lexer.lua` and Lua/LPeg lexer grammars are wxNote's language-definition
+  mechanism; wxNote runs them through a Scintilla container lexer and maps their tags to
+  styles.
+- **[Lua](https://www.lua.org/)** 5.4.7 (PUC-Rio, MIT) — the embedded scripting runtime
+  the lexers execute in.
+- **[LPeg](http://www.inf.puc-rio.br/~roberto/lpeg/)** 1.1.0 (Roberto Ierusalimschy, MIT) —
+  the PEG pattern-matching library Scintillua's lexers are written against.
+
+Legacy Notepad++ `userDefineLang.xml` files are handled *outside* the core by the optional
+GPL `packages/udl-compat/` plugin, which translates each UDL into a Scintillua lexer and
+registers it via the `nib.langdef` API — see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## CMake & Ninja — the build
 

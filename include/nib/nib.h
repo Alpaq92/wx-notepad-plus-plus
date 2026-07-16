@@ -130,6 +130,38 @@ typedef struct NibEventsApi {
     void (*subscribe)(NibHost*, NibEventKind kind, NibEventFn fn, void* user);  // call from activate()
 } NibEventsApi;
 
+// ---- nib.langdef/1 : register a language definition ----------------------------------------------
+// Lets a plugin add a highlightable language to the host. The host owns the highlighting engine
+// (Scintillua - Lua LPeg lexers); a plugin supplies a lexer as Scintillua Lua source and the host
+// loads it. This is how the optional GPL udl-compat plugin re-adds legacy Notepad++ User-Defined
+// Languages after the core dropped its own UDL engine: it translates each userDefineLang.xml into a
+// Scintillua lexer (see packages/udl-compat) and registers it here. Nothing here is Notepad++-shaped
+// - it is a generic "here is a language and how to colour it" surface, useful to any Nib plugin.
+#define NIB_IFACE_LANGDEF "nib.langdef/1"
+typedef struct NibLangDefApi {
+    uint32_t version;
+    uint32_t struct_size;
+    // Register a language. `name` is the display/menu name and the Scintillua lexer name; `extensions`
+    // is a space-separated extension list without dots (e.g. "myl mylang"); `scintillua_lua` is the
+    // lexer's Lua source (as produced by udl-compat's translateUdlToScintillua). The host copies all
+    // three strings and compiles the Lua once. Returns 1 on success, 0 on failure (invalid Lua, empty
+    // name, or a name already registered). Call from the plugin's activate().
+    int (*register_language)(NibHost*, const char* name, const char* extensions,
+                             const char* scintillua_lua);
+} NibLangDefApi;
+
+// ---- nib.paths/1 : well-known host directories ---------------------------------------------------
+// Gives a plugin the host's per-user data directory so it can find/read user assets (e.g. the
+// udl-compat plugin reads userDefineLangs/ from here). Generic - no Notepad++ specifics.
+#define NIB_IFACE_PATHS "nib.paths/1"
+typedef struct NibPathsApi {
+    uint32_t version;
+    uint32_t struct_size;
+    // Copy the per-user data dir (UTF-8, no trailing separator) into buf; returns byte length
+    // excluding the NUL, or 0 if unavailable.
+    int (*user_data_dir)(NibHost*, char* buf, int cap);
+} NibPathsApi;
+
 // ---- nib.panels/1 : dockable panels --------------------------------------------------------------
 // A panel is a host-owned, dockable text view (the portable content model - the plugin pushes text,
 // the host renders it via wxAui on every OS). Richer content models (canvas / webview) come later.

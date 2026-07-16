@@ -9,7 +9,7 @@ name: build
 # The repo is public, so GitHub-hosted runners are free; macOS just queues longer than linux/windows.
 on:
   push:
-    branches: [ wx-migration, master ]
+    branches: [ master ]
     paths: [ 'src/**', 'include/**', 'third_party/**', 'resources/**', 'installer/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
   # Deliberately NOT path-filtered (unlike push above): master's branch ruleset requires its
   # checks (windows/linux/macos-arm64/macos-x86_64) on every PR unconditionally, so a doc-only PR (e.g. CHANGELOG.md) that skipped

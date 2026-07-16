@@ -10,7 +10,8 @@
 #   ./build/bin/wxnote            (wxnote.exe on Windows)
 
 cmake_minimum_required(VERSION 3.20)
-project(wxNote VERSION 0.7.0 LANGUAGES CXX)
+# C is enabled for the vendored Lua + LPeg (Scintillua's runtime) - both are C.
+project(wxNote VERSION 0.8.0 LANGUAGES CXX C)
 
 include(FetchContent)
 
@@ -49,6 +50,43 @@ if(MSVC)
     target_compile_options(lexilla PRIVATE /EHsc /utf-8)
 endif()
 
+# ---- Lua + LPeg + Scintillua (wxNote's native language-definition engine) ---------------------------
+# Lua 5.4 + LPeg run Scintillua's Lua-LPeg lexers; src/scintillua_engine.{h,cpp} embeds them. All three
+# are MIT (compatible with the Apache-2.0 core). Fetched + built from source (no upstream CMake), which
+# is why the file sets are listed explicitly (a fixed set per pinned version; a glob would also miss
+# files an in-configure extract just created). lua.c/luac.c are omitted - they carry their own main().
+message(STATUS "[wxnote] Fetching Lua 5.4.7 + LPeg 1.1.0 + Scintillua lexer.lua...")
+FetchContent_Declare(lua54 URL https://www.lua.org/ftp/lua-5.4.7.tar.gz)
+FetchContent_Declare(lpeg  URL http://www.inf.puc-rio.br/~roberto/lpeg/lpeg-1.1.0.tar.gz)
+FetchContent_MakeAvailable(lua54 lpeg)
+
+set(LUA_UNITS lapi lauxlib lbaselib lcode lcorolib lctype ldblib ldebug ldo ldump lfunc lgc linit
+    liolib llex lmathlib lmem loadlib lobject lopcodes loslib lparser lstate lstring lstrlib ltable
+    ltablib ltm lundump lutf8lib lvm lzio)
+set(LUA_LPEG_SRC "")
+foreach(u ${LUA_UNITS})
+    list(APPEND LUA_LPEG_SRC "${lua54_SOURCE_DIR}/src/${u}.c")
+endforeach()
+foreach(u lpcap lpcode lpcset lpprint lptree lpvm)
+    list(APPEND LUA_LPEG_SRC "${lpeg_SOURCE_DIR}/${u}.c")
+endforeach()
+add_library(lua_lpeg STATIC ${LUA_LPEG_SRC})
+target_include_directories(lua_lpeg PUBLIC "${lua54_SOURCE_DIR}/src")
+if(MSVC)
+    target_compile_definitions(lua_lpeg PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+
+# Scintillua's lexer.lua (the engine's Lua half); staged so the resource copy below ships it.
+set(SCINTILLUA_LEXER_LUA "${CMAKE_BINARY_DIR}/scintillua/lexer.lua")
+if(NOT EXISTS "${SCINTILLUA_LEXER_LUA}")
+    file(DOWNLOAD "https://raw.githubusercontent.com/orbitalquark/scintillua/default/lexers/lexer.lua"
+         "${SCINTILLUA_LEXER_LUA}" STATUS _sl_status)
+    list(GET _sl_status 0 _sl_code)
+    if(NOT _sl_code EQUAL 0)
+        message(FATAL_ERROR "failed to download Scintillua lexer.lua: ${_sl_status}")
+    endif()
+endif()
+
 # ---- wxBorderlessFrame (vendored; the optional integrated/borderless title bar) ---------------------
 # Windows + Linux(GTK) only: the library has no macOS backend - its platform .cpp self-guard on _WIN32 /
 # __WXGTK__, so on Apple they compile to nothing and wxBorderlessFrame is unusable. Built with our own
@@ -77,9 +115,9 @@ endif()
 # ---- the wxNote executable --------------------------------------------------------------------
 # WIN32 = GUI-subsystem app on Windows; a plain executable elsewhere (GTK on Linux, Cocoa on macOS).
 if(WIN32)
-    add_executable(wxnote WIN32 src/main.cpp resources/app.rc)   # .rc embeds wxnote.ico as the exe's shell icon
+    add_executable(wxnote WIN32 src/main.cpp src/scintillua_engine.cpp resources/app.rc)   # .rc embeds wxnote.ico as the exe's shell icon
 else()
-    add_executable(wxnote src/main.cpp)
+    add_executable(wxnote src/main.cpp src/scintillua_engine.cpp)
 endif()
 set_target_properties(wxnote PROPERTIES
     CXX_STANDARD 17
@@ -120,7 +158,7 @@ target_include_directories(wxnote PRIVATE
 
 target_link_libraries(wxnote PRIVATE
     wx::core wx::aui wx::base wx::xml wx::stc
-    lexilla)
+    lexilla lua_lpeg)
 
 # Single-instance "reuse window" IPC (wxServer/wxClient/wxConnection): on Windows these map to the
 # DDE classes, which live in wx::base itself (src/msw/dde.cpp) - no extra link needed there. Everywhere
@@ -163,6 +201,8 @@ add_custom_command(TARGET wxnote POST_BUILD
         "${CMAKE_SOURCE_DIR}/resources/contextMenu.xml" "$<TARGET_FILE_DIR:wxnote>/contextMenu.xml"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/locale" "$<TARGET_FILE_DIR:wxnote>/locale"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${SCINTILLUA_LEXER_LUA}" "$<TARGET_FILE_DIR:wxnote>/lexers/lexer.lua"
     VERBATIM)
 
 # ---- Windows-only Notepad++-ABI test plugin (exercises the Win32 plugin loader) --------------------
@@ -176,6 +216,11 @@ endif()
 # ---- cross-platform Nib-API plugin (exercises our own permissive plugin API on every OS) -----------
 add_subdirectory(src/plugins/nib_test_plugin)
 add_dependencies(wxnote nib_test_plugin)
+
+# ---- optional GPL udl-compat plugin: translates legacy Notepad++ UDLs into Scintillua lexers -------
+# Reproduces the N++ UDL file format, so (like npp-bridge) it stays GPL and out of the Apache core.
+add_subdirectory(packages/udl-compat)
+add_dependencies(wxnote udl_compat_plugin)
 
 # ---- optional GPL Notepad++ binary-plugin bridge (Windows-only; itself a Nib plugin) ---------------
 if(WIN32)

@@ -3,18 +3,24 @@
 #include "menu_labels_help.h"
 #include "command_ids.h"
 
+// wxNote Help menu grouping (wxNote's own arrangement):
+//   Web-resource links lead, since visiting the project online is the most
+//   common reason to open Help: GitHub, Releases, Documentation, Report Issue.
+//   Then update-checking on its own, then the diagnostics cluster
+//   (Command-line Arguments + Debug Info) for troubleshooting, and About last
+//   per the CUA convention of parking the identity item at the bottom.
 static const MenuItemDef kHelpMenuItems[] = {
-    { MenuItemKind::Normal, IDM_CMDLINEARGUMENTS, &Label::HelpCmdLineArguments, "help.cmdLineArguments" },
+    { MenuItemKind::Normal, kCmdHomeSweetHome,   &Label::HelpGitHub,        "help.gitHub" },
+    { MenuItemKind::Normal, kCmdProjectpage,     &Label::HelpReleases,      "help.releases" },
+    { MenuItemKind::Normal, kCmdOnlineDocument,  &Label::HelpDocumentation, "help.documentation" },
+    { MenuItemKind::Normal, kCmdForum,           &Label::HelpReportIssue,   "help.reportIssue" },
     { MenuItemKind::Separator },
-    { MenuItemKind::Normal, IDM_HOMESWEETHOME,   &Label::HelpGitHub,        "help.gitHub" },
-    { MenuItemKind::Normal, IDM_PROJECTPAGE,     &Label::HelpReleases,      "help.releases" },
-    { MenuItemKind::Normal, IDM_ONLINEDOCUMENT,  &Label::HelpDocumentation, "help.documentation" },
-    { MenuItemKind::Normal, IDM_FORUM,           &Label::HelpReportIssue,   "help.reportIssue" },
+    { MenuItemKind::Normal, kCmdUpdateNpp,      &Label::HelpCheckForUpdates, "help.checkForUpdates" },
     { MenuItemKind::Separator },
-    { MenuItemKind::Normal, IDM_UPDATE_NPP,      &Label::HelpCheckForUpdates, "help.checkForUpdates" },
+    { MenuItemKind::Normal, kCmdCmdLineArguments, &Label::HelpCmdLineArguments, "help.cmdLineArguments" },
+    { MenuItemKind::Normal, kCmdDebuginfo,       &Label::HelpDebugInfo, "help.debugInfo" },
     { MenuItemKind::Separator },
-    { MenuItemKind::Normal, IDM_DEBUGINFO,       &Label::HelpDebugInfo, "help.debugInfo" },
-    { MenuItemKind::Normal, IDM_ABOUT,           &Label::HelpAbout,     "help.about" },
+    { MenuItemKind::Normal, kCmdAboutBase,           &Label::HelpAbout,     "help.about" },
 };
 
 static const MenuDef kHelpMenu = { "menu.help", &Label::MenuHelp, kHelpMenuItems, WXSIZEOF(kHelpMenuItems) };

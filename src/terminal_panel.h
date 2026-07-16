@@ -63,7 +63,7 @@ inline std::vector<TermShell> detectTermShells()
 // executable name on Linux, an app name on macOS for `open -a`.
 struct OpenHereTool { wxString label; wxString launch; };
 
-// Windows: cmd/PowerShell stay STATIC menu items with their original frozen IDM_* ids (real Notepad++
+// Windows: cmd/PowerShell stay STATIC menu items with their original frozen command ids (real Notepad++
 // plugins may invoke them via NPPM_MENUCOMMAND - every IDM_* must keep landing on a real menu item).
 // This returns only the EXTRA shells this machine happens to have, for the submenu's DynamicSlot -
 // reuses detectTermShells()'s exact detection + command strings so the two features never disagree

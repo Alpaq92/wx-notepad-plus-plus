@@ -1,619 +1,596 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// wxNote - the core's command-id space (menu items, toolbar, dispatch).
+// wxNote - the command-id table (menus, toolbar, popups, dispatch).
 // Copyright 2026 The wxNote Authors.
 //
-// This is the application's own, authoritative id table; the core includes nothing
-// from include/npp-compat. The numeric values are nevertheless FROZEN, not free to
-// renumber: on Windows the optional GPL packages/npp-bridge forwards plugin
-// NPPM_MENUCOMMAND requests straight into WM_COMMAND with the id the plugin sent,
-// so host command ids and the plugin-ABI ids (include/npp-compat/menuCmdID.h) must
-// stay value-identical for that passthrough to dispatch correctly. The
-// static_asserts at the bottom pin the section bases (and the range-sensitive ids)
-// to those contract values - renumbering anything asserted here is an ABI break.
+// Every id is an original wxNote constant, listed by the menu that owns it in
+// wxNote's own menu bar, alphabetically within each group. The NUMERIC VALUES
+// are the one thing that is not free to change: the optional GPL
+// packages/npp-bridge forwards plugin NPPM_MENUCOMMAND requests into command
+// dispatch carrying whatever id the plugin sent, so these values must stay
+// value-identical with the plugin ABI's command ids
+// (include/npp-compat/menuCmdID.h - which the core does not include). The
+// static_asserts at the bottom pin the range-sensitive values; treat every
+// literal in this file as frozen.
 
 #pragma once
 
-#define    IDM    40000
+// ---- File menu ----
+inline constexpr int kCmdFileClose                       = 41003;
+inline constexpr int kCmdFileCloseall                    = 41004;
+inline constexpr int kCmdFileCloseallButCurrent          = 41005;
+inline constexpr int kCmdFileCloseallButPinned           = 41026;
+inline constexpr int kCmdFileCloseallToleft              = 41009;
+inline constexpr int kCmdFileCloseallToright             = 41018;
+inline constexpr int kCmdFileCloseallUnchanged           = 41024;
+inline constexpr int kCmdFileContainingFolderAsWorkspace = 41025;
+inline constexpr int kCmdFileDelete                      = 41016;
+inline constexpr int kCmdFileExit                        = 41011;
+inline constexpr int kCmdFileLoadsession                 = 41012;
+inline constexpr int kCmdFileNew                         = 41001;
+inline constexpr int kCmdFileOpen                        = 41002;
+inline constexpr int kCmdFileOpenCmd                     = 41020;
+inline constexpr int kCmdFileOpenDefaultViewer           = 41023;
+inline constexpr int kCmdFileOpenFolder                  = 41019;
+inline constexpr int kCmdFileOpenFolderAsWorkspace       = 41022;
+inline constexpr int kCmdFileOpenPowershell              = 41027;
+inline constexpr int kCmdFilePrint                       = 41010;
+inline constexpr int kCmdFilePrintnow                    = 1001;
+inline constexpr int kCmdFileReload                      = 41014;
+inline constexpr int kCmdFileRename                      = 41017;
+inline constexpr int kCmdFileRestoreLastClosedFile       = 41021;
+inline constexpr int kCmdFileSave                        = 41006;
+inline constexpr int kCmdFileSaveall                     = 41007;
+inline constexpr int kCmdFileSaveas                      = 41008;
+inline constexpr int kCmdFileSavecopyas                  = 41015;
+inline constexpr int kCmdFileSavesession                 = 41013;
 
-#define    IDM_FILE    (IDM + 1000)
+// ---- Edit menu ----
+inline constexpr int kCmdEditAutoComplete                        = 50000;
+inline constexpr int kCmdEditAutoCompleteCurrentfile             = 50001;
+inline constexpr int kCmdEditAutoCompletePath                    = 50006;
+inline constexpr int kCmdEditBlankLineAboveCurrent               = 42057;
+inline constexpr int kCmdEditBlankLineBelowCurrent               = 42058;
+inline constexpr int kCmdEditBlockComment                        = 42022;
+inline constexpr int kCmdEditBlockCommentSet                     = 42035;
+inline constexpr int kCmdEditBlockUncomment                      = 42036;
+inline constexpr int kCmdEditChangeSearchEngine                  = 42076;
+inline constexpr int kCmdEditClearReadOnlyForAllDocs             = 42103;
+inline constexpr int kCmdEditColumnmode                          = 42034;
+inline constexpr int kCmdEditColumnModeTip                       = 42037;
+inline constexpr int kCmdEditCopy                                = 42002;
+inline constexpr int kCmdEditCopyAllNames                        = 42087;
+inline constexpr int kCmdEditCopyAllPaths                        = 42088;
+inline constexpr int kCmdEditCopyBinary                          = 42048;
+inline constexpr int kCmdEditCurrentDirToClip                    = 42031;
+inline constexpr int kCmdEditCut                                 = 42001;
+inline constexpr int kCmdEditCutBinary                           = 42049;
+inline constexpr int kCmdEditDelete                              = 42006;
+inline constexpr int kCmdEditDupLine                             = 42010;
+inline constexpr int kCmdEditEol2ws                              = 42044;
+inline constexpr int kCmdEditFileNameToClip                      = 42030;
+inline constexpr int kCmdEditFullPathToClip                      = 42029;
+inline constexpr int kCmdEditFunccalltip                         = 50002;
+inline constexpr int kCmdEditFunccalltipNext                     = 50011;
+inline constexpr int kCmdEditFunccalltipPrevious                 = 50010;
+inline constexpr int kCmdEditInsertDatetimeCustomized            = 42086;
+inline constexpr int kCmdEditInsertDatetimeLong                  = 42085;
+inline constexpr int kCmdEditInsertDatetimeShort                 = 42084;
+inline constexpr int kCmdEditInsTab                              = 42008;
+inline constexpr int kCmdEditInvertcase                          = 42071;
+inline constexpr int kCmdEditJoinLines                           = 42013;
+inline constexpr int kCmdEditLineDown                            = 42015;
+inline constexpr int kCmdEditLineUp                              = 42014;
+inline constexpr int kCmdEditLowercase                           = 42017;
+inline constexpr int kCmdEditMultiSelectAll                      = 42090;
+inline constexpr int kCmdEditMultiSelectAllMatchCase             = 42091;
+inline constexpr int kCmdEditMultiSelectAllMatchCaseWholeWord    = 42093;
+inline constexpr int kCmdEditMultiSelectAllWholeWord             = 42092;
+inline constexpr int kCmdEditMultiSelectNext                     = 42094;
+inline constexpr int kCmdEditMultiSelectNextMatchCase            = 42095;
+inline constexpr int kCmdEditMultiSelectNextMatchCaseWholeWord   = 42097;
+inline constexpr int kCmdEditMultiSelectNextWholeWord            = 42096;
+inline constexpr int kCmdEditOpenSelectedFileFolderInExplorer    = 42074;
+inline constexpr int kCmdEditOpenSelectedFileToEdit              = 42073;
+inline constexpr int kCmdEditPaste                               = 42005;
+inline constexpr int kCmdEditPasteAsHtml                         = 42038;
+inline constexpr int kCmdEditPasteAsRtf                          = 42039;
+inline constexpr int kCmdEditPasteBinary                         = 42050;
+inline constexpr int kCmdEditPropercaseBlend                     = 42068;
+inline constexpr int kCmdEditPropercaseForce                     = 42067;
+inline constexpr int kCmdEditRandomcase                          = 42072;
+inline constexpr int kCmdEditRedactSelection                     = 42106;
+inline constexpr int kCmdEditRedo                                = 42004;
+inline constexpr int kCmdEditRemoveAnyDupLines                   = 42079;
+inline constexpr int kCmdEditRemoveConsecutiveDupLines           = 42077;
+inline constexpr int kCmdEditRemoveEmptyLines                    = 42055;
+inline constexpr int kCmdEditRemoveEmptyLinesWithBlank           = 42056;
+inline constexpr int kCmdEditRmvTab                              = 42009;
+inline constexpr int kCmdEditSearchOnInternet                    = 42075;
+inline constexpr int kCmdEditSentenceCaseBlend                   = 42070;
+inline constexpr int kCmdEditSentenceCaseForce                   = 42069;
+inline constexpr int kCmdEditSetReadOnlyForAllDocs               = 42102;
+inline constexpr int kCmdEditSortlinesDecimalCommaAscending      = 42063;
+inline constexpr int kCmdEditSortlinesDecimalCommaDescending     = 42064;
+inline constexpr int kCmdEditSortlinesDecimaldotAscending        = 42065;
+inline constexpr int kCmdEditSortlinesDecimaldotDescending       = 42066;
+inline constexpr int kCmdEditSortlinesIntegerAscending           = 42061;
+inline constexpr int kCmdEditSortlinesIntegerDescending          = 42062;
+inline constexpr int kCmdEditSortlinesLengthAscending            = 42104;
+inline constexpr int kCmdEditSortlinesLengthDescending           = 42105;
+inline constexpr int kCmdEditSortlinesLexicoCaseInsensAscending  = 42080;
+inline constexpr int kCmdEditSortlinesLexicoCaseInsensDescending = 42081;
+inline constexpr int kCmdEditSortlinesLexicographicAscending     = 42059;
+inline constexpr int kCmdEditSortlinesLexicographicDescending    = 42060;
+inline constexpr int kCmdEditSortlinesLocaleAscending            = 42100;
+inline constexpr int kCmdEditSortlinesLocaleDescending           = 42101;
+inline constexpr int kCmdEditSortlinesRandomly                   = 42078;
+inline constexpr int kCmdEditSortlinesReverseOrder               = 42083;
+inline constexpr int kCmdEditSplitLines                          = 42012;
+inline constexpr int kCmdEditStreamComment                       = 42023;
+inline constexpr int kCmdEditStreamUncomment                     = 42047;
+inline constexpr int kCmdEditSw2tabAll                           = 42054;
+inline constexpr int kCmdEditSw2tabLeading                       = 42053;
+inline constexpr int kCmdEditTab2sw                              = 42046;
+inline constexpr int kCmdEditToggleReadOnly                      = 42028;
+inline constexpr int kCmdEditToggleSystemReadOnly                = 42033;
+inline constexpr int kCmdEditTrimall                             = 42045;
+inline constexpr int kCmdEditTrimBoth                            = 42043;
+inline constexpr int kCmdEditTrimLineHead                        = 42042;
+inline constexpr int kCmdEditTrimTrailing                        = 42024;
+inline constexpr int kCmdEditUndo                                = 42003;
+inline constexpr int kCmdEditUppercase                           = 42016;
+inline constexpr int kCmdFormatTodos                             = 45001;
+inline constexpr int kCmdFormatTomac                             = 45003;
+inline constexpr int kCmdFormatTounix                            = 45002;
 
-    #define    IDM_FILE_NEW                              (IDM_FILE + 1)
-    #define    IDM_FILE_OPEN                             (IDM_FILE + 2)
-    #define    IDM_FILE_CLOSE                            (IDM_FILE + 3)
-    #define    IDM_FILE_CLOSEALL                         (IDM_FILE + 4)
-    #define    IDM_FILE_CLOSEALL_BUT_CURRENT             (IDM_FILE + 5)
-    #define    IDM_FILE_SAVE                             (IDM_FILE + 6) 
-    #define    IDM_FILE_SAVEALL                          (IDM_FILE + 7) 
-    #define    IDM_FILE_SAVEAS                           (IDM_FILE + 8)
-    #define    IDM_FILE_CLOSEALL_TOLEFT                  (IDM_FILE + 9)
-    #define    IDM_FILE_PRINT                            (IDM_FILE + 10)
-    #define    IDM_FILE_PRINTNOW                         1001
-    #define    IDM_FILE_EXIT                             (IDM_FILE + 11)
-    #define    IDM_FILE_LOADSESSION                      (IDM_FILE + 12)
-    #define    IDM_FILE_SAVESESSION                      (IDM_FILE + 13)
-    #define    IDM_FILE_RELOAD                           (IDM_FILE + 14)
-    #define    IDM_FILE_SAVECOPYAS                       (IDM_FILE + 15)
-    #define    IDM_FILE_DELETE                           (IDM_FILE + 16)
-    #define    IDM_FILE_RENAME                           (IDM_FILE + 17)
-    #define    IDM_FILE_CLOSEALL_TORIGHT                 (IDM_FILE + 18)
-    #define    IDM_FILE_OPEN_FOLDER                      (IDM_FILE + 19)
-    #define    IDM_FILE_OPEN_CMD                         (IDM_FILE + 20)
-    #define    IDM_FILE_RESTORELASTCLOSEDFILE            (IDM_FILE + 21)
-    #define    IDM_FILE_OPENFOLDERASWORKSPACE            (IDM_FILE + 22)
-    #define    IDM_FILE_OPEN_DEFAULT_VIEWER              (IDM_FILE + 23)
-    #define    IDM_FILE_CLOSEALL_UNCHANGED               (IDM_FILE + 24)
-    #define    IDM_FILE_CONTAININGFOLDERASWORKSPACE      (IDM_FILE + 25)
-    #define    IDM_FILE_CLOSEALL_BUT_PINNED              (IDM_FILE + 26)
-    #define    IDM_FILE_OPEN_POWERSHELL                  (IDM_FILE + 27)
+// ---- Selection menu ----
+inline constexpr int kCmdEditBeginEndSelect           = 42020;
+inline constexpr int kCmdEditBeginEndSelectColumnmode = 42089;
+inline constexpr int kCmdEditCharPanel                = 42051;
+inline constexpr int kCmdEditClipboardHistoryPanel    = 42052;
+inline constexpr int kCmdEditMultiSelectSkip          = 42099;
+inline constexpr int kCmdEditMultiSelectUndo          = 42098;
+inline constexpr int kCmdEditSelectall                = 42007;
 
-    #define    IDM_FILEMENU_LASTONE             IDM_FILE_OPEN_POWERSHELL
+// ---- Go menu ----
+inline constexpr int kCmdFocusOnFoundResults        = 43045;
+inline constexpr int kCmdSearchAllStylesToClip      = 43060;
+inline constexpr int kCmdSearchChangedNext          = 43067;
+inline constexpr int kCmdSearchChangedPrev          = 43068;
+inline constexpr int kCmdSearchClearAllMarks        = 43032;
+inline constexpr int kCmdSearchClearBookmarks       = 43008;
+inline constexpr int kCmdSearchClearChangeHistory   = 43069;
+inline constexpr int kCmdSearchCopyMarkedLines      = 43019;
+inline constexpr int kCmdSearchCutMarkedLines       = 43018;
+inline constexpr int kCmdSearchDeleteMarkedLines    = 43021;
+inline constexpr int kCmdSearchDeleteUnmarkedLines  = 43051;
+inline constexpr int kCmdSearchFind                 = 43001;
+inline constexpr int kCmdSearchFindCharInRange      = 43052;
+inline constexpr int kCmdSearchFindIncrement        = 43011;
+inline constexpr int kCmdSearchFindinfiles          = 43013;
+inline constexpr int kCmdSearchFindnext             = 43002;
+inline constexpr int kCmdSearchFindprev             = 43010;
+inline constexpr int kCmdSearchGoNextMarker1        = 43039;
+inline constexpr int kCmdSearchGoNextMarker2        = 43040;
+inline constexpr int kCmdSearchGoNextMarker3        = 43041;
+inline constexpr int kCmdSearchGoNextMarker4        = 43042;
+inline constexpr int kCmdSearchGoNextMarker5        = 43043;
+inline constexpr int kCmdSearchGoNextMarkerDef      = 43044;
+inline constexpr int kCmdSearchGoPrevMarker1        = 43033;
+inline constexpr int kCmdSearchGoPrevMarker2        = 43034;
+inline constexpr int kCmdSearchGoPrevMarker3        = 43035;
+inline constexpr int kCmdSearchGoPrevMarker4        = 43036;
+inline constexpr int kCmdSearchGoPrevMarker5        = 43037;
+inline constexpr int kCmdSearchGoPrevMarkerDef      = 43038;
+inline constexpr int kCmdSearchGotoline             = 43004;
+inline constexpr int kCmdSearchGotoMatchingBrace    = 43009;
+inline constexpr int kCmdSearchGotoNextFound        = 43046;
+inline constexpr int kCmdSearchGotoPrevFound        = 43047;
+inline constexpr int kCmdSearchInverseMarks         = 43050;
+inline constexpr int kCmdSearchMark                 = 43054;
+inline constexpr int kCmdSearchMarkallext1          = 43022;
+inline constexpr int kCmdSearchMarkallext2          = 43024;
+inline constexpr int kCmdSearchMarkallext3          = 43026;
+inline constexpr int kCmdSearchMarkallext4          = 43028;
+inline constexpr int kCmdSearchMarkallext5          = 43030;
+inline constexpr int kCmdSearchMarkedToClip         = 43061;
+inline constexpr int kCmdSearchMarkoneext1          = 43062;
+inline constexpr int kCmdSearchMarkoneext2          = 43063;
+inline constexpr int kCmdSearchMarkoneext3          = 43064;
+inline constexpr int kCmdSearchMarkoneext4          = 43065;
+inline constexpr int kCmdSearchMarkoneext5          = 43066;
+inline constexpr int kCmdSearchNextBookmark         = 43006;
+inline constexpr int kCmdSearchPasteMarkedLines     = 43020;
+inline constexpr int kCmdSearchPrevBookmark         = 43007;
+inline constexpr int kCmdSearchReplace              = 43003;
+inline constexpr int kCmdSearchSelectMatchingBraces = 43053;
+inline constexpr int kCmdSearchSetAndFindNext       = 43048;
+inline constexpr int kCmdSearchSetAndFindPrev       = 43049;
+inline constexpr int kCmdSearchStyle1ToClip         = 43055;
+inline constexpr int kCmdSearchStyle2ToClip         = 43056;
+inline constexpr int kCmdSearchStyle3ToClip         = 43057;
+inline constexpr int kCmdSearchStyle4ToClip         = 43058;
+inline constexpr int kCmdSearchStyle5ToClip         = 43059;
+inline constexpr int kCmdSearchToggleBookmark       = 43005;
+inline constexpr int kCmdSearchUnmarkAllExt1        = 43023;
+inline constexpr int kCmdSearchUnmarkAllExt2        = 43025;
+inline constexpr int kCmdSearchUnmarkAllExt3        = 43027;
+inline constexpr int kCmdSearchUnmarkAllExt4        = 43029;
+inline constexpr int kCmdSearchUnmarkAllExt5        = 43031;
+inline constexpr int kCmdSearchVolatileFindnext     = 43014;
+inline constexpr int kCmdSearchVolatileFindprev     = 43015;
 
-    #define    IDM_FILEMENU_EXISTCMDPOSITION    22
+// ---- View menu ----
+inline constexpr int kCmdEditLtr                = 42027;
+inline constexpr int kCmdEditRtl                = 42026;
+inline constexpr int kCmdViewAllCharacters      = 44019;
+inline constexpr int kCmdViewAlwaysontop        = 44034;
+inline constexpr int kCmdViewCloneToAnotherView = 10002;
+inline constexpr int kCmdViewDistractionFree    = 44011;
+inline constexpr int kCmdViewDoclist            = 44070;
+inline constexpr int kCmdViewDocMap             = 44080;
+inline constexpr int kCmdViewEol                = 44026;
+inline constexpr int kCmdViewFilebrowser        = 44085;
+inline constexpr int kCmdViewFold1              = 44051;
+inline constexpr int kCmdViewFold2              = 44052;
+inline constexpr int kCmdViewFold3              = 44053;
+inline constexpr int kCmdViewFold4              = 44054;
+inline constexpr int kCmdViewFold5              = 44055;
+inline constexpr int kCmdViewFold6              = 44056;
+inline constexpr int kCmdViewFold7              = 44057;
+inline constexpr int kCmdViewFold8              = 44058;
+inline constexpr int kCmdViewFoldall            = 44010;
+inline constexpr int kCmdViewFoldCurrent        = 44030;
+inline constexpr int kCmdViewFullScreenToggle   = 44032;
+inline constexpr int kCmdViewFuncList           = 44084;
+inline constexpr int kCmdViewGotoAnotherView    = 10001;
+inline constexpr int kCmdViewGotoEnd            = 10006;
+inline constexpr int kCmdViewGotoNewInstance    = 10003;
+inline constexpr int kCmdViewGotoStart          = 10005;
+inline constexpr int kCmdViewHidelines          = 44042;
+inline constexpr int kCmdViewInChrome           = 44101;
+inline constexpr int kCmdViewIndentGuide        = 44020;
+inline constexpr int kCmdViewInEdge             = 44102;
+inline constexpr int kCmdViewInFirefox          = 44100;
+inline constexpr int kCmdViewInIe               = 44103;
+inline constexpr int kCmdViewLoadInNewInstance  = 10004;
+inline constexpr int kCmdViewMonitoring         = 44097;
+inline constexpr int kCmdViewNpc                = 44130;
+inline constexpr int kCmdViewNpcCcunieol        = 44131;
+inline constexpr int kCmdViewPostit             = 44009;
+inline constexpr int kCmdViewProjectPanel1      = 44081;
+inline constexpr int kCmdViewProjectPanel2      = 44082;
+inline constexpr int kCmdViewProjectPanel3      = 44083;
+inline constexpr int kCmdViewSummary            = 44049;
+inline constexpr int kCmdViewTab1               = 44086;
+inline constexpr int kCmdViewTab2               = 44087;
+inline constexpr int kCmdViewTab3               = 44088;
+inline constexpr int kCmdViewTab4               = 44089;
+inline constexpr int kCmdViewTab5               = 44090;
+inline constexpr int kCmdViewTab6               = 44091;
+inline constexpr int kCmdViewTab7               = 44092;
+inline constexpr int kCmdViewTab8               = 44093;
+inline constexpr int kCmdViewTab9               = 44094;
+inline constexpr int kCmdViewTabColour1         = 44111;
+inline constexpr int kCmdViewTabColour2         = 44112;
+inline constexpr int kCmdViewTabColour3         = 44113;
+inline constexpr int kCmdViewTabColour4         = 44114;
+inline constexpr int kCmdViewTabColour5         = 44115;
+inline constexpr int kCmdViewTabColourNone      = 44110;
+inline constexpr int kCmdViewTabEnd             = 44117;
+inline constexpr int kCmdViewTabMoveBackward    = 44099;
+inline constexpr int kCmdViewTabMoveforward     = 44098;
+inline constexpr int kCmdViewTabNext            = 44095;
+inline constexpr int kCmdViewTabPrev            = 44096;
+inline constexpr int kCmdViewTabSpace           = 44025;
+inline constexpr int kCmdViewTabStart           = 44116;
+inline constexpr int kCmdViewUnfold1            = 44061;
+inline constexpr int kCmdViewUnfold2            = 44062;
+inline constexpr int kCmdViewUnfold3            = 44063;
+inline constexpr int kCmdViewUnfold4            = 44064;
+inline constexpr int kCmdViewUnfold5            = 44065;
+inline constexpr int kCmdViewUnfold6            = 44066;
+inline constexpr int kCmdViewUnfold7            = 44067;
+inline constexpr int kCmdViewUnfold8            = 44068;
+inline constexpr int kCmdViewUnfoldall          = 44029;
+inline constexpr int kCmdViewUnfoldCurrent      = 44031;
+inline constexpr int kCmdViewWrap               = 44022;
+inline constexpr int kCmdViewWrapSymbol         = 44041;
+inline constexpr int kCmdViewZoomin             = 44023;
+inline constexpr int kCmdViewZoomout            = 44024;
+inline constexpr int kCmdViewZoomrestore        = 44033;
 
-#define    IDM_EDIT       (IDM + 2000)
-    #define    IDM_EDIT_CUT                                     (IDM_EDIT + 1) 
-    #define    IDM_EDIT_COPY                                    (IDM_EDIT + 2)
-    #define    IDM_EDIT_UNDO                                    (IDM_EDIT + 3)
-    #define    IDM_EDIT_REDO                                    (IDM_EDIT + 4)
-    #define    IDM_EDIT_PASTE                                   (IDM_EDIT + 5)
-    #define    IDM_EDIT_DELETE                                  (IDM_EDIT + 6)
-    #define    IDM_EDIT_SELECTALL                               (IDM_EDIT + 7)
-    #define    IDM_EDIT_INS_TAB                                 (IDM_EDIT + 8)
-    #define    IDM_EDIT_RMV_TAB                                 (IDM_EDIT + 9)
-    #define    IDM_EDIT_DUP_LINE                                (IDM_EDIT + 10)
-    #define    IDM_EDIT_TRANSPOSE_LINE                          (IDM_EDIT + 11)
-    #define    IDM_EDIT_SPLIT_LINES                             (IDM_EDIT + 12)
-    #define    IDM_EDIT_JOIN_LINES                              (IDM_EDIT + 13)
-    #define    IDM_EDIT_LINE_UP                                 (IDM_EDIT + 14)
-    #define    IDM_EDIT_LINE_DOWN                               (IDM_EDIT + 15)
-    #define    IDM_EDIT_UPPERCASE                               (IDM_EDIT + 16)
-    #define    IDM_EDIT_LOWERCASE                               (IDM_EDIT + 17)
-    #define    IDM_MACRO_STARTRECORDINGMACRO                    (IDM_EDIT + 18)
-    #define    IDM_MACRO_STOPRECORDINGMACRO                     (IDM_EDIT + 19)
-    #define    IDM_EDIT_BEGINENDSELECT                          (IDM_EDIT + 20)
-    #define    IDM_MACRO_PLAYBACKRECORDEDMACRO                  (IDM_EDIT + 21)
-    #define    IDM_EDIT_BLOCK_COMMENT                           (IDM_EDIT + 22)
-    #define    IDM_EDIT_STREAM_COMMENT                          (IDM_EDIT + 23)
-    #define    IDM_EDIT_TRIMTRAILING                            (IDM_EDIT + 24)
-    #define    IDM_MACRO_SAVECURRENTMACRO                       (IDM_EDIT + 25)
-    #define    IDM_EDIT_RTL                                     (IDM_EDIT + 26)
-    #define    IDM_EDIT_LTR                                     (IDM_EDIT + 27)
-    #define    IDM_EDIT_TOGGLEREADONLY                          (IDM_EDIT + 28)
-    #define    IDM_EDIT_FULLPATHTOCLIP                          (IDM_EDIT + 29)
-    #define    IDM_EDIT_FILENAMETOCLIP                          (IDM_EDIT + 30)
-    #define    IDM_EDIT_CURRENTDIRTOCLIP                        (IDM_EDIT + 31)
-    #define    IDM_MACRO_RUNMULTIMACRODLG                       (IDM_EDIT + 32)
-    #define    IDM_EDIT_TOGGLESYSTEMREADONLY                    (IDM_EDIT + 33)
-    #define    IDM_EDIT_COLUMNMODE                              (IDM_EDIT + 34)
-    #define    IDM_EDIT_BLOCK_COMMENT_SET                       (IDM_EDIT + 35)
-    #define    IDM_EDIT_BLOCK_UNCOMMENT                         (IDM_EDIT + 36)
-    #define    IDM_EDIT_COLUMNMODETIP                           (IDM_EDIT + 37)
-    #define    IDM_EDIT_PASTE_AS_HTML                           (IDM_EDIT + 38)
-    #define    IDM_EDIT_PASTE_AS_RTF                            (IDM_EDIT + 39)
-    #define    IDM_OPEN_ALL_RECENT_FILE                         (IDM_EDIT + 40)
-    #define    IDM_CLEAN_RECENT_FILE_LIST                       (IDM_EDIT + 41)
-    #define    IDM_EDIT_TRIMLINEHEAD                            (IDM_EDIT + 42)
-    #define    IDM_EDIT_TRIM_BOTH                               (IDM_EDIT + 43)
-    #define    IDM_EDIT_EOL2WS                                  (IDM_EDIT + 44)
-    #define    IDM_EDIT_TRIMALL                                 (IDM_EDIT + 45)
-    #define    IDM_EDIT_TAB2SW                                  (IDM_EDIT + 46)
-    #define    IDM_EDIT_STREAM_UNCOMMENT                        (IDM_EDIT + 47)
-    #define    IDM_EDIT_COPY_BINARY                             (IDM_EDIT + 48)
-    #define    IDM_EDIT_CUT_BINARY                              (IDM_EDIT + 49)
-    #define    IDM_EDIT_PASTE_BINARY                            (IDM_EDIT + 50)
-    #define    IDM_EDIT_CHAR_PANEL                              (IDM_EDIT + 51)
-    #define    IDM_EDIT_CLIPBOARDHISTORY_PANEL                  (IDM_EDIT + 52)
-    #define    IDM_EDIT_SW2TAB_LEADING                          (IDM_EDIT + 53)
-    #define    IDM_EDIT_SW2TAB_ALL                              (IDM_EDIT + 54)
-    #define    IDM_EDIT_REMOVEEMPTYLINES                        (IDM_EDIT + 55)
-    #define    IDM_EDIT_REMOVEEMPTYLINESWITHBLANK               (IDM_EDIT + 56)
-    #define    IDM_EDIT_BLANKLINEABOVECURRENT                   (IDM_EDIT + 57)
-    #define    IDM_EDIT_BLANKLINEBELOWCURRENT                   (IDM_EDIT + 58)
-    #define    IDM_EDIT_SORTLINES_LEXICOGRAPHIC_ASCENDING       (IDM_EDIT + 59)
-    #define    IDM_EDIT_SORTLINES_LEXICOGRAPHIC_DESCENDING      (IDM_EDIT + 60)
-    #define    IDM_EDIT_SORTLINES_INTEGER_ASCENDING             (IDM_EDIT + 61)
-    #define    IDM_EDIT_SORTLINES_INTEGER_DESCENDING            (IDM_EDIT + 62)
-    #define    IDM_EDIT_SORTLINES_DECIMALCOMMA_ASCENDING        (IDM_EDIT + 63)
-    #define    IDM_EDIT_SORTLINES_DECIMALCOMMA_DESCENDING       (IDM_EDIT + 64)
-    #define    IDM_EDIT_SORTLINES_DECIMALDOT_ASCENDING          (IDM_EDIT + 65)
-    #define    IDM_EDIT_SORTLINES_DECIMALDOT_DESCENDING         (IDM_EDIT + 66)
-    #define    IDM_EDIT_PROPERCASE_FORCE                        (IDM_EDIT + 67)
-    #define    IDM_EDIT_PROPERCASE_BLEND                        (IDM_EDIT + 68)
-    #define    IDM_EDIT_SENTENCECASE_FORCE                      (IDM_EDIT + 69)
-    #define    IDM_EDIT_SENTENCECASE_BLEND                      (IDM_EDIT + 70)
-    #define    IDM_EDIT_INVERTCASE                              (IDM_EDIT + 71)
-    #define    IDM_EDIT_RANDOMCASE                              (IDM_EDIT + 72)
-    #define    IDM_EDIT_OPENSELECTEDFILETOEDIT                  (IDM_EDIT + 73)
-    #define    IDM_EDIT_OPENSELECTEDFILEFOLDERINEXPLORER        (IDM_EDIT + 74)
-    #define    IDM_EDIT_SEARCHONINTERNET                        (IDM_EDIT + 75)
-    #define    IDM_EDIT_CHANGESEARCHENGINE                      (IDM_EDIT + 76)
-    #define    IDM_EDIT_REMOVE_CONSECUTIVE_DUP_LINES            (IDM_EDIT + 77)
-    #define    IDM_EDIT_SORTLINES_RANDOMLY                      (IDM_EDIT + 78)
-    #define    IDM_EDIT_REMOVE_ANY_DUP_LINES                    (IDM_EDIT + 79)
-    #define    IDM_EDIT_SORTLINES_LEXICO_CASE_INSENS_ASCENDING  (IDM_EDIT + 80)
-    #define    IDM_EDIT_SORTLINES_LEXICO_CASE_INSENS_DESCENDING (IDM_EDIT + 81)
-    #define    IDM_EDIT_COPY_LINK                               (IDM_EDIT + 82)
-    #define    IDM_EDIT_SORTLINES_REVERSE_ORDER                 (IDM_EDIT + 83)
-    #define    IDM_EDIT_INSERT_DATETIME_SHORT                   (IDM_EDIT + 84)
-    #define    IDM_EDIT_INSERT_DATETIME_LONG                    (IDM_EDIT + 85)
-    #define    IDM_EDIT_INSERT_DATETIME_CUSTOMIZED              (IDM_EDIT + 86)
-    #define    IDM_EDIT_COPY_ALL_NAMES                          (IDM_EDIT + 87)
-    #define    IDM_EDIT_COPY_ALL_PATHS                          (IDM_EDIT + 88)
-    #define    IDM_EDIT_BEGINENDSELECT_COLUMNMODE               (IDM_EDIT + 89)
-    #define    IDM_EDIT_MULTISELECTALL                          (IDM_EDIT + 90)
-    #define    IDM_EDIT_MULTISELECTALLMATCHCASE                 (IDM_EDIT + 91)
-    #define    IDM_EDIT_MULTISELECTALLWHOLEWORD                 (IDM_EDIT + 92)
-    #define    IDM_EDIT_MULTISELECTALLMATCHCASEWHOLEWORD        (IDM_EDIT + 93)
-    #define    IDM_EDIT_MULTISELECTNEXT                         (IDM_EDIT + 94)
-    #define    IDM_EDIT_MULTISELECTNEXTMATCHCASE                (IDM_EDIT + 95)
-    #define    IDM_EDIT_MULTISELECTNEXTWHOLEWORD                (IDM_EDIT + 96)
-    #define    IDM_EDIT_MULTISELECTNEXTMATCHCASEWHOLEWORD       (IDM_EDIT + 97)
-    #define    IDM_EDIT_MULTISELECTUNDO                         (IDM_EDIT + 98)
-    #define    IDM_EDIT_MULTISELECTSSKIP                        (IDM_EDIT + 99)
-    #define    IDM_EDIT_SORTLINES_LOCALE_ASCENDING              (IDM_EDIT + 100)
-    #define    IDM_EDIT_SORTLINES_LOCALE_DESCENDING             (IDM_EDIT + 101)
-    #define    IDM_EDIT_SETREADONLYFORALLDOCS                   (IDM_EDIT + 102)
-    #define    IDM_EDIT_CLEARREADONLYFORALLDOCS                 (IDM_EDIT + 103)
-    #define    IDM_EDIT_SORTLINES_LENGTH_ASCENDING              (IDM_EDIT + 104)
-    #define    IDM_EDIT_SORTLINES_LENGTH_DESCENDING             (IDM_EDIT + 105)
-    #define    IDM_EDIT_REDACT_SELECTION                        (IDM_EDIT + 106)
+// ---- Document menu - language ----
+inline constexpr int kCmdLangAda          = 46042;
+inline constexpr int kCmdLangAsm          = 46033;
+inline constexpr int kCmdLangAsn1         = 46064;
+inline constexpr int kCmdLangAsp          = 46009;
+inline constexpr int kCmdLangAu3          = 46044;
+inline constexpr int kCmdLangAvs          = 46065;
+inline constexpr int kCmdLangBaanc        = 46059;
+inline constexpr int kCmdLangBash         = 46027;
+inline constexpr int kCmdLangBatch        = 46022;
+inline constexpr int kCmdLangBlitzbasic   = 46066;
+inline constexpr int kCmdLangC            = 46002;
+inline constexpr int kCmdLangCaml         = 46040;
+inline constexpr int kCmdLangCmake        = 46048;
+inline constexpr int kCmdLangCobol        = 46050;
+inline constexpr int kCmdLangCoffeeScript = 46056;
+inline constexpr int kCmdLangCpp          = 46003;
+inline constexpr int kCmdLangCs           = 46023;
+inline constexpr int kCmdLangCsound       = 46069;
+inline constexpr int kCmdLangCss          = 46010;
+inline constexpr int kCmdLangD            = 46051;
+inline constexpr int kCmdLangDiff         = 46034;
+inline constexpr int kCmdLangErlang       = 46070;
+inline constexpr int kCmdLangEscript      = 46071;
+inline constexpr int kCmdLangFlash        = 46028;
+inline constexpr int kCmdLangForth        = 46072;
+inline constexpr int kCmdLangFortran      = 46026;
+inline constexpr int kCmdLangFortran77    = 46058;
+inline constexpr int kCmdLangFreebasic    = 46068;
+inline constexpr int kCmdLangGdscript     = 46087;
+inline constexpr int kCmdLangGolang       = 46089;
+inline constexpr int kCmdLangGui4cli      = 46052;
+inline constexpr int kCmdLangHaskell      = 46046;
+inline constexpr int kCmdLangHollywood    = 46088;
+inline constexpr int kCmdLangHtml         = 46005;
+inline constexpr int kCmdLangIhex         = 46061;
+inline constexpr int kCmdLangInno         = 46047;
+inline constexpr int kCmdLangJava         = 46004;
+inline constexpr int kCmdLangJs           = 46007;
+inline constexpr int kCmdLangJson         = 46057;
+inline constexpr int kCmdLangJson5        = 46085;
+inline constexpr int kCmdLangJsp          = 46055;
+inline constexpr int kCmdLangKix          = 46041;
+inline constexpr int kCmdLangLatex        = 46073;
+inline constexpr int kCmdLangLisp         = 46031;
+inline constexpr int kCmdLangLua          = 46024;
+inline constexpr int kCmdLangMakefile     = 46018;
+inline constexpr int kCmdLangMatlab       = 46045;
+inline constexpr int kCmdLangMmixal       = 46074;
+inline constexpr int kCmdLangMssql        = 46086;
+inline constexpr int kCmdLangNim          = 46075;
+inline constexpr int kCmdLangNncrontab    = 46076;
+inline constexpr int kCmdLangNsis         = 46029;
+inline constexpr int kCmdLangObjc         = 46014;
+inline constexpr int kCmdLangOpenudldir   = 46300;
+inline constexpr int kCmdLangOscript      = 46077;
+inline constexpr int kCmdLangPascal       = 46011;
+inline constexpr int kCmdLangPerl         = 46013;
+inline constexpr int kCmdLangPhp          = 46008;
+inline constexpr int kCmdLangPowershell   = 46053;
+inline constexpr int kCmdLangProps        = 46035;
+inline constexpr int kCmdLangPs           = 46036;
+inline constexpr int kCmdLangPurebasic    = 46067;
+inline constexpr int kCmdLangPython       = 46012;
+inline constexpr int kCmdLangR            = 46054;
+inline constexpr int kCmdLangRaku         = 46090;
+inline constexpr int kCmdLangRc           = 46017;
+inline constexpr int kCmdLangRebol        = 46078;
+inline constexpr int kCmdLangRegistry     = 46079;
+inline constexpr int kCmdLangRuby         = 46037;
+inline constexpr int kCmdLangRust         = 46080;
+inline constexpr int kCmdLangSas          = 46092;
+inline constexpr int kCmdLangScheme       = 46032;
+inline constexpr int kCmdLangSmalltalk    = 46038;
+inline constexpr int kCmdLangSpice        = 46081;
+inline constexpr int kCmdLangSql          = 46020;
+inline constexpr int kCmdLangSrec         = 46060;
+inline constexpr int kCmdLangSwift        = 46063;
+inline constexpr int kCmdLangTcl          = 46030;
+inline constexpr int kCmdLangTehex        = 46062;
+inline constexpr int kCmdLangTex          = 46025;
+inline constexpr int kCmdLangText         = 46016;
+inline constexpr int kCmdLangToml         = 46091;
+inline constexpr int kCmdLangTxt2tags     = 46082;
+inline constexpr int kCmdLangTypescript   = 46084;
+inline constexpr int kCmdLangUser         = 46180;
+inline constexpr int kCmdLangUserDlg      = 46250;
+inline constexpr int kCmdLangVb           = 46021;
+inline constexpr int kCmdLangVerilog      = 46043;
+inline constexpr int kCmdLangVhdl         = 46039;
+inline constexpr int kCmdLangVisualProlog = 46083;
+inline constexpr int kCmdLangXml          = 46006;
+inline constexpr int kCmdLangYaml         = 46049;
 
-    #define    IDM_EDIT_AUTOCOMPLETE                            (50000 + 0)
-    #define    IDM_EDIT_AUTOCOMPLETE_CURRENTFILE                (50000 + 1)
-    #define    IDM_EDIT_FUNCCALLTIP                             (50000 + 2)
-    #define    IDM_EDIT_AUTOCOMPLETE_PATH                       (50000 + 6)
-    #define    IDM_EDIT_FUNCCALLTIP_PREVIOUS                    (50000 + 10)
-    #define    IDM_EDIT_FUNCCALLTIP_NEXT                        (50000 + 11)
+// ---- Document menu - encoding ----
+inline constexpr int kCmdFormatAnsi          = 45004;
+inline constexpr int kCmdFormatAsUtf8        = 45008;
+inline constexpr int kCmdFormatBig5          = 45060;
+inline constexpr int kCmdFormatConv2Ansi     = 45009;
+inline constexpr int kCmdFormatConv2AsUtf8   = 45010;
+inline constexpr int kCmdFormatConv2Utf16be  = 45012;
+inline constexpr int kCmdFormatConv2Utf16le  = 45013;
+inline constexpr int kCmdFormatConv2Utf8     = 45011;
+inline constexpr int kCmdFormatDos437        = 45044;
+inline constexpr int kCmdFormatDos720        = 45045;
+inline constexpr int kCmdFormatDos737        = 45046;
+inline constexpr int kCmdFormatDos775        = 45047;
+inline constexpr int kCmdFormatDos850        = 45048;
+inline constexpr int kCmdFormatDos852        = 45049;
+inline constexpr int kCmdFormatDos855        = 45050;
+inline constexpr int kCmdFormatDos857        = 45051;
+inline constexpr int kCmdFormatDos858        = 45052;
+inline constexpr int kCmdFormatDos860        = 45053;
+inline constexpr int kCmdFormatDos861        = 45054;
+inline constexpr int kCmdFormatDos862        = 45055;
+inline constexpr int kCmdFormatDos863        = 45056;
+inline constexpr int kCmdFormatDos865        = 45057;
+inline constexpr int kCmdFormatDos866        = 45058;
+inline constexpr int kCmdFormatDos869        = 45059;
+inline constexpr int kCmdFormatEucKr         = 45064;
+inline constexpr int kCmdFormatGb2312        = 45061;
+inline constexpr int kCmdFormatIso88591      = 45029;
+inline constexpr int kCmdFormatIso885913     = 45040;
+inline constexpr int kCmdFormatIso885914     = 45041;
+inline constexpr int kCmdFormatIso885915     = 45042;
+inline constexpr int kCmdFormatIso88592      = 45030;
+inline constexpr int kCmdFormatIso88593      = 45031;
+inline constexpr int kCmdFormatIso88594      = 45032;
+inline constexpr int kCmdFormatIso88595      = 45033;
+inline constexpr int kCmdFormatIso88596      = 45034;
+inline constexpr int kCmdFormatIso88597      = 45035;
+inline constexpr int kCmdFormatIso88598      = 45036;
+inline constexpr int kCmdFormatIso88599      = 45037;
+inline constexpr int kCmdFormatKoi8rCyrillic = 45068;
+inline constexpr int kCmdFormatKoi8uCyrillic = 45067;
+inline constexpr int kCmdFormatKoreanWin     = 45063;
+inline constexpr int kCmdFormatMacCyrillic   = 45066;
+inline constexpr int kCmdFormatShiftJis      = 45062;
+inline constexpr int kCmdFormatTis620        = 45065;
+inline constexpr int kCmdFormatUtf16be       = 45006;
+inline constexpr int kCmdFormatUtf16le       = 45007;
+inline constexpr int kCmdFormatUtf8          = 45005;
+inline constexpr int kCmdFormatWin1250       = 45020;
+inline constexpr int kCmdFormatWin1251       = 45021;
+inline constexpr int kCmdFormatWin1252       = 45022;
+inline constexpr int kCmdFormatWin1253       = 45023;
+inline constexpr int kCmdFormatWin1254       = 45024;
+inline constexpr int kCmdFormatWin1255       = 45025;
+inline constexpr int kCmdFormatWin1256       = 45026;
+inline constexpr int kCmdFormatWin1257       = 45027;
+inline constexpr int kCmdFormatWin1258       = 45028;
 
-#define    IDM_SEARCH    (IDM + 3000)
-    #define    IDM_SEARCH_FIND                 (IDM_SEARCH + 1)
-    #define    IDM_SEARCH_FINDNEXT             (IDM_SEARCH + 2)
-    #define    IDM_SEARCH_REPLACE              (IDM_SEARCH + 3)
-    #define    IDM_SEARCH_GOTOLINE             (IDM_SEARCH + 4)
-    #define    IDM_SEARCH_TOGGLE_BOOKMARK      (IDM_SEARCH + 5)
-    #define    IDM_SEARCH_NEXT_BOOKMARK        (IDM_SEARCH + 6)
-    #define    IDM_SEARCH_PREV_BOOKMARK        (IDM_SEARCH + 7)
-    #define    IDM_SEARCH_CLEAR_BOOKMARKS      (IDM_SEARCH + 8)
-    #define    IDM_SEARCH_GOTOMATCHINGBRACE    (IDM_SEARCH + 9)
-    #define    IDM_SEARCH_FINDPREV             (IDM_SEARCH + 10)
-    #define    IDM_SEARCH_FINDINCREMENT        (IDM_SEARCH + 11)
-    #define    IDM_SEARCH_FINDINFILES          (IDM_SEARCH + 13)
-    #define    IDM_SEARCH_VOLATILE_FINDNEXT    (IDM_SEARCH + 14)
-    #define    IDM_SEARCH_VOLATILE_FINDPREV    (IDM_SEARCH + 15)
-    #define    IDM_SEARCH_CUTMARKEDLINES       (IDM_SEARCH + 18)
-    #define    IDM_SEARCH_COPYMARKEDLINES      (IDM_SEARCH + 19)
-    #define    IDM_SEARCH_PASTEMARKEDLINES     (IDM_SEARCH + 20)
-    #define    IDM_SEARCH_DELETEMARKEDLINES    (IDM_SEARCH + 21)
-    #define    IDM_SEARCH_MARKALLEXT1          (IDM_SEARCH + 22)
-    #define    IDM_SEARCH_UNMARKALLEXT1        (IDM_SEARCH + 23)
-    #define    IDM_SEARCH_MARKALLEXT2          (IDM_SEARCH + 24)
-    #define    IDM_SEARCH_UNMARKALLEXT2        (IDM_SEARCH + 25)
-    #define    IDM_SEARCH_MARKALLEXT3          (IDM_SEARCH + 26)
-    #define    IDM_SEARCH_UNMARKALLEXT3        (IDM_SEARCH + 27)
-    #define    IDM_SEARCH_MARKALLEXT4          (IDM_SEARCH + 28)
-    #define    IDM_SEARCH_UNMARKALLEXT4        (IDM_SEARCH + 29)
-    #define    IDM_SEARCH_MARKALLEXT5          (IDM_SEARCH + 30)
-    #define    IDM_SEARCH_UNMARKALLEXT5        (IDM_SEARCH + 31)
-    #define    IDM_SEARCH_CLEARALLMARKS        (IDM_SEARCH + 32)
+// ---- Automation menu - macros ----
+inline constexpr int kCmdMacroPlaybackRecordedMacro = 42021;
+inline constexpr int kCmdMacroRunMultiMacroDlg      = 42032;
+inline constexpr int kCmdMacroSaveCurrentMacro      = 42025;
+inline constexpr int kCmdMacroStartRecordingMacro   = 42018;
+inline constexpr int kCmdMacroStopRecordingMacro    = 42019;
 
-    #define    IDM_SEARCH_GOPREVMARKER1        (IDM_SEARCH + 33)
-    #define    IDM_SEARCH_GOPREVMARKER2        (IDM_SEARCH + 34)
-    #define    IDM_SEARCH_GOPREVMARKER3        (IDM_SEARCH + 35)
-    #define    IDM_SEARCH_GOPREVMARKER4        (IDM_SEARCH + 36)
-    #define    IDM_SEARCH_GOPREVMARKER5        (IDM_SEARCH + 37)
-    #define    IDM_SEARCH_GOPREVMARKER_DEF     (IDM_SEARCH + 38)
+// ---- Automation menu - run ----
+inline constexpr int kCmdExecuteBase                 = 49000;
+inline constexpr int kCmdExecuteValidateShortcutsXml = 49001;
 
-    #define    IDM_SEARCH_GONEXTMARKER1        (IDM_SEARCH + 39)
-    #define    IDM_SEARCH_GONEXTMARKER2        (IDM_SEARCH + 40)
-    #define    IDM_SEARCH_GONEXTMARKER3        (IDM_SEARCH + 41)
-    #define    IDM_SEARCH_GONEXTMARKER4        (IDM_SEARCH + 42)
-    #define    IDM_SEARCH_GONEXTMARKER5        (IDM_SEARCH + 43)
-    #define    IDM_SEARCH_GONEXTMARKER_DEF     (IDM_SEARCH + 44)
+// ---- Automation menu - tools ----
+inline constexpr int kCmdToolMd5Generate                 = 48501;
+inline constexpr int kCmdToolMd5GenerateFromFile         = 48502;
+inline constexpr int kCmdToolMd5GenerateIntoClipboard    = 48503;
+inline constexpr int kCmdToolSha1Generate                = 48507;
+inline constexpr int kCmdToolSha1GenerateFromFile        = 48508;
+inline constexpr int kCmdToolSha1GenerateIntoClipboard   = 48509;
+inline constexpr int kCmdToolSha256Generate              = 48504;
+inline constexpr int kCmdToolSha256GenerateFromFile      = 48505;
+inline constexpr int kCmdToolSha256GenerateIntoClipboard = 48506;
+inline constexpr int kCmdToolSha512Generate              = 48510;
+inline constexpr int kCmdToolSha512GenerateFromFile      = 48511;
+inline constexpr int kCmdToolSha512GenerateIntoClipboard = 48512;
 
-    #define    IDM_FOCUS_ON_FOUND_RESULTS      (IDM_SEARCH + 45)
-    #define    IDM_SEARCH_GOTONEXTFOUND        (IDM_SEARCH + 46)
-    #define    IDM_SEARCH_GOTOPREVFOUND        (IDM_SEARCH + 47)
+// ---- Extensions menu ----
+inline constexpr int kCmdSettingOpenPluginsDir = 48014;
 
-    #define    IDM_SEARCH_SETANDFINDNEXT       (IDM_SEARCH + 48)
-    #define    IDM_SEARCH_SETANDFINDPREV       (IDM_SEARCH + 49)
-    #define    IDM_SEARCH_INVERSEMARKS         (IDM_SEARCH + 50)
-    #define    IDM_SEARCH_DELETEUNMARKEDLINES  (IDM_SEARCH + 51)
-    #define    IDM_SEARCH_FINDCHARINRANGE      (IDM_SEARCH + 52)
-    #define    IDM_SEARCH_SELECTMATCHINGBRACES (IDM_SEARCH + 53)
-    #define    IDM_SEARCH_MARK                 (IDM_SEARCH + 54)
+// ---- Settings menu ----
+inline constexpr int kCmdLangstyleConfigDlg       = 46001;
+inline constexpr int kCmdSettingEditContextMenu   = 48018;
+inline constexpr int kCmdSettingImportPlugin      = 48005;
+inline constexpr int kCmdSettingImportStyleThemes = 48006;
+inline constexpr int kCmdSettingPreference        = 48011;
+inline constexpr int kCmdSettingShortcutMapper    = 48009;
 
-    #define    IDM_SEARCH_STYLE1TOCLIP         (IDM_SEARCH + 55)
-    #define    IDM_SEARCH_STYLE2TOCLIP         (IDM_SEARCH + 56)
-    #define    IDM_SEARCH_STYLE3TOCLIP         (IDM_SEARCH + 57)
-    #define    IDM_SEARCH_STYLE4TOCLIP         (IDM_SEARCH + 58)
-    #define    IDM_SEARCH_STYLE5TOCLIP         (IDM_SEARCH + 59)
-    #define    IDM_SEARCH_ALLSTYLESTOCLIP      (IDM_SEARCH + 60)
-    #define    IDM_SEARCH_MARKEDTOCLIP         (IDM_SEARCH + 61)
+// ---- Window menu ----
+inline constexpr int kCmdWindowMruFirst  = 11020;
+inline constexpr int kCmdWindowSortFdAsc = 11010;
+inline constexpr int kCmdWindowSortFdDsc = 11011;
+inline constexpr int kCmdWindowSortFnAsc = 11002;
+inline constexpr int kCmdWindowSortFnDsc = 11003;
+inline constexpr int kCmdWindowSortFpAsc = 11004;
+inline constexpr int kCmdWindowSortFpDsc = 11005;
+inline constexpr int kCmdWindowSortFsAsc = 11008;
+inline constexpr int kCmdWindowSortFsDsc = 11009;
+inline constexpr int kCmdWindowSortFtAsc = 11006;
+inline constexpr int kCmdWindowSortFtDsc = 11007;
+inline constexpr int kCmdWindowWindows   = 11001;
 
-    #define    IDM_SEARCH_MARKONEEXT1          (IDM_SEARCH + 62)
-    #define    IDM_SEARCH_MARKONEEXT2          (IDM_SEARCH + 63)
-    #define    IDM_SEARCH_MARKONEEXT3          (IDM_SEARCH + 64)
-    #define    IDM_SEARCH_MARKONEEXT4          (IDM_SEARCH + 65)
-    #define    IDM_SEARCH_MARKONEEXT5          (IDM_SEARCH + 66)
+// ---- Help menu ----
+inline constexpr int kCmdAboutBase        = 47000;
+inline constexpr int kCmdCmdLineArguments = 47010;
+inline constexpr int kCmdDebuginfo        = 47012;
+inline constexpr int kCmdForum            = 47004;
+inline constexpr int kCmdHomeSweetHome    = 47001;
+inline constexpr int kCmdOnlineDocument   = 47003;
+inline constexpr int kCmdProjectpage      = 47002;
+inline constexpr int kCmdUpdateNpp        = 47006;
 
-    #define    IDM_SEARCH_CHANGED_NEXT         (IDM_SEARCH + 67)
-    #define    IDM_SEARCH_CHANGED_PREV         (IDM_SEARCH + 68)
-    #define    IDM_SEARCH_CLEAR_CHANGE_HISTORY (IDM_SEARCH + 69)
+// ---- Dispatch-only ids (context menus, popups, ranges, toolbar) ----
+inline constexpr int kCmdCleanRecentFileList          = 42041;
+inline constexpr int kCmdConfUpdaterProxy             = 47009;
+inline constexpr int kCmdDoclistCopynames             = 43503;
+inline constexpr int kCmdDoclistCopypaths             = 43504;
+inline constexpr int kCmdDoclistFilesclose            = 43501;
+inline constexpr int kCmdDoclistFilesCloseOthers      = 43502;
+inline constexpr int kCmdDroplistList                 = 14001;
+inline constexpr int kCmdDroplistMruFirst             = 14020;
+inline constexpr int kCmdEditBase                     = 42000;
+inline constexpr int kCmdEditCopyLink                 = 42082;
+inline constexpr int kCmdEditTransposeLine            = 42011;
+inline constexpr int kCmdExportFuncListAndQuit        = 44073;
+inline constexpr int kCmdFileBase                     = 41000;
+inline constexpr int kCmdFormatBase                   = 45000;
+inline constexpr int kCmdFormatEncode                 = 45020;
+inline constexpr int kCmdFormatEncodeEnd              = 45068;
+inline constexpr int kCmdIdBase                       = 40000;
+inline constexpr int kCmdLangAscii                    = 46015;
+inline constexpr int kCmdLangBase                     = 46000;
+inline constexpr int kCmdLangErrorlist                = 46093;
+inline constexpr int kCmdLangEscseq                   = 46094;
+inline constexpr int kCmdLangExternal                 = 46165;
+inline constexpr int kCmdLangExternalLimit            = 46179;
+inline constexpr int kCmdLangIni                      = 46019;
+inline constexpr int kCmdLangUdlCollectionProjectSite = 46301;
+inline constexpr int kCmdLangUserLimit                = 46210;
+inline constexpr int kCmdMiscBase                     = 43500;
+inline constexpr int kCmdOpenAllRecentFile            = 42040;
+inline constexpr int kCmdPintab                       = 44048;
+inline constexpr int kCmdSearchBase                   = 43000;
+inline constexpr int kCmdSettingBase                  = 48000;
+inline constexpr int kCmdSettingPluginadm             = 48015;
+inline constexpr int kCmdSettingRememberLastSession   = 48010;
+inline constexpr int kCmdSettingShortcutMapperMacro   = 48016;
+inline constexpr int kCmdSettingShortcutMapperRun     = 48017;
+inline constexpr int kCmdSettingTrayicon              = 48008;
+inline constexpr int kCmdSysTrayPopupActivate         = 43101;
+inline constexpr int kCmdSysTrayPopupBase             = 43100;
+inline constexpr int kCmdSysTrayPopupClose            = 43105;
+inline constexpr int kCmdSysTrayPopupNewAndPaste      = 43103;
+inline constexpr int kCmdSysTrayPopupNewdoc           = 43102;
+inline constexpr int kCmdSysTrayPopupOpenfile         = 43104;
+inline constexpr int kCmdToolBase                     = 48500;
+inline constexpr int kCmdViewBase                     = 44000;
+inline constexpr int kCmdViewFold                     = 44050;
+inline constexpr int kCmdViewSwitchtoDoclist          = 44109;
+inline constexpr int kCmdViewSwitchtoFilebrowser      = 44107;
+inline constexpr int kCmdViewSwitchtoFuncList         = 44108;
+inline constexpr int kCmdViewSwitchtoOtherView        = 44072;
+inline constexpr int kCmdViewSwitchtoProjectPanel1    = 44104;
+inline constexpr int kCmdViewSwitchtoProjectPanel2    = 44105;
+inline constexpr int kCmdViewSwitchtoProjectPanel3    = 44106;
+inline constexpr int kCmdViewSynscrollh               = 44036;
+inline constexpr int kCmdViewSynscrollv               = 44035;
+inline constexpr int kCmdViewUnfold                   = 44060;
+inline constexpr int kCmdViewZoomSync                 = 44027;
+inline constexpr int kCmdWindowCopyName               = 11060;
+inline constexpr int kCmdWindowCopyPath               = 11061;
+inline constexpr int kCmdWindowMruLimit               = 11059;
+inline constexpr int kDropListMenuIdBase              = 14000;
+inline constexpr int kWindowMenuIdBase                = 11000;
 
-#define    IDM_MISC    (IDM + 3500)
-    #define    IDM_DOCLIST_FILESCLOSE             (IDM_MISC + 1)
-    #define    IDM_DOCLIST_FILESCLOSEOTHERS       (IDM_MISC + 2)
-    #define    IDM_DOCLIST_COPYNAMES              (IDM_MISC + 3)
-    #define    IDM_DOCLIST_COPYPATHS              (IDM_MISC + 4)
-
-#define IDM_VIEW    (IDM + 4000)                
-
-    #define    IDM_VIEW_POSTIT                    (IDM_VIEW + 9)
-    #define    IDM_VIEW_FOLDALL                   (IDM_VIEW + 10)
-    #define    IDM_VIEW_DISTRACTIONFREE           (IDM_VIEW + 11)
-
-    #define    IDM_VIEW_ALL_CHARACTERS            (IDM_VIEW + 19)
-    #define    IDM_VIEW_INDENT_GUIDE              (IDM_VIEW + 20)
-    
-    #define    IDM_VIEW_WRAP                      (IDM_VIEW + 22)
-    #define    IDM_VIEW_ZOOMIN                    (IDM_VIEW + 23)
-    #define    IDM_VIEW_ZOOMOUT                   (IDM_VIEW + 24)
-    #define    IDM_VIEW_TAB_SPACE                 (IDM_VIEW + 25)
-    #define    IDM_VIEW_EOL                       (IDM_VIEW + 26)
-    #define    IDM_VIEW_ZOOM_SYNC                 (IDM_VIEW + 27)
-    
-    #define    IDM_VIEW_UNFOLDALL                 (IDM_VIEW + 29)
-    #define    IDM_VIEW_FOLD_CURRENT              (IDM_VIEW + 30)
-    #define    IDM_VIEW_UNFOLD_CURRENT            (IDM_VIEW + 31)
-    #define    IDM_VIEW_FULLSCREENTOGGLE          (IDM_VIEW + 32)
-    #define    IDM_VIEW_ZOOMRESTORE               (IDM_VIEW + 33)
-    #define    IDM_VIEW_ALWAYSONTOP               (IDM_VIEW + 34)
-    #define    IDM_VIEW_SYNSCROLLV                (IDM_VIEW + 35)
-    #define    IDM_VIEW_SYNSCROLLH                (IDM_VIEW + 36)
-
-    #define    IDM_VIEW_WRAP_SYMBOL               (IDM_VIEW + 41)
-    #define    IDM_VIEW_HIDELINES                 (IDM_VIEW + 42)
-
-    #define    IDM_PINTAB                         (IDM_VIEW + 48)
-    #define    IDM_VIEW_SUMMARY                   (IDM_VIEW + 49)
-
-    #define    IDM_VIEW_FOLD                      (IDM_VIEW + 50)
-        #define    IDM_VIEW_FOLD_1    (IDM_VIEW_FOLD + 1)
-        #define    IDM_VIEW_FOLD_2    (IDM_VIEW_FOLD + 2)
-        #define    IDM_VIEW_FOLD_3    (IDM_VIEW_FOLD + 3)
-        #define    IDM_VIEW_FOLD_4    (IDM_VIEW_FOLD + 4)
-        #define    IDM_VIEW_FOLD_5    (IDM_VIEW_FOLD + 5)
-        #define    IDM_VIEW_FOLD_6    (IDM_VIEW_FOLD + 6)
-        #define    IDM_VIEW_FOLD_7    (IDM_VIEW_FOLD + 7)
-        #define    IDM_VIEW_FOLD_8    (IDM_VIEW_FOLD + 8)
-
-    #define    IDM_VIEW_UNFOLD                    (IDM_VIEW + 60)
-        #define    IDM_VIEW_UNFOLD_1    (IDM_VIEW_UNFOLD + 1)
-        #define    IDM_VIEW_UNFOLD_2    (IDM_VIEW_UNFOLD + 2)
-        #define    IDM_VIEW_UNFOLD_3    (IDM_VIEW_UNFOLD + 3)
-        #define    IDM_VIEW_UNFOLD_4    (IDM_VIEW_UNFOLD + 4)
-        #define    IDM_VIEW_UNFOLD_5    (IDM_VIEW_UNFOLD + 5)
-        #define    IDM_VIEW_UNFOLD_6    (IDM_VIEW_UNFOLD + 6)
-        #define    IDM_VIEW_UNFOLD_7    (IDM_VIEW_UNFOLD + 7)
-        #define    IDM_VIEW_UNFOLD_8    (IDM_VIEW_UNFOLD + 8)
-    
-    #define    IDM_VIEW_DOCLIST                   (IDM_VIEW + 70)
-    #define    IDM_VIEW_SWITCHTO_OTHER_VIEW       (IDM_VIEW + 72)
-    #define    IDM_EXPORT_FUNC_LIST_AND_QUIT      (IDM_VIEW + 73)
-
-    #define    IDM_VIEW_DOC_MAP                   (IDM_VIEW + 80)
-
-    #define    IDM_VIEW_PROJECT_PANEL_1           (IDM_VIEW + 81)
-    #define    IDM_VIEW_PROJECT_PANEL_2           (IDM_VIEW + 82)
-    #define    IDM_VIEW_PROJECT_PANEL_3           (IDM_VIEW + 83)
-
-    #define    IDM_VIEW_FUNC_LIST                 (IDM_VIEW + 84)
-    #define    IDM_VIEW_FILEBROWSER               (IDM_VIEW + 85)
-
-    #define    IDM_VIEW_TAB1                      (IDM_VIEW + 86)
-    #define    IDM_VIEW_TAB2                      (IDM_VIEW + 87)
-    #define    IDM_VIEW_TAB3                      (IDM_VIEW + 88)
-    #define    IDM_VIEW_TAB4                      (IDM_VIEW + 89)
-    #define    IDM_VIEW_TAB5                      (IDM_VIEW + 90)
-    #define    IDM_VIEW_TAB6                      (IDM_VIEW + 91)
-    #define    IDM_VIEW_TAB7                      (IDM_VIEW + 92)
-    #define    IDM_VIEW_TAB8                      (IDM_VIEW + 93)
-    #define    IDM_VIEW_TAB9                      (IDM_VIEW + 94)
-    #define    IDM_VIEW_TAB_NEXT                  (IDM_VIEW + 95)
-    #define    IDM_VIEW_TAB_PREV                  (IDM_VIEW + 96)
-    #define    IDM_VIEW_MONITORING                (IDM_VIEW + 97)
-    #define    IDM_VIEW_TAB_MOVEFORWARD           (IDM_VIEW + 98)
-    #define    IDM_VIEW_TAB_MOVEBACKWARD          (IDM_VIEW + 99)
-    #define    IDM_VIEW_IN_FIREFOX                (IDM_VIEW + 100)
-    #define    IDM_VIEW_IN_CHROME                 (IDM_VIEW + 101)
-    #define    IDM_VIEW_IN_EDGE                   (IDM_VIEW + 102)
-    #define    IDM_VIEW_IN_IE                     (IDM_VIEW + 103)
-
-    #define    IDM_VIEW_SWITCHTO_PROJECT_PANEL_1  (IDM_VIEW + 104)
-    #define    IDM_VIEW_SWITCHTO_PROJECT_PANEL_2  (IDM_VIEW + 105)
-    #define    IDM_VIEW_SWITCHTO_PROJECT_PANEL_3  (IDM_VIEW + 106)
-    #define    IDM_VIEW_SWITCHTO_FILEBROWSER      (IDM_VIEW + 107)
-    #define    IDM_VIEW_SWITCHTO_FUNC_LIST        (IDM_VIEW + 108)
-    #define    IDM_VIEW_SWITCHTO_DOCLIST          (IDM_VIEW + 109)
-
-    #define    IDM_VIEW_TAB_COLOUR_NONE           (IDM_VIEW + 110)
-    #define    IDM_VIEW_TAB_COLOUR_1              (IDM_VIEW + 111)
-    #define    IDM_VIEW_TAB_COLOUR_2              (IDM_VIEW + 112)
-    #define    IDM_VIEW_TAB_COLOUR_3              (IDM_VIEW + 113)
-    #define    IDM_VIEW_TAB_COLOUR_4              (IDM_VIEW + 114)
-    #define    IDM_VIEW_TAB_COLOUR_5              (IDM_VIEW + 115)
-    #define    IDM_VIEW_TAB_START                 (IDM_VIEW + 116)
-    #define    IDM_VIEW_TAB_END                   (IDM_VIEW + 117)
-
-    #define    IDM_VIEW_NPC                       (IDM_VIEW + 130)
-    #define    IDM_VIEW_NPC_CCUNIEOL              (IDM_VIEW + 131)
-
-    #define    IDM_VIEW_GOTO_ANOTHER_VIEW        10001
-    #define    IDM_VIEW_CLONE_TO_ANOTHER_VIEW    10002
-    #define    IDM_VIEW_GOTO_NEW_INSTANCE        10003
-    #define    IDM_VIEW_LOAD_IN_NEW_INSTANCE     10004
-    #define    IDM_VIEW_GOTO_START               10005
-    #define    IDM_VIEW_GOTO_END                 10006
-
-#define    IDM_FORMAT    (IDM + 5000)
-    #define    IDM_FORMAT_TODOS             (IDM_FORMAT + 1)
-    #define    IDM_FORMAT_TOUNIX            (IDM_FORMAT + 2)
-    #define    IDM_FORMAT_TOMAC             (IDM_FORMAT + 3)
-    #define    IDM_FORMAT_ANSI              (IDM_FORMAT + 4)
-    #define    IDM_FORMAT_UTF_8             (IDM_FORMAT + 5)
-    #define    IDM_FORMAT_UTF_16BE          (IDM_FORMAT + 6)
-    #define    IDM_FORMAT_UTF_16LE          (IDM_FORMAT + 7)
-    #define    IDM_FORMAT_AS_UTF_8          (IDM_FORMAT + 8)
-    #define    IDM_FORMAT_CONV2_ANSI        (IDM_FORMAT + 9)
-    #define    IDM_FORMAT_CONV2_AS_UTF_8    (IDM_FORMAT + 10)
-    #define    IDM_FORMAT_CONV2_UTF_8       (IDM_FORMAT + 11)
-    #define    IDM_FORMAT_CONV2_UTF_16BE    (IDM_FORMAT + 12)
-    #define    IDM_FORMAT_CONV2_UTF_16LE    (IDM_FORMAT + 13)
-
-    #define    IDM_FORMAT_ENCODE            (IDM_FORMAT + 20)
-    #define    IDM_FORMAT_WIN_1250          (IDM_FORMAT_ENCODE + 0)
-    #define    IDM_FORMAT_WIN_1251          (IDM_FORMAT_ENCODE + 1)
-    #define    IDM_FORMAT_WIN_1252          (IDM_FORMAT_ENCODE + 2)
-    #define    IDM_FORMAT_WIN_1253          (IDM_FORMAT_ENCODE + 3)
-    #define    IDM_FORMAT_WIN_1254          (IDM_FORMAT_ENCODE + 4)
-    #define    IDM_FORMAT_WIN_1255          (IDM_FORMAT_ENCODE + 5)
-    #define    IDM_FORMAT_WIN_1256          (IDM_FORMAT_ENCODE + 6)
-    #define    IDM_FORMAT_WIN_1257          (IDM_FORMAT_ENCODE + 7)
-    #define    IDM_FORMAT_WIN_1258          (IDM_FORMAT_ENCODE + 8)
-    #define    IDM_FORMAT_ISO_8859_1        (IDM_FORMAT_ENCODE + 9)
-    #define    IDM_FORMAT_ISO_8859_2        (IDM_FORMAT_ENCODE + 10)
-    #define    IDM_FORMAT_ISO_8859_3        (IDM_FORMAT_ENCODE + 11)
-    #define    IDM_FORMAT_ISO_8859_4        (IDM_FORMAT_ENCODE + 12)
-    #define    IDM_FORMAT_ISO_8859_5        (IDM_FORMAT_ENCODE + 13)
-    #define    IDM_FORMAT_ISO_8859_6        (IDM_FORMAT_ENCODE + 14)
-    #define    IDM_FORMAT_ISO_8859_7        (IDM_FORMAT_ENCODE + 15)
-    #define    IDM_FORMAT_ISO_8859_8        (IDM_FORMAT_ENCODE + 16)
-    #define    IDM_FORMAT_ISO_8859_9        (IDM_FORMAT_ENCODE + 17)
-
-    #define    IDM_FORMAT_ISO_8859_13       (IDM_FORMAT_ENCODE + 20)
-    #define    IDM_FORMAT_ISO_8859_14       (IDM_FORMAT_ENCODE + 21)
-    #define    IDM_FORMAT_ISO_8859_15       (IDM_FORMAT_ENCODE + 22)
-    
-    #define    IDM_FORMAT_DOS_437           (IDM_FORMAT_ENCODE + 24)
-    #define    IDM_FORMAT_DOS_720           (IDM_FORMAT_ENCODE + 25)
-    #define    IDM_FORMAT_DOS_737           (IDM_FORMAT_ENCODE + 26)
-    #define    IDM_FORMAT_DOS_775           (IDM_FORMAT_ENCODE + 27)
-    #define    IDM_FORMAT_DOS_850           (IDM_FORMAT_ENCODE + 28)
-    #define    IDM_FORMAT_DOS_852           (IDM_FORMAT_ENCODE + 29)
-    #define    IDM_FORMAT_DOS_855           (IDM_FORMAT_ENCODE + 30)
-    #define    IDM_FORMAT_DOS_857           (IDM_FORMAT_ENCODE + 31)
-    #define    IDM_FORMAT_DOS_858           (IDM_FORMAT_ENCODE + 32)
-    #define    IDM_FORMAT_DOS_860           (IDM_FORMAT_ENCODE + 33)
-    #define    IDM_FORMAT_DOS_861           (IDM_FORMAT_ENCODE + 34)
-    #define    IDM_FORMAT_DOS_862           (IDM_FORMAT_ENCODE + 35)
-    #define    IDM_FORMAT_DOS_863           (IDM_FORMAT_ENCODE + 36)
-    #define    IDM_FORMAT_DOS_865           (IDM_FORMAT_ENCODE + 37)
-    #define    IDM_FORMAT_DOS_866           (IDM_FORMAT_ENCODE + 38)
-    #define    IDM_FORMAT_DOS_869           (IDM_FORMAT_ENCODE + 39)
-    #define    IDM_FORMAT_BIG5              (IDM_FORMAT_ENCODE + 40)
-    #define    IDM_FORMAT_GB2312            (IDM_FORMAT_ENCODE + 41)
-    #define    IDM_FORMAT_SHIFT_JIS         (IDM_FORMAT_ENCODE + 42)
-    #define    IDM_FORMAT_KOREAN_WIN        (IDM_FORMAT_ENCODE + 43)
-    #define    IDM_FORMAT_EUC_KR            (IDM_FORMAT_ENCODE + 44)
-    #define    IDM_FORMAT_TIS_620           (IDM_FORMAT_ENCODE + 45)
-    #define    IDM_FORMAT_MAC_CYRILLIC      (IDM_FORMAT_ENCODE + 46)
-    #define    IDM_FORMAT_KOI8U_CYRILLIC    (IDM_FORMAT_ENCODE + 47)
-    #define    IDM_FORMAT_KOI8R_CYRILLIC    (IDM_FORMAT_ENCODE + 48)
-    #define    IDM_FORMAT_ENCODE_END        IDM_FORMAT_KOI8R_CYRILLIC
-
-#define    IDM_LANG    (IDM + 6000)
-    #define    IDM_LANGSTYLE_CONFIG_DLG    (IDM_LANG + 1)
-    #define    IDM_LANG_C                  (IDM_LANG + 2)
-    #define    IDM_LANG_CPP                (IDM_LANG + 3)
-    #define    IDM_LANG_JAVA               (IDM_LANG + 4)
-    #define    IDM_LANG_HTML               (IDM_LANG + 5)
-    #define    IDM_LANG_XML                (IDM_LANG + 6)
-    #define    IDM_LANG_JS                 (IDM_LANG + 7)
-    #define    IDM_LANG_PHP                (IDM_LANG + 8)
-    #define    IDM_LANG_ASP                (IDM_LANG + 9)
-    #define    IDM_LANG_CSS                (IDM_LANG + 10)
-    #define    IDM_LANG_PASCAL             (IDM_LANG + 11)
-    #define    IDM_LANG_PYTHON             (IDM_LANG + 12)
-    #define    IDM_LANG_PERL               (IDM_LANG + 13)
-    #define    IDM_LANG_OBJC               (IDM_LANG + 14) 
-    #define    IDM_LANG_ASCII              (IDM_LANG + 15)
-    #define    IDM_LANG_TEXT               (IDM_LANG + 16)
-    #define    IDM_LANG_RC                 (IDM_LANG + 17)
-    #define    IDM_LANG_MAKEFILE           (IDM_LANG + 18)
-    #define    IDM_LANG_INI                (IDM_LANG + 19)
-    #define    IDM_LANG_SQL                (IDM_LANG + 20)
-    #define    IDM_LANG_VB                 (IDM_LANG + 21)
-    #define    IDM_LANG_BATCH              (IDM_LANG + 22)
-    #define    IDM_LANG_CS                 (IDM_LANG + 23)
-    #define    IDM_LANG_LUA                (IDM_LANG + 24)
-    #define    IDM_LANG_TEX                (IDM_LANG + 25)
-    #define    IDM_LANG_FORTRAN            (IDM_LANG + 26)
-    #define    IDM_LANG_BASH               (IDM_LANG + 27)
-    #define    IDM_LANG_FLASH              (IDM_LANG + 28)
-    #define    IDM_LANG_NSIS               (IDM_LANG + 29)
-    #define    IDM_LANG_TCL                (IDM_LANG + 30)
-    #define    IDM_LANG_LISP               (IDM_LANG + 31)
-    #define    IDM_LANG_SCHEME             (IDM_LANG + 32)
-    #define    IDM_LANG_ASM                (IDM_LANG + 33)
-    #define    IDM_LANG_DIFF               (IDM_LANG + 34)
-    #define    IDM_LANG_PROPS              (IDM_LANG + 35)
-    #define    IDM_LANG_PS                 (IDM_LANG + 36)
-    #define    IDM_LANG_RUBY               (IDM_LANG + 37)
-    #define    IDM_LANG_SMALLTALK          (IDM_LANG + 38)
-    #define    IDM_LANG_VHDL               (IDM_LANG + 39)
-    #define    IDM_LANG_CAML               (IDM_LANG + 40)
-    #define    IDM_LANG_KIX                (IDM_LANG + 41)
-    #define    IDM_LANG_ADA                (IDM_LANG + 42)
-    #define    IDM_LANG_VERILOG            (IDM_LANG + 43)
-    #define    IDM_LANG_AU3                (IDM_LANG + 44)
-    #define    IDM_LANG_MATLAB             (IDM_LANG + 45)
-    #define    IDM_LANG_HASKELL            (IDM_LANG + 46)
-    #define    IDM_LANG_INNO               (IDM_LANG + 47)
-    #define    IDM_LANG_CMAKE              (IDM_LANG + 48)
-    #define    IDM_LANG_YAML               (IDM_LANG + 49)
-    #define    IDM_LANG_COBOL              (IDM_LANG + 50)
-    #define    IDM_LANG_D                  (IDM_LANG + 51)
-    #define    IDM_LANG_GUI4CLI            (IDM_LANG + 52)
-    #define    IDM_LANG_POWERSHELL         (IDM_LANG + 53)
-    #define    IDM_LANG_R                  (IDM_LANG + 54)
-    #define    IDM_LANG_JSP                (IDM_LANG + 55)
-    #define    IDM_LANG_COFFEESCRIPT       (IDM_LANG + 56)
-    #define    IDM_LANG_JSON               (IDM_LANG + 57)
-    #define    IDM_LANG_FORTRAN_77         (IDM_LANG + 58)
-    #define    IDM_LANG_BAANC              (IDM_LANG + 59)
-    #define    IDM_LANG_SREC               (IDM_LANG + 60)
-    #define    IDM_LANG_IHEX               (IDM_LANG + 61)
-    #define    IDM_LANG_TEHEX              (IDM_LANG + 62)
-    #define    IDM_LANG_SWIFT              (IDM_LANG + 63)
-    #define    IDM_LANG_ASN1               (IDM_LANG + 64)
-    #define    IDM_LANG_AVS                (IDM_LANG + 65)
-    #define    IDM_LANG_BLITZBASIC         (IDM_LANG + 66)
-    #define    IDM_LANG_PUREBASIC          (IDM_LANG + 67)
-    #define    IDM_LANG_FREEBASIC          (IDM_LANG + 68)
-    #define    IDM_LANG_CSOUND             (IDM_LANG + 69)
-    #define    IDM_LANG_ERLANG             (IDM_LANG + 70)
-    #define    IDM_LANG_ESCRIPT            (IDM_LANG + 71)
-    #define    IDM_LANG_FORTH              (IDM_LANG + 72)
-    #define    IDM_LANG_LATEX              (IDM_LANG + 73)
-    #define    IDM_LANG_MMIXAL             (IDM_LANG + 74)
-    #define    IDM_LANG_NIM                (IDM_LANG + 75)
-    #define    IDM_LANG_NNCRONTAB          (IDM_LANG + 76)
-    #define    IDM_LANG_OSCRIPT            (IDM_LANG + 77)
-    #define    IDM_LANG_REBOL              (IDM_LANG + 78)
-    #define    IDM_LANG_REGISTRY           (IDM_LANG + 79)
-    #define    IDM_LANG_RUST               (IDM_LANG + 80)
-    #define    IDM_LANG_SPICE              (IDM_LANG + 81)
-    #define    IDM_LANG_TXT2TAGS           (IDM_LANG + 82)
-    #define    IDM_LANG_VISUALPROLOG       (IDM_LANG + 83)
-    #define    IDM_LANG_TYPESCRIPT         (IDM_LANG + 84)
-    #define    IDM_LANG_JSON5              (IDM_LANG + 85)
-    #define    IDM_LANG_MSSQL              (IDM_LANG + 86)
-    #define    IDM_LANG_GDSCRIPT           (IDM_LANG + 87)
-    #define    IDM_LANG_HOLLYWOOD          (IDM_LANG + 88)
-    #define    IDM_LANG_GOLANG             (IDM_LANG + 89)
-    #define    IDM_LANG_RAKU               (IDM_LANG + 90)
-    #define    IDM_LANG_TOML               (IDM_LANG + 91)
-    #define    IDM_LANG_SAS                (IDM_LANG + 92)
-    #define    IDM_LANG_ERRORLIST          (IDM_LANG + 93)
-    #define    IDM_LANG_ESCSEQ             (IDM_LANG + 94)
-
-    #define    IDM_LANG_EXTERNAL           (IDM_LANG + 165)
-    #define    IDM_LANG_EXTERNAL_LIMIT     (IDM_LANG + 179)
-
-    #define    IDM_LANG_USER               (IDM_LANG + 180)     
-    #define    IDM_LANG_USER_LIMIT         (IDM_LANG + 210)     
-    #define    IDM_LANG_USER_DLG           (IDM_LANG + 250)     
-    #define    IDM_LANG_OPENUDLDIR         (IDM_LANG + 300)
-    #define    IDM_LANG_UDLCOLLECTION_PROJECT_SITE   (IDM_LANG + 301)
-
-#define    IDM_ABOUT    (IDM  + 7000)
-    #define    IDM_HOMESWEETHOME    (IDM_ABOUT  + 1)
-    #define    IDM_PROJECTPAGE      (IDM_ABOUT  + 2)
-    #define    IDM_ONLINEDOCUMENT   (IDM_ABOUT  + 3)
-    #define    IDM_FORUM            (IDM_ABOUT  + 4)
-    
-    #define    IDM_UPDATE_NPP       (IDM_ABOUT  + 6)
-
-    #define    IDM_CONFUPDATERPROXY (IDM_ABOUT  + 9)
-    #define    IDM_CMDLINEARGUMENTS (IDM_ABOUT  + 10)
-    
-    #define    IDM_DEBUGINFO        (IDM_ABOUT  + 12)
-
-#define    IDM_SETTING    (IDM + 8000)
-
-    #define    IDM_SETTING_IMPORTPLUGIN             (IDM_SETTING + 5)
-    #define    IDM_SETTING_IMPORTSTYLETHEMES        (IDM_SETTING + 6)
-    #define    IDM_SETTING_TRAYICON                 (IDM_SETTING + 8)
-    #define    IDM_SETTING_SHORTCUT_MAPPER          (IDM_SETTING + 9)
-    #define    IDM_SETTING_REMEMBER_LAST_SESSION    (IDM_SETTING + 10)
-    #define    IDM_SETTING_PREFERENCE               (IDM_SETTING + 11)
-    #define    IDM_SETTING_OPENPLUGINSDIR           (IDM_SETTING + 14)
-    #define    IDM_SETTING_PLUGINADM                (IDM_SETTING + 15)
-    #define    IDM_SETTING_SHORTCUT_MAPPER_MACRO    (IDM_SETTING + 16)
-    #define    IDM_SETTING_SHORTCUT_MAPPER_RUN      (IDM_SETTING + 17)
-    #define    IDM_SETTING_EDITCONTEXTMENU          (IDM_SETTING + 18)
-
-#define    IDM_TOOL  (IDM + 8500)
-    #define    IDM_TOOL_MD5_GENERATE                    (IDM_TOOL + 1)
-    #define    IDM_TOOL_MD5_GENERATEFROMFILE            (IDM_TOOL + 2)
-    #define    IDM_TOOL_MD5_GENERATEINTOCLIPBOARD       (IDM_TOOL + 3)
-    #define    IDM_TOOL_SHA256_GENERATE                 (IDM_TOOL + 4)
-    #define    IDM_TOOL_SHA256_GENERATEFROMFILE         (IDM_TOOL + 5)
-    #define    IDM_TOOL_SHA256_GENERATEINTOCLIPBOARD    (IDM_TOOL + 6)
-    #define    IDM_TOOL_SHA1_GENERATE                   (IDM_TOOL + 7)
-    #define    IDM_TOOL_SHA1_GENERATEFROMFILE           (IDM_TOOL + 8)
-    #define    IDM_TOOL_SHA1_GENERATEINTOCLIPBOARD      (IDM_TOOL + 9)
-    #define    IDM_TOOL_SHA512_GENERATE                 (IDM_TOOL + 10)
-    #define    IDM_TOOL_SHA512_GENERATEFROMFILE         (IDM_TOOL + 11)
-    #define    IDM_TOOL_SHA512_GENERATEINTOCLIPBOARD    (IDM_TOOL + 12)
-
-#define    IDM_EXECUTE  (IDM + 9000)
-#define    IDM_EXECUTE_VALIDATE_SHORTCUTSXML          (IDM_EXECUTE + 1)
-
-#define IDM_SYSTRAYPOPUP     (IDM + 3100)
-    #define IDM_SYSTRAYPOPUP_ACTIVATE         (IDM_SYSTRAYPOPUP + 1)
-    #define IDM_SYSTRAYPOPUP_NEWDOC           (IDM_SYSTRAYPOPUP + 2)
-    #define IDM_SYSTRAYPOPUP_NEW_AND_PASTE    (IDM_SYSTRAYPOPUP + 3)
-    #define IDM_SYSTRAYPOPUP_OPENFILE         (IDM_SYSTRAYPOPUP + 4)
-    #define IDM_SYSTRAYPOPUP_CLOSE            (IDM_SYSTRAYPOPUP + 5)
-
-#define IDR_WINDOWS_MENU 11000
-    #define  IDM_WINDOW_WINDOWS   	(IDR_WINDOWS_MENU + 1)
-    #define  IDM_WINDOW_SORT_FN_ASC	(IDR_WINDOWS_MENU + 2)
-    #define  IDM_WINDOW_SORT_FN_DSC	(IDR_WINDOWS_MENU + 3)
-    #define  IDM_WINDOW_SORT_FP_ASC	(IDR_WINDOWS_MENU + 4)
-    #define  IDM_WINDOW_SORT_FP_DSC	(IDR_WINDOWS_MENU + 5)
-    #define  IDM_WINDOW_SORT_FT_ASC	(IDR_WINDOWS_MENU + 6)
-    #define  IDM_WINDOW_SORT_FT_DSC	(IDR_WINDOWS_MENU + 7)
-    #define  IDM_WINDOW_SORT_FS_ASC	(IDR_WINDOWS_MENU + 8)
-    #define  IDM_WINDOW_SORT_FS_DSC	(IDR_WINDOWS_MENU + 9)
-    #define  IDM_WINDOW_SORT_FD_ASC	(IDR_WINDOWS_MENU + 10)
-    #define  IDM_WINDOW_SORT_FD_DSC	(IDR_WINDOWS_MENU + 11)
-    #define  IDM_WINDOW_MRU_FIRST 	(IDR_WINDOWS_MENU + 20)
-    #define  IDM_WINDOW_MRU_LIMIT 	(IDR_WINDOWS_MENU + 59)
-    #define  IDM_WINDOW_COPY_NAME 	(IDM_WINDOW_MRU_LIMIT + 1)
-    #define  IDM_WINDOW_COPY_PATH 	(IDM_WINDOW_MRU_LIMIT + 2)
-
-#define IDR_DROPLIST_MENU 14000
-    #define    IDM_DROPLIST_LIST           (IDR_DROPLIST_MENU + 1)
-    #define    IDM_DROPLIST_MRU_FIRST      (IDR_DROPLIST_MENU + 20)
-
-// ---- frozen-value pins (see header comment; keep in lockstep with the plugin ABI) -------------------
-static_assert(IDM               == 40000, "command-id base is a frozen plugin-ABI contract value");
-static_assert(IDM_FILE          == 41000, "IDM_FILE section base is frozen (plugin ABI)");
-static_assert(IDM_EDIT          == 42000, "IDM_EDIT section base is frozen (plugin ABI)");
-static_assert(IDM_SEARCH        == 43000, "IDM_SEARCH section base is frozen (plugin ABI)");
-static_assert(IDM_SYSTRAYPOPUP  == 43100, "IDM_SYSTRAYPOPUP base is frozen (plugin ABI)");
-static_assert(IDM_MISC          == 43500, "IDM_MISC section base is frozen (plugin ABI)");
-static_assert(IDM_VIEW          == 44000, "IDM_VIEW section base is frozen (plugin ABI)");
-static_assert(IDM_FORMAT        == 45000, "IDM_FORMAT section base is frozen (plugin ABI)");
-static_assert(IDM_LANG          == 46000, "IDM_LANG section base is frozen (plugin ABI)");
-static_assert(IDM_LANG_USER     == 46180, "UDL menu-id range start is frozen (plugin ABI + UDL dispatch range checks)");
-static_assert(IDM_LANG_USER_LIMIT == 46210, "UDL menu-id range end is frozen (plugin ABI + UDL dispatch range checks)");
-static_assert(IDM_ABOUT         == 47000, "IDM_ABOUT section base is frozen (plugin ABI)");
-static_assert(IDM_SETTING       == 48000, "IDM_SETTING section base is frozen (plugin ABI)");
-static_assert(IDM_TOOL          == 48500, "IDM_TOOL section base is frozen (plugin ABI)");
-static_assert(IDM_EXECUTE       == 49000, "IDM_EXECUTE section base is frozen (plugin ABI)");
-static_assert(IDR_WINDOWS_MENU  == 11000, "Window-menu id base is frozen (plugin ABI)");
-static_assert(IDR_DROPLIST_MENU == 14000, "Doc-droplist id base is frozen (plugin ABI)");
+// ---- frozen-value pins (bridge value-compat; see header comment) ----
+static_assert(kCmdIdBase == 40000, "frozen bridge-contract value");
+static_assert(kCmdFileBase == 41000, "frozen bridge-contract value");
+static_assert(kCmdEditBase == 42000, "frozen bridge-contract value");
+static_assert(kCmdSearchBase == 43000, "frozen bridge-contract value");
+static_assert(kCmdSysTrayPopupBase == 43100, "frozen bridge-contract value");
+static_assert(kCmdMiscBase == 43500, "frozen bridge-contract value");
+static_assert(kCmdViewBase == 44000, "frozen bridge-contract value");
+static_assert(kCmdFormatBase == 45000, "frozen bridge-contract value");
+static_assert(kCmdLangBase == 46000, "frozen bridge-contract value");
+static_assert(kCmdLangUser == 46180, "frozen bridge-contract value");
+static_assert(kCmdLangUserLimit == 46210, "frozen bridge-contract value");
+static_assert(kCmdAboutBase == 47000, "frozen bridge-contract value");
+static_assert(kCmdSettingBase == 48000, "frozen bridge-contract value");
+static_assert(kCmdToolBase == 48500, "frozen bridge-contract value");
+static_assert(kCmdExecuteBase == 49000, "frozen bridge-contract value");
+static_assert(kWindowMenuIdBase == 11000, "frozen bridge-contract value");
+static_assert(kDropListMenuIdBase == 14000, "frozen bridge-contract value");
