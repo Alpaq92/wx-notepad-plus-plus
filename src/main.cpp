@@ -5604,12 +5604,15 @@ private:
         return wxFileExists(path);
     }
 #endif
-    bool writeFile(const wxString& path)
+    // Encode the CURRENTLY-MOUNTED document for buffer p's encoding and write it to `path`. Returns false
+    // only if the file couldn't be opened (after the Windows elevated-write fallback). Shared by writeFile
+    // (active buffer) and writePageToDisk (background buffers swapped in by Save All).
+    bool writeMountedDoc(EditorPage* p, const wxString& path)
     {
         const int len = static_cast<int>(sci(SCI_GETLENGTH));
         std::string b(static_cast<size_t>(len) + 1, '\0');
         sci(SCI_GETTEXT, len + 1, reinterpret_cast<sptr_t>(&b[0])); b.resize(len);
-        const std::string out = encodeForPage(b, activePage());
+        const std::string out = encodeForPage(b, p);
         wxFile f(path, wxFile::write);
         if (!f.IsOpened())
         {
@@ -5621,12 +5624,81 @@ private:
         }
         else
             f.Write(out.data(), out.size());
+        return true;
+    }
+    bool writeFile(const wxString& path)
+    {
+        if (!writeMountedDoc(activePage(), path)) return false;
         sci(SCI_SETSAVEPOINT);
         if (auto* p = activePage()) { p->path = path; clearRecovery(p); }   // content is safely on disk now - no recovery copy needed
         m_path = path; setDocTitle(wxFileNameFromPath(path)); setLexerForFile(path); addToMRU(path); return true;
     }
+    // Save a BACKGROUND buffer (its document must already be swapped into the shared editor by onSaveAll).
+    // Unlike writeFile it touches none of the active-view chrome (window title, MRU, lexer, m_path) - only
+    // this page's own on-disk copy plus its dirty/recovery bookkeeping.
+    bool writePageToDisk(EditorPage* p)
+    {
+        if (!p || p->path.empty() || !writeMountedDoc(p, p->path)) return false;
+        sci(SCI_SETSAVEPOINT); clearRecovery(p); p->dirty = false;
+        return true;
+    }
     void onSave() { if (m_path.empty()) onSaveAs(); else writeFile(m_path); }
     void onSaveAs() { wxFileDialog d(this, _("Save As"), "", "new 1.txt", _("All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT); if (d.ShowModal() == wxID_OK) writeFile(d.GetPath()); }
+    // Repaint page p's tab label (add/remove the unsaved "*") on ITS OWN notebook - works for a page in
+    // EITHER split view, unlike refreshTab() which only touches the active view's strip.
+    void refreshTabLabel(EditorPage* p)
+    {
+        ViewPane* v = viewOf(p); if (!p || !v || !v->tabs) return;
+        const wxString lbl = (p->dirty ? wxString("*") : wxString()) + p->title;
+        const int idx = v->tabs->GetPageIndex(p);
+        if (idx != wxNOT_FOUND && v->tabs->GetPageText(idx) != lbl) v->tabs->SetPageText(idx, lbl);
+    }
+    // File > Save All: write EVERY dirty document across both split views, not just the active one.
+    void onSaveAll()
+    {
+        if (!m_stc) { onSave(); return; }             // no editor mounted yet - fall back to single-doc save
+        EditorPage* const active = activePage();
+        std::vector<EditorPage*> untitled;            // dirty buffers with no path yet -> Save As, after the sweep
+
+        // (1) The active document is already mounted - save it through the normal path (title/MRU/lexer).
+        if (active && sci(SCI_GETMODIFY) != 0)
+        {
+            if (active->path.empty()) untitled.push_back(active);
+            else                      writeFile(active->path);
+        }
+
+        // (2) Every OTHER document (both views): peek its buffer in via a raw doc-pointer swap and, if it's
+        // dirty, write it - without going through activateBuffer, so the active view's lexer/doc-map/status
+        // aren't churned. A doc swap clears the view's per-view selection (see the second-view lifecycle
+        // notes / sortTabs' size sort), so snapshot the caret + scroll and restore them afterwards.
+        const sptr_t savedDoc    = sci(SCI_GETDOCPOINTER);
+        const int    savedAnchor = static_cast<int>(sci(SCI_GETANCHOR));
+        const int    savedCaret  = static_cast<int>(sci(SCI_GETCURRENTPOS));
+        const int    savedTop    = static_cast<int>(sci(SCI_GETFIRSTVISIBLELINE));
+        bool swapped = false;
+        for (EditorPage* p : allPages())
+        {
+            if (!p || p == active) continue;
+            sci(SCI_SETDOCPOINTER, 0, p->doc); swapped = true;   // mount this background buffer to inspect/write it
+            const bool dirty = sci(SCI_GETMODIFY) != 0;
+            p->dirty = dirty;                                    // refresh the cached flag while the buffer is mounted
+            if (!dirty) continue;
+            if (p->path.empty()) { untitled.push_back(p); continue; }
+            if (writePageToDisk(p)) refreshTabLabel(p);   // drop this tab's unsaved "*" (its strip may be the other view)
+        }
+        if (swapped)                                             // restore the active view's own document + caret/scroll
+        {
+            sci(SCI_SETDOCPOINTER, 0, savedDoc);
+            sci(SCI_SETSEL, savedAnchor, savedCaret);
+            sci(SCI_SETFIRSTVISIBLELINE, savedTop);
+        }
+
+        // (3) Untitled dirty buffers need a filename - activate each and run Save As (one prompt each).
+        for (EditorPage* p : untitled) { activatePage(p); onSaveAs(); }
+        if (active && activePage() != active) activatePage(active);   // return to the originally-active tab
+
+        updateStatus(); updateUiState();
+    }
 
     // ----- edit actions --------------------------------------------------
     std::string getDocUtf8()
@@ -8120,7 +8192,8 @@ private:
             case kCmdFileNew: doNew(); break;
             case kCmdFileOpen: onOpen(); break;
             case kCmdFileReload: onReload(); break;
-            case kCmdFileSave: case kCmdFileSaveall: onSave(); break;
+            case kCmdFileSave: onSave(); break;
+            case kCmdFileSaveall: onSaveAll(); break;
             case kCmdFileSaveas: onSaveAs(); break;
             case kCmdFileClose: closeActive(); break;
             case kCmdFileRestoreLastClosedFile: restoreLastClosed(); break;
