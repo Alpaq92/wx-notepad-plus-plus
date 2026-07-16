@@ -342,12 +342,25 @@ static const char RUST_KEYWORDS[] =
     "as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub "
     "ref return self Self static struct super trait true type unsafe use where while bool char str u8 u32 u64 i32 i64 usize Vec String Option Result";
 
+// nib.sci/1 - the portable Scintilla passthrough tail. The frame installs g_coreSciCall (it needs
+// m_main/m_sub/m_stc); coreSciCall routes a view index (0=main, 1=sub, -1=active) into that editor's
+// wxStyledTextCtrl::SendMsg. Both the Windows HWND bridge (SciHwndProc, below) and the cross-platform
+// nib.sci vtable funnel through this one function, so every OS exercises the identical routing. Cross-
+// platform on purpose - NOT inside __WXMSW__.
+static std::function<intptr_t(int, unsigned, uintptr_t, intptr_t)> g_coreSciCall;
+static intptr_t coreSciCall(int view, unsigned msg, uintptr_t w, intptr_t l)
+{ return g_coreSciCall ? g_coreSciCall(view, msg, w, l) : 0; }
+
+// The two view editors, published so the free-function Win32 SCI bridge (SciHwndProc can't see the
+// frame's m_main/m_sub) can turn a subclass ref back into a view index. Set by the frame.
+static wxStyledTextCtrl* g_mainStc = nullptr;
+static wxStyledTextCtrl* g_subStc  = nullptr;
+
 #ifdef __WXMSW__   // ---- the SCI_* bridge: route Scintilla messages sent to the editor HWND into wxStyledTextCtrl ----
 // Win32 plugins reach the editor by SendMessage'ing SCI_* to the Scintilla HWND. But wxStyledTextCtrl
 // services Scintilla messages only through SendMsg (a direct ScintillaWX call); its HWND's WndProc
 // ignores them. Bridge it: subclass the wxSTC HWND and forward Scintilla-range messages (SCI_* live in
-// 2000-2999, the lexer messages in 4000-4999) to the real editor via the frame's sci(). (Set by frame.)
-static std::function<sptr_t(UINT, WPARAM, LPARAM)> g_sciForward;
+// 2000-2999, the lexer messages in 4000-4999) to the real editor through coreSciCall (above).
 
 // Mirrors the frame's dark state so the editor's non-client painting (below) runs only in dark mode.
 static bool g_editorDark = false;
@@ -381,9 +394,12 @@ static void paintScrollbarCorner(HWND h)
 static LRESULT CALLBACK SciHwndProc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR ref)
 {
     if ((msg >= 2000 && msg < 3000) || (msg >= 4000 && msg < 5000)) {   // SCI_* + Lexilla range
-        if (auto* stc = reinterpret_cast<wxStyledTextCtrl*>(ref))       // per-view: route to THIS handle's editor
-            return static_cast<LRESULT>(stc->SendMsg(static_cast<int>(msg), static_cast<wxUIntPtr>(w), static_cast<wxIntPtr>(l)));
-        if (g_sciForward) return static_cast<LRESULT>(g_sciForward(msg, w, l));   // fallback: active view
+        // Turn THIS handle's subclass ref (its wxStyledTextCtrl*) into a view index, then hand off to the
+        // shared, cross-platform tail so the Windows path exercises the identical routing the Linux path
+        // will. ref is always a view editor (set at subclass time), so -1 (active) is only a safety net.
+        const auto* stc = reinterpret_cast<const wxStyledTextCtrl*>(ref);
+        const int view = (stc == g_subStc) ? 1 : (stc == g_mainStc) ? 0 : -1;
+        return static_cast<LRESULT>(coreSciCall(view, msg, w, l));
     }
     const LRESULT res = DefSubclassProc(h, msg, w, l);
     if (msg == WM_NCPAINT && g_editorDark)   // overpaint the scrollbar dead-corner once the bars are drawn
@@ -1400,7 +1416,7 @@ static std::vector<NibSub> g_nibSubs;
 static void nibSubscribe(NibHost*, NibEventKind kind, NibEventFn fn, void* u) { g_nibSubs.push_back({ kind, fn, u }); }
 static void nibFireEvent(const NibEvent& ev)   // called by the editor handlers below
 { for (const auto& s : g_nibSubs) if (s.kind == ev.kind && s.fn) s.fn(reinterpret_cast<NibHost*>(g_view), &ev, s.user); }
-// nib.panels/1 - the frame installs these (they need m_aui + the frame as parent), matching g_sciForward.
+// nib.panels/1 - the frame installs these (they need m_aui + the frame as parent), matching g_coreSciCall.
 static std::function<void*(const char*, const char*, int)> g_nibCreatePanel;
 static std::function<void(void*, const char*, bool)>        g_nibPanelText;   // (panel, utf8, append?)
 static std::function<void(void*, bool)>                     g_nibPanelShow;
@@ -1448,6 +1464,12 @@ static std::function<int(char*, int)> g_nibUserDataDir;
 static int nibPathsUserData(NibHost*, char* b, int c) { return g_nibUserDataDir ? g_nibUserDataDir(b, c) : 0; }
 static const NibPathsApi g_nibPathsApi = { 1, sizeof(NibPathsApi), nibPathsUserData };
 
+// nib.sci/1 - generic Scintilla passthrough (portable, offered on every OS). Wraps the shared
+// coreSciCall tail installed by the frame; the same tail the Win32 HWND bridge uses.
+static intptr_t nibSciCall(NibHost*, int view, unsigned msg, uintptr_t w, intptr_t l)
+{ return coreSciCall(view, msg, w, l); }
+static const NibSciApi g_nibSciApi = { 1, sizeof(NibSciApi), nibSciCall };
+
 // nib.host/1
 static const char* nibHostName(NibHost*) { return "wxNote"; }
 static uint32_t     nibHostAbi(NibHost*) { return NIB_ABI_VERSION; }
@@ -1470,6 +1492,7 @@ static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PANELS)   == 0) return &g_nibPanelsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_LANGDEF)  == 0) return &g_nibLangDefApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PATHS)    == 0) return &g_nibPathsApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_SCI)      == 0) return &g_nibSciApi;   // portable: every OS
 #ifdef __WXMSW__
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_WIN32)    == 0) return &g_nibWin32Api;
 #endif
@@ -1491,13 +1514,16 @@ static void loadNibPlugins()
     const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "nib";
     if (!wxDirExists(dir)) return;
 #if defined(__WXMSW__)
-    const wxString pat = "*.dll";
+    const std::vector<wxString> pats = { "*.dll" };
 #elif defined(__WXMAC__)
-    const wxString pat = "*.dylib";
+    // CMake MODULE libraries are emitted as .so even on macOS (only SHARED libs get .dylib), so
+    // accept BOTH - otherwise every bin/nib/*.so (the bridge, udl-compat, ...) silently never loads.
+    const std::vector<wxString> pats = { "*.dylib", "*.so" };
 #else
-    const wxString pat = "*.so";
+    const std::vector<wxString> pats = { "*.so" };
 #endif
     wxDir d(dir); wxString f;
+    for (const wxString& pat : pats)
     for (bool more = d.GetFirst(&f, pat, wxDIR_FILES); more; more = d.GetNext(&f))
     {
         auto* lib = new wxDynamicLibrary(dir + wxFILE_SEP_PATH + f);
@@ -2165,9 +2191,14 @@ private:
         buildView(m_main, m_split);
         buildView(m_sub,  m_split);
         m_active = &m_main; m_tabs = m_main.tabs; m_stc = m_main.stc;   // MAIN is active to start
+        // nib.sci/1 tail: view 0=main, 1=sub, -1=active (m_stc is the active-view alias). Portable.
+        g_mainStc = m_main.stc; g_subStc = m_sub.stc;
+        g_coreSciCall = [this](int view, unsigned msg, uintptr_t w, intptr_t l) -> intptr_t {
+            wxStyledTextCtrl* stc = (view == 0) ? m_main.stc : (view == 1) ? m_sub.stc : m_stc;
+            return stc ? static_cast<intptr_t>(stc->SendMsg(static_cast<int>(msg), static_cast<wxUIntPtr>(w), static_cast<wxIntPtr>(l))) : 0;
+        };
 #ifdef __WXMSW__
         m_sci = m_main.sci;
-        g_sciForward = [this](UINT m, WPARAM w, LPARAM l) { return sci(m, static_cast<uptr_t>(w), static_cast<sptr_t>(l)); };   // fallback router -> active view
 #endif
         g_view = m_main.stc;                // EditorPage::~EditorPage releases its Document through an always-valid view
         m_sub.tabs->Hide();
@@ -8330,7 +8361,23 @@ private:
             case kCmdLangstyleConfigDlg: onStyleConfig(); break;
             case kCmdSettingImportPlugin: importPlugin(); break;
             case kCmdSettingImportStyleThemes: importStyleTheme(); break;
-            case kCmdSettingOpenPluginsDir: openFolder(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + wxFILE_SEP_PATH + "plugins"); break;
+            case kCmdSettingOpenPluginsDir: {
+                // "Open plugins folder" must always land on a real directory - opening a path that
+                // doesn't exist just silently does nothing. Create <exe>/plugins on demand; if the exe
+                // dir isn't writable (installed build) fall back to the always-present <exe>/nib (where
+                // cross-platform Nib plugins live), then the exe dir itself as a last resort.
+                const wxString exeDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath());
+#ifdef __WXMSW__
+                wxString dir = exeDir + wxFILE_SEP_PATH + "plugins";                 // where npp-bridge loads N++ plugin DLLs
+#else
+                wxString dir = userDataDir() + wxFILE_SEP_PATH + "plugins";          // where the POSIX npp-bridge loads plugins
+#endif
+                { wxLogNull noLog; if (!wxDirExists(dir)) wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL); }
+                if (!wxDirExists(dir)) dir = exeDir + wxFILE_SEP_PATH + "nib";       // fallback: the always-present Nib plugin dir
+                if (!wxDirExists(dir)) dir = exeDir;
+                openFolder(dir);
+                break;
+            }
             case kCmdSettingEditContextMenu: editContextMenu(); break;
             case kCmdLangText: setForcedLang("", _("Normal text file")); break;   // force Normal Text (a manual pick, like the languages)
             case kCmdLangOpenudldir: { wxLogNull noLog; wxFileName::Mkdir(udlDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL); openFolder(udlDir()); break; }   // create-then-open the per-user dir

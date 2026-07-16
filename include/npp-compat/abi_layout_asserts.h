@@ -16,9 +16,12 @@
 // hold (compiles clean) or they don't (compile error naming exactly which field moved).
 //
 // Included once from packages/npp-bridge/npp_bridge.cpp - the GPL component that consumes
-// these ABI headers. Windows-only, like the
-// bridge itself: these structs' real-world layout only has to match compiled plugin DLLs on
-// Windows, where the plugin-loading bridge actually runs.
+// these ABI headers. The bridge now builds on every platform, but the *external* ABI-match
+// constraint these asserts guard is Windows-specific: only there does the bridge load a
+// third-party plugin DLL that was compiled against the real Notepad++ headers, so only there
+// must our redeclarations match a layout we can't see. Off-Windows the plugin is recompiled
+// against these very headers, so both sides agree by construction and the asserts degrade to a
+// pure self-consistency guard (still useful: they keep a struct edit from silently changing ABI).
 
 #pragma once
 

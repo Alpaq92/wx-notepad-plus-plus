@@ -10,7 +10,7 @@ name: build
 on:
   push:
     branches: [ master ]
-    paths: [ 'src/**', 'include/**', 'third_party/**', 'resources/**', 'installer/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
+    paths: [ 'src/**', 'include/**', 'packages/**', 'cmake/**', 'third_party/**', 'resources/**', 'installer/**', 'CMakeLists.txt', '.github/workflows/build.yml' ]
   # Deliberately NOT path-filtered (unlike push above): master's branch ruleset requires its
   # checks (windows/linux/macos-arm64/macos-x86_64) on every PR unconditionally, so a doc-only PR (e.g. CHANGELOG.md) that skipped
   # the build here would sit forever as "Expected - waiting for status to be reported" and could
@@ -49,12 +49,48 @@ jobs:
           # define, since NSIS can't detect the arch of the exe it's wrapping).
           - { os: ubuntu-24.04-arm, name: linux-arm64 }
           - { os: windows-11-arm,   name: windows-arm64, msvc_arch: arm64, nsis_flags: /DTARGET_ARM64 }
+          # No native RISC-V runner exists, so linux-riscv64 CROSS-compiles on the x86_64 ubuntu host
+          # (a from-source wxWidgets build under QEMU-native would blow the 6h job limit). `cross` gates
+          # every step: the native-linux steps above are `&& !matrix.cross`, the riscv steps `== 'riscv64'`.
+          - { os: ubuntu-latest,    name: linux-riscv64, cross: riscv64 }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
 
+      # Cross-compile setup for the riscv64 leg: constrain the stock (deb822) apt sources to amd64 so
+      # `apt-get update` doesn't 404 hunting riscv64 indexes on archive/azure, add a riscv64-scoped
+      # ports.ubuntu.com source, then install the cross toolchain + qemu (for wxWidgets' try_run checks)
+      # + the riscv64 GTK3 dev sysroot (apt pulls the glib/pango/cairo/gdk-pixbuf/atk dep chain).
+      - name: Set up riscv64 cross toolchain + GTK sysroot (Linux cross)
+        if: matrix.cross == 'riscv64'
+        run: |
+          set -eux
+          # Constrain EVERY existing deb822 source to the host arch first, so that after
+          # `dpkg --add-architecture riscv64` `apt-get update` doesn't 404 hunting riscv64 indexes on
+          # archives that don't carry it (the stock ubuntu.sources and any runner-added sources).
+          for f in /etc/apt/sources.list.d/*.sources; do
+            [ -e "$f" ] || continue
+            grep -q '^Architectures:' "$f" || sudo sed -i '/^Types:/a Architectures: amd64 i386' "$f"
+          done
+          CODENAME="$(. /etc/os-release; echo "$VERSION_CODENAME")"
+          sudo tee /etc/apt/sources.list.d/riscv64-ports.sources >/dev/null <<EOF
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports
+          Suites: ${CODENAME} ${CODENAME}-updates ${CODENAME}-security
+          Components: main restricted universe multiverse
+          Architectures: riscv64
+          EOF
+          sudo dpkg --add-architecture riscv64
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config \
+            g++-riscv64-linux-gnu qemu-user-static binfmt-support \
+            libgtk-3-dev:riscv64
+          sudo update-binfmts --enable qemu-riscv64 || true
+          qemu-riscv64-static --version
+
       - name: Install GTK3 (Linux)
-        if: startsWith(matrix.name, 'linux')
+        if: startsWith(matrix.name, 'linux') && !matrix.cross
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config libgtk-3-dev
@@ -67,7 +103,7 @@ jobs:
       # librsvg2-bin: provides rsvg-convert, used to pre-rasterize our SVG icon to PNG for the
       # flatpak package - see build-flatpak.sh for why appstreamcli compose needs that.
       - name: Install packaging tools (Linux)
-        if: startsWith(matrix.name, 'linux')
+        if: startsWith(matrix.name, 'linux') && !matrix.cross
         run: |
           sudo apt-get install -y --no-install-recommends rpm flatpak flatpak-builder elfutils librsvg2-bin
           flatpak remote-add --if-not-exists --user flathub https://flathub.org/repo/flathub.flatpakrepo
@@ -77,20 +113,20 @@ jobs:
       # standard CI workaround; harmless no-op on runner images where the sysctl key doesn't exist
       # or the restriction isn't in effect.
       - name: Allow unprivileged user namespaces for flatpak-builder (Linux)
-        if: startsWith(matrix.name, 'linux')
+        if: startsWith(matrix.name, 'linux') && !matrix.cross
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
       # The GNOME runtime + SDK are a multi-hundred-MB download - cache them so only the first run
       # (or a version bump) pays that cost. Keyed on the pinned version in the Flatpak manifest.
       - name: Cache Flatpak runtime (Linux)
-        if: startsWith(matrix.name, 'linux')
+        if: startsWith(matrix.name, 'linux') && !matrix.cross
         uses: actions/cache@v6
         with:
           path: ~/.local/share/flatpak
           key: flatpak-gnome46-v1-${{ matrix.name }}
 
       - name: Install Flatpak runtime (Linux)
-        if: startsWith(matrix.name, 'linux')
+        if: startsWith(matrix.name, 'linux') && !matrix.cross
         run: flatpak install -y --user flathub org.gnome.Platform//46 org.gnome.Sdk//46
 
       # Cache the fetched + built wxWidgets so iterations don't rebuild it from source each run.
@@ -105,7 +141,9 @@ jobs:
           # and "wx331-v2-linux-" would also match the linux-arm64 leg's cache - restoring
           # ARM-compiled wxWidgets onto an x64 host and poisoning the cache. "wx331-linux-v2-"
           # cannot prefix-match "wx331-linux-arm64-v2-", so each leg only ever sees its own.
-          key: wx331-${{ matrix.name }}-v2-${{ hashFiles('CMakeLists.txt') }}
+          # Hash the cross toolchain file too, so a riscv64 toolchain edit invalidates that leg's wx cache
+          # (it's a real build input unique to the cross leg; harmless on the other legs, where it's stable).
+          key: wx331-${{ matrix.name }}-v2-${{ hashFiles('CMakeLists.txt', 'cmake/toolchains/*.cmake') }}
           restore-keys: wx331-${{ matrix.name }}-v2-
 
       # msvc-dev-cmd: puts cl.exe (not the runner's incidental MinGW g++) first on PATH, which
@@ -132,8 +170,13 @@ jobs:
       # build to a single target arch instead of wxWidgets/CMake's own default of "whatever the
       # runner's chip is" - that default would silently make both macOS legs produce an identical
       # arm64 binary since they share the same (Apple Silicon) runner image.
+      # The riscv64 leg points pkg-config at the riscv64 .pc files via the toolchain file's
+      # set(ENV{PKG_CONFIG_LIBDIR} ...) - NOT a step-level env, because a step env defaulting to '' on
+      # the native legs would EMPTY pkg-config's search path and break wxWidgets' pkg-config-only GTK3
+      # detection there. The toolchain-file env applies to the FetchContent sub-configures too (same
+      # cmake process), so the cross leg is covered without touching the native legs.
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 ${{ matrix.osx_arch && format('-DCMAKE_OSX_ARCHITECTURES={0}', matrix.osx_arch) || '' }}
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 ${{ matrix.osx_arch && format('-DCMAKE_OSX_ARCHITECTURES={0}', matrix.osx_arch) || '' }} ${{ matrix.cross && '-DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/riscv64-linux-gnu.cmake' || '' }}
 
       # Cap parallelism to 2: one cc1plus per core compiling wxWidgets + the large single-TU main.cpp
       # at -O2 all at once OOM-kills cc1plus on the hosted runners (esp. the 7 GB macOS M1). Two at a
@@ -142,26 +185,43 @@ jobs:
         run: cmake --build build --config Release --target wxnote --parallel 2
 
       - name: Package AppImage (Linux)
-        if: startsWith(matrix.name, 'linux')
+        if: startsWith(matrix.name, 'linux') && !matrix.cross
         run: bash installer/linux/build-appimage.sh
 
       - name: Package .deb (Linux)
-        if: startsWith(matrix.name, 'linux')
+        if: startsWith(matrix.name, 'linux') && !matrix.cross
         run: bash installer/linux/build-deb.sh
 
       - name: Package .rpm (Linux)
-        if: startsWith(matrix.name, 'linux')
+        if: startsWith(matrix.name, 'linux') && !matrix.cross
         run: bash installer/linux/build-rpm.sh
 
       - name: Package .flatpak (Linux)
-        if: startsWith(matrix.name, 'linux')
+        if: startsWith(matrix.name, 'linux') && !matrix.cross
         run: bash installer/linux/build-flatpak.sh
 
       - name: Upload Linux packages
-        if: startsWith(matrix.name, 'linux')
+        if: startsWith(matrix.name, 'linux') && !matrix.cross
         uses: actions/upload-artifact@v7
         with:
           name: wxnote-${{ matrix.name }}-packages
+          path: build/installer/*
+
+      # riscv64: only the .deb is feasible cross (dpkg-deb just packs the already-cross-built ELF).
+      # AppImage/flatpak have no riscv64 runtime and can't cross on x86_64; rpm is deferred. The staged
+      # build/bin/wxnote is a riscv64 ELF from the cross toolchain; DEB_ARCH_OVERRIDE stamps the control
+      # file's Architecture: and the package name.
+      - name: Package .deb (Linux cross riscv64)
+        if: matrix.cross == 'riscv64'
+        env:
+          DEB_ARCH_OVERRIDE: riscv64
+        run: bash installer/linux/build-deb.sh
+
+      - name: Upload Linux riscv64 packages
+        if: matrix.cross == 'riscv64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: wxnote-linux-riscv64-packages
           path: build/installer/*
 
       - name: Package .dmg (macOS)
