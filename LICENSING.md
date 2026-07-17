@@ -9,10 +9,12 @@
 ## TL;DR
 
 **wxNote is distributed under the Apache License 2.0** (see [`LICENSE`](LICENSE)),
-with one exception in what ships: `packages/npp-bridge/` (see below) stays
-**GPL-3.0-or-later** because it reproduces Notepad++'s plugin ABI for
-interoperability — its never-shipped, Windows-only test fixture
-`packages/test_plugin/` tracks the same GPL license for the same reason. It
+with two exceptions among the optional plugins that ship:
+`packages/npp-bridge/` and `packages/udl-compat/` (see below) both stay
+**GPL-3.0-or-later** because each reproduces a Notepad++ interoperability
+surface — npp-bridge the plugin ABI, udl-compat the `userDefineLang.xml` UDL
+format. (npp-bridge's never-shipped, Windows-only test fixture
+`packages/test_plugin/` tracks the same GPL license for the same reason.) It
 is an *independent reimplementation* — no Notepad++ source code is copied
 into `src/`; Notepad++ serves only as a functional reference and a test
 target (see [`NOTICE`](NOTICE)).
@@ -62,7 +64,7 @@ splitting it out makes the boundary unambiguous rather than just documented.
 | Plugin ABI headers — `include/npp-compat/` | **Apache-2.0** | clean-room *expression* of N++'s ABI facts (numeric ids, struct layouts, entry-point names). Consumed **only** by `packages/npp-bridge/` and `packages/test_plugin/` — the core includes nothing from this directory. Apache code being consumed by GPL code is one-directional-compatible and unproblematic; it does not make this directory GPL. |
 | **`packages/npp-bridge/`** | **GPL-3.0-or-later** | its own [`LICENSE`](packages/npp-bridge/LICENSE); see "Why npp-bridge (and its test fixture) stay GPL" above |
 | **`packages/test_plugin/`** | **GPL-3.0-or-later** | its own [`LICENSE`](packages/test_plugin/LICENSE); a Windows-only test fixture that consumes the same N++ ABI as npp-bridge, so it tracks the same license rather than the Apache default |
-| **`packages/udl-compat/`** | **GPL-3.0-or-later** | its own [`LICENSE`](packages/udl-compat/LICENSE); optional, cross-platform plugin (WIP) that reproduces Notepad++'s UDL (`userDefineLang.xml`) format to translate legacy definitions into Scintillua lexers. Like npp-bridge, it reproduces an N++ format for interoperability, so it stays GPL and out of the Apache core (which uses [Scintillua](https://github.com/orbitalquark/scintillua) — MIT — as its native language engine). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| **`packages/udl-compat/`** | **GPL-3.0-or-later** | its own [`LICENSE`](packages/udl-compat/LICENSE); optional, cross-platform plugin that reproduces Notepad++'s UDL (`userDefineLang.xml`) format to translate legacy definitions into Scintillua lexers. Like npp-bridge, it reproduces an N++ format for interoperability, so it stays GPL and out of the Apache core (which uses [Scintillua](https://github.com/orbitalquark/scintillua) — MIT — as its native language engine). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 
 > **Removed theme (2026-07-11):** `DansLeRuSH-Dark.xml` (© Franck Albaret) was dropped from the shipped
 > set. Its header contains MIT-style permission text, but that text is labeled "[ LEGAL DISCLAIMER ]"

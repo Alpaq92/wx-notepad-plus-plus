@@ -2,9 +2,9 @@
 
 This directory holds **clean-room, Apache-2.0 redeclarations** of the headers a compiled
 Notepad++ binary plugin is built against. They exist so that real, already-compiled Notepad++
-plugin DLLs can be loaded and driven by `packages/npp-bridge/` (the one GPL component in this
-repo that consumes them) without this repository containing, deriving from, or linking against
-any Notepad++ source code.
+plugin DLLs can be loaded and driven by `packages/npp-bridge/` (the GPL loader that drives them;
+`packages/test_plugin/`, also GPL, compiles against these headers as a test fixture) without this
+repository containing, deriving from, or linking against any Notepad++ source code.
 
 ## What "clean-room" means here, concretely
 
