@@ -104,8 +104,13 @@ Japanese, Chinese, Korean), with English as the source text.
 
 ## Signing
 
-For the time being, **wxNote's releases are not code-signed** — and
-changing that is one of the project's priorities.
+Every release now publishes a **`SHA256SUMS`** covering every artifact, so a
+download can be integrity-checked today. Beyond that, **wxNote's releases are
+not yet code-signed** — closing that gap is one of the project's priorities.
+The signing pipeline is already wired and gated on repository secrets (GPG
+signature of the checksums, Windows Authenticode, macOS notarization); each
+activates automatically once its certificate/key is configured, with no code
+change. See [`docs/SIGNING.md`](SIGNING.md).
 
 In practice, unsigned currently means:
 

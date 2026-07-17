@@ -224,9 +224,58 @@ jobs:
           name: wxnote-linux-riscv64-packages
           path: build/installer/*
 
+      # macOS code signing (release builds only, and only when the Apple secrets exist - otherwise every
+      # step below no-ops and the .dmg ships unsigned, exactly as before). Signing needs the caller to
+      # pass secrets down, which release.yml does via `secrets: inherit`. `github.ref_type == 'tag'`
+      # keeps notarization (a slow round-trip to Apple) off regular push/PR builds. See docs/SIGNING.md.
+      # NOTE: this path is scaffolded but has NOT been exercised against a real Developer ID cert yet.
+      - name: Set up macOS code signing
+        if: startsWith(matrix.name, 'macos') && github.ref_type == 'tag'
+        env:
+          CERT_B64:  ${{ secrets.APPLE_CERT_BASE64 }}
+          CERT_PASS: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CERT_B64:-}" ]; then
+            echo "::notice::APPLE_CERT_BASE64 not set - the .dmg ships UNSIGNED/UN-NOTARIZED (Gatekeeper blocks first launch). See docs/SIGNING.md."
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/wxnote-signing.keychain-db"
+          security create-keychain -p "" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "" "$KEYCHAIN"
+          echo "$CERT_B64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PASS" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN" >/dev/null
+          # Add our keychain to the search list (keeping the existing ones) so codesign finds the identity.
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed 's/["]//g')
+          IDENT=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep 'Developer ID Application' | head -1 | awk -F'"' '{print $2}')
+          if [ -z "$IDENT" ]; then echo "::error::no 'Developer ID Application' identity in the imported cert"; exit 1; fi
+          echo "MACOS_SIGN_IDENTITY=$IDENT" >> "$GITHUB_ENV"   # build-dmg.sh reads this to codesign the .app
+          rm -f "$RUNNER_TEMP/cert.p12"
+
       - name: Package .dmg (macOS)
         if: startsWith(matrix.name, 'macos')
         run: bash installer/macos/build-dmg.sh ${{ matrix.osx_arch }}
+
+      # Notarize the (now app-signed) .dmg and staple the ticket, so Gatekeeper clears it offline.
+      - name: Notarize + staple .dmg (macOS)
+        if: startsWith(matrix.name, 'macos') && github.ref_type == 'tag'
+        env:
+          APPLE_ID:      ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PWD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_ID:-}" ]; then
+            echo "::notice::APPLE_ID not set - skipping notarization. See docs/SIGNING.md."
+            exit 0
+          fi
+          DMG=$(ls build/installer/*.dmg | head -1)
+          xcrun notarytool submit "$DMG" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PWD" --wait
+          xcrun stapler staple "$DMG"
+          echo "Notarized + stapled $DMG"
 
       - name: Upload macOS package
         if: startsWith(matrix.name, 'macos')

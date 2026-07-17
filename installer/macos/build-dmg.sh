@@ -66,6 +66,17 @@ EOF
 
 chmod +x "$APPDIR/Contents/MacOS/wxnote"
 
+# Optional codesigning. The release CI exports MACOS_SIGN_IDENTITY (a "Developer ID Application: ..."
+# identity) into the environment when the Apple cert secret is present; otherwise this is skipped and
+# the .dmg ships unsigned exactly as before. Signed here - BEFORE the app is packed into the .dmg - so
+# the bundle inside the image is what carries the signature. Deep + hardened runtime + a secure
+# timestamp are what notarization (done on the .dmg back in the workflow) requires. See docs/SIGNING.md.
+if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
+    echo "codesigning $APPDIR as: $MACOS_SIGN_IDENTITY"
+    codesign --force --deep --options runtime --timestamp --sign "$MACOS_SIGN_IDENTITY" "$APPDIR"
+    codesign --verify --deep --strict --verbose=2 "$APPDIR"
+fi
+
 # Pack into a .dmg with a symlink to /Applications for the standard drag-to-install UX.
 DMGROOT="build/dmg-root"
 rm -rf "$DMGROOT"; mkdir -p "$DMGROOT"

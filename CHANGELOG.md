@@ -5,6 +5,12 @@ All notable changes to wxNote are documented here. Format loosely follows
 
 ## [0.9.1] - 2026-07-18
 
+### Added
+- **Release integrity: `SHA256SUMS`.** Every release now publishes a checksum file over all assets, so
+  a download can be verified (`sha256sum -c SHA256SUMS`). The code-signing pipeline (GPG signature of
+  the checksums, Windows Authenticode, macOS notarization) is wired and gated on repository secrets —
+  each activates automatically once its certificate/key is configured. See `docs/SIGNING.md`.
+
 ### Changed
 - **The About dialog shows the version in its header** ("wxNote vX.Y.Z") instead of a dimmed line at
   the bottom.

@@ -1,8 +1,20 @@
 name: release
 
-# Cuts a GitHub Release with all 3 platform packages attached whenever a version tag (v*) is
-# pushed. Reuses build.yml (via workflow_call) so the release artifacts are built exactly the
-# same way as every regular push - no separate packaging logic to drift out of sync.
+# Cuts a GitHub Release with all platform packages attached whenever a version tag (v*) is pushed.
+# Reuses build.yml (via workflow_call) so the release artifacts are built exactly the same way as
+# every regular push - no separate packaging logic to drift out of sync.
+#
+# SIGNING / INTEGRITY (see docs/SIGNING.md):
+#   - A SHA256SUMS file is ALWAYS published, covering every asset - no secret needed.
+#   - Everything else is gated on repository secrets and no-ops (with a ::notice::) when the secret is
+#     absent, so a repo without certificates ships exactly as before, just with checksums added:
+#       * Windows installers are Authenticode-signed (from Linux, via osslsigncode) when
+#         WINDOWS_PFX_BASE64 / WINDOWS_PFX_PASSWORD are set.
+#       * SHA256SUMS is GPG-signed (-> SHA256SUMS.asc) when GPG_PRIVATE_KEY / GPG_PASSPHRASE are set.
+#       * The macOS .dmg is codesigned + notarized on its build leg (build.yml) when the Apple secrets
+#         are set.
+#   The gate is at the SHELL level (the step runs and exits 0 early if the secret is empty), NOT a
+#   job-level `if:` - secrets can't be referenced there, and this keeps an unconfigured repo building.
 
 on:
   push:
@@ -11,6 +23,7 @@ on:
 jobs:
   build:
     uses: ./.github/workflows/build.yml
+    secrets: inherit   # so the macOS legs can codesign/notarize when the Apple secrets exist
 
   publish:
     needs: build
@@ -23,18 +36,67 @@ jobs:
         with:
           path: artifacts
 
+      - name: Collect assets into dist/
+        run: |
+          mkdir -p dist
+          # Flatten every packaged artifact (each leg uploaded build/installer/*) into one dir. Match by
+          # extension so a stray log from a leg can't sneak into the release.
+          find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \
+            -o -name '*.AppImage' -o -name '*.flatpak' \) -exec cp -n {} dist/ \;
+          echo "Release assets:" && ls -la dist
+
+      - name: Sign Windows installers (Authenticode)
+        env:
+          PFX_B64:  ${{ secrets.WINDOWS_PFX_BASE64 }}
+          PFX_PASS: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PFX_B64:-}" ]; then
+            echo "::notice::WINDOWS_PFX_BASE64 not set - Windows installers ship UNSIGNED (SmartScreen 'unknown publisher'). See docs/SIGNING.md."
+            exit 0
+          fi
+          sudo apt-get update && sudo apt-get install -y osslsigncode
+          echo "$PFX_B64" | base64 -d > /tmp/cert.pfx
+          for exe in dist/*.exe; do
+            echo "signing $exe"
+            osslsigncode sign \
+              -pkcs12 /tmp/cert.pfx -pass "$PFX_PASS" \
+              -n "wxNote" -i "https://alpaq92.github.io/wx-notepad-plus-plus/" \
+              -ts "http://timestamp.digicert.com" \
+              -in "$exe" -out "$exe.signed"
+            mv "$exe.signed" "$exe"
+          done
+          rm -f /tmp/cert.pfx
+          echo "Signed $(ls dist/*.exe 2>/dev/null | wc -l) installer(s)."
+
+      - name: Generate SHA256SUMS
+        run: |
+          set -euo pipefail
+          cd dist
+          # Checksums cover the FINAL bytes users download - so this runs AFTER Windows signing above.
+          sha256sum -- * > SHA256SUMS
+          echo "== SHA256SUMS ==" && cat SHA256SUMS
+
+      - name: Sign SHA256SUMS (GPG detached)
+        env:
+          GPG_KEY:  ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASS: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GPG_KEY:-}" ]; then
+            echo "::notice::GPG_PRIVATE_KEY not set - SHA256SUMS ships without a signature. See docs/SIGNING.md."
+            exit 0
+          fi
+          echo "$GPG_KEY" | gpg --batch --import
+          echo "${GPG_PASS:-}" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+            --armor --detach-sign -o dist/SHA256SUMS.asc dist/SHA256SUMS
+          echo "Wrote dist/SHA256SUMS.asc"
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            artifacts/wxnote-windows-installer/* \
-            artifacts/wxnote-windows-arm64-installer/* \
-            artifacts/wxnote-linux-packages/* \
-            artifacts/wxnote-linux-arm64-packages/* \
-            artifacts/wxnote-linux-riscv64-packages/* \
-            artifacts/wxnote-macos-arm64-package/* \
-            artifacts/wxnote-macos-x86_64-package/* \
+          gh release create "${{ github.ref_name }}" dist/* \
             --repo "${{ github.repository }}" \
             --title "wxNote ${{ github.ref_name }}" \
             --generate-notes
