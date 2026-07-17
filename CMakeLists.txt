@@ -11,7 +11,7 @@
 
 cmake_minimum_required(VERSION 3.20)
 # C is enabled for the vendored Lua + LPeg (Scintillua's runtime) - both are C.
-project(wxNote VERSION 0.8.5 LANGUAGES CXX C)
+project(wxNote VERSION 0.9.0 LANGUAGES CXX C)
 
 include(FetchContent)
 
@@ -192,6 +192,29 @@ if(WIN32)
 endif()
 if(MSVC)
     target_compile_options(wxnote PRIVATE /utf-8)
+endif()
+
+# ---- terminal_selftest: behavioural self-test for the Terminal panel ------------------------------
+# Builds a real TerminalPanel and drives it through its own public API. Deliberately a SEPARATE target
+# so no test-only code ships inside wxnote, and deliberately not added to add_test(): it needs a display
+# (it creates a real frame and spawns a real shell), so it is a developer/CI-with-display tool rather
+# than part of a headless test run.
+#   cmake --build build --target terminal_selftest && build/bin/terminal_selftest
+add_executable(terminal_selftest tests/terminal_selftest.cpp)
+set_target_properties(terminal_selftest PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(terminal_selftest PRIVATE
+    "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"
+    "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(terminal_selftest PRIVATE wx::core wx::aui wx::base wx::stc)
+if(UNIX AND NOT APPLE)
+    target_include_directories(terminal_selftest PRIVATE ${GTK3_INCLUDE_DIRS})
+    target_link_libraries(terminal_selftest PRIVATE ${GTK3_LIBRARIES})
+endif()
+if(MSVC)
+    target_compile_options(terminal_selftest PRIVATE /utf-8)
 endif()
 
 # ---- deploy runtime resources (toolbar icons, themes, default styler) next to the exe --------------

@@ -3,6 +3,37 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] - 2026-07-17
+
+### Changed
+- **Reworked the integrated terminal's chrome.** The panel's toolbar and tab strip were rebuilt as
+  owner-drawn controls so they theme correctly on every platform - the old native `wxChoice` shell
+  picker rendered a bright, un-themeable popup on the dark panel. The toolbar is now
+  `[+] [shell v] … [lights] [collapse]`; the tab strip carries a themed open-terminals dropdown and a
+  close button. New: a per-terminal light/dark toggle independent of the app theme, a toolbar button
+  for **View > Show Terminal** (icon in all three sets), the active-tab marker in the project's accent
+  green (shared with the editor's own tab strip so the two can't drift), vector toolbar glyphs (a text
+  caret font-linked to a 1-bit bitmap on Windows), tooltips on the tab-strip buttons, and a chevron
+  "collapse" affordance distinct from the tabs' close.
+- **POSIX shell detection now probes the machine.** Linux and macOS previously offered a hardcoded
+  one-or-two shells; the picker now lists `$SHELL` plus every common shell actually found on `PATH`
+  (`zsh`, `bash`, `fish`, `nu`, `ksh`, `tcsh`, `dash`), deduplicated by basename so `/bin/bash` and
+  `/usr/bin/bash` aren't listed twice.
+
+### Fixed
+- **The terminal's shell/tab dropdowns toggle correctly.** Clicking the shell chip while its list is
+  open now closes it instead of stacking a second popup, and clicking one dropdown's button while the
+  other is open switches between them. (Found by a new `wxUIActionSimulator`-driven UI self-test.)
+- **`File > Open Plugins Folder` and the other folder-opening actions** now report a failure on the
+  status bar instead of doing nothing, and route through one shared launcher that tries `xdg-open`
+  first on Linux (where the default-application path is flaky for directories on some distros).
+- A fresh `cmd.exe` no longer leaves a blank first line above its prompt.
+
+### Internal
+- Added `terminal_selftest`, a behavioural + real-click UI test target for the terminal panel.
+- Repaired the `zh_CN` catalog, which had diverged from `zh` (missing 159 strings); it now compiles
+  from `zh` like every other regional locale.
+
 ## [0.8.5] - 2026-07-16
 
 ### Added

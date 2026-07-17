@@ -52,13 +52,35 @@ inline std::vector<TermShell> detectTermShells()
         if (wxFileExists(root + "\\bin\\bash.exe")) { v.push_back({ "Cygwin", root + "\\bin\\bash.exe --login", false }); break; }
     { wxString win; wxGetEnv("SystemRoot", &win);
       if (!win.empty() && wxFileExists(win + "\\System32\\wsl.exe")) v.push_back({ "WSL", "wsl.exe", false }); }
-#elif defined(__WXMAC__)
-    v.push_back({ "zsh", "/bin/zsh", false });
-    if (wxFileExists("/bin/bash")) v.push_back({ "bash", "/bin/bash", false });
 #else
-    wxString sh; if (!wxGetEnv("SHELL", &sh) || sh.empty()) sh = "/bin/bash";
-    v.push_back({ wxFileNameFromPath(sh), sh, false });
-    if (sh != "/bin/bash" && wxFileExists("/bin/bash")) v.push_back({ "bash", "/bin/bash", false });
+    // POSIX (Linux + macOS - one branch: both answer to $SHELL and PATH). $SHELL leads, being the user's
+    // own choice, then every common shell this machine ACTUALLY has, probed on PATH the same way
+    // detectLinuxTerminalEmulators() below probes terminal apps. This used to assume a hardcoded pair
+    // (zsh+bash on macOS, $SHELL+bash on Linux) and probe for nothing, so a machine with fish or
+    // nushell installed offered neither, and a stock Ubuntu ($SHELL=/bin/bash) offered a one-row
+    // dropdown - while Windows enumerated up to five.
+    wxPathList pl; pl.AddEnvList("PATH");
+    // FindAbsoluteValidPath() searches by BASENAME even when handed an absolute path (wx's own doc:
+    // "search for the file name and ignore the path part"), so an absolute $SHELL that isn't itself on
+    // PATH needs a direct existence+exec check or a perfectly good shell is silently dropped.
+    auto resolve = [&](const wxString& exe) -> wxString {
+        wxFileName fn(exe);
+        if (fn.IsAbsolute()) return (wxFileExists(exe) && wxIsExecutable(exe)) ? exe : wxString();
+        return pl.FindAbsoluteValidPath(exe);
+    };
+    // Deduped by BASENAME, never by path string: /bin/bash and /usr/bin/bash are the SAME binary on any
+    // usrmerge distro, so comparing raw strings (as this did) listed "bash" twice - two identical,
+    // unpickable rows. That is precisely the trap the terminal-app list below documents; it just was
+    // never applied here.
+    auto add = [&](const wxString& path) {
+        if (path.empty()) return;
+        const wxString label = wxFileNameFromPath(path);
+        for (const TermShell& s : v) if (s.name == label) return;
+        v.push_back({ label, path, false });
+    };
+    { wxString sh; if (wxGetEnv("SHELL", &sh) && !sh.empty()) add(resolve(sh)); }
+    for (const char* c : { "zsh", "bash", "fish", "nu", "ksh", "tcsh", "dash", "sh" }) add(resolve(c));
+    if (v.empty()) v.push_back({ "sh", "/bin/sh", false });   // nothing resolved: the one shell POSIX guarantees
 #endif
     return v;
 }
@@ -702,6 +724,12 @@ public:
     // window-list button), so there is nothing to anchor under.
     void showAt(const wxPoint& screenPt) { Position(screenPt, wxSize(0, 0)); Popup(); }
 
+    // Close it ourselves, running the full dismissal (onClosed + the deferred self-destroy). The owner
+    // toggles the list with this rather than trusting wx to auto-dismiss on the re-click: a real-click
+    // UI test showed that dismissal does NOT reliably fire, so a chip click would stack a second popup
+    // instead of closing the first. DismissAndNotify() is protected in the base but callable on self.
+    void closeNow() { DismissAndNotify(); }
+
     void showBelow(wxWindow* anchor, bool alignRight = false)
     {
         wxPoint origin = anchor->GetScreenPosition();
@@ -873,53 +901,57 @@ public:
         return (m_sel >= 0 && m_sel < (int)m_shells.size()) ? m_shells[m_sel].name : wxString("shell");
     }
 
-    // The one entry point for both dropdowns.
-    //
-    // Clicking the anchor whose list is already open must leave it CLOSED, not reopen it. wx dismisses
-    // the popup on that button's LEFT_DOWN and still delivers the same click to the button (MSW's
-    // MSWDismissUnfocusedPopup falls through to normal processing; the generic port re-posts the click
-    // to the window underneath) - so by the time this runs the popup is already gone. There is nothing
-    // left to toggle here, only a reopen to suppress.
-    //
-    // Keyed on the ANCHOR as well as the time: a bare timestamp would also swallow the first click on
-    // the OTHER dropdown while this one is open, and neither list would appear.
-    // Clicking the anchor whose list is already open must leave it CLOSED, not reopen it: wx dismisses
-    // the popup on that anchor's LEFT_DOWN and STILL delivers the click to it (MSW's
-    // MSWDismissUnfocusedPopup falls through to normal processing; the generic ports re-post the click;
-    // the notebook's own button re-fires the same way) - so by the time we run the popup is already
-    // gone. Nothing to toggle here, only a reopen to suppress.
-    //
-    // Keyed on WHICH anchor (any stable pointer - the window-list button isn't a control of ours, so it
-    // keys off the notebook). Time alone would also swallow the first click on the OTHER dropdown.
+    // The one entry point for both dropdowns. Toggles deterministically instead of trusting wx to
+    // auto-dismiss the open list on the re-click:
+    //   - a list of THIS anchor is already up  -> close it, done (toggle off);
+    //   - a list of the OTHER anchor is up      -> close it, then open ours in its place;
+    //   - wx DID already auto-dismiss this same click (it sometimes does - MSWDismissUnfocusedPopup and
+    //     the generic re-post) -> the timestamp guard swallows the reopen the fall-through click causes.
+    // m_livePopup is the truth for "is a list showing"; the guard only covers the wx-dismissed-first
+    // race. hoverBtn (may be null for the tab strip's art button) gets its hover cleared on close.
     bool listReopenGuard(const void* anchorId) const
     {
         return m_popupAnchor == anchorId && (wxGetUTCTimeMillis() - m_popupClosedAt).GetValue() < 250;
     }
-    TermListPopup* makeList(wxWindow* parent, const void* anchorId, const std::vector<wxString>& items,
-                            int current, std::function<void(int)> onPick, TermFlatButton* hoverBtn)
+    void openList(TermFlatButton* hoverBtn, wxWindow* parent, const void* anchorId,
+                  const std::vector<wxString>& items, int current,
+                  std::function<void(int)> onPick, std::function<void(TermListPopup*)> show)
     {
+        if (m_livePopup)
+        {
+            const bool sameAnchor = (m_liveAnchor == anchorId);
+            m_livePopup->closeNow();   // runs onClosed synchronously -> m_livePopup = nullptr
+            if (sameAnchor) return;
+        }
+        if (listReopenGuard(anchorId)) return;
+
         auto* pop = new TermListPopup(parent, items, current, m_chromeDark, std::move(onPick));   // a dropdown is chrome
         pop->onClosed = [this, anchorId, hoverBtn]{
             if (hoverBtn) hoverBtn->clearHover();
+            m_livePopup     = nullptr;
             m_popupAnchor   = anchorId;
             m_popupClosedAt = wxGetUTCTimeMillis();
         };
-        return pop;
+        m_livePopup  = pop;
+        m_liveAnchor = anchorId;
+        show(pop);
     }
 
     // Picking a shell remembers it as the default the "+" button uses AND opens a new terminal of it
     // (VS Code-style: pick a profile -> get that terminal).
     void openPicker()
     {
-        if (m_shells.empty() || !m_shellBtn || listReopenGuard(m_shellBtn)) return;
+        if (m_shells.empty() || !m_shellBtn) return;
         std::vector<wxString> names;
         for (const TermShell& s : m_shells) names.push_back(s.name);
-        makeList(m_shellBtn, m_shellBtn, names, m_sel, [this](int i){
-            if (i < 0 || i >= (int)m_shells.size()) return;
-            m_sel = i;
-            if (m_shellBtn) m_shellBtn->setText(shellLabel());
-            addTerminal(i);
-        }, m_shellBtn)->showBelow(m_shellBtn);
+        openList(m_shellBtn, m_shellBtn, m_shellBtn, names, m_sel,
+            [this](int i){
+                if (i < 0 || i >= (int)m_shells.size()) return;
+                m_sel = i;
+                if (m_shellBtn) m_shellBtn->setText(shellLabel());
+                addTerminal(i);
+            },
+            [this](TermListPopup* p){ p->showBelow(m_shellBtn); });
     }
 
     // The tab strip's buttons are painted by the art, not real windows, so they cannot carry a tooltip
@@ -952,12 +984,12 @@ public:
     // hang the list under.
     void openTabList()
     {
-        if (!m_nb->GetPageCount() || listReopenGuard(m_nb)) return;
+        if (!m_nb->GetPageCount()) return;
         std::vector<wxString> titles;
         for (size_t i = 0; i < m_nb->GetPageCount(); ++i) titles.push_back(m_nb->GetPageText(i));
-        makeList(m_nb, m_nb, titles, m_nb->GetSelection(), [this](int i){
-            if (i >= 0 && i < (int)m_nb->GetPageCount()) { m_nb->SetSelection(i); focusActive(); }
-        }, nullptr)->showAt(wxGetMousePosition());
+        openList(nullptr, m_nb, m_nb, titles, m_nb->GetSelection(),
+            [this](int i){ if (i >= 0 && i < (int)m_nb->GetPageCount()) { m_nb->SetSelection(i); focusActive(); } },
+            [](TermListPopup* p){ p->showAt(wxGetMousePosition()); });
     }
 
     // The "lights" toggle: re-colours the TERMINAL ONLY - never the chrome. The toolbar, the separator
@@ -991,6 +1023,8 @@ private:
     // Only the shell chip is kept - the rest of the toolbar's controls are owned by the sizer and never
     // referred to again once built.
     TermFlatButton*        m_shellBtn = nullptr;
+    TermListPopup*         m_livePopup = nullptr;     // the dropdown currently showing, or null - the toggle's truth
+    const void*            m_liveAnchor = nullptr;    // which anchor owns m_livePopup
     const void*            m_popupAnchor = nullptr;   // whose dropdown closed last (see listReopenGuard)...
     wxLongLong             m_popupClosedAt = 0;       // ...and when: together they suppress the reopen-on-same-click
     std::vector<wxAuiTabCtrl*> m_tipped;              // tab ctrls already hooked for button tooltips
