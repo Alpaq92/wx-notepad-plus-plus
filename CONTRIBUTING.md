@@ -57,22 +57,30 @@ on CI), cap parallelism: `cmake --build build --target wxnote --parallel 2`.
 
 - Branch from `master`, push your branch, open a PR. Direct pushes to
   `master` are not accepted.
-- CI builds every PR on all three platforms (Windows, Linux, macOS — six
-  build legs in total, including x64 and ARM64 for Windows/Linux) — all
-  required checks must be green before merge (currently the four x64/macOS
-  legs; the ARM legs build on every PR but aren't merge-blocking yet).
+- CI builds every PR on all three platforms (Windows, Linux, macOS — seven
+  build legs in total, including x64 and ARM64 for Windows/Linux plus a
+  Linux RISC-V cross-compile) — all required checks must be green before
+  merge (currently the four x64/macOS legs; the ARM and RISC-V legs build
+  on every PR but aren't merge-blocking yet).
 - Keep PRs focused: one fix or feature per PR. Mechanical churn (renames,
   reformatting) separate from behavior changes.
 - Describe what you changed and *how you verified it*. The app itself has no
   unit-test suite, so for UI/editor work verification means building and
   exercising the affected feature in the running app on at least your own
-  platform. The `packages/udl-compat` translator is the exception: it has
-  unit + roundtrip tests you should run/extend when touching it —
+  platform. Two components have automated self-tests you should run/extend
+  when touching them. The `packages/udl-compat` translator has unit +
+  roundtrip tests —
   `cmake -S packages/udl-compat -B build-udltest && cmake --build build-udltest`
   then `ctest --test-dir build-udltest --output-on-failure` (add
   `-DUDL_COMPAT_SCINTILLUA_TEST=ON` to also run the end-to-end
-  Lua/LPeg/Scintillua lexing test). Cross-platform behavior you can't test
-  locally is what the CI matrix and review are for; say what you couldn't test.
+  Lua/LPeg/Scintillua lexing test). The integrated Terminal panel has
+  `terminal_selftest` (`tests/terminal_selftest.cpp`), a
+  `wxUIActionSimulator`-driven behavioural test that builds a real
+  TerminalPanel and drives it through its public API —
+  `cmake --build build --target terminal_selftest && build/bin/terminal_selftest`
+  (it needs a display, so it is a developer/CI-with-display tool, not part
+  of a headless test run). Cross-platform behavior you can't test locally is
+  what the CI matrix and review are for; say what you couldn't test.
 
 ## Code guidelines
 
@@ -95,8 +103,8 @@ on CI), cap parallelism: `cmake --build build --target wxnote --parallel 2`.
   new msgid to `resources/locale/wxn.pot` and to all eight language catalogs
   (`{pl,de,fr,es,ru,ja,zh,ko}/LC_MESSAGES/wxn.po`), then recompile the `.mo`
   files with `resources/locale/po2mo.py` (the region-qualified directories
-  such as `pl_PL/` ship byte-identical copies of their short-code sibling's
-  `.mo`; `zh_CN` is the exception with its own catalog). Untranslated
+  such as `pl_PL/` and `zh_CN/` ship byte-identical copies of their
+  short-code sibling's `.mo`). Untranslated
   strings fall back to English, so a missing translation degrades
   gracefully — but please don't ship new UI strings without at least the
   `.pot` entry.
