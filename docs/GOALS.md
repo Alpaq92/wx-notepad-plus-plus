@@ -80,7 +80,7 @@ wxWidgets was the natural toolkit for that rewrite:
 The whole point of the project is reaching the users Notepad++ (and its
 single-platform derivatives) couldn't — so wxNote puts deliberate, ongoing
 effort into being installable by as many people as possible, in whatever
-form their system expects. That's why one release carries **a dozen
+form their system expects. That's why one release carries **thirteen
 packages**:
 
 - **Windows** — an NSIS installer, built separately for **x64** and
@@ -91,7 +91,8 @@ packages**:
   (Debian/Ubuntu/Mint), an **.rpm** (Fedora/openSUSE), and a **.flatpak**
   (distro-agnostic sandboxed install) — each built for **x86_64 and
   aarch64**, covering ARM laptops, Raspberry Pi-class boards, and ARM
-  servers.
+  servers; the **.deb** additionally ships a **riscv64** build for RISC-V
+  hardware (the other three formats have no riscv64 runtime yet).
 - **macOS** — a `.dmg` built separately for **Apple Silicon** and
   **Intel**, so each download is small and native rather than a fat binary.
 
@@ -162,14 +163,19 @@ Plugins are first-class, and they are two-tier by design:
   and work on all three platforms. This is the project's real extension
   surface, and it is Apache-2.0 like the rest of the core.
 - **npp-bridge** (`packages/npp-bridge/`) is a **non-obligatory extension**:
-  an optional, Windows-only plugin (itself just a Nib plugin) that loads
-  real, compiled Notepad++ plugin binaries by reproducing Notepad++'s plugin
-  ABI and translating it to Nib calls. Because it is a Notepad++-ABI
+  an optional, cross-platform plugin (itself just a Nib plugin) that hosts
+  compiled Notepad++ plugin binaries by reproducing Notepad++'s plugin ABI
+  and translating it to Nib calls. On Windows it `LoadLibrary`s real,
+  compiled Notepad++ plugin *DLLs*; on Linux/macOS it `dlopen`s Notepad++
+  plugins recompiled against the bundled `libnpp_shim` (the Win32-only
+  docking/window-message machinery is `#ifdef`'d out off-Windows — see
+  [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)). Because it is a Notepad++-ABI
   derivative, it is **GPL** — the core never depends on it, ships and runs
   fine without it, and the module is slated to move into its own repository.
-  Delete `npp_bridge.dll` and nothing else changes. (A never-shipped,
-  Windows-only dev test fixture, `packages/test_plugin/`, tracks the same GPL
-  — see [`LICENSING.md`](../LICENSING.md).)
+  Delete the bridge module (`npp_bridge.dll` on Windows,
+  `npp_bridge.so`/`.dylib` elsewhere) and nothing else changes. (A
+  never-shipped, Windows-only dev test fixture, `packages/test_plugin/`,
+  tracks the same GPL — see [`LICENSING.md`](../LICENSING.md).)
 - **udl-compat** (`packages/udl-compat/`) is the other optional GPL Nib
   plugin. wxNote's native custom-language engine is **Scintillua** (Lua/LPeg
   lexer grammars, MIT), embedded in the Apache core; udl-compat is the
@@ -199,5 +205,6 @@ optional, and honestly labeled.
   is confined to the optional interoperability modules (the Notepad++
   plugin bridge and the UDL-compatibility plugin).
 - **Plugins everywhere.** A first-class, cross-platform plugin API, with
-  legacy Notepad++ plugin support as an optional Windows bonus rather than
-  an architectural constraint.
+  legacy Notepad++ plugin support as an optional, cross-platform bridge
+  (real compiled plugin binaries on Windows; recompiled plugins loaded via
+  `dlopen` on Linux/macOS) rather than an architectural constraint.

@@ -31,7 +31,8 @@ lexer grammars run through a Scintilla container lexer; see
 files importable via the optional GPL `udl-compat` plugin (see [Plugins](#plugins)), find/replace and
 find/replace-in-files, an **incremental search bar** (match-case / whole-word / regex toggles, live
 highlight-all, and an n-of-m match counter), **find-driven multi-cursor** (Select All Occurrences / Add
-Next), Go-to-line, dark mode, auto-indent / brace-match / smart-highlight, bookmarks, a **Document Map**
+Next), Go-to-line, dark mode, auto-indent / brace-match / smart-highlight, **code folding** (built-in
+lexers and custom Scintillua languages), bookmarks, a **Document Map**
 (minimap), a **Function List** (symbol tree, with rules derived independently from each language's own
 grammar — C++, Python, JS/TS, Java, C#, Go, Rust, Lua), an **integrated terminal** (multi-tab, with a
 per-platform shell picker), a **Clipboard History** panel, a **Project Panel** (workspace tree of
@@ -50,8 +51,10 @@ event subscriptions, dockable panels, and document/editor access. The core repro
 plugin ABI itself — it includes nothing from `include/npp-compat/`; its command ids live in the core's
 own `src/command_ids.h`.
 
-Real, compiled **Notepad++-ABI plugin binaries** (`NPPM_*` messages, `FuncItem`, `NppData`, …) are
-additionally supported on **Windows only**, through an optional bridge, `packages/npp-bridge`. The
+Real **Notepad++-ABI plugins** (`NPPM_*` messages, `FuncItem`, `NppData`, …) are additionally
+supported through an optional **cross-platform** bridge, `packages/npp-bridge`: on Windows it
+`LoadLibrary`s prebuilt N++ `.dll` binaries, and on Linux/macOS it `dlopen`s *recompiled* N++
+plugins (`.so` / `.dylib`). Only the prebuilt Win32 `.dll` binaries themselves stay Windows-only. The
 bridge is itself just a Nib plugin: it loads Notepad++-ABI DLLs, surfaces their commands in the Extensions
 menu, and translates `NPPM_*` / `FuncItem` / `SCNotification` to and from Nib on their behalf — see
 [`packages/npp-bridge/README.md`](packages/npp-bridge/README.md) for exact `NPPM_*` coverage. Because
@@ -97,7 +100,8 @@ Plugins:
 src/                 the wxNote application (main.cpp + the data-driven menu engine, the Scintillua
                      language engine (scintillua_engine.{h,cpp}), terminal panel, command_ids.h,
                      platform shims; src/plugins/nib_test_plugin is a Nib-native test plugin)
-packages/            npp-bridge (optional GPL Notepad++-ABI bridge, Windows-only, itself a Nib plugin),
+packages/            npp-bridge (optional GPL Notepad++-ABI bridge, builds on every OS — loads real
+                     Notepad++ plugin DLLs on Windows, recompiled npp_shim plugins on Linux/macOS; itself a Nib plugin),
                      udl-compat (optional GPL Nib plugin: imports legacy Notepad++ UDLs as Scintillua lexers),
                      test_plugin (a Notepad++-ABI test fixture, Windows-only, never shipped)
 include/nib/         the project's own permissive, cross-platform plugin API (nib.h)
@@ -120,7 +124,7 @@ Grab the latest build from the [project site's Download page](https://alpaq92.gi
 - **Windows** — the NSIS installer, for x64 (`wxNote-<version>-Setup.exe`) or Windows-on-ARM
   (`wxNote-<version>-arm64-Setup.exe`)
 - **Linux** — an AppImage, `.deb`, `.rpm`, or `.flatpak` (`flatpak install wxNote-<version>.flatpak`),
-  each available for x86_64 and ARM (aarch64/arm64-suffixed assets)
+  each available for x86_64 and ARM (aarch64/arm64-suffixed assets), plus a `.deb` for `riscv64`
 - **macOS** — a `.dmg`, built separately for Apple Silicon (`wxNote-<version>-arm64.dmg`) and
   Intel (`wxNote-<version>-x86_64.dmg`) — pick the one matching your Mac's chip
 

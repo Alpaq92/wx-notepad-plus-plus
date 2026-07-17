@@ -102,7 +102,7 @@ the contract. Nib plugins are ordinary shared libraries loaded by `dlopen`
 on all three platforms. Real Notepad++ plugins are supported through the
 optional GPL **npp-bridge** (itself just a Nib plugin): on Windows it loads the
 compiled plugin DLLs unchanged; on Linux/macOS it runs plugins **recompiled**
-against a small shim (Phase 1 — see "Plugins" below). Either way it rebuilds the
+against a small shim (Phase 2 — see "Plugins" below). Either way it rebuilds the
 `NppData` environment and translates `NPPM_*` ⇄ Nib on the plugins' behalf.
 
 ### Custom-language definitions — Scintillua replacing UDL
@@ -184,7 +184,7 @@ in [`LICENSING.md`](../LICENSING.md).
 | `src/command_ids.h` | The core's own, authoritative command-id table. Values are frozen (static_asserts) so they stay identical to the plugin ABI's ids and npp-bridge's command passthrough dispatches correctly. |
 | `include/nib/nib.h` | The Nib plugin API — an original, stable C ABI (below). |
 | `include/npp-compat/` | Clean-room redeclarations of the Notepad++ plugin-ABI facts (ids, struct layouts). Consumed only by `packages/npp-bridge/` and `packages/test_plugin/` — the core includes nothing from here. |
-| `packages/npp-bridge/` | The optional GPL Notepad++ binary-plugin bridge (Windows-only Nib plugin). |
+| `packages/npp-bridge/` | The optional GPL Notepad++ binary-plugin bridge (itself a Nib plugin; builds on every OS — loads real plugin DLLs on Windows, shim-recompiled `.so`/`.dylib` plugins on Linux/macOS). |
 | `packages/udl-compat/` | The optional GPL Notepad++ UDL compatibility plugin: reads legacy `userDefineLang.xml`, translates each into a Scintillua Lua lexer, and registers it via `nib.langdef`. Ships `bin/nib/udl_compat.dll`, a standalone `udl2scintillua` converter CLI, and unit + roundtrip tests. Scoped to move to its own repository. |
 | `packages/test_plugin/` | A minimal real-ABI Notepad++ plugin used as the bridge's regression fixture (Windows-only, GPL). |
 | `src/plugins/nib_test_plugin/` | A cross-platform reference/smoke-test Nib plugin (Apache-2.0). |
@@ -326,7 +326,8 @@ cross-platform, stable C ABI that borrows nothing from Notepad++ (no
 shared library exporting one entry point; it queries the host for versioned,
 length-prefixed interface tables by string id (`nib.host`, `nib.editor`,
 `nib.documents`, `nib.commands`, `nib.events`, `nib.panels`, `nib.langdef`
-(register a Scintillua language), `nib.paths` (the per-user data dir), and the
+(register a Scintillua language), `nib.paths` (the per-user data dir), `nib.sci`
+(a raw Scintilla-message passthrough, offered on every OS), and the
 capability-gated, Windows-only `nib.win32`). Interfaces grow additively;
 plugins load from `<exe>/nib/`.
 
@@ -348,8 +349,9 @@ The bridge reaches a plugin two ways:
   `SendMessage(hwnd, NPPM_*/SCI_*)` calls by subclassing the frame HWND. This
   is the mature path — real binary plugins run unmodified.
 
-- **Linux/macOS — recompile against a shim** (*cross-platform plugins, Phase 1,
-  in progress*). A Windows PE DLL can't load off-Windows, so instead the plugin
+- **Linux/macOS — recompile against a shim** (*cross-platform plugins, Phase 2
+  shipped in 0.8.5; not yet runtime-verified on real Linux/macOS hardware*). A
+  Windows PE DLL can't load off-Windows, so instead the plugin
   author recompiles their **source** against a small GPL static lib,
   `libnpp_shim` (`packages/npp-bridge/shim/`). The plugin's unchanged
   `SendMessage(handle, msg, w, l)` links to the shim, which routes into the same
@@ -361,7 +363,7 @@ The bridge reaches a plugin two ways:
   every OS. Scope note: this covers plugins whose host interaction is the
   `NPPM_*`/`SCI_*` message surface (the portable majority). Plugins that draw
   raw Win32 dialogs / GDI, or that vendor Notepad++'s `DockingFeature`
-  framework, are out of Phase 1 — their UI layer needs a separate port.
+  framework, remain out of scope so far — their UI layer needs a separate port.
 
   Because the dev toolchain is Windows-only, most of this is verified by
   **CI compilation** on the Linux/macOS legs plus the fact that the *Windows*
@@ -391,8 +393,9 @@ step copies all runtime resources (icons, themes, fonts, locale, styler,
 context menu) next to the executable — the layout every installer then ships
 as-is (no FHS split). CI builds and packages on all three OSes — with
 separate x64 and ARM64 legs for Windows and Linux (native arm64 runners; the
-packaging scripts detect the build host's architecture themselves) — for
-every pull request and for source-affecting pushes to master; pushing a `v*`
-tag assembles a GitHub Release with the NSIS installers (x64 + ARM64), the
-four Linux package formats in both x86_64 and aarch64, and both macOS
-`.dmg`s.
+packaging scripts detect the build host's architecture themselves), plus a
+cross-compiled `linux-riscv64` leg that packages a `.deb` — for every pull
+request and for source-affecting pushes to master; pushing a `v*` tag
+assembles a GitHub Release with the NSIS installers (x64 + ARM64), the four
+Linux package formats in both x86_64 and aarch64, an additional riscv64
+`.deb`, and both macOS `.dmg`s (13 assets).

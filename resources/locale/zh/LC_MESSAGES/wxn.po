@@ -2518,8 +2518,8 @@ msgstr "样式 %d"
 msgid "About wxNote"
 msgstr "关于 wxNote"
 
-msgid "wxNote\n\nA fast, cross-platform text editor built on wxWidgets:\na native Scintilla editor with dark/light themes and plugin support."
-msgstr "wxNote\n\n基于 wxWidgets 的快速跨平台文本编辑器:\n原生 Scintilla 编辑器，支持深色/浅色主题和插件。"
+msgid "A fast, cross-platform text editor built on wxWidgets:\na native Scintilla editor with dark/light themes and plugin support."
+msgstr "基于 wxWidgets 的快速跨平台文本编辑器:\n原生 Scintilla 编辑器，支持深色/浅色主题和插件。"
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
 msgstr "搜索 \"%s\"  (%d 处匹配，搜索的 %d 个文件中有 %d 个)"

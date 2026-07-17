@@ -8104,16 +8104,16 @@ private:
         auto* s = new wxBoxSizer(wxVERTICAL);
         s->Add(new wxStaticBitmap(&dlg, wxID_ANY, wxBitmapBundle::FromSVG(APP_ICON_SVG, wxSize(72, 72))),
                0, wxALIGN_CENTRE | wxTOP, 18);
+        // Header: app name + version ("wxNote vX.Y.Z"). Both are proper nouns / the CMake project()
+        // version, so no translatable string is needed and the version never drifts from a hardcoded
+        // copy. Bold + a touch larger so it reads as the title.
+        auto* title = new wxStaticText(&dlg, wxID_ANY, wxString::Format("wxNote v%s", WXN_VERSION));
+        { wxFont f = title->GetFont(); f.MakeBold(); f.SetPointSize(f.GetPointSize() + 3); title->SetFont(f); }
+        s->Add(title, 0, wxALIGN_CENTRE | wxTOP, 12);
         s->Add(new wxStaticText(&dlg, wxID_ANY,
-                   _("wxNote\n\n"
-                     "A fast, cross-platform text editor built on wxWidgets:\n"
+                   _("A fast, cross-platform text editor built on wxWidgets:\n"
                      "a native Scintilla editor with dark/light themes and plugin support.")),
-               0, wxLEFT | wxRIGHT | wxTOP, 16);
-        // Version, from the project() version via CMake. Kept as a bare "vX.Y.Z" line (no translatable
-        // word) so it needs no per-language string and never drifts from a hardcoded copy.
-        auto* ver = new wxStaticText(&dlg, wxID_ANY, wxString::Format("v%s", WXN_VERSION));
-        ver->SetForegroundColour(wxColour(m_dark ? 0x9A9A9A : 0x707070));
-        s->Add(ver, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16);
+               0, wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 16);
         s->Add(dlg.CreateButtonSizer(wxOK), 0, wxALL | wxALIGN_RIGHT, 10);
         dlg.SetSizerAndFit(s);
         themeDialog(&dlg);

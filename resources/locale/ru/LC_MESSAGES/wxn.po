@@ -2517,8 +2517,8 @@ msgstr "Стиль %d"
 msgid "About wxNote"
 msgstr "О программе wxNote"
 
-msgid "wxNote\n\nA fast, cross-platform text editor built on wxWidgets:\na native Scintilla editor with dark/light themes and plugin support."
-msgstr "wxNote\n\nБыстрый кроссплатформенный текстовый редактор на основе wxWidgets:\nнативный редактор Scintilla с тёмной/светлой темой и поддержкой плагинов."
+msgid "A fast, cross-platform text editor built on wxWidgets:\na native Scintilla editor with dark/light themes and plugin support."
+msgstr "Быстрый кроссплатформенный текстовый редактор на основе wxWidgets:\nнативный редактор Scintilla с тёмной/светлой темой и поддержкой плагинов."
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
 msgstr "Поиск \"%s\"  (%d совпадений в %d из %d просмотренных файлов)"

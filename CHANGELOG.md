@@ -3,6 +3,20 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.1] - 2026-07-18
+
+### Changed
+- **The About dialog shows the version in its header** ("wxNote vX.Y.Z") instead of a dimmed line at
+  the bottom.
+
+### Docs
+- Refreshed the docs to match the 0.8.5/0.9.0 reality that predated them: `npp-bridge` is no longer
+  described as Windows-only (it builds on every OS and loads recompiled plugins on Linux/macOS via the
+  Phase 1/2 POSIX loader), the RISC-V (`riscv64`) target and the 13-asset / 7-CI-leg counts are now
+  reflected, both shipped GPL modules (`npp-bridge` and `udl-compat`) are accounted for, Scintillua
+  code folding and the `terminal_selftest` target are mentioned, and stale claims (`zh_CN`'s own
+  catalog, the site's tab list) were corrected.
+
 ## [0.9.0] - 2026-07-17
 
 ### Changed

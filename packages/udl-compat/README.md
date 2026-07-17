@@ -54,7 +54,7 @@ Only Scintillua constructs confirmed against real bundled lexers are emitted:
 | `Delimiters` single-line set | `lexer.range(open, '\n', true)` |
 | numbers | `lexer.number` |
 | operators | `lpeg.S('+-*/…')` (LPeg char set) |
-| `Folders in code 1/2` (open/close) | a tagged `fold` rule + `M:add_fold_point('fold', marker, ±1)` → margin folding |
+| `Folders in code 1/2` (open/close) | markers split by shape into two tagged rules — `M:add_rule('foldsym', M:tag('foldsym', …))` (symbol markers, e.g. `{`/`}`) and `M:add_rule('foldkw', M:tag('foldkw', …))` (word markers, e.g. `if`/`end`) — each with `M:add_fold_point('foldsym'`/`'foldkw', marker, ±1)` → margin folding |
 | `Folders in comment` (open/close) | `M:add_fold_point(lexer.COMMENT, marker, ±1)` |
 
 Not every UDL feature has a clean Scintillua equivalent (nested delimiters, per-slot

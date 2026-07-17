@@ -10,8 +10,8 @@ Plain HTML/CSS/JS, no build step, no dependencies to install - adapted from
 [codewithsadee/vcard-personal-portfolio](https://github.com/codewithsadee/vcard-personal-portfolio)
 (MIT-licensed vCard template), reworked from a personal-portfolio layout into a project page:
 
-- `index.html` - the whole site (About / Features / Screenshots / Download / Changelog, single-page
-  tab navigation, no routing).
+- `index.html` - the whole site (About / Features / Comparison / Screenshots / Download / Changelog,
+  single-page tab navigation, no routing).
 - `assets/css/style.css` - all styling. Colors are CSS custom properties defined twice - once under
   `:root` (dark, the default) and once under `[data-theme="light"]` - so light/dark/system theming
   needs no per-component overrides; only the token *values* differ.
@@ -29,10 +29,12 @@ The version badge, the platform download buttons, and the changelog list are **n
 at deploy time - `script.js` calls the GitHub REST API directly from the visitor's browser
 (`GET /repos/Alpaq92/wx-notepad-plus-plus/releases/latest` and `.../releases?per_page=6`) on every
 page load, so they're always current even between deploys. Download buttons are matched to release
-assets by filename suffix and, for the two macOS builds, an `arm64`/`x86_64` substring
-(`.exe`, `arm64...dmg`, `x86_64...dmg`, `.AppImage`, `.deb`, `.rpm`, `.flatpak`) - if a packaging
-script's output naming ever changes (see `installer/*/build-*.sh` and `installer/windows/wxnote.nsi`),
-update `ASSET_MATCHERS` in `script.js` to match.
+assets by filename suffix plus, on every platform that now ships more than one architecture, an arch
+substring (`arm64`/`aarch64`/`x86_64`/`riscv64`). `ASSET_MATCHERS` has 13 entries: Windows x64/ARM64
+(`.exe` +/- `arm64`), macOS Apple Silicon/Intel (`arm64...dmg`, `x86_64...dmg`), and Linux
+`.AppImage`/`.deb`/`.rpm`/`.flatpak` each in x64 and ARM64 (`aarch64`/`arm64`), plus a RISC-V `.deb`
+(`riscv64`) - if a packaging script's output naming ever changes (see `installer/*/build-*.sh` and
+`installer/windows/wxnote.nsi`), update `ASSET_MATCHERS` in `script.js` to match.
 
 ## Screenshots page
 
