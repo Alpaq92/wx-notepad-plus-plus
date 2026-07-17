@@ -2585,3 +2585,27 @@ msgstr "Nie udało się uruchomić: %s"
 
 msgid "[process exited with code %d]"
 msgstr "[proces zakończył się kodem %d]"
+
+msgid "Could not open folder: %s"
+msgstr "Nie można otworzyć folderu: %s"
+
+msgid "New terminal"
+msgstr "Nowy terminal"
+
+msgid "Choose shell"
+msgstr "Wybierz powłokę"
+
+msgid "Switch terminal theme"
+msgstr "Przełącz motyw terminala"
+
+msgid "Hide terminal panel"
+msgstr "Ukryj panel terminala"
+
+msgid "Show Terminal"
+msgstr "Pokaż terminal"
+
+msgid "Show open terminals"
+msgstr "Pokaż otwarte terminale"
+
+msgid "Close terminal"
+msgstr "Zamknij terminal"

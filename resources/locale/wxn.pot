@@ -2569,3 +2569,27 @@ msgstr ""
 
 msgid "[process exited with code %d]"
 msgstr ""
+
+msgid "Could not open folder: %s"
+msgstr ""
+
+msgid "New terminal"
+msgstr ""
+
+msgid "Choose shell"
+msgstr ""
+
+msgid "Switch terminal theme"
+msgstr ""
+
+msgid "Hide terminal panel"
+msgstr ""
+
+msgid "Show Terminal"
+msgstr ""
+
+msgid "Show open terminals"
+msgstr ""
+
+msgid "Close terminal"
+msgstr ""

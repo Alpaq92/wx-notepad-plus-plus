@@ -2585,3 +2585,27 @@ msgstr "시작하지 못했습니다: %s"
 
 msgid "[process exited with code %d]"
 msgstr "[프로세스가 코드 %d(으)로 종료됨]"
+
+msgid "Could not open folder: %s"
+msgstr "폴더를 열 수 없습니다: %s"
+
+msgid "New terminal"
+msgstr "새 터미널"
+
+msgid "Choose shell"
+msgstr "쉘 선택"
+
+msgid "Switch terminal theme"
+msgstr "터미널 테마 전환"
+
+msgid "Hide terminal panel"
+msgstr "터미널 패널 숨기기"
+
+msgid "Show Terminal"
+msgstr "터미널 표시(T)"
+
+msgid "Show open terminals"
+msgstr "열린 터미널 표시"
+
+msgid "Close terminal"
+msgstr "터미널 닫기"

@@ -2585,3 +2585,27 @@ msgstr "Start fehlgeschlagen: %s"
 
 msgid "[process exited with code %d]"
 msgstr "[Prozess mit Code %d beendet]"
+
+msgid "Could not open folder: %s"
+msgstr "Ordner konnte nicht geöffnet werden: %s"
+
+msgid "New terminal"
+msgstr "Neues Terminal"
+
+msgid "Choose shell"
+msgstr "Shell auswählen"
+
+msgid "Switch terminal theme"
+msgstr "Terminal-Design wechseln"
+
+msgid "Hide terminal panel"
+msgstr "Terminal-Bereich ausblenden"
+
+msgid "Show Terminal"
+msgstr "Terminal anzeigen"
+
+msgid "Show open terminals"
+msgstr "Geöffnete Terminals anzeigen"
+
+msgid "Close terminal"
+msgstr "Terminal schließen"

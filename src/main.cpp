@@ -1604,23 +1604,11 @@ public:
                 delete gc;
             }
         }
-        if (page.active)   // active tab's top-edge marker, drawn in this project's accent green
-                            // (Open Color green-8) to match the toolbar palette
-        {
-            // wxAuiFlatTabArt::DrawPageTab() (just called above) already draws its OWN active-tab marker
-            // here first, in wxSYS_COLOUR_HOTLIGHT (a system accent colour - blue on GTK/most Linux themes,
-            // see build/_deps/wxwidgets-src/src/aui/tabart.cpp) at page.rect.GetLeft()+1, width
-            // page.rect.GetWidth()-1. This green rectangle is meant to fully paint over it, but was sized
-            // from `extent` (DrawPageTab's return value, xExtent - the tab's horizontal *advance* to the
-            // next tab, which can be narrower than the tab's own page.rect) instead of page.rect's own
-            // width, so on tabs where those two values differ, a sliver of that system-blue marker was left
-            // showing past the right edge of the green one. Match the base class's own rect exactly instead
-            // of reusing `extent`, so this always fully covers it regardless of what `extent` happens to be.
-            static const wxBrush accent(wxColour(47, 158, 68));   // built once - DrawPageTab runs on every paint
-            dc.SetPen(*wxTRANSPARENT_PEN);
-            dc.SetBrush(accent);
-            dc.DrawRectangle(page.rect.GetLeft() + 1, page.rect.GetTop(), page.rect.GetWidth() - 1, 3);
-        }
+        // Active tab's top-edge marker, in the project's accent green over the system-blue one the base
+        // class just drew. Shared with the terminal's tab strip (drawActiveTabMarker, terminal_panel.h)
+        // so the two strips can't drift apart - it also carries the `extent`-vs-page.rect and the
+        // FromDIP-height fixes, which this copy predates.
+        if (page.active) drawActiveTabMarker(dc, wnd, page.rect, rect);
         return extent;
     }
 private:
@@ -2472,8 +2460,18 @@ private:
                 const wxString p = curPath();
                 return p.empty() ? wxGetCwd() : wxFileName(p).GetPath();
             };
+            // No caption bar: the panel's own toolbar is its header, so a wxAui caption on top would be
+            // a second, redundant title row. The caption carried two affordances, and dropping it costs
+            // both: the close button (replaced by the panel's own X) and the drag handle. Gripper() would
+            // restore the drag, but wxAui draws it as a dotted rail down the pane's left edge, which is
+            // exactly the visual clutter removing the caption was meant to get rid of - so the terminal
+            // is DELIBERATELY fixed to its dock: resize by the sash, close by its own X, no drag/float.
+            // A terminal is a bottom-docked tool, not a panel people rearrange; the caption and the
+            // gripper both cost more chrome than that is worth.
+            m_terminal->onCloseRequested = [this]{ toggleTerminal(); };
             m_aui.AddPane(m_terminal, wxAuiPaneInfo().Name("terminal").Caption(_("Terminal"))
-                              .Bottom().Layer(1).BestSize(-1, 220).MinSize(150, 80).CloseButton(true).Hide());
+                              .CaptionVisible(false).Bottom().Layer(1).BestSize(-1, 220)
+                              .MinSize(150, 80).CloseButton(false).Hide());
         }
         wxAuiPaneInfo& pi = m_aui.GetPane(m_terminal);
         if (!pi.IsOk()) return;
@@ -4968,6 +4966,7 @@ private:
         T(kCmdViewDoclist, "doc-list", _("Document List"));
         T(kCmdViewFuncList, "function-list", _("Function List"));
         T(kCmdViewFilebrowser, "folder-as-workspace", _("Folder as Workspace"));
+        T(myID_VIEW_TERMINAL, "terminal", _("Show Terminal"));   // sits with the other panel toggles
         tb->AddSeparator();
         TC(kCmdViewMonitoring, "monitoring", _("Monitoring (tail -f)"));
         tb->AddSeparator();
@@ -5934,24 +5933,15 @@ private:
         // the cmd/PowerShell/Terminal entries in the same submenu, instead of a dead disabled item.
         const wxString p = curPath();
         const wxString dir = p.empty() ? wxGetCwd() : wxFileName(p).GetPath();
+        // Nothing to select: just open the folder, through the shared cascade in launchFolder().
+        if (p.empty()) { openFolder(dir); return; }
 #ifdef __WXMSW__
-        if (p.empty())
-            ShellExecuteW(nullptr, L"open", dir.ToStdWstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-        else
-        {
-            const std::wstring arg = L"/select,\"" + p.ToStdWstring() + L"\"";
-            ShellExecuteW(nullptr, L"open", L"explorer.exe", arg.c_str(), nullptr, SW_SHOWNORMAL);
-        }
+        const std::wstring arg = L"/select,\"" + p.ToStdWstring() + L"\"";
+        ShellExecuteW(nullptr, L"open", L"explorer.exe", arg.c_str(), nullptr, SW_SHOWNORMAL);
 #elif defined(__WXMAC__)
-        if (p.empty()) wxExecute(wxString::Format("open \"%s\"", dir), wxEXEC_ASYNC);
-        else           wxExecute(wxString::Format("open -R \"%s\"", p), wxEXEC_ASYNC);   // reveal (select) the file in Finder
+        wxExecute(wxString::Format("open -R \"%s\"", p), wxEXEC_ASYNC);   // reveal (select) the file in Finder
 #else
-        // Prefer the freedesktop tool for opening a DIRECTORY - wxLaunchDefaultApplication routes through
-        // gnome/gvfs code paths that are flaky for folders on some distros (reported "doesn't work" on
-        // Mint); xdg-open is what every desktop's file-manager association actually answers to.
-        wxLogNull noLog;
-        if (wxExecute(wxString::Format("xdg-open \"%s\"", dir), wxEXEC_ASYNC) <= 0)
-            wxLaunchDefaultApplication(dir);
+        openFolder(dir);   // no portable "select this file" on Linux - open the containing folder instead
 #endif
     }
 #ifdef __WXMSW__
@@ -5986,13 +5976,35 @@ private:
 #endif
     }
     void openInDefaultViewer() { const wxString p = curPath(); if (p.empty()) { notImpl(_("Open in Default Viewer (save the file first)")); return; } wxLaunchDefaultApplication(p); }
-    void openFolder(const wxString& dir)
+    // THE one way to open a directory in the desktop's file manager - revealInFolder() below routes
+    // here too, so the per-platform cascade lives in exactly one place. Each branch is load-bearing:
+    // on Linux, wxLaunchDefaultApplication routes through gnome/gvfs paths that are flaky for
+    // DIRECTORIES on some distros (reported "doesn't work" on Mint), so xdg-open - what every desktop's
+    // file-manager association actually answers to - has to be tried first.
+    //
+    // A false return is trustworthy; a true one is not a promise. On Linux/macOS the helper is spawned
+    // async and reports success as soon as it starts, whatever it does afterwards.
+    bool launchFolder(const wxString& dir)
     {
 #ifdef __WXMSW__
-        ShellExecuteW(nullptr, L"open", dir.ToStdWstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        // ShellExecuteW's HINSTANCE is a fake handle: any value <= 32 is an error code, not success.
+        return reinterpret_cast<INT_PTR>(
+            ShellExecuteW(nullptr, L"open", dir.ToStdWstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL)) > 32;
+#elif defined(__WXMAC__)
+        wxLogNull noLog;
+        return wxExecute(wxString::Format("open \"%s\"", dir), wxEXEC_ASYNC) > 0;
 #else
-        wxLaunchDefaultApplication(dir);
+        wxLogNull noLog;
+        if (wxExecute(wxString::Format("xdg-open \"%s\"", dir), wxEXEC_ASYNC) > 0) return true;
+        return wxLaunchDefaultApplication(dir);
 #endif
+    }
+    // Opening a path that doesn't exist otherwise fails SILENTLY - the menu item just looks dead, which
+    // is exactly how a missing plugins/ dir presented before that caller learned to create it on demand.
+    // m_hint keeps the message on the status bar; without it the 150ms status timer wipes it instantly.
+    void openFolder(const wxString& dir)
+    {
+        if (!launchFolder(dir)) { setStatus(0, wxString::Format(_("Could not open folder: %s"), dir)); m_hint = true; }
     }
     void openInBrowser(const wxString& exe)   // exe = firefox/chrome/iexplore, or "" for Edge (Windows)
     {
