@@ -2585,3 +2585,27 @@ msgstr "Échec du démarrage : %s"
 
 msgid "[process exited with code %d]"
 msgstr "[processus terminé avec le code %d]"
+
+msgid "Could not open folder: %s"
+msgstr "Impossible d'ouvrir le dossier : %s"
+
+msgid "New terminal"
+msgstr "Nouveau terminal"
+
+msgid "Choose shell"
+msgstr "Choisir le shell"
+
+msgid "Switch terminal theme"
+msgstr "Changer le thème du terminal"
+
+msgid "Hide terminal panel"
+msgstr "Masquer le panneau du terminal"
+
+msgid "Show Terminal"
+msgstr "Afficher le terminal"
+
+msgid "Show open terminals"
+msgstr "Afficher les terminaux ouverts"
+
+msgid "Close terminal"
+msgstr "Fermer le terminal"

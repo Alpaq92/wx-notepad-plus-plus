@@ -2586,3 +2586,27 @@ msgstr "启动失败：%s"
 
 msgid "[process exited with code %d]"
 msgstr "[进程已退出，代码 %d]"
+
+msgid "Could not open folder: %s"
+msgstr "无法打开文件夹：%s"
+
+msgid "New terminal"
+msgstr "新建终端"
+
+msgid "Choose shell"
+msgstr "选择 Shell"
+
+msgid "Switch terminal theme"
+msgstr "切换终端主题"
+
+msgid "Hide terminal panel"
+msgstr "隐藏终端面板"
+
+msgid "Show Terminal"
+msgstr "显示终端(T)"
+
+msgid "Show open terminals"
+msgstr "显示打开的终端"
+
+msgid "Close terminal"
+msgstr "关闭终端"

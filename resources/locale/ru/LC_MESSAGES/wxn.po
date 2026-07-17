@@ -2585,3 +2585,27 @@ msgstr "Не удалось запустить: %s"
 
 msgid "[process exited with code %d]"
 msgstr "[процесс завершился с кодом %d]"
+
+msgid "Could not open folder: %s"
+msgstr "Не удалось открыть папку: %s"
+
+msgid "New terminal"
+msgstr "Новый терминал"
+
+msgid "Choose shell"
+msgstr "Выбрать оболочку"
+
+msgid "Switch terminal theme"
+msgstr "Переключить тему терминала"
+
+msgid "Hide terminal panel"
+msgstr "Скрыть панель терминала"
+
+msgid "Show Terminal"
+msgstr "Показать терминал"
+
+msgid "Show open terminals"
+msgstr "Показать открытые терминалы"
+
+msgid "Close terminal"
+msgstr "Закрыть терминал"

@@ -2585,3 +2585,27 @@ msgstr "起動に失敗しました: %s"
 
 msgid "[process exited with code %d]"
 msgstr "[プロセスはコード %d で終了しました]"
+
+msgid "Could not open folder: %s"
+msgstr "フォルダーを開けませんでした: %s"
+
+msgid "New terminal"
+msgstr "新しいターミナル"
+
+msgid "Choose shell"
+msgstr "シェルを選択"
+
+msgid "Switch terminal theme"
+msgstr "ターミナルのテーマを切り替え"
+
+msgid "Hide terminal panel"
+msgstr "ターミナルパネルを非表示"
+
+msgid "Show Terminal"
+msgstr "ターミナルを表示(T)"
+
+msgid "Show open terminals"
+msgstr "開いているターミナルを表示"
+
+msgid "Close terminal"
+msgstr "ターミナルを閉じる"
