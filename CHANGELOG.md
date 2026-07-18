@@ -3,6 +3,24 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **The integrated terminal's chrome is keyboard accessible.** Its owner-drawn toolbar buttons (new
+  terminal, shell picker, lights, collapse) are now focusable, activate on <kbd>Enter</kbd>/<kbd>Space</kbd>
+  and draw a focus ring; the shell dropdown navigates with <kbd>Up</kbd>/<kbd>Down</kbd>/<kbd>Home</kbd>/<kbd>End</kbd>,
+  picks with <kbd>Enter</kbd> and cancels with <kbd>Esc</kbd>. Since the terminal itself consumes
+  <kbd>Tab</kbd> (it belongs to the shell), <kbd>Ctrl+Shift+Up</kbd> moves focus from the terminal out to
+  its toolbar and <kbd>Ctrl+Shift+Down</kbd> returns — previously the chrome was reachable only with a
+  mouse. Each glyph-only button also carries an accessible name, so a screen reader announces it rather
+  than an unlabelled control.
+
+### Fixed
+- **The terminal's scrollbar now follows the terminal's own light/dark toggle** on Windows. Scintilla's
+  scrollbar is a native control that `StyleClearAll` doesn't touch, so a dark terminal kept a bright
+  white scrollbar. (On Linux/macOS the native scrollbar still tracks the *app* theme rather than the
+  per-terminal toggle — the GTK scrollbar styling is installed app-wide.)
+
 ## [0.9.1] - 2026-07-18
 
 ### Added
