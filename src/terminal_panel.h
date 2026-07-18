@@ -28,6 +28,7 @@
 #include <thread>
 #ifdef __WXMSW__
     #include <windows.h>   // GetOEMCP - cmd/PowerShell pipe output arrives in the OEM codepage
+    #include <uxtheme.h>   // SetWindowTheme - dark/light the STC's native scrollbar (see applyTheme)
 #endif
 
 static const int myID_VIEW_TERMINAL = 60200;   // View > Show Terminal (app-local; clear of 60xxx app ids, 61xxx doc-list, 62xxx macros, 63xxx Nib commands)
@@ -233,6 +234,21 @@ public:
         m_out->StyleSetForeground(wxSTC_STYLE_DEFAULT, dark ? wxColour(220, 220, 220) : wxColour(30, 30, 30));
         m_out->StyleClearAll();   // propagate STYLE_DEFAULT to every style; safe to re-run
         m_out->SetCaretForeground(dark ? wxColour(220, 220, 220) : wxColour(30, 30, 30));
+#ifdef __WXMSW__
+        // Scintilla's scrollbar is a native Win32 control; StyleClearAll doesn't touch it, so a dark
+        // terminal otherwise kept a bright white scrollbar. The DarkMode_Explorer visual style darkens
+        // it - the same call the editor uses for its own scrollbars (main.cpp). Done per-HWND here so the
+        // terminal's own lights toggle themes ITS scrollbar independently of the editor's theme. RDW_FRAME
+        // forces the non-client scrollbar to repaint now: on a live toggle a plain Refresh() (client area
+        // only) would leave the old theme until the next scroll, exactly as it does for the editor.
+        // GTK/macOS get no per-terminal scrollbar theming: on GTK the native scrollbar is themed by an
+        // app-wide screen provider keyed to the EDITOR theme (wxn_InstallDarkScrollbarCss, src/gtk_native.cpp),
+        // so it follows the app theme, not this independent terminal lights toggle - a known minor mismatch
+        // only when the terminal is toggled to differ from the editor; macOS has no scrollbar-theming hook.
+        HWND h = static_cast<HWND>(m_out->GetHandle());
+        ::SetWindowTheme(h, dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
+        ::RedrawWindow(h, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW);
+#endif
         m_out->Refresh();
     }
 
@@ -579,9 +595,16 @@ class TermFlatButton : public wxControl
 {
 public:
     // `glyph` is optional inner-SVG (see kTG* above); a button may carry a label, a glyph, or both.
+    // onClick(bool keyboard): keyboard==true when fired by Enter/Space, false for a mouse click. The
+    // owner uses it to react to the input source - e.g. a mouse-activated toggle returns focus to the
+    // terminal (a keyboard one keeps focus on the button for repeated presses), and a keyboard-opened
+    // dropdown skips the mouse-only reopen debounce.
     TermFlatButton(wxWindow* parent, const wxString& label, const char* glyph, const wxFont& font,
-                   bool dark, std::function<void()> onClick)
-        : wxControl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE),
+                   bool dark, std::function<void(bool)> onClick)
+        // wxWANTS_CHARS: without it MSW's dialog manager eats Return and Tab as default-button /
+        // focus-navigation keys before they ever reach wxEVT_KEY_DOWN (Space alone would arrive). With
+        // it we get every key - and so must drive Tab traversal ourselves via Navigate() below.
+        : wxControl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxWANTS_CHARS),
           m_onClick(std::move(onClick))
     {
         m_bg = parent->GetBackgroundColour();
@@ -603,16 +626,22 @@ public:
         // the second of two fast clicks on "+" is silently dropped.
         Bind(wxEVT_LEFT_DCLICK,  [this](wxMouseEvent&){ m_down = true;  Refresh(); });
         Bind(wxEVT_LEFT_UP,      [this](wxMouseEvent&){ const bool c = m_down; m_down = false; Refresh();
-                                                        if (c && m_onClick) m_onClick(); });
-        // AcceptsFocus() alone is not enough on wxGTK. wxControl's one-step ctor runs Create() from its
-        // own body, so wxWindow's SetCanFocus(AcceptsFocus()) fires while the dynamic type is still
-        // wxControl - it reaches wxWindowBase::AcceptsFocus() (true), never the override below, and GTK
-        // ends up with can-focus set. Only wxGTK overrides SetCanFocus (the base is a no-op), which is
-        // why MSW/macOS look right and hid this; the call is harmless on those ports.
-        SetCanFocus(false);
+                                                        if (c && m_onClick) m_onClick(/*keyboard=*/false); });
+        // Keyboard: the button is focusable and activates on Enter/Space, so the terminal chrome isn't
+        // mouse-only. Because wxWANTS_CHARS also hands us Tab, we forward it to Navigate() ourselves -
+        // otherwise focus would dead-end on the button. Anything else is skipped for normal handling.
+        Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& e){
+            const int k = e.GetKeyCode();
+            if ((k == WXK_RETURN || k == WXK_NUMPAD_ENTER || k == WXK_SPACE) && m_onClick) m_onClick(/*keyboard=*/true);
+            else if (k == WXK_TAB) Navigate(e.ShiftDown() ? wxNavigationKeyEvent::IsBackward
+                                                          : wxNavigationKeyEvent::IsForward);
+            else e.Skip();
+        });
+        Bind(wxEVT_SET_FOCUS,  [this](wxFocusEvent& e){ Refresh(); e.Skip(); });   // draw/clear the focus ring
+        Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& e){ Refresh(); e.Skip(); });
     }
     void setText(const wxString& s) { SetLabel(s); InvalidateBestSize(); if (GetParent()) GetParent()->Layout(); Refresh(); }
-    bool AcceptsFocus() const override { return false; }
+    bool AcceptsFocus() const override { return true; }
 
     // Drop the hover/pressed paint. Needed when a dropdown opens off this button: wxGTK's popup grab
     // emits the LEAVE crossing with mode=GDK_CROSSING_GRAB, which wxGTK discards, so LEAVE_WINDOW never
@@ -646,7 +675,8 @@ private:
         dc.SetPen(*wxTRANSPARENT_PEN);
         dc.SetBrush(m_bg);
         dc.DrawRectangle(0, 0, sz.x, sz.y);
-        if (m_hot)
+        const bool focused = HasFocus();
+        if (m_hot || focused)
         {
             // Through a wxGraphicsContext, not the DC: on MSW the DC is GDI, which does not antialias at
             // all, so wxDC's rounded rectangle leaves visibly stair-stepped corners on the hover pill.
@@ -659,10 +689,20 @@ private:
             if (gc)
             {
                 gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
-                gc->SetPen(*wxTRANSPARENT_PEN);
-                gc->SetBrush(m_down ? termAccent().ChangeLightness(88) : termAccent());
-                gc->DrawRoundedRectangle(FromDIP(1), FromDIP(1),
-                                         sz.x - FromDIP(2), sz.y - FromDIP(2), FromDIP(4));
+                if (m_hot)   // mouse hover/press: the full accent pill (content inverts to white below)
+                {
+                    gc->SetPen(*wxTRANSPARENT_PEN);
+                    gc->SetBrush(m_down ? termAccent().ChangeLightness(88) : termAccent());
+                    gc->DrawRoundedRectangle(FromDIP(1), FromDIP(1),
+                                             sz.x - FromDIP(2), sz.y - FromDIP(2), FromDIP(4));
+                }
+                else   // keyboard focus without hover: an outline ring so Tab focus is visible unfilled
+                {
+                    gc->SetPen(wxPen(termAccent(), FromDIP(1)));
+                    gc->SetBrush(*wxTRANSPARENT_BRUSH);
+                    gc->DrawRoundedRectangle(FromDIP(1), FromDIP(1),
+                                             sz.x - FromDIP(2), sz.y - FromDIP(2), FromDIP(4));
+                }
             }
         }
         // Label then glyph, centred as one run, so the shell chip reads "cmd v" with a real vector caret.
@@ -683,7 +723,7 @@ private:
         if (bmp.IsOk()) { dc.DrawBitmap(bmp, x, (sz.y - gsz.y) / 2, true); }
     }
 
-    std::function<void()> m_onClick;
+    std::function<void(bool)> m_onClick;   // arg: keyboard-activated? (see ctor)
     wxBitmapBundle m_glyph, m_glyphHot;   // normal + hover (white-on-accent) rasterisations
     wxColour m_bg, m_fg;
     bool     m_hot = false, m_down = false;
@@ -700,7 +740,13 @@ public:
 
     TermListPopup(wxWindow* parent, const std::vector<wxString>& items, int current, bool dark,
                   std::function<void(int)> onPick)
-        : wxPopupTransientWindow(parent, wxBORDER_NONE),
+        // wxWANTS_CHARS so Enter/Esc/arrows all reach onKey rather than being eaten as navigation keys.
+        // wxPU_CONTAINS_CONTROLS: on MSW a plain transient popup is a WS_CHILD of the desktop that CANNOT
+        // take keyboard focus (wxPopupWindow::SetFocus is a documented no-op without this flag - see
+        // src/msw/popupwin.cpp), so the picker could never be keyboard-driven. The flag makes it a real
+        // WS_POPUP that accepts focus; dismissal then rides WM_ACTIVATE deactivation instead of a mouse
+        // capture (verified by terminal_selftest's toggle/reopen/pick checks, which still pass).
+        : wxPopupTransientWindow(parent, wxBORDER_NONE | wxWANTS_CHARS | wxPU_CONTAINS_CONTROLS),
           m_items(items), m_current(current), m_onPick(std::move(onPick))
     {
         m_bg     = dark ? wxColour(37, 37, 38)    : wxColour(250, 250, 250);
@@ -716,13 +762,14 @@ public:
         Bind(wxEVT_PAINT,        &TermListPopup::onPaint,  this);
         Bind(wxEVT_MOTION,       &TermListPopup::onMotion, this);
         Bind(wxEVT_LEFT_UP,      &TermListPopup::onClick,  this);
+        Bind(wxEVT_KEY_DOWN,     &TermListPopup::onKey,    this);
         Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent&){ if (m_hot != -1) { m_hot = -1; Refresh(); } });
     }
     // Drop the list under `anchor`. Right-aligned for anchors living on the toolbar's right edge, so a
     // wide list grows leftwards into the panel instead of hanging off it.
     // Drop the list at a screen point - for a trigger that isn't a window of ours (wx's own tab-strip
     // window-list button), so there is nothing to anchor under.
-    void showAt(const wxPoint& screenPt) { Position(screenPt, wxSize(0, 0)); Popup(); }
+    void showAt(const wxPoint& screenPt) { Position(screenPt, wxSize(0, 0)); popupFocused(); }
 
     // Close it ourselves, running the full dismissal (onClosed + the deferred self-destroy). The owner
     // toggles the list with this rather than trusting wx to auto-dismiss on the re-click: a real-click
@@ -738,10 +785,22 @@ public:
         // as size.y - handing it the anchor's full size drops the list diagonally down-RIGHT of the
         // button instead of under it. Only the vertical drop is wanted.
         Position(origin, wxSize(0, anchor->GetSize().y));
-        Popup();
+        popupFocused();
     }
 
 protected:
+    // Pop up AND take keyboard focus, so Up/Down/Enter/Esc route here. Popup()'s own focus argument is
+    // only honoured for a DESCENDANT window on MSW; this popup owns no child controls, so we focus the
+    // popup HWND directly afterwards - which works because wxPU_CONTAINS_CONTROLS (set in the ctor) makes
+    // SetFocus() effective. The highlight is seeded to the current shell so keyboard use starts on a
+    // sensible row and mouse use shows which entry is active.
+    void popupFocused()
+    {
+        m_hot = (m_current >= 0 && m_current < (int)m_items.size()) ? m_current : 0;
+        Popup();
+        SetFocus();
+    }
+
     // Self-destroy once dismissed so each open doesn't leak a window; deferred past the current event so
     // the pick callback, which runs right after the dismissal, still has a live `this`. Guarded: wx does
     // not promise OnDismiss fires only once, and a second Destroy() would trip wxPendingDelete's
@@ -765,14 +824,32 @@ private:
         return (r < (int)m_items.size()) ? r : -1;
     }
     void onMotion(wxMouseEvent& e) { const int r = rowAt(e.GetY()); if (r != m_hot) { m_hot = r; Refresh(); } }
-    void onClick(wxMouseEvent& e)
+    void onClick(wxMouseEvent& e) { const int r = rowAt(e.GetY()); if (r >= 0) pick(r); }
+    // Keyboard navigation, so the picker is usable once the shell chip is reached by Tab/Enter. Down/Up
+    // wrap; Home/End jump to the ends; Enter takes the highlighted row; Esc dismisses without picking.
+    void onKey(wxKeyEvent& e)
     {
-        const int r = rowAt(e.GetY());
-        if (r < 0) return;
-        auto cb = m_onPick; const int idx = r;
-        // DismissAndNotify(), NOT Dismiss(): by wx's contract Dismiss() only hides and never calls
-        // OnDismiss(), so a plain Dismiss() here would skip both onClosed (leaving the owner holding a
-        // stale popup pointer) and the deferred Destroy() - leaking a window on every pick.
+        const int n = (int)m_items.size();
+        if (n == 0) { e.Skip(); return; }
+        switch (e.GetKeyCode())
+        {
+        case WXK_DOWN:  m_hot = (m_hot < 0) ? 0 : (m_hot + 1) % n;      Refresh(); break;
+        case WXK_UP:    m_hot = (m_hot <= 0) ? n - 1 : m_hot - 1;       Refresh(); break;
+        case WXK_HOME:  m_hot = 0;                                      Refresh(); break;
+        case WXK_END:   m_hot = n - 1;                                  Refresh(); break;
+        case WXK_RETURN:
+        case WXK_NUMPAD_ENTER: if (m_hot >= 0 && m_hot < n) pick(m_hot); break;
+        case WXK_ESCAPE: DismissAndNotify(); break;
+        default: e.Skip(); break;
+        }
+    }
+    // Dismiss then fire the pick. DismissAndNotify(), NOT Dismiss(): by wx's contract Dismiss() only hides
+    // and never calls OnDismiss(), so a plain Dismiss() here would skip both onClosed (leaving the owner
+    // holding a stale popup pointer) and the deferred Destroy() - leaking a window on every pick. The
+    // callback is copied first because DismissAndNotify() can begin tearing `this` down.
+    void pick(int idx)
+    {
+        auto cb = m_onPick;
         DismissAndNotify();
         if (cb) cb(idx);
     }
@@ -825,16 +902,30 @@ public:
         // system widgets, and a native combo's popup can't be dark-themed on MSW at all.
         //   [ + ] [ shell v ] ................... [ v ] [ lights ] [ x ]
         auto* top = new wxBoxSizer(wxHORIZONTAL);
-        auto* newBtn = new TermFlatButton(this, "", kTGPlus, termUiFont(), dark, [this]{ addTerminal(m_sel); });
-        newBtn->SetToolTip(_("New terminal"));
-        m_shellBtn = new TermFlatButton(this, shellLabel(), kTGCaret, termUiFont(), dark, [this]{ openPicker(); });
-        m_shellBtn->SetToolTip(_("Choose shell"));
+        // addTerminal already moves focus to the new shell, so + needs no focus handling of its own.
+        // SetName gives each glyph-only button an accessible name (there is no text label to read), so a
+        // screen reader announces it; the tooltip text is the natural label.
+        auto* newBtn = new TermFlatButton(this, "", kTGPlus, termUiFont(), dark, [this](bool){ addTerminal(m_sel); });
+        newBtn->SetToolTip(_("New terminal")); newBtn->SetName(_("New terminal"));
+        m_firstBtn = newBtn;   // the leftmost/first toolbar button - target of the Ctrl+Shift+Up focus escape
+        // The chip opens the picker (which takes focus itself); pass the input source so a keyboard-opened
+        // picker isn't suppressed by the mouse-only reopen debounce.
+        m_shellBtn = new TermFlatButton(this, shellLabel(), kTGCaret, termUiFont(), dark,
+                                        [this](bool kb){ openPicker(kb); });
+        m_shellBtn->SetToolTip(_("Choose shell")); m_shellBtn->SetName(_("Choose shell"));
+        // On macOS a plain MOUSE click makes the button first responder, stranding keyboard focus on it
+        // (pulled off the terminal STC); on MSW/GTK the click leaves focus where it was. Key off the
+        // actual symptom rather than the platform: if a mouse click left focus on a chrome button, hand it
+        // back to the terminal - a no-op everywhere focus wasn't stolen, and it never yanks focus off the
+        // editor. A keyboard toggle (kb) keeps focus on the button so it can be pressed again.
         auto* lightsBtn = new TermFlatButton(this, "", kTGLights, termUiFont(), dark,
-                                             [this]{ setTerminalDark(!m_termDark); });
-        lightsBtn->SetToolTip(_("Switch terminal theme"));
+            [this](bool kb){ setTerminalDark(!m_termDark);
+                             if (!kb && dynamic_cast<TermFlatButton*>(wxWindow::FindFocus())) focusActive(); });
+        lightsBtn->SetToolTip(_("Switch terminal theme")); lightsBtn->SetName(_("Switch terminal theme"));
+        // Close hides the whole panel, so focus leaves regardless - no refocus needed here.
         auto* closeBtn = new TermFlatButton(this, "", kTGCollapse, termUiFont(), dark,
-                                            [this]{ if (onCloseRequested) onCloseRequested(); });
-        closeBtn->SetToolTip(_("Hide terminal panel"));
+                                            [this](bool){ if (onCloseRequested) onCloseRequested(); });
+        closeBtn->SetToolTip(_("Hide terminal panel")); closeBtn->SetName(_("Hide terminal panel"));
         top->Add(newBtn,      0, wxALIGN_CENTRE_VERTICAL | wxLEFT, FromDIP(4));
         top->Add(m_shellBtn,  0, wxALIGN_CENTRE_VERTICAL | wxLEFT, FromDIP(1));
         top->AddStretchSpacer(1);
@@ -874,6 +965,20 @@ public:
         s->Add(sep, 0, wxEXPAND);
         s->Add(m_nb, 1, wxEXPAND);
         SetSizer(s);
+
+        // Keyboard escape hatch. Focusable toolbar buttons are useless if a keyboard user can't REACH
+        // them: focus starts in the terminal, and the terminal consumes Tab (it belongs to the shell), so
+        // there is no way out. Ctrl+Shift+Up jumps from the terminal to the toolbar (Tab then moves between
+        // its buttons); Ctrl+Shift+Down returns to the active terminal. Deliberately a modifier chord, not
+        // F6 - cmd.exe binds F6 to ^Z. A CHAR_HOOK on the PANEL sees keys for every focused descendant (the
+        // terminal STC and the buttons alike) and runs before their own key handlers, so not skipping it
+        // keeps the chord away from Scintilla's bindings; being non-printable it never reaches the shell
+        // either. Inert while a dropdown is up, since the popup is a separate top-level window.
+        Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent& e){
+            if (e.ControlDown() && e.ShiftDown() && e.GetKeyCode() == WXK_UP)   { focusChrome(); return; }
+            if (e.ControlDown() && e.ShiftDown() && e.GetKeyCode() == WXK_DOWN) { focusActive(); return; }
+            e.Skip();
+        });
         // Kill the child BEFORE the page window is destroyed (the tab's dtor would too, but doing it in
         // the close handler keeps the ordering explicit).
         m_nb->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE, [this](wxAuiNotebookEvent& ev){
@@ -914,7 +1019,7 @@ public:
         return m_popupAnchor == anchorId && (wxGetUTCTimeMillis() - m_popupClosedAt).GetValue() < 250;
     }
     void openList(TermFlatButton* hoverBtn, wxWindow* parent, const void* anchorId,
-                  const std::vector<wxString>& items, int current,
+                  const std::vector<wxString>& items, int current, bool keyboard,
                   std::function<void(int)> onPick, std::function<void(TermListPopup*)> show)
     {
         if (m_livePopup)
@@ -923,7 +1028,10 @@ public:
             m_livePopup->closeNow();   // runs onClosed synchronously -> m_livePopup = nullptr
             if (sameAnchor) return;
         }
-        if (listReopenGuard(anchorId)) return;
+        // The reopen guard debounces ONLY the mouse race (wx auto-dismisses on the re-click, then delivers
+        // that same click to the anchor). A keyboard reopen - Esc to close, Enter to reopen - has no such
+        // fall-through click, so the guard must not swallow it, or a quick Esc+Enter would drop the reopen.
+        if (!keyboard && listReopenGuard(anchorId)) return;
 
         auto* pop = new TermListPopup(parent, items, current, m_chromeDark, std::move(onPick));   // a dropdown is chrome
         pop->onClosed = [this, anchorId, hoverBtn]{
@@ -939,12 +1047,12 @@ public:
 
     // Picking a shell remembers it as the default the "+" button uses AND opens a new terminal of it
     // (VS Code-style: pick a profile -> get that terminal).
-    void openPicker()
+    void openPicker(bool keyboard = false)
     {
         if (m_shells.empty() || !m_shellBtn) return;
         std::vector<wxString> names;
         for (const TermShell& s : m_shells) names.push_back(s.name);
-        openList(m_shellBtn, m_shellBtn, m_shellBtn, names, m_sel,
+        openList(m_shellBtn, m_shellBtn, m_shellBtn, names, m_sel, keyboard,
             [this](int i){
                 if (i < 0 || i >= (int)m_shells.size()) return;
                 m_sel = i;
@@ -987,7 +1095,7 @@ public:
         if (!m_nb->GetPageCount()) return;
         std::vector<wxString> titles;
         for (size_t i = 0; i < m_nb->GetPageCount(); ++i) titles.push_back(m_nb->GetPageText(i));
-        openList(nullptr, m_nb, m_nb, titles, m_nb->GetSelection(),
+        openList(nullptr, m_nb, m_nb, titles, m_nb->GetSelection(), /*keyboard=*/false,
             [this](int i){ if (i >= 0 && i < (int)m_nb->GetPageCount()) { m_nb->SetSelection(i); focusActive(); } },
             [](TermListPopup* p){ p->showAt(wxGetMousePosition()); });
     }
@@ -1007,6 +1115,9 @@ public:
     {
         if (auto* t = dynamic_cast<TerminalTab*>(m_nb->GetCurrentPage())) t->focusInput();
     }
+    // Hand focus to the toolbar (its first button); from there Tab walks the rest. See the Ctrl+Shift+Up
+    // CHAR_HOOK in the ctor - this is the only way into the chrome once focus is inside the terminal.
+    void focusChrome() { if (m_firstBtn) m_firstBtn->SetFocus(); }
     bool empty() const { return m_nb->GetPageCount() == 0; }
     void shutdownAll()
     {
@@ -1025,6 +1136,7 @@ private:
     TermFlatButton*        m_shellBtn = nullptr;
     TermListPopup*         m_livePopup = nullptr;     // the dropdown currently showing, or null - the toggle's truth
     const void*            m_liveAnchor = nullptr;    // which anchor owns m_livePopup
+    TermFlatButton*        m_firstBtn = nullptr;      // leftmost toolbar button - Ctrl+Shift+Up focus target
     const void*            m_popupAnchor = nullptr;   // whose dropdown closed last (see listReopenGuard)...
     wxLongLong             m_popupClosedAt = 0;       // ...and when: together they suppress the reopen-on-same-click
     std::vector<wxAuiTabCtrl*> m_tipped;              // tab ctrls already hooked for button tooltips

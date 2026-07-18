@@ -119,6 +119,8 @@ private:
         dropdowns();
         std::printf("---- UI: real clicks via wxUIActionSimulator ----\n");
         uiClicks();
+        std::printf("---- keyboard: focus + Enter/Space activation ----\n");
+        keyboard();
 
         m_panel->shutdownAll();   // no child shell outlives the test
         wxYield();
@@ -308,6 +310,133 @@ private:
         clickWindow(hide);
         check(m_hideAsked, "clicking collapse fires onCloseRequested (hide, not destroy)");
         check(!m_panel->empty(), "collapse does not kill the terminals");
+    }
+
+    // The chrome must be operable without a mouse: the flat buttons are focusable and fire on
+    // Enter/Space. This is the a11y parity the owner-drawn buttons owe the native wxChoice they replaced
+    // - a keyboard/screen-reader user has to be able to reach and trigger them.
+    void keyboard()
+    {
+        const std::vector<TermFlatButton*> b = toolbarButtons(m_panel);
+        if (b.size() != 4) { check(false, "expected 4 toolbar buttons for the keyboard test"); return; }
+        for (auto* btn : b) check(btn->AcceptsFocus(), "toolbar button accepts focus (keyboard-reachable)");
+
+        // Injected keys land in the OS FOREGROUND window, not our frame by handle. Before EVERY key burst
+        // we force the frame foreground and verify it; if we can't (a toast stole it, the user touched the
+        // desktop, a locked session), we SKIP rather than fail - injecting blind would both misreport the
+        // result and leak keystrokes into whatever app is really in front. See the runtime-verify memory.
+        if (!frameForeground()) { std::printf("  skip  frame not foreground; skipping key-injection tests\n"); return; }
+
+        wxUIActionSimulator sim;
+        TermFlatButton* plus = b[0];
+        plus->SetFocus();
+        pump(120);
+        check(plus->HasFocus(), "SetFocus lands on the + button");
+
+        // Enter on the focused button opens a terminal - same effect as a click, no mouse involved.
+        size_t before = m_nbPages();
+        sim.KeyDown(WXK_RETURN);
+        sim.KeyUp(WXK_RETURN);
+        pump(180);
+        check(m_nbPages() == before + 1, "Enter on the focused + button opens a terminal");
+
+        // Space activates too (addTerminal moves focus to the new shell, so re-focus first).
+        if (!frameForeground()) { std::printf("  skip  lost foreground; aborting key tests\n"); return; }
+        plus->SetFocus();
+        pump(120);
+        before = m_nbPages();
+        sim.KeyDown(WXK_SPACE);
+        sim.KeyUp(WXK_SPACE);
+        pump(180);
+        check(m_nbPages() == before + 1, "Space on the focused + button opens a terminal");
+
+        // The shell picker must be keyboard-operable. Prove ARROW NAVIGATION, not just Enter: the picker
+        // opens with the current shell pre-highlighted, so Enter alone would pick that seeded row and pass
+        // even if Down were broken. Home resets to row 0, Down moves to row 1, and Enter must then open the
+        // SECOND shell - so a broken/removed Down handler opens the wrong shell and fails the title check.
+        TermFlatButton* chip = b[1];
+        const std::vector<TermShell> shells = detectTermShells();
+        if (shells.size() >= 2 && frameForeground())
+        {
+            pump(320);                 // clear the 250ms reopen guard from earlier phases
+            clickWindow(chip);         // opens the picker, which TAKES foreground itself (wxPU_CONTAINS_CONTROLS)
+            // Do NOT frameForeground() here: the open picker is our foreground window now, and stealing
+            // foreground back to the frame would deactivate and dismiss it before the keys land.
+            if (visiblePickers() == 1)
+            {
+                before = m_nbPages();
+                sim.KeyDown(WXK_HOME);   sim.KeyUp(WXK_HOME);   pump(70);   // -> row 0 (deterministic start)
+                sim.KeyDown(WXK_DOWN);   sim.KeyUp(WXK_DOWN);   pump(70);   // -> row 1
+                sim.KeyDown(WXK_RETURN); sim.KeyUp(WXK_RETURN); pump(200);
+                check(m_nbPages() == before + 1, "Home+Down+Enter in the picker opens a terminal");
+                check(visiblePickers() == 0,     "the picker closes after a keyboard pick");
+                // Tabs are titled "<shell name> <n>"; row 1 must be the second shell, proving Down moved it.
+                check(newestPageTitle().BeforeLast(' ') == shells[1].name,
+                      "Down moved the highlight to the 2nd shell (arrow nav works, not just Enter)");
+            }
+            else check(false, "picker did not open for the keyboard-nav test");
+        }
+
+        // Esc dismisses the picker WITHOUT picking - no terminal should open.
+        if (frameForeground())
+        {
+            pump(320);
+            clickWindow(chip);         // picker takes foreground; don't steal it back (see above)
+            if (visiblePickers() == 1)
+            {
+                before = m_nbPages();
+                sim.KeyDown(WXK_ESCAPE); sim.KeyUp(WXK_ESCAPE);
+                pump(200);
+                check(visiblePickers() == 0, "Esc closes the picker");
+                check(m_nbPages() == before, "Esc does not open a terminal");
+            }
+            else check(false, "picker did not open for the Esc test");
+        }
+        destroyPopups();
+
+        // Every chrome button needs an accessible name: they are glyph-only (empty label), so without one
+        // a screen reader announces an unlabelled control and the "keyboard/screen-reader" claim is hollow.
+        for (auto* btn : b) check(!btn->GetName().empty(), "toolbar button has an accessible name");
+
+        // The focus escape. Focusable buttons are pointless if focus starts in the terminal and the
+        // terminal eats Tab: Ctrl+Shift+Up must reach the toolbar, Ctrl+Shift+Down must come back.
+        if (frameForeground())
+        {
+            m_panel->focusActive();    // put focus back in the terminal, where a user actually starts
+            pump(150);
+            check(dynamic_cast<wxStyledTextCtrl*>(wxWindow::FindFocus()) != nullptr,
+                  "focus starts in the terminal");
+            sim.Char(WXK_UP, wxMOD_CONTROL | wxMOD_SHIFT);
+            pump(180);
+            check(b[0]->HasFocus(), "Ctrl+Shift+Up escapes the terminal to the toolbar");
+            sim.Char(WXK_DOWN, wxMOD_CONTROL | wxMOD_SHIFT);
+            pump(180);
+            check(dynamic_cast<wxStyledTextCtrl*>(wxWindow::FindFocus()) != nullptr,
+                  "Ctrl+Shift+Down returns focus to the terminal");
+        }
+    }
+
+    // Force the test frame to the OS foreground and confirm it took. Key injection targets the foreground
+    // window, so this gates every key burst above: false -> could not take foreground -> caller skips (does
+    // NOT inject). Non-MSW returns true (no foreground gating needed for the local wxUIActionSimulator path).
+    bool frameForeground()
+    {
+#ifdef __WXMSW__
+        HWND fh = static_cast<HWND>(m_frame->GetHandle());
+        ::SetForegroundWindow(fh);
+        pump(120);
+        return ::GetForegroundWindow() == fh;
+#else
+        return true;
+#endif
+    }
+    // Title of the most recently added notebook page (AddPage appends + selects, so it's the last index).
+    wxString newestPageTitle() const
+    {
+        for (wxWindow* c : m_panel->GetChildren())
+            if (auto* nb = dynamic_cast<wxAuiNotebook*>(c))
+            { const size_t n = nb->GetPageCount(); return n ? nb->GetPageText(n - 1) : wxString(); }
+        return wxString();
     }
 
     // Count VISIBLE pickers, not merely constructed ones. A dismissed popup is hidden immediately but
