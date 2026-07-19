@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>wxNote User Manual</title>
+  <meta name="description" content="The wxNote user manual - menus, keyboard shortcuts, preferences, terminal, languages, plugins and command-line usage.">
+
+  <!--
+    - theme, applied before first paint (same key and same resolution rule as the landing page's
+      inline head script, so a visitor's light/dark/system choice carries over between the two)
+  -->
+  <script>
+    (function () {
+      var pref = localStorage.getItem('wxn-site-theme') || 'system';
+      var resolved = pref === 'system'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : pref;
+      document.documentElement.setAttribute('data-theme', resolved);
+    })();
+  </script>
+
+  <link rel="icon" href="../assets/images/logo.svg" type="image/svg+xml">
+
+  <!-- google font - same family as the landing page -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <!-- docsify's stock "vue" theme as a base; every colour is overridden below -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+
+  <style>
+    /**
+     * Colour tokens mirror site/assets/css/style.css: dark under :root (the default), light under
+     * [data-theme="light"], so this manual sits beside the landing page in either theme without
+     * per-component overrides. Only a subset of the landing page's tokens is needed here.
+     */
+    :root {
+      --bg: hsl(0, 0%, 7%);
+      --surface: hsl(240, 2%, 13%);
+      --surface-2: hsl(240, 1%, 17%);
+      --border: hsl(0, 0%, 22%);
+      --text: hsl(0, 0%, 84%);
+      --text-strong: hsl(0, 0%, 98%);
+      --text-muted: hsla(0, 0%, 84%, 0.7);
+      --accent: hsl(134, 52%, 55%);
+      --accent-muted: hsl(134, 35%, 50%);
+      --code-bg: hsl(240, 2%, 12%);
+      --shadow: -4px 8px 24px hsla(0, 0%, 0%, 0.25);
+
+      --ff: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --ff-mono: 'Cascadia Mono', 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    }
+
+    [data-theme="light"] {
+      --bg: hsl(220, 20%, 97%);
+      --surface: hsl(0, 0%, 100%);
+      --surface-2: hsl(220, 14%, 93%);
+      --border: hsl(220, 13%, 85%);
+      --text: hsl(220, 18%, 16%);
+      --text-strong: hsl(220, 20%, 12%);
+      --text-muted: hsl(220, 9%, 46%);
+      --accent: hsl(134, 55%, 38%);
+      --accent-muted: hsl(134, 35%, 40%);
+      --code-bg: hsl(220, 20%, 93%);
+      --shadow: -4px 8px 24px hsla(220, 20%, 40%, 0.12);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--ff);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ---------- sidebar ---------- */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding-top: 12px;
+    }
+    .sidebar > h1 { margin: 0 0 12px; padding: 0 20px; }
+    .sidebar > h1 .app-name {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-strong);
+    }
+    .sidebar > h1 .app-name img { width: 30px; height: 30px; }
+    .sidebar ul li a {
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 400;
+      border: none;
+    }
+    .sidebar ul li a:hover { color: var(--accent); text-decoration: none; }
+    .sidebar ul li.active > a { color: var(--accent); font-weight: 500; border-right: none; }
+    .sidebar ul li ul { padding-left: 14px; }
+    .sidebar-toggle { background: transparent; }
+    .sidebar-toggle .sidebar-toggle-button:hover { opacity: 0.6; }
+    .sidebar-toggle span { background-color: var(--accent); }
+
+    /* Docsify's stock GitHub corner (from the repo: option below) is a top-right wedge that collides with
+       the theme switcher. Mirroring it into the bottom corner does NOT work: the wedge and the octocat
+       live in one SVG, so flipping the triangle flips the cat with it, and the cat is two SEPARATE paths
+       (.octo-arm / .octo-body) - counter-flipping them individually pivots each about its own box and
+       tears the cat apart. Rather than hand-tune a shared pivot, hide the corner and use a plain circular
+       button, which reads better at this size anyway and needs no transform maths. */
+    .github-corner { display: none !important; }
+
+    /* Wider than docsify's stock 300px: the FAQ headings are full questions and were being
+       truncated mid-word ("I clicked a menu item and the st..."), which defeats the point of a
+       nav list. Desktop only - below 768px docsify slides the sidebar OVER the content, so a
+       wider panel there would swallow the page on a phone. The toggle tracks the same width so
+       the hamburger stays anchored to the sidebar's own edge. */
+    @media screen and (min-width: 769px) {
+      .sidebar        { width: 380px; }
+      .content        { left: 380px; }
+      .sidebar-toggle { width: 364px; }
+    }
+
+    /* ---------- content ---------- */
+    .markdown-section { max-width: 860px; }
+    .markdown-section h1,
+    .markdown-section h2,
+    .markdown-section h3,
+    .markdown-section h4 { color: var(--text-strong); font-weight: 600; }
+    .markdown-section h1 { font-size: 2em; }
+    .markdown-section h2 {
+      margin-top: 2.2rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .markdown-section a { color: var(--accent); text-decoration: none; font-weight: 400; }
+    .markdown-section a:hover { color: var(--accent-muted); text-decoration: underline; }
+    /**
+     * Headings are wrapped in docsify's permalink <a class="anchor"><span>…</span></a>, and the stock
+     * vue theme hardcodes that span to #34495e - a dark slate that is all but invisible on our dark
+     * background. The heading colour therefore has to be set on the span, not just on h1..h4 above.
+     */
+    .markdown-section .anchor span { color: var(--text-strong); }
+    .markdown-section .anchor:hover span { color: var(--accent); text-decoration: none; }
+    .markdown-section strong { color: var(--text-strong); font-weight: 500; }
+    .markdown-section p, .markdown-section li { color: var(--text); }
+    .markdown-section hr { border-bottom: 1px solid var(--border); }
+
+    .markdown-section code,
+    .markdown-section kbd {
+      font-family: var(--ff-mono);
+      background: var(--code-bg);
+      color: var(--accent);
+      border-radius: 4px;
+      font-size: 0.86em;
+      padding: 2px 5px;
+      margin: 0 1px;
+    }
+    .markdown-section kbd {
+      color: var(--text-strong);
+      border: 1px solid var(--border);
+      border-bottom-width: 2px;
+      white-space: nowrap;
+    }
+    .markdown-section pre,
+    .markdown-section pre > code {
+      background: var(--code-bg);
+      color: var(--text);
+      font-family: var(--ff-mono);
+    }
+    .markdown-section pre { border: 1px solid var(--border); border-radius: 8px; }
+    .markdown-section pre::after { color: var(--text-muted); }
+
+    .markdown-section table {
+      display: table;
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1rem;
+    }
+    .markdown-section th,
+    .markdown-section td {
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      font-size: 14px;
+    }
+    .markdown-section th {
+      background: var(--surface-2);
+      color: var(--text-strong);
+      text-align: left;
+      font-weight: 500;
+    }
+    .markdown-section tr:nth-child(2n) { background: transparent; }
+    .markdown-section tr:nth-child(2n) td { background: var(--surface); }
+
+    .markdown-section blockquote {
+      border-left: 3px solid var(--accent);
+      background: var(--surface);
+      border-radius: 0 8px 8px 0;
+      padding: 10px 16px;
+      margin: 1.2em 0;
+    }
+    .markdown-section blockquote p { color: var(--text-muted); font-weight: 400; }
+
+    /* wide tables must scroll in their own box, never the page */
+    .markdown-section .table-wrap { overflow-x: auto; }
+
+    /* ---------- search plugin ---------- */
+    .sidebar .search { border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+    .sidebar .search input {
+      background: var(--code-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: var(--ff);
+      font-size: 13px;
+    }
+    .sidebar .search input::placeholder { color: var(--text-muted); }
+    .sidebar .search .results-panel { color: var(--text); }
+    .sidebar .search h2 { color: var(--text-muted); font-size: 13px; }
+    .sidebar .search .matching-post { border-bottom: 1px solid var(--border); }
+    .sidebar .search p { color: var(--text-muted); font-size: 12px; }
+    .sidebar .search .search-keyword { color: var(--accent); font-style: normal; font-weight: 500; }
+    .sidebar .search .clear-button { cursor: pointer; }
+
+    /* ---------- copy-to-clipboard plugin ---------- */
+    .docsify-copy-code-button {
+      background: var(--surface-2) !important;
+      color: var(--text) !important;
+      border: 1px solid var(--border);
+      border-radius: 0 8px 0 6px;
+      font-family: var(--ff);
+      font-size: 12px;
+    }
+    .docsify-copy-code-button:hover { color: var(--accent) !important; }
+    .docsify-copy-code-button::after { display: none; }
+
+    /* ---------- top-right controls (home link + theme switcher) ---------- */
+    .doc-controls {
+      position: fixed;
+      top: 14px;
+      right: 18px;
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    /* Home + GitHub share ONE pill, mirroring how .doc-theme-toggle groups its buttons: the wrapper owns
+       the border/background/shadow and the children are transparent, so the row reads as two grouped
+       controls rather than three loose ones. Same 3px padding and 28px round hit-area as the toggle. */
+    .doc-brand {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 3px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .doc-controls a.home-link {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 4px 10px;
+      border: none;
+      border-radius: 999px;
+      background: transparent;
+      box-shadow: none;
+    }
+    .doc-controls a.home-link:hover { color: var(--accent); }
+    /* Labelled, matching .home-link exactly - same gap, font-size and padding - so the two read as a
+       matched pair inside the pill rather than "a link and an icon". The hairline divider keeps the two
+       labels from running together now that both carry text. */
+    .doc-controls a.gh-link {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      color: var(--text-muted);
+      text-decoration: none;
+      border-left: 1px solid var(--border);
+    }
+    .doc-controls a.gh-link:hover { color: var(--accent); }
+    .doc-controls a.gh-link svg { width: 15px; height: 15px; fill: currentColor; display: block; }
+    .doc-theme-toggle {
+      display: flex;
+      gap: 2px;
+      padding: 3px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .doc-theme-toggle button {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .doc-theme-toggle button:hover { color: var(--text-strong); }
+    .doc-theme-toggle button[aria-pressed="true"] { background: var(--surface-2); color: var(--accent); }
+    .doc-theme-toggle svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+    @media screen and (max-width: 768px) {
+      .doc-controls { top: 8px; right: 10px; gap: 6px; }
+      .doc-controls a.home-link span { display: none; }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">Loading the wxNote manual…</div>
+
+
+  <!--
+    - Home link + theme switcher. Deliberately OUTSIDE #app: docsify only rewrites/routes links it
+      compiles from Markdown, so a plain relative href here navigates normally instead of being
+      swallowed by the hash router.
+  -->
+  <div class="doc-controls">
+    <!-- Home + GitHub in ONE pill (.doc-brand owns the chrome; see the CSS above). The GitHub mark is an
+         inline SVG rather than an icon font: this page loads none, so it still renders if a CDN is
+         unreachable - the landing page's ionicons do not. -->
+    <div class="doc-brand">
+      <a class="home-link" href="../" title="Back to the wxNote home page">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+          <path d="M12 2.65 1.84 11.1a1 1 0 0 0 .64 1.77H4V21a1 1 0 0 0 1 1h4.5v-5.5h5V22H19a1 1 0 0 0 1-1v-8.13h1.52a1 1 0 0 0 .64-1.77L12 2.65z"></path>
+        </svg>
+        <span>wxNote home</span>
+      </a>
+
+      <a class="gh-link" href="https://github.com/Alpaq92/wx-notepad-plus-plus"
+         target="_blank" rel="noopener" title="View source on GitHub" aria-label="View source on GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span>GitHub</span>
+      </a>
+    </div>
+
+    <div class="doc-theme-toggle" role="group" aria-label="Colour theme">
+      <button type="button" data-theme-option="light" aria-pressed="false" title="Light" aria-label="Light theme">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+      </button>
+      <button type="button" data-theme-option="system" aria-pressed="true" title="Match system" aria-label="Match system theme">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>
+      </button>
+      <button type="button" data-theme-option="dark" aria-pressed="false" title="Dark" aria-label="Dark theme">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    window.$docsify = {
+      name: '<span class="app-name"><img src="../assets/images/logo.svg" alt=""> wxNote</span>',
+      nameLink: '#/',
+      repo: 'https://github.com/Alpaq92/wx-notepad-plus-plus',
+      loadSidebar: true,
+      subMaxLevel: 2,
+      auto2top: true,
+      relativePath: true,
+      notFoundPage: false,
+      search: {
+        placeholder: 'Search the manual…',
+        noData: 'No matches found.',
+        depth: 3,
+        paths: 'auto'
+      },
+      copyCode: {
+        buttonText: 'Copy',
+        errorText: 'Error',
+        successText: 'Copied'
+      }
+    };
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/docsify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-copy-code@3/dist/docsify-copy-code.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-powershell.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-c.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-lua.min.js"></script>
+
+  <script>
+    // Theme switcher - writes the SAME localStorage key the landing page uses ('wxn-site-theme'),
+    // so switching here follows you back to the landing page and vice versa.
+    (function () {
+      var KEY = 'wxn-site-theme';
+      var root = document.documentElement;
+      var buttons = document.querySelectorAll('[data-theme-option]');
+      var media = window.matchMedia('(prefers-color-scheme: dark)');
+
+      function resolve(pref) {
+        return pref === 'system' ? (media.matches ? 'dark' : 'light') : pref;
+      }
+      function apply(pref) {
+        root.setAttribute('data-theme', resolve(pref));
+        buttons.forEach(function (btn) {
+          btn.setAttribute('aria-pressed', String(btn.dataset.themeOption === pref));
+        });
+      }
+      function current() { return localStorage.getItem(KEY) || 'system'; }
+
+      apply(current());
+      buttons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          localStorage.setItem(KEY, this.dataset.themeOption);
+          apply(this.dataset.themeOption);
+        });
+      });
+      media.addEventListener('change', function () {
+        if (current() === 'system') apply('system');
+      });
+    })();
+  </script>
+</body>
+
+</html>
