@@ -2,12 +2,15 @@ wxNote
 Copyright 2026 The wxNote Authors
 
 This product is distributed under the Apache License, Version 2.0 (see
-LICENSE), with one exception in what ships: packages/npp-bridge/ remains
-GPL-3.0-or-later (see packages/npp-bridge/LICENSE) because it reproduces
-Notepad++'s plugin ABI for interoperability - its never-shipped, Windows-only
-test fixture packages/test_plugin/ tracks the same GPL license for the same
-reason. This NOTICE records the project's provenance and third-party
-attributions.
+LICENSE), with a few exceptions among the optional plugins that ship, each of
+which remains GPL-3.0-or-later because it reproduces a Notepad++
+interoperability surface: packages/npp-bridge/ (the plugin ABI),
+packages/udl-compat/ (the userDefineLang.xml UDL format), and
+packages/npp-shortcuts-compat/ (the shortcuts.xml keybinding format). Each has
+its own LICENSE. npp-bridge's never-shipped, Windows-only test fixture
+packages/test_plugin/ tracks the same GPL license for the same reason. The
+Apache-2.0 core links against none of them. This NOTICE records the project's
+provenance and third-party attributions.
 
 ------------------------------------------------------------------------------
 A license-aware, independent reimplementation
@@ -58,6 +61,16 @@ wxWidgets
   Copyright (c) the wxWidgets team.
   wxWindows Library Licence (LGPL-2.1 plus a binary-distribution exception).
   Fetched at build time; not vendored in this repository.
+
+libvterm
+  Copyright (c) 2008 Paul Evans <leonerd@leonerd.org.uk>
+  MIT License. VT520/xterm terminal-emulation core (parser + state machine),
+  from the neovim/libvterm GitHub mirror (Neovim's fork of Paul Evans'
+  upstream, now archived read-only), pinned to tag v0.3.3 by SHA256. Fetched at
+  build time and linked as the static "vterm" library; not vendored in this
+  repository except for two small generated DEC character-set tables in
+  third_party/libvterm-tables/ (same MIT license and copyright - mechanical
+  transformations of upstream's .tbl data; see that directory's README.md).
 
 Toolbar icons — "wxNote Toolbar Icons (Tabler x Open Color)"
   A derivative work of two MIT-licensed projects, released under the MIT License:

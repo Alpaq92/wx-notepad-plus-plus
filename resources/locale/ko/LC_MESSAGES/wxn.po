@@ -6,11 +6,11 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Language: ko\n"
 
-msgid "&New\tCtrl+N"
-msgstr "새로 만들기(&N)\tCtrl+N"
+msgid "&New"
+msgstr "새로 만들기(&N)"
 
-msgid "&Open...\tCtrl+O"
-msgstr "열기(&O)...\tCtrl+O"
+msgid "&Open..."
+msgstr "열기(&O)..."
 
 msgid "Explorer"
 msgstr "Explorer"
@@ -36,26 +36,26 @@ msgstr "폴더를 작업 영역으로 열기(&W)..."
 msgid "Re&load from Disk"
 msgstr "디스크에서 다시 불러오기(&L)"
 
-msgid "&Save\tCtrl+S"
-msgstr "저장(&S)\tCtrl+S"
+msgid "&Save"
+msgstr "저장(&S)"
 
-msgid "Save &As...\tCtrl+Alt+S"
-msgstr "다른 이름으로 저장(&A)...\tCtrl+Alt+S"
+msgid "Save &As..."
+msgstr "다른 이름으로 저장(&A)..."
 
 msgid "Save a Cop&y As..."
 msgstr "복사본으로 저장(&Y)..."
 
-msgid "Sa&ve All\tCtrl+Shift+S"
-msgstr "모두 저장(&V)\tCtrl+Shift+S"
+msgid "Sa&ve All"
+msgstr "모두 저장(&V)"
 
 msgid "&Rename..."
 msgstr "이름 바꾸기(&R)..."
 
-msgid "&Close\tCtrl+W"
-msgstr "닫기(&C)\tCtrl+W"
+msgid "&Close"
+msgstr "닫기(&C)"
 
-msgid "Clos&e All\tCtrl+Shift+W"
-msgstr "모두 닫기(&E)\tCtrl+Shift+W"
+msgid "Clos&e All"
+msgstr "모두 닫기(&E)"
 
 msgid "Close All but Active Document"
 msgstr "활성 문서 외 모두 닫기"
@@ -75,8 +75,8 @@ msgstr "변경되지 않은 문서 모두 닫기"
 msgid "Close &Multiple Documents"
 msgstr "여러 문서 닫기(&M)"
 
-msgid "Restore Recent Closed File\tCtrl+Shift+T"
-msgstr "최근에 닫은 파일 다시 열기\tCtrl+Shift+T"
+msgid "Restore Recent Closed File"
+msgstr "최근에 닫은 파일 다시 열기"
 
 msgid "Move to Recycle &Bin"
 msgstr "휴지통으로 이동(&B)"
@@ -87,38 +87,38 @@ msgstr "세션 불러오기(&I)..."
 msgid "Save Sess&ion..."
 msgstr "세션 저장(&I)..."
 
-msgid "&Print...\tCtrl+P"
-msgstr "인쇄(&P)...\tCtrl+P"
+msgid "&Print..."
+msgstr "인쇄(&P)..."
 
 msgid "Print No&w"
 msgstr "바로 인쇄(&W)"
 
-msgid "E&xit\tAlt+F4"
-msgstr "끝내기(&X)\tAlt+F4"
+msgid "E&xit"
+msgstr "끝내기(&X)"
 
 msgid "&File"
 msgstr "파일(&F)"
 
-msgid "&Undo\tCtrl+Z"
-msgstr "실행 취소(&U)\tCtrl+Z"
+msgid "&Undo"
+msgstr "실행 취소(&U)"
 
-msgid "&Redo\tCtrl+Y"
-msgstr "다시 실행(&R)\tCtrl+Y"
+msgid "&Redo"
+msgstr "다시 실행(&R)"
 
-msgid "Cu&t\tCtrl+X"
-msgstr "잘라내기(&T)\tCtrl+X"
+msgid "Cu&t"
+msgstr "잘라내기(&T)"
 
-msgid "&Copy\tCtrl+C"
-msgstr "복사(&C)\tCtrl+C"
+msgid "&Copy"
+msgstr "복사(&C)"
 
-msgid "&Paste\tCtrl+V"
-msgstr "붙여넣기(&P)\tCtrl+V"
+msgid "&Paste"
+msgstr "붙여넣기(&P)"
 
-msgid "&Delete\tDel"
-msgstr "삭제(&D)\tDel"
+msgid "&Delete"
+msgstr "삭제(&D)"
 
-msgid "&Select All\tCtrl+A"
-msgstr "모두 선택(&S)\tCtrl+A"
+msgid "&Select All"
+msgstr "모두 선택(&S)"
 
 msgid "Begin/End &Select"
 msgstr "선택 시작/끝(&S)"
@@ -165,11 +165,11 @@ msgstr "줄 들여쓰기 줄이기"
 msgid "&Indent"
 msgstr "들여쓰기(&I)"
 
-msgid "&UPPERCASE\tCtrl+Shift+U"
-msgstr "대문자로(&U)\tCtrl+Shift+U"
+msgid "&UPPERCASE"
+msgstr "대문자로(&U)"
 
-msgid "&lowercase\tCtrl+U"
-msgstr "소문자로(&L)\tCtrl+U"
+msgid "&lowercase"
+msgstr "소문자로(&L)"
 
 msgid "&Proper Case"
 msgstr "단어 첫 글자를 대문자로(&P)"
@@ -192,8 +192,8 @@ msgstr "대/소문자 무작위(&R)"
 msgid "Con&vert Case to"
 msgstr "대/소문자 변환(&V)"
 
-msgid "Duplicate Current Line\tCtrl+D"
-msgstr "현재 줄 복제\tCtrl+D"
+msgid "Duplicate Current Line"
+msgstr "현재 줄 복제"
 
 msgid "Remove Duplicate Lines"
 msgstr "중복된 줄 제거"
@@ -201,17 +201,17 @@ msgstr "중복된 줄 제거"
 msgid "Remove Consecutive Duplicate Lines"
 msgstr "연속된 중복 줄 제거"
 
-msgid "Split Lines\tCtrl+I"
-msgstr "줄 나누기\tCtrl+I"
+msgid "Split Lines"
+msgstr "줄 나누기"
 
-msgid "Join Lines\tCtrl+J"
-msgstr "줄 합치기\tCtrl+J"
+msgid "Join Lines"
+msgstr "줄 합치기"
 
-msgid "Move Up Current Line\tCtrl+Shift+Up"
-msgstr "현재 줄 위로 이동\tCtrl+Shift+Up"
+msgid "Move Up Current Line"
+msgstr "현재 줄 위로 이동"
 
-msgid "Move Down Current Line\tCtrl+Shift+Down"
-msgstr "현재 줄 아래로 이동\tCtrl+Shift+Down"
+msgid "Move Down Current Line"
+msgstr "현재 줄 아래로 이동"
 
 msgid "Remove Empty Lines"
 msgstr "빈 줄 제거"
@@ -276,8 +276,8 @@ msgstr "줄을 길이순 내림차순 정렬"
 msgid "&Line Operations"
 msgstr "줄 작업(&L)"
 
-msgid "Toggle Single Line Comment\tCtrl+Q"
-msgstr "한 줄 주석 전환\tCtrl+Q"
+msgid "Toggle Single Line Comment"
+msgstr "한 줄 주석 전환"
 
 msgid "Single Line Comment"
 msgstr "한 줄 주석"
@@ -285,8 +285,8 @@ msgstr "한 줄 주석"
 msgid "Single Line Uncomment"
 msgstr "한 줄 주석 해제"
 
-msgid "Block Comment\tCtrl+Shift+Q"
-msgstr "블록 주석\tCtrl+Shift+Q"
+msgid "Block Comment"
+msgstr "블록 주석"
 
 msgid "Block Uncomment"
 msgstr "블록 주석 해제"
@@ -294,8 +294,8 @@ msgstr "블록 주석 해제"
 msgid "Co&mment/Uncomment"
 msgstr "주석/주석 해제(&M)"
 
-msgid "Function Completion\tCtrl+Space"
-msgstr "함수 자동 완성\tCtrl+Space"
+msgid "Function Completion"
+msgstr "함수 자동 완성"
 
 msgid "Word Completion"
 msgstr "단어 자동 완성"
@@ -417,8 +417,8 @@ msgstr "현재 항목 건너뛰기 && 다음 다중 선택으로 이동"
 msgid "Column Mode..."
 msgstr "열 모드..."
 
-msgid "Colum&n Editor...\tAlt+C"
-msgstr "열 편집기(&N)...\tAlt+C"
+msgid "Colum&n Editor..."
+msgstr "열 편집기(&N)..."
 
 msgid "Character &Panel"
 msgstr "문자 패널(&P)"
@@ -444,23 +444,23 @@ msgstr "Windows 읽기 전용 특성"
 msgid "&Edit"
 msgstr "편집(&E)"
 
-msgid "&Find...\tCtrl+F"
-msgstr "찾기(&F)...\tCtrl+F"
+msgid "&Find..."
+msgstr "찾기(&F)..."
 
-msgid "Find in Fi&les...\tCtrl+Shift+F"
-msgstr "파일에서 찾기(&L)...\tCtrl+Shift+F"
+msgid "Find in Fi&les..."
+msgstr "파일에서 찾기(&L)..."
 
-msgid "Find &Next\tF3"
-msgstr "다음 찾기(&N)\tF3"
+msgid "Find &Next"
+msgstr "다음 찾기(&N)"
 
-msgid "Find &Previous\tShift+F3"
-msgstr "이전 찾기(&P)\tShift+F3"
+msgid "Find &Previous"
+msgstr "이전 찾기(&P)"
 
-msgid "&Select and Find Next\tCtrl+F3"
-msgstr "선택 후 다음 찾기(&S)\tCtrl+F3"
+msgid "&Select and Find Next"
+msgstr "선택 후 다음 찾기(&S)"
 
-msgid "&Select and Find Previous\tCtrl+Shift+F3"
-msgstr "선택 후 이전 찾기(&S)\tCtrl+Shift+F3"
+msgid "&Select and Find Previous"
+msgstr "선택 후 이전 찾기(&S)"
 
 msgid "Find (&Volatile) Next"
 msgstr "(임시) 다음 찾기(&V)"
@@ -468,26 +468,26 @@ msgstr "(임시) 다음 찾기(&V)"
 msgid "Find (&Volatile) Previous"
 msgstr "(임시) 이전 찾기(&V)"
 
-msgid "&Replace...\tCtrl+H"
-msgstr "바꾸기(&R)...\tCtrl+H"
+msgid "&Replace..."
+msgstr "바꾸기(&R)..."
 
-msgid "&Incremental Search\tCtrl+Alt+I"
-msgstr "증분 검색(&I)\tCtrl+Alt+I"
+msgid "&Incremental Search"
+msgstr "증분 검색(&I)"
 
-msgid "Search Results &Window\tF7"
-msgstr "검색 결과 창(&W)\tF7"
+msgid "Search Results &Window"
+msgstr "검색 결과 창(&W)"
 
-msgid "Next Search Resul&t\tF4"
-msgstr "다음 검색 결과(&T)\tF4"
+msgid "Next Search Resul&t"
+msgstr "다음 검색 결과(&T)"
 
-msgid "Previous Search Resul&t\tShift+F4"
-msgstr "이전 검색 결과(&T)\tShift+F4"
+msgid "Previous Search Resul&t"
+msgstr "이전 검색 결과(&T)"
 
-msgid "&Go to...\tCtrl+G"
-msgstr "이동(&G)...\tCtrl+G"
+msgid "&Go to..."
+msgstr "이동(&G)..."
 
-msgid "Go to &Matching Brace\tCtrl+B"
-msgstr "짝이 되는 괄호로 이동(&M)\tCtrl+B"
+msgid "Go to &Matching Brace"
+msgstr "짝이 되는 괄호로 이동(&M)"
 
 msgid "Select All In-betw&een {} [] or ()"
 msgstr "{} [] () 사이 모두 선택(&E)"
@@ -579,14 +579,14 @@ msgstr "모든 스타일"
 msgid "&Copy Styled Text"
 msgstr "스타일 적용된 텍스트 복사(&C)"
 
-msgid "Toggle Bookmark\tCtrl+F2"
-msgstr "책갈피 전환\tCtrl+F2"
+msgid "Toggle Bookmark"
+msgstr "책갈피 전환"
 
-msgid "Next Bookmark\tF2"
-msgstr "다음 책갈피\tF2"
+msgid "Next Bookmark"
+msgstr "다음 책갈피"
 
-msgid "Previous Bookmark\tShift+F2"
-msgstr "이전 책갈피\tShift+F2"
+msgid "Previous Bookmark"
+msgstr "이전 책갈피"
 
 msgid "Clear All Bookmarks"
 msgstr "모든 책갈피 지우기"
@@ -621,11 +621,11 @@ msgstr "찾기(&S)"
 msgid "Always on &Top"
 msgstr "항상 위(&T)"
 
-msgid "To&ggle Full Screen Mode\tF11"
-msgstr "전체 화면 모드 전환(&G)\tF11"
+msgid "To&ggle Full Screen Mode"
+msgstr "전체 화면 모드 전환(&G)"
 
-msgid "&Post-It\tF12"
-msgstr "포스트잇(&P)\tF12"
+msgid "&Post-It"
+msgstr "포스트잇(&P)"
 
 msgid "D&istraction Free Mode"
 msgstr "집중 모드(&I)"
@@ -696,32 +696,32 @@ msgstr "새 인스턴스에서 열기(&O)"
 msgid "&Move/Clone Current Document"
 msgstr "현재 문서 이동/복제(&M)"
 
-msgid "1st Tab\tCtrl+1"
-msgstr "1번 탭\tCtrl+1"
+msgid "1st Tab"
+msgstr "1번 탭"
 
-msgid "2nd Tab\tCtrl+2"
-msgstr "2번 탭\tCtrl+2"
+msgid "2nd Tab"
+msgstr "2번 탭"
 
-msgid "3rd Tab\tCtrl+3"
-msgstr "3번 탭\tCtrl+3"
+msgid "3rd Tab"
+msgstr "3번 탭"
 
-msgid "4th Tab\tCtrl+4"
-msgstr "4번 탭\tCtrl+4"
+msgid "4th Tab"
+msgstr "4번 탭"
 
-msgid "5th Tab\tCtrl+5"
-msgstr "5번 탭\tCtrl+5"
+msgid "5th Tab"
+msgstr "5번 탭"
 
-msgid "6th Tab\tCtrl+6"
-msgstr "6번 탭\tCtrl+6"
+msgid "6th Tab"
+msgstr "6번 탭"
 
-msgid "7th Tab\tCtrl+7"
-msgstr "7번 탭\tCtrl+7"
+msgid "7th Tab"
+msgstr "7번 탭"
 
-msgid "8th Tab\tCtrl+8"
-msgstr "8번 탭\tCtrl+8"
+msgid "8th Tab"
+msgstr "8번 탭"
 
-msgid "9th Tab\tCtrl+9"
-msgstr "9번 탭\tCtrl+9"
+msgid "9th Tab"
+msgstr "9번 탭"
 
 msgid "First Tab"
 msgstr "첫 번째 탭"
@@ -729,11 +729,11 @@ msgstr "첫 번째 탭"
 msgid "Last Tab"
 msgstr "마지막 탭"
 
-msgid "Next Tab\tCtrl+Tab"
-msgstr "다음 탭\tCtrl+Tab"
+msgid "Next Tab"
+msgstr "다음 탭"
 
-msgid "Previous Tab\tCtrl+Shift+Tab"
-msgstr "이전 탭\tCtrl+Shift+Tab"
+msgid "Previous Tab"
+msgstr "이전 탭"
 
 msgid "Move to Start"
 msgstr "처음으로 이동"
@@ -774,68 +774,44 @@ msgstr "자동 줄 바꿈(&W)"
 msgid "&Hide Lines"
 msgstr "줄 숨기기(&H)"
 
-msgid "Fold All\tAlt+0"
-msgstr "모두 접기\tAlt+0"
+msgid "Fold All"
+msgstr "모두 접기"
 
-msgid "Unfold All\tAlt+Shift+0"
-msgstr "모두 펼치기\tAlt+Shift+0"
+msgid "Unfold All"
+msgstr "모두 펼치기"
 
-msgid "Fold Current Level\tCtrl+Alt+F"
-msgstr "현재 수준 접기\tCtrl+Alt+F"
+msgid "Fold Current Level"
+msgstr "현재 수준 접기"
 
-msgid "Unfold Current Level\tCtrl+Alt+Shift+F"
-msgstr "현재 수준 펼치기\tCtrl+Alt+Shift+F"
+msgid "Unfold Current Level"
+msgstr "현재 수준 펼치기"
 
-msgid "1\tAlt+1"
-msgstr "1\tAlt+1"
+msgid "1"
+msgstr "1"
 
-msgid "2\tAlt+2"
-msgstr "2\tAlt+2"
+msgid "2"
+msgstr "2"
 
-msgid "3\tAlt+3"
-msgstr "3\tAlt+3"
+msgid "3"
+msgstr "3"
 
-msgid "4\tAlt+4"
-msgstr "4\tAlt+4"
+msgid "4"
+msgstr "4"
 
-msgid "5\tAlt+5"
-msgstr "5\tAlt+5"
+msgid "5"
+msgstr "5"
 
-msgid "6\tAlt+6"
-msgstr "6\tAlt+6"
+msgid "6"
+msgstr "6"
 
-msgid "7\tAlt+7"
-msgstr "7\tAlt+7"
+msgid "7"
+msgstr "7"
 
-msgid "8\tAlt+8"
-msgstr "8\tAlt+8"
+msgid "8"
+msgstr "8"
 
 msgid "Fold Level"
 msgstr "수준별 접기"
-
-msgid "1\tAlt+Shift+1"
-msgstr "1\tAlt+Shift+1"
-
-msgid "2\tAlt+Shift+2"
-msgstr "2\tAlt+Shift+2"
-
-msgid "3\tAlt+Shift+3"
-msgstr "3\tAlt+Shift+3"
-
-msgid "4\tAlt+Shift+4"
-msgstr "4\tAlt+Shift+4"
-
-msgid "5\tAlt+Shift+5"
-msgstr "5\tAlt+Shift+5"
-
-msgid "6\tAlt+Shift+6"
-msgstr "6\tAlt+Shift+6"
-
-msgid "7\tAlt+Shift+7"
-msgstr "7\tAlt+Shift+7"
-
-msgid "8\tAlt+Shift+8"
-msgstr "8\tAlt+Shift+8"
 
 msgid "Unfold Level"
 msgstr "수준별 펼치기"
@@ -1188,8 +1164,8 @@ msgstr "매크로 여러 번 실행(&R)..."
 msgid "&Macro"
 msgstr "매크로(&M)"
 
-msgid "&Run...\tF5"
-msgstr "실행(&R)...\tF5"
+msgid "&Run..."
+msgstr "실행(&R)..."
 
 msgid "Validate shortcuts.xml"
 msgstr "shortcuts.xml 유효성 검사"
@@ -1257,8 +1233,8 @@ msgstr "업데이터 프록시 설정..."
 msgid "Debug Info..."
 msgstr "디버그 정보..."
 
-msgid "About wxNote\tF1"
-msgstr "wxNote 정보\tF1"
+msgid "About wxNote"
+msgstr "wxNote 정보"
 
 msgid "&About"
 msgstr "정보(&A)"
@@ -1466,9 +1442,6 @@ msgstr "새 파일 %d"
 
 msgid "Save file\n%s ?"
 msgstr "파일을 저장하시겠습니까?\n%s"
-
-msgid "&Save"
-msgstr "저장(&S)"
 
 msgid "Do&n't Save"
 msgstr "저장 안 함(&N)"
@@ -2439,8 +2412,8 @@ msgstr "액세스 거부됨"
 msgid "Reuse an existing window"
 msgstr "기존 창 재사용"
 
-msgid "Usage: wxnote [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
-msgstr "사용법: wxnote [옵션] [파일...]\n\n-g, --goto <줄[,열]>   마지막으로 연 파일에서 이 줄(및 열)로 이동\n-e, --encoding <이름>   인코딩 강제 지정: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance      항상 새 창 열기\n-r, --reuse-instance    이미 실행 중인 창 재사용\n\n명령줄에 지정된 파일은 탭으로 열립니다."
+msgid "Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"
+msgstr "사용법: wxnote [옵션] [파일...]\n\n파일:\n  file                     탭으로 열기\n  folder                   작업 공간으로 열기\n  file:line[:col]          지정 위치에서 열기\n  +N, +N,col               마지막 파일을 N행(및 열)에서 열기\n  +/text                   'text'의 첫 일치 위치에 커서 두기\n  -                        파이프 입력을 새 제목 없는 버퍼로 읽기\n\n옵션:\n  -g, --goto <line[,col]>  마지막으로 연 파일의 해당 행(및 열)으로 이동\n  -e, --encoding <name>    인코딩 강제: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      지정한 파일을 읽기 전용으로 열기\n  -o, -O, --split          지정한 파일을 분할 보기로 열기\n  -n, --new-instance       항상 새 창 열기\n  -r, --reuse-instance     이미 실행 중인 창 재사용\n  -w, --wait               파일이 닫힐 때까지 기다린 후 반환\n  --safe                   플러그인을 불러오지 않고 시작\n  --clean                  --safe와 같고 세션 및 복구 복원도 건너뜀\n  --locale <lang>          이번 실행의 UI 언어 (예: pl, de, ja)\n  -v, --version            버전을 출력하고 종료\n  -h, --help               이 도움말 표시"
 
 msgid "open at line[,col]"
 msgstr "줄[,열]로 이동"
@@ -2460,8 +2433,8 @@ msgstr "복구됨"
 msgid "NewLanguage"
 msgstr "새언어"
 
-msgid "file"
-msgstr "파일"
+msgid "file-or-folder"
+msgstr "파일-또는-폴더"
 
 msgid "Dec"
 msgstr "10진수"
@@ -2513,9 +2486,6 @@ msgstr "전역 스타일"
 
 msgid "Style %d"
 msgstr "스타일 %d"
-
-msgid "About wxNote"
-msgstr "wxNote 정보"
 
 msgid "A fast, cross-platform text editor built on wxWidgets:\na native Scintilla editor with dark/light themes and plugin support."
 msgstr "wxWidgets 기반의 빠른 크로스 플랫폼 텍스트 편집기:\n다크/라이트 테마와 플러그인을 지원하는 네이티브 Scintilla 편집기입니다."
@@ -2609,3 +2579,330 @@ msgstr "열린 터미널 표시"
 
 msgid "Close terminal"
 msgstr "터미널 닫기"
+
+msgid "Zoom level"
+msgstr "확대/축소 수준"
+
+msgid "Show zoom control in status bar"
+msgstr "상태 표시줄에 확대/축소 컨트롤 표시"
+
+msgid "%s:  (could not open)"
+msgstr "%s:  (열 수 없음)"
+
+msgid "Auto-hide toolbar in full screen"
+msgstr "전체 화면에서 도구 모음 자동 숨기기"
+
+msgid "Batch file"
+msgstr "배치 파일"
+
+msgid "C source file"
+msgstr "C 소스 파일"
+
+msgid "C# source file"
+msgstr "C# 소스 파일"
+
+msgid "C++ source file"
+msgstr "C++ 소스 파일"
+
+msgid "CSS file"
+msgstr "CSS 파일"
+
+msgid "Could not create a writable contextMenu.xml to edit."
+msgstr "편집할 수 있는 contextMenu.xml을 만들 수 없습니다."
+
+msgid "Go source file"
+msgstr "Go 소스 파일"
+
+msgid "JSON file"
+msgstr "JSON 파일"
+
+msgid "Java source file"
+msgstr "Java 소스 파일"
+
+msgid "JavaScript file"
+msgstr "JavaScript 파일"
+
+msgid "Leave blank for none. Macros: $(FULL_PATH) $(FILE_NAME) $(DATE) $(TIME)\n$(CURRENT_PRINTING_PAGE) $(TOTAL_PRINTING_PAGES)"
+msgstr "비워 두면 인쇄하지 않습니다. 매크로: $(FULL_PATH) $(FILE_NAME) $(DATE) $(TIME)\n$(CURRENT_PRINTING_PAGE) $(TOTAL_PRINTING_PAGES)"
+
+msgid "Lua source file"
+msgstr "Lua 소스 파일"
+
+msgid "New Folder"
+msgstr "새 폴더"
+
+msgid "Perl source file"
+msgstr "Perl 소스 파일"
+
+msgid "PowerShell file"
+msgstr "PowerShell 파일"
+
+msgid "Properties file"
+msgstr "속성 파일"
+
+msgid "Python file"
+msgstr "Python 파일"
+
+msgid "Ruby source file"
+msgstr "Ruby 소스 파일"
+
+msgid "Rust source file"
+msgstr "Rust 소스 파일"
+
+msgid "SQL file"
+msgstr "SQL 파일"
+
+msgid "Shell script file"
+msgstr "셸 스크립트 파일"
+
+msgid "TypeScript file"
+msgstr "TypeScript 파일"
+
+msgid "XML file"
+msgstr "XML 파일"
+
+msgid "YAML file"
+msgstr "YAML 파일"
+
+msgid "print the version and exit"
+msgstr "버전을 출력하고 종료"
+
+msgid "show this help message"
+msgstr "이 도움말 메시지 표시"
+
+msgid "UI language for this run (e.g. pl, de, ja)"
+msgstr "이번 실행의 UI 언어 (예: pl, de, ja)"
+
+msgid "start without loading any plugins"
+msgstr "플러그인을 불러오지 않고 시작"
+
+msgid "wait for the file to be closed before returning"
+msgstr "파일이 닫힐 때까지 기다린 후 반환"
+
+msgid "open the given file(s) read-only"
+msgstr "지정한 파일을 읽기 전용으로 열기"
+
+msgid "open the given file(s) in a split view"
+msgstr "지정한 파일을 분할 보기로 열기"
+
+msgid "like --safe, plus skip session and recovery restore"
+msgstr "--safe와 같고 세션 및 복구 복원도 건너뜀"
+
+msgid "(stdin)"
+msgstr "(stdin)"
+
+msgid "Shortcut Mapper"
+msgstr "단축키 매퍼"
+
+msgid "Editor"
+msgstr "편집기"
+
+msgid "Global"
+msgstr "전역"
+
+msgid "Scheme"
+msgstr "구성표"
+
+msgid "User"
+msgstr "사용자"
+
+msgid "Default"
+msgstr "기본값"
+
+msgid "Keymap scheme:"
+msgstr "키맵 구성표:"
+
+msgid "Filter by name or shortcut"
+msgstr "이름 또는 단축키로 필터링"
+
+msgid "Find by shortcut"
+msgstr "단축키로 찾기"
+
+msgid "Press a shortcut to list the commands it is bound to"
+msgstr "단축키를 누르면 해당 단축키에 연결된 명령을 표시합니다"
+
+msgid "Command"
+msgstr "명령"
+
+msgid "Shortcut"
+msgstr "단축키"
+
+msgid "Scope"
+msgstr "범위"
+
+msgid "Source"
+msgstr "원본"
+
+msgid "No conflicts."
+msgstr "충돌 없음."
+
+msgid "Modify..."
+msgstr "수정..."
+
+msgid "Clear"
+msgstr "지우기"
+
+msgid "Reset to default"
+msgstr "기본값으로 재설정"
+
+msgid "Ctrl"
+msgstr "Ctrl"
+
+msgid "Alt"
+msgstr "Alt"
+
+msgid "Shift"
+msgstr "Shift"
+
+msgid "Reassign"
+msgstr "다시 지정"
+
+msgid "Keep both"
+msgstr "둘 다 유지"
+
+msgid "Assign"
+msgstr "지정"
+
+msgid "Assign Shortcut"
+msgstr "단축키 지정"
+
+msgid "Shortcut Conflict"
+msgstr "단축키 충돌"
+
+msgid "Shortcut Warning"
+msgstr "단축키 경고"
+
+msgid "Control (physical)"
+msgstr "Control(물리)"
+
+msgid "Press a shortcut..."
+msgstr "단축키를 누르세요..."
+
+msgid "Conflict: %s is also assigned to \"%s\"."
+msgstr "충돌: %s은(는) 이미 \"%s\"에 지정되어 있습니다."
+
+msgid "Warning: %s shadows the built-in editor command %s."
+msgstr "경고: %s이(가) 내장 편집기 명령 %s을(를) 가립니다."
+
+msgid "Shortcut for: %s"
+msgstr "단축키 대상: %s"
+
+msgid "%s is already assigned to \"%s\".\nWhat would you like to do?"
+msgstr "%s은(는) 이미 \"%s\"에 지정되어 있습니다.\n어떻게 하시겠습니까?"
+
+msgid "%s shadows the built-in editor command %s.\nAssign it anyway?"
+msgstr "%s이(가) 내장 편집기 명령 %s을(를) 가립니다.\n그래도 지정하시겠습니까?"
+
+msgid "Commands bound to %s: %d"
+msgstr "%s에 연결된 명령: %d"
+
+msgid "Move Word Left"
+msgstr "단어 왼쪽으로 이동"
+
+msgid "Move Word Right"
+msgstr "단어 오른쪽으로 이동"
+
+msgid "Extend Selection Word Left"
+msgstr "선택 영역을 단어 왼쪽으로 확장"
+
+msgid "Extend Selection Word Right"
+msgstr "선택 영역을 단어 오른쪽으로 확장"
+
+msgid "Move to Previous Word Part"
+msgstr "이전 단어 부분으로 이동"
+
+msgid "Move to Next Word Part"
+msgstr "다음 단어 부분으로 이동"
+
+msgid "Move to Previous Paragraph"
+msgstr "이전 단락으로 이동"
+
+msgid "Move to Next Paragraph"
+msgstr "다음 단락으로 이동"
+
+msgid "Go to Start of Document"
+msgstr "문서 처음으로 이동"
+
+msgid "Go to End of Document"
+msgstr "문서 끝으로 이동"
+
+msgid "Extend Selection to Start of Document"
+msgstr "선택 영역을 문서 처음까지 확장"
+
+msgid "Extend Selection to End of Document"
+msgstr "선택 영역을 문서 끝까지 확장"
+
+msgid "Scroll Up One Line"
+msgstr "한 줄 위로 스크롤"
+
+msgid "Scroll Down One Line"
+msgstr "한 줄 아래로 스크롤"
+
+msgid "Go to Start of Display Line"
+msgstr "화면 줄 처음으로 이동"
+
+msgid "Go to End of Display Line"
+msgstr "화면 줄 끝으로 이동"
+
+msgid "Cut Current Line"
+msgstr "현재 줄 잘라내기"
+
+msgid "Delete Current Line"
+msgstr "현재 줄 삭제"
+
+msgid "Copy Current Line"
+msgstr "현재 줄 복사"
+
+msgid "Delete Word Left"
+msgstr "왼쪽 단어 삭제"
+
+msgid "Delete Word Right"
+msgstr "오른쪽 단어 삭제"
+
+msgid "Delete to Start of Line"
+msgstr "줄 처음까지 삭제"
+
+msgid "Delete to End of Line"
+msgstr "줄 끝까지 삭제"
+
+msgid "Toggle Overtype Mode"
+msgstr "겹쳐쓰기 모드 전환"
+
+msgid "%d conflicts, %d warnings"
+msgstr "충돌 %d개, 경고 %d개"
+
+msgid "Details..."
+msgstr "자세히..."
+
+msgid "Conflict Details"
+msgstr "충돌 상세 정보"
+
+msgid "Conflict"
+msgstr "충돌"
+
+msgid "Warning (shadowed editor command)"
+msgstr "경고(가려진 편집기 명령)"
+
+msgid "\"%s\"  (menu command, scope: %s, source: %s)"
+msgstr "\"%s\"  (메뉴 명령, 범위: %s, 원본: %s)"
+
+msgid "\"%s\"  (editor command, scope: %s, source: %s)"
+msgstr "\"%s\"  (편집기 명령, 범위: %s, 원본: %s)"
+
+msgid "built-in editor command %s  (editor default, scope: %s)"
+msgstr "내장 편집기 명령 %s  (편집기 기본값, 범위: %s)"
+
+msgid "built-in terminal key  (scope: %s)"
+msgstr "내장 터미널 키  (범위: %s)"
+
+msgid "Both bindings are active in the same context; pressing the key runs only one of them."
+msgstr "두 지정이 같은 컨텍스트에서 활성화되어 있어 키를 누르면 그중 하나만 실행됩니다."
+
+msgid "When the editor has focus, the menu shortcut wins; the editor command is unreachable."
+msgstr "편집기에 포커스가 있으면 메뉴 단축키가 우선하므로 편집기 명령은 실행할 수 없습니다."
+
+msgid "(scope: %s)"
+msgstr "(범위: %s)"
+
+msgid "Warning: %s is also assigned to \"%s\"."
+msgstr "경고: %s은(는) 이미 \"%s\"에 지정되어 있습니다."

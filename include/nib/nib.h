@@ -159,6 +159,57 @@ typedef struct NibLangDefApi {
                              const char* scintillua_lua);
 } NibLangDefApi;
 
+// ---- nib.keymap/1 : contribute keyboard bindings and named schemes -------------------------------
+// Lets a plugin push keybinding overrides into the host's keymap store as a named, switchable SCHEME
+// (a bundled default plus user/plugin schemes, each storing only deltas against a parent scheme). This
+// is how the optional GPL npp-shortcuts-compat plugin re-adds Notepad++ shortcuts after parsing a
+// shortcuts.xml: it translates each entry into a portable accelerator string and registers them here as
+// a "Notepad++ (imported)" scheme. Nothing here is Notepad++-shaped - it is a generic "here is a key and
+// what it should do" surface. Three binding namespaces mirror the host's three keymap tiers:
+//   * command by id    - a frozen kCmd*/IDM_* number; translation-free for an importer that speaks them.
+//   * command by name  - a stable symbolic name ("file.save", or a plugin command id "npp.mimeTools.4").
+//   * editor by SCI id - a Scintilla SCI_* command, routed to the editor keymap (SCI_ASSIGNCMDKEY).
+// Accelerator strings use the host's portable spelling ("Ctrl+Shift+S"); the host parses, validates, and
+// OWNS a copy of every string, and maps Ctrl->Cmd itself on macOS. Only DATA crosses the boundary (never
+// a live callback), so bindings are safe across plugin unload - unlike nib.events there is nothing left
+// dangling. A committed scheme is written to the host's scheme store and OUTLIVES the plugin. All entry
+// points are scheme-scoped: a plugin can never mutate the user's active scheme in place.
+#define NIB_IFACE_KEYMAP "nib.keymap/1"
+typedef struct NibKeymapScheme NibKeymapScheme;   // opaque host-side scheme-build handle
+
+typedef struct NibKeymapApi {
+    uint32_t version;
+    uint32_t struct_size;
+
+    // Begin building a named scheme. `id` is a stable ascii key ("org.wxnote.npp-imported"); `title` is
+    // the user-visible name in the scheme picker; `parent` is the id this one deltas against (NULL/"" =>
+    // host default; unknown id => host default, noted at commit). Committing over an existing id replaces
+    // it (idempotent re-import). Returns an opaque handle, or NULL on failure. Invisible until commit.
+    NibKeymapScheme* (*begin_scheme)(NibHost*, const char* id, const char* title, const char* parent);
+
+    // Bind a host COMMAND by frozen numeric id (kCmd*/IDM_*). `accel` is a portable accelerator string,
+    // or NULL/"" to UNBIND (mask the parent/default). `additional` non-zero ADDS `accel` as an extra
+    // binding (N++ NextKey) instead of replacing. Returns 1, or 0 if the id is unknown or accel unparsable.
+    int (*bind_id)(NibHost*, NibKeymapScheme*, int cmd_id, const char* accel, int additional);
+
+    // Bind a host command by stable symbolic name. Same accel/unbind/additional semantics. Returns 1, or
+    // 0 if the name is unknown or `accel` does not parse.
+    int (*bind_name)(NibHost*, NibKeymapScheme*, const char* symbolic_name, const char* accel, int additional);
+
+    // Bind an EDITOR command (Scintilla SCI_* id), routed to the editor keymap tier and applied to every
+    // editor view. Same accel/unbind/additional semantics. Returns 1, or 0 if the SCI id or accel rejected.
+    int (*bind_editor)(NibHost*, NibKeymapScheme*, int sci_command, const char* accel, int additional);
+
+    // Abandon an uncommitted build and free the handle (e.g. on a parse error). No effect on any prior
+    // committed scheme of the same id.
+    void (*discard_scheme)(NibHost*, NibKeymapScheme*);
+
+    // Commit: the host validates, writes the scheme to its store (PERSISTS across sessions, outlives this
+    // plugin), and makes it selectable. The handle is consumed - do not reuse. `activate` non-zero also
+    // switches the host to this scheme now (an importer typically passes 0). Returns 1, or 0 on failure.
+    int (*commit_scheme)(NibHost*, NibKeymapScheme*, int activate);
+} NibKeymapApi;
+
 // ---- nib.paths/1 : well-known host directories ---------------------------------------------------
 // Gives a plugin the host's per-user data directory so it can find/read user assets (e.g. the
 // udl-compat plugin reads userDefineLangs/ from here). Generic - no Notepad++ specifics.

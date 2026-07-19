@@ -5,21 +5,21 @@ namespace Label
 {
     inline const wxString MenuGo() { return _("&Go"); }
 
-    inline const wxString SearchFind() { return _("&Find...\tCtrl+F"); }
-    inline const wxString SearchFindInFiles() { return _("Find in Fi&les...\tCtrl+Shift+F"); }
-    inline const wxString SearchFindNext() { return _("Find &Next\tF3"); }
-    inline const wxString SearchFindPrev() { return _("Find &Previous\tShift+F3"); }
-    inline const wxString SearchSetAndFindNext() { return _("&Select and Find Next\tCtrl+F3"); }
-    inline const wxString SearchSetAndFindPrev() { return _("&Select and Find Previous\tCtrl+Shift+F3"); }
+    inline const wxString SearchFind() { return _("&Find..."); }
+    inline const wxString SearchFindInFiles() { return _("Find in Fi&les..."); }
+    inline const wxString SearchFindNext() { return _("Find &Next"); }
+    inline const wxString SearchFindPrev() { return _("Find &Previous"); }
+    inline const wxString SearchSetAndFindNext() { return _("&Select and Find Next"); }
+    inline const wxString SearchSetAndFindPrev() { return _("&Select and Find Previous"); }
     inline const wxString SearchVolatileFindNext() { return _("Find (&Volatile) Next"); }
     inline const wxString SearchVolatileFindPrev() { return _("Find (&Volatile) Previous"); }
-    inline const wxString SearchReplace() { return _("&Replace...\tCtrl+H"); }
-    inline const wxString SearchFindIncrement() { return _("&Incremental Search\tCtrl+Alt+I"); }
-    inline const wxString SearchFocusOnFoundResults() { return _("Search Results &Window\tF7"); }
-    inline const wxString SearchGotoNextFound() { return _("Next Search Resul&t\tF4"); }
-    inline const wxString SearchGotoPrevFound() { return _("Previous Search Resul&t\tShift+F4"); }
-    inline const wxString SearchGotoLine() { return _("&Go to...\tCtrl+G"); }
-    inline const wxString SearchGotoMatchingBrace() { return _("Go to &Matching Brace\tCtrl+B"); }
+    inline const wxString SearchReplace() { return _("&Replace..."); }
+    inline const wxString SearchFindIncrement() { return _("&Incremental Search"); }
+    inline const wxString SearchFocusOnFoundResults() { return _("Search Results &Window"); }
+    inline const wxString SearchGotoNextFound() { return _("Next Search Resul&t"); }
+    inline const wxString SearchGotoPrevFound() { return _("Previous Search Resul&t"); }
+    inline const wxString SearchGotoLine() { return _("&Go to..."); }
+    inline const wxString SearchGotoMatchingBrace() { return _("Go to &Matching Brace"); }
     inline const wxString SearchSelectMatchingBraces() { return _("Select All In-betw&een {} [] or ()"); }
     inline const wxString SearchMark() { return _("Mar&k..."); }
 
@@ -67,9 +67,9 @@ namespace Label
 
     // ---- Bookmark submenu
     inline const wxString SearchBookmark() { return _("&Bookmark"); }
-    inline const wxString SearchToggleBookmark() { return _("Toggle Bookmark\tCtrl+F2"); }
-    inline const wxString SearchNextBookmark() { return _("Next Bookmark\tF2"); }
-    inline const wxString SearchPrevBookmark() { return _("Previous Bookmark\tShift+F2"); }
+    inline const wxString SearchToggleBookmark() { return _("Toggle Bookmark"); }
+    inline const wxString SearchNextBookmark() { return _("Next Bookmark"); }
+    inline const wxString SearchPrevBookmark() { return _("Previous Bookmark"); }
     inline const wxString SearchClearBookmarks() { return _("Clear All Bookmarks"); }
     inline const wxString SearchCutMarkedLines() { return _("Cut Bookmarked Lines"); }
     inline const wxString SearchCopyMarkedLines() { return _("Copy Bookmarked Lines"); }

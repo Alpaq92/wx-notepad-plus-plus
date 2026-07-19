@@ -6,11 +6,11 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Language: pl\n"
 
-msgid "&New\tCtrl+N"
-msgstr "&Nowy\tCtrl+N"
+msgid "&New"
+msgstr "&Nowy"
 
-msgid "&Open...\tCtrl+O"
-msgstr "&Otwórz...\tCtrl+O"
+msgid "&Open..."
+msgstr "&Otwórz..."
 
 msgid "Explorer"
 msgstr "Explorer"
@@ -36,26 +36,26 @@ msgstr "Otwórz folder jako &obszar roboczy..."
 msgid "Re&load from Disk"
 msgstr "Wczytaj &ponownie z dysku"
 
-msgid "&Save\tCtrl+S"
-msgstr "&Zapisz\tCtrl+S"
+msgid "&Save"
+msgstr "&Zapisz"
 
-msgid "Save &As...\tCtrl+Alt+S"
-msgstr "Zapisz &jako...\tCtrl+Alt+S"
+msgid "Save &As..."
+msgstr "Zapisz &jako..."
 
 msgid "Save a Cop&y As..."
 msgstr "Zapisz &kopię jako..."
 
-msgid "Sa&ve All\tCtrl+Shift+S"
-msgstr "Zapisz &wszystko\tCtrl+Shift+S"
+msgid "Sa&ve All"
+msgstr "Zapisz &wszystko"
 
 msgid "&Rename..."
 msgstr "Zmień naz&wę..."
 
-msgid "&Close\tCtrl+W"
-msgstr "Za&mknij\tCtrl+W"
+msgid "&Close"
+msgstr "Za&mknij"
 
-msgid "Clos&e All\tCtrl+Shift+W"
-msgstr "Zamknij wszystki&e\tCtrl+Shift+W"
+msgid "Clos&e All"
+msgstr "Zamknij wszystki&e"
 
 msgid "Close All but Active Document"
 msgstr "Zamknij wszystkie oprócz aktywnego dokumentu"
@@ -75,8 +75,8 @@ msgstr "Zamknij wszystkie niezmienione"
 msgid "Close &Multiple Documents"
 msgstr "Zamknij &wiele dokumentów"
 
-msgid "Restore Recent Closed File\tCtrl+Shift+T"
-msgstr "Przywróć ostatnio zamknięty plik\tCtrl+Shift+T"
+msgid "Restore Recent Closed File"
+msgstr "Przywróć ostatnio zamknięty plik"
 
 msgid "Move to Recycle &Bin"
 msgstr "Przenieś do &kosza"
@@ -87,38 +87,38 @@ msgstr "Wczytaj &sesję..."
 msgid "Save Sess&ion..."
 msgstr "Zapi&sz sesję..."
 
-msgid "&Print...\tCtrl+P"
-msgstr "&Drukuj...\tCtrl+P"
+msgid "&Print..."
+msgstr "&Drukuj..."
 
 msgid "Print No&w"
 msgstr "Drukuj &teraz"
 
-msgid "E&xit\tAlt+F4"
-msgstr "&Zakończ\tAlt+F4"
+msgid "E&xit"
+msgstr "&Zakończ"
 
 msgid "&File"
 msgstr "&Plik"
 
-msgid "&Undo\tCtrl+Z"
-msgstr "&Cofnij\tCtrl+Z"
+msgid "&Undo"
+msgstr "&Cofnij"
 
-msgid "&Redo\tCtrl+Y"
-msgstr "P&onów\tCtrl+Y"
+msgid "&Redo"
+msgstr "P&onów"
 
-msgid "Cu&t\tCtrl+X"
-msgstr "Wy&tnij\tCtrl+X"
+msgid "Cu&t"
+msgstr "Wy&tnij"
 
-msgid "&Copy\tCtrl+C"
-msgstr "&Kopiuj\tCtrl+C"
+msgid "&Copy"
+msgstr "&Kopiuj"
 
-msgid "&Paste\tCtrl+V"
-msgstr "Wk&lej\tCtrl+V"
+msgid "&Paste"
+msgstr "Wk&lej"
 
-msgid "&Delete\tDel"
-msgstr "&Usuń\tDel"
+msgid "&Delete"
+msgstr "&Usuń"
 
-msgid "&Select All\tCtrl+A"
-msgstr "Zaznacz w&szystko\tCtrl+A"
+msgid "&Select All"
+msgstr "Zaznacz w&szystko"
 
 msgid "Begin/End &Select"
 msgstr "Początek/koniec &zaznaczenia"
@@ -165,11 +165,11 @@ msgstr "Zmniejsz wcięcie wiersza"
 msgid "&Indent"
 msgstr "Wcięci&e"
 
-msgid "&UPPERCASE\tCtrl+Shift+U"
-msgstr "&WIELKIE LITERY\tCtrl+Shift+U"
+msgid "&UPPERCASE"
+msgstr "&WIELKIE LITERY"
 
-msgid "&lowercase\tCtrl+U"
-msgstr "&małe litery\tCtrl+U"
+msgid "&lowercase"
+msgstr "&małe litery"
 
 msgid "&Proper Case"
 msgstr "&Pierwsze Litery Wielkie"
@@ -192,8 +192,8 @@ msgstr "&loSOWA wielKOŚĆ liTER"
 msgid "Con&vert Case to"
 msgstr "Zmień wielkość li&ter na"
 
-msgid "Duplicate Current Line\tCtrl+D"
-msgstr "Powiel bieżący wiersz\tCtrl+D"
+msgid "Duplicate Current Line"
+msgstr "Powiel bieżący wiersz"
 
 msgid "Remove Duplicate Lines"
 msgstr "Usuń zduplikowane wiersze"
@@ -201,17 +201,17 @@ msgstr "Usuń zduplikowane wiersze"
 msgid "Remove Consecutive Duplicate Lines"
 msgstr "Usuń kolejne zduplikowane wiersze"
 
-msgid "Split Lines\tCtrl+I"
-msgstr "Podziel wiersze\tCtrl+I"
+msgid "Split Lines"
+msgstr "Podziel wiersze"
 
-msgid "Join Lines\tCtrl+J"
-msgstr "Połącz wiersze\tCtrl+J"
+msgid "Join Lines"
+msgstr "Połącz wiersze"
 
-msgid "Move Up Current Line\tCtrl+Shift+Up"
-msgstr "Przenieś bieżący wiersz w górę\tCtrl+Shift+Up"
+msgid "Move Up Current Line"
+msgstr "Przenieś bieżący wiersz w górę"
 
-msgid "Move Down Current Line\tCtrl+Shift+Down"
-msgstr "Przenieś bieżący wiersz w dół\tCtrl+Shift+Down"
+msgid "Move Down Current Line"
+msgstr "Przenieś bieżący wiersz w dół"
 
 msgid "Remove Empty Lines"
 msgstr "Usuń puste wiersze"
@@ -276,8 +276,8 @@ msgstr "Sortuj wiersze wg długości malejąco"
 msgid "&Line Operations"
 msgstr "Operacje na &wierszach"
 
-msgid "Toggle Single Line Comment\tCtrl+Q"
-msgstr "Przełącz komentarz jednowierszowy\tCtrl+Q"
+msgid "Toggle Single Line Comment"
+msgstr "Przełącz komentarz jednowierszowy"
 
 msgid "Single Line Comment"
 msgstr "Komentarz jednowierszowy"
@@ -285,8 +285,8 @@ msgstr "Komentarz jednowierszowy"
 msgid "Single Line Uncomment"
 msgstr "Usuń komentarz jednowierszowy"
 
-msgid "Block Comment\tCtrl+Shift+Q"
-msgstr "Komentarz blokowy\tCtrl+Shift+Q"
+msgid "Block Comment"
+msgstr "Komentarz blokowy"
 
 msgid "Block Uncomment"
 msgstr "Usuń komentarz blokowy"
@@ -294,8 +294,8 @@ msgstr "Usuń komentarz blokowy"
 msgid "Co&mment/Uncomment"
 msgstr "Ko&mentuj/Odkomentuj"
 
-msgid "Function Completion\tCtrl+Space"
-msgstr "Uzupełnianie funkcji\tCtrl+Space"
+msgid "Function Completion"
+msgstr "Uzupełnianie funkcji"
 
 msgid "Word Completion"
 msgstr "Uzupełnianie wyrazów"
@@ -417,8 +417,8 @@ msgstr "Pomiń bieżące && przejdź do następnego zaznaczenia wielokrotnego"
 msgid "Column Mode..."
 msgstr "Tryb kolumnowy..."
 
-msgid "Colum&n Editor...\tAlt+C"
-msgstr "Edytor kolum&n...\tAlt+C"
+msgid "Colum&n Editor..."
+msgstr "Edytor kolum&n..."
 
 msgid "Character &Panel"
 msgstr "&Panel znaków"
@@ -444,23 +444,23 @@ msgstr "Atrybut tylko do odczytu w Windows"
 msgid "&Edit"
 msgstr "&Edycja"
 
-msgid "&Find...\tCtrl+F"
-msgstr "&Znajdź...\tCtrl+F"
+msgid "&Find..."
+msgstr "&Znajdź..."
 
-msgid "Find in Fi&les...\tCtrl+Shift+F"
-msgstr "Znajdź w p&likach...\tCtrl+Shift+F"
+msgid "Find in Fi&les..."
+msgstr "Znajdź w p&likach..."
 
-msgid "Find &Next\tF3"
-msgstr "Znajdź &następny\tF3"
+msgid "Find &Next"
+msgstr "Znajdź &następny"
 
-msgid "Find &Previous\tShift+F3"
-msgstr "Znajdź &poprzedni\tShift+F3"
+msgid "Find &Previous"
+msgstr "Znajdź &poprzedni"
 
-msgid "&Select and Find Next\tCtrl+F3"
-msgstr "Zaznacz i znajdź na&stępny\tCtrl+F3"
+msgid "&Select and Find Next"
+msgstr "Zaznacz i znajdź na&stępny"
 
-msgid "&Select and Find Previous\tCtrl+Shift+F3"
-msgstr "Zaznacz i znajdź poprz&edni\tCtrl+Shift+F3"
+msgid "&Select and Find Previous"
+msgstr "Zaznacz i znajdź poprz&edni"
 
 msgid "Find (&Volatile) Next"
 msgstr "Znajdź następne (&tymczasowe)"
@@ -468,26 +468,26 @@ msgstr "Znajdź następne (&tymczasowe)"
 msgid "Find (&Volatile) Previous"
 msgstr "Znajdź poprzednie (t&ymczasowe)"
 
-msgid "&Replace...\tCtrl+H"
-msgstr "&Zamień...\tCtrl+H"
+msgid "&Replace..."
+msgstr "&Zamień..."
 
-msgid "&Incremental Search\tCtrl+Alt+I"
-msgstr "Wyszukiwanie &przyrostowe\tCtrl+Alt+I"
+msgid "&Incremental Search"
+msgstr "Wyszukiwanie &przyrostowe"
 
-msgid "Search Results &Window\tF7"
-msgstr "Okno &wyników wyszukiwania\tF7"
+msgid "Search Results &Window"
+msgstr "Okno &wyników wyszukiwania"
 
-msgid "Next Search Resul&t\tF4"
-msgstr "Następny wynik wyszukiwani&a\tF4"
+msgid "Next Search Resul&t"
+msgstr "Następny wynik wyszukiwani&a"
 
-msgid "Previous Search Resul&t\tShift+F4"
-msgstr "Poprzedni wynik wyszukiwani&a\tShift+F4"
+msgid "Previous Search Resul&t"
+msgstr "Poprzedni wynik wyszukiwani&a"
 
-msgid "&Go to...\tCtrl+G"
-msgstr "&Idź do...\tCtrl+G"
+msgid "&Go to..."
+msgstr "&Idź do..."
 
-msgid "Go to &Matching Brace\tCtrl+B"
-msgstr "Idź do pasującego &nawiasu\tCtrl+B"
+msgid "Go to &Matching Brace"
+msgstr "Idź do pasującego &nawiasu"
 
 msgid "Select All In-betw&een {} [] or ()"
 msgstr "Zaznacz wszystko pomiędz&y {} [] lub ()"
@@ -579,14 +579,14 @@ msgstr "Wszystkie style"
 msgid "&Copy Styled Text"
 msgstr "&Kopiuj ostylowany tekst"
 
-msgid "Toggle Bookmark\tCtrl+F2"
-msgstr "Przełącz zakładkę\tCtrl+F2"
+msgid "Toggle Bookmark"
+msgstr "Przełącz zakładkę"
 
-msgid "Next Bookmark\tF2"
-msgstr "Następna zakładka\tF2"
+msgid "Next Bookmark"
+msgstr "Następna zakładka"
 
-msgid "Previous Bookmark\tShift+F2"
-msgstr "Poprzednia zakładka\tShift+F2"
+msgid "Previous Bookmark"
+msgstr "Poprzednia zakładka"
 
 msgid "Clear All Bookmarks"
 msgstr "Usuń wszystkie zakładki"
@@ -621,11 +621,11 @@ msgstr "&Szukaj"
 msgid "Always on &Top"
 msgstr "Zawsze na &wierzchu"
 
-msgid "To&ggle Full Screen Mode\tF11"
-msgstr "Przełącz tryb &pełnoekranowy\tF11"
+msgid "To&ggle Full Screen Mode"
+msgstr "Przełącz tryb &pełnoekranowy"
 
-msgid "&Post-It\tF12"
-msgstr "&Post-It\tF12"
+msgid "&Post-It"
+msgstr "&Post-It"
 
 msgid "D&istraction Free Mode"
 msgstr "Tryb bez rozpraszan&ia"
@@ -696,32 +696,32 @@ msgstr "&Otwórz w nowej instancji"
 msgid "&Move/Clone Current Document"
 msgstr "Przenieś/sklonuj bieżący doku&ment"
 
-msgid "1st Tab\tCtrl+1"
-msgstr "1. karta\tCtrl+1"
+msgid "1st Tab"
+msgstr "1. karta"
 
-msgid "2nd Tab\tCtrl+2"
-msgstr "2. karta\tCtrl+2"
+msgid "2nd Tab"
+msgstr "2. karta"
 
-msgid "3rd Tab\tCtrl+3"
-msgstr "3. karta\tCtrl+3"
+msgid "3rd Tab"
+msgstr "3. karta"
 
-msgid "4th Tab\tCtrl+4"
-msgstr "4. karta\tCtrl+4"
+msgid "4th Tab"
+msgstr "4. karta"
 
-msgid "5th Tab\tCtrl+5"
-msgstr "5. karta\tCtrl+5"
+msgid "5th Tab"
+msgstr "5. karta"
 
-msgid "6th Tab\tCtrl+6"
-msgstr "6. karta\tCtrl+6"
+msgid "6th Tab"
+msgstr "6. karta"
 
-msgid "7th Tab\tCtrl+7"
-msgstr "7. karta\tCtrl+7"
+msgid "7th Tab"
+msgstr "7. karta"
 
-msgid "8th Tab\tCtrl+8"
-msgstr "8. karta\tCtrl+8"
+msgid "8th Tab"
+msgstr "8. karta"
 
-msgid "9th Tab\tCtrl+9"
-msgstr "9. karta\tCtrl+9"
+msgid "9th Tab"
+msgstr "9. karta"
 
 msgid "First Tab"
 msgstr "Pierwsza karta"
@@ -729,11 +729,11 @@ msgstr "Pierwsza karta"
 msgid "Last Tab"
 msgstr "Ostatnia karta"
 
-msgid "Next Tab\tCtrl+Tab"
-msgstr "Następna karta\tCtrl+Tab"
+msgid "Next Tab"
+msgstr "Następna karta"
 
-msgid "Previous Tab\tCtrl+Shift+Tab"
-msgstr "Poprzednia karta\tCtrl+Shift+Tab"
+msgid "Previous Tab"
+msgstr "Poprzednia karta"
 
 msgid "Move to Start"
 msgstr "Przenieś na początek"
@@ -774,68 +774,44 @@ msgstr "&Zawijanie wierszy"
 msgid "&Hide Lines"
 msgstr "&Ukryj wiersze"
 
-msgid "Fold All\tAlt+0"
-msgstr "Zwiń wszystkie\tAlt+0"
+msgid "Fold All"
+msgstr "Zwiń wszystkie"
 
-msgid "Unfold All\tAlt+Shift+0"
-msgstr "Rozwiń wszystkie\tAlt+Shift+0"
+msgid "Unfold All"
+msgstr "Rozwiń wszystkie"
 
-msgid "Fold Current Level\tCtrl+Alt+F"
-msgstr "Zwiń bieżący poziom\tCtrl+Alt+F"
+msgid "Fold Current Level"
+msgstr "Zwiń bieżący poziom"
 
-msgid "Unfold Current Level\tCtrl+Alt+Shift+F"
-msgstr "Rozwiń bieżący poziom\tCtrl+Alt+Shift+F"
+msgid "Unfold Current Level"
+msgstr "Rozwiń bieżący poziom"
 
-msgid "1\tAlt+1"
-msgstr "1\tAlt+1"
+msgid "1"
+msgstr "1"
 
-msgid "2\tAlt+2"
-msgstr "2\tAlt+2"
+msgid "2"
+msgstr "2"
 
-msgid "3\tAlt+3"
-msgstr "3\tAlt+3"
+msgid "3"
+msgstr "3"
 
-msgid "4\tAlt+4"
-msgstr "4\tAlt+4"
+msgid "4"
+msgstr "4"
 
-msgid "5\tAlt+5"
-msgstr "5\tAlt+5"
+msgid "5"
+msgstr "5"
 
-msgid "6\tAlt+6"
-msgstr "6\tAlt+6"
+msgid "6"
+msgstr "6"
 
-msgid "7\tAlt+7"
-msgstr "7\tAlt+7"
+msgid "7"
+msgstr "7"
 
-msgid "8\tAlt+8"
-msgstr "8\tAlt+8"
+msgid "8"
+msgstr "8"
 
 msgid "Fold Level"
 msgstr "Zwiń poziom"
-
-msgid "1\tAlt+Shift+1"
-msgstr "1\tAlt+Shift+1"
-
-msgid "2\tAlt+Shift+2"
-msgstr "2\tAlt+Shift+2"
-
-msgid "3\tAlt+Shift+3"
-msgstr "3\tAlt+Shift+3"
-
-msgid "4\tAlt+Shift+4"
-msgstr "4\tAlt+Shift+4"
-
-msgid "5\tAlt+Shift+5"
-msgstr "5\tAlt+Shift+5"
-
-msgid "6\tAlt+Shift+6"
-msgstr "6\tAlt+Shift+6"
-
-msgid "7\tAlt+Shift+7"
-msgstr "7\tAlt+Shift+7"
-
-msgid "8\tAlt+Shift+8"
-msgstr "8\tAlt+Shift+8"
 
 msgid "Unfold Level"
 msgstr "Rozwiń poziom"
@@ -1188,8 +1164,8 @@ msgstr "U&ruchom makro wielokrotnie..."
 msgid "&Macro"
 msgstr "&Makro"
 
-msgid "&Run...\tF5"
-msgstr "U&ruchom...\tF5"
+msgid "&Run..."
+msgstr "U&ruchom..."
 
 msgid "Validate shortcuts.xml"
 msgstr "Sprawdź poprawność shortcuts.xml"
@@ -1257,8 +1233,8 @@ msgstr "Ustaw proxy aktualizatora..."
 msgid "Debug Info..."
 msgstr "Informacje debugowania..."
 
-msgid "About wxNote\tF1"
-msgstr "O programie wxNote\tF1"
+msgid "About wxNote"
+msgstr "O programie wxNote"
 
 msgid "&About"
 msgstr "&Pomoc"
@@ -1466,9 +1442,6 @@ msgstr "nowy %d"
 
 msgid "Save file\n%s ?"
 msgstr "Zapisz plik\n%s ?"
-
-msgid "&Save"
-msgstr "&Zapisz"
 
 msgid "Do&n't Save"
 msgstr "&Nie zapisuj"
@@ -2439,8 +2412,8 @@ msgstr "Odmowa dostępu"
 msgid "Reuse an existing window"
 msgstr "Użyj istniejącego okna"
 
-msgid "Usage: wxnote [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
-msgstr "Użycie: wxnote [opcje] [pliki...]\n\n-g, --goto <wiersz[,kolumna]>   przejdź do tego wiersza (i kolumny) w ostatnio otwartym pliku\n-e, --encoding <nazwa>          wymuś kodowanie: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance              zawsze otwórz nowe okno\n-r, --reuse-instance            użyj już uruchomionego okna\n\nPliki podane w wierszu poleceń są otwierane w kartach."
+msgid "Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"
+msgstr "Użycie: wxnote [opcje] [pliki...]\n\nPliki:\n  file                     otwórz w karcie\n  folder                   otwórz jako obszar roboczy\n  file:line[:col]          otwórz na pozycji\n  +N, +N,col               otwórz ostatni plik w wierszu N (i kolumnie)\n  +/text                   ustaw kursor na pierwszym dopasowaniu 'text'\n  -                        wczytaj dane z potoku do nowego bufora bez nazwy\n\nOpcje:\n  -g, --goto <line[,col]>  przejdź do tego wiersza (i kolumny) w ostatnio otwartym pliku\n  -e, --encoding <name>    wymuś kodowanie: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      otwórz podane pliki tylko do odczytu\n  -o, -O, --split          otwórz podane pliki w widoku podzielonym\n  -n, --new-instance       zawsze otwórz nowe okno\n  -r, --reuse-instance     użyj już uruchomionego okna\n  -w, --wait               czekaj na zamknięcie pliku przed powrotem\n  --safe                   uruchom bez wczytywania wtyczek\n  --clean                  jak --safe, dodatkowo pomiń przywracanie sesji i kopii\n  --locale <lang>          język interfejsu dla tego uruchomienia (np. pl, de, ja)\n  -v, --version            wyświetl wersję i zakończ\n  -h, --help               pokaż tę pomoc"
 
 msgid "open at line[,col]"
 msgstr "przejdź do wiersza[,kolumny]"
@@ -2460,8 +2433,8 @@ msgstr "Odzyskany"
 msgid "NewLanguage"
 msgstr "NowyJęzyk"
 
-msgid "file"
-msgstr "plik"
+msgid "file-or-folder"
+msgstr "plik-lub-folder"
 
 msgid "Dec"
 msgstr "Dziesiętny"
@@ -2513,9 +2486,6 @@ msgstr "Style globalne"
 
 msgid "Style %d"
 msgstr "Styl %d"
-
-msgid "About wxNote"
-msgstr "O programie wxNote"
 
 msgid "A fast, cross-platform text editor built on wxWidgets:\na native Scintilla editor with dark/light themes and plugin support."
 msgstr "Szybki, międzyplatformowy edytor tekstu oparty na wxWidgets:\nnatywny edytor Scintilla z jasnym/ciemnym motywem i obsługą wtyczek."
@@ -2609,3 +2579,330 @@ msgstr "Pokaż otwarte terminale"
 
 msgid "Close terminal"
 msgstr "Zamknij terminal"
+
+msgid "Zoom level"
+msgstr "Poziom powiększenia"
+
+msgid "Show zoom control in status bar"
+msgstr "Pokaż kontrolkę powiększenia na pasku stanu"
+
+msgid "%s:  (could not open)"
+msgstr "%s:  (nie można otworzyć)"
+
+msgid "Auto-hide toolbar in full screen"
+msgstr "Automatycznie ukrywaj pasek narzędzi w trybie pełnoekranowym"
+
+msgid "Batch file"
+msgstr "Plik wsadowy"
+
+msgid "C source file"
+msgstr "Plik źródłowy C"
+
+msgid "C# source file"
+msgstr "Plik źródłowy C#"
+
+msgid "C++ source file"
+msgstr "Plik źródłowy C++"
+
+msgid "CSS file"
+msgstr "Plik CSS"
+
+msgid "Could not create a writable contextMenu.xml to edit."
+msgstr "Nie udało się utworzyć zapisywalnego pliku contextMenu.xml do edycji."
+
+msgid "Go source file"
+msgstr "Plik źródłowy Go"
+
+msgid "JSON file"
+msgstr "Plik JSON"
+
+msgid "Java source file"
+msgstr "Plik źródłowy Java"
+
+msgid "JavaScript file"
+msgstr "Plik JavaScript"
+
+msgid "Leave blank for none. Macros: $(FULL_PATH) $(FILE_NAME) $(DATE) $(TIME)\n$(CURRENT_PRINTING_PAGE) $(TOTAL_PRINTING_PAGES)"
+msgstr "Pozostaw puste, aby wyłączyć. Makra: $(FULL_PATH) $(FILE_NAME) $(DATE) $(TIME)\n$(CURRENT_PRINTING_PAGE) $(TOTAL_PRINTING_PAGES)"
+
+msgid "Lua source file"
+msgstr "Plik źródłowy Lua"
+
+msgid "New Folder"
+msgstr "Nowy folder"
+
+msgid "Perl source file"
+msgstr "Plik źródłowy Perl"
+
+msgid "PowerShell file"
+msgstr "Plik PowerShell"
+
+msgid "Properties file"
+msgstr "Plik właściwości"
+
+msgid "Python file"
+msgstr "Plik Python"
+
+msgid "Ruby source file"
+msgstr "Plik źródłowy Ruby"
+
+msgid "Rust source file"
+msgstr "Plik źródłowy Rust"
+
+msgid "SQL file"
+msgstr "Plik SQL"
+
+msgid "Shell script file"
+msgstr "Plik skryptu powłoki"
+
+msgid "TypeScript file"
+msgstr "Plik TypeScript"
+
+msgid "XML file"
+msgstr "Plik XML"
+
+msgid "YAML file"
+msgstr "Plik YAML"
+
+msgid "print the version and exit"
+msgstr "wypisz wersję i zakończ"
+
+msgid "show this help message"
+msgstr "pokaż ten komunikat pomocy"
+
+msgid "UI language for this run (e.g. pl, de, ja)"
+msgstr "język interfejsu dla tego uruchomienia (np. pl, de, ja)"
+
+msgid "start without loading any plugins"
+msgstr "uruchom bez ładowania wtyczek"
+
+msgid "wait for the file to be closed before returning"
+msgstr "czekaj na zamknięcie pliku przed zakończeniem"
+
+msgid "open the given file(s) read-only"
+msgstr "otwórz podane pliki tylko do odczytu"
+
+msgid "open the given file(s) in a split view"
+msgstr "otwórz podane pliki w widoku podzielonym"
+
+msgid "like --safe, plus skip session and recovery restore"
+msgstr "jak --safe, dodatkowo pomiń przywracanie sesji i kopii"
+
+msgid "(stdin)"
+msgstr "(stdin)"
+
+msgid "Shortcut Mapper"
+msgstr "Menedżer skrótów"
+
+msgid "Editor"
+msgstr "Edytor"
+
+msgid "Global"
+msgstr "Globalny"
+
+msgid "Scheme"
+msgstr "Schemat"
+
+msgid "User"
+msgstr "Użytkownik"
+
+msgid "Default"
+msgstr "Domyślny"
+
+msgid "Keymap scheme:"
+msgstr "Schemat klawiszy:"
+
+msgid "Filter by name or shortcut"
+msgstr "Filtruj według nazwy lub skrótu"
+
+msgid "Find by shortcut"
+msgstr "Znajdź według skrótu"
+
+msgid "Press a shortcut to list the commands it is bound to"
+msgstr "Naciśnij skrót, aby wyświetlić przypisane do niego polecenia"
+
+msgid "Command"
+msgstr "Polecenie"
+
+msgid "Shortcut"
+msgstr "Skrót"
+
+msgid "Scope"
+msgstr "Zakres"
+
+msgid "Source"
+msgstr "Źródło"
+
+msgid "No conflicts."
+msgstr "Brak konfliktów."
+
+msgid "Modify..."
+msgstr "Zmień..."
+
+msgid "Clear"
+msgstr "Wyczyść"
+
+msgid "Reset to default"
+msgstr "Przywróć domyślne"
+
+msgid "Ctrl"
+msgstr "Ctrl"
+
+msgid "Alt"
+msgstr "Alt"
+
+msgid "Shift"
+msgstr "Shift"
+
+msgid "Reassign"
+msgstr "Przypisz ponownie"
+
+msgid "Keep both"
+msgstr "Zachowaj oba"
+
+msgid "Assign"
+msgstr "Przypisz"
+
+msgid "Assign Shortcut"
+msgstr "Przypisz skrót"
+
+msgid "Shortcut Conflict"
+msgstr "Konflikt skrótów"
+
+msgid "Shortcut Warning"
+msgstr "Ostrzeżenie o skrócie"
+
+msgid "Control (physical)"
+msgstr "Control (fizyczny)"
+
+msgid "Press a shortcut..."
+msgstr "Naciśnij skrót..."
+
+msgid "Conflict: %s is also assigned to \"%s\"."
+msgstr "Konflikt: %s jest już przypisane do „%s”."
+
+msgid "Warning: %s shadows the built-in editor command %s."
+msgstr "Ostrzeżenie: %s przesłania wbudowane polecenie edytora %s."
+
+msgid "Shortcut for: %s"
+msgstr "Skrót dla: %s"
+
+msgid "%s is already assigned to \"%s\".\nWhat would you like to do?"
+msgstr "%s jest już przypisane do „%s”.\nCo chcesz zrobić?"
+
+msgid "%s shadows the built-in editor command %s.\nAssign it anyway?"
+msgstr "%s przesłania wbudowane polecenie edytora %s.\nPrzypisać mimo to?"
+
+msgid "Commands bound to %s: %d"
+msgstr "Polecenia przypisane do %s: %d"
+
+msgid "Move Word Left"
+msgstr "Przesuń o wyraz w lewo"
+
+msgid "Move Word Right"
+msgstr "Przesuń o wyraz w prawo"
+
+msgid "Extend Selection Word Left"
+msgstr "Rozszerz zaznaczenie o wyraz w lewo"
+
+msgid "Extend Selection Word Right"
+msgstr "Rozszerz zaznaczenie o wyraz w prawo"
+
+msgid "Move to Previous Word Part"
+msgstr "Przesuń do poprzedniej części wyrazu"
+
+msgid "Move to Next Word Part"
+msgstr "Przesuń do następnej części wyrazu"
+
+msgid "Move to Previous Paragraph"
+msgstr "Przesuń do poprzedniego akapitu"
+
+msgid "Move to Next Paragraph"
+msgstr "Przesuń do następnego akapitu"
+
+msgid "Go to Start of Document"
+msgstr "Idź do początku dokumentu"
+
+msgid "Go to End of Document"
+msgstr "Idź do końca dokumentu"
+
+msgid "Extend Selection to Start of Document"
+msgstr "Rozszerz zaznaczenie do początku dokumentu"
+
+msgid "Extend Selection to End of Document"
+msgstr "Rozszerz zaznaczenie do końca dokumentu"
+
+msgid "Scroll Up One Line"
+msgstr "Przewiń w górę o jeden wiersz"
+
+msgid "Scroll Down One Line"
+msgstr "Przewiń w dół o jeden wiersz"
+
+msgid "Go to Start of Display Line"
+msgstr "Idź do początku wiersza ekranowego"
+
+msgid "Go to End of Display Line"
+msgstr "Idź do końca wiersza ekranowego"
+
+msgid "Cut Current Line"
+msgstr "Wytnij bieżący wiersz"
+
+msgid "Delete Current Line"
+msgstr "Usuń bieżący wiersz"
+
+msgid "Copy Current Line"
+msgstr "Kopiuj bieżący wiersz"
+
+msgid "Delete Word Left"
+msgstr "Usuń wyraz w lewo"
+
+msgid "Delete Word Right"
+msgstr "Usuń wyraz w prawo"
+
+msgid "Delete to Start of Line"
+msgstr "Usuń do początku wiersza"
+
+msgid "Delete to End of Line"
+msgstr "Usuń do końca wiersza"
+
+msgid "Toggle Overtype Mode"
+msgstr "Przełącz tryb zastępowania"
+
+msgid "%d conflicts, %d warnings"
+msgstr "%d konfliktów, %d ostrzeżeń"
+
+msgid "Details..."
+msgstr "Szczegóły..."
+
+msgid "Conflict Details"
+msgstr "Szczegóły konfliktów"
+
+msgid "Conflict"
+msgstr "Konflikt"
+
+msgid "Warning (shadowed editor command)"
+msgstr "Ostrzeżenie (przesłonięte polecenie edytora)"
+
+msgid "\"%s\"  (menu command, scope: %s, source: %s)"
+msgstr "„%s”  (polecenie menu, zakres: %s, źródło: %s)"
+
+msgid "\"%s\"  (editor command, scope: %s, source: %s)"
+msgstr "„%s”  (polecenie edytora, zakres: %s, źródło: %s)"
+
+msgid "built-in editor command %s  (editor default, scope: %s)"
+msgstr "wbudowane polecenie edytora %s  (domyślne edytora, zakres: %s)"
+
+msgid "built-in terminal key  (scope: %s)"
+msgstr "wbudowany skrót terminala  (zakres: %s)"
+
+msgid "Both bindings are active in the same context; pressing the key runs only one of them."
+msgstr "Oba przypisania są aktywne w tym samym kontekście; naciśnięcie klawisza uruchamia tylko jedno z nich."
+
+msgid "When the editor has focus, the menu shortcut wins; the editor command is unreachable."
+msgstr "Gdy edytor ma fokus, skrót menu ma pierwszeństwo; polecenie edytora jest nieosiągalne."
+
+msgid "(scope: %s)"
+msgstr "(zakres: %s)"
+
+msgid "Warning: %s is also assigned to \"%s\"."
+msgstr "Ostrzeżenie: %s jest już przypisane do „%s”."

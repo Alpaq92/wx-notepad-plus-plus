@@ -54,6 +54,20 @@ struct MenuItemDef
     bool initiallyDisabled = false;            // rare: item starts disabled (e.g. the Window menu's
                                                 // "Recent Window" placeholder). Appended last so every
                                                 // existing 4-field positional initializer stays valid.
+    const char* defaultAccel = nullptr;        // canonical accel spelling ("Ctrl+S"), locale-independent;
+                                                // nullptr/"" = no default binding. Moved OUT of the
+                                                // translated menu-label strings (menu_labels_*.h) so a
+                                                // translator typo can no longer silently rebind or drop a
+                                                // shortcut. NOT appended to the label at build time: the
+                                                // builder (menu_builder.h) appends BARE labels and feeds
+                                                // this field into the KeymapStore's Tier 0
+                                                // (seedKeymapDefaults); the frame's
+                                                // rewriteMenuAccelLabels (main.cpp) then attaches the
+                                                // "\t<accel>" suffix from the store's EFFECTIVE binding
+                                                // (default, scheme or user override) before first show.
+                                                // Appended LAST, after initiallyDisabled, so every
+                                                // existing positional initializer that stops earlier
+                                                // stays valid.
 };
 
 struct MenuDef

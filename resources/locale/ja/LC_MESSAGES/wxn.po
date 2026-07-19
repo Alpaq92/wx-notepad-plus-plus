@@ -6,11 +6,11 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Language: ja\n"
 
-msgid "&New\tCtrl+N"
-msgstr "新規(&N)\tCtrl+N"
+msgid "&New"
+msgstr "新規(&N)"
 
-msgid "&Open...\tCtrl+O"
-msgstr "開く(&O)...\tCtrl+O"
+msgid "&Open..."
+msgstr "開く(&O)..."
 
 msgid "Explorer"
 msgstr "Explorer"
@@ -36,26 +36,26 @@ msgstr "フォルダーをワークスペースとして開く(&W)..."
 msgid "Re&load from Disk"
 msgstr "ディスクから再読み込み(&L)"
 
-msgid "&Save\tCtrl+S"
-msgstr "保存(&S)\tCtrl+S"
+msgid "&Save"
+msgstr "保存(&S)"
 
-msgid "Save &As...\tCtrl+Alt+S"
-msgstr "名前を付けて保存(&A)...\tCtrl+Alt+S"
+msgid "Save &As..."
+msgstr "名前を付けて保存(&A)..."
 
 msgid "Save a Cop&y As..."
 msgstr "名前を付けてコピーを保存(&Y)..."
 
-msgid "Sa&ve All\tCtrl+Shift+S"
-msgstr "すべて保存(&V)\tCtrl+Shift+S"
+msgid "Sa&ve All"
+msgstr "すべて保存(&V)"
 
 msgid "&Rename..."
 msgstr "名前の変更(&R)..."
 
-msgid "&Close\tCtrl+W"
-msgstr "閉じる(&C)\tCtrl+W"
+msgid "&Close"
+msgstr "閉じる(&C)"
 
-msgid "Clos&e All\tCtrl+Shift+W"
-msgstr "すべて閉じる(&E)\tCtrl+Shift+W"
+msgid "Clos&e All"
+msgstr "すべて閉じる(&E)"
 
 msgid "Close All but Active Document"
 msgstr "アクティブな文書以外をすべて閉じる"
@@ -75,8 +75,8 @@ msgstr "未変更の文書をすべて閉じる"
 msgid "Close &Multiple Documents"
 msgstr "複数の文書を閉じる(&M)"
 
-msgid "Restore Recent Closed File\tCtrl+Shift+T"
-msgstr "最近閉じたファイルを開き直す\tCtrl+Shift+T"
+msgid "Restore Recent Closed File"
+msgstr "最近閉じたファイルを開き直す"
 
 msgid "Move to Recycle &Bin"
 msgstr "ごみ箱へ移動(&B)"
@@ -87,38 +87,38 @@ msgstr "セッションの読み込み(&I)..."
 msgid "Save Sess&ion..."
 msgstr "セッションの保存(&I)..."
 
-msgid "&Print...\tCtrl+P"
-msgstr "印刷(&P)...\tCtrl+P"
+msgid "&Print..."
+msgstr "印刷(&P)..."
 
 msgid "Print No&w"
 msgstr "今すぐ印刷(&W)"
 
-msgid "E&xit\tAlt+F4"
-msgstr "終了(&X)\tAlt+F4"
+msgid "E&xit"
+msgstr "終了(&X)"
 
 msgid "&File"
 msgstr "ファイル(&F)"
 
-msgid "&Undo\tCtrl+Z"
-msgstr "元に戻す(&U)\tCtrl+Z"
+msgid "&Undo"
+msgstr "元に戻す(&U)"
 
-msgid "&Redo\tCtrl+Y"
-msgstr "やり直し(&R)\tCtrl+Y"
+msgid "&Redo"
+msgstr "やり直し(&R)"
 
-msgid "Cu&t\tCtrl+X"
-msgstr "切り取り(&T)\tCtrl+X"
+msgid "Cu&t"
+msgstr "切り取り(&T)"
 
-msgid "&Copy\tCtrl+C"
-msgstr "コピー(&C)\tCtrl+C"
+msgid "&Copy"
+msgstr "コピー(&C)"
 
-msgid "&Paste\tCtrl+V"
-msgstr "貼り付け(&P)\tCtrl+V"
+msgid "&Paste"
+msgstr "貼り付け(&P)"
 
-msgid "&Delete\tDel"
-msgstr "削除(&D)\tDel"
+msgid "&Delete"
+msgstr "削除(&D)"
 
-msgid "&Select All\tCtrl+A"
-msgstr "すべて選択(&S)\tCtrl+A"
+msgid "&Select All"
+msgstr "すべて選択(&S)"
 
 msgid "Begin/End &Select"
 msgstr "選択の開始/終了(&S)"
@@ -165,11 +165,11 @@ msgstr "行のインデントを減らす"
 msgid "&Indent"
 msgstr "インデント(&I)"
 
-msgid "&UPPERCASE\tCtrl+Shift+U"
-msgstr "大文字に変換(&U)\tCtrl+Shift+U"
+msgid "&UPPERCASE"
+msgstr "大文字に変換(&U)"
 
-msgid "&lowercase\tCtrl+U"
-msgstr "小文字に変換(&L)\tCtrl+U"
+msgid "&lowercase"
+msgstr "小文字に変換(&L)"
 
 msgid "&Proper Case"
 msgstr "各単語の先頭を大文字に(&P)"
@@ -192,8 +192,8 @@ msgstr "大文字と小文字をランダムに(&R)"
 msgid "Con&vert Case to"
 msgstr "大文字/小文字の変換(&V)"
 
-msgid "Duplicate Current Line\tCtrl+D"
-msgstr "現在の行を複製\tCtrl+D"
+msgid "Duplicate Current Line"
+msgstr "現在の行を複製"
 
 msgid "Remove Duplicate Lines"
 msgstr "重複行を削除"
@@ -201,17 +201,17 @@ msgstr "重複行を削除"
 msgid "Remove Consecutive Duplicate Lines"
 msgstr "連続する重複行を削除"
 
-msgid "Split Lines\tCtrl+I"
-msgstr "行の分割\tCtrl+I"
+msgid "Split Lines"
+msgstr "行の分割"
 
-msgid "Join Lines\tCtrl+J"
-msgstr "行の結合\tCtrl+J"
+msgid "Join Lines"
+msgstr "行の結合"
 
-msgid "Move Up Current Line\tCtrl+Shift+Up"
-msgstr "現在の行を上へ移動\tCtrl+Shift+Up"
+msgid "Move Up Current Line"
+msgstr "現在の行を上へ移動"
 
-msgid "Move Down Current Line\tCtrl+Shift+Down"
-msgstr "現在の行を下へ移動\tCtrl+Shift+Down"
+msgid "Move Down Current Line"
+msgstr "現在の行を下へ移動"
 
 msgid "Remove Empty Lines"
 msgstr "空行を削除"
@@ -276,8 +276,8 @@ msgstr "行を長さで降順に並べ替え"
 msgid "&Line Operations"
 msgstr "行の操作(&L)"
 
-msgid "Toggle Single Line Comment\tCtrl+Q"
-msgstr "行コメントの切り替え\tCtrl+Q"
+msgid "Toggle Single Line Comment"
+msgstr "行コメントの切り替え"
 
 msgid "Single Line Comment"
 msgstr "行コメント"
@@ -285,8 +285,8 @@ msgstr "行コメント"
 msgid "Single Line Uncomment"
 msgstr "行コメント解除"
 
-msgid "Block Comment\tCtrl+Shift+Q"
-msgstr "ブロックコメント\tCtrl+Shift+Q"
+msgid "Block Comment"
+msgstr "ブロックコメント"
 
 msgid "Block Uncomment"
 msgstr "ブロックコメント解除"
@@ -294,8 +294,8 @@ msgstr "ブロックコメント解除"
 msgid "Co&mment/Uncomment"
 msgstr "コメント/コメント解除(&M)"
 
-msgid "Function Completion\tCtrl+Space"
-msgstr "関数名の補完\tCtrl+Space"
+msgid "Function Completion"
+msgstr "関数名の補完"
 
 msgid "Word Completion"
 msgstr "単語の補完"
@@ -417,8 +417,8 @@ msgstr "現在をスキップ && 次のマルチ選択へ"
 msgid "Column Mode..."
 msgstr "矩形選択モード..."
 
-msgid "Colum&n Editor...\tAlt+C"
-msgstr "矩形編集(&N)...\tAlt+C"
+msgid "Colum&n Editor..."
+msgstr "矩形編集(&N)..."
 
 msgid "Character &Panel"
 msgstr "文字パネル(&P)"
@@ -444,23 +444,23 @@ msgstr "Windows の読み取り専用属性"
 msgid "&Edit"
 msgstr "編集(&E)"
 
-msgid "&Find...\tCtrl+F"
-msgstr "検索(&F)...\tCtrl+F"
+msgid "&Find..."
+msgstr "検索(&F)..."
 
-msgid "Find in Fi&les...\tCtrl+Shift+F"
-msgstr "ファイルから検索(&L)...\tCtrl+Shift+F"
+msgid "Find in Fi&les..."
+msgstr "ファイルから検索(&L)..."
 
-msgid "Find &Next\tF3"
-msgstr "次を検索(&N)\tF3"
+msgid "Find &Next"
+msgstr "次を検索(&N)"
 
-msgid "Find &Previous\tShift+F3"
-msgstr "前を検索(&P)\tShift+F3"
+msgid "Find &Previous"
+msgstr "前を検索(&P)"
 
-msgid "&Select and Find Next\tCtrl+F3"
-msgstr "選択して次を検索(&S)\tCtrl+F3"
+msgid "&Select and Find Next"
+msgstr "選択して次を検索(&S)"
 
-msgid "&Select and Find Previous\tCtrl+Shift+F3"
-msgstr "選択して前を検索(&S)\tCtrl+Shift+F3"
+msgid "&Select and Find Previous"
+msgstr "選択して前を検索(&S)"
 
 msgid "Find (&Volatile) Next"
 msgstr "選択文字列で次を検索(&V)"
@@ -468,26 +468,26 @@ msgstr "選択文字列で次を検索(&V)"
 msgid "Find (&Volatile) Previous"
 msgstr "選択文字列で前を検索(&V)"
 
-msgid "&Replace...\tCtrl+H"
-msgstr "置換(&R)...\tCtrl+H"
+msgid "&Replace..."
+msgstr "置換(&R)..."
 
-msgid "&Incremental Search\tCtrl+Alt+I"
-msgstr "インクリメンタルサーチ(&I)\tCtrl+Alt+I"
+msgid "&Incremental Search"
+msgstr "インクリメンタルサーチ(&I)"
 
-msgid "Search Results &Window\tF7"
-msgstr "検索結果ウィンドウ(&W)\tF7"
+msgid "Search Results &Window"
+msgstr "検索結果ウィンドウ(&W)"
 
-msgid "Next Search Resul&t\tF4"
-msgstr "次の検索結果(&T)\tF4"
+msgid "Next Search Resul&t"
+msgstr "次の検索結果(&T)"
 
-msgid "Previous Search Resul&t\tShift+F4"
-msgstr "前の検索結果(&T)\tShift+F4"
+msgid "Previous Search Resul&t"
+msgstr "前の検索結果(&T)"
 
-msgid "&Go to...\tCtrl+G"
-msgstr "指定行へ移動(&G)...\tCtrl+G"
+msgid "&Go to..."
+msgstr "指定行へ移動(&G)..."
 
-msgid "Go to &Matching Brace\tCtrl+B"
-msgstr "対応する括弧へ移動(&M)\tCtrl+B"
+msgid "Go to &Matching Brace"
+msgstr "対応する括弧へ移動(&M)"
 
 msgid "Select All In-betw&een {} [] or ()"
 msgstr "{} [] () の間をすべて選択(&E)"
@@ -579,14 +579,14 @@ msgstr "すべてのスタイル"
 msgid "&Copy Styled Text"
 msgstr "スタイル設定したテキストをコピー(&C)"
 
-msgid "Toggle Bookmark\tCtrl+F2"
-msgstr "ブックマークの切り替え\tCtrl+F2"
+msgid "Toggle Bookmark"
+msgstr "ブックマークの切り替え"
 
-msgid "Next Bookmark\tF2"
-msgstr "次のブックマーク\tF2"
+msgid "Next Bookmark"
+msgstr "次のブックマーク"
 
-msgid "Previous Bookmark\tShift+F2"
-msgstr "前のブックマーク\tShift+F2"
+msgid "Previous Bookmark"
+msgstr "前のブックマーク"
 
 msgid "Clear All Bookmarks"
 msgstr "すべてのブックマークを解除"
@@ -621,11 +621,11 @@ msgstr "検索(&S)"
 msgid "Always on &Top"
 msgstr "常に手前に表示(&T)"
 
-msgid "To&ggle Full Screen Mode\tF11"
-msgstr "全画面表示の切り替え(&G)\tF11"
+msgid "To&ggle Full Screen Mode"
+msgstr "全画面表示の切り替え(&G)"
 
-msgid "&Post-It\tF12"
-msgstr "ポストイット(&P)\tF12"
+msgid "&Post-It"
+msgstr "ポストイット(&P)"
 
 msgid "D&istraction Free Mode"
 msgstr "集中モード(&I)"
@@ -696,32 +696,32 @@ msgstr "新しいインスタンスで開く(&O)"
 msgid "&Move/Clone Current Document"
 msgstr "現在の文書を移動/複製(&M)"
 
-msgid "1st Tab\tCtrl+1"
-msgstr "1番目のタブ\tCtrl+1"
+msgid "1st Tab"
+msgstr "1番目のタブ"
 
-msgid "2nd Tab\tCtrl+2"
-msgstr "2番目のタブ\tCtrl+2"
+msgid "2nd Tab"
+msgstr "2番目のタブ"
 
-msgid "3rd Tab\tCtrl+3"
-msgstr "3番目のタブ\tCtrl+3"
+msgid "3rd Tab"
+msgstr "3番目のタブ"
 
-msgid "4th Tab\tCtrl+4"
-msgstr "4番目のタブ\tCtrl+4"
+msgid "4th Tab"
+msgstr "4番目のタブ"
 
-msgid "5th Tab\tCtrl+5"
-msgstr "5番目のタブ\tCtrl+5"
+msgid "5th Tab"
+msgstr "5番目のタブ"
 
-msgid "6th Tab\tCtrl+6"
-msgstr "6番目のタブ\tCtrl+6"
+msgid "6th Tab"
+msgstr "6番目のタブ"
 
-msgid "7th Tab\tCtrl+7"
-msgstr "7番目のタブ\tCtrl+7"
+msgid "7th Tab"
+msgstr "7番目のタブ"
 
-msgid "8th Tab\tCtrl+8"
-msgstr "8番目のタブ\tCtrl+8"
+msgid "8th Tab"
+msgstr "8番目のタブ"
 
-msgid "9th Tab\tCtrl+9"
-msgstr "9番目のタブ\tCtrl+9"
+msgid "9th Tab"
+msgstr "9番目のタブ"
 
 msgid "First Tab"
 msgstr "最初のタブ"
@@ -729,11 +729,11 @@ msgstr "最初のタブ"
 msgid "Last Tab"
 msgstr "最後のタブ"
 
-msgid "Next Tab\tCtrl+Tab"
-msgstr "次のタブ\tCtrl+Tab"
+msgid "Next Tab"
+msgstr "次のタブ"
 
-msgid "Previous Tab\tCtrl+Shift+Tab"
-msgstr "前のタブ\tCtrl+Shift+Tab"
+msgid "Previous Tab"
+msgstr "前のタブ"
 
 msgid "Move to Start"
 msgstr "先頭へ移動"
@@ -774,68 +774,44 @@ msgstr "右端で折り返す(&W)"
 msgid "&Hide Lines"
 msgstr "行を非表示(&H)"
 
-msgid "Fold All\tAlt+0"
-msgstr "すべて折りたたむ\tAlt+0"
+msgid "Fold All"
+msgstr "すべて折りたたむ"
 
-msgid "Unfold All\tAlt+Shift+0"
-msgstr "すべて展開\tAlt+Shift+0"
+msgid "Unfold All"
+msgstr "すべて展開"
 
-msgid "Fold Current Level\tCtrl+Alt+F"
-msgstr "現在のレベルを折りたたむ\tCtrl+Alt+F"
+msgid "Fold Current Level"
+msgstr "現在のレベルを折りたたむ"
 
-msgid "Unfold Current Level\tCtrl+Alt+Shift+F"
-msgstr "現在のレベルを展開\tCtrl+Alt+Shift+F"
+msgid "Unfold Current Level"
+msgstr "現在のレベルを展開"
 
-msgid "1\tAlt+1"
-msgstr "1\tAlt+1"
+msgid "1"
+msgstr "1"
 
-msgid "2\tAlt+2"
-msgstr "2\tAlt+2"
+msgid "2"
+msgstr "2"
 
-msgid "3\tAlt+3"
-msgstr "3\tAlt+3"
+msgid "3"
+msgstr "3"
 
-msgid "4\tAlt+4"
-msgstr "4\tAlt+4"
+msgid "4"
+msgstr "4"
 
-msgid "5\tAlt+5"
-msgstr "5\tAlt+5"
+msgid "5"
+msgstr "5"
 
-msgid "6\tAlt+6"
-msgstr "6\tAlt+6"
+msgid "6"
+msgstr "6"
 
-msgid "7\tAlt+7"
-msgstr "7\tAlt+7"
+msgid "7"
+msgstr "7"
 
-msgid "8\tAlt+8"
-msgstr "8\tAlt+8"
+msgid "8"
+msgstr "8"
 
 msgid "Fold Level"
 msgstr "レベルを折りたたむ"
-
-msgid "1\tAlt+Shift+1"
-msgstr "1\tAlt+Shift+1"
-
-msgid "2\tAlt+Shift+2"
-msgstr "2\tAlt+Shift+2"
-
-msgid "3\tAlt+Shift+3"
-msgstr "3\tAlt+Shift+3"
-
-msgid "4\tAlt+Shift+4"
-msgstr "4\tAlt+Shift+4"
-
-msgid "5\tAlt+Shift+5"
-msgstr "5\tAlt+Shift+5"
-
-msgid "6\tAlt+Shift+6"
-msgstr "6\tAlt+Shift+6"
-
-msgid "7\tAlt+Shift+7"
-msgstr "7\tAlt+Shift+7"
-
-msgid "8\tAlt+Shift+8"
-msgstr "8\tAlt+Shift+8"
 
 msgid "Unfold Level"
 msgstr "レベルを展開"
@@ -1188,8 +1164,8 @@ msgstr "マクロを複数回実行(&R)..."
 msgid "&Macro"
 msgstr "マクロ(&M)"
 
-msgid "&Run...\tF5"
-msgstr "実行(&R)...\tF5"
+msgid "&Run..."
+msgstr "実行(&R)..."
 
 msgid "Validate shortcuts.xml"
 msgstr "shortcuts.xml を検証"
@@ -1257,8 +1233,8 @@ msgstr "アップデーターのプロキシ設定..."
 msgid "Debug Info..."
 msgstr "デバッグ情報..."
 
-msgid "About wxNote\tF1"
-msgstr "wxNote について\tF1"
+msgid "About wxNote"
+msgstr "wxNote について"
 
 msgid "&About"
 msgstr "ヘルプ(&A)"
@@ -1466,9 +1442,6 @@ msgstr "新規 %d"
 
 msgid "Save file\n%s ?"
 msgstr "ファイル\n%s を保存しますか?"
-
-msgid "&Save"
-msgstr "保存(&S)"
 
 msgid "Do&n't Save"
 msgstr "保存しない(&N)"
@@ -2439,8 +2412,8 @@ msgstr "アクセスが拒否されました"
 msgid "Reuse an existing window"
 msgstr "既存のウィンドウを再利用する"
 
-msgid "Usage: wxnote [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
-msgstr "使い方: wxnote [オプション] [ファイル...]\n\n-g, --goto <行[,列]>   最後に開いたファイルのこの行(と列)に移動する\n-e, --encoding <名前>   エンコーディングを強制指定: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance      常に新しいウィンドウを開く\n-r, --reuse-instance    既に実行中のウィンドウを再利用する\n\nコマンドラインで指定したファイルはタブで開かれます。"
+msgid "Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"
+msgstr "使い方: wxnote [オプション] [ファイル...]\n\nファイル:\n  file                     タブで開く\n  folder                   ワークスペースとして開く\n  file:line[:col]          指定位置で開く\n  +N, +N,col               最後のファイルを行N（と桁）で開く\n  +/text                   'text' の最初の一致にカーソルを置く\n  -                        パイプ入力を新規の無題バッファーに読み込む\n\nオプション:\n  -g, --goto <line[,col]>  最後に開いたファイルのこの行（と桁）へ移動\n  -e, --encoding <name>    エンコーディングを強制: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      指定したファイルを読み取り専用で開く\n  -o, -O, --split          指定したファイルを分割ビューで開く\n  -n, --new-instance       常に新しいウィンドウを開く\n  -r, --reuse-instance     既に実行中のウィンドウを再利用する\n  -w, --wait               ファイルが閉じられるまで待ってから戻る\n  --safe                   プラグインを読み込まずに起動する\n  --clean                  --safe に加え、セッションと復元の復旧を省略する\n  --locale <lang>          この実行の UI 言語（例: pl, de, ja）\n  -v, --version            バージョンを表示して終了する\n  -h, --help               このヘルプを表示する"
 
 msgid "open at line[,col]"
 msgstr "行[,列]に移動"
@@ -2460,8 +2433,8 @@ msgstr "復元済み"
 msgid "NewLanguage"
 msgstr "新しい言語"
 
-msgid "file"
-msgstr "ファイル"
+msgid "file-or-folder"
+msgstr "ファイルまたはフォルダー"
 
 msgid "Dec"
 msgstr "10進数"
@@ -2513,9 +2486,6 @@ msgstr "グローバルスタイル"
 
 msgid "Style %d"
 msgstr "スタイル %d"
-
-msgid "About wxNote"
-msgstr "wxNote について"
 
 msgid "A fast, cross-platform text editor built on wxWidgets:\na native Scintilla editor with dark/light themes and plugin support."
 msgstr "wxWidgets 上に構築された高速なクロスプラットフォームのテキストエディタ:\nダーク/ライトテーマとプラグイン対応のネイティブ Scintilla エディタ。"
@@ -2609,3 +2579,330 @@ msgstr "開いているターミナルを表示"
 
 msgid "Close terminal"
 msgstr "ターミナルを閉じる"
+
+msgid "Zoom level"
+msgstr "ズーム倍率"
+
+msgid "Show zoom control in status bar"
+msgstr "ステータスバーにズームコントロールを表示"
+
+msgid "%s:  (could not open)"
+msgstr "%s:  (開けませんでした)"
+
+msgid "Auto-hide toolbar in full screen"
+msgstr "全画面表示でツールバーを自動的に隠す"
+
+msgid "Batch file"
+msgstr "バッチファイル"
+
+msgid "C source file"
+msgstr "C ソースファイル"
+
+msgid "C# source file"
+msgstr "C# ソースファイル"
+
+msgid "C++ source file"
+msgstr "C++ ソースファイル"
+
+msgid "CSS file"
+msgstr "CSS ファイル"
+
+msgid "Could not create a writable contextMenu.xml to edit."
+msgstr "編集可能な contextMenu.xml を作成できませんでした。"
+
+msgid "Go source file"
+msgstr "Go ソースファイル"
+
+msgid "JSON file"
+msgstr "JSON ファイル"
+
+msgid "Java source file"
+msgstr "Java ソースファイル"
+
+msgid "JavaScript file"
+msgstr "JavaScript ファイル"
+
+msgid "Leave blank for none. Macros: $(FULL_PATH) $(FILE_NAME) $(DATE) $(TIME)\n$(CURRENT_PRINTING_PAGE) $(TOTAL_PRINTING_PAGES)"
+msgstr "空欄にすると印刷されません。マクロ: $(FULL_PATH) $(FILE_NAME) $(DATE) $(TIME)\n$(CURRENT_PRINTING_PAGE) $(TOTAL_PRINTING_PAGES)"
+
+msgid "Lua source file"
+msgstr "Lua ソースファイル"
+
+msgid "New Folder"
+msgstr "新しいフォルダー"
+
+msgid "Perl source file"
+msgstr "Perl ソースファイル"
+
+msgid "PowerShell file"
+msgstr "PowerShell ファイル"
+
+msgid "Properties file"
+msgstr "プロパティファイル"
+
+msgid "Python file"
+msgstr "Python ファイル"
+
+msgid "Ruby source file"
+msgstr "Ruby ソースファイル"
+
+msgid "Rust source file"
+msgstr "Rust ソースファイル"
+
+msgid "SQL file"
+msgstr "SQL ファイル"
+
+msgid "Shell script file"
+msgstr "シェルスクリプトファイル"
+
+msgid "TypeScript file"
+msgstr "TypeScript ファイル"
+
+msgid "XML file"
+msgstr "XML ファイル"
+
+msgid "YAML file"
+msgstr "YAML ファイル"
+
+msgid "print the version and exit"
+msgstr "バージョンを表示して終了する"
+
+msgid "show this help message"
+msgstr "このヘルプを表示する"
+
+msgid "UI language for this run (e.g. pl, de, ja)"
+msgstr "この実行のUI言語 (例: pl, de, ja)"
+
+msgid "start without loading any plugins"
+msgstr "プラグインを読み込まずに起動する"
+
+msgid "wait for the file to be closed before returning"
+msgstr "ファイルが閉じられるまで待機する"
+
+msgid "open the given file(s) read-only"
+msgstr "指定したファイルを読み取り専用で開く"
+
+msgid "open the given file(s) in a split view"
+msgstr "指定したファイルを分割ビューで開く"
+
+msgid "like --safe, plus skip session and recovery restore"
+msgstr "--safe に加え、セッションと復元の復旧を省略する"
+
+msgid "(stdin)"
+msgstr "(stdin)"
+
+msgid "Shortcut Mapper"
+msgstr "ショートカット マッパー"
+
+msgid "Editor"
+msgstr "エディター"
+
+msgid "Global"
+msgstr "グローバル"
+
+msgid "Scheme"
+msgstr "スキーム"
+
+msgid "User"
+msgstr "ユーザー"
+
+msgid "Default"
+msgstr "既定"
+
+msgid "Keymap scheme:"
+msgstr "キーマップ スキーム:"
+
+msgid "Filter by name or shortcut"
+msgstr "名前またはショートカットで絞り込み"
+
+msgid "Find by shortcut"
+msgstr "ショートカットで検索"
+
+msgid "Press a shortcut to list the commands it is bound to"
+msgstr "ショートカットを押すと、それに割り当てられたコマンドを一覧表示します"
+
+msgid "Command"
+msgstr "コマンド"
+
+msgid "Shortcut"
+msgstr "ショートカット"
+
+msgid "Scope"
+msgstr "スコープ"
+
+msgid "Source"
+msgstr "ソース"
+
+msgid "No conflicts."
+msgstr "競合はありません。"
+
+msgid "Modify..."
+msgstr "変更..."
+
+msgid "Clear"
+msgstr "クリア"
+
+msgid "Reset to default"
+msgstr "既定に戻す"
+
+msgid "Ctrl"
+msgstr "Ctrl"
+
+msgid "Alt"
+msgstr "Alt"
+
+msgid "Shift"
+msgstr "Shift"
+
+msgid "Reassign"
+msgstr "再割り当て"
+
+msgid "Keep both"
+msgstr "両方を保持"
+
+msgid "Assign"
+msgstr "割り当て"
+
+msgid "Assign Shortcut"
+msgstr "ショートカットの割り当て"
+
+msgid "Shortcut Conflict"
+msgstr "ショートカットの競合"
+
+msgid "Shortcut Warning"
+msgstr "ショートカットの警告"
+
+msgid "Control (physical)"
+msgstr "Control（物理）"
+
+msgid "Press a shortcut..."
+msgstr "ショートカットを押してください..."
+
+msgid "Conflict: %s is also assigned to \"%s\"."
+msgstr "競合: %s は既に「%s」に割り当てられています。"
+
+msgid "Warning: %s shadows the built-in editor command %s."
+msgstr "警告: %s は組み込みエディター コマンド %s を隠します。"
+
+msgid "Shortcut for: %s"
+msgstr "ショートカット: %s"
+
+msgid "%s is already assigned to \"%s\".\nWhat would you like to do?"
+msgstr "%s は既に「%s」に割り当てられています。\nどうしますか？"
+
+msgid "%s shadows the built-in editor command %s.\nAssign it anyway?"
+msgstr "%s は組み込みエディター コマンド %s を隠します。\nそれでも割り当てますか？"
+
+msgid "Commands bound to %s: %d"
+msgstr "%s に割り当てられたコマンド: %d"
+
+msgid "Move Word Left"
+msgstr "左の単語へ移動"
+
+msgid "Move Word Right"
+msgstr "右の単語へ移動"
+
+msgid "Extend Selection Word Left"
+msgstr "左の単語まで選択範囲を拡張"
+
+msgid "Extend Selection Word Right"
+msgstr "右の単語まで選択範囲を拡張"
+
+msgid "Move to Previous Word Part"
+msgstr "前の単語の一部へ移動"
+
+msgid "Move to Next Word Part"
+msgstr "次の単語の一部へ移動"
+
+msgid "Move to Previous Paragraph"
+msgstr "前の段落へ移動"
+
+msgid "Move to Next Paragraph"
+msgstr "次の段落へ移動"
+
+msgid "Go to Start of Document"
+msgstr "文書の先頭へ移動"
+
+msgid "Go to End of Document"
+msgstr "文書の末尾へ移動"
+
+msgid "Extend Selection to Start of Document"
+msgstr "文書の先頭まで選択範囲を拡張"
+
+msgid "Extend Selection to End of Document"
+msgstr "文書の末尾まで選択範囲を拡張"
+
+msgid "Scroll Up One Line"
+msgstr "1行上へスクロール"
+
+msgid "Scroll Down One Line"
+msgstr "1行下へスクロール"
+
+msgid "Go to Start of Display Line"
+msgstr "表示行の先頭へ移動"
+
+msgid "Go to End of Display Line"
+msgstr "表示行の末尾へ移動"
+
+msgid "Cut Current Line"
+msgstr "現在の行を切り取り"
+
+msgid "Delete Current Line"
+msgstr "現在の行を削除"
+
+msgid "Copy Current Line"
+msgstr "現在の行をコピー"
+
+msgid "Delete Word Left"
+msgstr "左の単語を削除"
+
+msgid "Delete Word Right"
+msgstr "右の単語を削除"
+
+msgid "Delete to Start of Line"
+msgstr "行頭まで削除"
+
+msgid "Delete to End of Line"
+msgstr "行末まで削除"
+
+msgid "Toggle Overtype Mode"
+msgstr "上書きモードの切り替え"
+
+msgid "%d conflicts, %d warnings"
+msgstr "競合 %d 件、警告 %d 件"
+
+msgid "Details..."
+msgstr "詳細..."
+
+msgid "Conflict Details"
+msgstr "競合の詳細"
+
+msgid "Conflict"
+msgstr "競合"
+
+msgid "Warning (shadowed editor command)"
+msgstr "警告（隠されたエディター コマンド）"
+
+msgid "\"%s\"  (menu command, scope: %s, source: %s)"
+msgstr "「%s」  （メニュー コマンド、スコープ: %s、ソース: %s）"
+
+msgid "\"%s\"  (editor command, scope: %s, source: %s)"
+msgstr "「%s」  （エディター コマンド、スコープ: %s、ソース: %s）"
+
+msgid "built-in editor command %s  (editor default, scope: %s)"
+msgstr "組み込みエディター コマンド %s  （エディター既定、スコープ: %s）"
+
+msgid "built-in terminal key  (scope: %s)"
+msgstr "組み込みターミナル キー  （スコープ: %s）"
+
+msgid "Both bindings are active in the same context; pressing the key runs only one of them."
+msgstr "両方の割り当てが同じコンテキストで有効です。キーを押しても実行されるのは一方だけです。"
+
+msgid "When the editor has focus, the menu shortcut wins; the editor command is unreachable."
+msgstr "エディターにフォーカスがあるときはメニューのショートカットが優先され、エディター コマンドは実行できません。"
+
+msgid "(scope: %s)"
+msgstr "（スコープ: %s）"
+
+msgid "Warning: %s is also assigned to \"%s\"."
+msgstr "警告: %s は既に「%s」に割り当てられています。"

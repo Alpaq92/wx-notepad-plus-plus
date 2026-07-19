@@ -6,8 +6,8 @@ namespace Label
     inline const wxString MenuView() { return _("&View"); }
 
     inline const wxString ViewAlwaysOnTop() { return _("Always on &Top"); }
-    inline const wxString ViewFullScreenToggle() { return _("To&ggle Full Screen Mode\tF11"); }
-    inline const wxString ViewPostIt() { return _("&Post-It\tF12"); }
+    inline const wxString ViewFullScreenToggle() { return _("To&ggle Full Screen Mode"); }
+    inline const wxString ViewPostIt() { return _("&Post-It"); }
     inline const wxString ViewDistractionFree() { return _("D&istraction Free Mode"); }
 
     inline const wxString ViewViewCurrentFileIn() { return _("&View Current File in"); }
@@ -37,19 +37,19 @@ namespace Label
     inline const wxString ViewLoadInNewInstance() { return _("&Open in New Instance"); }
 
     inline const wxString ViewTab() { return _("Ta&b"); }
-    inline const wxString ViewTab1() { return _("1st Tab\tCtrl+1"); }
-    inline const wxString ViewTab2() { return _("2nd Tab\tCtrl+2"); }
-    inline const wxString ViewTab3() { return _("3rd Tab\tCtrl+3"); }
-    inline const wxString ViewTab4() { return _("4th Tab\tCtrl+4"); }
-    inline const wxString ViewTab5() { return _("5th Tab\tCtrl+5"); }
-    inline const wxString ViewTab6() { return _("6th Tab\tCtrl+6"); }
-    inline const wxString ViewTab7() { return _("7th Tab\tCtrl+7"); }
-    inline const wxString ViewTab8() { return _("8th Tab\tCtrl+8"); }
-    inline const wxString ViewTab9() { return _("9th Tab\tCtrl+9"); }
+    inline const wxString ViewTab1() { return _("1st Tab"); }
+    inline const wxString ViewTab2() { return _("2nd Tab"); }
+    inline const wxString ViewTab3() { return _("3rd Tab"); }
+    inline const wxString ViewTab4() { return _("4th Tab"); }
+    inline const wxString ViewTab5() { return _("5th Tab"); }
+    inline const wxString ViewTab6() { return _("6th Tab"); }
+    inline const wxString ViewTab7() { return _("7th Tab"); }
+    inline const wxString ViewTab8() { return _("8th Tab"); }
+    inline const wxString ViewTab9() { return _("9th Tab"); }
     inline const wxString ViewTabFirst() { return _("First Tab"); }
     inline const wxString ViewTabLast() { return _("Last Tab"); }
-    inline const wxString ViewTabNext() { return _("Next Tab\tCtrl+Tab"); }
-    inline const wxString ViewTabPrev() { return _("Previous Tab\tCtrl+Shift+Tab"); }
+    inline const wxString ViewTabNext() { return _("Next Tab"); }
+    inline const wxString ViewTabPrev() { return _("Previous Tab"); }
     inline const wxString ViewMoveToStart() { return _("Move to Start"); }
     inline const wxString ViewMoveToEnd() { return _("Move to End"); }
     inline const wxString ViewTabMoveForward() { return _("Move Tab Forward"); }
@@ -64,30 +64,30 @@ namespace Label
     inline const wxString ViewWordWrap() { return _("&Word wrap"); }
     inline const wxString ViewHideLines() { return _("&Hide Lines"); }
 
-    inline const wxString ViewFoldAll() { return _("Fold All\tAlt+0"); }
-    inline const wxString ViewUnfoldAll() { return _("Unfold All\tAlt+Shift+0"); }
-    inline const wxString ViewFoldCurrent() { return _("Fold Current Level\tCtrl+Alt+F"); }
-    inline const wxString ViewUnfoldCurrent() { return _("Unfold Current Level\tCtrl+Alt+Shift+F"); }
+    inline const wxString ViewFoldAll() { return _("Fold All"); }
+    inline const wxString ViewUnfoldAll() { return _("Unfold All"); }
+    inline const wxString ViewFoldCurrent() { return _("Fold Current Level"); }
+    inline const wxString ViewUnfoldCurrent() { return _("Unfold Current Level"); }
 
     inline const wxString ViewFoldLevel() { return _("Fold Level"); }
-    inline const wxString ViewFold1() { return _("1\tAlt+1"); }
-    inline const wxString ViewFold2() { return _("2\tAlt+2"); }
-    inline const wxString ViewFold3() { return _("3\tAlt+3"); }
-    inline const wxString ViewFold4() { return _("4\tAlt+4"); }
-    inline const wxString ViewFold5() { return _("5\tAlt+5"); }
-    inline const wxString ViewFold6() { return _("6\tAlt+6"); }
-    inline const wxString ViewFold7() { return _("7\tAlt+7"); }
-    inline const wxString ViewFold8() { return _("8\tAlt+8"); }
+    inline const wxString ViewFold1() { return _("1"); }
+    inline const wxString ViewFold2() { return _("2"); }
+    inline const wxString ViewFold3() { return _("3"); }
+    inline const wxString ViewFold4() { return _("4"); }
+    inline const wxString ViewFold5() { return _("5"); }
+    inline const wxString ViewFold6() { return _("6"); }
+    inline const wxString ViewFold7() { return _("7"); }
+    inline const wxString ViewFold8() { return _("8"); }
 
     inline const wxString ViewUnfoldLevel() { return _("Unfold Level"); }
-    inline const wxString ViewUnfold1() { return _("1\tAlt+Shift+1"); }
-    inline const wxString ViewUnfold2() { return _("2\tAlt+Shift+2"); }
-    inline const wxString ViewUnfold3() { return _("3\tAlt+Shift+3"); }
-    inline const wxString ViewUnfold4() { return _("4\tAlt+Shift+4"); }
-    inline const wxString ViewUnfold5() { return _("5\tAlt+Shift+5"); }
-    inline const wxString ViewUnfold6() { return _("6\tAlt+Shift+6"); }
-    inline const wxString ViewUnfold7() { return _("7\tAlt+Shift+7"); }
-    inline const wxString ViewUnfold8() { return _("8\tAlt+Shift+8"); }
+    inline const wxString ViewUnfold1() { return _("1"); }
+    inline const wxString ViewUnfold2() { return _("2"); }
+    inline const wxString ViewUnfold3() { return _("3"); }
+    inline const wxString ViewUnfold4() { return _("4"); }
+    inline const wxString ViewUnfold5() { return _("5"); }
+    inline const wxString ViewUnfold6() { return _("6"); }
+    inline const wxString ViewUnfold7() { return _("7"); }
+    inline const wxString ViewUnfold8() { return _("8"); }
 
     inline const wxString ViewSummary() { return _("&Summary..."); }
 

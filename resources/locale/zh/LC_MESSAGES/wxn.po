@@ -54,11 +54,11 @@ msgstr "取消(&C)"
 msgid "&Chrome"
 msgstr "Chrome(&C)"
 
-msgid "&Close	Ctrl+W"
-msgstr "关闭(&C)	Ctrl+W"
+msgid "&Close"
+msgstr "关闭(&C)"
 
-msgid "&Copy	Ctrl+C"
-msgstr "复制(&C)	Ctrl+C"
+msgid "&Copy"
+msgstr "复制(&C)"
 
 msgid "&Copy Styled Text"
 msgstr "复制带样式的文本(&C)"
@@ -66,8 +66,8 @@ msgstr "复制带样式的文本(&C)"
 msgid "&Dark Mode"
 msgstr "深色模式(&D)"
 
-msgid "&Delete	Del"
-msgstr "删除(&D)	Del"
+msgid "&Delete"
+msgstr "删除(&D)"
 
 msgid "&Document Map"
 msgstr "文档缩略图(&D)"
@@ -84,14 +84,14 @@ msgstr "编辑(&E)"
 msgid "&File"
 msgstr "文件(&F)"
 
-msgid "&Find...	Ctrl+F"
-msgstr "查找(&F)...	Ctrl+F"
+msgid "&Find..."
+msgstr "查找(&F)..."
 
 msgid "&Firefox"
 msgstr "Firefox(&F)"
 
-msgid "&Go to...	Ctrl+G"
-msgstr "转到(&G)...	Ctrl+G"
+msgid "&Go to..."
+msgstr "转到(&G)..."
 
 msgid "&Hide Lines"
 msgstr "隐藏行(&H)"
@@ -99,8 +99,8 @@ msgstr "隐藏行(&H)"
 msgid "&IE"
 msgstr "IE(&I)"
 
-msgid "&Incremental Search	Ctrl+Alt+I"
-msgstr "增量查找(&I)	Ctrl+Alt+I"
+msgid "&Incremental Search"
+msgstr "增量查找(&I)"
 
 msgid "&Indent"
 msgstr "缩进(&I)"
@@ -120,8 +120,8 @@ msgstr "宏(&M)"
 msgid "&Move/Clone Current Document"
 msgstr "移动/克隆当前文档(&M)"
 
-msgid "&New	Ctrl+N"
-msgstr "新建(&N)	Ctrl+N"
+msgid "&New"
+msgstr "新建(&N)"
 
 msgid "&On Selection"
 msgstr "选中内容(&O)"
@@ -129,11 +129,11 @@ msgstr "选中内容(&O)"
 msgid "&Open in New Instance"
 msgstr "在新实例中打开(&O)"
 
-msgid "&Open...	Ctrl+O"
-msgstr "打开(&O)...	Ctrl+O"
+msgid "&Open..."
+msgstr "打开(&O)..."
 
-msgid "&Paste	Ctrl+V"
-msgstr "粘贴(&P)	Ctrl+V"
+msgid "&Paste"
+msgstr "粘贴(&P)"
 
 msgid "&Paste Special"
 msgstr "选择性粘贴(&P)"
@@ -144,11 +144,11 @@ msgstr "回放(&P)"
 msgid "&Plugins"
 msgstr "插件(&P)"
 
-msgid "&Post-It	F12"
-msgstr "便签模式(&P)	F12"
+msgid "&Post-It"
+msgstr "便签模式(&P)"
 
-msgid "&Print...	Ctrl+P"
-msgstr "打印(&P)...	Ctrl+P"
+msgid "&Print..."
+msgstr "打印(&P)..."
 
 msgid "&Proper Case"
 msgstr "单词首字母大写(&P)"
@@ -156,14 +156,14 @@ msgstr "单词首字母大写(&P)"
 msgid "&Redact Selection █ (Shift: ●)"
 msgstr "涂黑所选内容(&R) █ (Shift: ●)"
 
-msgid "&Redo	Ctrl+Y"
-msgstr "重做(&R)	Ctrl+Y"
+msgid "&Redo"
+msgstr "重做(&R)"
 
 msgid "&Rename..."
 msgstr "重命名(&R)..."
 
-msgid "&Replace...	Ctrl+H"
-msgstr "替换(&R)...	Ctrl+H"
+msgid "&Replace..."
+msgstr "替换(&R)..."
 
 msgid "&Restore Default Zoom"
 msgstr "恢复默认缩放(&R)"
@@ -174,14 +174,11 @@ msgstr "运行(&R)"
 msgid "&Run a Macro Multiple Times..."
 msgstr "多次运行宏(&R)..."
 
-msgid "&Run...	F5"
-msgstr "运行(&R)...	F5"
+msgid "&Run..."
+msgstr "运行(&R)..."
 
 msgid "&Save"
 msgstr "保存(&S)"
-
-msgid "&Save	Ctrl+S"
-msgstr "保存(&S)	Ctrl+S"
 
 msgid "&Save Current Recorded Macro..."
 msgstr "保存当前录制的宏(&S)..."
@@ -189,14 +186,14 @@ msgstr "保存当前录制的宏(&S)..."
 msgid "&Search"
 msgstr "搜索(&S)"
 
-msgid "&Select All	Ctrl+A"
-msgstr "全选(&S)	Ctrl+A"
+msgid "&Select All"
+msgstr "全选(&S)"
 
-msgid "&Select and Find Next	Ctrl+F3"
-msgstr "选定并查找下一个(&S)	Ctrl+F3"
+msgid "&Select and Find Next"
+msgstr "选定并查找下一个(&S)"
 
-msgid "&Select and Find Previous	Ctrl+Shift+F3"
-msgstr "选定并查找上一个(&S)	Ctrl+Shift+F3"
+msgid "&Select and Find Previous"
+msgstr "选定并查找上一个(&S)"
 
 msgid "&Sentence case"
 msgstr "句首字母大写(&S)"
@@ -204,11 +201,11 @@ msgstr "句首字母大写(&S)"
 msgid "&Summary..."
 msgstr "摘要(&S)..."
 
-msgid "&UPPERCASE	Ctrl+Shift+U"
-msgstr "转换为大写(&U)	Ctrl+Shift+U"
+msgid "&UPPERCASE"
+msgstr "转换为大写(&U)"
 
-msgid "&Undo	Ctrl+Z"
-msgstr "撤销(&U)	Ctrl+Z"
+msgid "&Undo"
+msgstr "撤销(&U)"
 
 msgid "&View"
 msgstr "视图(&V)"
@@ -231,8 +228,8 @@ msgstr "缩放(&Z)"
 msgid "&iNVERT cASE"
 msgstr "反转大小写(&I)"
 
-msgid "&lowercase	Ctrl+U"
-msgstr "转换为小写(&L)	Ctrl+U"
+msgid "&lowercase"
+msgstr "转换为小写(&L)"
 
 msgid "&ranDOm CasE"
 msgstr "随机大小写(&R)"
@@ -246,101 +243,77 @@ msgstr ", (逗号)"
 msgid ". (dot)"
 msgstr ". (点)"
 
-msgid "1	Alt+1"
-msgstr "1	Alt+1"
-
-msgid "1	Alt+Shift+1"
-msgstr "1	Alt+Shift+1"
+msgid "1"
+msgstr "1"
 
 msgid "1st Style"
 msgstr "第 1 种样式"
 
-msgid "1st Tab	Ctrl+1"
-msgstr "第 1 个标签	Ctrl+1"
+msgid "1st Tab"
+msgstr "第 1 个标签"
 
-msgid "2	Alt+2"
-msgstr "2	Alt+2"
-
-msgid "2	Alt+Shift+2"
-msgstr "2	Alt+Shift+2"
+msgid "2"
+msgstr "2"
 
 msgid "2nd Style"
 msgstr "第 2 种样式"
 
-msgid "2nd Tab	Ctrl+2"
-msgstr "第 2 个标签	Ctrl+2"
+msgid "2nd Tab"
+msgstr "第 2 个标签"
 
-msgid "3	Alt+3"
-msgstr "3	Alt+3"
-
-msgid "3	Alt+Shift+3"
-msgstr "3	Alt+Shift+3"
+msgid "3"
+msgstr "3"
 
 msgid "3rd Style"
 msgstr "第 3 种样式"
 
-msgid "3rd Tab	Ctrl+3"
-msgstr "第 3 个标签	Ctrl+3"
+msgid "3rd Tab"
+msgstr "第 3 个标签"
 
-msgid "4	Alt+4"
-msgstr "4	Alt+4"
-
-msgid "4	Alt+Shift+4"
-msgstr "4	Alt+Shift+4"
+msgid "4"
+msgstr "4"
 
 msgid "4th Style"
 msgstr "第 4 种样式"
 
-msgid "4th Tab	Ctrl+4"
-msgstr "第 4 个标签	Ctrl+4"
+msgid "4th Tab"
+msgstr "第 4 个标签"
 
-msgid "5	Alt+5"
-msgstr "5	Alt+5"
-
-msgid "5	Alt+Shift+5"
-msgstr "5	Alt+Shift+5"
+msgid "5"
+msgstr "5"
 
 msgid "5th Style"
 msgstr "第 5 种样式"
 
-msgid "5th Tab	Ctrl+5"
-msgstr "第 5 个标签	Ctrl+5"
+msgid "5th Tab"
+msgstr "第 5 个标签"
 
-msgid "6	Alt+6"
-msgstr "6	Alt+6"
+msgid "6"
+msgstr "6"
 
-msgid "6	Alt+Shift+6"
-msgstr "6	Alt+Shift+6"
+msgid "6th Tab"
+msgstr "第 6 个标签"
 
-msgid "6th Tab	Ctrl+6"
-msgstr "第 6 个标签	Ctrl+6"
+msgid "7"
+msgstr "7"
 
-msgid "7	Alt+7"
-msgstr "7	Alt+7"
+msgid "7th Tab"
+msgstr "第 7 个标签"
 
-msgid "7	Alt+Shift+7"
-msgstr "7	Alt+Shift+7"
+msgid "8"
+msgstr "8"
 
-msgid "7th Tab	Ctrl+7"
-msgstr "第 7 个标签	Ctrl+7"
+msgid "8th Tab"
+msgstr "第 8 个标签"
 
-msgid "8	Alt+8"
-msgstr "8	Alt+8"
-
-msgid "8	Alt+Shift+8"
-msgstr "8	Alt+Shift+8"
-
-msgid "8th Tab	Ctrl+8"
-msgstr "第 8 个标签	Ctrl+8"
-
-msgid "9th Tab	Ctrl+9"
-msgstr "第 9 个标签	Ctrl+9"
+msgid "9th Tab"
+msgstr "第 9 个标签"
 
 msgid "ANSI"
 msgstr "ANSI"
 
-msgid "About wxNote\tF1"
-msgstr "关于 wxNote\tF1"
+msgid "About wxNote"
+msgstr "关于 wxNote"
 
 msgid "Activate document:"
 msgstr "激活文档："
@@ -426,8 +399,8 @@ msgstr "Big5 (繁体)"
 msgid "Binary Clipboard (Windows only)"
 msgstr "二进制剪贴板（仅限 Windows）"
 
-msgid "Block Comment	Ctrl+Shift+Q"
-msgstr "区块注释	Ctrl+Shift+Q"
+msgid "Block Comment"
+msgstr "区块注释"
 
 msgid "Block Uncomment"
 msgstr "取消区块注释"
@@ -537,8 +510,8 @@ msgstr "克隆到另一视图(&W)"
 msgid "Clone to Other View"
 msgstr "克隆到其他视图"
 
-msgid "Clos&e All	Ctrl+Shift+W"
-msgstr "全部关闭(&E)	Ctrl+Shift+W"
+msgid "Clos&e All"
+msgstr "全部关闭(&E)"
 
 msgid "Close"
 msgstr "关闭"
@@ -576,8 +549,8 @@ msgstr "注释/取消注释(&M)"
 msgid "Colored icons"
 msgstr "彩色图标"
 
-msgid "Colum&n Editor...	Alt+C"
-msgstr "列块编辑(&N)...	Alt+C"
+msgid "Colum&n Editor..."
+msgstr "列块编辑(&N)..."
 
 msgid "Column (rectangular) selection:\n\n- Alt + drag the mouse\n- Alt + Shift + Arrow keys\n- Alt + Shift + Click\n\nTyping or pasting applies to every line of the block at once."
 msgstr "列(矩形)选择:\n\n- Alt + 拖动鼠标\n- Alt + Shift + 方向键\n- Alt + Shift + 单击\n\n输入或粘贴会同时应用于块中的每一行。"
@@ -669,8 +642,8 @@ msgstr "无法读取会话文件。"
 msgid "Count: %d match(es)"
 msgstr "计数：%d 处匹配"
 
-msgid "Cu&t	Ctrl+X"
-msgstr "剪切(&T)	Ctrl+X"
+msgid "Cu&t"
+msgstr "剪切(&T)"
 
 msgid "Cut"
 msgstr "剪切"
@@ -765,14 +738,14 @@ msgstr "文档列表"
 msgid "Document Map"
 msgstr "文档地图"
 
-msgid "Duplicate Current Line	Ctrl+D"
-msgstr "复制当前行	Ctrl+D"
+msgid "Duplicate Current Line"
+msgstr "复制当前行"
 
 msgid "E&ncoding"
 msgstr "编码(&N)"
 
-msgid "E&xit	Alt+F4"
-msgstr "退出(&X)	Alt+F4"
+msgid "E&xit"
+msgstr "退出(&X)"
 
 msgid "EOL to Space"
 msgstr "行尾符转为空格"
@@ -867,11 +840,11 @@ msgstr "筛选器:"
 msgid "Find"
 msgstr "查找"
 
-msgid "Find &Next	F3"
-msgstr "查找下一个(&N)	F3"
+msgid "Find &Next"
+msgstr "查找下一个(&N)"
 
-msgid "Find &Previous	Shift+F3"
-msgstr "查找上一个(&P)	Shift+F3"
+msgid "Find &Previous"
+msgstr "查找上一个(&P)"
 
 msgid "Find (&Volatile) Next"
 msgstr "快速查找下一个(&V)"
@@ -894,8 +867,8 @@ msgstr "查找下一个"
 msgid "Find characters in rang&e..."
 msgstr "查找范围内的字符(&E)..."
 
-msgid "Find in Fi&les...	Ctrl+Shift+F"
-msgstr "在文件中查找(&L)...	Ctrl+Shift+F"
+msgid "Find in Fi&les..."
+msgstr "在文件中查找(&L)..."
 
 msgid "Find in Files"
 msgstr "在文件中查找"
@@ -927,11 +900,11 @@ msgstr "从光标处开始(循环环绕)查找\n编码位于此范围内的下�
 msgid "First Tab"
 msgstr "第一个标签"
 
-msgid "Fold All	Alt+0"
-msgstr "全部折叠	Alt+0"
+msgid "Fold All"
+msgstr "全部折叠"
 
-msgid "Fold Current Level	Ctrl+Alt+F"
-msgstr "折叠当前层级	Ctrl+Alt+F"
+msgid "Fold Current Level"
+msgstr "折叠当前层级"
 
 msgid "Fold Level"
 msgstr "折叠层级"
@@ -1005,8 +978,8 @@ msgstr "Fugue 图标"
 msgid "Function &List"
 msgstr "函数列表(&L)"
 
-msgid "Function Completion	Ctrl+Space"
-msgstr "函数自动完成	Ctrl+Space"
+msgid "Function Completion"
+msgstr "函数自动完成"
 
 msgid "Function List"
 msgstr "函数列表"
@@ -1035,8 +1008,8 @@ msgstr "从所选内容生成到剪贴板"
 msgid "Generate..."
 msgstr "生成..."
 
-msgid "Go to &Matching Brace	Ctrl+B"
-msgstr "转到匹配的括号(&M)	Ctrl+B"
+msgid "Go to &Matching Brace"
+msgstr "转到匹配的括号(&M)"
 
 msgid "Go to Next Change"
 msgstr "转到下一处更改"
@@ -1173,8 +1146,8 @@ msgstr "斜体"
 msgid "Japanese"
 msgstr "日语"
 
-msgid "Join Lines	Ctrl+J"
-msgstr "合并行	Ctrl+J"
+msgid "Join Lines"
+msgstr "合并行"
 
 msgid "Jump &Down"
 msgstr "向下跳转(&D)"
@@ -1353,8 +1326,8 @@ msgstr "监视已停止（文档已被编辑）"
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "将 \"%s\" 移动到回收站？"
 
-msgid "Move Down Current Line	Ctrl+Shift+Down"
-msgstr "下移当前行	Ctrl+Shift+Down"
+msgid "Move Down Current Line"
+msgstr "下移当前行"
 
 msgid "Move Tab Backward"
 msgstr "标签后移"
@@ -1362,8 +1335,8 @@ msgstr "标签后移"
 msgid "Move Tab Forward"
 msgstr "标签前移"
 
-msgid "Move Up Current Line	Ctrl+Shift+Up"
-msgstr "上移当前行	Ctrl+Shift+Up"
+msgid "Move Up Current Line"
+msgstr "上移当前行"
 
 msgid "Move to End"
 msgstr "移到末尾"
@@ -1413,14 +1386,14 @@ msgstr "新建工作区"
 msgid "Next"
 msgstr "下一个"
 
-msgid "Next Bookmark	F2"
-msgstr "下一个书签	F2"
+msgid "Next Bookmark"
+msgstr "下一个书签"
 
-msgid "Next Search Resul&t	F4"
-msgstr "下一个搜索结果(&T)	F4"
+msgid "Next Search Resul&t"
+msgstr "下一个搜索结果(&T)"
 
-msgid "Next Tab	Ctrl+Tab"
-msgstr "下一个标签	Ctrl+Tab"
+msgid "Next Tab"
+msgstr "下一个标签"
 
 msgid "No character in that range found"
 msgstr "在该范围内未找到字符"
@@ -1641,14 +1614,14 @@ msgstr "前缀2:"
 msgid "Prefix mode"
 msgstr "前缀模式"
 
-msgid "Previous Bookmark	Shift+F2"
-msgstr "上一个书签	Shift+F2"
+msgid "Previous Bookmark"
+msgstr "上一个书签"
 
-msgid "Previous Search Resul&t	Shift+F4"
-msgstr "上一个搜索结果(&T)	Shift+F4"
+msgid "Previous Search Resul&t"
+msgstr "上一个搜索结果(&T)"
 
-msgid "Previous Tab	Ctrl+Shift+Tab"
-msgstr "上一个标签	Ctrl+Shift+Tab"
+msgid "Previous Tab"
+msgstr "上一个标签"
 
 msgid "Print"
 msgstr "打印"
@@ -1788,8 +1761,8 @@ msgstr "替换为 :"
 msgid "Replaced %d occurrence(s)"
 msgstr "已替换 %d 处"
 
-msgid "Restore Recent Closed File	Ctrl+Shift+T"
-msgstr "恢复最近关闭的文件	Ctrl+Shift+T"
+msgid "Restore Recent Closed File"
+msgstr "恢复最近关闭的文件"
 
 msgid "Reverse Line Order"
 msgstr "反转行顺序"
@@ -1815,8 +1788,8 @@ msgstr "SHA-256"
 msgid "SHA-512"
 msgstr "SHA-512"
 
-msgid "Sa&ve All	Ctrl+Shift+S"
-msgstr "全部保存(&V)	Ctrl+Shift+S"
+msgid "Sa&ve All"
+msgstr "全部保存(&V)"
 
 msgid "Save"
 msgstr "保存"
@@ -1824,8 +1797,8 @@ msgstr "保存"
 msgid "Save && Close"
 msgstr "保存 && 关闭"
 
-msgid "Save &As...	Ctrl+Alt+S"
-msgstr "另存为(&A)...	Ctrl+Alt+S"
+msgid "Save &As..."
+msgstr "另存为(&A)..."
 
 msgid "Save All"
 msgstr "全部保存"
@@ -1869,8 +1842,8 @@ msgstr "设置(&T)"
 msgid "Search Mode"
 msgstr "查找模式"
 
-msgid "Search Results &Window	F7"
-msgstr "搜索结果窗口(&W)	F7"
+msgid "Search Results &Window"
+msgstr "搜索结果窗口(&W)"
 
 msgid "Search on Internet"
 msgstr "在互联网上搜索"
@@ -2025,8 +1998,8 @@ msgstr "空格转为 TAB (全部)"
 msgid "Space to TAB (Leading)"
 msgstr "空格转为 TAB (行首)"
 
-msgid "Split Lines	Ctrl+I"
-msgstr "拆分行	Ctrl+I"
+msgid "Split Lines"
+msgstr "拆分行"
 
 msgid "Start Re&cording"
 msgstr "开始录制(&C)"
@@ -2157,17 +2130,17 @@ msgstr "主题样式已保存"
 msgid "There was a problem printing.\nPerhaps your current printer is not set up correctly."
 msgstr "打印时出现问题。\n您当前的打印机可能未正确设置。"
 
-msgid "To&ggle Full Screen Mode	F11"
-msgstr "切换全屏模式(&G)	F11"
+msgid "To&ggle Full Screen Mode"
+msgstr "切换全屏模式(&G)"
 
 msgid "To:"
 msgstr "到:"
 
-msgid "Toggle Bookmark	Ctrl+F2"
-msgstr "切换书签	Ctrl+F2"
+msgid "Toggle Bookmark"
+msgstr "切换书签"
 
-msgid "Toggle Single Line Comment	Ctrl+Q"
-msgstr "切换单行注释	Ctrl+Q"
+msgid "Toggle Single Line Comment"
+msgstr "切换单行注释"
 
 msgid "Toolbar icon style:"
 msgstr "工具栏图标样式："
@@ -2217,11 +2190,11 @@ msgstr "撤销"
 msgid "Undo the Latest Added Multi-Select"
 msgstr "撤销最近添加的多选"
 
-msgid "Unfold All	Alt+Shift+0"
-msgstr "全部展开	Alt+Shift+0"
+msgid "Unfold All"
+msgstr "全部展开"
 
-msgid "Unfold Current Level	Ctrl+Alt+Shift+F"
-msgstr "展开当前层级	Ctrl+Alt+Shift+F"
+msgid "Unfold Current Level"
+msgstr "展开当前层级"
 
 msgid "Unfold Level"
 msgstr "展开层级"
@@ -2440,8 +2413,8 @@ msgstr "拒绝访问"
 msgid "Reuse an existing window"
 msgstr "重用现有窗口"
 
-msgid "Usage: wxnote [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."
-msgstr "用法: wxnote [选项] [文件...]\n\n-g, --goto <行[,列]>   跳转到最后打开文件中的此行(和列)\n-e, --encoding <名称>   强制指定编码: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance      始终打开一个新窗口\n-r, --reuse-instance    重用一个已在运行的窗口\n\n命令行中指定的文件将在标签页中打开。"
+msgid "Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"
+msgstr "用法：wxnote [选项] [文件...]\n\n文件：\n  file                     在标签页中打开\n  folder                   作为工作区打开\n  file:line[:col]          在指定位置打开\n  +N, +N,col               在第 N 行（和列）打开最后一个文件\n  +/text                   将光标置于 'text' 的首个匹配处\n  -                        将管道输入读入新的无标题缓冲区\n\n选项：\n  -g, --goto <line[,col]>  转到最后打开文件中的该行（和列）\n  -e, --encoding <name>    强制编码：ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      以只读方式打开指定文件\n  -o, -O, --split          在拆分视图中打开指定文件\n  -n, --new-instance       总是打开新窗口\n  -r, --reuse-instance     重用已在运行的窗口\n  -w, --wait               等待文件关闭后再返回\n  --safe                   启动时不加载任何插件\n  --clean                  与 --safe 相同，并跳过会话和恢复还原\n  --locale <lang>          本次运行的界面语言（例如 pl、de、ja）\n  -v, --version            打印版本并退出\n  -h, --help               显示此帮助信息"
 
 msgid "open at line[,col]"
 msgstr "跳转到行[,列]"
@@ -2461,8 +2434,8 @@ msgstr "已恢复"
 msgid "NewLanguage"
 msgstr "新语言"
 
-msgid "file"
-msgstr "文件"
+msgid "file-or-folder"
+msgstr "文件或文件夹"
 
 msgid "Dec"
 msgstr "十进制"
@@ -2514,9 +2487,6 @@ msgstr "全局样式"
 
 msgid "Style %d"
 msgstr "样式 %d"
-
-msgid "About wxNote"
-msgstr "关于 wxNote"
 
 msgid "A fast, cross-platform text editor built on wxWidgets:\na native Scintilla editor with dark/light themes and plugin support."
 msgstr "基于 wxWidgets 的快速跨平台文本编辑器:\n原生 Scintilla 编辑器，支持深色/浅色主题和插件。"
@@ -2610,3 +2580,330 @@ msgstr "显示打开的终端"
 
 msgid "Close terminal"
 msgstr "关闭终端"
+
+msgid "Zoom level"
+msgstr "缩放比例"
+
+msgid "Show zoom control in status bar"
+msgstr "在状态栏显示缩放控件"
+
+msgid "%s:  (could not open)"
+msgstr "%s:  (无法打开)"
+
+msgid "Auto-hide toolbar in full screen"
+msgstr "全屏时自动隐藏工具栏"
+
+msgid "Batch file"
+msgstr "批处理文件"
+
+msgid "C source file"
+msgstr "C 源文件"
+
+msgid "C# source file"
+msgstr "C# 源文件"
+
+msgid "C++ source file"
+msgstr "C++ 源文件"
+
+msgid "CSS file"
+msgstr "CSS 文件"
+
+msgid "Could not create a writable contextMenu.xml to edit."
+msgstr "无法创建可写入的 contextMenu.xml 以供编辑。"
+
+msgid "Go source file"
+msgstr "Go 源文件"
+
+msgid "JSON file"
+msgstr "JSON 文件"
+
+msgid "Java source file"
+msgstr "Java 源文件"
+
+msgid "JavaScript file"
+msgstr "JavaScript 文件"
+
+msgid "Leave blank for none. Macros: $(FULL_PATH) $(FILE_NAME) $(DATE) $(TIME)\n$(CURRENT_PRINTING_PAGE) $(TOTAL_PRINTING_PAGES)"
+msgstr "留空则不打印。宏: $(FULL_PATH) $(FILE_NAME) $(DATE) $(TIME)\n$(CURRENT_PRINTING_PAGE) $(TOTAL_PRINTING_PAGES)"
+
+msgid "Lua source file"
+msgstr "Lua 源文件"
+
+msgid "New Folder"
+msgstr "新建文件夹"
+
+msgid "Perl source file"
+msgstr "Perl 源文件"
+
+msgid "PowerShell file"
+msgstr "PowerShell 文件"
+
+msgid "Properties file"
+msgstr "属性文件"
+
+msgid "Python file"
+msgstr "Python 文件"
+
+msgid "Ruby source file"
+msgstr "Ruby 源文件"
+
+msgid "Rust source file"
+msgstr "Rust 源文件"
+
+msgid "SQL file"
+msgstr "SQL 文件"
+
+msgid "Shell script file"
+msgstr "Shell 脚本文件"
+
+msgid "TypeScript file"
+msgstr "TypeScript 文件"
+
+msgid "XML file"
+msgstr "XML 文件"
+
+msgid "YAML file"
+msgstr "YAML 文件"
+
+msgid "print the version and exit"
+msgstr "输出版本号并退出"
+
+msgid "show this help message"
+msgstr "显示此帮助信息"
+
+msgid "UI language for this run (e.g. pl, de, ja)"
+msgstr "本次运行的界面语言 (例如 pl, de, ja)"
+
+msgid "start without loading any plugins"
+msgstr "启动时不加载任何插件"
+
+msgid "wait for the file to be closed before returning"
+msgstr "等待文件关闭后再返回"
+
+msgid "open the given file(s) read-only"
+msgstr "以只读方式打开指定文件"
+
+msgid "open the given file(s) in a split view"
+msgstr "在拆分视图中打开指定文件"
+
+msgid "like --safe, plus skip session and recovery restore"
+msgstr "与 --safe 相同，并跳过会话和恢复还原"
+
+msgid "(stdin)"
+msgstr "(stdin)"
+
+msgid "Shortcut Mapper"
+msgstr "快捷键映射器"
+
+msgid "Editor"
+msgstr "编辑器"
+
+msgid "Global"
+msgstr "全局"
+
+msgid "Scheme"
+msgstr "方案"
+
+msgid "User"
+msgstr "用户"
+
+msgid "Default"
+msgstr "默认"
+
+msgid "Keymap scheme:"
+msgstr "键位方案："
+
+msgid "Filter by name or shortcut"
+msgstr "按名称或快捷键筛选"
+
+msgid "Find by shortcut"
+msgstr "按快捷键查找"
+
+msgid "Press a shortcut to list the commands it is bound to"
+msgstr "按下快捷键以列出绑定到它的命令"
+
+msgid "Command"
+msgstr "命令"
+
+msgid "Shortcut"
+msgstr "快捷键"
+
+msgid "Scope"
+msgstr "范围"
+
+msgid "Source"
+msgstr "来源"
+
+msgid "No conflicts."
+msgstr "无冲突。"
+
+msgid "Modify..."
+msgstr "修改..."
+
+msgid "Clear"
+msgstr "清除"
+
+msgid "Reset to default"
+msgstr "重置为默认"
+
+msgid "Ctrl"
+msgstr "Ctrl"
+
+msgid "Alt"
+msgstr "Alt"
+
+msgid "Shift"
+msgstr "Shift"
+
+msgid "Reassign"
+msgstr "重新分配"
+
+msgid "Keep both"
+msgstr "两者都保留"
+
+msgid "Assign"
+msgstr "分配"
+
+msgid "Assign Shortcut"
+msgstr "分配快捷键"
+
+msgid "Shortcut Conflict"
+msgstr "快捷键冲突"
+
+msgid "Shortcut Warning"
+msgstr "快捷键警告"
+
+msgid "Control (physical)"
+msgstr "Control（物理）"
+
+msgid "Press a shortcut..."
+msgstr "请按快捷键..."
+
+msgid "Conflict: %s is also assigned to \"%s\"."
+msgstr "冲突：%s 已分配给“%s”。"
+
+msgid "Warning: %s shadows the built-in editor command %s."
+msgstr "警告：%s 遮蔽了内置编辑器命令 %s。"
+
+msgid "Shortcut for: %s"
+msgstr "快捷键：%s"
+
+msgid "%s is already assigned to \"%s\".\nWhat would you like to do?"
+msgstr "%s 已分配给“%s”。\n您想执行什么操作？"
+
+msgid "%s shadows the built-in editor command %s.\nAssign it anyway?"
+msgstr "%s 遮蔽了内置编辑器命令 %s。\n仍要分配吗？"
+
+msgid "Commands bound to %s: %d"
+msgstr "绑定到 %s 的命令：%d"
+
+msgid "Move Word Left"
+msgstr "向左移动一个单词"
+
+msgid "Move Word Right"
+msgstr "向右移动一个单词"
+
+msgid "Extend Selection Word Left"
+msgstr "向左扩展选择一个单词"
+
+msgid "Extend Selection Word Right"
+msgstr "向右扩展选择一个单词"
+
+msgid "Move to Previous Word Part"
+msgstr "移动到上一个单词部分"
+
+msgid "Move to Next Word Part"
+msgstr "移动到下一个单词部分"
+
+msgid "Move to Previous Paragraph"
+msgstr "移动到上一段"
+
+msgid "Move to Next Paragraph"
+msgstr "移动到下一段"
+
+msgid "Go to Start of Document"
+msgstr "转到文档开头"
+
+msgid "Go to End of Document"
+msgstr "转到文档末尾"
+
+msgid "Extend Selection to Start of Document"
+msgstr "扩展选择到文档开头"
+
+msgid "Extend Selection to End of Document"
+msgstr "扩展选择到文档末尾"
+
+msgid "Scroll Up One Line"
+msgstr "向上滚动一行"
+
+msgid "Scroll Down One Line"
+msgstr "向下滚动一行"
+
+msgid "Go to Start of Display Line"
+msgstr "转到显示行首"
+
+msgid "Go to End of Display Line"
+msgstr "转到显示行尾"
+
+msgid "Cut Current Line"
+msgstr "剪切当前行"
+
+msgid "Delete Current Line"
+msgstr "删除当前行"
+
+msgid "Copy Current Line"
+msgstr "复制当前行"
+
+msgid "Delete Word Left"
+msgstr "删除左侧单词"
+
+msgid "Delete Word Right"
+msgstr "删除右侧单词"
+
+msgid "Delete to Start of Line"
+msgstr "删除至行首"
+
+msgid "Delete to End of Line"
+msgstr "删除至行尾"
+
+msgid "Toggle Overtype Mode"
+msgstr "切换改写模式"
+
+msgid "%d conflicts, %d warnings"
+msgstr "%d 个冲突，%d 个警告"
+
+msgid "Details..."
+msgstr "详细信息..."
+
+msgid "Conflict Details"
+msgstr "冲突详情"
+
+msgid "Conflict"
+msgstr "冲突"
+
+msgid "Warning (shadowed editor command)"
+msgstr "警告（被遮蔽的编辑器命令）"
+
+msgid "\"%s\"  (menu command, scope: %s, source: %s)"
+msgstr "“%s”  （菜单命令，范围：%s，来源：%s）"
+
+msgid "\"%s\"  (editor command, scope: %s, source: %s)"
+msgstr "“%s”  （编辑器命令，范围：%s，来源：%s）"
+
+msgid "built-in editor command %s  (editor default, scope: %s)"
+msgstr "内置编辑器命令 %s  （编辑器默认，范围：%s）"
+
+msgid "built-in terminal key  (scope: %s)"
+msgstr "内置终端按键  （范围：%s）"
+
+msgid "Both bindings are active in the same context; pressing the key runs only one of them."
+msgstr "两个绑定在同一上下文中同时生效；按下该键只会执行其中一个。"
+
+msgid "When the editor has focus, the menu shortcut wins; the editor command is unreachable."
+msgstr "当编辑器获得焦点时，菜单快捷键优先；该编辑器命令将无法触发。"
+
+msgid "(scope: %s)"
+msgstr "（范围：%s）"
+
+msgid "Warning: %s is also assigned to \"%s\"."
+msgstr "警告：%s 已分配给“%s”。"

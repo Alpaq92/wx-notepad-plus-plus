@@ -27,15 +27,19 @@ static const MenuItemDef kEditCopyToClipboardItems[] = {
     { MenuItemKind::Normal, kCmdEditCopyAllPaths,    &Label::EditCopyAllPaths,          "edit.copyToClipboard.allPaths" },
 };
 
+// Ctrl+] / Ctrl+[ are the strong-4 consensus indent/outdent chords (VSCode/TextMate/Sublime/Pulsar);
+// Tab / Shift+Tab keep working regardless (Scintilla's own SCI_TAB/SCI_BACKTAB). These menu accels
+// shadow Scintilla's stock paragraph-up/down defaults, so the curated editor rows editor.paragraphUp/
+// paragraphDown are unbound-by-default now (shortcut_labels.h; both stay remappable).
 static const MenuItemDef kEditIndentItems[] = {
-    { MenuItemKind::Normal, kCmdEditInsTab, &Label::EditIndentIncrease, "edit.indent.increase" },
-    { MenuItemKind::Normal, kCmdEditRmvTab, &Label::EditIndentDecrease, "edit.indent.decrease" },
+    { MenuItemKind::Normal, kCmdEditInsTab, &Label::EditIndentIncrease, "edit.indent.increase", nullptr, 0, false, "Ctrl+]" },
+    { MenuItemKind::Normal, kCmdEditRmvTab, &Label::EditIndentDecrease, "edit.indent.decrease", nullptr, 0, false, "Ctrl+[" },
 };
 
 // Uppercase/lowercase lead (CUA); the proper/sentence/invert/random group follows.
 static const MenuItemDef kEditConvertCaseToItems[] = {
-    { MenuItemKind::Normal, kCmdEditUppercase,          &Label::EditConvertCaseUppercase,     "edit.convertCaseTo.uppercase" },
-    { MenuItemKind::Normal, kCmdEditLowercase,          &Label::EditConvertCaseLowercase,     "edit.convertCaseTo.lowercase" },
+    { MenuItemKind::Normal, kCmdEditUppercase,          &Label::EditConvertCaseUppercase,     "edit.convertCaseTo.uppercase", nullptr, 0, false, "Ctrl+Shift+U" },
+    { MenuItemKind::Normal, kCmdEditLowercase,          &Label::EditConvertCaseLowercase,     "edit.convertCaseTo.lowercase", nullptr, 0, false, "Ctrl+U" },
     { MenuItemKind::Separator },
     { MenuItemKind::Normal, kCmdEditPropercaseForce,   &Label::EditConvertCaseProperForce,   "edit.convertCaseTo.properForce" },
     { MenuItemKind::Normal, kCmdEditPropercaseBlend,   &Label::EditConvertCaseProperBlend,   "edit.convertCaseTo.properBlend" },
@@ -49,19 +53,25 @@ static const MenuItemDef kEditConvertCaseToItems[] = {
 // then whole-list reordering, then the sort ascending and sort descending blocks
 // (each block keeps its canonical lexicographic->length order).
 static const MenuItemDef kEditLineOperationsItems[] = {
-    { MenuItemKind::Normal, kCmdEditDupLine,                                 &Label::EditLineOpsDuplicateLine,                  "edit.lineOperations.duplicateLine" },
-    { MenuItemKind::Normal, kCmdEditLineUp,                                  &Label::EditLineOpsMoveUp,                         "edit.lineOperations.moveUp" },
-    { MenuItemKind::Normal, kCmdEditLineDown,                                &Label::EditLineOpsMoveDown,                       "edit.lineOperations.moveDown" },
-    { MenuItemKind::Normal, kCmdEditSplitLines,                              &Label::EditLineOpsSplitLines,                     "edit.lineOperations.splitLines" },
-    { MenuItemKind::Normal, kCmdEditJoinLines,                               &Label::EditLineOpsJoinLines,                      "edit.lineOperations.joinLines" },
+    // The consensus Ctrl+D fork's modal resolution: Ctrl+D = add-next-occurrence multi-select (see
+    // kEditMultiselectNextItems below - the VSCode/Sublime/Pulsar convention), duplicate-line moves to
+    // Ctrl+Shift+D (TextMate/Sublime/Pulsar - the camp that reserves Ctrl+D for multi-cursor).
+    { MenuItemKind::Normal, kCmdEditDupLine,                                 &Label::EditLineOpsDuplicateLine,                  "edit.lineOperations.duplicateLine", nullptr, 0, false, "Ctrl+Shift+D" },
+    { MenuItemKind::Normal, kCmdEditLineUp,                                  &Label::EditLineOpsMoveUp,                         "edit.lineOperations.moveUp", nullptr, 0, false, "Ctrl+Shift+Up" },
+    { MenuItemKind::Normal, kCmdEditLineDown,                                &Label::EditLineOpsMoveDown,                       "edit.lineOperations.moveDown", nullptr, 0, false, "Ctrl+Shift+Down" },
+    { MenuItemKind::Normal, kCmdEditSplitLines,                              &Label::EditLineOpsSplitLines,                     "edit.lineOperations.splitLines", nullptr, 0, false, "Ctrl+I" },
+    { MenuItemKind::Normal, kCmdEditJoinLines,                               &Label::EditLineOpsJoinLines,                      "edit.lineOperations.joinLines", nullptr, 0, false, "Ctrl+J" },
     { MenuItemKind::Separator },
     { MenuItemKind::Normal, kCmdEditRemoveAnyDupLines,                     &Label::EditLineOpsRemoveDupLines,                 "edit.lineOperations.removeDupLines" },
     { MenuItemKind::Normal, kCmdEditRemoveConsecutiveDupLines,             &Label::EditLineOpsRemoveConsecutiveDupLines,      "edit.lineOperations.removeConsecutiveDupLines" },
     { MenuItemKind::Normal, kCmdEditRemoveEmptyLines,                         &Label::EditLineOpsRemoveEmptyLines,               "edit.lineOperations.removeEmptyLines" },
     { MenuItemKind::Normal, kCmdEditRemoveEmptyLinesWithBlank,                &Label::EditLineOpsRemoveEmptyLinesWithBlank,      "edit.lineOperations.removeEmptyLinesWithBlank" },
     { MenuItemKind::Separator },
+    // Insert-line-below is Ctrl+Enter in 4 of 6 surveyed editors (VSCode/TextMate/Sublime/Pulsar) -
+    // adopted on the nearest wxNote command. Insert-line-above stays keyless: its consensus is split
+    // (Ctrl+Shift+Enter 3 vs Ctrl+Alt+Enter 2).
     { MenuItemKind::Normal, kCmdEditBlankLineAboveCurrent,                    &Label::EditLineOpsBlankLineAboveCurrent,          "edit.lineOperations.blankLineAboveCurrent" },
-    { MenuItemKind::Normal, kCmdEditBlankLineBelowCurrent,                    &Label::EditLineOpsBlankLineBelowCurrent,          "edit.lineOperations.blankLineBelowCurrent" },
+    { MenuItemKind::Normal, kCmdEditBlankLineBelowCurrent,                    &Label::EditLineOpsBlankLineBelowCurrent,          "edit.lineOperations.blankLineBelowCurrent", nullptr, 0, false, "Ctrl+Enter" },
     { MenuItemKind::Separator },
     { MenuItemKind::Normal, kCmdEditSortlinesReverseOrder,                  &Label::EditLineOpsReverseOrder,                   "edit.lineOperations.reverseOrder" },
     { MenuItemKind::Normal, kCmdEditSortlinesRandomly,                       &Label::EditLineOpsRandomizeOrder,                 "edit.lineOperations.randomizeOrder" },
@@ -84,15 +94,18 @@ static const MenuItemDef kEditLineOperationsItems[] = {
 };
 
 static const MenuItemDef kEditCommentUncommentItems[] = {
-    { MenuItemKind::Normal, kCmdEditBlockComment,     &Label::EditCommentToggleSingle,  "edit.commentUncomment.toggleSingle" },
+    // Ctrl+/ is the ONE non-CUA editing chord all 6 surveyed editors agree on (VSCode/IntelliJ/TextMate/
+    // Notepad4/Sublime/Pulsar) - adopted over the N++-lineage Ctrl+Q. The menu accel shadows Scintilla's
+    // stock Ctrl+/ word-part-left, so editor.wordPartLeft is unbound-by-default now (shortcut_labels.h).
+    { MenuItemKind::Normal, kCmdEditBlockComment,     &Label::EditCommentToggleSingle,  "edit.commentUncomment.toggleSingle", nullptr, 0, false, "Ctrl+/" },
     { MenuItemKind::Normal, kCmdEditBlockCommentSet, &Label::EditCommentSetSingle,     "edit.commentUncomment.setSingle" },
     { MenuItemKind::Normal, kCmdEditBlockUncomment,   &Label::EditCommentUnsetSingle,   "edit.commentUncomment.unsetSingle" },
-    { MenuItemKind::Normal, kCmdEditStreamComment,    &Label::EditCommentBlockComment,  "edit.commentUncomment.blockComment" },
+    { MenuItemKind::Normal, kCmdEditStreamComment,    &Label::EditCommentBlockComment,  "edit.commentUncomment.blockComment", nullptr, 0, false, "Ctrl+Shift+Q" },
     { MenuItemKind::Normal, kCmdEditStreamUncomment,  &Label::EditCommentBlockUncomment,"edit.commentUncomment.blockUncomment" },
 };
 
 static const MenuItemDef kEditAutoCompletionItems[] = {
-    { MenuItemKind::Normal, kCmdEditAutoComplete,             &Label::EditAutoCompleteFunction,   "edit.autoCompletion.function" },
+    { MenuItemKind::Normal, kCmdEditAutoComplete,             &Label::EditAutoCompleteFunction,   "edit.autoCompletion.function", nullptr, 0, false, "Ctrl+Space" },
     { MenuItemKind::Normal, kCmdEditAutoCompleteCurrentfile, &Label::EditAutoCompleteWord,       "edit.autoCompletion.word" },
     { MenuItemKind::Normal, kCmdEditFunccalltip,              &Label::EditFuncCallTip,            "edit.autoCompletion.funcCallTip" },
     { MenuItemKind::Normal, kCmdEditFunccalltipPrevious,     &Label::EditFuncCallTipPrevious,    "edit.autoCompletion.funcCallTipPrevious" },
@@ -145,7 +158,10 @@ static const MenuItemDef kEditMultiselectAllItems[] = {
 };
 
 static const MenuItemDef kEditMultiselectNextItems[] = {
-    { MenuItemKind::Normal, kCmdEditMultiSelectNext,                   &Label::EditMultiselectIgnoreCaseWholeWord,  "edit.multiselectNext.ignoreCaseWholeWord" },
+    // Ctrl+D = add-next-occurrence-to-selection (VSCode/Sublime/Pulsar - the modern-trio convention; the
+    // other half of the duplicate-line fork, see kEditLineOperationsItems). Bound on the plain
+    // ignoring-case-and-whole-word variant, the closest match to those editors' default find state.
+    { MenuItemKind::Normal, kCmdEditMultiSelectNext,                   &Label::EditMultiselectIgnoreCaseWholeWord,  "edit.multiselectNext.ignoreCaseWholeWord", nullptr, 0, false, "Ctrl+D" },
     { MenuItemKind::Normal, kCmdEditMultiSelectNextMatchCase,          &Label::EditMultiselectMatchCaseOnly,        "edit.multiselectNext.matchCaseOnly" },
     { MenuItemKind::Normal, kCmdEditMultiSelectNextWholeWord,          &Label::EditMultiselectMatchWholeWordOnly,   "edit.multiselectNext.matchWholeWordOnly" },
     { MenuItemKind::Normal, kCmdEditMultiSelectNextMatchCaseWholeWord, &Label::EditMultiselectMatchCaseWholeWord,   "edit.multiselectNext.matchCaseWholeWord" },
@@ -158,13 +174,15 @@ static const MenuItemDef kEditReadOnlyItems[] = {
 };
 
 static const MenuItemDef kEditMenuItems[] = {
-    { MenuItemKind::Normal,  kCmdEditUndo,                     &Label::EditUndo,                     "edit.undo" },
-    { MenuItemKind::Normal,  kCmdEditRedo,                     &Label::EditRedo,                     "edit.redo" },
+    { MenuItemKind::Normal,  kCmdEditUndo,                     &Label::EditUndo,                     "edit.undo", nullptr, 0, false, "Ctrl+Z" },
+    // Redo also answers to Ctrl+Shift+Z as a SECONDARY default - the only redo chord bound in all 6
+    // surveyed editors (seeded by menu_builder.h's kSecondaryDefaults; the label shows Ctrl+Y).
+    { MenuItemKind::Normal,  kCmdEditRedo,                     &Label::EditRedo,                     "edit.redo", nullptr, 0, false, "Ctrl+Y" },
     { MenuItemKind::Separator },
-    { MenuItemKind::Normal,  kCmdEditCut,                      &Label::EditCut,                      "edit.cut" },
-    { MenuItemKind::Normal,  kCmdEditCopy,                     &Label::EditCopy,                     "edit.copy" },
-    { MenuItemKind::Normal,  kCmdEditPaste,                    &Label::EditPaste,                    "edit.paste" },
-    { MenuItemKind::Normal,  kCmdEditDelete,                   &Label::EditDelete,                   "edit.delete" },
+    { MenuItemKind::Normal,  kCmdEditCut,                      &Label::EditCut,                      "edit.cut", nullptr, 0, false, "Ctrl+X" },
+    { MenuItemKind::Normal,  kCmdEditCopy,                     &Label::EditCopy,                     "edit.copy", nullptr, 0, false, "Ctrl+C" },
+    { MenuItemKind::Normal,  kCmdEditPaste,                    &Label::EditPaste,                    "edit.paste", nullptr, 0, false, "Ctrl+V" },
+    { MenuItemKind::Normal,  kCmdEditDelete,                   &Label::EditDelete,                   "edit.delete", nullptr, 0, false, "Del" },
     { MenuItemKind::Separator },
     { MenuItemKind::Submenu, 0, &Label::EditConvertCaseTo, "edit.convertCaseTo",
       kEditConvertCaseToItems, WXSIZEOF(kEditConvertCaseToItems) },
@@ -188,7 +206,7 @@ static const MenuItemDef kEditMenuItems[] = {
       kEditCopyToClipboardItems, WXSIZEOF(kEditCopyToClipboardItems) },
     { MenuItemKind::Separator },
     { MenuItemKind::Normal,  kCmdEditColumnModeTip,            &Label::EditColumnModeTip,             "edit.columnModeTip" },
-    { MenuItemKind::Normal,  kCmdEditColumnmode,               &Label::EditColumnMode,                "edit.columnMode" },
+    { MenuItemKind::Normal,  kCmdEditColumnmode,               &Label::EditColumnMode,                "edit.columnMode", nullptr, 0, false, "Alt+C" },
     { MenuItemKind::Separator },
     { MenuItemKind::Submenu, 0, &Label::EditReadOnly, "edit.readOnly",
       kEditReadOnlyItems, WXSIZEOF(kEditReadOnlyItems) },

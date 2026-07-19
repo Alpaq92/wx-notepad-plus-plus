@@ -5,13 +5,13 @@ namespace Label
 {
     inline const wxString MenuEdit() { return _("&Edit"); }
 
-    inline const wxString EditUndo() { return _("&Undo\tCtrl+Z"); }
-    inline const wxString EditRedo() { return _("&Redo\tCtrl+Y"); }
-    inline const wxString EditCut() { return _("Cu&t\tCtrl+X"); }
-    inline const wxString EditCopy() { return _("&Copy\tCtrl+C"); }
-    inline const wxString EditPaste() { return _("&Paste\tCtrl+V"); }
-    inline const wxString EditDelete() { return _("&Delete\tDel"); }
-    inline const wxString EditSelectAll() { return _("&Select All\tCtrl+A"); }
+    inline const wxString EditUndo() { return _("&Undo"); }
+    inline const wxString EditRedo() { return _("&Redo"); }
+    inline const wxString EditCut() { return _("Cu&t"); }
+    inline const wxString EditCopy() { return _("&Copy"); }
+    inline const wxString EditPaste() { return _("&Paste"); }
+    inline const wxString EditDelete() { return _("&Delete"); }
+    inline const wxString EditSelectAll() { return _("&Select All"); }
     inline const wxString EditBeginEndSelect() { return _("Begin/End &Select"); }
     inline const wxString EditBeginEndSelectColumnMode() { return _("Begin/End Select in Column Mode"); }
 
@@ -32,8 +32,8 @@ namespace Label
     inline const wxString EditIndentDecrease() { return _("Decrease Line Indent"); }
 
     inline const wxString EditConvertCaseTo() { return _("Con&vert Case to"); }
-    inline const wxString EditConvertCaseUppercase() { return _("&UPPERCASE\tCtrl+Shift+U"); }
-    inline const wxString EditConvertCaseLowercase() { return _("&lowercase\tCtrl+U"); }
+    inline const wxString EditConvertCaseUppercase() { return _("&UPPERCASE"); }
+    inline const wxString EditConvertCaseLowercase() { return _("&lowercase"); }
     inline const wxString EditConvertCaseProperForce() { return _("&Proper Case"); }
     inline const wxString EditConvertCaseProperBlend() { return _("Proper Case (blend)"); }
     inline const wxString EditConvertCaseSentenceForce() { return _("&Sentence case"); }
@@ -42,13 +42,13 @@ namespace Label
     inline const wxString EditConvertCaseRandom() { return _("&ranDOm CasE"); }
 
     inline const wxString EditLineOperations() { return _("&Line Operations"); }
-    inline const wxString EditLineOpsDuplicateLine() { return _("Duplicate Current Line\tCtrl+D"); }
+    inline const wxString EditLineOpsDuplicateLine() { return _("Duplicate Current Line"); }
     inline const wxString EditLineOpsRemoveDupLines() { return _("Remove Duplicate Lines"); }
     inline const wxString EditLineOpsRemoveConsecutiveDupLines() { return _("Remove Consecutive Duplicate Lines"); }
-    inline const wxString EditLineOpsSplitLines() { return _("Split Lines\tCtrl+I"); }
-    inline const wxString EditLineOpsJoinLines() { return _("Join Lines\tCtrl+J"); }
-    inline const wxString EditLineOpsMoveUp() { return _("Move Up Current Line\tCtrl+Shift+Up"); }
-    inline const wxString EditLineOpsMoveDown() { return _("Move Down Current Line\tCtrl+Shift+Down"); }
+    inline const wxString EditLineOpsSplitLines() { return _("Split Lines"); }
+    inline const wxString EditLineOpsJoinLines() { return _("Join Lines"); }
+    inline const wxString EditLineOpsMoveUp() { return _("Move Up Current Line"); }
+    inline const wxString EditLineOpsMoveDown() { return _("Move Down Current Line"); }
     inline const wxString EditLineOpsRemoveEmptyLines() { return _("Remove Empty Lines"); }
     inline const wxString EditLineOpsRemoveEmptyLinesWithBlank() { return _("Remove Empty Lines (Containing Blank characters)"); }
     inline const wxString EditLineOpsBlankLineAboveCurrent() { return _("Insert Blank Line Above Current"); }
@@ -71,14 +71,14 @@ namespace Label
     inline const wxString EditLineOpsSortLengthDescending() { return _("Sort Lines By Length Descending"); }
 
     inline const wxString EditCommentUncomment() { return _("Co&mment/Uncomment"); }
-    inline const wxString EditCommentToggleSingle() { return _("Toggle Single Line Comment\tCtrl+Q"); }
+    inline const wxString EditCommentToggleSingle() { return _("Toggle Single Line Comment"); }
     inline const wxString EditCommentSetSingle() { return _("Single Line Comment"); }
     inline const wxString EditCommentUnsetSingle() { return _("Single Line Uncomment"); }
-    inline const wxString EditCommentBlockComment() { return _("Block Comment\tCtrl+Shift+Q"); }
+    inline const wxString EditCommentBlockComment() { return _("Block Comment"); }
     inline const wxString EditCommentBlockUncomment() { return _("Block Uncomment"); }
 
     inline const wxString EditAutoCompletion() { return _("&Auto-Completion"); }
-    inline const wxString EditAutoCompleteFunction() { return _("Function Completion\tCtrl+Space"); }
+    inline const wxString EditAutoCompleteFunction() { return _("Function Completion"); }
     inline const wxString EditAutoCompleteWord() { return _("Word Completion"); }
     inline const wxString EditFuncCallTip() { return _("Function Parameters Hint"); }
     inline const wxString EditFuncCallTipPrevious() { return _("Function Parameters Previous Hint"); }
@@ -137,7 +137,7 @@ namespace Label
     inline const wxString EditMultiselectSkip() { return _("Skip Current && Go to Next Multi-select"); }
 
     inline const wxString EditColumnModeTip() { return _("Column Mode..."); }
-    inline const wxString EditColumnMode() { return _("Colum&n Editor...\tAlt+C"); }
+    inline const wxString EditColumnMode() { return _("Colum&n Editor..."); }
     inline const wxString EditCharPanel() { return _("Character &Panel"); }
     inline const wxString EditClipboardHistoryPanel() { return _("Clipboard &History"); }
 

@@ -20,7 +20,7 @@ static const MenuItemDef kHelpMenuItems[] = {
     { MenuItemKind::Normal, kCmdCmdLineArguments, &Label::HelpCmdLineArguments, "help.cmdLineArguments" },
     { MenuItemKind::Normal, kCmdDebuginfo,       &Label::HelpDebugInfo, "help.debugInfo" },
     { MenuItemKind::Separator },
-    { MenuItemKind::Normal, kCmdAboutBase,           &Label::HelpAbout,     "help.about" },
+    { MenuItemKind::Normal, kCmdAboutBase,           &Label::HelpAbout,     "help.about", nullptr, 0, false, "F1" },
 };
 
 static const MenuDef kHelpMenu = { "menu.help", &Label::MenuHelp, kHelpMenuItems, WXSIZEOF(kHelpMenuItems) };

@@ -90,6 +90,51 @@ if(NOT EXISTS "${SCINTILLUA_LEXER_LUA}")
     endif()
 endif()
 
+# ---- libvterm (VT520/xterm terminal-emulation core; MIT) -------------------------------------------
+# The parser/state-machine core Neovim and emacs-libvterm build on, fetched from the neovim fork
+# (the maintained GitHub mirror of Paul Evans' upstream) pinned to the v0.3.3 release tag. Writing a
+# correct escape-sequence parser from scratch is a known bug farm, so the integrated terminal will sit
+# on this instead. No upstream CMake (only a libtool Makefile), so the static target is assembled here
+# like lua_lpeg: an explicit file set per pinned version.
+message(STATUS "[wxnote] Fetching libvterm 0.3.3...")
+FetchContent_Declare(libvterm
+    URL      https://github.com/neovim/libvterm/archive/refs/tags/v0.3.3.tar.gz
+    URL_HASH SHA256=0babe3ab42c354925dadede90d352f054aa9c4ae6842ea803a20c9741e172e56
+)
+FetchContent_MakeAvailable(libvterm)
+
+# encoding.c #includes two GENERATED tables (encoding/DECdrawing.inc, encoding/uk.inc) that the GitHub
+# tag archive does not ship - upstream's Makefile creates them from the .tbl sources with a perl
+# one-liner, and perl is not a dependency this build can assume (the MSVC CI runners configure without
+# it). The pre-generated pair is vendored in third_party/libvterm-tables (provenance + regeneration
+# steps in its README.md) and staged next to encoding.c so its quoted #include resolves naturally.
+file(COPY "${CMAKE_SOURCE_DIR}/third_party/libvterm-tables/encoding/DECdrawing.inc"
+          "${CMAKE_SOURCE_DIR}/third_party/libvterm-tables/encoding/uk.inc"
+     DESTINATION "${libvterm_SOURCE_DIR}/src/encoding")
+
+set(VTERM_SRC "")
+foreach(u encoding keyboard mouse parser pen screen state unicode vterm)
+    list(APPEND VTERM_SRC "${libvterm_SOURCE_DIR}/src/${u}.c")
+endforeach()
+add_library(vterm STATIC ${VTERM_SRC})
+target_include_directories(vterm PUBLIC "${libvterm_SOURCE_DIR}/include")
+# C11, not the C99 upstream advertises: the code leans on designated initializers, which MSVC's
+# default (C89 + extensions) C mode rejects - /std:c11 (VS2019 16.8+) is the first MSVC mode that
+# accepts them, and C11 is upward-compatible for the GCC/clang builds. PIC for the same reason as
+# lua_lpeg above: this archive ends up inside the PIE wxnote executable on ELF.
+set_target_properties(vterm PROPERTIES
+    C_STANDARD 11
+    C_STANDARD_REQUIRED ON
+    POSITION_INDEPENDENT_CODE ON)
+# Third-party code we do not patch: mute its warnings on THIS target only (PRIVATE), so our own
+# targets' warning signal stays intact and the global flags stay clean.
+if(MSVC)
+    target_compile_options(vterm PRIVATE /w)
+    target_compile_definitions(vterm PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_compile_options(vterm PRIVATE -w)
+endif()
+
 # ---- wxBorderlessFrame (vendored; the optional integrated/borderless title bar) ---------------------
 # Windows + Linux(GTK) only: the library has no macOS backend - its platform .cpp self-guard on _WIN32 /
 # __WXGTK__, so on Apple they compile to nothing and wxBorderlessFrame is unusable. Built with our own
@@ -122,9 +167,9 @@ if(WIN32)
     # never drift from the release version (it silently shipped 0.7.0 for 0.8.0 when hand-maintained).
     # The .rc also embeds wxnote.ico as the exe's shell icon.
     configure_file("${CMAKE_SOURCE_DIR}/resources/app.rc.in" "${CMAKE_BINARY_DIR}/app.rc" @ONLY)
-    add_executable(wxnote WIN32 src/main.cpp src/scintillua_engine.cpp "${CMAKE_BINARY_DIR}/app.rc")
+    add_executable(wxnote WIN32 src/main.cpp src/scintillua_engine.cpp src/term_backend.cpp src/term_view.cpp "${CMAKE_BINARY_DIR}/app.rc")
 else()
-    add_executable(wxnote src/main.cpp src/scintillua_engine.cpp)
+    add_executable(wxnote src/main.cpp src/scintillua_engine.cpp src/term_backend.cpp src/term_view.cpp)
 endif()
 set_target_properties(wxnote PROPERTIES
     CXX_STANDARD 17
@@ -159,6 +204,10 @@ if(UNIX AND NOT APPLE)
     target_include_directories(wxnote PRIVATE ${GTK3_INCLUDE_DIRS})
     target_link_directories(wxnote PRIVATE ${GTK3_LIBRARY_DIRS})
     target_link_libraries(wxnote PRIVATE ${GTK3_LIBRARIES})
+    # forkpty() (src/term_backend.cpp) lives in the separate libutil on glibc < 2.34 (merged into
+    # libc since, with libutil kept as a stub) - linking it unconditionally is safe on every glibc
+    # and required on the old ones. macOS needs nothing: forkpty is in libSystem there.
+    target_link_libraries(wxnote PRIVATE util)
 endif()
 
 target_include_directories(wxnote PRIVATE
@@ -169,7 +218,8 @@ target_include_directories(wxnote PRIVATE
 
 target_link_libraries(wxnote PRIVATE
     wx::core wx::aui wx::base wx::xml wx::stc
-    lexilla lua_lpeg)
+    lexilla lua_lpeg
+    vterm)   # terminal-emulation core behind src/term_view.cpp (its include dir propagates from the vterm target)
 
 # Single-instance "reuse window" IPC (wxServer/wxClient/wxConnection): on Windows these map to the
 # DDE classes, which live in wx::base itself (src/msw/dde.cpp) - no extra link needed there. Everywhere
@@ -200,7 +250,10 @@ endif()
 # (it creates a real frame and spawns a real shell), so it is a developer/CI-with-display tool rather
 # than part of a headless test run.
 #   cmake --build build --target terminal_selftest && build/bin/terminal_selftest
-add_executable(terminal_selftest tests/terminal_selftest.cpp)
+# term_backend.cpp/term_view.cpp are compiled in too: the selftest builds against the same terminal
+# sources as the app, so backend/renderer regressions surface in the harness rather than only in a
+# manual app run.
+add_executable(terminal_selftest tests/terminal_selftest.cpp src/term_backend.cpp src/term_view.cpp)
 set_target_properties(terminal_selftest PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
@@ -208,13 +261,33 @@ set_target_properties(terminal_selftest PROPERTIES
 target_include_directories(terminal_selftest PRIVATE
     "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"
     "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(terminal_selftest PRIVATE wx::core wx::aui wx::base wx::stc)
+target_link_libraries(terminal_selftest PRIVATE wx::core wx::aui wx::base wx::stc vterm)
 if(UNIX AND NOT APPLE)
     target_include_directories(terminal_selftest PRIVATE ${GTK3_INCLUDE_DIRS})
     target_link_libraries(terminal_selftest PRIVATE ${GTK3_LIBRARIES})
+    # forkpty() for term_backend.cpp - same libutil note as the wxnote target above.
+    target_link_libraries(terminal_selftest PRIVATE util)
 endif()
 if(MSVC)
     target_compile_options(terminal_selftest PRIVATE /utf-8)
+endif()
+
+# ---- keymap_selftest: headless self-test for the shortcut store + conflict engine (Phase 3) --------
+# No GUI (no frame, no display): seeds a KeymapStore and drives the ConflictEngine over the static
+# Scintilla-default mirror, asserting the conflict classes. Links only
+# wx core/base for wxAcceleratorEntry/wxString; the keymap/conflict code is header-only.
+#   cmake --build build --target keymap_selftest && build/bin/keymap_selftest
+add_executable(keymap_selftest tests/keymap_selftest.cpp)
+set_target_properties(keymap_selftest PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(keymap_selftest PRIVATE
+    "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"
+    "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(keymap_selftest PRIVATE wx::core wx::base)
+if(MSVC)
+    target_compile_options(keymap_selftest PRIVATE /utf-8)
 endif()
 
 # ---- deploy runtime resources (toolbar icons, themes, default styler) next to the exe --------------
@@ -255,6 +328,12 @@ add_dependencies(wxnote nib_test_plugin)
 # Reproduces the N++ UDL file format, so (like npp-bridge) it stays GPL and out of the Apache core.
 add_subdirectory(packages/udl-compat)
 add_dependencies(wxnote udl_compat_plugin)
+
+# ---- optional GPL npp-shortcuts-compat plugin: imports a Notepad++ shortcuts.xml keybinding file ----
+# Reproduces the N++ shortcuts.xml format and feeds bindings into the core via nib.keymap/1, so (like
+# udl-compat / npp-bridge) it stays GPL and out of the Apache core.
+add_subdirectory(packages/npp-shortcuts-compat)
+add_dependencies(wxnote npp_shortcuts_compat_plugin)
 
 # ---- optional GPL Notepad++ binary-plugin bridge (every OS now; itself a Nib plugin) ---------------
 # Phase 1 of docs/ARCHITECTURE.md: the bridge builds on Linux/macOS too (its Win32-only

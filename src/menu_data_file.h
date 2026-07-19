@@ -49,26 +49,31 @@ static const MenuItemDef kFileCloseMultipleDocumentsItems[] = {
 
 static const MenuItemDef kFileMenuItems[] = {
     // OPEN group - create or bring a document into the editor.
-    { MenuItemKind::Normal,  kCmdFileNew,                   &Label::FileNew,                   "file.new" },
-    { MenuItemKind::Normal,  kCmdFileOpen,                  &Label::FileOpen,                  "file.open" },
+    { MenuItemKind::Normal,  kCmdFileNew,                   &Label::FileNew,                   "file.new", nullptr, 0, false, "Ctrl+N" },
+    { MenuItemKind::Normal,  kCmdFileOpen,                  &Label::FileOpen,                  "file.open", nullptr, 0, false, "Ctrl+O" },
     { MenuItemKind::Submenu, 0, &Label::FileOpenContainingFolder, "file.openContainingFolder",
       kFileOpenContainingFolderItems, WXSIZEOF(kFileOpenContainingFolderItems) },
     { MenuItemKind::Normal,  kCmdFileOpenDefaultViewer,   &Label::FileOpenDefaultViewer,     "file.openDefaultViewer" },
     { MenuItemKind::Normal,  kCmdFileOpenFolderAsWorkspace, &Label::FileOpenFolderAsWorkspace, "file.openFolderAsWorkspace" },
     { MenuItemKind::Normal,  kCmdFileReload,                &Label::FileReload,                "file.reload" },
     { MenuItemKind::Separator },
-    // SAVE group.
-    { MenuItemKind::Normal,  kCmdFileSave,                  &Label::FileSave,                  "file.save" },
-    { MenuItemKind::Normal,  kCmdFileSaveas,                &Label::FileSaveAs,                "file.saveAs" },
+    // SAVE group. Save As sits on Ctrl+Shift+S per the 6-editor consensus (strong 4:
+    // VSCode/TextMate/Sublime/Pulsar); that evicted Save All from Ctrl+Shift+S to menu-only, which is
+    // itself the consensus (4 of the surveyed editors ship Save All keyless; the three that bind it use
+    // three incompatible chords).
+    { MenuItemKind::Normal,  kCmdFileSave,                  &Label::FileSave,                  "file.save", nullptr, 0, false, "Ctrl+S" },
+    { MenuItemKind::Normal,  kCmdFileSaveas,                &Label::FileSaveAs,                "file.saveAs", nullptr, 0, false, "Ctrl+Shift+S" },
     { MenuItemKind::Normal,  kCmdFileSavecopyas,            &Label::FileSaveCopyAs,            "file.saveCopyAs" },
     { MenuItemKind::Normal,  kCmdFileSaveall,               &Label::FileSaveAll,               "file.saveAll" },
     { MenuItemKind::Separator },
-    // CLOSE group - dismiss open documents/tabs.
-    { MenuItemKind::Normal,  kCmdFileClose,                 &Label::FileClose,                 "file.close" },
-    { MenuItemKind::Normal,  kCmdFileCloseall,              &Label::FileCloseAll,              "file.closeAll" },
+    // CLOSE group - dismiss open documents/tabs. Close also answers to Ctrl+F4 as a SECONDARY default
+    // (each of Ctrl+W / Ctrl+F4 is live in 4-5 of the 6 surveyed editors) - the extra accel is seeded by
+    // menu_builder.h's kSecondaryDefaults (the Tier-0 data here is single-accel; the label shows Ctrl+W).
+    { MenuItemKind::Normal,  kCmdFileClose,                 &Label::FileClose,                 "file.close", nullptr, 0, false, "Ctrl+W" },
+    { MenuItemKind::Normal,  kCmdFileCloseall,              &Label::FileCloseAll,              "file.closeAll", nullptr, 0, false, "Ctrl+Shift+W" },
     { MenuItemKind::Submenu, 0, &Label::FileCloseMultipleDocuments, "file.closeMultipleDocuments",
       kFileCloseMultipleDocumentsItems, WXSIZEOF(kFileCloseMultipleDocumentsItems) },
-    { MenuItemKind::Normal,  kCmdFileRestoreLastClosedFile, &Label::FileRestoreLastClosed,     "file.restoreLastClosed" },
+    { MenuItemKind::Normal,  kCmdFileRestoreLastClosedFile, &Label::FileRestoreLastClosed,     "file.restoreLastClosed", nullptr, 0, false, "Ctrl+Shift+T" },
     { MenuItemKind::Separator },
     // FILE-SYSTEM group - act on the file on disk, not the tab.
     { MenuItemKind::Normal,  kCmdFileRename,                &Label::FileRename,                "file.rename" },
@@ -79,12 +84,12 @@ static const MenuItemDef kFileMenuItems[] = {
     { MenuItemKind::Normal,  kCmdFileSavesession,           &Label::FileSaveSession,           "file.saveSession" },
     { MenuItemKind::Separator },
     // Print.
-    { MenuItemKind::Normal,  kCmdFilePrint,                 &Label::FilePrint,                 "file.print" },
+    { MenuItemKind::Normal,  kCmdFilePrint,                 &Label::FilePrint,                 "file.print", nullptr, 0, false, "Ctrl+P" },
     { MenuItemKind::Normal,  kCmdFilePrintnow,              &Label::FilePrintNow,              "file.printNow" },
     { MenuItemKind::Separator },
     // The "Recent Files" submenu (wxFileHistory) is inserted here at runtime by buildMenuBar().
     { MenuItemKind::DynamicSlot, 0, nullptr, "slot.recentFiles" },
-    { MenuItemKind::Normal,  kCmdFileExit,                  &Label::FileExit,                  "file.exit" },
+    { MenuItemKind::Normal,  kCmdFileExit,                  &Label::FileExit,                  "file.exit", nullptr, 0, false, "Alt+F4" },
 };
 
 static const MenuDef kFileMenu = { "menu.file", &Label::MenuFile, kFileMenuItems, WXSIZEOF(kFileMenuItems) };

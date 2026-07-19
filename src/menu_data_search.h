@@ -71,9 +71,9 @@ static const MenuItemDef kSearchCopyStyledTextItems[] = {
 };
 
 static const MenuItemDef kSearchBookmarkItems[] = {
-    { MenuItemKind::Normal, kCmdSearchToggleBookmark,     &Label::SearchToggleBookmark,      "search.bookmark.toggle" },
-    { MenuItemKind::Normal, kCmdSearchNextBookmark,       &Label::SearchNextBookmark,        "search.bookmark.next" },
-    { MenuItemKind::Normal, kCmdSearchPrevBookmark,       &Label::SearchPrevBookmark,        "search.bookmark.prev" },
+    { MenuItemKind::Normal, kCmdSearchToggleBookmark,     &Label::SearchToggleBookmark,      "search.bookmark.toggle", nullptr, 0, false, "Ctrl+F2" },
+    { MenuItemKind::Normal, kCmdSearchNextBookmark,       &Label::SearchNextBookmark,        "search.bookmark.next", nullptr, 0, false, "F2" },
+    { MenuItemKind::Normal, kCmdSearchPrevBookmark,       &Label::SearchPrevBookmark,        "search.bookmark.prev", nullptr, 0, false, "Shift+F2" },
     { MenuItemKind::Normal, kCmdSearchClearBookmarks,     &Label::SearchClearBookmarks,      "search.bookmark.clearAll" },
     { MenuItemKind::Normal, kCmdSearchCutMarkedLines,      &Label::SearchCutMarkedLines,      "search.bookmark.cutLines" },
     { MenuItemKind::Normal, kCmdSearchCopyMarkedLines,     &Label::SearchCopyMarkedLines,     "search.bookmark.copyLines" },
@@ -85,27 +85,27 @@ static const MenuItemDef kSearchBookmarkItems[] = {
 
 static const MenuItemDef kSearchMenuItems[] = {
     // Find / Replace core
-    { MenuItemKind::Normal,  kCmdSearchFind,                  &Label::SearchFind,                 "search.find" },
-    { MenuItemKind::Normal,  kCmdSearchReplace,               &Label::SearchReplace,              "search.replace" },
-    { MenuItemKind::Normal,  kCmdSearchFindinfiles,           &Label::SearchFindInFiles,          "search.findInFiles" },
-    { MenuItemKind::Normal,  kCmdSearchFindIncrement,         &Label::SearchFindIncrement,        "search.findIncrement" },
+    { MenuItemKind::Normal,  kCmdSearchFind,                  &Label::SearchFind,                 "search.find", nullptr, 0, false, "Ctrl+F" },
+    { MenuItemKind::Normal,  kCmdSearchReplace,               &Label::SearchReplace,              "search.replace", nullptr, 0, false, "Ctrl+H" },
+    { MenuItemKind::Normal,  kCmdSearchFindinfiles,           &Label::SearchFindInFiles,          "search.findInFiles", nullptr, 0, false, "Ctrl+Shift+F" },
+    { MenuItemKind::Normal,  kCmdSearchFindIncrement,         &Label::SearchFindIncrement,        "search.findIncrement", nullptr, 0, false, "Ctrl+Alt+I" },
     { MenuItemKind::Separator },
     // Find navigation
-    { MenuItemKind::Normal,  kCmdSearchFindnext,              &Label::SearchFindNext,             "search.findNext" },
-    { MenuItemKind::Normal,  kCmdSearchFindprev,              &Label::SearchFindPrev,             "search.findPrev" },
-    { MenuItemKind::Normal,  kCmdSearchSetAndFindNext,        &Label::SearchSetAndFindNext,       "search.setAndFindNext" },
-    { MenuItemKind::Normal,  kCmdSearchSetAndFindPrev,        &Label::SearchSetAndFindPrev,       "search.setAndFindPrev" },
+    { MenuItemKind::Normal,  kCmdSearchFindnext,              &Label::SearchFindNext,             "search.findNext", nullptr, 0, false, "F3" },
+    { MenuItemKind::Normal,  kCmdSearchFindprev,              &Label::SearchFindPrev,             "search.findPrev", nullptr, 0, false, "Shift+F3" },
+    { MenuItemKind::Normal,  kCmdSearchSetAndFindNext,        &Label::SearchSetAndFindNext,       "search.setAndFindNext", nullptr, 0, false, "Ctrl+F3" },
+    { MenuItemKind::Normal,  kCmdSearchSetAndFindPrev,        &Label::SearchSetAndFindPrev,       "search.setAndFindPrev", nullptr, 0, false, "Ctrl+Shift+F3" },
     { MenuItemKind::Normal,  kCmdSearchVolatileFindnext,      &Label::SearchVolatileFindNext,     "search.volatileFindNext" },
     { MenuItemKind::Normal,  kCmdSearchVolatileFindprev,      &Label::SearchVolatileFindPrev,     "search.volatileFindPrev" },
     { MenuItemKind::Separator },
     // Found-results navigation
-    { MenuItemKind::Normal,  kCmdFocusOnFoundResults,         &Label::SearchFocusOnFoundResults,  "search.focusOnFoundResults" },
-    { MenuItemKind::Normal,  kCmdSearchGotoNextFound,         &Label::SearchGotoNextFound,        "search.gotoNextFound" },
-    { MenuItemKind::Normal,  kCmdSearchGotoPrevFound,         &Label::SearchGotoPrevFound,        "search.gotoPrevFound" },
+    { MenuItemKind::Normal,  kCmdFocusOnFoundResults,         &Label::SearchFocusOnFoundResults,  "search.focusOnFoundResults", nullptr, 0, false, "F7" },
+    { MenuItemKind::Normal,  kCmdSearchGotoNextFound,         &Label::SearchGotoNextFound,        "search.gotoNextFound", nullptr, 0, false, "F4" },
+    { MenuItemKind::Normal,  kCmdSearchGotoPrevFound,         &Label::SearchGotoPrevFound,        "search.gotoPrevFound", nullptr, 0, false, "Shift+F4" },
     { MenuItemKind::Separator },
     // Go to
-    { MenuItemKind::Normal,  kCmdSearchGotoline,              &Label::SearchGotoLine,             "search.gotoLine" },
-    { MenuItemKind::Normal,  kCmdSearchGotoMatchingBrace,     &Label::SearchGotoMatchingBrace,    "search.gotoMatchingBrace" },
+    { MenuItemKind::Normal,  kCmdSearchGotoline,              &Label::SearchGotoLine,             "search.gotoLine", nullptr, 0, false, "Ctrl+G" },
+    { MenuItemKind::Normal,  kCmdSearchGotoMatchingBrace,     &Label::SearchGotoMatchingBrace,    "search.gotoMatchingBrace", nullptr, 0, false, "Ctrl+B" },
     { MenuItemKind::Normal,  kCmdSearchSelectMatchingBraces,  &Label::SearchSelectMatchingBraces, "search.selectMatchingBraces" },
     { MenuItemKind::Normal,  kCmdSearchFindCharInRange,       &Label::SearchFindCharInRange,      "search.findCharInRange" },
     { MenuItemKind::Separator },
