@@ -14,7 +14,7 @@ plain-English version.
 | Dark mode &amp; themes | Yes | Yes |
 | Syntax highlighting | Yes | Yes |
 | Define your own language | Yes | Yes |
-| Plugins | Its own, plus Notepad++ plugins on Windows | Notepad++ plugins |
+| Plugins | Its own (all platforms), plus Notepad++ plugins — unmodified `.dll`s on Windows, recompiled via the shim SDK on Linux/macOS | Notepad++ plugins |
 | Built-in terminal | Yes — a real PTY terminal (`vim`, `htop`, ANSI colour all work) | Add-on |
 | Interface languages | 8, and growing | Many |
 

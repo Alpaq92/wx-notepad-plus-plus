@@ -546,9 +546,6 @@ msgstr "关闭:"
 msgid "Co&mment/Uncomment"
 msgstr "注释/取消注释(&M)"
 
-msgid "Colored icons"
-msgstr "彩色图标"
-
 msgid "Colum&n Editor..."
 msgstr "列块编辑(&N)..."
 
@@ -819,9 +816,6 @@ msgstr "附加2:"
 msgid "Failed to run:\n"
 msgstr "运行失败:\n"
 
-msgid "Fatcow icons"
-msgstr "Fatcow 图标"
-
 msgid "File attribute: Read-Only"
 msgstr "文件属性：只读"
 
@@ -972,9 +966,6 @@ msgstr "从第"
 msgid "From:"
 msgstr "从:"
 
-msgid "Fugue icons"
-msgstr "Fugue 图标"
-
 msgid "Function &List"
 msgstr "函数列表(&L)"
 
@@ -1077,11 +1068,11 @@ msgstr "ISO 8859-8"
 msgid "ISO 8859-9"
 msgstr "ISO 8859-9"
 
-msgid "IconPark Bold icons (teal/lime)"
-msgstr "IconPark 粗体图标（青绿/青柠）"
-
 msgid "IconPark icons (teal/lime)"
 msgstr "IconPark 图标（青绿/青柠）"
+
+msgid "Streamline icons (green/teal)"
+msgstr "Streamline 图标（绿色/青绿）"
 
 msgid "Ignore Case && Whole Word"
 msgstr "忽略大小写 && 全词匹配"
@@ -1202,12 +1193,6 @@ msgstr "行注释"
 
 msgid "Line comment open:"
 msgstr "行注释起始:"
-
-msgid "Line icons (Tabler)"
-msgstr "线条图标（Tabler）"
-
-msgid "Line icons (default)"
-msgstr "线条图标（默认）"
 
 msgid "Line number (1 - %d):"
 msgstr "行号 (1 - %d):"
@@ -2336,7 +2321,6 @@ msgstr "次"
 
 msgid "wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
 msgstr "wxNote（实验版）\n\nwxWidgets %d.%d.%d\n%s\n\n可执行文件：\n%s"
-
 
 msgid "Theme:"
 msgstr "主题："

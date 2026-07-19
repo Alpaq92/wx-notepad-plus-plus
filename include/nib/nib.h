@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-#define NIB_ABI_VERSION 0x00010000u   // (major << 16) | minor  ->  1.0
+#define NIB_ABI_VERSION 0x00010001u   // (major << 16) | minor  ->  1.1 (additive: events v2, ui/toolbar/alloc)
 
 #if defined(_WIN32)
   #define NIB_API __declspec(dllexport)
@@ -114,14 +114,33 @@ typedef struct NibCommandsApi {
 } NibCommandsApi;
 
 // ---- nib.events/1 : subscribe to editor / document events ----------------------------------------
+// The interface is version-gated at query time (the struct layout is identical - only semantics differ):
+//   * query(..., NIB_IFACE_EVENTS, 1) -> the v1 table. NIB_EV_DOCUMENT_SAVED keeps its original,
+//     savepoint-derived meaning: it fires whenever the editor reaches a save point, which INCLUDES
+//     undo/redo landing back on the last saved state - and carries no payload. Existing v1 plugins
+//     keep exactly the behaviour they were built against.
+//   * query(..., NIB_IFACE_EVENTS, 2) -> the v2 table. NIB_EV_DOCUMENT_SAVED fires exactly once per
+//     REAL disk write (never on undo-to-savepoint; a background Save All write reports the id of the
+//     buffer actually written, not the active one) and carries as.document.id. v2 also adds
+//     NIB_EV_DOCUMENT_SAVING and NIB_EV_DOCUMENT_BEFORE_OPEN below.
 #define NIB_IFACE_EVENTS "nib.events/1"
 typedef enum {
     NIB_EV_TEXT_CHANGED = 1,    // as.text:      pos, added, removed (bytes)
     NIB_EV_SELECTION_CHANGED,   // as.selection: anchor, caret
-    NIB_EV_DOCUMENT_SAVED,      // (no payload)
+    NIB_EV_DOCUMENT_SAVED,      // v1: no payload, savepoint-derived. v2: as.document.id, one per real disk write.
     NIB_EV_DOCUMENT_ACTIVATED,  // as.document:   id (the now-active document's buffer id)
     NIB_EV_DOCUMENT_OPENED,     // as.document:   id (a document just opened/loaded)
-    NIB_EV_DOCUMENT_CLOSED      // as.document:   id (a document about to close)
+    NIB_EV_DOCUMENT_CLOSED,     // as.document:   id (a document about to close). Ordering guarantee: this
+                                //   fires BEFORE the document is torn down on every close path, so the id -
+                                //   and its path via nib.documents path_from_id - stay resolvable for the
+                                //   whole callback (a bridge can derive its own "before close" from it).
+    // ---- v2 additions (subscribe only through the v2 table) --------------------------------------
+    NIB_EV_DOCUMENT_SAVING = 7, // as.document: id - about to write this buffer to disk (fires before the
+                                //   write is attempted, whether or not it then succeeds; during Save All it
+                                //   fires once per buffer, each with that buffer's own id)
+    NIB_EV_DOCUMENT_BEFORE_OPEN = 8  // as.document: id - a file document was created but its content has
+                                //   not been loaded yet (fires before the first byte is read; the id and
+                                //   its path are already resolvable). Real files only, like DOCUMENT_OPENED.
 } NibEventKind;
 typedef struct NibEvent {
     NibEventKind kind;
@@ -269,6 +288,95 @@ typedef struct NibSciApi {
     // target view does not exist).
     intptr_t (*sci_call)(NibHost* host, int view, unsigned msg, uintptr_t wparam, intptr_t lparam);
 } NibSciApi;
+
+// ---- nib.ui/1 : host chrome state (menu checkmarks, dark mode) -----------------------------------
+// A small window into the host's own UI so a plugin can keep chrome in sync with its state: check/
+// uncheck a menu item it registered, ask whether the host runs its dark chrome, and read the host's
+// dark palette to paint its own surfaces to match. Colours are plain 0xRRGGBB - no COLORREF, no
+// platform types - so the surface stays portable; any native conversion is the caller's business.
+#define NIB_IFACE_UI "nib.ui/1"
+typedef struct NibUiDarkColors {
+    uint32_t version;            // caller sets the layout version it speaks (1)
+    uint32_t struct_size;        // caller sets sizeof(NibUiDarkColors); lets this struct grow compatibly
+    // The host's dark palette, 0xRRGGBB each. Meaningful pairings: text on background (bars/chrome),
+    // text on pure_background (content areas), hot_background under the pointer, edge/hot_edge/
+    // disabled_edge for control outlines.
+    uint32_t background;         // chrome background (bars, panels)
+    uint32_t softer_background;  // slightly raised surfaces (input rows, gutters)
+    uint32_t hot_background;     // hover / hot-track fill
+    uint32_t pure_background;    // content background (the editor's default style)
+    uint32_t error_background;   // error field fill
+    uint32_t text;               // primary text
+    uint32_t darker_text;        // secondary text
+    uint32_t disabled_text;      // disabled text
+    uint32_t link_text;          // hyperlink text
+    uint32_t edge;               // control outline
+    uint32_t hot_edge;           // hovered control outline
+    uint32_t disabled_edge;      // disabled control outline
+} NibUiDarkColors;
+typedef struct NibUiApi {
+    uint32_t version;
+    uint32_t struct_size;
+    // Check/uncheck a checkable menu item by its numeric command id (a host kCmd* id or an id the
+    // plugin's own commands were surfaced under). Returns 1 if the item exists and is checkable, else 0.
+    int (*menu_check)(NibHost*, int cmd_id, int checked);
+    // 1 when the host chrome runs dark, 0 when light. (Chrome darkness is fixed per process.)
+    int (*is_dark)(NibHost*);
+    // Fill `out` with the host's dark palette (see NibUiDarkColors). The caller must set out->version
+    // and out->struct_size first; returns 1 on success, 0 if out is NULL or too small. The palette is
+    // the host's DARK set regardless of is_dark() - callers normally consult is_dark() first.
+    int (*dark_colors)(NibHost*, NibUiDarkColors* out);
+} NibUiApi;
+
+// ---- nib.toolbar/1 : plugin toolbar buttons ------------------------------------------------------
+// Adds a button to the host's main toolbar that fires a command id through the host's normal command
+// dispatcher (the same wx-event path menu items use - NEVER a raw window message, so ids above 32767
+// survive the 16-bit WM_COMMAND wrap intact). The icon crosses the boundary as portable RGBA pixels -
+// no HBITMAP/HICON in the contract; a Windows compatibility bridge converts native handles to RGBA
+// BEFORE calling in. The host copies the pixels and the tooltip immediately (nothing plugin-owned is
+// retained) and rescales to its configured toolbar icon size; buttons are removed by the host on
+// plugin unload, before the plugin unmaps.
+#define NIB_IFACE_TOOLBAR "nib.toolbar/1"
+typedef struct NibToolbarIcon {
+    uint32_t version;      // caller sets 1
+    uint32_t struct_size;  // caller sets sizeof(NibToolbarIcon)
+    int32_t  width;        // pixels; > 0
+    int32_t  height;       // pixels; > 0
+    const unsigned char* rgba;  // width*height*4 bytes, RGBA order, row-major top-down, straight (non-premultiplied) alpha
+} NibToolbarIcon;
+typedef struct NibToolbarApi {
+    uint32_t version;
+    uint32_t struct_size;
+    // Append one button. `cmd_id` is what clicking dispatches (a command registered via nib.commands,
+    // or an id from nib.alloc alloc_cmd_ids). One button per id - a second add with the same id fails.
+    // Returns 1 on success, 0 on failure (no toolbar, bad icon, or duplicate id).
+    int (*add_tool)(NibHost*, int cmd_id, const NibToolbarIcon* icon, const char* tooltip_utf8);
+} NibToolbarApi;
+
+// ---- nib.alloc/1 : dynamic command-id / marker / indicator ranges --------------------------------
+// Grants a plugin ranges of the shared number spaces so multiple plugins never collide with each
+// other or with the host. Every grant is CONTIGUOUS ([first, first+count)) and process-lifetime
+// (never recycled, even across plugin unload). The host guarantees each pool is disjoint from every
+// number it uses itself; the concrete reserved ranges are documented at the host-side allocators.
+//   * command ids: valid for nib.toolbar buttons, host menu items and invoke_command; when one fires,
+//     the host calls every sink registered via on_command with that id (dispatch runs on the host's
+//     wx-event command path, never through a raw 16-bit window message).
+//   * markers / indicators: Scintilla marker / indicator numbers, usable directly via nib.sci.
+#define NIB_IFACE_ALLOC "nib.alloc/1"
+typedef void (*NibAllocCommandFn)(NibHost* host, int cmd_id, void* user);
+typedef struct NibAllocApi {
+    uint32_t version;
+    uint32_t struct_size;
+    // Each returns 1 and writes the first granted number to *first, or returns 0 (count <= 0, NULL
+    // out-pointer, or the pool is exhausted - a failed call grants nothing).
+    int  (*alloc_cmd_ids)(NibHost*, int count, int* first_id);
+    int  (*alloc_markers)(NibHost*, int count, int* first_marker);
+    int  (*alloc_indicators)(NibHost*, int count, int* first_indicator);
+    // Register a sink for allocated command ids (call from activate()). Every sink hears every fired
+    // allocated id - filter on cmd_id. Like nib.events subscriptions, sinks are dropped by the host on
+    // plugin unload before the plugin unmaps; there is no unregister.
+    void (*on_command)(NibHost*, NibAllocCommandFn fn, void* user);
+} NibAllocApi;
 
 // ---- the plugin's lifecycle vtable ---------------------------------------------------------------
 typedef struct NibPluginApi {

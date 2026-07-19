@@ -38,15 +38,30 @@ Editor (`SCI_*`) messages a plugin sends to the editor HWND are bridged to wxSty
 
 ## NPPM_* coverage
 
+**Roughly 44 of Notepad++'s 118 `NPPM_*` messages are served, plus 10 `NPPN_*` notifications.**
+The Phase-1 round added: plugin **toolbar icons** (`ADDTOOLBARICON_DEPRECATED` /
+`ADDTOOLBARICON_FORDARKMODE`), the **allocator family** (`ALLOCATESUPPORTED_DEPRECATED` /
+`ALLOCATECMDID` / `ALLOCATEMARKER` / `ALLOCATEINDICATOR`), the **dark-mode queries**
+(`ISDARKMODEENABLED`, `GETDARKMODECOLORS`, the editor default colours), **inter-plugin messaging**
+(`MSGTOPLUGIN`), `SETCURRENTLANGTYPE` / `SETMENUITEMCHECK` / `RELOADFILE`, the **before-events**
+(`NPPN_FILEBEFORESAVE` / `NPPN_FILEBEFOREOPEN` / `NPPN_FILEBEFORECLOSE`, plus
+`NPPN_TBMODIFICATION`), and **save-event fidelity** — the id-carrying `NPPN_FILESAVED` (see the
+compatibility notes below).
+
 | Served | Stubbed / not yet |
 |---|---|
 | GETCURRENTSCINTILLA, GETNPPVERSION, GETCURRENTLANGTYPE, **GETCURRENTVIEW**, **GETBUFFERLANGTYPE** | ACTIVATEDOC (doc tracking) |
 | GETMENUHANDLE, MENUCOMMAND, **SWITCHTOFILE**, **SETSTATUSBAR**, **GETPLUGINHOMEPATH**, **GETCURRENTBUFFERID**, **GETFULLPATHFROMBUFFERID** | |
 | GETNPPDIRECTORY, GETNPPFULLFILEPATH-ish, GETPLUGINSCONFIGDIR | richer `beNotified` (char-added, margin-click) |
-| **GETFULLCURRENTPATH / GETCURRENTDIRECTORY / GETFILENAME / GETNAMEPART / GETEXTPART**, GETNBOPENFILES, **GETOPENFILENAMES** | RELOADFILE, MAKECURRENTBUFFERDIRTY |
-| **DOOPEN**, **SAVECURRENTFILE**, **SAVEALLFILES**, **GETCURRENTLINE / GETCURRENTCOLUMN** | |
+| **GETFULLCURRENTPATH / GETCURRENTDIRECTORY / GETFILENAME / GETNAMEPART / GETEXTPART**, GETNBOPENFILES, **GETOPENFILENAMES** | MAKECURRENTBUFFERDIRTY |
+| **DOOPEN**, **SAVECURRENTFILE**, **SAVEALLFILES**, **RELOADFILE**, **GETCURRENTLINE / GETCURRENTCOLUMN** | |
 | **DMMREGASDCKDLG / DMMSHOW / DMMHIDE / DMMUPDATEDISPINFO** (docking) | |
-| `beNotified` for text-changed / selection / save (NPPN_FILESAVED) / **buffer-activated** (NPPN_BUFFERACTIVATED) / **file-opened / file-closed** (NPPN_FILEOPENED / NPPN_FILECLOSED) / **app lifecycle** (NPPN_READY, NPPN_SHUTDOWN) | |
+| **SETCURRENTLANGTYPE** (via the host's frozen `IDM_LANG_*` Language-menu commands), **SETMENUITEMCHECK** (via `nib.ui`) | |
+| **ISDARKMODEENABLED / GETDARKMODECOLORS** (host palette laid into the `NppDarkMode::Colors` ABI), **GETEDITORDEFAULTFOREGROUNDCOLOR / -BACKGROUNDCOLOR** | |
+| **ADDTOOLBARICON_DEPRECATED / ADDTOOLBARICON_FORDARKMODE** (Windows: HBITMAP/HICON → RGBA → `nib.toolbar`; POSIX: documented no-op TRUE) | |
+| **ALLOCATESUPPORTED_DEPRECATED / ALLOCATECMDID / ALLOCATEMARKER / ALLOCATEINDICATOR** (via `nib.alloc`; the pre-rename numeric values shipped binaries send are the same numbers) | |
+| **MSGTOPLUGIN** (delivered to the dest plugin's `messageProc`, matched by module filename or stem) | |
+| `beNotified` for text-changed / selection / save (**id-carrying NPPN_FILESAVED** + NPPN_FILEBEFORESAVE) / **buffer-activated** (NPPN_BUFFERACTIVATED) / **file-opened / file-closed** (NPPN_FILEBEFOREOPEN / NPPN_FILEOPENED / NPPN_FILEBEFORECLOSE / NPPN_FILECLOSED) / **app lifecycle** (NPPN_READY, NPPN_TBMODIFICATION, NPPN_SHUTDOWN) | |
 
 Stubbed messages fall through and return 0; coverage grows additively as the `nib.*` interfaces grow
 (each new capability is a few lines here). Note: the path family lives in the `RUNCOMMAND_USER`
@@ -56,6 +71,42 @@ Stubbed messages fall through and return 0; coverage grows additively as the `ni
 view-aware plugins target the right editor in a split. **Partial**: `GETBUFFERLANGTYPE` / `GETCURRENTLANGTYPE`
 report the language **by file extension** (a Language-menu override isn't reflected), and `SWITCHTOFILE`
 *opens* the path rather than switching to an already-open tab (needs an open-tab lookup in the host).
+
+## Compatibility notes (documented divergences from real Notepad++)
+
+The first two are **permanent** — settled host design decisions, not gaps waiting on a later phase.
+Code to the documented behaviour.
+
+* **Permanent — `NPPN_READY` fires before session restore** (N++: after). The host's startup order
+  (frame up → plugins loaded → READY → session restored) is deliberate; files restored by the session
+  arrive as ordinary `NPPN_FILEOPENED` / `NPPN_BUFFERACTIVATED` *after* READY, so a plugin must not
+  assume READY means "the session's files are already open".
+* **Permanent — `NPPN_SHUTDOWN` is deferred past the frame's own close/teardown dispatch**
+  (`CallAfter`) — required by the plugin-unload ordering fix (a reentrant `RemoveWindowSubclass` from
+  inside the subclassed window's own dispatch only *defers* the removal). Plugins still receive it
+  exactly once, while fully mapped, just later in shutdown than real N++ delivers it.
+* **`NPPN_TBMODIFICATION` fires immediately *after* `NPPN_READY`** (N++ fires it while rebuilding the
+  toolbar, before READY). It fires on **every OS** — see the POSIX toolbar policy next.
+* **POSIX toolbar policy — off-Windows, `NPPM_ADDTOOLBARICON*` is a deliberate no-op that answers
+  `TRUE`.** The message's payload is GDI (`HBITMAP`/`HICON`), which a plugin recompiled for
+  Linux/macOS cannot produce, so the bridge reports success without adding a button rather than
+  failing — init code hanging off `NPPN_TBMODIFICATION` (or treating `FALSE` as fatal) keeps running
+  unchanged. On Windows the same messages add a real button (native image → RGBA → `nib.toolbar`).
+  The portable way to a real button on every OS is the host's own `nib.toolbar/1` interface, which
+  speaks RGBA pixels instead of GDI handles.
+* **`NPPN_FILESAVED` reports real disk writes** with the *written* buffer's id: no false fire on
+  undo-to-savepoint, and during Save All each background write reports its own buffer id (on hosts
+  without `nib.events` v2 the bridge falls back to the old savepoint-derived, active-id emission).
+  `NPPN_FILEBEFORECLOSE` precedes `NPPN_FILECLOSED` with the same still-valid buffer id on every close path.
+* **`FuncItem::_cmdID` values are host-granted dynamic ids** (the `nib.alloc` 64000+ pool, assigned at
+  load like N++'s `ID_PLUGINS_CMD+n`). They dispatch through the host's wx-event command path — never a
+  raw 16-bit `WM_COMMAND` — and unresolved dynamic ids (`NPPM_ALLOCATECMDID`) are relayed to every
+  plugin's `messageProc` as `WM_COMMAND`, as in N++.
+* **`NPPM_SETMENUITEMCHECK` answers honestly**: the host's Extensions-menu entries are not checkable
+  today, so checking a plugin's own item returns `FALSE` (nothing is silently pretended).
+* **`NPPM_RELOADFILE`** ignores the "with alert" flag (the host reloads silently); toolbar icons pick the
+  **dark icon variant when the host chrome runs dark** (chrome darkness is fixed per process, so there is
+  no `NPPN_DARKMODECHANGED` to observe yet).
 
 ## Build
 

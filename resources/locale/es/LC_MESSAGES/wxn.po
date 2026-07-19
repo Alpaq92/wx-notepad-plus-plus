@@ -2037,29 +2037,14 @@ msgstr "Estilo de iconos de la barra de herramientas:"
 msgid "Toolbar icon size:"
 msgstr "Tamaño de iconos de la barra de herramientas:"
 
-msgid "Line icons (default)"
-msgstr "Iconos de línea (predeterminado)"
-
-msgid "Colored icons"
-msgstr "Iconos de color"
-
-msgid "Fatcow icons"
-msgstr "Iconos Fatcow"
-
-msgid "Fugue icons"
-msgstr "Iconos Fugue"
-
 msgid "Solar icons (green)"
 msgstr "Iconos Solar (verde)"
 
 msgid "IconPark icons (teal/lime)"
 msgstr "Iconos IconPark (verde azulado/lima)"
 
-msgid "Line icons (Tabler)"
-msgstr "Iconos de línea (Tabler)"
-
-msgid "IconPark Bold icons (teal/lime)"
-msgstr "Iconos IconPark en negrita (verde azulado/lima)"
+msgid "Streamline icons (green/teal)"
+msgstr "Iconos Streamline (verde/verde azulado)"
 
 msgid "Tabler icons (line)"
 msgstr "Iconos Tabler (línea)"

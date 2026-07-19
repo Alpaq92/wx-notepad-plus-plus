@@ -2037,29 +2037,14 @@ msgstr "Symbolleisten-Icon-Stil:"
 msgid "Toolbar icon size:"
 msgstr "Symbolleisten-Icon-Größe:"
 
-msgid "Line icons (default)"
-msgstr "Linien-Icons (Standard)"
-
-msgid "Colored icons"
-msgstr "Farbige Icons"
-
-msgid "Fatcow icons"
-msgstr "Fatcow-Icons"
-
-msgid "Fugue icons"
-msgstr "Fugue-Icons"
-
 msgid "Solar icons (green)"
 msgstr "Solar-Icons (grün)"
 
 msgid "IconPark icons (teal/lime)"
 msgstr "IconPark-Icons (Türkis/Limette)"
 
-msgid "Line icons (Tabler)"
-msgstr "Linien-Icons (Tabler)"
-
-msgid "IconPark Bold icons (teal/lime)"
-msgstr "IconPark-Icons fett (Türkis/Limette)"
+msgid "Streamline icons (green/teal)"
+msgstr "Streamline-Icons (Grün/Türkis)"
 
 msgid "Tabler icons (line)"
 msgstr "Tabler-Icons (Linien)"

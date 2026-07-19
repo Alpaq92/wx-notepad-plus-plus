@@ -2037,29 +2037,14 @@ msgstr "Style d'icônes de la barre d'outils :"
 msgid "Toolbar icon size:"
 msgstr "Taille d'icônes de la barre d'outils :"
 
-msgid "Line icons (default)"
-msgstr "Icônes filaires (par défaut)"
-
-msgid "Colored icons"
-msgstr "Icônes colorées"
-
-msgid "Fatcow icons"
-msgstr "Icônes Fatcow"
-
-msgid "Fugue icons"
-msgstr "Icônes Fugue"
-
 msgid "Solar icons (green)"
 msgstr "Icônes Solar (vert)"
 
 msgid "IconPark icons (teal/lime)"
 msgstr "Icônes IconPark (sarcelle/citron vert)"
 
-msgid "Line icons (Tabler)"
-msgstr "Icônes filaires (Tabler)"
-
-msgid "IconPark Bold icons (teal/lime)"
-msgstr "Icônes IconPark grasses (sarcelle/citron vert)"
+msgid "Streamline icons (green/teal)"
+msgstr "Icônes Streamline (vert/sarcelle)"
 
 msgid "Tabler icons (line)"
 msgstr "Icônes Tabler (filaires)"

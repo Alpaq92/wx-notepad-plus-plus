@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 14" id="Terminal--Streamline-wxNote">
+  <desc>
+    terminal (window + shell prompt), derived from Streamline Core flat icons: https://streamlinehq.com
+  </desc>
+  <path fill="#69db7c" fill-rule="evenodd" clip-rule="evenodd" d="M1.75058 0.0461426C0.809244 0.0461426 0.0461426 0.809244 0.0461426 1.75058V12.2494c0 0.9413 0.7631014 1.7044 1.7044374 1.7044H12.2494c0.9413 0 1.7044 -0.7631 1.7044 -1.7044V1.75058c0 -0.941336 -0.7631 -1.7044374 -1.7044 -1.7044374H1.75058Z"/>
+  <path fill="#099268" d="M1.75058 0.0461426C0.809244 0.0461426 0.0461426 0.809244 0.0461426 1.75058v1.74936H13.9538V1.75058c0 -0.941336 -0.7631 -1.7044374 -1.7044 -1.7044374H1.75058Z"/>
+  <path fill="none" stroke="#099268" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M3.4 6.6 5.6 8.5 3.4 10.4"/>
+  <path fill="none" stroke="#099268" stroke-width="1.5" stroke-linecap="round" d="M7.4 10.5h3.2"/>
+</svg>

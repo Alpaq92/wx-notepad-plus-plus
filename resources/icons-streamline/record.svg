@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 14" id="Record--Streamline-wxNote">
+  <desc>
+    record macro (record button + dot), derived from Streamline Core flat icons: https://streamlinehq.com
+  </desc>
+  <path fill="#69db7c" d="M7 14c3.866 0 7 -3.134 7 -7 0 -3.86599 -3.134 -7 -7 -7 -3.86599 0 -7 3.13401 -7 7 0 3.866 3.13401 7 7 7Z"/>
+  <circle cx="7" cy="7" r="3.2" fill="#099268"/>
+</svg>

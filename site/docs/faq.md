@@ -64,9 +64,12 @@ a popup.
 
 ## Can I run Notepad++ plugins?
 
-On Windows, yes — through the optional `npp-bridge` module, with partial `NPPM_*` coverage. On Linux and
-macOS a precompiled Windows plugin binary cannot be hosted; a plugin author can recompile against the
-bridge's shim SDK instead. Full detail in [Plugins](plugins.md).
+Yes, on every platform — through the optional `npp-bridge` module. On Windows it loads **unmodified
+plugin `.dll`s**; on Linux and macOS a precompiled Windows binary cannot be hosted, but the same plugin
+**recompiled against the bridge's shim SDK** runs there too (its unchanged `::SendMessage` calls route
+into the host). Coverage today: the full Scintilla `SCI_*` surface natively, plus ~30 of the 118
+`NPPM_*` messages (file/buffer info, file operations, docking panels, menu commands) — no toolbar
+icons or before-save hooks yet. Full detail in [Plugins](plugins.md).
 
 ## A plugin is crashing the editor. How do I get back in?
 
