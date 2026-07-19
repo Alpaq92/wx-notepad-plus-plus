@@ -60,6 +60,10 @@
   #ifndef MAKELONG
     #define MAKELONG(lo, hi) ((LONG)(((WORD)((DWORD)(lo) & 0xFFFF)) | (((DWORD)((WORD)((DWORD)(hi) & 0xFFFF))) << 16)))
   #endif
+  // ...nor WM_COMMAND (the message number N++ relays dynamic plugin command ids under).
+  #ifndef WM_COMMAND
+    #define WM_COMMAND 0x0111
+  #endif
 #endif
 
 static NppData g_npp = {};      // the Notepad++ environment, rebuilt from nib.win32 (Win) / opaque tokens (POSIX)
@@ -69,6 +73,10 @@ static const NibWin32Api*     g_win32 = nullptr;  // nib.win32 - serves docking 
 static const NibSciApi*       g_sci   = nullptr;  // nib.sci - the portable SCI_* passthrough (every OS)
 static const NibPathsApi*     g_paths = nullptr;  // nib.paths - user-data dir; the off-Windows plugins base
 static const NibCommandsApi*  g_cmds  = nullptr;  // nib.commands - invoke a built-in command by id (NPPM_MENUCOMMAND)
+static const NibUiApi*        g_ui      = nullptr;  // nib.ui - menu checkmarks + dark probe/palette (SETMENUITEMCHECK, ISDARKMODEENABLED, GETDARKMODECOLORS)
+static const NibToolbarApi*   g_toolbar = nullptr;  // nib.toolbar - plugin toolbar buttons (ADDTOOLBARICON*); NULL on old hosts
+static const NibAllocApi*     g_alloc   = nullptr;  // nib.alloc - cmd-id/marker/indicator grants (ALLOCATE* + FuncItem cmdIDs)
+static bool                   g_eventsV2 = false;   // host speaks nib.events v2 (id-carrying SAVING/SAVED/BEFORE_OPEN)
 
 struct NppPlugin {              // a loaded N++ plugin (kept alive for its FuncItem pointers + Stage-3 notifications)
     DllHandle    lib;
@@ -76,6 +84,7 @@ struct NppPlugin {              // a loaded N++ plugin (kept alive for its FuncI
     PMESSAGEPROC messageProc;
     FuncItem*    funcs;
     int          count;
+    std::wstring module;        // module filename ("NppExec.dll" / "NppExec.so") - the NPPM_MSGTOPLUGIN address
 };
 static std::vector<NppPlugin> g_plugins;
 
@@ -227,13 +236,15 @@ static void on_nib_event(NibHost*, const NibEvent* ev, void*)
             scn.updated    = SC_UPDATE_SELECTION;
             break;
         case NIB_EV_DOCUMENT_SAVED:
+            // v1 (savepoint-derived): the editor-level save-point notification. The application-level
+            // NPPN_FILESAVED comes from the v2 pipeline below (one per REAL disk write, id-carrying);
+            // only when the host predates events v2 is it still derived here - active-doc id,
+            // undo-to-savepoint false positives and all (the old, lower-fidelity behaviour).
             scn.nmhdr.code = SCN_SAVEPOINTREACHED;
-            // Also fire the application-level NPPN_FILESAVED: plugins that track saves listen for that,
-            // not the editor's save-point notification. idFrom is the saved buffer id when the host
-            // exposes it (the active doc, which is the one just saved).
-            notifyNpp(NPPN_FILESAVED,
-                      (g_docs && g_docs->version >= 2 && g_docs->active_id)
-                          ? static_cast<uptr_t>(g_docs->active_id(g_host)) : 0);
+            if (!g_eventsV2)
+                notifyNpp(NPPN_FILESAVED,
+                          (g_docs && g_docs->version >= 2 && g_docs->active_id)
+                              ? static_cast<uptr_t>(g_docs->active_id(g_host)) : 0);
             break;
         case NIB_EV_DOCUMENT_ACTIVATED:
             scn.nmhdr.hwndFrom = g_npp._nppHandle;   // an NPPN_ notification comes from the frame, not the editor
@@ -246,6 +257,11 @@ static void on_nib_event(NibHost*, const NibEvent* ev, void*)
             scn.nmhdr.idFrom   = static_cast<uptr_t>(ev->as.document.id);   // the opened file's buffer id
             break;
         case NIB_EV_DOCUMENT_CLOSED:
+            // N++ pairs these on every close path: FILEBEFORECLOSE first, then FILECLOSED, both with
+            // the SAME still-valid buffer id. The host guarantees id/path stay resolvable for this
+            // whole callback (NIB_EV_DOCUMENT_CLOSED's ordering note in nib.h), so both notifications
+            // can resolve the path via NPPM_GETFULLPATHFROMBUFFERID.
+            notifyNpp(NPPN_FILEBEFORECLOSE, static_cast<uptr_t>(ev->as.document.id));
             scn.nmhdr.hwndFrom = g_npp._nppHandle;
             scn.nmhdr.code     = NPPN_FILECLOSED;
             scn.nmhdr.idFrom   = static_cast<uptr_t>(ev->as.document.id);   // the closing file's buffer id (still valid)
@@ -253,6 +269,22 @@ static void on_nib_event(NibHost*, const NibEvent* ev, void*)
         default: return;
     }
     for (const auto& p : g_plugins) if (p.beNotified) p.beNotified(&scn);
+}
+
+// The nib.events v2 pipeline: id-carrying document lifecycle (subscribed only when the host offers the
+// v2 table). SAVING fires before each real write attempt - during Save All once per buffer, each with
+// that buffer's own id - and maps to NPPN_FILEBEFORESAVE; SAVED fires exactly once per real disk write
+// (never on undo-to-savepoint) and maps to the id-carrying NPPN_FILESAVED; BEFORE_OPEN fires after the
+// page exists but before content loads and maps to NPPN_FILEBEFOREOPEN. Kept separate from
+// on_nib_event because the same NIB_EV_DOCUMENT_SAVED kind means different things per table version.
+static void on_nib_event_v2(NibHost*, const NibEvent* ev, void*)
+{
+    switch (ev->kind) {
+        case NIB_EV_DOCUMENT_SAVING:      notifyNpp(NPPN_FILEBEFORESAVE, static_cast<uptr_t>(ev->as.document.id)); break;
+        case NIB_EV_DOCUMENT_SAVED:       notifyNpp(NPPN_FILESAVED,      static_cast<uptr_t>(ev->as.document.id)); break;
+        case NIB_EV_DOCUMENT_BEFORE_OPEN: notifyNpp(NPPN_FILEBEFOREOPEN, static_cast<uptr_t>(ev->as.document.id)); break;
+        default: break;
+    }
 }
 
 // Diagnostic: report the rebuilt NppData + how many N++ plugins loaded.
@@ -284,9 +316,11 @@ static void registerFuncItems(NibHost* host, const NibCommandsApi* cmds,
 // ---- SHARED: finish loading one already-dlopen'd module (both loaders differ only in how they find it).
 // Resolves the three required N++ entry points, delivers the NppData, registers the plugin's FuncItems,
 // and records it. bindTarget wires the plugin's outbound SendMessage before setInfo (POSIX; nullptr on
-// Windows, where the plugin uses the OS ::SendMessage). Returns false + closes lib if it's not a plugin.
+// Windows, where the plugin uses the OS ::SendMessage). moduleFile is the plugin's on-disk filename -
+// the address NPPM_MSGTOPLUGIN routes by. Returns false + closes lib if it's not a plugin.
 static bool loadOneNppModule(NibHost* host, const NibCommandsApi* cmds, DllHandle lib,
-                             const char* diagName, const NppHostBridge* bindTarget)
+                             const char* diagName, const NppHostBridge* bindTarget,
+                             const std::wstring& moduleFile)
 {
     auto setInfo  = reinterpret_cast<PFUNCSETINFO>      (dllSym(lib, "setInfo"));
     auto getFuncs = reinterpret_cast<PFUNCGETFUNCSARRAY>(dllSym(lib, "getFuncsArray"));
@@ -308,11 +342,21 @@ static bool loadOneNppModule(NibHost* host, const NibCommandsApi* cmds, DllHandl
     setInfo(g_npp);                          // hand over the NppData (real HWNDs on Win, opaque tokens off-Win)
     int count = 0;
     FuncItem* funcs = getFuncs(&count);      // the plugin's menu commands (array owned by the module)
+    // Assign each FuncItem a real, dispatchable command id from the host's dynamic pool - what N++'s
+    // plugin manager does with ID_PLUGINS_CMD+n. These are the ids the plugin passes back through
+    // NPPM_SETMENUITEMCHECK / NPPM_ADDTOOLBARICON* / NPPM_GETSHORTCUTBYCMDID, and when one fires
+    // (toolbar click) it dispatches through on_alloc_command on the host's wx-event command path -
+    // never a raw WM_COMMAND, so ids above 32767 survive the 16-bit wrap (see nib.alloc in nib.h).
+    if (g_alloc && g_alloc->alloc_cmd_ids && funcs && count > 0) {
+        int first = 0;
+        if (g_alloc->alloc_cmd_ids(host, count, &first))
+            for (int i = 0; i < count; ++i) funcs[i]._cmdID = first + i;
+    }
     registerFuncItems(host, cmds, toUtf8(getName()), funcs, count);
     g_plugins.push_back({ lib,
         reinterpret_cast<PBENOTIFIED> (dllSym(lib, "beNotified")),
         reinterpret_cast<PMESSAGEPROC>(dllSym(lib, "messageProc")),
-        funcs, count });
+        funcs, count, moduleFile });
     return true;
 }
 
@@ -332,7 +376,7 @@ static void loadNppPlugins(NibHost* host, const NibCommandsApi* cmds)
 
         DllHandle lib = dllOpen(dll);
         if (!lib) continue;
-        loadOneNppModule(host, cmds, lib, nullptr, nullptr);   // Windows plugins use the OS ::SendMessage (no shim)
+        loadOneNppModule(host, cmds, lib, nullptr, nullptr, sub + kPluginExt);   // Windows plugins use the OS ::SendMessage (no shim)
     } while (::FindNextFileW(hf, &fd));
     ::FindClose(hf);
 }
@@ -428,6 +472,233 @@ static LRESULT putPath(WPARAM wParam, LPARAM lParam, const std::wstring& s)
     return static_cast<LRESULT>(s.size());
 }
 
+// ---- Phase-1 helpers: plugin relay, allocated-command dispatch, dark palette, language map -------
+
+// ASCII-case-insensitive wide compare - enough for the ASCII module filenames N++ plugins ship under.
+static bool wideIEq(const std::wstring& a, const std::wstring& b)
+{
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        wchar_t x = a[i], y = b[i];
+        if (x >= L'A' && x <= L'Z') x = static_cast<wchar_t>(x + 32);
+        if (y >= L'A' && y <= L'Z') y = static_cast<wchar_t>(y + 32);
+        if (x != y) return false;
+    }
+    return true;
+}
+static std::wstring stemOf(const std::wstring& f)
+{ const size_t d = f.find_last_of(L'.'); return d == std::wstring::npos ? f : f.substr(0, d); }
+// NPPM_MSGTOPLUGIN addressing: match the recorded module filename - or, so a POSIX-recompiled plugin
+// keeps answering to the name its Windows binary shipped under (L"NppExec.dll" vs NppExec.so), the stem.
+static bool moduleMatches(const std::wstring& module, const wchar_t* want)
+{
+    if (!want || !*want) return false;
+    const std::wstring w = want;
+    return wideIEq(module, w) || wideIEq(stemOf(module), stemOf(w));
+}
+
+// The FuncItem a bridge-assigned command id belongs to (NULL if the id is not one of ours).
+static const FuncItem* funcItemForCmd(int cmdId)
+{
+    if (cmdId == 0) return nullptr;
+    for (const auto& p : g_plugins)
+        for (int i = 0; i < p.count; ++i)
+            if (p.funcs && p.funcs[i]._cmdID == cmdId) return &p.funcs[i];
+    return nullptr;
+}
+
+// The bridge's nib.alloc command sink: a fired allocated id is either one of the FuncItem ids the
+// bridge assigned at load (invoke that item's _pFunc - the same action its menu entry runs), or a
+// dynamic id a plugin allocated itself via NPPM_ALLOCATECMDID - relay WM_COMMAND to every plugin's
+// messageProc, exactly how N++ relays a dynamic command id it cannot resolve (plugins filter on the
+// id). Registered once in activate(); the HOST drops the sink before plugin unmap (nib.alloc
+// contract), so no pointer here outlives FreeLibrary.
+static void on_alloc_command(NibHost*, int cmdId, void*)
+{
+    if (const FuncItem* fi = funcItemForCmd(cmdId)) { if (fi->_pFunc) fi->_pFunc(); return; }
+    for (const auto& p : g_plugins)
+        if (p.messageProc) p.messageProc(WM_COMMAND, static_cast<WPARAM>(cmdId), 0);
+}
+
+// The NPPM_GETDARKMODECOLORS payload - N++'s NppDarkMode::Colors ABI layout (12 COLORREFs, this exact
+// order). Declared by this GPL module (the npp-compat header carries only the dmf* constants); the
+// static_assert below keeps the layout from drifting silently, abi_layout_asserts.h-style.
+namespace NppDarkMode {
+    struct Colors {
+        COLORREF background       = 0;
+        COLORREF softerBackground = 0;
+        COLORREF hotBackground    = 0;
+        COLORREF pureBackground   = 0;
+        COLORREF errorBackground  = 0;
+        COLORREF text             = 0;
+        COLORREF darkerText       = 0;
+        COLORREF disabledText     = 0;
+        COLORREF linkText         = 0;
+        COLORREF edge             = 0;
+        COLORREF hotEdge          = 0;
+        COLORREF disabledEdge     = 0;
+    };
+}
+static_assert(sizeof(NppDarkMode::Colors) == 12 * sizeof(COLORREF), "NppDarkMode::Colors ABI layout drift");
+
+// nib.ui speaks portable 0xRRGGBB; the N++ ABI (like Scintilla) speaks COLORREF 0x00bbggrr.
+static COLORREF rgbToColorref(uint32_t rgb)
+{ return ((rgb >> 16) & 0xFF) | (rgb & 0xFF00) | ((rgb & 0xFF) << 16); }
+
+// LangType -> the host's frozen Language-menu command id (kCmd* == IDM_LANG_*, the composition lever).
+// Only languages the host's own Language menu carries map; the rest return 0 and
+// NPPM_SETCURRENTLANGTYPE answers a documented FALSE (never a silently-dead menu id).
+static int menuIdForLangType(int lt)
+{
+    switch (lt) {
+        case L_TEXT: return IDM_LANG_TEXT;               // "None (Normal Text)"
+        case L_PHP: return IDM_LANG_PHP;                 case L_C: return IDM_LANG_C;
+        case L_CPP: return IDM_LANG_CPP;                 case L_CS: return IDM_LANG_CS;
+        case L_OBJC: return IDM_LANG_OBJC;               case L_JAVA: return IDM_LANG_JAVA;
+        case L_RC: return IDM_LANG_RC;                   case L_HTML: return IDM_LANG_HTML;
+        case L_XML: return IDM_LANG_XML;                 case L_MAKEFILE: return IDM_LANG_MAKEFILE;
+        case L_PASCAL: return IDM_LANG_PASCAL;           case L_BATCH: return IDM_LANG_BATCH;
+        case L_ASP: return IDM_LANG_ASP;                 case L_SQL: return IDM_LANG_SQL;
+        case L_VB: return IDM_LANG_VB;                   case L_CSS: return IDM_LANG_CSS;
+        case L_PERL: return IDM_LANG_PERL;               case L_PYTHON: return IDM_LANG_PYTHON;
+        case L_LUA: return IDM_LANG_LUA;                 case L_TEX: return IDM_LANG_TEX;
+        case L_FORTRAN: return IDM_LANG_FORTRAN;         case L_BASH: return IDM_LANG_BASH;
+        case L_FLASH: return IDM_LANG_FLASH;             case L_NSIS: return IDM_LANG_NSIS;
+        case L_TCL: return IDM_LANG_TCL;                 case L_LISP: return IDM_LANG_LISP;
+        case L_SCHEME: return IDM_LANG_SCHEME;           case L_ASM: return IDM_LANG_ASM;
+        case L_DIFF: return IDM_LANG_DIFF;               case L_PROPS: return IDM_LANG_PROPS;
+        case L_PS: return IDM_LANG_PS;                   case L_RUBY: return IDM_LANG_RUBY;
+        case L_SMALLTALK: return IDM_LANG_SMALLTALK;     case L_VHDL: return IDM_LANG_VHDL;
+        case L_KIX: return IDM_LANG_KIX;                 case L_AU3: return IDM_LANG_AU3;
+        case L_CAML: return IDM_LANG_CAML;               case L_ADA: return IDM_LANG_ADA;
+        case L_VERILOG: return IDM_LANG_VERILOG;         case L_MATLAB: return IDM_LANG_MATLAB;
+        case L_HASKELL: return IDM_LANG_HASKELL;         case L_INNO: return IDM_LANG_INNO;
+        case L_CMAKE: return IDM_LANG_CMAKE;             case L_YAML: return IDM_LANG_YAML;
+        case L_COBOL: return IDM_LANG_COBOL;             case L_GUI4CLI: return IDM_LANG_GUI4CLI;
+        case L_D: return IDM_LANG_D;                     case L_POWERSHELL: return IDM_LANG_POWERSHELL;
+        case L_R: return IDM_LANG_R;                     case L_JSP: return IDM_LANG_JSP;
+        case L_COFFEESCRIPT: return IDM_LANG_COFFEESCRIPT; case L_JSON: return IDM_LANG_JSON;
+        case L_JAVASCRIPT: return IDM_LANG_JS;           case L_FORTRAN_77: return IDM_LANG_FORTRAN_77;
+        case L_BAANC: return IDM_LANG_BAANC;             case L_SREC: return IDM_LANG_SREC;
+        case L_IHEX: return IDM_LANG_IHEX;               case L_TEHEX: return IDM_LANG_TEHEX;
+        case L_SWIFT: return IDM_LANG_SWIFT;             case L_ASN1: return IDM_LANG_ASN1;
+        case L_AVS: return IDM_LANG_AVS;                 case L_BLITZBASIC: return IDM_LANG_BLITZBASIC;
+        case L_PUREBASIC: return IDM_LANG_PUREBASIC;     case L_FREEBASIC: return IDM_LANG_FREEBASIC;
+        case L_CSOUND: return IDM_LANG_CSOUND;           case L_ERLANG: return IDM_LANG_ERLANG;
+        case L_ESCRIPT: return IDM_LANG_ESCRIPT;         case L_FORTH: return IDM_LANG_FORTH;
+        case L_LATEX: return IDM_LANG_LATEX;             case L_MMIXAL: return IDM_LANG_MMIXAL;
+        case L_NIM: return IDM_LANG_NIM;                 case L_NNCRONTAB: return IDM_LANG_NNCRONTAB;
+        case L_OSCRIPT: return IDM_LANG_OSCRIPT;         case L_REBOL: return IDM_LANG_REBOL;
+        case L_REGISTRY: return IDM_LANG_REGISTRY;       case L_RUST: return IDM_LANG_RUST;
+        case L_SPICE: return IDM_LANG_SPICE;             case L_TXT2TAGS: return IDM_LANG_TXT2TAGS;
+        case L_VISUALPROLOG: return IDM_LANG_VISUALPROLOG; case L_TYPESCRIPT: return IDM_LANG_TYPESCRIPT;
+        case L_JSON5: return IDM_LANG_JSON5;             case L_MSSQL: return IDM_LANG_MSSQL;
+        case L_GDSCRIPT: return IDM_LANG_GDSCRIPT;       case L_HOLLYWOOD: return IDM_LANG_HOLLYWOOD;
+        case L_GOLANG: return IDM_LANG_GOLANG;           case L_RAKU: return IDM_LANG_RAKU;
+        case L_TOML: return IDM_LANG_TOML;               case L_SAS: return IDM_LANG_SAS;
+        default: return 0;   // L_INI/L_ASCII/L_USER/L_JS_EMBEDDED/... have no host Language-menu entry
+    }
+}
+
+#ifdef _WIN32
+// ---- HBITMAP/HICON -> straight-alpha RGBA (the nib.toolbar ABI) ----------------------------------
+// The alpha-fidelity cases (the plan's named risk): a plugin's toolbarIcons bitmap may be 32bpp with
+// PREMULTIPLIED alpha, 32bpp with a dead (all-zero) alpha channel, or classic 24bpp using N++'s
+// RGB(192,192,192) "toolbar grey" background as the implicit transparency mask. Icons carry straight
+// alpha - or none at all, in which case it is derived from the icon's AND mask.
+static bool dibBits32(HDC dc, HBITMAP hbm, int w, int h, std::vector<unsigned char>& bgra)
+{
+    BITMAPINFO bi = {};
+    bi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth       = w;
+    bi.bmiHeader.biHeight      = -h;                     // negative height = top-down row order
+    bi.bmiHeader.biPlanes      = 1;
+    bi.bmiHeader.biBitCount    = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    bgra.assign(static_cast<size_t>(w) * static_cast<size_t>(h) * 4, 0);
+    return ::GetDIBits(dc, hbm, 0, static_cast<UINT>(h), bgra.data(), &bi, DIB_RGB_COLORS) == h;
+}
+static void bgraToRgba(const std::vector<unsigned char>& bgra, std::vector<unsigned char>& rgba)
+{
+    rgba.resize(bgra.size());
+    for (size_t i = 0; i + 3 < bgra.size(); i += 4)
+    { rgba[i] = bgra[i + 2]; rgba[i + 1] = bgra[i + 1]; rgba[i + 2] = bgra[i]; rgba[i + 3] = bgra[i + 3]; }
+}
+static bool hbmpToRgba(HBITMAP hbm, std::vector<unsigned char>& rgba, int& w, int& h)
+{
+    BITMAP bm = {};
+    if (!hbm || !::GetObjectW(hbm, sizeof(bm), &bm) || bm.bmWidth <= 0 || bm.bmHeight <= 0) return false;
+    w = bm.bmWidth; h = bm.bmHeight;
+    HDC dc = ::CreateCompatibleDC(nullptr);
+    if (!dc) return false;
+    std::vector<unsigned char> px;
+    const bool ok = dibBits32(dc, hbm, w, h, px);
+    ::DeleteDC(dc);
+    if (!ok) return false;
+    bool anyAlpha = false, premulShaped = true;
+    for (size_t i = 0; i + 3 < px.size(); i += 4) {
+        const unsigned char b = px[i], g = px[i + 1], r = px[i + 2], a = px[i + 3];
+        if (a) anyAlpha = true;
+        if (b > a || g > a || r > a) premulShaped = false;   // impossible shape for premultiplied data
+    }
+    if (bm.bmBitsPixel == 32 && anyAlpha) {
+        // A live alpha channel. GDI 32bpp bitmaps are conventionally PREMULTIPLIED (AlphaBlend's
+        // format): when every channel is <= its alpha - the only shape premultiplied data can have -
+        // un-premultiply into the straight alpha the nib ABI wants; otherwise it can only already be
+        // straight and is copied through.
+        if (premulShaped)
+            for (size_t i = 0; i + 3 < px.size(); i += 4) {
+                const unsigned a = px[i + 3];
+                if (a && a != 255)
+                    for (int c = 0; c < 3; ++c)
+                        px[i + c] = static_cast<unsigned char>((px[i + c] * 255u + a / 2) / a);
+            }
+    } else {
+        // 24bpp (or a 32bpp source whose alpha channel is dead): opaque, except N++'s documented
+        // RGB(192,192,192) transparent-background convention for plugin toolbar bitmaps.
+        for (size_t i = 0; i + 3 < px.size(); i += 4)
+            px[i + 3] = (px[i] == 192 && px[i + 1] == 192 && px[i + 2] == 192) ? 0 : 255;
+    }
+    bgraToRgba(px, rgba);
+    return true;
+}
+static bool hiconToRgba(HICON hic, std::vector<unsigned char>& rgba, int& w, int& h)
+{
+    ICONINFO ii = {};
+    if (!hic || !::GetIconInfo(hic, &ii)) return false;
+    bool ok = false;
+    if (ii.hbmColor) {   // colour icon (a monochrome icon's double-height mask layout is not served)
+        BITMAP bm = {};
+        if (::GetObjectW(ii.hbmColor, sizeof(bm), &bm) && bm.bmWidth > 0 && bm.bmHeight > 0) {
+            w = bm.bmWidth; h = bm.bmHeight;
+            if (HDC dc = ::CreateCompatibleDC(nullptr)) {
+                std::vector<unsigned char> px, mask;
+                if (dibBits32(dc, ii.hbmColor, w, h, px)) {
+                    bool anyAlpha = false;
+                    for (size_t i = 3; i < px.size(); i += 4) if (px[i]) { anyAlpha = true; break; }
+                    if (!anyAlpha) {
+                        // No per-pixel alpha: derive it from the icon's AND mask (a set mask bit
+                        // reads back white = transparent), or fall back to fully opaque.
+                        if (ii.hbmMask && dibBits32(dc, ii.hbmMask, w, h, mask))
+                            for (size_t i = 0; i + 3 < px.size(); i += 4) px[i + 3] = mask[i] ? 0 : 255;
+                        else
+                            for (size_t i = 3; i < px.size(); i += 4) px[i] = 255;
+                    }
+                    // Icon colour planes carry STRAIGHT alpha (DrawIconEx blends at draw time):
+                    // no un-premultiply here, just the BGRA->RGBA channel swap.
+                    bgraToRgba(px, rgba);
+                    ok = true;
+                }
+                ::DeleteDC(dc);
+            }
+        }
+    }
+    if (ii.hbmColor) ::DeleteObject(ii.hbmColor);
+    if (ii.hbmMask)  ::DeleteObject(ii.hbmMask);
+    return ok;
+}
+#endif // _WIN32
+
 static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& out)
 {
     switch (msg) {
@@ -521,6 +792,122 @@ static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& o
         // per-buffer tracking, via nib.documents v2 (the host's EditorPage* is the opaque buffer id)
         case NPPM_GETCURRENTBUFFERID:      out = (g_docs && g_docs->version >= 2 && g_docs->active_id) ? g_docs->active_id(g_host) : 0; return true;
         case NPPM_GETFULLPATHFROMBUFFERID: out = putPath(0, lParam, pathFromIdW(static_cast<intptr_t>(wParam))); return true;
+        // ---- Phase 1: dark mode + editor default colours (nib.ui / nib.sci) ----
+        case NPPM_ISDARKMODEENABLED:
+            out = (g_ui && g_ui->is_dark && g_ui->is_dark(g_host)) ? TRUE : FALSE; return true;
+        case NPPM_GETDARKMODECOLORS: {
+            // wParam must be sizeof(NppDarkMode::Colors), lParam the caller's struct (N++ semantics);
+            // the host's portable 0xRRGGBB palette is laid into the COLORREF ABI layout.
+            auto* colors = reinterpret_cast<NppDarkMode::Colors*>(lParam);
+            NibUiDarkColors c = {}; c.version = 1; c.struct_size = sizeof(c);
+            if (static_cast<size_t>(wParam) != sizeof(NppDarkMode::Colors) || !colors
+                || !g_ui || !g_ui->dark_colors || !g_ui->dark_colors(g_host, &c)) { out = FALSE; return true; }
+            colors->background       = rgbToColorref(c.background);
+            colors->softerBackground = rgbToColorref(c.softer_background);
+            colors->hotBackground    = rgbToColorref(c.hot_background);
+            colors->pureBackground   = rgbToColorref(c.pure_background);
+            colors->errorBackground  = rgbToColorref(c.error_background);
+            colors->text             = rgbToColorref(c.text);
+            colors->darkerText       = rgbToColorref(c.darker_text);
+            colors->disabledText     = rgbToColorref(c.disabled_text);
+            colors->linkText         = rgbToColorref(c.link_text);
+            colors->edge             = rgbToColorref(c.edge);
+            colors->hotEdge          = rgbToColorref(c.hot_edge);
+            colors->disabledEdge     = rgbToColorref(c.disabled_edge);
+            out = TRUE; return true;
+        }
+        case NPPM_GETEDITORDEFAULTFOREGROUNDCOLOR:   // returns COLORREF 0x00bbggrr == Scintilla's own colour layout
+            out = g_sci ? static_cast<LRESULT>(g_sci->sci_call(g_host, activeView(), SCI_STYLEGETFORE, STYLE_DEFAULT, 0) & 0xFFFFFF) : 0;
+            return true;
+        case NPPM_GETEDITORDEFAULTBACKGROUNDCOLOR:
+            out = g_sci ? static_cast<LRESULT>(g_sci->sci_call(g_host, activeView(), SCI_STYLEGETBACK, STYLE_DEFAULT, 0) & 0xFFFFFF) : 0;
+            return true;
+        // ---- Phase 1: menu state / language / reload / plugin-to-plugin relay ----
+        case NPPM_SETMENUITEMCHECK:
+            // wParam = a FuncItem's bridge-assigned cmd id, lParam = check state. Honest answer: TRUE
+            // only when the host found a real CHECKABLE menu item under that id - its Extensions-menu
+            // entries are not checkable today, so plugin items report FALSE rather than pretending.
+            out = (g_ui && g_ui->menu_check && g_ui->menu_check(g_host, static_cast<int>(wParam), lParam ? 1 : 0)) ? TRUE : FALSE;
+            return true;
+        case NPPM_SETCURRENTLANGTYPE: {
+            // lParam = the LangType to force on the active buffer. Composition: the host's own
+            // Language-menu command (frozen kCmd* == IDM_LANG_*), through the same wx-event
+            // dispatcher a menu pick uses - never a raw WM_COMMAND.
+            const int id = menuIdForLangType(static_cast<int>(lParam));
+            if (!id || !g_cmds || g_cmds->version < 2 || !g_cmds->invoke_command) { out = FALSE; return true; }
+            g_cmds->invoke_command(g_host, id);
+            out = TRUE; return true;
+        }
+        case NPPM_RELOADFILE: {
+            // lParam = full path to reload (wParam's "with alert" flag is not honoured - the host
+            // reloads silently). Open-or-switch to the file, then File > Reload (IDM_FILE_RELOAD,
+            // frozen id) re-reads the now-active buffer from disk.
+            const wchar_t* p = reinterpret_cast<const wchar_t*>(lParam);
+            if (!p || !*p || !g_docs || !g_docs->open(g_host, toUtf8(p).c_str())) { out = FALSE; return true; }
+            if (g_cmds && g_cmds->version >= 2 && g_cmds->invoke_command) g_cmds->invoke_command(g_host, IDM_FILE_RELOAD);
+            out = TRUE; return true;
+        }
+        case NPPM_MSGTOPLUGIN: {
+            // wParam = dest module filename (e.g. L"NppExec.dll"), lParam = CommunicationInfo*.
+            // Deliver to the named plugin's already-resolved messageProc, N++-style (the dest reads
+            // internalMsg/srcModuleName/info out of lParam); TRUE only if actually delivered.
+            const wchar_t* dest = reinterpret_cast<const wchar_t*>(wParam);
+            out = FALSE;
+            if (!dest || !*dest || !lParam) return true;
+            for (const auto& p : g_plugins)
+                if (p.messageProc && moduleMatches(p.module, dest)) { p.messageProc(msg, wParam, lParam); out = TRUE; break; }
+            return true;
+        }
+        // ---- Phase 1: toolbar buttons (Windows converts the native images to the portable RGBA ABI) ----
+        case NPPM_ADDTOOLBARICON_DEPRECATED:      // == the pre-rename NPPM_ADDTOOLBARICON value shipped binaries / C# SDKs still send
+        case NPPM_ADDTOOLBARICON_FORDARKMODE: {
+#ifdef _WIN32
+            const auto* ic = reinterpret_cast<const toolbarIcons*>(lParam);   // FORDARKMODE only appends a field
+            if (!g_toolbar || !g_toolbar->add_tool || !ic || !wParam) { out = FALSE; return true; }
+            const HICON darkIcon = (msg == NPPM_ADDTOOLBARICON_FORDARKMODE)
+                ? reinterpret_cast<const toolbarIconsWithDarkMode*>(lParam)->hToolbarIconDarkMode : nullptr;
+            const bool dark = g_ui && g_ui->is_dark && g_ui->is_dark(g_host);
+            std::vector<unsigned char> rgba; int w = 0, h = 0;
+            bool got = false;
+            if (dark) {   // dark chrome: the dark icon variant first, then the light icon, then the bmp
+                if (darkIcon)                 got = hiconToRgba(darkIcon, rgba, w, h);
+                if (!got && ic->hToolbarIcon) got = hiconToRgba(ic->hToolbarIcon, rgba, w, h);
+                if (!got && ic->hToolbarBmp)  got = hbmpToRgba(ic->hToolbarBmp, rgba, w, h);
+            } else {      // light chrome: the classic bmp is what plugins design for light toolbars
+                if (ic->hToolbarBmp)          got = hbmpToRgba(ic->hToolbarBmp, rgba, w, h);
+                if (!got && ic->hToolbarIcon) got = hiconToRgba(ic->hToolbarIcon, rgba, w, h);
+                if (!got && darkIcon)         got = hiconToRgba(darkIcon, rgba, w, h);
+            }
+            if (!got) { out = FALSE; return true; }
+            NibToolbarIcon icon = {};
+            icon.version = 1; icon.struct_size = sizeof(icon);
+            icon.width = w; icon.height = h; icon.rgba = rgba.data();   // host copies the pixels immediately
+            const FuncItem* fi = funcItemForCmd(static_cast<int>(wParam));   // tooltip = the item's menu name, as N++
+            const std::string tip = fi ? toUtf8(fi->_itemName) : std::string();
+            out = g_toolbar->add_tool(g_host, static_cast<int>(wParam), &icon, tip.c_str()) ? TRUE : FALSE;
+#else
+            // A recompiled plugin cannot own an HBITMAP/HICON off-Windows: documented no-op SUCCESS,
+            // so TBMODIFICATION-driven init paths keep running (the notification fires on every OS).
+            (void)wParam; (void)lParam;
+            out = TRUE;
+#endif
+            return true;
+        }
+        // ---- Phase 1: the allocator family (host-owned ranges; fired ids dispatch via wx events) ----
+        case NPPM_ALLOCATESUPPORTED_DEPRECATED:   // == the pre-rename NPPM_ALLOCATESUPPORTED probe (DSpellCheck gates on it)
+            out = TRUE; return true;
+        case NPPM_ALLOCATECMDID:                  // wParam = count, lParam = int* first granted number (all three)
+            out = (g_alloc && g_alloc->alloc_cmd_ids && lParam
+                   && g_alloc->alloc_cmd_ids(g_host, static_cast<int>(wParam), reinterpret_cast<int*>(lParam))) ? TRUE : FALSE;
+            return true;
+        case NPPM_ALLOCATEMARKER:
+            out = (g_alloc && g_alloc->alloc_markers && lParam
+                   && g_alloc->alloc_markers(g_host, static_cast<int>(wParam), reinterpret_cast<int*>(lParam))) ? TRUE : FALSE;
+            return true;
+        case NPPM_ALLOCATEINDICATOR:              // also the value C# SDKs spell NPPM_ALLOCATEINDICATORS (same number)
+            out = (g_alloc && g_alloc->alloc_indicators && lParam
+                   && g_alloc->alloc_indicators(g_host, static_cast<int>(wParam), reinterpret_cast<int*>(lParam))) ? TRUE : FALSE;
+            return true;
         default:                       return false;   // not one of ours -> caller falls through (DefSubclassProc / 0)
     }
 }
@@ -595,7 +982,7 @@ static void loadNppPluginsPosix(NibHost* host, const NibCommandsApi* cmds, const
 
         // Wire the plugin's outbound SendMessage (via g_hostBridge) before setInfo; see loadOneNppModule.
         // isUnicode is intentionally NOT resolved/honored in Phase 1 (plugins treated as wide, as today).
-        loadOneNppModule(host, cmds, lib, name.c_str(), &g_hostBridge);
+        loadOneNppModule(host, cmds, lib, name.c_str(), &g_hostBridge, wFromUtf8((name + kPluginExt).c_str()));
     }
 }
 #endif // !_WIN32
@@ -608,6 +995,14 @@ static void activate(NibHost* host, NibQueryFn query)
     g_paths = static_cast<const NibPathsApi*>(query(host, NIB_IFACE_PATHS, 1));          // off-Windows plugins base + NPPM home/config dir
     const NibWin32Api* w = static_cast<const NibWin32Api*>(query(host, NIB_IFACE_WIN32, 1));
     g_win32 = w;   // docking (NPPM_DMM*) routes through nib.win32; NULL off-Windows
+    g_ui      = static_cast<const NibUiApi*>(query(host, NIB_IFACE_UI, 1));            // menu checks + dark palette
+    g_toolbar = static_cast<const NibToolbarApi*>(query(host, NIB_IFACE_TOOLBAR, 1));  // plugin toolbar buttons
+    g_alloc   = static_cast<const NibAllocApi*>(query(host, NIB_IFACE_ALLOC, 1));      // cmd/marker/indicator grants
+    // The bridge's one command sink: fired allocated ids dispatch FuncItem actions and relay dynamic
+    // NPPM_ALLOCATECMDID ids to every plugin's messageProc (see on_alloc_command). Registered BEFORE
+    // the plugins load so the very first granted id is already routable; the HOST drops the sink
+    // before plugin unmap (nib.alloc contract - nothing dangles into an unmapped DLL).
+    if (g_alloc && g_alloc->on_command) g_alloc->on_command(host, on_alloc_command, nullptr);
 #ifdef _WIN32
     if (w) {
         g_npp._nppHandle             = static_cast<HWND>(w->main_window(host));
@@ -632,21 +1027,39 @@ static void activate(NibHost* host, NibQueryFn query)
     }
 #endif
 
-    // Forward editor events to the loaded plugins' beNotified (Stage 3).
-    const NibEventsApi* events = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 1));
+    // Forward editor events to the loaded plugins' beNotified (Stage 3). The v1 table carries the
+    // savepoint-derived SAVED plus the document lifecycle; the v2 table (when the host speaks it) adds
+    // the id-carrying real-save pipeline: SAVING -> NPPN_FILEBEFORESAVE, SAVED -> NPPN_FILESAVED
+    // (exactly one per real disk write, the written buffer's own id even during background Save All -
+    // never a false fire on undo-to-savepoint), BEFORE_OPEN -> NPPN_FILEBEFOREOPEN. Without v2 the
+    // bridge falls back to deriving FILESAVED from the savepoint (see on_nib_event).
+    const NibEventsApi* events   = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 1));
+    const NibEventsApi* eventsV2 = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 2));
+    g_eventsV2 = eventsV2 != nullptr;
     if (events) {
         events->subscribe(host, NIB_EV_TEXT_CHANGED,       on_nib_event, nullptr);
         events->subscribe(host, NIB_EV_SELECTION_CHANGED,  on_nib_event, nullptr);
-        events->subscribe(host, NIB_EV_DOCUMENT_SAVED,     on_nib_event, nullptr);
+        events->subscribe(host, NIB_EV_DOCUMENT_SAVED,     on_nib_event, nullptr);   // savepoint -> SCN_SAVEPOINTREACHED
         events->subscribe(host, NIB_EV_DOCUMENT_ACTIVATED, on_nib_event, nullptr);   // -> NPPN_BUFFERACTIVATED
         events->subscribe(host, NIB_EV_DOCUMENT_OPENED,    on_nib_event, nullptr);   // -> NPPN_FILEOPENED
-        events->subscribe(host, NIB_EV_DOCUMENT_CLOSED,    on_nib_event, nullptr);   // -> NPPN_FILECLOSED
+        events->subscribe(host, NIB_EV_DOCUMENT_CLOSED,    on_nib_event, nullptr);   // -> NPPN_FILEBEFORECLOSE + NPPN_FILECLOSED
+    }
+    if (eventsV2) {
+        eventsV2->subscribe(host, NIB_EV_DOCUMENT_SAVING,      on_nib_event_v2, nullptr);  // -> NPPN_FILEBEFORESAVE
+        eventsV2->subscribe(host, NIB_EV_DOCUMENT_SAVED,       on_nib_event_v2, nullptr);  // -> NPPN_FILESAVED (id-carrying)
+        eventsV2->subscribe(host, NIB_EV_DOCUMENT_BEFORE_OPEN, on_nib_event_v2, nullptr);  // -> NPPN_FILEBEFOREOPEN
     }
 
     // Real Notepad++ sends NPPN_READY once its UI is up; the bridge sends it after finishing loading +
     // wiring the plugins, which is the point at which they can safely query the environment. Plugins
     // commonly do first-run init (toolbar buttons, docking dialogs, menu state) in this handler.
     notifyNpp(NPPN_READY);
+    // The toolbar-registration window. Real N++ fires TBMODIFICATION while (re)building its toolbar,
+    // BEFORE READY; wxNote's toolbar already exists by now, so the bridge opens the window right after
+    // READY instead (documented divergence - see the README's compatibility notes). It fires on EVERY
+    // OS: off-Windows the ADDTOOLBARICON* answers are no-op TRUE, but plugins' init code that hangs off
+    // this notification must still run.
+    notifyNpp(NPPN_TBMODIFICATION);
 }
 
 static void deactivate(NibHost*)

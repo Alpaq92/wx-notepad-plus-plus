@@ -59,7 +59,10 @@ interface independently versioned, so structs grow only at the end.
 | `nib.editor/1` | length, insert text, replace selection, selection bounds, read a range |
 | `nib.documents/1` | document count, active path, open, save; **v2** buffer ids and path-from-id; **v3** active view (main/sub); **v4** enumerate every open document |
 | `nib.commands/1` | register a command (surfaced in the menu); **v2** invoke one of the host's own commands by id |
-| `nib.events/1` | subscribe to text changed, selection changed, document saved / activated / opened / closed |
+| `nib.events/1` | subscribe to text changed, selection changed, document saved / activated / opened / closed; **v2** id-carrying save events that fire per real disk write (before and after), plus before-open |
+| `nib.toolbar/1` | add a main-toolbar button that fires a command id — the icon crosses as portable RGBA pixels, no native image types |
+| `nib.ui/1` | host chrome state: check/uncheck a menu item, ask whether the chrome runs dark, read the host's dark palette |
+| `nib.alloc/1` | process-lifetime grants of command-id / marker / indicator ranges, so plugins never collide — plus a sink for fired allocated ids |
 | `nib.langdef/1` | register a language as a Scintillua Lua lexer — see [Languages &amp; Syntax](languages.md) |
 | `nib.keymap/1` | contribute keyboard bindings as a named, switchable keymap scheme: begin a scheme, bind by command id / symbolic name / Scintilla editor key, commit — see [Customizing Shortcuts](custom-shortcuts.md) |
 | `nib.paths/1` | the per-user data directory |
@@ -87,12 +90,20 @@ the `NPPM_*` messages that plugin sends into Nib calls.
   can instead **recompile** against the bridge's GPL shim SDK, which routes the plugin's own
   `::SendMessage` calls into the bridge's portable dispatch core.
 
-Message coverage is partial and grows additively. Served today: the current-Scintilla / version /
-language / view queries, menu handle and `MENUCOMMAND`, the path family (full path, directory,
-filename, name part, ext part), open-file enumeration, `DOOPEN`, save current / save all, current line
-and column, status-bar text, plugin config and home paths, buffer ids, docking (`DMM*`), and
-notifications for text changed, selection, save, buffer activated, file opened / closed and app
-lifecycle. Unserved messages fall through and return 0.
+Message coverage is partial and grows additively — today roughly **44 of the 118 `NPPM_*` messages,
+plus 10 `NPPN_*` notifications**. Served: the current-Scintilla / version / language / view queries,
+menu handle and `MENUCOMMAND`, the path family (full path, directory, filename, name part, ext
+part), open-file enumeration, `DOOPEN`, save current / save all / reload, current line and column,
+status-bar text, plugin config and home paths, buffer ids, docking (`DMM*`), plugin toolbar icons,
+the command-id / marker / indicator allocators, dark-mode and editor-colour queries, menu-item
+checks, language setting, inter-plugin messaging (`MSGTOPLUGIN`), and notifications for text
+changed, selection, save (before and after, carrying the written buffer's id), buffer activated,
+file opened / closed (before and after), toolbar modification and app lifecycle. Unserved messages
+fall through and return 0. The bridge's own README documents each divergence from real Notepad++ —
+two are permanent by design (`NPPN_READY` fires before session restore; `NPPN_SHUTDOWN` is
+deferred past the frame's close dispatch) — and the POSIX toolbar policy: off-Windows,
+`NPPM_ADDTOOLBARICON*` is a documented no-op returning `TRUE`, since a recompiled plugin cannot
+produce the message's native `HBITMAP`/`HICON` payload.
 
 Two known partials worth planning around: language-type queries report the language **by file
 extension** (a manual Language-menu override is not reflected), and `SWITCHTOFILE` *opens* the path

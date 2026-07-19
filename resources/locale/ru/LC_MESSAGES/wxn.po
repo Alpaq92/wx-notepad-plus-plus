@@ -2037,29 +2037,14 @@ msgstr "Стиль значков панели инструментов:"
 msgid "Toolbar icon size:"
 msgstr "Размер значков панели инструментов:"
 
-msgid "Line icons (default)"
-msgstr "Контурные значки (по умолчанию)"
-
-msgid "Colored icons"
-msgstr "Цветные значки"
-
-msgid "Fatcow icons"
-msgstr "Значки Fatcow"
-
-msgid "Fugue icons"
-msgstr "Значки Fugue"
-
 msgid "Solar icons (green)"
 msgstr "Значки Solar (зелёные)"
 
 msgid "IconPark icons (teal/lime)"
 msgstr "Значки IconPark (бирюзово-лаймовые)"
 
-msgid "Line icons (Tabler)"
-msgstr "Контурные значки (Tabler)"
-
-msgid "IconPark Bold icons (teal/lime)"
-msgstr "Жирные значки IconPark (бирюзово-лаймовые)"
+msgid "Streamline icons (green/teal)"
+msgstr "Значки Streamline (зелёно-бирюзовые)"
 
 msgid "Tabler icons (line)"
 msgstr "Значки Tabler (контурные)"

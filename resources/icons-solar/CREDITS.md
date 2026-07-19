@@ -2,7 +2,8 @@
 
 This is one of three "Colored icons" options for the toolbar (Settings > Preferences >
 General > Toolbar icon style), alongside the default line-icon set in `resources/icons/`
-and the sibling "IconPark" colored set in `resources/icons-iconpark/`.
+and the sibling "IconPark" (`resources/icons-iconpark/`) and "Streamline"
+(`resources/icons-streamline/`) colored sets.
 
 **Solar Icons** (Bold Duotone style) — © 480 Design, distributed via
 [Iconify](https://icon-sets.iconify.design/solar/) / <https://github.com/480-Design>.

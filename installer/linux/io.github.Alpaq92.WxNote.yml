@@ -34,6 +34,7 @@ modules:
       - cp -r build-bin/icons /app/bin/icons
       - cp -r build-bin/icons-solar /app/bin/icons-solar
       - cp -r build-bin/icons-iconpark /app/bin/icons-iconpark
+      - cp -r build-bin/icons-streamline /app/bin/icons-streamline
       - cp -r build-bin/themes /app/bin/themes
       - mkdir -p /app/bin/locale
       - cp -r build-bin/locale/. /app/bin/locale/

@@ -2,7 +2,8 @@
 
 This is one of three "Colored icons" options for the toolbar (Settings > Preferences >
 General > Toolbar icon style), alongside the default line-icon set in `resources/icons/`
-and the sibling "Solar" colored set in `resources/icons-solar/`. (A separate bolder-stroke
+and the sibling "Solar" (`resources/icons-solar/`) and "Streamline"
+(`resources/icons-streamline/`) colored sets. (A separate bolder-stroke
 `icons-iconpark-bold/` variant existed briefly and was dropped - it read as visually
 identical to this one in dark mode, so it wasn't worth the extra selectable option.)
 

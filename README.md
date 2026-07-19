@@ -108,8 +108,8 @@ packages/            npp-bridge (optional GPL Notepad++-ABI bridge, builds on ev
 include/nib/         the project's own permissive, cross-platform plugin API (nib.h)
 include/npp-compat/  clean-room Notepad++-ABI headers (consumed only by packages/npp-bridge and
                      packages/test_plugin — the core includes nothing from here)
-resources/           toolbar icons (icons/ = Tabler default, icons-solar/, icons-iconpark/), themes,
-                     default styler, fonts, locale/ (8-language i18n catalogs)
+resources/           toolbar icons (icons/ = Tabler default, icons-solar/, icons-iconpark/,
+                     icons-streamline/), themes, default styler, fonts, locale/ (8-language i18n catalogs)
 third_party/         scintilla + lexilla (both permissive, HPND), lua + lpeg + scintillua (the custom-language engine, all MIT), libvterm-tables (generated DEC tables for the fetched libvterm terminal core, MIT), wxbf (wxBorderlessFrame, wxWindows Licence)
 installer/           packaging scripts: windows/ (NSIS), linux/ (AppImage, .deb, .rpm, Flatpak), macos/ (.dmg)
 docs/                GOALS.md (why the project exists), ARCHITECTURE.md (how the editor is put
@@ -199,5 +199,6 @@ design references — is in [`docs/CREDITS.md`](docs/CREDITS.md). The headliners
   - [Tabler Icons](https://tabler.io/icons) (MIT) + [Open Color](https://yeun.github.io/open-color/) (MIT) — the default line-icon set (`resources/icons/CREDITS.md`).
   - [Solar Icons](https://icon-sets.iconify.design/solar/) (Bold Duotone) — © 480 Design (CC BY 4.0, attribution required; `resources/icons-solar/CREDITS.md`).
   - [IconPark](https://github.com/bytedance/IconPark) — © ByteDance (Apache-2.0; `resources/icons-iconpark/CREDITS.md`).
+  - [Streamline](https://streamlinehq.com) Core free icons — free icons from Streamline (CC BY 4.0, attribution required; `resources/icons-streamline/CREDITS.md`).
 - Bundled editor fonts, both SIL OFL 1.1 and both unmodified, shipped in place of the proprietary Consolas (`resources/fonts/CREDITS.md`): [Cascadia Mono](https://github.com/microsoft/cascadia-code) — © Microsoft, the **default** and fallback face, and carrying the Reserved Font Name `Cascadia Code` (see [`LICENSING.md`](LICENSING.md)) — and [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) — © the JetBrains Mono Project Authors, no Reserved Font Name.
 - Color themes: kept third-party themes are MIT (© Fabio Zendhi Nagao; Bespin © Oren Farhi) or CC BY 3.0 (© Paul Neubauer); regenerated themes + the default styler use permissive palettes (GitHub Primer, Atom One, Nord, Dracula, VS Code — all MIT; canonical Zenburn/Obsidian colors). [Markdown Preview Enhanced](https://github.com/shd101wyy/vscode-markdown-preview-enhanced) (NCSA) was reviewed as a permissive palette source.

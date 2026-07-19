@@ -2037,29 +2037,14 @@ msgstr "도구 모음 아이콘 스타일:"
 msgid "Toolbar icon size:"
 msgstr "도구 모음 아이콘 크기:"
 
-msgid "Line icons (default)"
-msgstr "선 아이콘(기본값)"
-
-msgid "Colored icons"
-msgstr "컬러 아이콘"
-
-msgid "Fatcow icons"
-msgstr "Fatcow 아이콘"
-
-msgid "Fugue icons"
-msgstr "Fugue 아이콘"
-
 msgid "Solar icons (green)"
 msgstr "Solar 아이콘(녹색)"
 
 msgid "IconPark icons (teal/lime)"
 msgstr "IconPark 아이콘(틸/라임)"
 
-msgid "Line icons (Tabler)"
-msgstr "선 아이콘(Tabler)"
-
-msgid "IconPark Bold icons (teal/lime)"
-msgstr "IconPark 굵은 아이콘(틸/라임)"
+msgid "Streamline icons (green/teal)"
+msgstr "Streamline 아이콘(녹색/틸)"
 
 msgid "Tabler icons (line)"
 msgstr "Tabler 아이콘(선)"

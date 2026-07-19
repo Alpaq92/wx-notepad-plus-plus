@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 14" id="Stop-Record--Streamline-wxNote">
+  <desc>
+    stop recording (stop button + square), derived from Streamline Core flat icons: https://streamlinehq.com
+  </desc>
+  <path fill="#69db7c" fill-rule="evenodd" clip-rule="evenodd" d="M1.5 0A1.5 1.5 0 0 0 0 1.5v11A1.5 1.5 0 0 0 1.5 14h11a1.5 1.5 0 0 0 1.5 -1.5v-11A1.5 1.5 0 0 0 12.5 0h-11Z"/>
+  <rect x="4.3" y="4.3" width="5.4" height="5.4" rx="1" fill="#099268"/>
+</svg>

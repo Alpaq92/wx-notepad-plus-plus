@@ -1623,12 +1623,28 @@ static std::function<void(int)> g_nibInvokeCommand;   // frame installs this (ne
 static void nibCmdRegister(NibHost*, const char* id, const char* title, NibCommandFn fn, void* u)
 { g_nibCommands.push_back({ id ? id : "", title ? title : "", fn, u }); }
 static void nibInvokeCommand(NibHost*, int id) { if (g_nibInvokeCommand) g_nibInvokeCommand(id); }
-// nib.events/1
-struct NibSub { NibEventKind kind; NibEventFn fn; void* user; };
+// nib.events/1 (+v2). Both versions share one subscriber list; the `v2` flag records which table a
+// subscription came through, because NIB_EV_DOCUMENT_SAVED means different things per version: v1 is
+// savepoint-derived (fires on undo-to-savepoint too, no payload), v2 fires once per real disk write
+// with the saved buffer's id. Emission sites pass a gate so each cohort only hears its own semantics.
+struct NibSub { NibEventKind kind; NibEventFn fn; void* user; bool v2; };
 static std::vector<NibSub> g_nibSubs;
-static void nibSubscribe(NibHost*, NibEventKind kind, NibEventFn fn, void* u) { g_nibSubs.push_back({ kind, fn, u }); }
-static void nibFireEvent(const NibEvent& ev)   // called by the editor handlers below
-{ for (const auto& s : g_nibSubs) if (s.kind == ev.kind && s.fn) s.fn(reinterpret_cast<NibHost*>(g_view), &ev, s.user); }
+static void nibSubscribe(NibHost*, NibEventKind kind, NibEventFn fn, void* u)   { g_nibSubs.push_back({ kind, fn, u, false }); }
+static void nibSubscribeV2(NibHost*, NibEventKind kind, NibEventFn fn, void* u) { g_nibSubs.push_back({ kind, fn, u, true  }); }
+enum NibFireGate { NIB_FIRE_ALL, NIB_FIRE_V1_ONLY, NIB_FIRE_V2_ONLY };
+static void nibFireEvent(const NibEvent& ev, NibFireGate gate = NIB_FIRE_ALL)   // called by the editor handlers below
+{
+    for (const auto& s : g_nibSubs)
+        if (s.kind == ev.kind && s.fn && (gate == NIB_FIRE_ALL || (gate == NIB_FIRE_V2_ONLY) == s.v2))
+            s.fn(reinterpret_cast<NibHost*>(g_view), &ev, s.user);
+}
+// Fire a document-scoped event (id = the EditorPage*). The one shape every document event shares.
+static void nibFireDocEvent(NibEventKind kind, void* page, NibFireGate gate = NIB_FIRE_ALL)
+{
+    NibEvent ev{}; ev.kind = kind; ev.struct_size = sizeof(NibEvent);
+    ev.as.document.id = reinterpret_cast<intptr_t>(page);
+    nibFireEvent(ev, gate);
+}
 // nib.panels/1 - the frame installs these (they need m_aui + the frame as parent), matching g_coreSciCall.
 static std::function<void*(const char*, const char*, int)> g_nibCreatePanel;
 static std::function<void(void*, const char*, bool)>        g_nibPanelText;   // (panel, utf8, append?)
@@ -1763,6 +1779,76 @@ static intptr_t nibSciCall(NibHost*, int view, unsigned msg, uintptr_t w, intptr
 { return coreSciCall(view, msg, w, l); }
 static const NibSciApi g_nibSciApi = { 1, sizeof(NibSciApi), nibSciCall };
 
+// nib.ui/1 - menu checkmarks + dark-mode probe/palette. The frame installs the three hooks (they need
+// menuBar()/m_dark/m_theme); the C trampolines below stay NUL-guarded like every other nib.* surface.
+static std::function<int(int, bool)>          g_nibUiMenuCheck;
+static std::function<int()>                   g_nibUiIsDark;
+static std::function<int(NibUiDarkColors*)>   g_nibUiDarkColors;
+static int nibUiMenuCheck(NibHost*, int id, int on)        { return g_nibUiMenuCheck ? g_nibUiMenuCheck(id, on != 0) : 0; }
+static int nibUiIsDark(NibHost*)                           { return g_nibUiIsDark ? g_nibUiIsDark() : 0; }
+static int nibUiDarkColorsFn(NibHost*, NibUiDarkColors* c) { return (g_nibUiDarkColors && c) ? g_nibUiDarkColors(c) : 0; }
+static const NibUiApi g_nibUiApi = { 1, sizeof(NibUiApi), nibUiMenuCheck, nibUiIsDark, nibUiDarkColorsFn };
+
+// nib.toolbar/1 - plugin toolbar buttons. add_tool copies the RGBA pixels + tooltip immediately (no
+// plugin memory retained); the button's command id dispatches through onCommand exactly like a menu
+// click (wx-event path - never raw WM_COMMAND, see the & 0xFFFF notes there). g_nibToolbarRemoveAll is
+// the teardown the frame installs: unloadNibPlugins()/onCloseWindow run it BEFORE FreeLibrary so no
+// button whose command targets a plugin outlives that plugin's mapped image.
+static std::function<int(int, const NibToolbarIcon*, const char*)> g_nibToolbarAddTool;
+static std::function<void()>                                       g_nibToolbarRemoveAll;
+static int nibToolbarAddTool(NibHost*, int cmdId, const NibToolbarIcon* icon, const char* tip)
+{ return (g_nibToolbarAddTool && icon) ? g_nibToolbarAddTool(cmdId, icon, tip ? tip : "") : 0; }
+static const NibToolbarApi g_nibToolbarApi = { 1, sizeof(NibToolbarApi), nibToolbarAddTool };
+
+// nib.alloc/1 - host-owned dynamic ranges of the shared number spaces. Reserved-number audit (what the
+// grants below are provably disjoint from):
+//   * command ids - frozen kCmd*/IDM_* menu ids 1001..50011 (src/command_ids.h), wx stock ids (< 6000,
+//     incl. wxID_FILE1..9 MRU), myID_TIMER block 60000..60005, UI-language radios 60100..60109,
+//     Open-Containing-Folder tools 60300+, doc-list dropdown 61000..61999, saved macros 62100+,
+//     Nib plugin commands NIB_CMD_BASE 63000..63499, Scintillua language menu 63500..63999.
+//     Pool: 64000..64999 - and < 65536 on purpose, so a granted id survives the 16-bit WM_COMMAND
+//     path unwrapped (see MSWWindowProc / onCommand's & 0xFFFF; ids > 32767 arrive sign-wrapped and
+//     are recovered by that mask, exactly like the kCmd* range).
+//   * markers (Scintilla 0..31) - MARK_BOOKMARK = 2 (main.cpp:160), fold chrome SC_MARKNUM_* 25..31
+//     (setupFolding); 21..24 stay clear for Scintilla's change-history markers (SC_MARKNUM_HISTORY_*,
+//     inert under the wx-bundled 5.0 runtime but reserved so grants survive a Scintilla upgrade).
+//     Pool: 3..20 (0 and 1 also stay host-reserved for future chrome).
+//   * indicators - 0..7 belong to lexers (Scintilla's INDICATOR_CONTAINER starts at 8; 8 stays
+//     host-reserved as headroom), MARK_INDIC = 9, SMART_INDIC = 10, URL_INDIC = 11, and the five
+//     "Mark All Ext" styles MARK_STYLE_BASE 21..25 (main.cpp:161-165). Pools: 12..20, then 26..31 -
+//     each grant is contiguous, so a request that doesn't fit the first pool's remainder is served
+//     whole from the next.
+// Grants are process-lifetime and never recycled (a stale number from an unloaded plugin must never
+// be re-granted to another - same reasoning as N++'s allocators).
+static const int NIB_ALLOC_CMD_FIRST = 64000, NIB_ALLOC_CMD_LAST = 64999;
+static int g_nibAllocNextCmd    = NIB_ALLOC_CMD_FIRST;
+static int g_nibAllocNextMarker = 3;                       // marker pool: 3..20
+struct NibAllocSink { NibAllocCommandFn fn; void* user; };
+static std::vector<NibAllocSink> g_nibAllocSinks;          // raw plugin fn pointers - cleared BEFORE FreeLibrary
+static int nibAllocCmdIds(NibHost*, int n, int* first)
+{
+    if (n <= 0 || !first || g_nibAllocNextCmd + n - 1 > NIB_ALLOC_CMD_LAST) return 0;
+    *first = g_nibAllocNextCmd; g_nibAllocNextCmd += n; return 1;
+}
+static int nibAllocMarkers(NibHost*, int n, int* first)
+{
+    if (n <= 0 || !first || g_nibAllocNextMarker + n - 1 > 20) return 0;
+    *first = g_nibAllocNextMarker; g_nibAllocNextMarker += n; return 1;
+}
+static int nibAllocIndicators(NibHost*, int n, int* first)
+{
+    static int next[2] = { 12, 26 };                       // indicator pools: 12..20, 26..31
+    static const int hi[2] = { 20, 31 };
+    if (n <= 0 || !first) return 0;
+    for (int p = 0; p < 2; ++p)
+        if (next[p] + n - 1 <= hi[p]) { *first = next[p]; next[p] += n; return 1; }
+    return 0;
+}
+static void nibAllocOnCommand(NibHost*, NibAllocCommandFn fn, void* u)
+{ if (fn) g_nibAllocSinks.push_back({ fn, u }); }
+static const NibAllocApi g_nibAllocApi = { 1, sizeof(NibAllocApi),
+    nibAllocCmdIds, nibAllocMarkers, nibAllocIndicators, nibAllocOnCommand };
+
 // nib.host/1
 static const char* nibHostName(NibHost*) { return "wxNote"; }
 static uint32_t     nibHostAbi(NibHost*) { return NIB_ABI_VERSION; }
@@ -1770,7 +1856,8 @@ static uint32_t     nibHostAbi(NibHost*) { return NIB_ABI_VERSION; }
 static const NibHostApi     g_nibHostApi     = { 1, sizeof(NibHostApi),     nibHostName, nibHostAbi };
 static const NibEditorApi   g_nibEditorApi   = { 1, sizeof(NibEditorApi),   nibEdLength, nibEdInsert, nibEdReplSel, nibEdSelStart, nibEdSelEnd, nibEdGetText };
 static const NibCommandsApi g_nibCommandsApi = { 2, sizeof(NibCommandsApi), nibCmdRegister, nibInvokeCommand };
-static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibSubscribe };
+static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibSubscribe };     // v1: savepoint-derived DOCUMENT_SAVED
+static const NibEventsApi   g_nibEventsApiV2 = { 2, sizeof(NibEventsApi),   nibSubscribeV2 };   // v2: id-carrying SAVING/SAVED/BEFORE_OPEN
 static const NibPanelsApi   g_nibPanelsApi   = { 1, sizeof(NibPanelsApi),   nibPanelRegister, nibPanelSetText, nibPanelAppend, nibPanelShow };
 static const NibDocumentsApi g_nibDocumentsApi = { 4, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen, nibDocSave, nibDocActiveId, nibDocPathFromId, nibDocActiveView, nibDocPathAt };
 
@@ -1781,12 +1868,20 @@ static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_EDITOR)   == 0) return &g_nibEditorApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_DOCUMENTS)== 0) return &g_nibDocumentsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_COMMANDS) == 0) return &g_nibCommandsApi;
-    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_EVENTS)   == 0) return &g_nibEventsApi;
+    if (std::strcmp(iface, NIB_IFACE_EVENTS) == 0)   // version-gated: which table a plugin gets decides
+    {                                                // its DOCUMENT_SAVED semantics (see nib.h)
+        if (minv <= 1) return &g_nibEventsApi;
+        if (minv == 2) return &g_nibEventsApiV2;
+        return nullptr;
+    }
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PANELS)   == 0) return &g_nibPanelsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_LANGDEF)  == 0) return &g_nibLangDefApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_KEYMAP)   == 0) return &g_nibKeymapApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PATHS)    == 0) return &g_nibPathsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_SCI)      == 0) return &g_nibSciApi;   // portable: every OS
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_UI)       == 0) return &g_nibUiApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_TOOLBAR)  == 0) return &g_nibToolbarApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_ALLOC)    == 0) return &g_nibAllocApi;
 #ifdef __WXMSW__
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_WIN32)    == 0) return &g_nibWin32Api;
 #endif
@@ -1850,6 +1945,11 @@ static void unloadNibPlugins()
     // down after this call returns, and nibFireEvent() would otherwise call straight into unmapped memory.
     g_nibSubs.clear();
     g_nibCommands.clear();
+    g_nibAllocSinks.clear();   // nib.alloc command sinks: raw plugin fn pointers, same hazard class as g_nibSubs
+    // Remove any plugin toolbar buttons BEFORE FreeLibrary, so no button whose command id targets a
+    // plugin outlives that plugin's mapped image. At app shutdown this hook is already run (and nulled)
+    // by onCloseWindow while the toolbar widget still exists - this call covers any non-shutdown unload.
+    if (g_nibToolbarRemoveAll) { g_nibToolbarRemoveAll(); g_nibToolbarRemoveAll = nullptr; }
     // Free any still-pending nib.keymap builders (a plugin that began a scheme but never committed/discarded
     // it - e.g. it aborted on a parse error, or is being unloaded mid-import). Unlike g_nibSubs/g_nibCommands
     // above these hold NO plugin-side pointers (only copied strings), so this is a leak-guard, not a UAF fix -
@@ -2393,6 +2493,82 @@ public:
             }
         };
 #endif
+        // nib.ui/1: menu checkmarks + dark-mode probe/palette. Installed before loadNibPlugins() so a
+        // plugin's activate() can already query them.
+        g_nibUiMenuCheck = [this](int id, bool on) -> int {
+            wxMenuBar* mb = menuBar(); if (!mb) return 0;
+            // Ids can arrive sign-wrapped through the 16-bit WM_COMMAND path (kCmd* > 32767); recover
+            // with the same & 0xFFFF mask onCommand uses. Every real menu id is < 65536.
+            wxMenuItem* it = mb->FindItem(id & 0xFFFF);
+            if (!it || !it->IsCheckable()) return 0;
+            it->Check(on);
+            return 1;
+        };
+        g_nibUiIsDark = [this]() -> int { return m_dark ? 1 : 0; };
+        g_nibUiDarkColors = [this](NibUiDarkColors* c) -> int {
+            if (!c || c->struct_size < sizeof(NibUiDarkColors)) return 0;
+            // Scintilla-style 0xBBGGRR (theme XML ints) -> the portable 0xRRGGBB the ABI speaks.
+            auto bgrToRgb = [](int bgr, uint32_t fallback) -> uint32_t {
+                if (bgr < 0) return fallback;
+                return ((static_cast<uint32_t>(bgr) & 0xFF) << 16) | (static_cast<uint32_t>(bgr) & 0xFF00)
+                     | ((static_cast<uint32_t>(bgr) >> 16) & 0xFF);
+            };
+            // The dark palette is the host's fixed dark chrome set (chrome darkness is per-process, so
+            // these are the exact colours applyTheme/buildStatusBar paint); pure_background follows the
+            // ACTIVE editor theme's default background when this process runs dark, so plugin surfaces
+            // sit on the same canvas colour as the editor.
+            int themeBg = -1;
+            if (m_dark && m_theme.loaded)
+            { auto it = m_theme.global.find("Default Style"); if (it != m_theme.global.end()) themeBg = it->second.second; }
+            c->version           = 1;
+            c->background        = 0x202020;   // chrome bars (32,32,32) - applyTheme's chromeBg
+            c->softer_background = 0x2D2D2D;   // raised rows/gutter (45,45,45) - incremental-search bar
+            c->hot_background    = 0x3F3F46;   // hover fill (63,63,70) - menu/tab hover
+            c->pure_background   = bgrToRgb(themeBg, 0x1E1E1E);   // editor default bg (30,30,30 fallback)
+            c->error_background  = 0xB00000;
+            c->text              = 0xDCDCDC;   // primary text (220,220,220) - chromeFg
+            c->darker_text       = 0xC0C0C0;
+            c->disabled_text     = 0x808080;
+            c->link_text         = 0x4DA6FF;   // a lighter shade of the URL indicator's link blue
+            c->edge              = 0x646464;
+            c->hot_edge          = 0x9B9B9B;
+            c->disabled_edge     = 0x484848;
+            return 1;
+        };
+        // nib.toolbar/1: plugin toolbar buttons. The pixels/tooltip are copied HERE (nothing plugin-
+        // owned is retained); the button dispatches its command id through the frame's normal command
+        // path - on MSW that is MSWWindowProc's WM_COMMAND redispatch into onCommand (unsigned 16-bit
+        // recovery), elsewhere the wxEVT_TOOL/wxEVT_MENU bindings - never a raw window message.
+        g_nibToolbarAddTool = [this](int cmdId, const NibToolbarIcon* ic, const char* tip) -> int {
+            wxToolBar* tb = toolBar();
+            if (!tb || !ic || ic->struct_size < sizeof(NibToolbarIcon) || !ic->rgba) return 0;
+            const int w = static_cast<int>(ic->width), h = static_cast<int>(ic->height);
+            if (w <= 0 || h <= 0 || w > 256 || h > 256) return 0;   // sanity: toolbar icons, not photographs
+            const int id = cmdId & 0xFFFF;                          // same unsigned-16-bit space onCommand matches on
+            if (tb->FindById(id)) return 0;                         // one button per command id
+            wxImage img(w, h);
+            img.InitAlpha();
+            const unsigned char* px = ic->rgba;
+            for (int y = 0; y < h; ++y)
+                for (int x = 0; x < w; ++x, px += 4)
+                { img.SetRGB(x, y, px[0], px[1], px[2]); img.SetAlpha(x, y, px[3]); }
+            const int isz = m_toolbarIconSize;
+            if (w != isz || h != isz) img.Rescale(isz, isz, wxIMAGE_QUALITY_HIGH);   // host icon size wins
+            const wxBitmapBundle bmp = wxBitmapBundle::FromBitmap(wxBitmap(img));
+            const wxString tipStr = wxString::FromUTF8(tip ? tip : "");
+            tb->AddTool(id, tipStr, bmp, iconDisabled(bmp, isz), wxITEM_NORMAL, tipStr);
+            tb->Realize();
+            m_nibToolIds.push_back(id);
+            return 1;
+        };
+        g_nibToolbarRemoveAll = [this]() {
+            if (wxToolBar* tb = toolBar())
+            {
+                for (int id : m_nibToolIds) tb->DeleteTool(id);
+                if (!m_nibToolIds.empty()) tb->Realize();
+            }
+            m_nibToolIds.clear();
+        };
         if (!g_safeMode)    // --safe: load nothing from <exe>/nib - our own Nib plugins AND the GPL npp-bridge
             loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
         if (!g_nibCommands.empty())   // surface registered Nib commands in the Plugins menu
@@ -2772,7 +2948,10 @@ private:
         v.stc->Bind(wxEVT_STC_MODIFIED,         &WxnShellFrameT::onStcModified,    this);
         v.stc->Bind(wxEVT_STC_MACRORECORD,      &WxnShellFrameT::onMacroRecord,    this);   // capture commands while recording a macro
         v.stc->Bind(wxEVT_STC_STYLENEEDED,      &WxnShellFrameT::onStcStyleNeeded, this);   // container-lexed Scintillua-language buffers only
-        v.stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev); e.Skip(); });
+        // v1 nib.events semantics only: savepoint == "saved" (which also fires on undo/redo landing back
+        // on the saved state, and during Save All reports no id at all). v2 subscribers instead get the
+        // real, id-carrying NIB_EV_DOCUMENT_SAVED from writeFile/writePageToDisk - one per disk write.
+        v.stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev, NIB_FIRE_V1_ONLY); e.Skip(); });
         v.stc->Bind(wxEVT_CONTEXT_MENU,         &WxnShellFrameT::onStcContextMenu, this);
         v.stc->Bind(wxEVT_SET_FOCUS, [this, vp = &v](wxFocusEvent& e) { onViewFocus(vp); e.Skip(); });   // focus -> this view becomes active
     }
@@ -4180,15 +4359,21 @@ private:
         page->path = path; page->title = title;
         m_tabs->AddPage(page, title, true);    // selecting it fires PAGE_CHANGED -> activateBuffer
         activateBuffer(page);                  // ensure it (the first AddPage may not fire PAGE_CHANGED); idempotent
-        if (!path.empty()) { loadFile(path); addToMRU(path); } else { sci(SCI_SETSAVEPOINT); setLexerForFile(""); }
+        if (!path.empty())
+        {
+            // Notify subscribers (nib.events v2 -> the N++ bridge's NPPN_FILEBEFOREOPEN) that this file
+            // document exists but its content is about to load. Fired AFTER AddPage on purpose: the page
+            // is already enumerable, so the id and its path resolve through nib.documents from inside the
+            // callback (the ordering-guarantee sibling of DOCUMENT_CLOSED). Real files only, like OPENED.
+            nibFireDocEvent(NIB_EV_DOCUMENT_BEFORE_OPEN, page);
+            loadFile(path); addToMRU(path);
+        }
+        else { sci(SCI_SETSAVEPOINT); setLexerForFile(""); }
         setWindowTitle(title);
         updateStatus();
         // Notify subscribers (e.g. the N++ bridge -> NPPN_FILEOPENED) that a file document just opened.
         // Only for real files, not new empty tabs - matching Notepad++'s NPPN_FILEOPENED semantics.
-        if (!path.empty()) {
-            NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_OPENED; ev.struct_size = sizeof(NibEvent);
-            ev.as.document.id = reinterpret_cast<intptr_t>(page); nibFireEvent(ev);
-        }
+        if (!path.empty()) nibFireDocEvent(NIB_EV_DOCUMENT_OPENED, page);
         return page;
     }
 
@@ -4735,14 +4920,23 @@ private:
         auto* p = static_cast<EditorPage*>(m_tabs->GetPage(e.GetSelection()));
         if (!confirmClose(p)) { e.Veto(); return; }
         recordClosed(p);                                                                     // remember it for Restore Recent Closed File
-        if (totalDocs() <= 1) { e.Veto(); resetActiveDoc(); return; }                        // never zero documents
+        if (totalDocs() <= 1)
+        {   // Never zero documents: the last page is recycled into a fresh untitled buffer instead of
+            // being deleted. For plugins that recycle IS a close (real N++ fires NPPN_FILEBEFORECLOSE/
+            // NPPN_FILECLOSED here too, then re-uses the tab for "new 1"), so the pair still fires -
+            // BEFORE resetActiveDoc(), while the page's path/id are still resolvable (see nib.h).
+            e.Veto();
+            nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);
+            resetActiveDoc();
+            return;
+        }
         // Remove the page ourselves (after this event) so the collapse check sees the real count - wxAui's
         // own removal races a CallAfter, which would leave an empty pane behind.
         e.Veto();
-        // Notify subscribers (e.g. the N++ bridge -> NPPN_FILECLOSED) BEFORE the page is destroyed, so a
-        // plugin can still resolve its path/buffer id from `p` (deletion is deferred to the CallAfter).
-        { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_CLOSED; ev.struct_size = sizeof(NibEvent);
-          ev.as.document.id = reinterpret_cast<intptr_t>(p); nibFireEvent(ev); }
+        // Notify subscribers (e.g. the N++ bridge -> NPPN_FILEBEFORECLOSE + NPPN_FILECLOSED) BEFORE the
+        // page is destroyed, so a plugin can still resolve its path/buffer id from `p` (deletion is
+        // deferred to the CallAfter). Every close path fires this with the same guarantee - see nib.h.
+        nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);
         this->CallAfter([this, p]{
             if (ViewPane* v = viewOf(p)) {
                 const int i = v->tabs->GetPageIndex(p);
@@ -4758,7 +4952,14 @@ private:
     {
         if (!confirmClose(activePage())) return;
         recordClosed(activePage());                                                          // remember it for Restore Recent Closed File
-        if (totalDocs() <= 1) { resetActiveDoc(); return; }                                  // last document - keep one empty
+        if (totalDocs() <= 1)
+        {   // Last document - keep one empty (the buffer-recycle path; see onPageClose): still a
+            // close for plugins, so fire the event before the recycle wipes path/title.
+            nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, activePage());
+            resetActiveDoc();
+            return;
+        }
+        nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, activePage());   // before teardown: path/id still resolvable (see nib.h)
         detachViewEditor(m_active, activePage());   // lift the editor off the page before deleting it
         m_tabs->DeletePage(m_tabs->GetSelection());
         collapseIfEmpty();
@@ -4768,6 +4969,7 @@ private:
         for (EditorPage* p : allPages())
             if (!confirmClose(p)) return;                  // prompt across BOTH views; cancel aborts
         for (EditorPage* p : allPages()) recordClosed(p);  // all become restorable via Ctrl+Shift+T
+        for (EditorPage* p : allPages()) nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);   // before any teardown: path/id still resolvable
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
             if (nb)
             {
@@ -4802,6 +5004,7 @@ private:
         for (EditorPage* p : allPages())
             if (p != keep && !confirmClose(p)) return;     // prompt across BOTH views; cancel aborts
         for (EditorPage* p : allPages()) if (p != keep) recordClosed(p);
+        for (EditorPage* p : allPages()) if (p != keep) nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);   // before teardown
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
             if (nb)
             {
@@ -4826,6 +5029,9 @@ private:
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
             if (nb) for (int i = 0; i < (int)nb->GetPageCount(); ++i)
                 if (unpinned(nb, i)) recordClosed(static_cast<EditorPage*>(nb->GetPage(i)));
+        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })   // before teardown: path/id still resolvable
+            if (nb) for (int i = 0; i < (int)nb->GetPageCount(); ++i)
+                if (unpinned(nb, i)) nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, nb->GetPage(i));
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
             if (nb)
             {
@@ -4867,6 +5073,25 @@ private:
         // this is what showed up as npp_bridge.dll_unloaded crashes on exit). Running the unload from
         // CallAfter guarantees it happens after the whole WM_CLOSE/WM_DESTROY chain has fully unwound back
         // to the event loop, by which point the subclass is already gone and the window already destroyed.
+        // Remove plugin toolbar buttons NOW, while the toolbar widget still exists, and null both hooks:
+        // unloadNibPlugins() runs from the CallAfter below - after e.Skip() has already destroyed this
+        // frame and its toolbar - so running the removal from there (or serving a late add_tool from a
+        // plugin's deferred deactivate) would touch a dead widget. This keeps the contract (buttons gone
+        // before FreeLibrary) without moving the deferred unload itself.
+        if (g_nibToolbarRemoveAll) { g_nibToolbarRemoveAll(); g_nibToolbarRemoveAll = nullptr; }
+        g_nibToolbarAddTool = nullptr;
+        // Same teardown discipline for the other frame-capturing hooks a plugin can still reach from
+        // its NPPN_SHUTDOWN handler: that notification is delivered from the CallAfter-deferred
+        // unloadNibPlugins() below - AFTER e.Skip() has already destroyed this frame - so a plugin
+        // sending NPPM_SETMENUITEMCHECK / NPPM_ISDARKMODEENABLED / NPPM_GETDARKMODECOLORS (nib.ui) or
+        // NPPM_SETCURRENTLANGTYPE / NPPM_RELOADFILE / NPPM_MENUCOMMAND (invoke_command) at shutdown
+        // would otherwise call straight into the destroyed frame / native menu. Null them here, like
+        // the toolbar hooks above: every C trampoline is NUL-guarded, so a late call degrades to the
+        // documented "capability unavailable" 0 return instead of a use-after-free.
+        g_nibUiMenuCheck   = nullptr;
+        g_nibUiIsDark      = nullptr;
+        g_nibUiDarkColors  = nullptr;
+        g_nibInvokeCommand = nullptr;
         CallAfter([this] { unloadNibPlugins(); });
         e.Skip();
     }
@@ -5601,9 +5826,10 @@ private:
 
     // ----- toolbar (default icon set, fixed button order) -------------------
     // Colored icon sets (Settings > Preferences > General > Toolbar icon style): Solar (Bold Duotone,
-    // CC BY 4.0) tinted Open Color green, and IconPark (Apache-2.0) tinted Open Color teal-7/lime-5 -
-    // see resources/icons-solar|iconpark/CREDITS.md. Unlike the default set these bake a FIXED colour in
-    // at generation time rather than a currentColor token. Both packs also need a small THEME-specific
+    // CC BY 4.0) tinted Open Color green, IconPark (Apache-2.0) tinted Open Color teal-7/lime-5, and
+    // Streamline (Core flat, CC BY 4.0) tinted Open Color green-4/teal-8 - see
+    // resources/icons-solar|iconpark|streamline/CREDITS.md. Unlike the default set these bake a FIXED
+    // colour in at generation time rather than a currentColor token. The packs also need a small THEME-specific
     // runtime retint (below): the single baked colour that reads best on dark chrome isn't always the one
     // that reads best on light chrome (or vice versa), so `iconColored()` does a cheap string substitution
     // on top of the baked file rather than shipping four colour variants per pack.
@@ -5652,15 +5878,34 @@ private:
                 return wxBitmapBundle::FromSVG(u.data(), wxSize(px, px));
             }
         }
+        if (packDir == "icons-streamline" && m_dark)
+        {
+            // Streamline's flat two-paint pair is baked for LIGHT chrome (green-4 fill + teal-8
+            // detail, both matching the stock blues' weight - see the pack's CREDITS.md). On dark
+            // chrome teal-8 has too little luminance contrast (the same "enabled reads as disabled"
+            // failure the IconPark strokes had), so lighten BOTH paints a la Solar: the detail paint
+            // to teal-4 and the fill to green-3, which keeps the fill/detail separation while the
+            // whole glyph pops against dark chrome. The bare-hex replace covers fills and the couple
+            // of stroked prompt glyphs (terminal) alike; the save-macro badge's #fff stays.
+            wxFile f(path); wxString svg;
+            if (f.IsOpened() && f.ReadAll(&svg))
+            {
+                svg.Replace("#099268", "#38d9a9");   // Open Color teal-8  -> teal-4
+                svg.Replace("#69db7c", "#8ce99a");   // Open Color green-4 -> green-3
+                const wxScopedCharBuffer u = svg.utf8_str();
+                return wxBitmapBundle::FromSVG(u.data(), wxSize(px, px));
+            }
+        }
         return wxBitmapBundle::FromSVGFile(path, wxSize(px, px));
     }
     // px is the raster/default bundle size - the toolbar passes m_toolbarIconSize (configurable, restart-to-
     // apply); other callers (Function List tree, file-browser icon table) keep the fixed 16 default.
     wxBitmapBundle icon(const wxString& name, int px = 16)
     {
-        // m_iconStyle: 0 = line icons (default), 1 = Solar (green), 2 = IconPark (teal/lime)
+        // m_iconStyle: 0 = line icons (default), 1 = Solar (green), 2 = IconPark (teal/lime), 3 = Streamline (green/teal)
         if (m_iconStyle == 1) { wxBitmapBundle c = iconColored(name, "icons-solar", px); if (c.IsOk()) return c; }
-        else if (m_iconStyle >= 2) { wxBitmapBundle c = iconColored(name, "icons-iconpark", px); if (c.IsOk()) return c; }   // >= 2: also catches a stale ToolbarIconStyle=3 ("Bold", removed - looked identical to this in dark mode) from an older config
+        else if (m_iconStyle == 2) { wxBitmapBundle c = iconColored(name, "icons-iconpark", px); if (c.IsOk()) return c; }
+        else if (m_iconStyle >= 3) { wxBitmapBundle c = iconColored(name, "icons-streamline", px); if (c.IsOk()) return c; }   // 3 also absorbs a stale ToolbarIconStyle=3 ("IconPark Bold", removed) from an older config - it lands on a colored pack either way (loadSettings clamps anything past 3)
         static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "icons" + wxFILE_SEP_PATH;
         // Permissive toolbar icons (Tabler x Open Color, MIT) - monochrome by default, with a meaning-accent
         // on 8 of the 32 (gold New "+", blue Save/Save-All, red Record/Stop, green Playback/-multiple). Neutral
@@ -6482,18 +6727,28 @@ private:
     }
     bool writeFile(const wxString& path)
     {
-        if (!writeMountedDoc(activePage(), path)) return false;
-        sci(SCI_SETSAVEPOINT);
-        if (auto* p = activePage()) { p->path = path; clearRecovery(p); }   // content is safely on disk now - no recovery copy needed
-        m_path = path; setDocTitle(wxFileNameFromPath(path)); setLexerForFile(path); addToMRU(path); return true;
+        EditorPage* p = activePage();
+        // nib.events v2: about to write this buffer (fires whether or not the write then succeeds -
+        // NPPN_FILEBEFORESAVE semantics in the bridge). The buffer is mounted, so a subscriber's edits
+        // (trim-on-save style) land in exactly the content that is written below.
+        nibFireDocEvent(NIB_EV_DOCUMENT_SAVING, p);
+        if (!writeMountedDoc(p, path)) return false;
+        sci(SCI_SETSAVEPOINT);                        // fires the v1 savepoint-derived DOCUMENT_SAVED
+        if (p) { p->path = path; clearRecovery(p); }   // content is safely on disk now - no recovery copy needed
+        m_path = path; setDocTitle(wxFileNameFromPath(path)); setLexerForFile(path); addToMRU(path);
+        nibFireDocEvent(NIB_EV_DOCUMENT_SAVED, p, NIB_FIRE_V2_ONLY);   // v2: the REAL save signal, with the saved buffer's id
+        return true;
     }
     // Save a BACKGROUND buffer (its document must already be swapped into the shared editor by onSaveAll).
     // Unlike writeFile it touches none of the active-view chrome (window title, MRU, lexer, m_path) - only
     // this page's own on-disk copy plus its dirty/recovery bookkeeping.
     bool writePageToDisk(EditorPage* p)
     {
-        if (!p || p->path.empty() || !writeMountedDoc(p, p->path)) return false;
+        if (!p || p->path.empty()) return false;
+        nibFireDocEvent(NIB_EV_DOCUMENT_SAVING, p);   // v2 - carries THIS page's id, not the active one's
+        if (!writeMountedDoc(p, p->path)) return false;
         sci(SCI_SETSAVEPOINT); clearRecovery(p); p->dirty = false;
+        nibFireDocEvent(NIB_EV_DOCUMENT_SAVED, p, NIB_FIRE_V2_ONLY);   // v2: right id even for a background Save All write
         return true;
     }
     void onSave() { if (m_path.empty()) onSaveAs(); else writeFile(m_path); }
@@ -6914,13 +7169,22 @@ private:
     {
         const int cur = m_tabs->GetSelection();
         for (int i = (int)m_tabs->GetPageCount() - 1; i >= 0; --i)
-            if ((toRight && i > cur) || (!toRight && i < cur)) m_tabs->DeletePage(i);
+            if ((toRight && i > cur) || (!toRight && i < cur))
+            {
+                nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, m_tabs->GetPage(i));   // before teardown: path/id still resolvable
+                m_tabs->DeletePage(i);
+            }
     }
     void closeAllUnchanged()
     {
         auto* keep = activePage();
         for (int i = (int)m_tabs->GetPageCount() - 1; i >= 0; --i)
-        { auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i)); if (p != keep && !p->dirty) m_tabs->DeletePage(i); }
+        {
+            auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i));
+            if (p == keep || p->dirty) continue;
+            nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);   // before teardown: path/id still resolvable
+            m_tabs->DeletePage(i);
+        }
     }
 
     // ---- read-only ----
@@ -7876,7 +8140,7 @@ private:
         const long gcDefault = m_dark ? 0x3E3A3AL : 0xE8E8E8L;
         long gc = gcDefault; c->Read("Editing/GutterColourValue", &gc, gcDefault); m_gutterColorValue = gc;
         long is = 0; c->Read("ToolbarIconStyle", &is, 0L);
-        m_iconStyle = (is < 0 || is > 2) ? 2 : (int)is;   // 0 = line icons, 1 = Solar, 2 = IconPark; clamp a stale "3 = Bold" (removed) into IconPark
+        m_iconStyle = (is < 0 || is > 3) ? 2 : (int)is;   // 0 = line icons, 1 = Solar, 2 = IconPark, 3 = Streamline; clamp anything out of range into IconPark so the Preferences combo's SetSelection stays valid (a stale "3 = IconPark Bold" (removed) value now lands on Streamline - still a colored pack)
         long tis = 16; c->Read("ToolbarIconSize", &tis, 16L);
         m_toolbarIconSize = (tis < 12 || tis > 64) ? 16 : (int)tis;   // px; clamp garbage/out-of-range back to the 16 default
         long mr = 10; c->Read("RecentFiles/Max", &mr, 10L); m_maxRecent = (int)mr;
@@ -8029,12 +8293,13 @@ private:
         auto* chUiLang = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, uiNames);
         chUiLang->SetSelection(uiLangIndex(curUi));
         // Toolbar icon style (restart-to-apply, like Localization above): the default line-icon set
-        // (theme-adaptive) vs. two fixed-colour sets, Solar and IconPark (see iconColored()). (A separate
-        // "IconPark Bold" stroke-width variant existed briefly - dropped after feedback that dark mode
-        // made it indistinguishable from this one; icon() still maps any stale saved index >= 2 here.)
+        // (theme-adaptive) vs. three fixed-colour sets, Solar, IconPark and Streamline (see
+        // iconColored()). (A separate "IconPark Bold" stroke-width variant existed briefly - dropped
+        // after feedback that dark mode made it indistinguishable from IconPark; its old saved index 3
+        // now belongs to Streamline.)
         wxArrayString iconStyleNames;
         iconStyleNames.Add(_("Tabler icons (line)")); iconStyleNames.Add(_("Solar icons (green)"));
-        iconStyleNames.Add(_("IconPark icons (teal/lime)"));
+        iconStyleNames.Add(_("IconPark icons (teal/lime)")); iconStyleNames.Add(_("Streamline icons (green/teal)"));
         auto* chIconStyle = new wxChoice(gen, wxID_ANY, wxDefaultPosition, wxDefaultSize, iconStyleNames);
         chIconStyle->SetSelection(m_iconStyle);
         // Toolbar icon size (restart-to-apply, like the icon style above): the icons are SVG, so they stay
@@ -9089,6 +9354,15 @@ private:
             if (nc.fn) nc.fn(reinterpret_cast<NibHost*>(g_view), &nibQuery, nc.user);
             return;
         }
+        if (cmd >= NIB_ALLOC_CMD_FIRST && cmd < g_nibAllocNextCmd)
+        {   // a nib.alloc/1 dynamic command id (toolbar button / invoke_command / plugin menu entry).
+            // Broadcast to every registered sink - each filters on the id, mirroring how N++ relays a
+            // dynamic WM_COMMAND to every plugin. This IS the wx-event dispatch path the alloc contract
+            // promises (`cmd` is already the & 0xFFFF-recovered unsigned id) - never raw WM_COMMAND.
+            for (const NibAllocSink& s : g_nibAllocSinks)
+                if (s.fn) s.fn(reinterpret_cast<NibHost*>(g_view), cmd, s.user);
+            return;
+        }
         if (cmd >= myID_UILANG_FIRST && cmd < myID_UILANG_FIRST + (int)WXSIZEOF(UI_LANG_IDS))   // Localization menu: switch the UI language (restart-to-apply)
         {
             const long newUi = UI_LANG_IDS[cmd - myID_UILANG_FIRST];
@@ -9725,13 +9999,14 @@ private:
     wxWindowGripper* m_gripper = nullptr;         // lib helper for cross-platform window move (drag the bar)
 #endif
     wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()
+    std::vector<int> m_nibToolIds;               // plugin toolbar buttons (nib.toolbar/1) - torn down before plugin unload
     wxPanel*    m_toolBarHost = nullptr;          // macOS: host panel for the docked non-native child toolbar (see buildToolBar)
 #ifdef __WXMAC__
     wxSizerItem* m_macInsetItem = nullptr;        // integrated bar: leading spacer reserving the traffic-light cluster's width
     int          m_macToolbarRowH = 0;            // integrated bar: toolbar row height = the re-centred traffic lights' band height
 #endif
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
-    int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Solar, 2 = IconPark (restart-to-apply)
+    int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Solar, 2 = IconPark, 3 = Streamline (restart-to-apply)
     int         m_toolbarIconSize = 16;          // toolbar icon size in px (16/20/24/32, default 16; restart-to-apply)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
@@ -10244,6 +10519,38 @@ public:
         // race destroyed wx logging state. See term_backend.cpp's g_sweepThreads.
         TermBackend::joinKillSweeps();
         return wxApp::OnExit();
+    }
+
+    // wxWidgets compiles its assertions into RELEASE builds too: wxDEBUG_LEVEL defaults to 1
+    // regardless of NDEBUG (see wx/debug.h) and our CMake leaves wxBUILD_DEBUG_LEVEL at "Default",
+    // so it is never overridden. That means wxMenuItemBase's ctor runs, live on users' machines,
+    //     menucmn.cpp:257  wxASSERT_MSG((itemid >= 0 && itemid < SHRT_MAX) || wxID_AUTO range,
+    //                                   "invalid itemid value")
+    // and - because the default handler ends in wxAppTraitsBase::ShowAssertDialog/DoShowAssertDialog -
+    // pops a modal "wxWidgets Debug Alert" MessageBox (plus an OutputDebugString line) EVERY time we
+    // append a menu item whose id is >= 32767 (SHRT_MAX). wxNote does that deliberately: these are
+    // frozen, ABI-compatibility command ranges that intentionally live above 32767 -
+    //     doc-list dropdown   myID_DOCLIST_ITEM   61000+   (core: fires when the tab list is opened)
+    //     saved macros        myID_MACRO_ITEM     62100+
+    //     Nib plugin cmds     NIB_CMD_BASE        63000+   (appended at startup if a plugin registers)
+    //     Scintillua langs    kSciLangMenuBase    63500+   (appended at startup, e.g. via udl-compat)
+    //     nib.alloc pool      NIB_ALLOC_CMD_FIRST 64000+
+    // The concern the assert actually guards against - MSW truncating ids to 16 bits in WM_COMMAND -
+    // is already handled elsewhere: onCommand recovers the real id with `& 0xFFFF`, and native
+    // menu/toolbar clicks are redispatched through MSWWindowProc (see the "npp-ids-break-wx-wm-command"
+    // design note). The ids must NOT be renumbered (they are frozen for plugin ABI compatibility), and
+    // wx offers no sanctioned way to register an out-of-16-bit-range id on a menu item, so we silence
+    // exactly THIS one assertion and defer every other wx assertion to the base handler unchanged -
+    // in both debug and release - keeping the genuine safety net (and its dialog) fully intact.
+    //
+    // "invalid itemid value" is used at exactly one site in the whole wxWidgets tree (menucmn.cpp),
+    // so matching on the message is precise: it can only ever be our deliberate high menu ids.
+    void OnAssertFailure(const wxChar* file, int line, const wxChar* func,
+                         const wxChar* cond, const wxChar* msg) override
+    {
+        if (msg && wxString(msg) == wxS("invalid itemid value"))
+            return;   // deliberate frozen command id above SHRT_MAX - not a bug; swallow the false positive
+        wxApp::OnAssertFailure(file, line, func, cond, msg);
     }
 
 private:

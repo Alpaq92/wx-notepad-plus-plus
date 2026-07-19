@@ -1,8 +1,8 @@
 # Default toolbar icon set — attribution
 
 This is the default line-icon toolbar set (Settings > Preferences > General > Toolbar
-icon style), alongside the two "Colored icons" options in `resources/icons-solar/` and
-`resources/icons-iconpark/`.
+icon style), alongside the three "Colored icons" options in `resources/icons-solar/`,
+`resources/icons-iconpark/` and `resources/icons-streamline/`.
 
 **"Notepad++ Toolbar Icons (Tabler x Open Color)"** — a derivative work of two
 MIT-licensed projects, released under the MIT License:

@@ -138,13 +138,18 @@ No code was taken from any of these; each contributed ideas, structure, or
   toolbar icon set.
 - **[Open Color](https://yeun.github.io/open-color/)** (Heeyeun Jeong, MIT) —
   the project's entire color language, including the wxNote brand green and
-  the recoloring targets for both alternative icon sets.
+  the recoloring targets for all three alternative icon sets.
 - **[Solar Icons](https://icon-sets.iconify.design/solar/)** (480 Design,
   CC BY 4.0) — the "Solar (green)" toolbar option, recolored to Open Color
   green-8/green-3; obtained via [Iconify](https://iconify.design/).
 - **[IconPark](https://github.com/bytedance/IconPark)** (ByteDance,
   Apache-2.0) — the "IconPark (teal/lime)" toolbar option, recolored to Open
   Color teal-7/lime-5; also via Iconify.
+- **Free icons from [Streamline](https://streamlinehq.com)** (Core flat set,
+  CC BY 4.0) — the "Streamline (green/teal)" toolbar option, recolored to Open
+  Color green-4/teal-8; obtained from the first-party
+  [streamline-vectors](https://github.com/webalys-hq/streamline-vectors) repo
+  at a pinned commit.
 
 Full modification records: `resources/icons*/CREDITS.md`.
 

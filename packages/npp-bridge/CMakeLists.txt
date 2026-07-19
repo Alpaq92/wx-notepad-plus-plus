@@ -52,13 +52,11 @@ if(MSVC)
     target_compile_options(npp_shim PRIVATE /EHsc /utf-8)
 endif()
 
-# ---- CI compile-only proof: a recompiled-plugin template linked against libnpp_shim -----------------
-# The example builds a real N++-shaped plugin .so/.dylib using ONLY NPPM_*/SCI_* via ::SendMessage, and
-# links libnpp_shim -> a link-only proof of the six-symbol entry contract + the shim's SendMessage seam.
-# Built off-Windows always (a tiny target; on Windows the plugin uses the OS ::SendMessage and the real
-# packages/test_plugin already exercises the loader). It is what actually compiles npp_shim.cpp +
-# example_plugin.cpp, so the top-level CMakeLists makes wxnote DEPEND on npp_example_plugin off-Windows -
-# otherwise CI's `cmake --build --target wxnote` would never reach this path and it would go unverified.
-if(NOT WIN32)
-    add_subdirectory(example)
-endif()
+# ---- the example/PROBE plugin -----------------------------------------------------------------------
+# One source (example/example_plugin.cpp), two per-OS roles - see example/CMakeLists.txt:
+#   * off-Windows: the CI compile+link proof of the six-symbol contract + libnpp_shim SendMessage seam
+#     (npp_example_plugin), unchanged from Phase 1;
+#   * on Windows: a real loadable probe DLL (npp_probe_plugin -> bin/plugins/WxnProbe/WxnProbe.dll)
+#     that logs every bridge notification + its toolbar/allocator registrations for
+#     tests/bridge_selftest.cpp.
+add_subdirectory(example)

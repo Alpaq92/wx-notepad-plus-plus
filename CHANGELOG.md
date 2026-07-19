@@ -3,6 +3,37 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.6] - 2026-07-19
+
+### Added
+- **Cross-platform Notepad++ plugin support, Phase 1.** The Nib ABI grows additively to 1.1 and the
+  GPL `npp-bridge` now serves roughly 44 of the 118 `NPPM_*` messages plus 10 `NPPN_*` notifications.
+  New in this round: **plugin toolbar icons** (`NPPM_ADDTOOLBARICON_DEPRECATED` / `_FORDARKMODE`
+  through the new portable `nib.toolbar/1` — Windows converts the plugin's native images to RGBA
+  pixels and picks the dark variant under dark chrome; off-Windows the messages are a documented
+  no-op `TRUE`), **before-save/close/open events** (`NPPN_FILEBEFORESAVE` / `NPPN_FILEBEFORECLOSE` /
+  `NPPN_FILEBEFOREOPEN`, plus `NPPN_TBMODIFICATION` on every OS), **id allocators**
+  (`NPPM_ALLOCATECMDID` / `ALLOCATEMARKER` / `ALLOCATEINDICATOR` over the new `nib.alloc/1`:
+  process-lifetime, collision-free ranges whose command ids — including `FuncItem::_cmdID`, now
+  host-granted — dispatch on the wx-event path, immune to the 16-bit `WM_COMMAND` wrap),
+  **dark-mode queries** (`NPPM_ISDARKMODEENABLED`, `NPPM_GETDARKMODECOLORS` and the editor default
+  colours, via the new `nib.ui/1`), **inter-plugin messaging** (`NPPM_MSGTOPLUGIN`), and
+  **save-event fidelity**: `nib.events` v2 reports each real disk write with the *written* buffer's
+  id, so `NPPN_FILESAVED` no longer false-fires on undo-to-savepoint and Save All reports every
+  buffer, not just the active one. Two divergences from real N++ are documented as permanent in
+  `packages/npp-bridge/README.md`: `NPPN_READY` fires before session restore, and `NPPN_SHUTDOWN`
+  is deferred past the frame's own close dispatch.
+
+### Fixed
+- **No more spurious "wxWidgets Debug Alert" pop-ups from high command ids.** wxWidgets keeps its
+  assertions compiled in even for release builds (`wxDEBUG_LEVEL` defaults to 1 regardless of
+  `NDEBUG`), so appending a menu item whose id sits above 32767 — the frozen doc-list, saved-macro,
+  Nib-command, Scintillua-language and `nib.alloc` ranges — tripped `wxMenuItemBase`'s advisory
+  id-range assertion and popped a modal debug dialog on the user's screen. `WxnApp::OnAssertFailure`
+  now swallows exactly that one "invalid itemid value" assertion (the 16-bit `WM_COMMAND` truncation
+  it guards against is already handled on the wx-event path) while letting every other assertion
+  surface unchanged.
+
 ## [0.9.5] - 2026-07-19
 
 ### Added

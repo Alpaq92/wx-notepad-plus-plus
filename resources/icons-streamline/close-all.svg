@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 14" id="Close-All--Streamline-wxNote">
+  <desc>
+    close all (X in a window frame), derived from Streamline Core flat icons: https://streamlinehq.com
+  </desc>
+  <path fill="#69db7c" fill-rule="evenodd" clip-rule="evenodd" d="M1.75058 0.0461426C0.809244 0.0461426 0.0461426 0.809244 0.0461426 1.75058V12.2494c0 0.9413 0.7631014 1.7044 1.7044374 1.7044H12.2494c0.9413 0 1.7044 -0.7631 1.7044 -1.7044V1.75058c0 -0.941336 -0.7631 -1.7044374 -1.7044 -1.7044374H1.75058Z"/>
+  <g transform="translate(3.15 3.15) scale(0.55)">
+    <path fill="#099268" fill-rule="evenodd" clip-rule="evenodd" d="M1.707 0.293A1 1 0 0 0 0.293 1.707L5.586 7 0.293 12.293a1 1 0 1 0 1.414 1.414L7 8.414l5.293 5.293a1 1 0 0 0 1.414 -1.414L8.414 7l5.293 -5.293A1 1 0 0 0 12.293 0.293L7 5.586 1.707 0.293Z"/>
+  </g>
+</svg>

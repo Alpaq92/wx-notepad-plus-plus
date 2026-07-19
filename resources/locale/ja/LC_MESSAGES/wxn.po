@@ -2037,29 +2037,14 @@ msgstr "ツールバーアイコンのスタイル:"
 msgid "Toolbar icon size:"
 msgstr "ツールバーアイコンのサイズ:"
 
-msgid "Line icons (default)"
-msgstr "ラインアイコン（既定）"
-
-msgid "Colored icons"
-msgstr "カラーアイコン"
-
-msgid "Fatcow icons"
-msgstr "Fatcow アイコン"
-
-msgid "Fugue icons"
-msgstr "Fugue アイコン"
-
 msgid "Solar icons (green)"
 msgstr "Solar アイコン（緑）"
 
 msgid "IconPark icons (teal/lime)"
 msgstr "IconPark アイコン（ティール/ライム）"
 
-msgid "Line icons (Tabler)"
-msgstr "ラインアイコン（Tabler）"
-
-msgid "IconPark Bold icons (teal/lime)"
-msgstr "IconPark 太字アイコン（ティール/ライム）"
+msgid "Streamline icons (green/teal)"
+msgstr "Streamline アイコン（緑/ティール）"
 
 msgid "Tabler icons (line)"
 msgstr "Tabler アイコン（ライン）"

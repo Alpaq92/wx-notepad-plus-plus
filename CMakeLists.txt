@@ -11,7 +11,7 @@
 
 cmake_minimum_required(VERSION 3.20)
 # C is enabled for the vendored Lua + LPeg (Scintillua's runtime) - both are C.
-project(wxNote VERSION 0.9.5 LANGUAGES CXX C)
+project(wxNote VERSION 0.9.6 LANGUAGES CXX C)
 
 include(FetchContent)
 
@@ -293,6 +293,67 @@ if(MSVC)
     target_compile_options(keymap_selftest PRIVATE /utf-8)
 endif()
 
+# ---- bridge_selftest: end-to-end self-test of the npp-bridge Phase-1 surface -----------------------
+# Boots the REAL application (tests/bridge_selftest.cpp #includes src/main.cpp with wxIMPLEMENT_APP
+# neutralized and supplies its own app subclass + main() -> wxEntry), so the genuine host pipeline -
+# nib capability surface, plugin loader, save pipeline, wx command dispatcher - loads the real
+# npp_bridge, which loads the PROBE plugin (packages/npp-bridge/example). The harness then drives
+# open/edit/save/undo-to-savepoint/save-all/close through DIRECT host calls (no OS input injection)
+# and asserts the Phase-1 acceptance points against the probe's notification log. User data is fully
+# sandboxed (custom wxAppTraits + wxFileConfig), so it never touches a real installation's state.
+# Needs a display (it creates the real frame), so - like terminal_selftest - it is a developer /
+# CI-with-display tool, not part of a headless test run. Mirrors the wxnote target's build setup
+# because it compiles the same sources.
+#   cmake --build build --target bridge_selftest && build/bin/bridge_selftest
+add_executable(bridge_selftest tests/bridge_selftest.cpp src/scintillua_engine.cpp src/term_backend.cpp src/term_view.cpp)
+set_target_properties(bridge_selftest PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_compile_definitions(bridge_selftest PRIVATE WXN_VERSION="${PROJECT_VERSION}")
+if(APPLE)
+    target_sources(bridge_selftest PRIVATE src/macos_native.mm)
+    target_link_libraries(bridge_selftest PRIVATE "-framework AppKit")
+endif()
+if(UNIX AND NOT APPLE)
+    target_sources(bridge_selftest PRIVATE src/gtk_native.cpp)
+    target_include_directories(bridge_selftest PRIVATE ${GTK3_INCLUDE_DIRS})
+    target_link_directories(bridge_selftest PRIVATE ${GTK3_LIBRARY_DIRS})
+    target_link_libraries(bridge_selftest PRIVATE ${GTK3_LIBRARIES})
+    target_link_libraries(bridge_selftest PRIVATE util)
+endif()
+target_include_directories(bridge_selftest PRIVATE
+    "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"
+    "${CMAKE_SOURCE_DIR}/third_party/lexilla/include"
+    "${CMAKE_SOURCE_DIR}/include/nib"
+    "${CMAKE_SOURCE_DIR}/include/npp-compat"    # Notepad_plus_msgs.h - the NPPN_*/NPPM_* codes the assertions speak
+    "${CMAKE_SOURCE_DIR}/src")                  # main.cpp itself (textually included) + its headers
+target_link_libraries(bridge_selftest PRIVATE
+    wx::core wx::aui wx::base wx::xml wx::stc
+    lexilla lua_lpeg
+    vterm)
+if(UNIX)
+    target_link_libraries(bridge_selftest PRIVATE wx::net)
+endif()
+if(WIN32 OR (UNIX AND NOT APPLE))
+    target_link_libraries(bridge_selftest PRIVATE wxbf)
+    target_compile_definitions(bridge_selftest PRIVATE WXN_HAS_BORDERLESS=1)
+endif()
+if(WIN32)
+    target_link_libraries(bridge_selftest PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme)
+endif()
+if(MSVC)
+    target_compile_options(bridge_selftest PRIVATE /utf-8 /bigobj)
+endif()
+# The runtime pieces the booted app + bridge load: bin resources (copied by wxnote's POST_BUILD), the
+# bridge in bin/nib, the Nib test plugin, and the probe (Windows DLL / POSIX staged .so).
+add_dependencies(bridge_selftest wxnote npp_bridge nib_test_plugin)
+if(WIN32)
+    add_dependencies(bridge_selftest npp_probe_plugin npp_test_plugin)
+else()
+    add_dependencies(bridge_selftest npp_example_plugin)
+endif()
+
 # ---- deploy runtime resources (toolbar icons, themes, default styler) next to the exe --------------
 add_custom_command(TARGET wxnote POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -301,6 +362,8 @@ add_custom_command(TARGET wxnote POST_BUILD
         "${CMAKE_SOURCE_DIR}/resources/icons-solar" "$<TARGET_FILE_DIR:wxnote>/icons-solar"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/icons-iconpark" "$<TARGET_FILE_DIR:wxnote>/icons-iconpark"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/icons-streamline" "$<TARGET_FILE_DIR:wxnote>/icons-streamline"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/themes" "$<TARGET_FILE_DIR:wxnote>/themes"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
