@@ -13,11 +13,16 @@
 //   cmake --build build --target terminal_selftest && build/bin/terminal_selftest
 
 #include "terminal_panel.h"
+#include "term_backend.h"   // PTY process backend - spawned directly by the pty phases below
+#include "term_view.h"      // libvterm cell grid - constructed directly by the pty phases below
 
 #include <wx/app.h>
 #include <wx/frame.h>
 #include <wx/uiaction.h>
+#include <wx/accel.h>     // wxAcceleratorTable/Entry - the frame accel table the Ctrl+C scope test installs
 #include <cstdio>
+#include <memory>
+#include <string>
 
 static int g_fail = 0;
 
@@ -102,6 +107,15 @@ public:
         return true;
     }
 
+    int OnExit() override
+    {
+        // Same contract as the real app (WxnApp::OnExit): the backends' kill-sweep threads must be
+        // joined after the last backend dtor and before wx teardown, or process exit abandons them
+        // mid-walk. The pty phases above kill real children, so sweeps DO run here.
+        TermBackend::joinKillSweeps();
+        return wxApp::OnExit();
+    }
+
 private:
     void runAll()
     {
@@ -121,6 +135,14 @@ private:
         uiClicks();
         std::printf("---- keyboard: focus + Enter/Space activation ----\n");
         keyboard();
+        std::printf("---- accel scope: terminal-focused Ctrl+C reaches the terminal ----\n");
+        accelScopeCtrlC();
+        std::printf("---- pty: emulation (TermView + libvterm, no process) ----\n");
+        ptyEmulation();
+        std::printf("---- pty: backend (ConPTY/forkpty spawn + resize) ----\n");
+        ptyBackend();
+        std::printf("---- pty: fallback (spawn forced to fail) ----\n");
+        ptyFallback();
 
         m_panel->shutdownAll();   // no child shell outlives the test
         wxYield();
@@ -404,16 +426,268 @@ private:
         {
             m_panel->focusActive();    // put focus back in the terminal, where a user actually starts
             pump(150);
-            check(dynamic_cast<wxStyledTextCtrl*>(wxWindow::FindFocus()) != nullptr,
-                  "focus starts in the terminal");
+            check(focusInTerminal(), "focus starts in the terminal");
             sim.Char(WXK_UP, wxMOD_CONTROL | wxMOD_SHIFT);
             pump(180);
             check(b[0]->HasFocus(), "Ctrl+Shift+Up escapes the terminal to the toolbar");
             sim.Char(WXK_DOWN, wxMOD_CONTROL | wxMOD_SHIFT);
             pump(180);
-            check(dynamic_cast<wxStyledTextCtrl*>(wxWindow::FindFocus()) != nullptr,
-                  "Ctrl+Shift+Down returns focus to the terminal");
+            check(focusInTerminal(), "Ctrl+Shift+Down returns focus to the terminal");
         }
+    }
+
+    // Phase 0 of the shortcut work: with the terminal focused,
+    // plain Ctrl+C must reach the TermView - which cooks it into the child's SIGINT - instead of being
+    // stolen by the frame's accelerator table and run as Edit>Copy on the hidden editor. The production
+    // fix lives in WxnShellFrameT::refreshAccelerators/onChildFocus (src/main.cpp), which carries
+    // wxIMPLEMENT_APP and can't be linked into this standalone test. So this phase exercises the underlying
+    // MECHANISM the fix relies on: a real frame accel table binding Ctrl+C (the exact shape Edit>Copy's
+    // "\tCtrl+C" produces), a real focused TermView, real OS key injection through the real
+    // accelerator-translation path, and the empty-table swap that is precisely what "terminal scope"
+    // installs. MSW-only: the defect IS MSW's PreProcessMessage/TranslateAccelerator firing before the
+    // focused window sees WM_KEYDOWN; GTK/macOS accel handling differs and is treated separately.
+    void accelScopeCtrlC()
+    {
+#ifndef __WXMSW__
+        std::printf("  skip  Ctrl+C accel-scope gating is verified on MSW (the accelerator-vs-focus ordering is the MSW-specific defect)\n");
+#else
+        destroyPopups();
+        auto* v = new TermView(m_frame, "Consolas", 10, /*dark=*/true);
+        v->SetSize(0, 0, 600, 320);
+        pump(40);
+
+        // Observe what the terminal received: TermView turns a keypress into VT bytes and hands them to
+        // onOutput synchronously (vterm's output callback), so a Ctrl+C that reaches the view shows up
+        // here as 0x03 (^C) - the byte the shell reads as an interrupt.
+        std::string outbuf;
+        v->onOutput = [&outbuf](const char* d, size_t n){ outbuf.append(d, n); };
+
+        // The "hidden editor" stand-in: a frame accelerator binding Ctrl+C to a command, exactly as
+        // Edit>Copy (kCmdEditCopy, label "&Copy\tCtrl+C") does in the real menu bar. If this command
+        // fires, the accelerator ran instead of the terminal getting the key - the defect.
+        const int kSentinel = wxID_HIGHEST + 777;
+        m_frame->Bind(wxEVT_MENU, [this](wxCommandEvent&){ m_sentinelFired = true; }, kSentinel);
+        wxAcceleratorEntry ent(wxACCEL_CTRL, 'C', kSentinel);
+        m_frame->SetAcceleratorTable(wxAcceleratorTable(1, &ent));
+
+        if (!frameForeground())
+        {
+            std::printf("  skip  frame not foreground; skipping Ctrl+C injection\n");
+            m_frame->SetAcceleratorTable(wxNullAcceleratorTable);
+            v->onOutput = nullptr; v->Destroy(); pump(60);
+            return;
+        }
+
+        wxUIActionSimulator sim;
+
+        // Editor scope (full accel table present): reproduces the defect - the accel steals Ctrl+C, so the
+        // command fires and the view never sees the key. This is the current-behaviour claim the fix rests
+        // on; proving it here is what makes the terminal-scope checks below meaningful rather than vacuous.
+        v->SetFocus(); pump(120);
+        m_sentinelFired = false; outbuf.clear();
+        sim.Char('C', wxMOD_CONTROL);
+        pump(180);
+        const bool viewGotCtrlC = outbuf.find('\x03') != std::string::npos;
+        std::printf("     [diag] full table: sentinel=%s  view-got-^C=%s\n",
+                    m_sentinelFired ? "yes" : "no", viewGotCtrlC ? "yes" : "no");
+        check(m_sentinelFired && !viewGotCtrlC,
+              "editor scope: the frame accel table steals Ctrl+C from the terminal (reproduces the defect)");
+
+        // Terminal scope (empty table - exactly what refreshAccelerators(Scope::Terminal) installs): the
+        // fix. With nothing to steal it, the keystroke reaches the focused TermView.
+        m_frame->SetAcceleratorTable(wxNullAcceleratorTable);
+        v->SetFocus(); pump(120);
+        m_sentinelFired = false; outbuf.clear();
+        sim.Char('C', wxMOD_CONTROL);
+        pump(180);
+        check(outbuf.find('\x03') != std::string::npos,
+              "terminal scope: Ctrl+C reaches the TermView (its SIGINT path), not the accelerator");
+        check(!m_sentinelFired,
+              "terminal scope: the editor's Ctrl+C command does not fire");
+
+        m_frame->SetAcceleratorTable(wxNullAcceleratorTable);
+        v->onOutput = nullptr;
+        v->Destroy();
+        pump(60);
+#endif
+    }
+
+    // "Focus is in the terminal" now has two honest answers: the TermView grid in PTY mode, the
+    // wxSTC console in legacy fallback mode. The tab picks its mode at construction (per machine /
+    // per test hook), so the focus checks must accept either or they would fail on exactly one mode.
+    static bool focusInTerminal()
+    {
+        wxWindow* f = wxWindow::FindFocus();
+        return dynamic_cast<TermView*>(f) != nullptr || dynamic_cast<wxStyledTextCtrl*>(f) != nullptr;
+    }
+
+    // ---- pty phases. None of these inject OS keystrokes: feed()/write() drive the emulator and the
+    // backend directly, so no foreground gating is needed and nothing can leak into other windows. ----
+
+    // The v2 renderer alone, no child process: feed VT bytes by hand and read the screen model back
+    // through the rowText/screenText test accessors.
+    void ptyEmulation()
+    {
+        auto* v = new TermView(m_frame, "Consolas", 10, /*dark=*/true);
+        // Give it a real >= one-cell size: the grid deliberately stays 80x24 until the first real
+        // wxEVT_SIZE (see term_view.h), and these assertions should run against a grid the widget
+        // actually computed, proving the size->grid path too.
+        v->SetSize(0, 0, 600, 320);
+        pump(40);
+        check(v->cols() >= 20 && v->rows() >= 5, "TermView sized to a usable grid");
+        // ...and NOT still the constructor default: the grid stays 80x24 until the first real size
+        // event, and 80x24 satisfies the >=20x5 check above - so that check alone would pass with
+        // a dead size->updateGrid path. 600x320 cannot compute to exactly 80x24 at any plausible
+        // cell metric (Consolas 10pt is ~8x18px -> roughly 75x17).
+        check(v->cols() != 80 || v->rows() != 24, "grid recomputed from the real size (not the 80x24 default)");
+
+        // An SGR colour sequence must be PARSED (the old pipe console merely stripped it): the text
+        // lands on the screen, the escape bytes do not.
+        const char red[] = "\x1b[31mwxnote_red_ok\x1b[0m plain";
+        v->feed(red, sizeof(red) - 1);
+        check(v->rowText(0) == "wxnote_red_ok plain", "SGR colour sequence is parsed, not printed");
+        check(v->screenText().Contains("wxnote_red_ok"), "screenText sees the fed text");
+
+        // ED 2 + CUP - the "clear" every shell's `cls`/`clear` emits - must empty the whole grid.
+        const char clear[] = "\x1b[2J\x1b[H";
+        v->feed(clear, sizeof(clear) - 1);
+        wxString all = v->screenText();
+        all.Replace("\n", "");
+        all.Trim();
+        check(all.empty(), "ED 2 + CUP clears the whole screen");
+
+        // Cursor addressing must land text at the addressed CELL, not append linearly - the very
+        // capability (full-screen placement) the pipe console lacked.
+        const char at[] = "\x1b[3;5Hplaced";
+        v->feed(at, sizeof(at) - 1);
+        check(v->rowText(2).Find("placed") == 4, "CUP addresses row 3 col 5 (full-screen placement)");
+
+        v->Destroy();
+        pump(60);
+    }
+
+    // The real backend: spawn the default shell on a pty, write an echo command to its stdin, and
+    // watch the output arrive through onData -> feed -> the screen model. Then resize and prove the
+    // child survives, then kill and prove it dies.
+    void ptyBackend()
+    {
+        const std::vector<TermShell> shells = detectTermShells();
+        if (shells.empty()) { check(false, "no shell to spawn for the backend test"); return; }
+
+        auto* v = new TermView(m_frame, "Consolas", 10, /*dark=*/true);
+        v->SetSize(0, 0, 600, 320);
+        pump(40);
+
+        std::unique_ptr<TermBackend> be =
+            TermBackend::spawn(shells[0].cmd, wxGetCwd(), v->cols(), v->rows());
+        m_ptyWorks = (be != nullptr);
+        if (!be)
+        {
+            // Legitimate on Windows < 10 1809 (no ConPTY): the fallback phase below still proves
+            // the tab copes. Skip, don't fail - failing here would make the suite red on exactly
+            // the machines the fallback exists for.
+            std::printf("  skip  TermBackend::spawn returned null (no ConPTY on this OS?)\n");
+            v->Destroy();
+            pump(60);
+            return;
+        }
+        // Same wiring the real tab does, assigned synchronously right after spawn per the contract.
+        size_t rxBytes = 0;   // diag: total bytes onData delivered (distinguishes "no read" from "bad render")
+        be->onData         = [v, &rxBytes](const char* d, size_t n){ rxBytes += n; v->feed(d, n); };
+        v->onOutput        = [&be](const char* d, size_t n){ if (be) be->write(d, n); };
+        v->onResizeRequest = [&be](int c, int r){ if (be) be->resize(c, r); };
+        check(be->running(), "spawned child reports running()");
+
+        const char cmd[] = "echo wxnote_pty_ok\r\n";
+        be->write(cmd, sizeof(cmd) - 1);
+        // Pump until the output shows up (shell startup time varies); 5s is generous, the loop
+        // exits the moment it appears. The needle must sit on a row WITHOUT the word 'echo':
+        // terminal input echo (conhost cooked mode on Windows, the tty line discipline on POSIX)
+        // reflects the typed command line itself onto the screen, so a whole-screen Contains()
+        // went green off that echoed input even when the command never EXECUTED (e.g. a write
+        // path that mangles the CR so Enter never registers). Only the executed command prints
+        // the needle on a line of its own.
+        auto executedRowSeen = [v]
+        {
+            for (int r = 0; r < v->rows(); ++r)
+            {
+                const wxString t = v->rowText(r);
+                if (t.Contains("wxnote_pty_ok") && !t.Contains("echo")) return true;
+            }
+            return false;
+        };
+        bool seen = false;
+        for (int i = 0; i < 100 && !seen; ++i)
+        {
+            pump(50);
+            seen = executedRowSeen();
+        }
+        if (!seen)
+            std::printf("     [diag] onData bytes=%u screen[0..120]='%s'\n", (unsigned)rxBytes,
+                        (const char*)v->screenText().Left(120).utf8_str());
+        check(seen, "executed echo output (not its input echo) arrives via backend->onData -> view->feed");
+
+        // Resize: a smaller widget -> a smaller grid -> backend->resize (wired above); the child
+        // must survive the SIGWINCH/ResizePseudoConsole.
+        const int c0 = v->cols(), r0 = v->rows();
+        v->SetSize(0, 0, 400, 200);
+        pump(120);
+        check(v->cols() != c0 || v->rows() != r0, "resizing the view changes the grid");
+        check(be->running(), "child survives the pty resize");
+
+        be->kill();
+        bool dead = false;
+        for (int i = 0; i < 40 && !dead; ++i)
+        {
+            pump(50);
+            dead = !be->running();
+        }
+        check(dead, "kill() stops the child");
+
+        // Teardown order matters: the callbacks are cleared and the backend destroyed while `v` is
+        // still alive, so a chunk queued mid-pump can never feed a dead view.
+        v->onOutput = nullptr;
+        v->onResizeRequest = nullptr;
+        be.reset();
+        v->Destroy();
+        pump(60);
+    }
+
+    // The fallback: force spawn() to fail via the test hook and prove the tab still opens - in
+    // legacy pipe mode, with the v1 wxSTC console - and that the shared tab surface (theme, focus)
+    // keeps working across a mixed PTY/legacy tab set.
+    void ptyFallback()
+    {
+        // Every tab the earlier phases opened went through the REAL spawn; if that worked (probed
+        // by ptyBackend above), those tabs must actually be running the PTY mode.
+        if (m_ptyWorks)
+            check(currentTabUsesPty(), "normally-opened tab runs in PTY mode when spawn works");
+
+        termForceLegacyBackend() = true;
+        const size_t before = m_nbPages();
+        m_panel->addTerminal(0);
+        pump(150);
+        termForceLegacyBackend() = false;   // reset immediately - no later phase may inherit it
+        check(m_nbPages() == before + 1, "tab still opens when the PTY backend is unavailable");
+        check(!currentTabUsesPty(), "forced-fail tab reports legacy mode");
+        check(countDeep<wxStyledTextCtrl>(m_panel) >= 1, "legacy tab hosts the v1 wxSTC console");
+
+        // The panel calls these blind on every tab - they must hold up when PTY and legacy tabs
+        // coexist in one notebook.
+        m_panel->setTerminalDark(false);
+        m_panel->setTerminalDark(true);
+        m_panel->focusActive();
+        pump(60);
+        check(true, "applyTheme/focus survive a mixed PTY+legacy tab set");
+    }
+
+    bool currentTabUsesPty() const
+    {
+        for (wxWindow* c : m_panel->GetChildren())
+            if (auto* nb = dynamic_cast<wxAuiNotebook*>(c))
+                if (auto* t = dynamic_cast<TerminalTab*>(nb->GetCurrentPage()))
+                    return t->usingPty();
+        return false;
     }
 
     // Force the test frame to the OS foreground and confirm it took. Key injection targets the foreground
@@ -475,6 +749,8 @@ private:
     wxFrame*       m_frame = nullptr;
     TerminalPanel* m_panel = nullptr;
     bool           m_hideAsked = false;
+    bool           m_ptyWorks  = false;   // did ptyBackend's real spawn succeed on this machine?
+    bool           m_sentinelFired = false;   // accelScopeCtrlC: did the frame's Ctrl+C accelerator fire?
 };
 
 wxIMPLEMENT_APP_CONSOLE(SelfTestApp);
