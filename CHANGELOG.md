@@ -3,9 +3,23 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.9.5] - 2026-07-19
 
 ### Added
+- **The integrated terminal is now a real pseudo-terminal.** Each shell tab runs on a genuine PTY —
+  **ConPTY** on Windows 10 1809+, **`forkpty`** on Linux and macOS — with a built-in terminal emulator
+  (the vendored **libvterm** core, MIT © 2008 Paul Evans, fetched at build and linked as the `vterm`
+  static library) driving a new owner-drawn cell-grid renderer (`src/term_backend.*`,
+  `src/term_view.*`). Full-screen **TUI applications** (`vim`, `htop`, `less`, menu-driven installers),
+  the shell's own **line editing / history / tab-completion / `Ctrl+R`**, **ANSI colour** (the 16
+  themed colours, the 256-colour palette, and bold/italic/underline/reverse), **mouse reporting**
+  (hold <kbd>Shift</kbd> to select locally instead), a 5,000-line scrollback, and live resize
+  (`SIGWINCH` / `ResizePseudoConsole`) all work now — none of which the previous line-oriented console
+  could do. Copy/paste are <kbd>Ctrl+Shift+C</kbd>/<kbd>Ctrl+Shift+V</kbd> so plain <kbd>Ctrl+C</kbd>
+  stays the interrupt. On **Windows older than 10 1809** (where ConPTY does not exist) or any
+  pty-spawn failure, the tab transparently falls back to the previous redirected-pipe console
+  (line-oriented tools only, ANSI stripped); the panel, tabs, shell picker and shortcuts are identical
+  either way.
 - **The integrated terminal's chrome is keyboard accessible.** Its owner-drawn toolbar buttons (new
   terminal, shell picker, lights, collapse) are now focusable, activate on <kbd>Enter</kbd>/<kbd>Space</kbd>
   and draw a focus ring; the shell dropdown navigates with <kbd>Up</kbd>/<kbd>Down</kbd>/<kbd>Home</kbd>/<kbd>End</kbd>,
@@ -14,12 +28,70 @@ All notable changes to wxNote are documented here. Format loosely follows
   its toolbar and <kbd>Ctrl+Shift+Down</kbd> returns — previously the chrome was reachable only with a
   mouse. Each glyph-only button also carries an accessible name, so a screen reader announces it rather
   than an unlabelled control.
+- **Keyboard shortcuts are now remappable.** **Settings > Shortcut Mapper…** opens a searchable grid
+  over every menu accelerator plus a curated 24-command tier of the editor's own Scintilla keys
+  (word/paragraph motion and selection, document start/end, line cut/copy/delete, word/line deletion,
+  overtype, …): filter by name or key, reverse-look-up a pressed combination ("Find by shortcut"), and
+  **Modify / Clear / Reset** per command with press-the-keys capture. A live conflict engine tints
+  colliding rows red and classifies what it found — a **hard conflict** prompts Reassign (stealing only
+  the colliding key) / Keep both / Cancel, a menu key **shadowing** a different built-in editor key
+  warns, and keys coexisting in mutually-exclusive focus scopes (terminal vs. editor) are correctly
+  left alone. Overrides persist to **`shortcuts.json`** in the per-user data directory — a VS
+  Code-style delta file (only changes are stored) that is hand-editable, written atomically on every
+  edit, supports `"-command"` unbinds and a separate `"editor"` section, keeps entries it doesn't
+  recognise, degrades to defaults instead of failing on damage, and goes read-only (with a marker in
+  the Mapper) rather than clobbering a file written by a newer wxNote.
+- **Named keymap schemes.** JetBrains-style switchable schemes, picked at the top of the Shortcut
+  Mapper and persisted as `"activeScheme"`. One bundled read-only preset ships — **wxNote default**,
+  the stock keys. There is deliberately no bundled Notepad++ preset: rather than shipping a guess at
+  another editor's keymap, Notepad++ bindings arrive through the optional `npp-shortcuts-compat`
+  plugin, which imports your actual `shortcuts.xml` as a scheme (see below). User schemes are plain
+  JSON in `shortcuts.json` (id, name, optional parent to delta against), and personal Mapper edits
+  live in a layer above the active scheme, so switching schemes never discards them. An
+  `"activeScheme"` naming a scheme that no longer exists falls back to the default keys and is
+  migrated to `wxnote.default` on the next save.
+- **Notepad++ `shortcuts.xml` import.** The new optional GPL module **`npp-shortcuts-compat`**
+  (`packages/npp-shortcuts-compat/`) imports a Notepad++ keybinding file as a switchable
+  **"Notepad++ (imported)"** scheme — menu keys, `ScintillaKeys` editor rebinds (stored with the
+  scheme, applied when it is activated) and best-effort plugin commands — via the new generic
+  **`nib.keymap/1`** plugin capability, so the core never learns the `shortcuts.xml` format.
+  **Automation > Run > Validate shortcuts.xml** forwards to the importer, which auto-detects the file
+  (wxNote's user-data dir, or `%APPDATA%\Notepad++\` on Windows) and shows a validation report:
+  imported / unmapped / unknown counts, with `UserDefinedCommands` and `Macros` parsed **as data only,
+  never executed** (the plugin has no execution path; the XML parser is XXE-hardened). The imported
+  scheme outlives the plugin.
+
+### Changed
+- **The default keymap now follows the modern-editor consensus.** The stock keys were audited against
+  six editors — VS Code, JetBrains IDEs, TextMate, Notepad4, Sublime Text and Pulsar — and realigned
+  wherever a clear consensus exists. The headline moves: toggle line comment is <kbd>Ctrl+/</kbd>
+  (was <kbd>Ctrl+Q</kbd>); Save As… is <kbd>Ctrl+Shift+S</kbd> (was <kbd>Ctrl+Alt+S</kbd>), with Save
+  All now menu-only; Redo answers to both <kbd>Ctrl+Y</kbd> and <kbd>Ctrl+Shift+Z</kbd> and Close to
+  both <kbd>Ctrl+W</kbd> and <kbd>Ctrl+F4</kbd> (the menu shows the first key, a rebind replaces
+  both); and the classic <kbd>Ctrl+D</kbd> fork is resolved the multi-cursor way — <kbd>Ctrl+D</kbd>
+  now adds the next occurrence to a multi-selection (Multi-select Next, Ignore Case &amp; Whole Word)
+  while Duplicate Current Line moves to <kbd>Ctrl+Shift+D</kbd>. Newly bound: increase/decrease line
+  indent on <kbd>Ctrl+]</kbd>/<kbd>Ctrl+[</kbd> (<kbd>Tab</kbd>/<kbd>Shift+Tab</kbd> keep working),
+  insert blank line below on <kbd>Ctrl+Enter</kbd>, the terminal on <kbd>Ctrl+`</kbd>, and zoom on
+  <kbd>Ctrl+=</kbd>/<kbd>Ctrl+-</kbd> (<kbd>Ctrl</kbd>+wheel and the numpad zoom keys are
+  unaffected). On the editor tier, delete line moves to <kbd>Ctrl+Shift+K</kbd> (was
+  <kbd>Ctrl+Shift+L</kbd>), and the few stock Scintilla keys the new accelerators would have shadowed
+  (paragraph up/down, word-part-left, copy line under reopen-closed-tab's <kbd>Ctrl+Shift+T</kbd>)
+  now start unbound but stay remappable. Any old chord can be restored per command in the Shortcut
+  Mapper.
 
 ### Fixed
 - **The terminal's scrollbar now follows the terminal's own light/dark toggle** on Windows. Scintilla's
   scrollbar is a native control that `StyleClearAll` doesn't touch, so a dark terminal kept a bright
   white scrollbar. (On Linux/macOS the native scrollbar still tracks the *app* theme rather than the
   per-terminal toggle — the GTK scrollbar styling is installed app-wide.)
+- **Plain <kbd>Ctrl</kbd>+<kbd>C</kbd> reaches the terminal on the borderless frame.** With the
+  terminal focused, the frame's accelerator table translated **Edit > Copy**'s <kbd>Ctrl</kbd>+<kbd>C</kbd>
+  first and ran a silent copy on the hidden editor, so the keystroke never reached the terminal view
+  and the shell never got its interrupt (SIGINT). The frame accelerator table is now scoped by focus —
+  emptied while the terminal owns the keyboard — so the interrupt goes through. (The native-menu frame
+  keeps its accelerators on the menu bar, which cannot be scoped this way; that residual is left for a
+  later phase.)
 
 ## [0.9.1] - 2026-07-18
 
