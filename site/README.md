@@ -10,7 +10,7 @@ Plain HTML/CSS/JS, no build step, no dependencies to install - adapted from
 [codewithsadee/vcard-personal-portfolio](https://github.com/codewithsadee/vcard-personal-portfolio)
 (MIT-licensed vCard template), reworked from a personal-portfolio layout into a project page:
 
-- `index.html` - the whole site (About / Features / Comparison / Screenshots / Download / Changelog,
+- `index.html` - the whole site (About / Features / Screenshots / Download / Changelog,
   single-page tab navigation, no routing).
 - `assets/css/style.css` - all styling. Colors are CSS custom properties defined twice - once under
   `:root` (dark, the default) and once under `[data-theme="light"]` - so light/dark/system theming

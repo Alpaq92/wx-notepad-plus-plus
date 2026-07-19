@@ -57,6 +57,7 @@
 #include <wx/printdlg.h>        // wxPrintDialogData/wxPageSetupDialogData - the Print dialog + page geometry
 #include <wx/paper.h>           // wxThePrintPaperDatabase - resolve a concrete default paper size (A4)
 #include <wx/cmdline.h>         // wxCmdLineParser - -g/-e/-n/-r switches (see WxnApp::OnInit)
+#include <wx/msgout.h>          // wxMessageOutputBest - --version/--help text from a GUI-subsystem exe (see WxnApp::OnInit)
 #include <wx/snglinst.h>        // wxSingleInstanceChecker - "reuse an existing window" (Preferences > General)
 #include <wx/ipc.h>             // wxServer/wxClient/wxConnection - hand file args to the already-running instance
 #include <wx/tokenzr.h>         // wxStringTokenizer - splits the IPC payload back into paths/goto/encoding
@@ -64,7 +65,7 @@
 
 #ifdef WXN_HAS_BORDERLESS
 #include <type_traits>                  // std::is_base_of - detect the borderless base in WxnShellFrameT<FB>
-#include <vector>                       // std::vector - accelerator-entry list for installAccelsFromMenuBar
+#include <vector>                       // std::vector - accelerator-entry list for refreshAccelerators
 #include <wxbf/borderless_frame.h>      // wxBorderlessFrame - the optional integrated/borderless title bar (Windows + GTK)
 #include <wxbf/window_gripper.h>        // wxWindowGripper - cross-platform window move (MSW + GTK begin_move_drag)
 #endif
@@ -74,6 +75,7 @@
 #include <commctrl.h>
 #include <dwmapi.h>
 #include <uxtheme.h>
+#include <wx/msw/darkmode.h>   // wxDarkModeSettings - recolour wx's native dark menu bar (see WxnDarkModeSettings)
 #include <shellapi.h>          // ShellExecuteW / SHFileOperationW - File menu shell commands (Explorer, cmd, Recycle Bin)
 #include <bcrypt.h>            // BCrypt* - MD5 / SHA digests for the Tools menu
 #pragma comment(lib, "bcrypt.lib")
@@ -87,6 +89,7 @@
 #define DWMWCP_DONOTROUND 1
 #endif
 #else
+#include <unistd.h>          // isatty()/read() - the POSIX side of `wxnote -` (read piped stdin into a buffer)
 using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/sciSend() message-id params
 #endif
 
@@ -124,6 +127,7 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 #include <set>
 #include <algorithm>
 #include <cstdlib>
+#include <memory>             // std::unique_ptr - host-owned pending nib.keymap scheme builders
 #include <random>              // std::shuffle - "Randomize Line Order"
 
 #include <wx/clipbrd.h>        // wxClipboard - copy file paths / hashes to the clipboard
@@ -148,6 +152,9 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 #include "nib.h"               // our own permissive, cross-platform plugin API (Nib)
 #include "terminal_panel.h"    // View > Show Terminal - bottom multi-tab shell panel (defines myID_VIEW_TERMINAL, used by menu_data_view.h below)
 #include "menu_builder.h"      // data-driven menu bar builder (menu_model.h/menu_data_*.h) - replaces the old inline menu construction
+#include "keymap_schemes.h"    // bundled read-only keymap presets ("wxNote default" + "Notepad++") - Tier 1 of the shortcut model
+#include "shortcut_mapper_dialog.h"  // the Shortcut Mapper dialog + conflict engine (implements kCmdSettingShortcutMapper 48009)
+#include "shortcut_labels.h"   // curated Scintilla "Editor commands" tier: seedEditorKeymapDefaults + wx<->SCK translation
 #include "scintillua_engine.h" // embedded Lua+LPeg+Scintillua engine (the native language-definition engine)
 
 static const int  MARK_BOOKMARK = 2;      // a free Scintilla marker number for bookmarks
@@ -270,6 +277,31 @@ static int npp_bgr(const wxString& rrggbb)
     const int r = (int)((v >> 16) & 0xFF), g = (int)((v >> 8) & 0xFF), b = (int)(v & 0xFF);
     return (b << 16) | (g << 8) | r;
 }
+// Selected-text foreground. Scintilla leaves the selection FOREGROUND unset by default
+// (ViewStyle: selColours.fore.isSet == false), so a selected glyph keeps its own syntax colour painted
+// on top of the selection fill - and against a pale fill like the light theme's #ADD6FF a mid or light
+// token (comment grey, a number) simply disappears. Themes nominally carry a "Selected text colour"
+// foreground, but nearly every N++ XML we ship stores an inert sentinel ("000004") or a flat "000000"
+// that would paint BLACK on a dark-blue dark-mode selection - so an explicit value is honoured only when
+// it genuinely contrasts with the fill, and otherwise black/white is derived from the fill's luminance.
+// Gamma-2.0 approximation on purpose: close enough for a pick-one-of-two decision, and needs no <cmath>.
+static int selection_fore_bgr(int selBackBgr, int themeForeBgr)
+{
+    auto lum = [](int c) {                                  // c is Scintilla 0xBBGGRR
+        const double r = (c & 0xFF) / 255.0, g = ((c >> 8) & 0xFF) / 255.0, b = ((c >> 16) & 0xFF) / 255.0;
+        return 0.2126 * r * r + 0.7152 * g * g + 0.0722 * b * b;
+    };
+    const double lb = lum(selBackBgr);
+    const int autoFore = (lb > 0.30) ? 0x000000 : 0xFFFFFF;   // dark text on a light fill, light on a dark one
+    if (themeForeBgr >= 0)
+    {
+        const double lf = lum(themeForeBgr);
+        const double hi = (lf > lb ? lf : lb) + 0.05, lo = (lf > lb ? lb : lf) + 0.05;
+        if (hi / lo >= 4.5) return themeForeBgr;              // the theme's own choice is readable - respect it
+    }
+    return autoFore;
+}
+
 // Keyword lists for the languages we ship words for (others still colour comments/strings/numbers).
 static const char CPP_KEYWORDS[] =
     "alignas alignof and auto bool break case catch char char8_t char16_t char32_t class const "
@@ -424,16 +456,64 @@ static std::function<void(const wxString&)> g_openDropped;
 // Set by the frame: a zoom change (Ctrl+wheel etc.) in one editor syncs all tabs + persists.
 static std::function<void(int)> g_onZoom;
 
+// What one wxnote launch asks a window to open: the command line's positional arguments, already split
+// into files (tabs) and folders (workspace-browser roots), plus the goto/encoding switches. Grouped into
+// a struct rather than a growing parameter list because it travels three ways - straight from OnInit into
+// a freshly built frame, and across the IPC handoff (serialise in OnInit, parse in WxnIpcConnection::OnExec)
+// - so every added field would otherwise have to be threaded through four signatures by hand.
+struct WxnOpenRequest
+{
+    wxArrayString paths;                              // existing FILES, absolute; each becomes a tab
+    wxArrayString folders;                            // existing DIRECTORIES, absolute; last one roots the browser
+    wxArrayInt    lines, cols;                        // parallel to paths: a `file:line[:col]` suffix, or -1
+    int gotoLine = -1, gotoCol = -1, forceEnc = -1;   // the launch-wide -g / -e (or +N) switches (-1 = not given)
+    bool readOnly = false;                            // -R/-M/--read-only: open THIS launch's files read-only
+    bool split    = false;                            // -o/-O/--split: route THIS launch's files into the split view
+    wxString findPattern;                             // +/{pattern}: put the caret on the first match in the last-opened file
+    bool hasStdin = false;                            // '-': a piped-stdin buffer was captured (never travels over IPC - forces a new instance)
+    wxString stdinText;                               // the captured stdin bytes (decoded UTF-8)
+};
+
 // Set by the frame: a second wxnote launch handed its file args (+ optional -g/-e) to us over IPC
 // (see WxnIpcConnection below) because "reuse an existing window" is active. gotoLine/gotoCol/forceEnc
 // are -1 when not requested by the sending launch.
-static std::function<void(const wxArrayString&, int, int, int)> g_ipcOpenRequest;
+static std::function<void(const WxnOpenRequest&)> g_ipcOpenRequest;
+
+// ---- -w/--wait: block the launching process until the file's tab is closed (git core.editor / $EDITOR) --
+// The exe IS the GUI process - there is no separate console-subsystem CLI shim that could block on our
+// behalf - so "block the caller" means exactly "don't exit yet", and the caller unblocks on our PROCESS
+// EXIT, not on any IPC reply. That is also why --wait forces a NEW instance (see OnInit): the IPC handoff
+// below Execute()s and returns immediately, which would unblock git before the tab was even opened.
+static wxArrayString g_waitPaths;          // absolute paths still being waited on; emptying it quits the app
+static bool          g_waitMode = false;   // --wait was given (also suppresses session restore/save)
+// ---- --safe: start with no plugins loaded (guards loadNibPlugins(), which pulls in the N++ bridge too) --
+static bool          g_safeMode = false;
+// ---- --clean: a pristine launch = --safe (no plugins) PLUS skip session restore AND recovery-backup ----
+// restore. Distinct from --safe (which only skips plugins); for bug-repro / catalog-screenshot QA that must
+// start from a blank slate. --clean implies --safe, so g_safeMode is also set when this is (see OnInit).
+static bool          g_cleanMode = false;
+// ---- --locale <lang>: UI language for THIS RUN only -----------------------------------------------
+// Deliberately NOT written back to the "UILanguage" config key: Preferences > Localization and the
+// Localization radio menu must keep reflecting the user's persisted choice, so that a one-shot
+// `wxnote --locale ja README.md` (screenshotting/QA'ing a catalog) doesn't silently repoint the editor.
+// -1 = not given / not a language we ship a catalog for; see the raw-argv pre-scan in WxnApp::OnInit.
+static int           g_localeOverride = -1;
 
 // ---- single-instance "reuse window" IPC (Preferences > General; off by default) ------------------
 // A second wxnote process, on finding one already running (wxSingleInstanceChecker), connects here as a
-// wxClient and Executes() a small payload instead of opening its own window - one path per line, with
-// an optional trailing "\x01GOTO=line,col" / "\x01ENC=n" line carrying -g/-e. Standard wx pattern for
-// pairing wxSingleInstanceChecker with wxServer/wxClient; DDE on Windows, a loopback TCP port elsewhere.
+// wxClient and Executes() a small payload instead of opening its own window - one path per line, plus
+// \x01-prefixed key lines: GOTO=line,col and ENC=n (-g/-e), DIR=<folder> (a positional directory, which
+// must NOT go through openPath() - that returns nullptr for a directory, i.e. the running instance would
+// silently swallow `wxnote .`) and FGOTO=idx,line,col (a per-file `file:line[:col]` suffix).
+// Standard wx pattern for pairing wxSingleInstanceChecker with wxServer/wxClient; DDE on Windows, a
+// loopback TCP port elsewhere.
+//
+// NOTE the string-literal split in "\x01" "ENC=", "\x01" "DIR=", "\x01" "FGOTO=" - on BOTH the sending and
+// the receiving side. A C++ \x escape eats every following HEX DIGIT, so an unsplit "\x01ENC=" is really
+// {0x1E,'N','C','='}: four characters, not five, because 'E' is a hex digit. That silently broke -e over
+// the IPC handoff (the receiver's Mid(5) walked past the digits, leaving forceEnc at -1). "\x01GOTO="
+// escaped it only because 'G' is not a hex digit, which is why that one key always worked.
+// Keep the concatenation, and count every Mid() offset from the SPLIT form (5 for \x01XXX=, 7 for FGOTO=).
 static const wxChar* const kIpcServiceName = wxT("31415");   // arbitrary but fixed "port" (Unix) / DDE service (Windows)
 static const wxChar* const kIpcTopic = wxT("wxnote-open");
 
@@ -448,7 +528,7 @@ public:
     // decoded wxString regardless of which wire format the transport chose.
     bool OnExec(const wxString&, const wxString& payload) override
     {
-        wxArrayString paths; int gotoLine = -1, gotoCol = -1, forceEnc = -1;
+        WxnOpenRequest req;
         wxStringTokenizer tok(payload, "\n");
         while (tok.HasMoreTokens())
         {
@@ -456,12 +536,32 @@ public:
             if (line.StartsWith("\x01GOTO=")) {
                 const wxString v = line.Mid(6); long l = -1, c = -1;
                 v.BeforeFirst(',').ToLong(&l); if (v.Contains(",")) v.AfterFirst(',').ToLong(&c);
-                gotoLine = (int)l; gotoCol = (int)c;
-            } else if (line.StartsWith("\x01ENC=")) {
-                long e = -1; line.Mid(5).ToLong(&e); forceEnc = (int)e;
-            } else if (!line.empty()) paths.Add(line);
+                req.gotoLine = (int)l; req.gotoCol = (int)c;
+            } else if (line.StartsWith("\x01" "ENC=")) {
+                long e = -1; line.Mid(5).ToLong(&e); req.forceEnc = (int)e;
+            } else if (line.StartsWith("\x01" "DIR=")) {
+                req.folders.Add(line.Mid(5));          // a positional directory: roots the workspace browser
+            } else if (line.StartsWith("\x01" "FGOTO=")) {
+                // per-file `file:line[:col]` suffix, as "<index into paths>,<line>,<col>". Without this the
+                // suffix would work for a new window and be silently dropped whenever "reuse window" is on.
+                const wxString v = line.Mid(7); long i = -1, l = -1, c = -1;
+                v.BeforeFirst(',').ToLong(&i);
+                const wxString rest = v.AfterFirst(',');
+                rest.BeforeFirst(',').ToLong(&l); if (rest.Contains(",")) rest.AfterFirst(',').ToLong(&c);
+                while ((long)req.lines.GetCount() <= i) { req.lines.Add(-1); req.cols.Add(-1); }
+                if (i >= 0) { req.lines[i] = (int)l; req.cols[i] = (int)c; }
+            } else if (line.StartsWith("\x01" "RO=")) {
+                req.readOnly = true;                   // -R/-M: open the forwarded file(s) read-only in the reused window too
+            } else if (line.StartsWith("\x01" "SPLIT=")) {
+                req.split = true;                      // -o/-O/--split: route the forwarded file(s) into the split
+            } else if (line.StartsWith("\x01" "FIND=")) {
+                // +/{pattern} find-on-open. MUST stay split from \x01 as "\x01" "FIND=": 'F' is a hex digit,
+                // so an unsplit "\x01FIND=" is really {0x1F,'I','N','D','='} and Mid(6) would mis-slice it
+                // (the exact trap the ENC=/DIR= comment above documents). Count Mid() from the split form: 6.
+                req.findPattern = line.Mid(6);
+            } else if (!line.empty()) req.paths.Add(line);
         }
-        if (g_ipcOpenRequest) g_ipcOpenRequest(paths, gotoLine, gotoCol, forceEnc);
+        if (g_ipcOpenRequest) g_ipcOpenRequest(req);
         return true;
     }
 };
@@ -963,6 +1063,111 @@ private:
     wxTextCtrl* m_text = nullptr;
     wxColour    m_fieldBg, m_fieldFg, m_borderCol;
     int         m_min, m_max;
+};
+
+// The status bar's zoom control: SpinField's chrome recipe (borderless wxTextCtrl + a painted 1px
+// outline + a childless zone on the right that an arrow is drawn into), but with ONE ▼ that opens a
+// preset list instead of a spinner - SpinField's +/-1 bump is meaningless here, because one Scintilla
+// zoom step is ~10 percentage points. A native wxComboBox is disqualified for the same reason
+// TermListPopup exists: its drop list is drawn by the OS and stays bright white on dark chrome.
+// The frame owns the percent<->zoom maths; this widget only shows what it is told and reports intent.
+class ZoomField : public wxPanel
+{
+public:
+    std::function<void(int)> onPercentTyped;   // a value was typed and committed (the frame clamps it and pushes the TRUE value back)
+    std::function<void()>    onDropdown;       // the ▼ zone was clicked
+    std::function<void(int)> onWheelStep;      // wheel over the field: one zoom step up (+1) or down (-1)
+
+    ZoomField(wxWindow* p, bool dark) : wxPanel(p, wxID_ANY)
+    {
+        pickColours(dark);
+        SetBackgroundColour(m_fieldBg);
+        m_text = new wxTextCtrl(this, wxID_ANY, "100%", wxDefaultPosition, wxDefaultSize,
+                                wxBORDER_NONE | wxTE_PROCESS_ENTER | wxTE_RIGHT);
+        m_text->SetBackgroundColour(m_fieldBg); m_text->SetForegroundColour(m_fieldFg);
+        auto* fhs = new wxBoxSizer(wxHORIZONTAL);
+        fhs->Add(m_text, 1, wxALIGN_CENTRE_VERTICAL | wxLEFT, 4);
+        fhs->AddSpacer(kCaretZone);                          // childless zone on the right; the caret is painted here
+        SetSizer(fhs);
+
+        Bind(wxEVT_PAINT, [this](wxPaintEvent&) { paintField(); });
+        Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent& e) {
+            const wxSize sz = GetClientSize();
+            if (e.GetX() >= sz.x - kCaretZone) { if (onDropdown) onDropdown(); }
+            else { m_text->SetFocus(); e.Skip(); }
+        });
+        m_text->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent&) { commit(); });
+        m_text->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& e) { e.Skip(); commit(); });
+        m_text->Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& e) {
+            if (e.GetKeyCode() == WXK_ESCAPE) { setPercent(m_shown); return; }   // abandon the edit, back to the truth
+            e.Skip();
+        });
+        auto wheel = [this](wxMouseEvent& e) { if (onWheelStep) onWheelStep(e.GetWheelRotation() > 0 ? +1 : -1); };
+        Bind(wxEVT_MOUSEWHEEL, wheel);
+        m_text->Bind(wxEVT_MOUSEWHEEL, wheel);
+    }
+
+    // The frame pushes the value here; ChangeValue (not SetValue) so a programmatic resync never fires
+    // wxEVT_TEXT, and the no-op check keeps the caret put when the shown value hasn't actually moved.
+    void setPercent(int p)
+    {
+        m_shown = p;
+        const wxString s = wxString::Format("%d%%", p);
+        if (m_text->GetValue() != s) m_text->ChangeValue(s);
+    }
+    // Live dark/light toggle: SpinField's lazy repaint restore only covers the dialog-theming pass.
+    void setColours(bool dark)
+    {
+        pickColours(dark);
+        SetBackgroundColour(m_fieldBg);
+        m_text->SetBackgroundColour(m_fieldBg); m_text->SetForegroundColour(m_fieldFg);
+        m_text->Refresh(); Refresh();
+    }
+
+private:
+    static const int kCaretZone = 16;
+    void pickColours(bool dark)
+    {
+        m_fieldBg   = dark ? wxColour(32, 32, 32)    : wxColour(240, 240, 240);   // == the status bar's chrome, so the field reads as part of it
+        m_fieldFg   = dark ? wxColour(220, 220, 220) : *wxBLACK;
+        m_borderCol = dark ? wxColour(82, 82, 82)    : wxColour(160, 160, 160);
+    }
+    void commit()
+    {
+        // Clicking the ▼ moves focus off the edit, so kill-focus fires a commit BEFORE the popup opens -
+        // without this guard the field fights itself (commit -> zoom -> setPercent) mid-click.
+        if (m_inCommit) return;
+        m_inCommit = true;
+        wxString s = m_text->GetValue();
+        s.Trim(true).Trim(false);
+        if (s.EndsWith("%")) { s.RemoveLast(); s.Trim(true); }
+        long v = 0;
+        // Garbage, empty or nonsense: silently revert. A status-bar field must never pop a dialog.
+        if (!s.ToLong(&v) || v <= 0)      setPercent(m_shown);
+        else if ((int)v == m_shown)       setPercent(m_shown);      // unchanged - just re-render the canonical "NNN%"
+        else if (onPercentTyped)          onPercentTyped((int)v);   // the frame clamps and calls setPercent with the truth
+        m_inCommit = false;
+    }
+    void paintField()
+    {
+        wxPaintDC dc(this);
+        const wxSize sz = GetClientSize();
+        dc.SetBrush(*wxTRANSPARENT_BRUSH); dc.SetPen(wxPen(m_borderCol));
+        dc.DrawRectangle(0, 0, sz.x, sz.y);                       // field outline (crisp 1px)
+        const int ax = sz.x - kCaretZone;
+        dc.DrawLine(ax, 3, ax, sz.y - 3);                         // thin separator before the caret
+        // Antialiased fill, like SpinField's arrows: plain GDI DrawPolygon drops the bottom edge and the
+        // triangle comes out lopsided.
+        wxGCDC gdc(dc);
+        const int cx = ax + kCaretZone / 2, mid = sz.y / 2;
+        gdc.SetPen(*wxTRANSPARENT_PEN); gdc.SetBrush(wxBrush(m_fieldFg));
+        const wxPoint dn[3] = { { cx - 3, mid - 2 }, { cx + 3, mid - 2 }, { cx, mid + 2 } };   // ▼
+        gdc.DrawPolygon(3, dn);
+    }
+    wxTextCtrl* m_text = nullptr;
+    wxColour    m_fieldBg, m_fieldFg, m_borderCol;
+    int         m_shown = 100;      // the last percent the frame set - what Esc/garbage reverts to
+    bool        m_inCommit = false;
 };
 
 class GoToLineDialog : public wxDialog
@@ -1469,6 +1674,84 @@ static int nibLangRegister(NibHost*, const char* name, const char* exts, const c
 { return (g_nibRegisterLanguage && name && lua) ? g_nibRegisterLanguage(name, exts ? exts : "", lua) : 0; }
 static const NibLangDefApi g_nibLangDefApi = { 1, sizeof(NibLangDefApi), nibLangRegister };
 
+// nib.keymap/1 - a plugin contributes keybinding overrides as a named, switchable SCHEME (the optional
+// GPL npp-shortcuts-compat plugin uses it to re-add Notepad++ shortcuts after parsing a shortcuts.xml).
+// The opaque NibKeymapScheme handed to the plugin IS a host-owned builder that accumulates COPIED strings
+// only - never a plugin-side pointer or callback. That is the categorical safety difference from
+// nib.events (whose retained raw fn pointers caused the unload UAF/crash - the nib-event-subscriber-uaf +
+// nib-plugin-unload-crash memories): a committed scheme is copied into the KeymapStore + persisted to
+// disk, and any still-pending builder holds only host memory, so BOTH survive FreeLibrary by construction.
+// Menu-command bindings (bind_id / bind_name) resolve to the store's symbolicName space and become a
+// KeymapScheme's deltas; editor bindings (bind_editor) resolve a SCI_* id to the curated editor-command
+// name of the store's Phase-4 editor tier. The frame installs the six hooks below against its m_keymap.
+struct NibKmMenuBind   { wxString sym;  wxString accel; bool unbind = false; bool additional = false; };
+struct NibKmEditorBind { wxString name; wxString accel; bool unbind = false; bool additional = false; };
+struct NibKeymapBuilder                       // == the opaque NibKeymapScheme* the plugin holds
+{
+    wxString id, title, parent;
+    std::vector<NibKmMenuBind>   menu;        // bind_id / bind_name (id already resolved to a symbolicName)
+    std::vector<NibKmEditorBind> editor;      // bind_editor (SCI_* already resolved to an editor-command name)
+};
+// Uncommitted builders live here, host-owned. commit_scheme / discard_scheme consume one; unloadNibPlugins()
+// clears any left pending BEFORE FreeLibrary. (They hold no plugin-side pointers, so this is a leak-guard,
+// not a UAF fix - but it keeps the "nothing dangling into an unmapped DLL" invariant total and obvious.)
+static std::vector<std::unique_ptr<NibKeymapBuilder>> g_nibKmPendingBuilders;
+static void dropNibKmBuilder(NibKeymapBuilder* b)
+{
+    if (!b) return;
+    auto& v = g_nibKmPendingBuilders;
+    v.erase(std::remove_if(v.begin(), v.end(),
+            [b](const std::unique_ptr<NibKeymapBuilder>& p){ return p.get() == b; }), v.end());
+}
+// An accelerator string the host will accept: a single-level chord ("ctrl+k ctrl+c" - which
+// wxAcceleratorEntry can't round-trip, so accept it verbatim for the store's chord layer) or a spelling
+// wxAcceleratorEntry::FromString() parses. Rejecting the unparseable ones here is what lets bind_*()
+// return the 0/1 an importer uses to build its "Validate shortcuts.xml" report without any host read API.
+static bool nibKmAccelOk(const wxString& accel)
+{
+    if (accel.empty()) return false;
+    if (keySpell::isChord(accel)) return true;
+    wxAcceleratorEntry e;
+    return e.FromString(accel);
+}
+// Record one menu-command binding into a pending builder (shared by bind_id after id->symbolicName, and
+// bind_name). A NULL/empty accel is an UNBIND (masks the parent/default); otherwise the accel must parse
+// or nothing is recorded and 0 is returned. `additional`==0 marks a REPLACE (commit prepends an unbind so
+// the scheme delta clears the inherited default before binding - unbind-then-bind); `additional`
+// !=0 marks an extra binding (N++ NextKey). Returns 1 on record, 0 on an unparseable accel.
+static int nibKmPushMenu(NibKeymapBuilder* b, const wxString& sym, const char* accel, int additional)
+{
+    if (!b || sym.empty()) return 0;
+    const bool unbind = !accel || !*accel;
+    wxString a;
+    if (!unbind) { a = wxString::FromUTF8(accel); if (!nibKmAccelOk(a)) return 0; }
+    b->menu.push_back({ sym, a, unbind, additional != 0 });
+    return 1;
+}
+// The frame installs these against its KeymapStore (m_keymap). begin/discard/commit manage the pending
+// builder list; bind_* resolve + validate against the loaded store and push a copied binding into a builder.
+static std::function<NibKeymapScheme*(const char*, const char*, const char*)> g_nibKmBegin;
+static std::function<int(NibKeymapScheme*, int, const char*, int)>            g_nibKmBindId;
+static std::function<int(NibKeymapScheme*, const char*, const char*, int)>    g_nibKmBindName;
+static std::function<int(NibKeymapScheme*, int, const char*, int)>            g_nibKmBindEditor;
+static std::function<void(NibKeymapScheme*)>                                  g_nibKmDiscard;
+static std::function<int(NibKeymapScheme*, int)>                              g_nibKmCommit;
+// Thin C trampolines (host/handle/string NUL-guarded) -> the frame hooks. Same shape as nibLangRegister.
+static NibKeymapScheme* nibKmBegin(NibHost*, const char* id, const char* title, const char* parent)
+{ return g_nibKmBegin ? g_nibKmBegin(id ? id : "", title ? title : "", parent ? parent : "") : nullptr; }
+static int nibKmBindId(NibHost*, NibKeymapScheme* s, int cmd_id, const char* accel, int additional)
+{ return (g_nibKmBindId && s) ? g_nibKmBindId(s, cmd_id, accel, additional) : 0; }
+static int nibKmBindName(NibHost*, NibKeymapScheme* s, const char* name, const char* accel, int additional)
+{ return (g_nibKmBindName && s && name) ? g_nibKmBindName(s, name, accel, additional) : 0; }
+static int nibKmBindEditor(NibHost*, NibKeymapScheme* s, int sci_command, const char* accel, int additional)
+{ return (g_nibKmBindEditor && s) ? g_nibKmBindEditor(s, sci_command, accel, additional) : 0; }
+static void nibKmDiscard(NibHost*, NibKeymapScheme* s)
+{ if (g_nibKmDiscard && s) g_nibKmDiscard(s); }
+static int nibKmCommit(NibHost*, NibKeymapScheme* s, int activate)
+{ return (g_nibKmCommit && s) ? g_nibKmCommit(s, activate) : 0; }
+static const NibKeymapApi g_nibKeymapApi = { 1, sizeof(NibKeymapApi),
+    nibKmBegin, nibKmBindId, nibKmBindName, nibKmBindEditor, nibKmDiscard, nibKmCommit };
+
 // nib.paths/1 - well-known host directories.
 static std::function<int(char*, int)> g_nibUserDataDir;
 static int nibPathsUserData(NibHost*, char* b, int c) { return g_nibUserDataDir ? g_nibUserDataDir(b, c) : 0; }
@@ -1501,6 +1784,7 @@ static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_EVENTS)   == 0) return &g_nibEventsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PANELS)   == 0) return &g_nibPanelsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_LANGDEF)  == 0) return &g_nibLangDefApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_KEYMAP)   == 0) return &g_nibKeymapApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PATHS)    == 0) return &g_nibPathsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_SCI)      == 0) return &g_nibSciApi;   // portable: every OS
 #ifdef __WXMSW__
@@ -1566,6 +1850,13 @@ static void unloadNibPlugins()
     // down after this call returns, and nibFireEvent() would otherwise call straight into unmapped memory.
     g_nibSubs.clear();
     g_nibCommands.clear();
+    // Free any still-pending nib.keymap builders (a plugin that began a scheme but never committed/discarded
+    // it - e.g. it aborted on a parse error, or is being unloaded mid-import). Unlike g_nibSubs/g_nibCommands
+    // above these hold NO plugin-side pointers (only copied strings), so this is a leak-guard, not a UAF fix -
+    // but it keeps "nothing referencing a DLL we're about to unmap" total. COMMITTED schemes are deliberately
+    // NOT torn down here: they were copied into the KeymapStore + persisted to shortcuts.json, so they are
+    // host-owned data that OUTLIVES the plugin - the exact property nib.events lacked.
+    g_nibKmPendingBuilders.clear();
     for (auto it = g_nibLibs.rbegin(); it != g_nibLibs.rend(); ++it)
     {
         if (it->api && it->api->deactivate) it->api->deactivate(reinterpret_cast<NibHost*>(g_view));
@@ -1818,6 +2109,14 @@ public:
     static constexpr bool kBorderless = false;
 #endif
 
+    // Keyboard focus scope, consumed by refreshAccelerators(). Phase 0 of the shortcut work:
+    // when focus is inside the terminal panel the frame's
+    // accelerator table must NOT carry the terminal-critical keys (Ctrl+C etc.), or MSW's accelerator
+    // translation steals them from the focused TermView before it can turn Ctrl+C into a SIGINT. Later
+    // phases grow this into KeyScope { Global, Editor, Terminal }; for now Editor = the full table,
+    // Terminal = an empty table.
+    enum class Scope { Editor, Terminal };
+
     explicit WxnShellFrameT(bool dark)
         : FB(nullptr, wxID_ANY, "new 1 - wxNote", wxDefaultPosition, wxSize(1100, 720)),
           m_timer(this, myID_TIMER)
@@ -1927,6 +2226,109 @@ public:
         g_nibRegisterLanguage = [this](const char* n, const char* e, const char* lua) -> int {
             return registerScintilluaLanguage(wxString::FromUTF8(n), wxString::FromUTF8(e ? e : ""), wxString::FromUTF8(lua ? lua : ""));
         };
+        // nib.keymap/1: build/commit plugin keybinding schemes into m_keymap. Installed here (before
+        // loadNibPlugins() at the end of this method) so a plugin's activate() can call them, and after
+        // buildMenuBar() has seeded+loaded m_keymap (m_keymapReady) so bind_id/bind_name can resolve ids and
+        // names against a live store. Data-only across the boundary -> unload-safe (see the nib.keymap block).
+        g_nibKmBegin = [this](const char* id, const char* title, const char* parent) -> NibKeymapScheme* {
+            if (!id || !*id) return nullptr;                       // a scheme needs a stable id to be committable
+            // A bundled preset's id ("wxnote.default") is RESERVED: a plugin scheme may
+            // PARENT a preset but never claim its id (registerScheme would refuse the commit anyway -
+            // failing here surfaces the mistake at begin time instead of after a whole build).
+            if (m_keymap.schemeIsBundled(wxString::FromUTF8(id))) return nullptr;
+            auto up = std::make_unique<NibKeymapBuilder>();
+            up->id     = wxString::FromUTF8(id);
+            up->title  = wxString::FromUTF8(title  ? title  : "");
+            up->parent = wxString::FromUTF8(parent ? parent : "");
+            NibKeymapBuilder* raw = up.get();
+            g_nibKmPendingBuilders.push_back(std::move(up));       // host-owned until commit / discard / unload
+            return reinterpret_cast<NibKeymapScheme*>(raw);
+        };
+        g_nibKmBindId = [this](NibKeymapScheme* h, int cmdId, const char* accel, int additional) -> int {
+            NibKeymapBuilder* b = reinterpret_cast<NibKeymapBuilder*>(h);
+            if (!b) return 0;
+            const EffectiveBinding* eff = m_keymap.effectiveByCmd(cmdId);   // frozen kCmd/IDM -> symbolicName
+            if (!eff) return 0;                                   // bind_id MUST reject an unknown id
+            return nibKmPushMenu(b, eff->symbolicName, accel, additional);
+        };
+        g_nibKmBindName = [this](NibKeymapScheme* h, const char* name, const char* accel, int additional) -> int {
+            NibKeymapBuilder* b = reinterpret_cast<NibKeymapBuilder*>(h);
+            if (!b || !name || !*name) return 0;
+            const wxString sym = wxString::FromUTF8(name);
+            const int recorded = nibKmPushMenu(b, sym, accel, additional);
+            // Report success only for a command this build actually knows; an unknown name is still recorded
+            // (forward-compat: resolveAll() retains-but-ignores it) but returns 0 so an importer can flag it.
+            return (recorded && m_keymap.effective(sym) != nullptr) ? 1 : 0;
+        };
+        g_nibKmBindEditor = [this](NibKeymapScheme* h, int sciCmd, const char* accel, int additional) -> int {
+            NibKeymapBuilder* b = reinterpret_cast<NibKeymapBuilder*>(h);
+            if (!b) return 0;
+            // Phase 4's editor tier is keyed by a curated ascii name, not the raw SCI_* id; map id -> name.
+            wxString name;
+            for (const EditorEffective& e : m_keymap.editorAll())
+                if (e.sciCmd == sciCmd) { name = e.name; break; }
+            if (name.empty()) return 0;                           // no remappable editor row for this SCI id
+            const bool unbind = !accel || !*accel;
+            wxString a;
+            if (!unbind) { a = wxString::FromUTF8(accel); if (!nibKmAccelOk(a)) return 0; }
+            b->editor.push_back({ name, a, unbind, additional != 0 });
+            return 1;
+        };
+        g_nibKmDiscard = [](NibKeymapScheme* h) { dropNibKmBuilder(reinterpret_cast<NibKeymapBuilder*>(h)); };
+        g_nibKmCommit = [this](NibKeymapScheme* h, int activate) -> int {
+            NibKeymapBuilder* b = reinterpret_cast<NibKeymapBuilder*>(h);
+            if (!b) return 0;
+            // Menu tier: build a delta-only KeymapScheme. bundled=false so save() serializes it into
+            // shortcuts.json and it OUTLIVES the plugin (reloads as a plain user scheme even with the plugin
+            // gone). registerScheme replaces any same-id scheme, so a re-import is idempotent.
+            KeymapScheme s;
+            s.id      = b->id;
+            s.name    = b->title.empty() ? b->id : b->title;
+            s.parent  = b->parent;             // "" or an unknown id => resolves against the root only
+            s.bundled = false;
+            for (const NibKmMenuBind& mb : b->menu)
+            {
+                // A replace (additional==0, non-unbind) is the store's unbind-then-bind convention -
+                // one owner, KeymapStore::pushReplace (clears the inherited Tier-0/parent accel first;
+                // without it applyDelta ADDS the new key alongside the old one).
+                if (!mb.additional && !mb.unbind)
+                { KeymapStore::pushReplace(s.deltas, mb.sym, mb.accel); continue; }
+                KeymapDelta d;
+                d.symbolicName = mb.sym;
+                d.scope        = KeyScope::Global;
+                d.unbind       = mb.unbind;
+                d.key          = mb.unbind ? wxString() : mb.accel;
+                s.deltas.push_back(std::move(d));
+            }
+            // Editor tier: SCHEME-SCOPED editor deltas, stored UNCONDITIONALLY (activate or not) so an
+            // inactive commit still persists them and a later activation applies them - exact parity
+            // with the menu deltas above (the importer's "select the scheme in the mapper to apply"
+            // holds for both tiers). The editor tier resolves ONE accel per command last-wins, so an
+            // `additional` bind collapses the same way the old activate-time setEditorBinding loop did.
+            for (const NibKmEditorBind& eb : b->editor)
+            {
+                KeymapDelta d;
+                d.symbolicName = eb.name;
+                d.scope        = KeyScope::Editor;
+                d.unbind       = eb.unbind;
+                d.key          = eb.unbind ? wxString() : eb.accel;
+                s.editorDeltas.push_back(std::move(d));
+            }
+            if (!m_keymap.registerScheme(s))   // refused: the id names a bundled read-only preset
+            { dropNibKmBuilder(b); return 0; }
+            // Re-resolve NOW even without activation: a re-commit may have REPLACED a scheme that is
+            // already in the ACTIVE chain, and registerScheme itself never resolves - without this the
+            // live accel table/menu labels/editor keymap would serve the stale deltas until restart.
+            // Idempotent (the activate path's setActiveScheme resolves again) and a cheap no-op when
+            // the committed scheme is not in the active chain.
+            m_keymap.resolveAll();
+            if (activate) m_keymap.setActiveScheme(s.id);
+            m_keymap.save();                   // persist immediately (host-owned on disk) - never on exit
+            refreshAccelerators(m_accelScope); // reflect any now-active menu deltas on the bar + frame accel table
+            reapplyEditorKeymaps();            // and any now-active editor overrides on the live STCs
+            dropNibKmBuilder(b);               // the handle is consumed - free the builder, do not reuse
+            return 1;
+        };
         g_nibUserDataDir = [this](char* b, int c) -> int { return nibCopyUtf8(userDataDir().utf8_string(), b, c); };
         g_nibDocCount      = [this]() -> int { const int n = (m_main.tabs ? (int)m_main.tabs->GetPageCount() : 0) + (m_sub.tabs ? (int)m_sub.tabs->GetPageCount() : 0); return n > 0 ? n : 1; };   // across BOTH views
         g_nibDocActivePath = [this](char* b, int c) -> int {   // active document's full path (UTF-8); 0 if untitled
@@ -1991,7 +2393,8 @@ public:
             }
         };
 #endif
-        loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
+        if (!g_safeMode)    // --safe: load nothing from <exe>/nib - our own Nib plugins AND the GPL npp-bridge
+            loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
         if (!g_nibCommands.empty())   // surface registered Nib commands in the Plugins menu
             if (wxMenu* pm = m_menuRegistry.find("menu.extensions"))
             {
@@ -2002,12 +2405,25 @@ public:
 
         Bind(wxEVT_MENU, &WxnShellFrameT::onCommand, this);          // one dispatcher for all menu+toolbar ids
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) { updateStatus(); updateUiState(); }, myID_TIMER);
+#ifdef WXN_HAS_BORDERLESS
+        // Focus-scoped accelerators (see refreshAccelerators / onChildFocus). Only the borderless frame
+        // owns a wxAcceleratorTable, so only it needs the gate: when focus moves into the terminal panel
+        // we drop that table so Ctrl+C/D/Z/L/A/E and the arrows reach the focused TermView instead of
+        // firing a menu command on the hidden editor. wxChildFocusEvent propagates up to the frame on
+        // every descendant focus change - and ONLY on focus changes, not per-event like a global filter -
+        // so it covers the dynamically-created terminal tabs for free. The native frame's accelerators
+        // come from the attached wxMenuBar (which SetAcceleratorTable can't clear), so it never binds this.
+        if constexpr (kBorderless) Bind(wxEVT_CHILD_FOCUS, &WxnShellFrameT::onChildFocus, this);
+#endif
         g_editorContextMenu = [this](int sx, int sy) { showEditorContext(sx, sy); };   // editor right-click menu
         g_openDropped = [this](const wxString& s) { openDroppedPaths(s); };            // files dropped on the editor
         g_onZoom = [this](int z) { onZoomChanged(z); };                                // sync + persist zoom
-        g_ipcOpenRequest = [this](const wxArrayString& paths, int gotoLine, int gotoCol, int forceEnc) {
-            for (const auto& p : paths) openPath(p);
-            if (!paths.IsEmpty()) applyGotoAndEncoding(gotoLine, gotoCol, forceEnc);
+        g_ipcOpenRequest = [this](const WxnOpenRequest& r) {
+            for (const auto& d : r.folders) showFileBrowserRooted(d);   // `wxnote .` handed to us; last root wins
+            // Shared with the new-window path: files as tabs (or into the split for -o/-O/--split), each
+            // file's :line[:col], the launch-wide -g/-e (or +N), -R/-M read-only and +/{pattern}. -w/stdin
+            // never reach here (both force a new instance in OnInit), so no wait/stdin handling is needed.
+            openRequestFiles(r);
             Raise(); if (IsIconized()) Iconize(false);   // a background launch handed us files - come to front
         };
         SetDropTarget(new FileDrop([this](const wxArrayString& fs) { for (const auto& f : fs) openPath(f); }));
@@ -2022,7 +2438,20 @@ public:
 
     // Open a file given on the command line (cmdline paths open as tabs). Returns the new
     // page (nullptr if the path didn't exist) so callers can act on it further (e.g. -g/-e, IPC handoff).
+    // FILES only, by design: a positional DIRECTORY is routed by the caller (WxnApp::OnInit and the IPC
+    // lambda above) to openFolderPath() instead. Teaching openPath() to swallow directories would put them
+    // into the `opened` array that feeds enterWaitMode(), and `wxnote -w somedir` would then block forever
+    // on a "tab" that can never be closed because it never was one.
     EditorPage* openPath(const wxString& p) { return wxFileExists(p) ? addDocument(p, wxFileNameFromPath(p)) : nullptr; }
+    // A positional directory (`wxnote .`, `wxnote C:\src\proj`) roots the workspace browser rather than
+    // opening a tab. Public wrapper: showFileBrowserRooted() itself lives in the private section below.
+    void openFolderPath(const wxString& p) { showFileBrowserRooted(p); }
+    // -w/--wait: the paths the launching process is blocked on. Also force the save prompt ON for this run
+    // only (not persisted - saveSettings() skips the AskBeforeClose write in wait mode): m_askBeforeClose
+    // defaults to OFF, i.e. a modified buffer is discarded silently - which for a commit message would hand
+    // git back an unedited COMMIT_EDITMSG with no warning.
+    void enterWaitMode(const wxArrayString& paths)
+    { g_waitMode = true; g_waitPaths = paths; m_askBeforeClose = true; }
     // Apply -g (goto line[,col]) / -e (force encoding) to whichever page is active after opening some
     // CLI/IPC-supplied paths - the switches apply to the file just opened, and since addDocument()
     // always activates the newest page, that's simply activePage().
@@ -2035,6 +2464,79 @@ public:
             sci(SCI_GOTOPOS, pos);
         }
         if (m_stc) m_stc->SetFocus();
+    }
+    // Open the FILES named by a launch or IPC request into THIS frame, honouring -o/-O/--split (first file
+    // into MAIN, the rest into the revealed SUB view), each file's own :line[:col], the launch-wide -g/-e
+    // (or a +N token folded into gotoLine), -R/-M/--read-only and +/{pattern}. Returns the paths that
+    // actually opened (feeds -w wait mode). Folders and piped stdin stay with the CALLER: they differ
+    // between the new-window path (WxnApp::OnInit) and the reuse-window path (the g_ipcOpenRequest lambda).
+    wxArrayString openRequestFiles(const WxnOpenRequest& req)
+    {
+        wxArrayString opened;
+        std::vector<EditorPage*> openedPages;
+        // wxNote's split is exactly TWO views in ONE (always side-by-side) orientation, so -o and -O are
+        // identical and there is no third pane / second orientation to honour vim's -oN/-ON counts: N>2 just
+        // piles the tail onto SUB. Only split for >=2 files - a lone `-o file` in an empty second pane is pointless.
+        const bool doSplit = req.split && req.paths.GetCount() >= 2;
+        if (doSplit) ensureSplit();
+        for (size_t i = 0; i < req.paths.GetCount(); ++i)
+        {
+            if (doSplit) setActiveView(i == 0 ? &m_main : &m_sub);    // first file MAIN, everything after it SUB
+            if (EditorPage* pg = openPath(req.paths[i]))
+            {
+                opened.Add(req.paths[i]);
+                openedPages.push_back(pg);
+                if (i < req.lines.GetCount() && req.lines[i] > 0)
+                    applyGotoAndEncoding(req.lines[i], req.cols[i], -1);   // this file's own :line[:col] suffix
+            }
+        }
+        // The launch-wide -g/-e (or +N) goes last, so an explicit -g still wins over a suffix on the final
+        // file. Runs while the LAST-opened page is still active (so goto/find land on it, matching wxNote's
+        // documented "last file opened" semantics), then we hand focus back to MAIN for the split case.
+        if (!req.paths.IsEmpty()) applyGotoAndEncoding(req.gotoLine, req.gotoCol, req.forceEnc);
+        if (!req.findPattern.empty() && !openedPages.empty()) findOnOpen(req.findPattern);
+        if (req.readOnly) setReadOnlyForPages(openedPages);
+        if (doSplit) setActiveView(&m_main);
+        return opened;
+    }
+    // -R/-M/--read-only: set (soft, Scintilla) read-only on ONLY the pages just opened by this launch, not
+    // every tab - a reuse-window launch must never freeze the user's already-open buffers. Read-only lives
+    // on the Scintilla Document, so we reach each page's doc through the same doc-pointer swap
+    // setReadOnlyAllDocs uses and restore the active view's own doc + caret afterwards.
+    void setReadOnlyForPages(const std::vector<EditorPage*>& pages)
+    {
+        if (!m_stc || pages.empty()) return;
+        const sptr_t original = sci(SCI_GETDOCPOINTER);
+        const int savedAnchor = (int)sci(SCI_GETANCHOR), savedCaret = (int)sci(SCI_GETCURRENTPOS);
+        for (EditorPage* p : pages) { if (!p) continue; sci(SCI_SETDOCPOINTER, 0, p->doc); sci(SCI_SETREADONLY, 1); }
+        sci(SCI_SETDOCPOINTER, 0, original);
+        sci(SCI_SETSEL, savedAnchor, savedCaret);
+        setStatus(0, _("Read-Only"));
+    }
+    // +/{pattern}: put the caret on the first LITERAL match of pattern in the active (last-opened) document.
+    // Deliberately a plain search-in-target pass, NOT a regex: vim's +/ is a regex, but wxNote has no CLI
+    // regex contract to honour and a case-insensitive literal find is the least-surprising, always-valid
+    // behaviour. No match = caret left where the goto/open put it (no error dialog for a CLI convenience).
+    void findOnOpen(const wxString& pattern)
+    {
+        if (!m_stc || pattern.empty()) return;
+        const wxScopedCharBuffer pat = pattern.ToUTF8();
+        sci(SCI_SETSEARCHFLAGS, 0);                          // 0 = plain text, case-insensitive
+        sci(SCI_SETTARGETSTART, 0);
+        sci(SCI_SETTARGETEND, sci(SCI_GETLENGTH));
+        const sptr_t pos = sci(SCI_SEARCHINTARGET, (uptr_t)pat.length(), reinterpret_cast<sptr_t>(pat.data()));
+        if (pos >= 0) { sci(SCI_GOTOPOS, pos); if (m_stc) m_stc->SetFocus(); }
+    }
+    // '-': drop captured piped stdin into a NEW untitled, MODIFIED buffer titled "(stdin)" so `... | wxnote -`
+    // and `git show HEAD:f | wxnote -` land the text in an editor. Like restoreRecoveryBackups, this
+    // deliberately does NOT SCI_SETSAVEPOINT - the buffer stays flagged unsaved so closing it prompts to save.
+    EditorPage* openStdinBuffer(const wxString& text)
+    {
+        EditorPage* pg = addDocument(wxString(), _("(stdin)"));
+        if (!pg) return nullptr;
+        setAllText(text);                                    // NOT a savepoint: leave it dirty/unsaved
+        if (m_stc) { sci(SCI_GOTOPOS, 0); m_stc->SetFocus(); }
+        return pg;
     }
     // Open file(s) from a Scintilla SCN_URIDROPPED payload (newline-separated; may be file:// URIs).
     void openDroppedPaths(const wxString& data)
@@ -2766,7 +3268,7 @@ private:
     void projAddFolder(const wxTreeItemId& parent)
     {
         if (!parent.IsOk()) return;
-        const wxTreeItemId f = m_projPanel->AppendItem(parent, "New Folder", -1, -1, new ProjItemData(false));
+        const wxTreeItemId f = m_projPanel->AppendItem(parent, _("New Folder"), -1, -1, new ProjItemData(false));
         m_projPanel->Expand(parent);
         m_projPanel->EditLabel(f);                 // let the user name it right away
     }
@@ -2923,11 +3425,30 @@ private:
         // BEFORE we get a chance to override it, and since these typically have NO OS registration,
         // it caches the SHARED generic `file` id - which the skip-guard above correctly declines to
         // overwrite (doing so would reskin every other unmatched file too). So they get a dedicated
-        // image-list slot instead, applied by exact-filename match via applyDotfileIcons() below,
+        // image-list slot instead, applied by exact-filename match via applyBrowserIcons() below,
         // entirely bypassing wxGenericDirCtrl's built-in icon resolution for just this curated set.
         m_dotfileIconIdx = il->Add(icon("filetype-code").GetBitmap(sz));
+
+        // Everything above only PRE-EMPTS the OS lookup, which makes it a whitelist: any extension not in
+        // kExtIcons that Windows/xdg DOES have registered still gets a live OS icon, because
+        // wxGenericDirCtrl calls GetIconID() for it at populate time and allocates a fresh image-list slot
+        // we never touched (".txt" was one such hole - hence a Notepad icon on CMakeLists.txt). Rather than
+        // keep chasing extensions, add our OWN slots here and assign them per item in applyBrowserIcons(),
+        // which bypasses wxGenericDirCtrl's icon resolution entirely for files. Unmatched files get our
+        // generic "file" icon, so an OS icon can no longer appear whatever the machine has registered.
+        for (const auto& e : kExtIcons)
+        {
+            auto it = m_iconIdxByName.find(e.iconName);
+            if (it == m_iconIdxByName.end())
+                it = m_iconIdxByName.emplace(e.iconName, il->Add(icon(e.iconName).GetBitmap(sz))).first;
+            m_extToIconIdx[wxString::FromAscii(e.ext)] = it->second;
+        }
+        m_genericFileIconIdx = il->Add(icon("file").GetBitmap(sz));
     }
     int m_dotfileIconIdx = -1;
+    int m_genericFileIconIdx = -1;
+    std::map<wxString, int> m_iconIdxByName;   // our icon name -> image-list slot (deduped)
+    std::map<wxString, int> m_extToIconIdx;    // lowercased extension -> image-list slot
     // Filenames matched LITERALLY (unlike kExtIcons' AfterLast('.') suffix match), so e.g.
     // "config.env"/"production.env" are correctly left alone - only the exact dotfile gets reskinned.
     static bool isCuratedDotfile(const wxString& name)
@@ -2942,16 +3463,38 @@ private:
     // Re-images any curated dotfile among `parent`'s direct children. Run once for the file browser's
     // root (already populated synchronously at construction) and again on every EVT_TREE_ITEM_EXPANDED,
     // since wxGenericDirCtrl lazily populates a folder's children only when the user expands it.
-    void applyDotfileIcons(wxTreeCtrl* tree, const wxTreeItemId& parent)
+    // Our icon slot for a filename: exact-name pass first (dotfiles have no real extension), then a
+    // case-insensitive extension match, else our generic file icon. Never returns an OS-derived slot.
+    int browserIconFor(const wxString& name) const
     {
-        if (!tree || !parent.IsOk() || m_dotfileIconIdx < 0) return;
+        if (isCuratedDotfile(name)) return m_dotfileIconIdx;
+        const int dot = name.Find('.', /*fromEnd=*/true);
+        if (dot != wxNOT_FOUND && dot != 0)
+        {
+            const auto it = m_extToIconIdx.find(name.Mid(dot + 1).Lower());
+            if (it != m_extToIconIdx.end()) return it->second;
+        }
+        return m_genericFileIconIdx;   // no extension (LICENSE, NOTICE) or an unmapped one
+    }
+    // Re-images `parent`'s direct FILE children with our own icons. Folders are left alone - their slots
+    // (folder/folder_open) were already replaced wholesale above. Run for the file browser's root (already
+    // populated synchronously at construction) and again on every EVT_TREE_ITEM_EXPANDED, since
+    // wxGenericDirCtrl populates a folder's children only when the user expands it.
+    void applyBrowserIcons(wxTreeCtrl* tree, const wxTreeItemId& parent)
+    {
+        if (!tree || !parent.IsOk() || m_genericFileIconIdx < 0) return;
         wxTreeItemIdValue cookie;
         for (wxTreeItemId child = tree->GetFirstChild(parent, cookie); child.IsOk(); child = tree->GetNextChild(parent, cookie))
-            if (isCuratedDotfile(tree->GetItemText(child)))
-            {
-                tree->SetItemImage(child, m_dotfileIconIdx, wxTreeItemIcon_Normal);
-                tree->SetItemImage(child, m_dotfileIconIdx, wxTreeItemIcon_Selected);
-            }
+        {
+            // wxGenericDirCtrl hangs a wxDirItemData off every item; m_isDir is the reliable way to tell a
+            // folder from a file here (the tree's own image would already be the thing we're replacing).
+            const auto* d = dynamic_cast<wxDirItemData*>(tree->GetItemData(child));
+            if (d && d->m_isDir) continue;
+            const int idx = browserIconFor(tree->GetItemText(child));
+            if (idx < 0) continue;
+            tree->SetItemImage(child, idx, wxTreeItemIcon_Normal);
+            tree->SetItemImage(child, idx, wxTreeItemIcon_Selected);
+        }
     }
     void createFileBrowser(const wxString& root)
     {
@@ -2970,8 +3513,8 @@ private:
         if (auto* tree = m_fileBrowser->GetTreeCtrl())
         {
             themeToEditor(tree);   // theme the tree to the editor's colours
-            applyDotfileIcons(tree, tree->GetRootItem());   // root's children are already populated synchronously
-            tree->Bind(wxEVT_TREE_ITEM_EXPANDED, [this, tree](wxTreeEvent& ev) { applyDotfileIcons(tree, ev.GetItem()); ev.Skip(); });
+            applyBrowserIcons(tree, tree->GetRootItem());   // root's children are already populated synchronously
+            tree->Bind(wxEVT_TREE_ITEM_EXPANDED, [this, tree](wxTreeEvent& ev) { applyBrowserIcons(tree, ev.GetItem()); ev.Skip(); });
         }
         m_fileBrowser->Bind(wxEVT_DIRCTRL_FILEACTIVATED, [this](wxTreeEvent&) {
             const wxString f = m_fileBrowser->GetFilePath();
@@ -2991,7 +3534,9 @@ private:
         }
         togglePane(m_fileBrowser);
     }
-    void showFileBrowserRooted(const wxString& root)   // Open Folder as Workspace / Folder as Workspace: (re)root + reveal
+    // Open Folder as Workspace / Containing Folder as Workspace / a positional directory on the command
+    // line (`wxnote .`, via openFolderPath()): (re)root + reveal
+    void showFileBrowserRooted(const wxString& root)
     {
         createFileBrowser(root);
         wxAuiPaneInfo& pi = m_aui.GetPane(m_fileBrowser);
@@ -3676,7 +4221,7 @@ private:
     // itself (privately loaded, but still visible to GDI's font enumeration within this same process).
     wxString effectiveFontFace() const
     {
-        if (m_fontFace.empty() || !wxFontEnumerator::IsValidFacename(m_fontFace)) return "JetBrains Mono";
+        if (m_fontFace.empty() || !wxFontEnumerator::IsValidFacename(m_fontFace)) return "Cascadia Mono";
         return m_fontFace;
     }
     // Per-editor Scintilla configuration: margins, font, options, theme, scrollbars.
@@ -3689,9 +4234,14 @@ private:
         sci(SCI_INDICSETSTYLE, MARK_INDIC, INDIC_ROUNDBOX);   // "Mark All" / found-highlight indicator
         sci(SCI_INDICSETFORE, MARK_INDIC, 0x00C800);
         sci(SCI_INDICSETALPHA, MARK_INDIC, 80);
+        sci(SCI_INDICSETUNDER, MARK_INDIC, 1);   // paint the box UNDER the glyphs, not over them
         sci(SCI_INDICSETSTYLE, SMART_INDIC, INDIC_ROUNDBOX);  // smart-highlight (double-click a word)
         sci(SCI_INDICSETFORE, SMART_INDIC, 0x00C800);
         sci(SCI_INDICSETALPHA, SMART_INDIC, 70);
+        // Without SETUNDER the translucent roundbox is composited ON TOP of the text; a double-click
+        // both selects a word AND smart-highlights it, so the selected token got a green wash over an
+        // already low-contrast pale selection - the two effects stacking is what made it unreadable.
+        sci(SCI_INDICSETUNDER, SMART_INDIC, 1);
         sci(SCI_INDICSETOUTLINEALPHA, SMART_INDIC, 160);
         for (int i = 0; i < 5; ++i) {   // the 5 "Mark All Ext" styles
             sci(SCI_INDICSETSTYLE, MARK_STYLE_BASE + i, INDIC_ROUNDBOX);
@@ -3735,6 +4285,12 @@ private:
 #endif
         sci(SCI_SETZOOM, m_zoom);   // new tabs inherit the current (persisted) zoom level
         updateLineMargin();
+        // Editor-command remaps: apply the store's overrides to THIS freshly-created view. At
+        // startup the store isn't loaded yet (buildEditor precedes buildMenuBar), so this is a no-op and
+        // reapplyEditorKeymaps() in buildMenuBar does the real apply to main+sub; for any view created after
+        // the store is ready this remaps its editor keys on creation. The view starts at Scintilla's stock
+        // keymap, so a plain apply (no undo) is correct here.
+        if (m_keymapReady && m_stc) applyEditorOpsTo(m_stc, computeEditorOps(m_keymap));
     }
     // Code folding: margin 2 with a box-tree, automatic fold on margin click.
     void setupFolding()
@@ -3879,6 +4435,9 @@ private:
         if (auto* p = activePage()) {
             if (m_docMap) { m_docMap->SetDocPointer(reinterpret_cast<void*>(p->doc)); updateDocMapViewport(); }
             updateStatus();
+            // Zoom lives in each wxStyledTextCtrl's own ViewStyle, so after a split the two views can hold
+            // different zooms; without this the field would keep showing the other pane's number.
+            syncZoomField();
         }
     }
     void onPageChanged(wxAuiNotebookEvent& e)
@@ -4006,7 +4565,27 @@ private:
         if (!p || p->path.empty()) return;
         for (size_t i = 0; i < m_closedFiles.size(); ++i) if (m_closedFiles[i] == p->path) { m_closedFiles.erase(m_closedFiles.begin() + i); break; }
         m_closedFiles.push_back(p->path);
+        if (g_waitMode) checkWaitDone(p->path);   // -w/--wait: this may have been the last file we were waiting on
         if (m_closedFiles.size() > 30) m_closedFiles.erase(m_closedFiles.begin());
+    }
+    // -w/--wait: a tab the launcher is blocked on just closed. When the last one goes, quit - that process
+    // exit is what unblocks git. CallAfter, not a direct Close(): onPageClose defers the page's real
+    // deletion to its own CallAfter, so tearing the frame down synchronously here would run under it.
+    // Close() (vetoable, not Close(true)) so any OTHER modified tab still gets its save prompt.
+    void checkWaitDone(const wxString& path)
+    {
+        for (size_t i = 0; i < g_waitPaths.GetCount(); ++i)
+            // SameAs() normalises + compares case-insensitively on Windows, but it touches the filesystem,
+            // so it says "not equal" for a file deleted while still open (git removes COMMIT_EDITMSG in
+            // some flows) - fall back to a plain compare, or that path would never leave g_waitPaths and
+            // the launcher would hang forever.
+            if (wxFileName(g_waitPaths[i]).SameAs(wxFileName(path))
+                || g_waitPaths[i].IsSameAs(path, /*caseSensitive=*/wxFileName::IsCaseSensitive()))
+            {
+                g_waitPaths.RemoveAt(i);
+                if (g_waitPaths.IsEmpty()) this->CallAfter([this] { this->Close(); });
+                return;
+            }
     }
     void restoreLastClosed()                 // Ctrl+Shift+T: reopen the most-recently-closed file (skip vanished/already-open)
     {
@@ -4266,7 +4845,10 @@ private:
             for (EditorPage* p : allPages())   // prompt EVERY modified doc across BOTH views - none lost on exit
                 if (!confirmClose(p, /*exiting=*/true)) { e.Veto(); return; }
         saveSettings();    // persist any in-session View-menu toggle changes
-        saveSession(wxConfigBase::Get());   // remember the open (saved) files so the next launch reopens them
+        if (!g_waitMode)   // a --wait window is ephemeral (a commit message is not a session): without this every
+                           // `git commit` would overwrite the user's saved tabs with .git/COMMIT_EDITMSG and the
+                           // next normal launch would reopen it
+            saveSession(wxConfigBase::Get());   // remember the open (saved) files so the next launch reopens them
         wxConfigBase::Get()->Flush();
         if (m_terminal) m_terminal->shutdownAll();   // kill child shells + stop their poll timers before AUI teardown
         // stop + free the owned timers so no WM_TIMER can Notify() into the frame while teardown pumps messages
@@ -4529,6 +5111,240 @@ private:
         tb->Show(show);   // native frame toolbar
     }
 
+    // Strip a "\t<accel>" suffix from a menu label while KEEPING its "&" mnemonic. wx's own
+    // GetItemLabelText() can't be used for the label rewrite below: it runs wxStripMenuCodes(wxStrip_Menu)
+    // which also removes the "&", so it would silently turn "&Save" into "Save" and kill Alt-navigation.
+    static wxString stripAccelKeepMnemonic(const wxString& label)
+    {
+        const int t = label.Find('\t');
+        return (t == wxNOT_FOUND) ? label : label.Left(t);
+    }
+
+    // Rewrite every store-managed menu item's "\t<accel>" suffix from the KeymapStore's effective set,
+    // preserving the mnemonic. This is how a shortcuts.json override (and, later, a scheme switch) shows
+    // up in the menu, and how the accel is re-attached from locale-independent DATA after a UI-language
+    // switch instead of from the (translated) .po label. Items with no store entry (the runtime Language
+    // submenu, Recent Files, plugin/macro commands) are left untouched. Idempotent; runs on every
+    // keymap CHANGE (menu build, nib commit, mapper apply) - pure focus-scope flips skip it, since no
+    // label depends on the scope. On the NATIVE frame SetItemLabel also rebuilds wx's per-port menu
+    // accelerators (MSW UpdateAccel / GTK AccelGroup / macOS keyEquivalent), so the native menubar is
+    // served here too - and since menu_builder.h appends items with BARE labels, this rewrite is what
+    // attaches the accel suffix (and the native accel) in the first place, before the frame first shows.
+    //
+    // SECONDARY accels (the dual-default rows - redo Ctrl+Shift+Z, close Ctrl+F4 - and user bare-bind
+    // ADDs) are installed here too, via wxMenuItem::AddExtraAccel: the label suffix carries only the
+    // primary, and on the native frame that label is the ONLY accel wx derives per item - without the
+    // extras the secondaries would be store-resolved yet never fire there (the borderless frame was
+    // already covered, its collectFrameAccels table installs ALL accels). Port support: MSW folds
+    // GetExtraAccels() into the menubar accel table inside UpdateAccel, GTK adds them to the
+    // AccelGroup immediately, macOS >= 10.13 creates hidden keyEquivalent items. Diffed against the
+    // installed set so the common nothing-changed rewrite stays cheap, and applied BEFORE
+    // SetItemLabel - MSW only consumes extras via SetItemLabel's UpdateAccel. On the borderless frame
+    // the bar is never attached, so the extras are inert there (no double dispatch with the frame
+    // table); on the native frame they share the existing scope residual (native menubar accels are
+    // not terminal-scope gated - see refreshAccelerators).
+    void rewriteMenuAccelLabels(wxMenuBar* mb)
+    {
+        std::function<void(wxMenu*)> scan = [&](wxMenu* m) {
+            for (wxMenuItem* item : m->GetMenuItems())
+            {
+                if (item->IsSubMenu()) { scan(item->GetSubMenu()); continue; }
+                const int id = item->GetId();
+                if (id == 0 || id == wxID_ANY) continue;
+                const EffectiveBinding* b = m_keymap.effectiveByCmd(id);
+                if (!b) continue;                          // not a store-managed command - leave as-is
+                const wxString accel = b->primaryRaw();    // empty => the command is unbound
+
+                std::vector<wxAcceleratorEntry> extras;    // everything beyond the primary (see above)
+                for (const wxString& raw : b->secondaryRaws())
+                {
+                    wxAcceleratorEntry e;
+                    if (e.FromString(raw)) extras.push_back(e);
+                }
+                const wxVector<wxAcceleratorEntry>& cur = item->GetExtraAccels();
+                bool sameExtras = cur.size() == extras.size();
+                for (size_t k = 0; sameExtras && k < extras.size(); ++k)
+                    sameExtras = cur[k].GetFlags() == extras[k].GetFlags()
+                              && cur[k].GetKeyCode() == extras[k].GetKeyCode();
+                if (!sameExtras)
+                {
+                    item->ClearExtraAccels();
+                    for (const wxAcceleratorEntry& e : extras) item->AddExtraAccel(e);
+                }
+
+                const wxString base  = stripAccelKeepMnemonic(item->GetItemLabel());
+                const wxString want  = accel.empty() ? base : (base + "\t" + accel);
+                if (want != item->GetItemLabel()) item->SetItemLabel(want);
+#ifdef __WXMSW__
+                // MSW consumes extras only inside wxMenu::UpdateAccel, which SetItemLabel skips when
+                // the label text is unchanged (e.g. a Reassign stealing only a SECONDARY key leaves
+                // the primary label intact) - force the update so the stale accel can't keep firing.
+                else if (!sameExtras && item->GetMenu()) item->GetMenu()->UpdateAccel(item);
+#endif
+            }
+        };
+        for (size_t i = 0; i < mb->GetMenuCount(); ++i) scan(mb->GetMenu(i));
+    }
+
+    // Rebuild the frame's wxAcceleratorTable from the current menu, filtered by focus scope. Hoisted out
+    // of the old borderless-only installAccelsFromMenuBar() so BOTH frame paths and the focus gate share
+    // one entry point, now sourcing every binding from the KeymapStore rather than the label suffix.
+    //
+    // Scope::Terminal installs an EMPTY table. This is the Phase 0 fix: Edit>Copy is bound Ctrl+C, so with
+    // the terminal focused MSW's PreProcessMessage accelerator translation fired that accel and ran
+    // SCI_COPY on the hidden editor BEFORE the focused TermView ever saw WM_KEYDOWN - so plain Ctrl+C never
+    // reached term_view.cpp's onChar, which is what cooks 0x03 into the child's SIGINT. Emptying the frame
+    // table for terminal scope removes the collision; the keystroke reaches TermView and the shell gets
+    // its interrupt.
+    //
+    // The frame's wxAcceleratorTable only exists on the BORDERLESS frame (the native frame's accelerators
+    // live on the attached wxMenuBar instead, which SetAcceleratorTable cannot clear - so scoping it there
+    // is a no-op and a duplicate frame table risks double-dispatch, notably macOS Cmd keyEquivalents). The
+    // label rewrite above, however, runs on BOTH paths. The native-frame terminal-scope residual is
+    // left for a later phase.
+    // rewriteLabels=false is for the pure focus-scope flips (onChildFocus): menu labels depend only on
+    // the store, never on the scope, so a scope-only change re-installs the accel table without the
+    // full recursive label walk. Every keymap-CHANGE caller (menu build, nib commit, mapper apply)
+    // keeps the default and rewrites.
+    void refreshAccelerators(Scope scope = Scope::Editor, bool rewriteLabels = true)
+    {
+        m_accelScope = scope;
+        wxMenuBar* mb = menuBar();
+        if (!mb) return;
+
+        if (rewriteLabels && m_keymapReady) rewriteMenuAccelLabels(mb);
+#ifdef WXN_HAS_BORDERLESS
+        if constexpr (kBorderless)
+        {
+            std::vector<wxAcceleratorEntry> accels;
+            if (scope != Scope::Terminal)   // Terminal scope: leave the list empty (see above)
+                collectFrameAccels(mb, accels);
+            // Always call SetAcceleratorTable, even with an empty list: swapping in the null table is how
+            // terminal scope DROPS the previously-installed full one.
+            SetAcceleratorTable(accels.empty() ? wxNullAcceleratorTable
+                                               : wxAcceleratorTable((int)accels.size(), accels.data()));
+        }
+#endif
+    }
+
+    // Collect the frame accelerator-table entries for every store-managed menu command's plain (non-chord)
+    // global accels. Walks the built menu (not the store) so only commands that actually have a menu item
+    // get an accelerator, exactly as before the KeymapStore existed; the accel string itself comes from
+    // the store. Runs only with the store seeded: m_keymapReady is set BEFORE every refreshAccelerators
+    // call in buildMenuBar (its sole caller's sole caller), so no pre-seed fallback is needed - and
+    // effectiveByCmd on an empty store safely returns nullptr anyway.
+    void collectFrameAccels(wxMenuBar* mb, std::vector<wxAcceleratorEntry>& out)
+    {
+        std::function<void(wxMenu*)> scan = [&](wxMenu* m) {
+            for (wxMenuItem* item : m->GetMenuItems())
+            {
+                if (item->IsSubMenu()) { scan(item->GetSubMenu()); continue; }
+                const int id = item->GetId();
+                if (id == 0 || id == wxID_ANY) continue;
+                const EffectiveBinding* b = m_keymap.effectiveByCmd(id);
+                if (!b) continue;                          // not a store-managed command (Recent Files, ...)
+                for (const EffectiveAccel& a : b->accels)
+                {
+                    if (a.isChord || a.scope != KeyScope::Global || a.raw.empty()) continue;
+                    wxAcceleratorEntry e;
+                    if (e.FromString(a.raw)) out.push_back(wxAcceleratorEntry(e.GetFlags(), e.GetKeyCode(), id));
+                }
+            }
+        };
+        for (size_t i = 0; i < mb->GetMenuCount(); ++i) scan(mb->GetMenu(i));
+    }
+
+    // ----- the Scintilla editor tier ---------------
+    // Curated editor commands (src/shortcut_labels.h) are remapped per wxStyledTextCtrl via Scintilla's
+    // own CmdKeyAssign/CmdKeyClear, NOT the frame accelerator table - they live in Scintilla's key space
+    // and only ever fire with editor focus. This applies to the two PERSISTENT editor STCs (main + sub
+    // view); the terminal panel's STC is built in terminal_panel.h and never routed through here, so it is
+    // excluded for free. The split view's STC reparents across pages, but Scintilla's keymap is
+    // per-instance and set once at creation, so a reparent never loses it.
+    //
+    // A curated row whose EFFECTIVE binding equals its STOCK Scintilla key is never touched, so the stock
+    // keymap - including any macOS-only rows we don't mirror - is left exactly as Scintilla set it for
+    // those keys. A row is managed (stock key vacated, effective key assigned) whenever the two diverge:
+    // a user/scheme override, OR one of the handful of curated defaults that deliberately differ from
+    // stock since the 6-editor consensus adoption (shortcut_labels.h: lineDelete's Ctrl+Shift+K, and the
+    // unbound-by-default lineCopy/paragraphUp/paragraphDown/wordPartLeft whose stock chords now belong to
+    // menu accelerators). On top of that, the scintKeymap::kStockVacated table adds pure vacates for the
+    // stock keys a DEFAULT menu accel displaces without a curated row (Ctrl+D/SCI_SELECTIONDUPLICATE).
+    // The whole op computation lives in shortcut_labels.h (computeEditorOps(store)) so the ConflictEngine
+    // and the self-test consume the exact same set - see the header's comment. We track the applied set
+    // (m_editorLive) so a later reset/rebind can restore the stock binding precisely rather than leaving
+    // a stale key live until restart.
+    // Apply overrides to one STC. TWO PASSES on purpose: vacate EVERY overridden command's stock default
+    // key first, THEN bind every override. Interleaving clear+assign per op corrupts the live keymap when
+    // one command's override key equals a later-processed command's stock default key: e.g. rebinding
+    // editor.lineCut (stock Ctrl+L) to Ctrl+Shift+T while editor.lineCopy's stock default IS Ctrl+Shift+T.
+    // With a single interleaved loop the lineCopy op's CmdKeyClear(Ctrl+Shift+T) would wipe the just-
+    // assigned SCI_LINECUT off Ctrl+Shift+T, silently killing lineCut's binding. Clearing all defaults up
+    // front means a later clear can never undo an earlier assign onto the same key.
+    static void applyEditorOpsTo(wxStyledTextCtrl* stc, const std::vector<EditorOp>& ops)
+    {
+        if (!stc) return;
+        for (const EditorOp& op : ops)
+            stc->CmdKeyClear(op.defKey, op.defMods);
+        for (const EditorOp& op : ops)
+            if (op.hasOverride) stc->CmdKeyAssign(op.ovKey, op.ovMods, op.sciCmd);
+    }
+    // Undo a previously-applied set: restore each command's stock default, and return the key it had been
+    // moved onto to its own stock binding (or clear it if it wasn't a stock key). Leaves the STC back at
+    // Scintilla's built-in keymap for every key these ops touched.
+    static void undoEditorOpsOn(wxStyledTextCtrl* stc, const std::vector<EditorOp>& ops)
+    {
+        if (!stc) return;
+        for (const EditorOp& op : ops)
+        {
+            stc->CmdKeyAssign(op.defKey, op.defMods, op.sciCmd);
+            if (op.hasOverride)
+            {
+                const int stock = stockSciCommandFor(op.ovKey, op.ovMods);
+                if (stock) stc->CmdKeyAssign(op.ovKey, op.ovMods, stock);
+                else       stc->CmdKeyClear(op.ovKey, op.ovMods);
+            }
+        }
+    }
+    // Re-apply the editor keymap to both persistent views after the store changes (startup after load, and
+    // every mapper OK). Diffs against the last-applied set so reset/rebind restores the stock binding.
+    void reapplyEditorKeymaps()
+    {
+        if (!m_keymapReady) return;
+        std::vector<EditorOp> ops = computeEditorOps(m_keymap);
+        if (ops.empty() && m_editorLive.empty()) return;   // nothing applied and nothing to undo (defensive:
+                                                           // the ops always carry at least the kStockVacated rows)
+        wxStyledTextCtrl* stcs[2] = { m_main.stc, m_sub.stc };
+        for (wxStyledTextCtrl* stc : stcs)
+        {
+            undoEditorOpsOn(stc, m_editorLive);
+            applyEditorOpsTo(stc, ops);
+        }
+        m_editorLive = std::move(ops);
+    }
+
+    // Which scope a window belongs to: Terminal if it (or an ancestor) is the terminal panel, else Editor.
+    Scope scopeOfFocus(wxWindow* w) const
+    {
+        for (; w; w = w->GetParent())
+            if (m_terminal && w == static_cast<wxWindow*>(m_terminal)) return Scope::Terminal;
+        return Scope::Editor;
+    }
+
+    // Focus moved somewhere inside the frame: pick the accelerator scope for the newly-focused window.
+    // wxWindow::FindFocus() is authoritative here (the event object can be an intermediate ancestor as the
+    // event bubbles up). Only re-installs when the scope actually flips, so the common editor<->editor and
+    // terminal<->terminal focus hops do no work.
+    void onChildFocus(wxChildFocusEvent& e)
+    {
+        e.Skip();
+        if (!m_terminal) { if (m_accelScope != Scope::Editor) refreshAccelerators(Scope::Editor, /*rewriteLabels=*/false); return; }
+        wxWindow* f = wxWindow::FindFocus();
+        if (!f) f = e.GetWindow();
+        const Scope want = scopeOfFocus(f);
+        if (want != m_accelScope) refreshAccelerators(want, /*rewriteLabels=*/false);   // labels are scope-independent
+    }
+
     void buildMenuBar()
     {
         auto* mb = new wxMenuBar;
@@ -4584,6 +5400,24 @@ private:
                     ofMenu->Insert(insertAt + (int)i, myID_OPENFOLDER_TOOL_BASE + (int)i, m_openFolderTools[i].label);
             }
         }
+        // Shortcut store: seed Tier 0 from the menu data's defaultAccel, register the bundled read-only
+        // preset (Tier 1: the "wxNote default" identity; Notepad++ keys come only via the optional
+        // npp-shortcuts-compat import), then layer shortcuts.json's active-scheme selection + user
+        // deltas on top (best-effort/hand-editable). Ordering is load-bearing: schemes must be
+        // registered BEFORE load() so a saved activeScheme resolves at startup (an id that no longer
+        // exists snaps back to the default inside load()) and load()'s reload cleanup (keep bundled,
+        // drop user schemes) preserves the preset.
+        // All must happen BEFORE the refreshAccelerators() calls in either frame branch below, since those
+        // now build the accel table + rewrite the menu labels from this store.
+        seedKeymapDefaults(m_keymap);
+        seedEditorKeymapDefaults(m_keymap);   // Tier 0 for the curated Scintilla "Editor commands"
+        registerKeymapSchemes(m_keymap);
+        m_keymap.load(userDataDir());
+        m_keymapReady = true;
+        // Apply any editor-command overrides to the two persistent STCs now the store is loaded. buildEditor()
+        // created them before this point (store empty then), so the setupScintilla-time apply was a no-op;
+        // this is the real startup apply. No-op for a user with no editor overrides.
+        reapplyEditorKeymaps();
 #ifdef WXN_HAS_BORDERLESS
         if constexpr (kBorderless)
         {
@@ -4591,12 +5425,13 @@ private:
             // The bar is never SetMenuBar'd, so a popped menu's commands route to it, not the frame - bind
             // onCommand on the bar itself so menu clicks actually fire (otherwise items appear but do nothing).
             mb->Bind(wxEVT_MENU, &WxnShellFrameT::onCommand, this);
-            installAccelsFromMenuBar(mb);      // keyboard shortcuts still fire without a native menu bar
+            refreshAccelerators();             // borderless: our frame accel table is the ONLY shortcut source (no native menu bar)
             buildIntegratedTitleBar(mb);       // VS-style top bar: icon + menu-buttons + window controls
             return;
         }
 #endif
         SetMenuBar(mb);
+        refreshAccelerators();   // shared entry point (no-op on the native frame, where the wxMenuBar owns accels) - see refreshAccelerators
     }
 
 #ifdef WXN_HAS_BORDERLESS
@@ -4606,26 +5441,6 @@ private:
     // Borderless hit-testing. We use real child controls for the menu/window buttons and a manual drag
     // (onTitleBarDrag), so the inner area is plain client; the lib still handles the resize borders itself.
     wxWindowPart GetWindowPart(wxPoint) const { return wxWP_CLIENT_AREA; }
-
-    // A wxAcceleratorTable built from every menu item's shortcut, so Ctrl+S / Ctrl+F / ... keep working
-    // even though integrated mode never attaches a native wxMenuBar.
-    void installAccelsFromMenuBar(wxMenuBar* mb)
-    {
-        std::vector<wxAcceleratorEntry> accels;
-        std::function<void(wxMenu*)> scan = [&](wxMenu* m) {
-            for (wxMenuItem* item : m->GetMenuItems())
-            {
-                if (item->IsSubMenu()) { scan(item->GetSubMenu()); continue; }
-                if (wxAcceleratorEntry* a = item->GetAccel())
-                {
-                    accels.push_back(wxAcceleratorEntry(a->GetFlags(), a->GetKeyCode(), item->GetId()));
-                    delete a;
-                }
-            }
-        };
-        for (size_t i = 0; i < mb->GetMenuCount(); ++i) scan(mb->GetMenu(i));
-        if (!accels.empty()) SetAcceleratorTable(wxAcceleratorTable((int)accels.size(), accels.data()));
-    }
 
     void buildIntegratedTitleBar(wxMenuBar* mb)
     {
@@ -5075,27 +5890,65 @@ private:
         // in the desktop theme's accent - e.g. a blue diagonal grip under Linux Mint's dark theme - which
         // stands out sharply against our dark chrome (this was the persistent "blue tint in the bottom-
         // right corner"). The window still resizes from its borders without it.
-        auto* sb = CreateStatusBar(7, wxSTB_DEFAULT_STYLE & ~wxSTB_SIZEGRIP);
+        auto* sb = CreateStatusBar(8, wxSTB_DEFAULT_STYLE & ~wxSTB_SIZEGRIP);
 #else
-        auto* sb = CreateStatusBar(7);   // macOS: keep the native grip (Cocoa themes it consistently)
+        auto* sb = CreateStatusBar(8);   // macOS: keep the native grip (Cocoa themes it consistently)
 #endif
+        const int styles[8] = { wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT };
+        sb->SetStatusStyles(8, styles);   // flat fields - no per-field sunken background
+        sb->Bind(wxEVT_LEFT_DCLICK, &WxnShellFrameT::onStatusDClick, this);   // interactive status bar: double-click a field to act
+        // Editable zoom combo, parked over field 6 (INS/OVR moved to 7). m_zoom is already restored from
+        // config at this point (the ctor reads it before building any chrome), so seed the field directly
+        // rather than waiting for a zoom event that only fires when the user changes something.
+        m_zoomField = new ZoomField(sb, m_dark);
+        m_zoomField->SetToolTip(_("Zoom level"));
+        m_zoomField->onDropdown     = [this]{ openZoomList(); };
+        m_zoomField->onPercentTyped = [this](int p){ applyZoomPercent(p); };
+        // Wheel goes through SCI_ZOOMIN/OUT, not SETZOOM, so the +20/-10 engine clamps apply for free.
+        m_zoomField->onWheelStep    = [this](int d){ sci(d > 0 ? SCI_ZOOMIN : SCI_ZOOMOUT); syncZoomField(); };
+        m_zoomField->setPercent(percentFromZoom(m_zoom));
+#ifdef __WXMSW__
+        m_grip = new SizeGripWin(sb);   // our own resize grip, parked in the bottom-right corner
+#endif
+        // Manually placed children must be repositioned on every bar resize. This hook is deliberately
+        // NOT inside the MSW-only grip block any more: on GTK/macOS the zoom field would otherwise never
+        // be positioned and would sit at (0,0), on top of the language label.
+        sb->Bind(wxEVT_SIZE, [this](wxSizeEvent& e){ e.Skip(); layoutStatusBarChildren(); });
+        applyZoomFieldVisibility();   // also sets the field widths (index 6 depends on the setting) and lays the children out
+    }
+
+    // Field widths + zoom-field visibility in one place: the two are coupled, because hiding the child
+    // window on its own would leave a visibly empty 78px slot between the encoding and INS/OVR fields.
+    // Collapsing field 6 to width 0 hands those pixels back to the proportional field 0, so INS/OVR and
+    // the resize grip stay flush right. Field indices are untouched either way, so updateStatus's
+    // setStatus(7, ...) and onStatusDClick's "case 7" keep working in both states.
+    void applyZoomFieldVisibility()
+    {
+        wxStatusBar* sb = GetStatusBar();
+        if (!sb || sb->GetFieldsCount() != 8) return;
         // field 0 (doc type / message area) is proportional so the fields fill the whole bar and
         // the typing-mode field lands flush right (no dead slack on the right).
-        const int w[7] = { -1, 150, 210, 110, 130, 120, 46 };   // field 5 (encoding) wide enough for "UTF-16 LE BOM"
-        sb->SetStatusWidths(7, w);
-        const int styles[7] = { wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT };
-        sb->SetStatusStyles(7, styles);   // flat fields - no per-field sunken background
-        sb->Bind(wxEVT_LEFT_DCLICK, &WxnShellFrameT::onStatusDClick, this);   // interactive status bar: double-click a field to act
+        // Field 6 carries no text: the ZoomField child window is parked over it (when shown).
+        const int w[8] = { -1, 150, 210, 110, 130, 120, m_showZoomField ? 78 : 0, 46 };   // field 5 (encoding) wide enough for "UTF-16 LE BOM"
+        sb->SetStatusWidths(8, w);
+        if (m_zoomField) m_zoomField->Show(m_showZoomField);
+        layoutStatusBarChildren();
+        sb->Refresh();   // SetStatusWidths alone doesn't repaint the reflowed separators on MSW
+    }
+
+    void layoutStatusBarChildren()
+    {
+        wxStatusBar* sb = GetStatusBar();
+        if (!sb) return;
+        wxRect r;
+        // Skipped when hidden: field 6's rect is 0px wide then, and SetSize'ing the child to it would
+        // also drag it to the collapsed x - pointless work that would have to be undone on re-show.
+        if (m_zoomField && m_showZoomField && sb->GetFieldRect(6, r))
+            m_zoomField->SetSize(r.x, r.y + 1, r.width, r.height - 2);   // 1px inset so the outline isn't clipped
 #ifdef __WXMSW__
-        // our own resize grip, parked in the bottom-right corner and kept there as the bar resizes
-        m_grip = new SizeGripWin(sb);
-        auto place = [this, sb]() {
-            const wxSize ss = sb->GetClientSize();
-            const int gw = 16;
-            if (m_grip) m_grip->SetSize(ss.x - gw, 0, gw, ss.y);
-        };
-        sb->Bind(wxEVT_SIZE, [place](wxSizeEvent& e){ e.Skip(); place(); });
-        place();
+        const wxSize ss = sb->GetClientSize();
+        const int gw = 16;
+        if (m_grip) m_grip->SetSize(ss.x - gw, 0, gw, ss.y);
 #endif
     }
 
@@ -5123,31 +5976,33 @@ private:
         if (e=="xml"||e=="svg"||e=="xaml"||e=="xsd"||e=="xsl"||e=="vcxproj") return m("xml", "xml");
         return m(nullptr, nullptr);   // plain text
     }
-    // Friendly document-type label for the status bar (e.g. "C++ source file").
+    // Friendly document-type label for the status bar (e.g. "C++ source file"). Translated at the
+    // point of construction: this string's only consumer is EditorPage::lang, which updateStatus()
+    // paints into status field 0 (the session XML's "lang" attribute is written but never read back).
     static wxString langDisplayName(const wxString& e)
     {
-        if (e=="cpp"||e=="cc"||e=="cxx"||e=="hpp"||e=="hxx") return "C++ source file";
-        if (e=="c"||e=="h")                                  return "C source file";
-        if (e=="cs")                                         return "C# source file";
-        if (e=="java")                                       return "Java source file";
-        if (e=="js"||e=="jsx")                               return "JavaScript file";
-        if (e=="ts"||e=="tsx")                               return "TypeScript file";
-        if (e=="py"||e=="pyw")                               return "Python file";
-        if (e=="json")                                       return "JSON file";
-        if (e=="xml"||e=="svg"||e=="xaml"||e=="xsd"||e=="xsl"||e=="vcxproj") return "XML file";
-        if (e=="css")                                        return "CSS file";
-        if (e=="sql")                                        return "SQL file";
-        if (e=="lua")                                        return "Lua source file";
-        if (e=="sh"||e=="bash")                              return "Shell script file";
-        if (e=="bat"||e=="cmd")                              return "Batch file";
-        if (e=="rb")                                         return "Ruby source file";
-        if (e=="rs")                                         return "Rust source file";
-        if (e=="go")                                         return "Go source file";
-        if (e=="pl"||e=="pm")                                return "Perl source file";
-        if (e=="ps1"||e=="psm1")                             return "PowerShell file";
-        if (e=="ini"||e=="properties"||e=="cfg")            return "Properties file";
-        if (e=="yml"||e=="yaml")                             return "YAML file";
-        return "Normal text file";
+        if (e=="cpp"||e=="cc"||e=="cxx"||e=="hpp"||e=="hxx") return _("C++ source file");
+        if (e=="c"||e=="h")                                  return _("C source file");
+        if (e=="cs")                                         return _("C# source file");
+        if (e=="java")                                       return _("Java source file");
+        if (e=="js"||e=="jsx")                               return _("JavaScript file");
+        if (e=="ts"||e=="tsx")                               return _("TypeScript file");
+        if (e=="py"||e=="pyw")                               return _("Python file");
+        if (e=="json")                                       return _("JSON file");
+        if (e=="xml"||e=="svg"||e=="xaml"||e=="xsd"||e=="xsl"||e=="vcxproj") return _("XML file");
+        if (e=="css")                                        return _("CSS file");
+        if (e=="sql")                                        return _("SQL file");
+        if (e=="lua")                                        return _("Lua source file");
+        if (e=="sh"||e=="bash")                              return _("Shell script file");
+        if (e=="bat"||e=="cmd")                              return _("Batch file");
+        if (e=="rb")                                         return _("Ruby source file");
+        if (e=="rs")                                         return _("Rust source file");
+        if (e=="go")                                         return _("Go source file");
+        if (e=="pl"||e=="pm")                                return _("Perl source file");
+        if (e=="ps1"||e=="psm1")                             return _("PowerShell file");
+        if (e=="ini"||e=="properties"||e=="cfg")            return _("Properties file");
+        if (e=="yml"||e=="yaml")                             return _("YAML file");
+        return _("Normal text file");
     }
     // Content-based language sniff for documents the extension table can't place (no extension, or an
     // unknown one): shebang interpreters, XML/HTML prologs and JSON shapes. Returns the CANONICAL
@@ -6312,7 +7167,7 @@ private:
         for (const wxString& p : paths)
         {
             wxFile f(p);
-            if (!f.IsOpened()) { out += wxFileNameFromPath(p) + ":  (could not open)\n"; continue; }
+            if (!f.IsOpened()) { out += wxString::Format(_("%s:  (could not open)"), wxFileNameFromPath(p)) + "\n"; continue; }
             const wxFileOffset sz = f.Length();
             std::string buf(static_cast<size_t>(sz > 0 ? sz : 0), '\0');
             if (sz > 0) f.Read(&buf[0], (size_t)sz);
@@ -7035,6 +7890,7 @@ private:
         c->Read("Editing/WrapSymbol", &m_wrapSymbol, false);
         c->Read("View/Toolbar", &m_showToolbar, true);
         c->Read("View/StatusBar", &m_showStatusbar, true);
+        c->Read("View/ZoomField", &m_showZoomField, false);
         c->Read("Editing/AutoComplete", &m_autocomplete, true);
         c->Read("Editing/CaretLine", &m_caretLine, true);
         c->Read("Editing/AutoIndent", &m_autoindent, true);
@@ -7052,7 +7908,7 @@ private:
         c->Read("Print/Header", &m_printHeader, wxEmptyString);
         c->Read("Print/Footer", &m_printFooter, wxEmptyString);
         long se = 0; c->Read("Editing/SearchEngine", &se, 0L); m_searchEngine = (int)se;
-        c->Read("Editing/FontFace", &m_fontFace, "JetBrains Mono");
+        c->Read("Editing/FontFace", &m_fontFace, "Cascadia Mono");
     }
     void saveSettings()
     {
@@ -7062,6 +7918,7 @@ private:
         c->Write("Editing/Whitespace", m_ws);             c->Write("Editing/IndentGuides", m_guides);
         c->Write("Editing/WrapSymbol", m_wrapSymbol);     c->Write("View/Toolbar", m_showToolbar);
         c->Write("View/StatusBar", m_showStatusbar);      c->Write("Editing/AutoComplete", m_autocomplete);
+        c->Write("View/ZoomField", m_showZoomField);
         c->Write("Editing/CaretLine", m_caretLine);       c->Write("Editing/AutoIndent", m_autoindent);
         c->Write("Editing/CaretWidth", (long)m_caretWidth); c->Write("Editing/EdgeColumn", (long)m_edgeColumn);
         c->Write("NewDoc/Eol", (long)m_defaultEol);         c->Write("NewDoc/Lang", (long)m_defaultLangId);
@@ -7073,7 +7930,9 @@ private:
         c->Write("Theme", m_themeName);
         c->Write("Print/Header", m_printHeader); c->Write("Print/Footer", m_printFooter);
         c->Write("Editing/SearchEngine", (long)m_searchEngine);
-        c->Write("AskBeforeClose", m_askBeforeClose);
+        if (!g_waitMode)   // -w/--wait force-enables the prompt for that run only (enterWaitMode); saveSettings()
+                           // runs on every close, so writing it here would silently turn the user's preference on
+            c->Write("AskBeforeClose", m_askBeforeClose);
         c->Write("FullscreenAutohideToolbar", m_fsAutohideToolbar);
         c->Write("Editing/CustomGutterColour", m_customGutterColor);
         c->Write("Editing/GutterColourValue", m_gutterColorValue);
@@ -7104,8 +7963,24 @@ private:
         if (auto* tb = toolBar()) tb->ToggleTool(kCmdViewWrap, m_wrap);
         showToolBar(m_showToolbar);   // aui-aware: hides the pane in integrated mode, the frame toolbar in native
         if (auto* sb = GetStatusBar()) sb->Show(m_showStatusbar);
+        applyZoomFieldVisibility();   // live: collapses/restores field 6 without a restart
         SendSizeEvent();
     }
+    // Shortcut Mapper (kCmdSettingShortcutMapper == 48009): a searchable grid over every menu command's
+    // effective binding, with rebind/clear/reset, a scheme picker, and the live conflict engine. A pure
+    // view over m_keymap: edits write shortcuts.json immediately and re-apply through refreshAccelerators()
+    // (via the apply callback) so a rebind shows on the menu and fires without a restart. The dialog owns no
+    // persistent state, so a fresh instance per invocation is fine (mirrors onPreferences()).
+    void showShortcutMapper()
+    {
+        wxMenuBar* mb = menuBar();
+        if (!mb || !m_keymapReady) { notImpl(_("Shortcut Mapper")); return; }
+        ShortcutMapperDialog dlg(this, m_keymap, mb, m_dark,
+                                 [this](wxWindow* w){ themeDialog(w); },
+                                 [this]{ refreshAccelerators(m_accelScope); reapplyEditorKeymaps(); });
+        dlg.ShowModal();
+    }
+
     void onPreferences()
     {
         // Page layout: General / Editing / Indentation / Auto-Completion / Dark Mode
@@ -7125,7 +8000,11 @@ private:
         auto* gen = pg(_("General"), true); auto* gs = new wxBoxSizer(wxVERTICAL);
         auto* cbToolbar = new wxCheckBox(gen, wxID_ANY, _("Show toolbar"));    cbToolbar->SetValue(m_showToolbar);
         auto* cbStatus  = new wxCheckBox(gen, wxID_ANY, _("Show status bar")); cbStatus->SetValue(m_showStatusbar);
-        row(gs, cbToolbar); row(gs, cbStatus);
+        // Off by default: the editable zoom combo in the status bar. Zooming itself (Ctrl+wheel,
+        // View > Zoom In/Out) is unaffected by this - it only hides the readout/entry control.
+        auto* cbZoomField = new wxCheckBox(gen, wxID_ANY, _("Show zoom control in status bar"));
+        cbZoomField->SetValue(m_showZoomField);
+        row(gs, cbToolbar); row(gs, cbStatus); row(gs, cbZoomField);
         // Off by default: closing a modified document just discards it silently
         // rather than blocking on a Save/Don't Save/Cancel prompt every time.
         auto* cbAskClose = new wxCheckBox(gen, wxID_ANY, _("Ask before closing unsaved changes"));
@@ -7194,17 +8073,21 @@ private:
 
         // ---- Editing --------------------------------------------------------------------------
         auto* ed = pg(_("Editing")); auto* es = new wxBoxSizer(wxVERTICAL);
-        // Font: JetBrains Mono first (our bundled default), then every system font below it. Falls back
-        // to JetBrains Mono at render time (effectiveFontFace()) if the chosen one is later uninstalled.
+        // Font: the bundled font first (JetBrains Mono, our default), then every system font below the
+        // divider. Falls back to JetBrains Mono at render time (effectiveFontFace()) if the chosen one is
+        // later uninstalled. The bundled set is listed explicitly rather than relying on the enumeration
+        // below, so it stays pinned at the top whatever the system font list contains.
         auto* frow = new wxBoxSizer(wxHORIZONTAL);
         frow->Add(new wxStaticText(ed, wxID_ANY, _("Font:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         // wxChoice has no native separator item, so a plain-text divider line stands in for one - harmless
         // even if somehow selected: it's not a real face name, so effectiveFontFace() falls back to
         // JetBrains Mono exactly as it would for any other uninstalled/invalid font.
         const wxString kFontSep = wxString(wxUniChar(0x2500), 20);
-        wxArrayString fontNames; fontNames.Add("JetBrains Mono"); fontNames.Add(kFontSep);
+        const wxArrayString kBundledFonts = [] {
+            wxArrayString a; a.Add("Cascadia Mono"); a.Add("JetBrains Mono"); return a; }();
+        wxArrayString fontNames = kBundledFonts; fontNames.Add(kFontSep);
         { wxArrayString sysFonts = wxFontEnumerator::GetFacenames(); sysFonts.Sort();
-          for (const wxString& f : sysFonts) if (f != "JetBrains Mono") fontNames.Add(f); }
+          for (const wxString& f : sysFonts) if (kBundledFonts.Index(f) == wxNOT_FOUND) fontNames.Add(f); }
         auto* chFont = new wxChoice(ed, wxID_ANY, wxDefaultPosition, wxDefaultSize, fontNames);
         { int sel = fontNames.Index(m_fontFace); chFont->SetSelection(sel != wxNOT_FOUND ? sel : 0); }
         frow->Add(chFont, 1, wxALIGN_CENTRE_VERTICAL);
@@ -7314,8 +8197,10 @@ private:
         prs->Add(new wxStaticText(pr, wxID_ANY, _("Footer:")), 0, wxLEFT | wxRIGHT | wxTOP, 10);
         auto* txFooter = new wxTextCtrl(pr, wxID_ANY, m_printFooter);
         prs->Add(txFooter, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 10);
+        // The $(...) macro names are the literal tokens resolvePageMacros() substitutes - translations
+        // localise the surrounding prose only and must repeat the tokens verbatim.
         auto* prHint = new wxStaticText(pr, wxID_ANY,
-            "Leave blank for none. Macros: $(FULL_PATH) $(FILE_NAME) $(DATE) $(TIME)\n$(CURRENT_PRINTING_PAGE) $(TOTAL_PRINTING_PAGES)");
+            _("Leave blank for none. Macros: $(FULL_PATH) $(FILE_NAME) $(DATE) $(TIME)\n$(CURRENT_PRINTING_PAGE) $(TOTAL_PRINTING_PAGES)"));
         prHint->SetForegroundColour(m_dark ? wxColour(150, 150, 150) : wxColour(110, 110, 110));
         prs->Add(prHint, 0, wxALL, 10);
         pr->SetSizer(prs);
@@ -7362,11 +8247,25 @@ private:
         // geometry (clipped labels, collapsed combos, dead space). MSW reflows on the initial show, so
         // this is a no-op there. Layout() (not Fit/SetSizerAndFit) keeps the deliberate 620x440 size.
         dlg.SetSizer(top); dlg.Layout(); themeDialog(&dlg);
-        // The nav list's row selection is native/generic list-control highlighting, which doesn't
-        // reliably pick up the app's own theme - macOS in particular can render the selected row's fill
-        // as plain white regardless of dark mode, instead of the system highlight colour every other
-        // "active" control here (checkboxes, choice fields) already uses natively. Drive it ourselves.
-        if (auto* lv = book->GetListView())
+        // The nav list's row selection is native/generic list-control highlighting. Override it ONLY where
+        // the platform actually gets it wrong, and deliberately leave it alone otherwise:
+        //   - macOS can render the selected row's fill as plain white regardless of dark mode (instead of
+        //     the system highlight every other control here uses natively), so it always needs driving.
+        //   - In dark mode every platform needs the rows recoloured, since the native list is light.
+        //   - In LIGHT mode on Win/GTK we must NOT touch it. Assigning per-item colours gives the items
+        //     wxItemAttrs, which flips wxMSW's list control into its custom-draw path (HandleItemPaint,
+        //     src/msw/listctrl.cpp): that path paints a SELECTED row with the legacy
+        //     COLOR_HIGHLIGHT/COLOR_HIGHLIGHTTEXT pair, ignoring whatever we set, instead of letting
+        //     Windows 11 draw its themed selection. On Win11 light that legacy pair is white-on-pale-blue,
+        //     which left the selected page ("General") almost unreadable. Setting nothing keeps the native
+        //     themed selection (light fill, dark text) - and in light mode our colours were a no-op anyway,
+        //     since normBg/normFg below are just the list's own colours.
+#ifdef __WXMAC__
+        const bool driveNavColours = true;
+#else
+        const bool driveNavColours = m_dark;
+#endif
+        if (auto* lv = driveNavColours ? book->GetListView() : nullptr)
         {
             const wxColour hiBg = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
             const wxColour hiFg = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT);
@@ -7385,6 +8284,7 @@ private:
         dlg.ShowModal();   // Preferences has no Cancel - changes apply on close
         const int newThemeMode = chTheme->GetSelection();
         m_showToolbar = cbToolbar->GetValue(); m_showStatusbar = cbStatus->GetValue();
+        m_showZoomField = cbZoomField->GetValue();
         m_askBeforeClose = cbAskClose->GetValue();
         m_fsAutohideToolbar = cbFsToolbar->GetValue();
         m_tabWidth = spTab->GetValue(); m_useTabs = !cbSpace->GetValue(); m_lineNumbers = cbLineNum->GetValue();
@@ -7797,6 +8697,10 @@ private:
             // Scintilla) - the flat gray this replaced had too little contrast against the editor
             // background to read clearly as a selection at a glance.
             const auto sel = G("Selected text colour");  sci(SCI_SETSELBACK, 1, sel.second >= 0 ? sel.second : (dark ? 0x784F26 : 0xFFD6AD));
+            // ...and a matching FOREGROUND, or selected glyphs keep their syntax colour and vanish into a
+            // pale fill (see selection_fore_bgr - the theme's own fgColor is used only if it contrasts).
+            { const int sb = sel.second >= 0 ? sel.second : (dark ? 0x784F26 : 0xFFD6AD);
+              sci(SCI_SETSELFORE, 1, selection_fore_bgr(sb, sel.first)); }
             const auto wsp = G("White space symbol");    sci(SCI_SETWHITESPACEFORE, 1, wsp.first >= 0 ? wsp.first : (dark ? 0x606060 : 0xB0B0B0));
             // Fold margin + markers, edge, and highlight indicators - re-applied on every theme switch so the whole
             // editor surface follows the theme (not just tokens + default background).
@@ -7827,6 +8731,7 @@ private:
         sci(SCI_SETCARETLINEVISIBLE, 1);
         sci(SCI_SETCARETLINEBACK, dark ? 0x2A2A2A : 0xF6F6F6);
         sci(SCI_SETSELBACK, 1, dark ? 0x784F26 : 0xFFD6AD);   // VS Code's selection colours (see the other SETSELBACK call)
+        sci(SCI_SETSELFORE, 1, selection_fore_bgr(dark ? 0x784F26 : 0xFFD6AD, -1));   // keep selected text readable
         sci(SCI_SETWHITESPACEFORE, 1, dark ? 0x606060 : 0xB0B0B0);
         applyBraceStyles(dark);
     }
@@ -7870,6 +8775,9 @@ private:
 #ifdef __WXMSW__
         if (m_grip) m_grip->setColours(chromeBg, dark ? wxColour(112, 112, 112) : wxColour(150, 150, 150));   // dots blend onto chrome
 #endif
+        // Outside the ifdef - the zoom combo exists on every platform. Its percent grid can move too: a
+        // theme change rewrites STYLE_DEFAULT's size, which is the base the percentage is measured against.
+        if (m_zoomField) { m_zoomField->setColours(dark); syncZoomField(); }
         if (m_tabs) { m_tabs->SetBackgroundColour(chromeBg); m_tabs->Refresh(); }
         // The integrated toolbar is an aui pane that doesn't span the full width; paint the dock
         // background (the strip to the right of the icons) the same chrome colour so there's no grey gap.
@@ -8053,7 +8961,8 @@ private:
             case 2: onGoTo(); break;                                       // Ln:Col:Pos -> Go To Line
             case 4: showEolMenu(); break;                                  // line-ending -> convert popup
             case 5: showEncodingMenu(); break;                             // encoding -> re-interpret / convert popup
-            case 6: sci(SCI_EDITTOGGLEOVERTYPE); updateStatus(); break;    // INS/OVR -> toggle typing mode
+            // no case 6 (zoom): the ZoomField child eats its own mouse events, so nothing reaches the bar there
+            case 7: sci(SCI_EDITTOGGLEOVERTYPE); updateStatus(); break;    // INS/OVR -> toggle typing mode
             default: e.Skip(); break;
         }
     }
@@ -8515,6 +9424,7 @@ private:
             case kCmdWindowSortFdAsc: sortTabs(TabSortKey::Modified, true); break;
             case kCmdWindowSortFdDsc: sortTabs(TabSortKey::Modified, false); break;
             case kCmdSettingPreference: onPreferences(); break;
+            case kCmdSettingShortcutMapper: showShortcutMapper(); break;   // 48009: the Shortcut Mapper dialog
             case kCmdLangstyleConfigDlg: onStyleConfig(); break;
             case kCmdSettingImportPlugin: importPlugin(); break;
             case kCmdSettingImportStyleThemes: importStyleTheme(); break;
@@ -8542,13 +9452,30 @@ private:
             // ---- Help: external links + info ----
             case kCmdHomeSweetHome: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus"); break;
             case kCmdProjectpage: case kCmdUpdateNpp: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/releases"); break;
-            case kCmdOnlineDocument: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/tree/master/docs"); break;
+            case kCmdOnlineDocument: wxLaunchDefaultBrowser("https://alpaq92.github.io/wx-notepad-plus-plus/docs/"); break;   // the user manual on the project site (repo docs/ holds developer notes, not a manual)
             case kCmdForum: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/issues"); break;
             case kCmdDebuginfo: themedInfo(wxString::Format(_("wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"),
                 wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER, wxGetOsDescription(), wxStandardPaths::Get().GetExecutablePath()), _("Debug Info")); break;
-            case kCmdCmdLineArguments: themedInfo(_("Usage: wxnote [options] [files...]\n\n-g, --goto <line[,col]>   go to this line (and column) in the last file opened\n-e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n-n, --new-instance        always open a new window\n-r, --reuse-instance      reuse an already-running window\n\nFiles given on the command line are opened in tabs."), _("Command Line Arguments")); break;
+            case kCmdCmdLineArguments: themedInfo(_("Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"), _("Command Line Arguments")); break;
 
             case kCmdExecuteBase: onRun(); break;   // Run... (F5)
+
+            case kCmdExecuteValidateShortcutsXml: {   // 49001: "Validate shortcuts.xml"
+                // Stay N++-agnostic: the core knows only that SOME plugin may offer a well-known
+                // "import shortcuts" command. If one registered "host.shortcuts.import", forward to it;
+                // otherwise fall through to notImpl. The optional GPL npp-shortcuts-compat plugin
+                // registers that id and does the whole parse+report+import - the core learns nothing
+                // about the shortcuts.xml format (generic-indirection option).
+                const NibCmd* imp = nullptr;
+                for (const NibCmd& nc : g_nibCommands) if (nc.id == "host.shortcuts.import") { imp = &nc; break; }
+                if (imp && imp->fn) imp->fn(reinterpret_cast<NibHost*>(g_view), &nibQuery, imp->user);
+                else {
+                    wxString lbl;
+                    if (auto* mb = menuBar()) if (auto* it = mb->FindItem(kCmdExecuteValidateShortcutsXml)) lbl = it->GetItemLabelText();
+                    notImpl(lbl);
+                }
+                break;
+            }
 
             // ---- Encoding: interpret-as (re-decode the file) + convert-to (re-encode on save) ----
             case kCmdFormatAnsi: interpretAs(ENC_ANSI); break;
@@ -8594,10 +9521,87 @@ private:
     // the same for every tab, so there's nothing to mirror (unlike the old per-tab-HWND model).
     void onZoomChanged(int z)
     {
-        if (z == m_zoom) return;
-        m_zoom = z;
-        updateLineMargin();
-        wxConfigBase::Get()->Write("Zoom", static_cast<long>(z)); wxConfigBase::Get()->Flush();
+        if (z != m_zoom)
+        {
+            m_zoom = z;
+            updateLineMargin();
+            wxConfigBase::Get()->Write("Zoom", static_cast<long>(z)); wxConfigBase::Get()->Flush();
+        }
+        // Outside the early-out on purpose: typing "103%" at base 10 rounds to the zoom the editor is
+        // already at, so no SCN_ZOOM ever fires - without this the field would keep showing a percentage
+        // the editor never adopted.
+        syncZoomField();
+    }
+    // ----- status-bar zoom combo ------------------------------------------
+    // Scintilla's zoom is a POINT-SIZE DELTA on the default style, not a percentage, so the percent grid
+    // is quantised by the base size - and the base is dynamic (11 raw, but every bundled theme declares
+    // 10). Always read it at call time; SCI_STYLEGETSIZE returns the UNZOOMED size, so it is safe to ask
+    // while zoomed.
+    // (non-const throughout: sci() is the editor gateway and isn't const)
+    int zoomBase() { const int b = static_cast<int>(sci(SCI_STYLEGETSIZE, STYLE_DEFAULT)); return b > 0 ? b : 11; }
+    // Scintilla clamps the RENDERED size at 2pt without touching zoomLevel, so below 2-base the reported
+    // zoom stops matching what's on screen and a percent readout would lie.
+    int zoomMin() { return wxMax(-10, 2 - zoomBase()); }
+    int percentFromZoom(int z)
+    { const int b = zoomBase(), s = wxMax(1, b + z); return (100 * s + b / 2) / b; }
+    // CRITICAL clamp at +20: SCI_SETZOOM does NOT clamp, but SCI_ZOOMIN only fires 'if (zoomLevel < 20)',
+    // so parking the zoom above 20 kills Ctrl+wheel-up and View > Zoom In permanently while zoom-out
+    // still works - a confusing half-dead state with no other guard against it.
+    int zoomFromPercent(int p)
+    {
+        const int b = zoomBase();
+        const int z = (b * wxMax(1, p) + 50) / 100 - b;
+        return wxMax(zoomMin(), wxMin(kZoomMax, z));
+    }
+    // The canonical presets, re-labelled with the percentage they ACTUALLY produce at this base size and
+    // de-duplicated (at base 11 the top entries collapse onto the +20 ceiling). Returning (percent, zoom)
+    // pairs means the pick handler can't disagree with the label the user clicked.
+    std::vector<std::pair<int, int>> zoomPresets()
+    {
+        std::vector<std::pair<int, int>> out;
+        for (int p : { 50, 75, 100, 125, 150, 175, 200, 250, 300 })
+        {
+            const int z = zoomFromPercent(p);
+            if (!out.empty() && out.back().second == z) continue;
+            out.push_back({ percentFromZoom(z), z });
+        }
+        return out;
+    }
+    void syncZoomField()
+    { if (m_zoomField) m_zoomField->setPercent(percentFromZoom(static_cast<int>(sci(SCI_GETZOOM)))); }
+    void applyZoomPercent(int p)
+    {
+        sci(SCI_SETZOOM, zoomFromPercent(p));
+        syncZoomField();   // covers the case where the clamped/rounded zoom equals the current one (no SCN_ZOOM)
+    }
+    // The preset list, opening UPWARD out of the status bar. This replicates TerminalPanel::openList's
+    // toggle/reopen protocol rather than trusting wx to auto-dismiss: a real-click test showed dismissal
+    // is unreliable, so a second click on the caret would stack a second popup instead of closing the first.
+    void openZoomList()
+    {
+        if (m_zoomPopup) { m_zoomPopup->closeNow(); return; }   // same anchor -> the caret toggles the list
+        // Debounces the mouse race only: wx dismisses on the re-click, then delivers that same click to us.
+        if ((wxGetUTCTimeMillis() - m_zoomPopupClosedAt).GetValue() < 250) return;
+        const std::vector<std::pair<int, int>> presets = zoomPresets();
+        const int live = static_cast<int>(sci(SCI_GETZOOM));
+        std::vector<wxString> items; int current = -1;
+        for (size_t i = 0; i < presets.size(); ++i)
+        {
+            items.push_back(wxString::Format("%d%%", presets[i].first));   // a number, not a translatable string
+            if (presets[i].second == live) current = static_cast<int>(i);
+        }
+        auto* pop = new TermListPopup(this, items, current, m_dark, [this, presets](int i) {
+            if (i >= 0 && i < static_cast<int>(presets.size())) { sci(SCI_SETZOOM, presets[i].second); syncZoomField(); }
+        });
+        pop->onClosed = [this]{
+            m_zoomPopup = nullptr;
+            m_zoomPopupClosedAt = wxGetUTCTimeMillis();
+            if (m_stc) m_stc->SetFocus();   // wxPU_CONTAINS_CONTROLS takes real focus; hand it back or the next keystroke goes nowhere
+        };
+        m_zoomPopup = pop;
+        // Right-aligned: the popup's minimum width (FromDIP(130)) is wider than the 78px field, so a
+        // left-aligned list would hang off the window's right edge.
+        pop->showAbove(m_zoomField, true);
     }
     void updateStatus()
     {
@@ -8620,7 +9624,11 @@ private:
         setStatus(3, wxString::Format(fmtSel, sel, selLines));
         setStatus(4, eolName(eol));
         setStatus(5, encDisplay(activePage()));
-        setStatus(6, sci(SCI_GETOVERTYPE) ? "OVR" : "INS");   // typing mode, toggled by the Insert key
+        // Nothing is written to field 6 - the ZoomField window covers it, and text underneath would show
+        // through wherever the child doesn't fill the field rect exactly (GTK insets differ from MSW).
+        // The zoom field is deliberately NOT resynced here either: this runs on the 150ms timer and would
+        // stomp characters mid-typing.
+        setStatus(7, sci(SCI_GETOVERTYPE) ? "OVR" : "INS");   // typing mode, toggled by the Insert key
     }
 
     // Gray out toolbar buttons and menu items that don't apply right now (Save when clean, Undo/Redo
@@ -8681,6 +9689,10 @@ private:
     wxPanel*       m_capBar = nullptr;   // +/v/x caption buttons on the tab strip
     FindReplaceDialog* m_findDlg = nullptr;   // modeless Find/Replace dialog
     TerminalPanel*     m_terminal = nullptr;  // View > Show Terminal - bottom multi-tab shell panel (lazy)
+    Scope              m_accelScope = Scope::Editor;   // current frame accel-table scope (see refreshAccelerators/onChildFocus)
+    KeymapStore        m_keymap;          // effective shortcut set (defaults + shortcuts.json); drives refreshAccelerators (keymap_store.h)
+    bool               m_keymapReady = false;   // true once seeded+loaded in buildMenuBar; gates every store read (label rewrite, editor ops)
+    std::vector<EditorOp> m_editorLive;   // editor-command overrides currently applied to the persistent STCs; diffed on re-apply so reset restores stock keys
     std::vector<OpenHereTool> m_openFolderTools;   // File > Open Containing Folder's dynamically-detected entries (see terminal_panel.h)
     wxStyledTextCtrl*  m_findResults = nullptr;   // Find-in-Files results panel (docked, bottom)
     wxStyledTextCtrl*  m_fifScratch  = nullptr;   // hidden scratch buffer for searching file contents
@@ -8695,6 +9707,10 @@ private:
     wxTreeCtrl* m_fifPanel = nullptr;       // Find result: docked Find-in-Files results tree
     wxTimer*    m_flTimer  = nullptr;        // debounce re-parse of the Function List after edits
     wxTimer*    m_monTimer = nullptr;        // View > Monitoring (tail -f): 1s poll while any tab is monitored
+    ZoomField*  m_zoomField = nullptr;       // editable zoom combo parked over status-bar field 6
+    TermListPopup* m_zoomPopup = nullptr;    // its live preset list, if open (the caret toggles on it)
+    wxLongLong  m_zoomPopupClosedAt = 0;     // reopen guard: wx delivers the dismissing click to us afterwards
+    static const int kZoomMax = 20;          // Scintilla's own SCI_ZOOMIN ceiling - see zoomFromPercent
 #ifdef __WXMSW__
     HWND        m_sci  = nullptr;
     SizeGripWin* m_grip = nullptr;          // custom dark-themed status-bar resize grip (native one can't theme)
@@ -8726,9 +9742,12 @@ private:
     bool        m_reuseInstance = false;    // Preferences > General "Reuse an existing window" (restart-to-apply; read in OnInit)
     bool        m_customGutterColor = false;   // Preferences > Editing "Use a custom line-number margin colour"
     long        m_gutterColorValue = 0xE0E0E0;   // Scintilla BGR-packed int (see bgrToColour/colourToBgr); only used when m_customGutterColor
-    wxString    m_fontFace = "JetBrains Mono";   // Preferences > Editing "Font"; effectiveFontFace() falls back to this if it's no longer installed
+    wxString    m_fontFace = "Cascadia Mono";    // Preferences > Editing "Font"; effectiveFontFace() falls back to this if it's no longer installed
     int         m_tabWidth = 4;                                   // persisted editor preferences (Settings > Preferences)
     bool        m_useTabs = true, m_lineNumbers = true, m_wrapSymbol = false, m_showToolbar = true, m_showStatusbar = true;
+    // Off by default: the zoom combo is a power-user affordance, and Ctrl+wheel / View > Zoom work
+    // without it. When off, status-bar field 6 is collapsed to width 0 so no empty slot is left behind.
+    bool        m_showZoomField = false;
     bool        m_autocomplete = true;                            // auto word/keyword completion while typing
     bool        m_caretLine = true, m_autoindent = true;          // highlight the current line; auto-indent new lines
     int         m_caretWidth = 1, m_edgeColumn = 0;               // caret thickness (px); long-line marker column (0 = off)
@@ -8769,6 +9788,122 @@ using WxnShellFrame = WxnShellFrameT<wxFrame>;
 using WxnIntegratedFrame = WxnShellFrameT<wxBorderlessFrame>;
 #endif
 
+#ifdef __WXMSW__
+// wx 3.3 already dark-draws the native menu bar itself (src/msw/darkmode.cpp, via the undocumented UAH
+// WM_UAHDRAWMENU/DRAWMENUITEM messages) - so the bar was never the light native one. Its stock dark is
+// wxSYS_COLOUR_MENU == (43,43,43), while every other piece of our chrome - caption, toolbar, tab strip,
+// status bar - is (32,32,32). Those 11 levels are exactly the lighter band the user sees across the menu
+// row. Overriding just the MENU colours here fixes it without touching any Win32 message handling and
+// without giving up native menu behaviour (Alt/F10 activation, Alt+mnemonics, arrow traversal, MSAA).
+// Only GetMenuColour is overridden - GetColour()/GetBorderPen() keep wx's defaults, so nothing else moves.
+class WxnDarkModeSettings : public wxDarkModeSettings
+{
+public:
+    wxColour GetMenuColour(wxMenuColour which) override
+    {
+        switch (which)
+        {
+            case wxMenuColour::StandardBg: return wxColour(32, 32, 32);      // == applyTheme's chromeBg
+            case wxMenuColour::StandardFg: return wxColour(220, 220, 220);   // == chromeFg (not wx's pure white)
+            case wxMenuColour::DisabledFg: return wxColour(109, 109, 109);   // wx's own 0x6d6d6d, still legible on 0x202020
+            case wxMenuColour::HotBg:      return wxColour(51, 51, 51);      // subtle hover lift off the darker bar
+        }
+        return wxDarkModeSettings::GetMenuColour(which);
+    }
+};
+#endif
+
+// `file:line[:col]` on a positional argument - the format every compiler, linter, grep and stack trace
+// already emits ("src/main.cpp:9201:9"), so an error location can be pasted straight onto the command
+// line. Peels the suffix off `path` and reports it through line/col (left untouched when there is none).
+//
+// Three guards, each for a concrete way this mangles a real filename:
+//  - if `path` exists exactly as given, nothing is stripped at all - a file literally named "notes:12"
+//    opens as itself rather than as "notes" at line 12;
+//  - otherwise the suffix is only accepted once the REMAINDER exists on disk, so a nonexistent
+//    "report:2024" is still passed through whole (and reported missing) instead of becoming "report";
+//  - the remainder is never allowed to shrink to a bare drive spec. On Windows the drive colon is the
+//    common case, not the exception: without this "C:" would parse as drive "C" plus a line number, and
+//    the two-suffix pass would chew "C:\x" down the same way.
+static void stripLineColSuffix(wxString& path, int& line, int& col)
+{
+    if (path.empty() || wxFileExists(path) || wxDirExists(path)) return;
+    auto isDriveSpec = [](const wxString& s) { return s.length() == 2 && s[1] == ':' && wxIsalpha(s[0]); };
+
+    wxString head = path;
+    long num[2] = { 0, 0 };                    // num[0] = innermost (col when two are present), num[1] = line
+    for (int n = 0; n < 2; ++n)                // at most two: ":line" then ":line:col"
+    {
+        const size_t p = head.rfind(':');
+        if (p == wxString::npos || p + 1 >= head.length()) return;
+        const wxString tail = head.Mid(p + 1), rest = head.Left(p);
+        if (tail.find_first_not_of("0123456789") != wxString::npos) return;   // not a numeric suffix
+        if (rest.empty() || isDriveSpec(rest)) return;
+        if (!tail.ToLong(&num[n]) || num[n] <= 0) return;                     // ":0" is not a line number
+        head = rest;
+        if (wxFileExists(head) || wxDirExists(head))
+        {
+            path = head;
+            line = (int)num[n];                                               // the last number peeled is the line
+            if (n == 1) col = (int)num[0];                                    // ...and with two, the first was the column
+            return;
+        }
+    }
+}
+
+// `wxnote -`: read piped/redirected standard input into memory so OnInit can drop it into a new untitled
+// buffer. Returns false (a NO-OP, never a block) whenever stdin is NOT a pipe or a redirected file. That
+// gate is load-bearing on Windows: this is a GUI-subsystem exe (add_executable(wxnote WIN32 ...)) with NO
+// console attached from a bare `cmd`/PowerShell/Explorer launch, so blindly ReadFile()-ing the input handle
+// would hang forever waiting on a console line the user can never type. A real pipe from git/sh
+// (`... | wxnote -`) or a redirect (`wxnote - < file`) DOES connect a readable handle - which is exactly
+// what FILE_TYPE_PIPE / FILE_TYPE_DISK (POSIX: !isatty) admits, and a console (FILE_TYPE_CHAR / a tty) does not.
+static bool readPipedStdin(wxString& out)
+{
+    // Bound the capture. An editor never needs gigabytes, and an unbounded slurp here is a real hazard:
+    // `yes | wxnote -` or a multi-GB `wxnote - < huge.bin` would otherwise buffer without limit (and twice -
+    // once as raw bytes, again as the decoded wxString) and, since this runs synchronously in OnInit BEFORE
+    // any window is shown, that either exhausts memory or freezes the GUI before it appears. We stop after
+    // this many bytes and open what we captured. (A pipe that stays open while trickling little data - e.g.
+    // `tail -f log | wxnote -` - is a different failure this cap can't cover; that needs the read moved onto
+    // a background thread after the window is up, which is out of scope for these startup-path fixes.)
+    static const size_t kMaxStdinBytes = 64u * 1024u * 1024u;
+    std::string buf; char chunk[4096];
+#ifdef __WXMSW__
+    const HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
+    if (h == nullptr || h == INVALID_HANDLE_VALUE) return false;
+    const DWORD ft = GetFileType(h);
+    if (ft != FILE_TYPE_PIPE && ft != FILE_TYPE_DISK) return false;   // console/tty or nothing attached - never block
+    DWORD n = 0;
+    while (buf.size() < kMaxStdinBytes)
+    {
+        const DWORD want = (DWORD)std::min<size_t>(sizeof(chunk), kMaxStdinBytes - buf.size());
+        if (!ReadFile(h, chunk, want, &n, nullptr) || n == 0) break;
+        buf.append(chunk, n);
+    }
+#else
+    if (isatty(0)) return false;                                       // interactive terminal - never block
+    ssize_t n;
+    while (buf.size() < kMaxStdinBytes)
+    {
+        const size_t want = std::min<size_t>(sizeof(chunk), kMaxStdinBytes - buf.size());
+        if ((n = read(0, chunk, want)) <= 0) break;
+        buf.append(chunk, (size_t)n);
+    }
+#endif
+    // Decode as UTF-8, but DON'T silently drop the buffer when it isn't valid UTF-8: wxString::FromUTF8
+    // returns an EMPTY string the instant ANY byte is invalid - it discards the whole buffer, it does not
+    // substitute - so a cp1252 apostrophe (0x92), a latin-1 stream, or a raw UTF-16 blob (leading 0xFF 0xFE)
+    // would otherwise yield an empty '(stdin)' tab with every byte of content gone and no error. Fall back
+    // to the local 8-bit encoding, then to latin-1 (which maps all 256 byte values and never fails), so the
+    // bytes always survive - a garbled-but-present buffer the user can fix via the encoding menu beats a
+    // blank one that ate their piped input.
+    out = wxString::FromUTF8(buf.data(), buf.size());
+    if (out.empty() && !buf.empty()) out = wxString(buf.data(), wxConvLocal, buf.size());
+    if (out.empty() && !buf.empty()) out = wxString(buf.data(), wxConvISO8859_1, buf.size());
+    return true;
+}
+
 class WxnApp : public wxApp
 {
 public:
@@ -8786,35 +9921,191 @@ public:
 #endif
         SetAppName("wxNote");             // the identity wxConfig + GetUserDataDir() key everything under
 
+        // ---- --locale pre-scan: raw argv, before the parser exists -------------------------------------
+        // Deliberately runs AFTER the --elevated-write block above: that helper must never have its argv
+        // reinterpreted by anything.
+        //
+        // Why a hand-rolled scan instead of just reading parser.Found("locale") below: every help string
+        // handed to wxCmdLineParser is _()-wrapped, and Parse() renders the usage text from them. The
+        // locale used to be Init()ed hundreds of lines further down, next to the frame construction, so
+        // `wxnote --help` printed ENGLISH usage even for a user whose Preferences > Localization is Polish
+        // - the catalog simply wasn't installed yet. Resolving --locale here and doing the Init below,
+        // still ABOVE the parser, fixes --help for everyone, not just --locale users.
+        for (int i = 1; i < argc; ++i)
+        {
+            wxString arg(argv[i]), val;
+            if (arg == "--locale") { if (i + 1 >= argc) break; val = argv[i + 1]; }
+            else if (!arg.StartsWith("--locale=", &val)) continue;
+            if (val.empty()) break;
+            // Accept the language only if we actually ship a catalog for it. wxLocale::FindLanguageInfo()
+            // happily resolves e.g. "sv", and Init()ing that would leave every string English while still
+            // switching the process's number/date formatting - a stranger result than ignoring the flag.
+            if (const wxLanguageInfo* li = wxLocale::FindLanguageInfo(val))
+                for (int k = 0; k < (int)WXSIZEOF(UI_LANG_IDS); ++k)
+                    if (UI_LANG_IDS[k] == li->Language) { g_localeOverride = li->Language; break; }
+            break;                        // first --locale wins; an unshipped one falls back silently
+        }
+
+        // ---- positional-token pre-scan: +N / +N,col, +/{pattern} and a lone '-' -----------------------
+        // These are vim/less-style POSITIONAL syntax, not switches: '+' is not in SetSwitchChars("-"), and a
+        // bare '-' is (per wxCmdLineParser) a parameter, so none of them collide with any -x flag. wx would
+        // just funnel them into GetParam() as nonexistent "files"; we consume them HERE (raw argv, like the
+        // --locale scan) and skip them in the param loop below. Kept out of the parser because '+' and '-'
+        // aren't option syntax it can model.
+        //
+        // A POSIX '--' ends option/token processing: everything after it is a literal filename, so the one
+        // standard escape for a file whose name looks like a token - `wxnote -- +5.txt`, `wxnote -- -` -
+        // works. Without this the pre-scan would eat those '+5.txt'/'-' argv entries and the param loop would
+        // skip them, so such a file could never be opened at all. wx strips '--' from GetParam() (and treats
+        // ALL following args as parameters, in order), so the post-'--' args are exactly the trailing suffix
+        // of the param list; we count them here (excluding any further '--', which wx also discards) and mark
+        // that suffix "literal" in the param loop below.
+        int  plusLine = -1, plusCol = -1;   // +N / +N,col -> fed into the SAME goto path as -g (an explicit -g wins)
+        wxString plusFindPattern;           // +/{pattern} -> caret on the first match in the last-opened file
+        bool stdinRequested = false;        // '-' -> read piped stdin into a new untitled buffer
+        bool afterDoubleDash = false;       // seen a bare '--' -> stop consuming tokens, everything after is a file
+        int  postDoubleDashCount = 0;       // non-'--' argv entries after the first '--' == trailing literal params
+        for (int i = 1; i < argc; ++i)
+        {
+            const wxString a(argv[i]);
+            if (a == "--") { afterDoubleDash = true; continue; }   // the separator itself is not a file (wx drops it too)
+            if (afterDoubleDash) { ++postDoubleDashCount; continue; }   // a literal filename - never a +N/'-'/+/ token
+            if (a == "-") { stdinRequested = true; }
+            else if (a.StartsWith("+/")) { if (plusFindPattern.empty()) plusFindPattern = a.Mid(2); }   // first +/pat wins
+            else if (a.length() > 1 && a[0] == '+' && a[1] >= '0' && a[1] <= '9')
+            {
+                long l = -1, c = -1;
+                const wxString body = a.Mid(1);
+                body.BeforeFirst(',').ToLong(&l);
+                if (body.Contains(",")) body.AfterFirst(',').ToLong(&c);
+                plusLine = (int)l; plusCol = (int)c;   // last +N wins (mirrors wxNote's "last file opened" goto semantics)
+            }
+        }
+
+        // UI localization (gettext): every _()-wrapped string looks itself up in resources/locale/<lang>/
+        // LC_MESSAGES/wxn.mo next to the exe. The language is --locale for this run if it named a shipped
+        // catalog, else the user's Preferences > General > Localization choice (wxLANGUAGE_DEFAULT = follow
+        // the OS); if no catalog exists for it (e.g. English, which has none), AddCatalog finds nothing and
+        // _() falls back to returning its English argument.
+        //
+        // Must stay ABOVE the parser: see the pre-scan comment. Note this also makes readUiLang() the first
+        // wxConfigBase::Get() touch in the process, which used to be the "ReuseInstance" read further down.
+        { wxLogNull noWarn;                                     // a chosen language whose OS locale isn't installed still loads our catalog; hush the C-locale warning
+          m_locale.Init(g_localeOverride >= 0 ? g_localeOverride : (int)readUiLang()); }   // ignore failure: wx installs the chosen wxTranslations even then, and a second Init() would assert (wx forbids re-Init)
+        m_locale.AddCatalogLookupPathPrefix(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "locale");
+        m_locale.AddCatalog("wxn");
+
         // ---- command line: -g/--goto, -e/--encoding, -n/--new-instance, -r/--reuse-instance, file... ----
         wxCmdLineParser parser(argc, argv);
         parser.SetSwitchChars("-");                              // don't also accept "/" (ambiguous with paths)
         parser.AddOption("g", "goto", _("open at line[,col]"), wxCMD_LINE_VAL_STRING);
         parser.AddOption("e", "encoding", _("force encoding: ansi|utf8|utf8bom|utf16le|utf16be"), wxCMD_LINE_VAL_STRING);
+        // -R/-M/--read-only: open THIS launch's files read-only. -M is a second short form of the same soft
+        // read-only (nvim's -M "disallow modifications"); wx has no multi-alias switch, so it's its own entry
+        // OR'd in below. nvim's -m (writable buffer, blocked save) has no clean analogue here and is skipped.
+        parser.AddSwitch("R", "read-only", _("open the given file(s) read-only"));
+        parser.AddSwitch("M", wxString(), _("open the given file(s) read-only"));   // alias for -R (same soft read-only)
+        // -o/-O/--split: route THIS launch's files into the split view (see openRequestFiles for the two-view,
+        // single-orientation ceiling that makes -o and -O identical).
+        parser.AddSwitch("o", "split", _("open the given file(s) in a split view"));
+        parser.AddSwitch("O", wxString(), _("open the given file(s) in a split view"));   // alias for -o (one orientation, so identical)
         parser.AddSwitch("n", "new-instance", _("always open a new window"));
         parser.AddSwitch("r", "reuse-instance", _("reuse an already-running window"));
-        parser.AddParam(_("file"), wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_MULTIPLE | wxCMD_LINE_PARAM_OPTIONAL);
+        parser.AddSwitch("w", "wait", _("wait for the file to be closed before returning"));
+        parser.AddLongSwitch("safe", _("start without loading any plugins"));   // no short form
+        // --clean: --safe (no plugins) PLUS skip session and recovery-backup restore - a pristine launch for
+        // bug-repro / catalog screenshots. Distinct from --safe; gates g_cleanMode alongside g_safeMode below.
+        parser.AddLongSwitch("clean", _("like --safe, plus skip session and recovery restore"));
+        // Registered so it shows up in --help and doesn't trip "unknown option"; the VALUE is read by the
+        // raw-argv pre-scan far above, because the catalog has to be installed before this parser is built.
+        parser.AddOption("", "locale", _("UI language for this run (e.g. pl, de, ja)"), wxCMD_LINE_VAL_STRING);
+        parser.AddSwitch("v", "version", _("print the version and exit"));
+        // Registered explicitly: without it -h is just an unknown option, so the usage text is preceded by an
+        // error. wxCMD_LINE_OPTION_HELP makes Parse() print the usage itself and return -1, which the
+        // `parser.Parse() != 0` line below already treats as "done, don't open a window".
+        parser.AddSwitch("h", "help", _("show this help message"), wxCMD_LINE_OPTION_HELP);
+        parser.AddParam(_("file-or-folder"), wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_MULTIPLE | wxCMD_LINE_PARAM_OPTIONAL);
         if (parser.Parse() != 0) return false;                   // --help/bad args: wx already showed usage
 
-        wxArrayString files;
-        for (size_t i = 0; i < parser.GetParamCount(); ++i)
+        if (parser.Found("v"))
         {
-            wxFileName fn(parser.GetParam(i));
-            fn.MakeAbsolute();                                    // an IPC handoff runs in a different process's cwd
-            files.Add(fn.GetFullPath());
+            // A GUI-subsystem exe (add_executable(wxnote WIN32 ...)) has NO console of its own, so a plain
+            // printf() here is written into the void when launched from cmd/PowerShell. wxMessageOutputBest
+            // is the portable fix: on MSW it goes through wxGUIAppTraits::CanUseStderr(), which does the
+            // AttachConsole(ATTACH_PARENT_PROCESS) + freopen(CONOUT$) dance and writes into the invoking
+            // console; only with no parent console at all (Explorer / the Run box) does it fall back to a
+            // message box. On GTK/macOS it is plain stderr. Nothing is constructed yet - no window appears.
+            wxMessageOutputBest().Printf("wxNote %s", WXN_VERSION);
+            std::exit(0);   // NOT `return false`: wxEntry turns that into exit code -1 (255), which breaks
+                            // any script doing `wxnote --version && ...`
         }
-        int gotoLine = -1, gotoCol = -1, forceEnc = -1;
+        g_cleanMode = parser.Found("clean");
+        g_safeMode  = parser.Found("safe") || g_cleanMode;   // --clean implies --safe (no plugins), and also skips session/recovery restore
+
+        // Positional arguments split two ways: an existing DIRECTORY roots the workspace browser
+        // (`wxnote .`, matching `code .` / `subl .`), everything else is opened as a tab. Until this split
+        // existed a directory was simply dropped - openPath() is wxFileExists()-gated, so `wxnote .` was a
+        // silent no-op. Mixing works: `wxnote . main.cpp` roots the browser AND opens the file.
+        WxnOpenRequest req;
+        // Post-'--' params are the trailing suffix of the param list (see the pre-scan): treat them as
+        // literal filenames and never run the token-skip heuristic on them, so `wxnote -- +5.txt` opens the
+        // file. Guard against a count larger than the param list (multiple '--' etc.) by clamping to 0.
+        const size_t paramCount = parser.GetParamCount();
+        const size_t literalStart = ((size_t)postDoubleDashCount >= paramCount) ? 0 : paramCount - (size_t)postDoubleDashCount;
+        for (size_t i = 0; i < paramCount; ++i)
+        {
+            wxString raw = parser.GetParam(i);
+            // Skip the positional tokens the pre-scan above already consumed - wx delivers them here as
+            // "parameters", but they are vim/less syntax, not files: '-' (stdin), '+N'/'+N,col' (goto) and
+            // '+/pattern' (find-on-open). The guard is deliberately narrow (only '+' followed by '/' or a
+            // digit) so a real file literally named e.g. "+notes" is still opened. Params after a '--' are
+            // literal by definition, so the skip is bypassed for them.
+            if (i < literalStart)
+            {
+                if (raw == "-") continue;
+                if (raw.length() > 1 && raw[0] == '+' && (raw[1] == '/' || (raw[1] >= '0' && raw[1] <= '9'))) continue;
+            }
+            int pLine = -1, pCol = -1;
+            stripLineColSuffix(raw, pLine, pCol);                 // `main.cpp:100:9` -> main.cpp + 100,9
+            wxFileName fn(raw);
+            fn.MakeAbsolute();                                    // an IPC handoff runs in a different process's cwd
+            const wxString full = fn.GetFullPath();
+            // Folders stay OUT of req.paths: that array is what feeds enterWaitMode(), and -w must only
+            // ever wait on real tabs (see openPath()'s comment).
+            if (wxDirExists(full)) req.folders.Add(full);
+            else { req.paths.Add(full); req.lines.Add(pLine); req.cols.Add(pCol); }
+        }
         wxString gotoArg, encArg;
         if (parser.Found("g", &gotoArg))
         {
             long l = -1, c = -1;
             gotoArg.BeforeFirst(',').ToLong(&l);
             if (gotoArg.Contains(",")) gotoArg.AfterFirst(',').ToLong(&c);
-            gotoLine = (int)l; gotoCol = (int)c;
+            req.gotoLine = (int)l; req.gotoCol = (int)c;
         }
-        if (parser.Found("e", &encArg)) forceEnc = encodingFromName(encArg);
-        const bool forceNew = parser.Found("n");
-        const bool forceReuse = parser.Found("r");
+        else if (plusLine >= 0) { req.gotoLine = plusLine; req.gotoCol = plusCol; }   // +N goto, but an explicit -g wins
+        if (parser.Found("e", &encArg)) req.forceEnc = encodingFromName(encArg);
+        req.readOnly    = parser.Found("R") || parser.Found("M");   // -R / -M
+        req.split       = parser.Found("o") || parser.Found("O");   // -o / -O / --split
+        req.findPattern = plusFindPattern;                          // +/{pattern}
+        // '-': read piped stdin now (a NO-OP off a console - see readPipedStdin). Only when it actually
+        // captured a stream do we flag it; an empty pipe still opens an empty "(stdin)" buffer, matching
+        // `echo -n | wxnote -`. Piped content has no path to forward, so it forces a NEW instance below.
+        if (stdinRequested) { wxString s; if (readPipedStdin(s)) { req.hasStdin = true; req.stdinText = s; } }
+
+        // --wait must never take the IPC handoff path below: that process Execute()s and exits immediately,
+        // so the caller (git) would unblock before the tab even opened and commit the untouched template.
+        // Forcing a new instance makes "block until closed" reduce to "this process stays alive", with no
+        // reply channel, no proxy event loop, and no way to hang if the other instance dies. Piped stdin
+        // forces a new instance for the same reason: its buffer can't be serialised as a path over IPC.
+        // --safe/--clean (g_safeMode covers both) likewise MUST open our own window: their whole purpose is a
+        // pristine launch with no plugins (and, for --clean, no session/recovery restore). Handing off to an
+        // already-running instance - the default when "Reuse an existing window" is on - would drop the file
+        // into a process that already loaded plugins and restored session, i.e. the exact opposite of what
+        // the flags ask, silently. So they force new, and an explicit -r can't drag them back into a reuse.
+        const bool wait = parser.Found("w");
+        const bool forceNew = parser.Found("n") || wait || req.hasStdin || g_safeMode;
+        const bool forceReuse = parser.Found("r") && !wait && !req.hasStdin && !g_safeMode;
 
         // ---- single-instance "reuse window" handoff (Preferences > General; off by default) -----------
         bool reuseSetting = false;
@@ -8831,9 +10122,18 @@ public:
                 if (conn)
                 {
                     wxString payload;
-                    for (const auto& f : files) payload += f + "\n";
-                    if (gotoLine >= 0) payload += wxString::Format("\x01GOTO=%d,%d\n", gotoLine, gotoCol);
-                    if (forceEnc >= 0) payload += wxString::Format("\x01ENC=%d\n", forceEnc);
+                    for (const auto& f : req.paths) payload += f + "\n";
+                    for (const auto& d : req.folders) payload += "\x01" "DIR=" + d + "\n";
+                    for (size_t i = 0; i < req.lines.GetCount(); ++i)
+                        if (req.lines[i] > 0) payload += wxString::Format("\x01" "FGOTO=%d,%d,%d\n", (int)i, req.lines[i], req.cols[i]);
+                    if (req.gotoLine >= 0) payload += wxString::Format("\x01GOTO=%d,%d\n", req.gotoLine, req.gotoCol);
+                    if (req.forceEnc >= 0) payload += wxString::Format("\x01" "ENC=%d\n", req.forceEnc);
+                    // -R/-M, -o/-O/--split and +/{pattern} must ride along too, or they'd silently work for a
+                    // NEW window but be dropped whenever "reuse window" is on (the same class of bug the FGOTO
+                    // key was added to fix). "\x01" "FIND=" MUST stay split: 'F' is a hex digit (see OnExec).
+                    if (req.readOnly) payload += "\x01" "RO=1\n";
+                    if (req.split)    payload += "\x01" "SPLIT=1\n";
+                    if (!req.findPattern.empty()) payload += "\x01" "FIND=" + req.findPattern + "\n";
                     conn->Execute(payload);
                     conn->Disconnect();
                     delete conn;
@@ -8849,33 +10149,63 @@ public:
         }
 
         wxImage::AddHandler(new wxPNGHandler());                // needed to load raster icons (iconColored) - SVG icons go through NanoSVG instead and don't need this
-#ifdef __WXMSW__
-        // Bundle JetBrains Mono (SIL OFL 1.1, resources/fonts/) as the default editor font instead of
-        // Consolas: Consolas is a proprietary Microsoft font that happens to already be installed on
-        // Windows, but isn't legally ours to redistribute and isn't present on Linux/macOS at all - so
-        // referencing it by name there would silently fall back to an arbitrary system font. Loading
-        // it as a FR_PRIVATE resource means no installer/admin rights are needed and it never touches
-        // the user's system-wide font list; Windows unloads it automatically on process exit regardless
-        // of whether RemoveFontResourceEx in OnExit() below runs (belt-and-suspenders cleanup).
-        { const wxString fontDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "fonts" + wxFILE_SEP_PATH;
-          ::AddFontResourceExW((fontDir + "JetBrainsMono-Regular.ttf").wc_str(), FR_PRIVATE, nullptr);
-          ::AddFontResourceExW((fontDir + "JetBrainsMono-Bold.ttf").wc_str(), FR_PRIVATE, nullptr); }
+        // Register the bundled code font (SIL OFL 1.1 - see resources/fonts/CREDITS.md) so it is rendered
+        // identically on every platform, rather than naming a system font: Consolas is Microsoft's
+        // (Windows-only, not ours to redistribute), and naming a font that isn't installed silently falls
+        // back to an arbitrary system default.
+        //
+        // wxFont::AddPrivateFont registers for THIS PROCESS ONLY on every port we ship - MSW, GTK (via
+        // fontconfig) and macOS (via CoreText) - so no installer or admin rights are needed and nothing is
+        // added to the user's system-wide font list. This replaced a raw ::AddFontResourceExW, which was
+        // inside an #ifdef __WXMSW__ and therefore left Linux and macOS silently falling back to whatever
+        // the system picked for "JetBrains Mono" - i.e. the bundled default was shipped but never used on
+        // two of the three platforms. wxLogNull: a font that fails to register just isn't offered, which
+        // effectiveFontFace()/the picker already handle; it must not raise a dialog at startup.
+        //
+        // wxUSE_PRIVATE_FONTS guard: the API is a wx BUILD OPTION, not a given - our Linux CI's static
+        // wxGTK compiles with it OFF, where wxFont::AddPrivateFont does not exist at all (0.9.5 CI broke
+        // on exactly this). Without it the bundled faces simply aren't registered and the picker's
+        // fallback chain applies - same behaviour the pre-AddPrivateFont code had on those platforms.
+#if wxUSE_PRIVATE_FONTS
+        { wxLogNull noPopup;
+          const wxString fontDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "fonts" + wxFILE_SEP_PATH;
+          // Cascadia MONO, not Cascadia Code: Mono is the ligature-free cut, which is the right one here
+          // because Scintilla draws through GDI on Windows (no SetTechnology call anywhere in src/) and GDI
+          // does no OpenType shaping - so Code's programming ligatures would never render anyway, and Mono
+          // is the smaller, honest choice. Regular and Bold both report GDI family "Cascadia Mono" (name
+          // ID 1) with subfamilies "Regular"/"Bold", so they pair as one family and bold syntax styles get
+          // the REAL Bold face rather than a GDI-synthesised one (which measures ~11% wider and pulls bold
+          // tokens out of column alignment - the trap a separate-family weight cut like SemiBold falls into).
+          for (const char* f : { "JetBrainsMono-Regular.ttf", "JetBrainsMono-Bold.ttf",
+                                 "CascadiaMono-Regular.ttf",  "CascadiaMono-Bold.ttf" })
+              wxFont::AddPrivateFont(fontDir + f); }
 #endif
-        // UI localization (gettext): every _()-wrapped string looks itself up in resources/locale/<lang>/
-        // LC_MESSAGES/wxn.mo next to the exe. The language is the user's Preferences > General >
-        // Localization choice (wxLANGUAGE_DEFAULT = follow the OS); if no catalog exists for it (e.g. English,
-        // which has none), AddCatalog finds nothing and _() falls back to returning its English argument.
-        { wxLogNull noWarn;                                     // a chosen language whose OS locale isn't installed still loads our catalog; hush the C-locale warning
-          m_locale.Init((int)readUiLang()); }                          // ignore failure: wx installs the chosen wxTranslations even then, and a second Init() would assert (wx forbids re-Init)
-        m_locale.AddCatalogLookupPathPrefix(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "locale");
-        m_locale.AddCatalog("wxn");
+        // (UI localization used to be Init()ed here; it moved above the command-line parser so that the
+        //  parser's own _()-wrapped help strings - i.e. `wxnote --help` - are translated too.)
         const bool dark = resolveDark(readThemeMode());
 #ifdef __WXMSW__
         if (dark)
-            MSWEnableDarkMode(DarkMode_Always);                // native dark chrome ONLY in dark mode; light
+            // The settings object recolours wx's native dark menu bar to our chrome (32,32,32) so it stops
+            // reading as a lighter band between the caption and the toolbar. wx TAKES OWNERSHIP of the
+            // pointer (wxApp::MSWEnableDarkMode -> wxDarkModeModule::SetSettings), so it must be heap-
+            // allocated and must not be deleted here.
+            MSWEnableDarkMode(DarkMode_Always, new WxnDarkModeSettings());   // native dark chrome ONLY in dark mode; light
                                                                // mode never enables it, so it stays fully native-light.
                                                                // MSW-only API; other platforms theme via wx below.
 #endif
+        // Everything the command line asks of a newly built window, in one place. A generic lambda because
+        // WxnShellFrame and WxnIntegratedFrame are two instantiations of the same template with no common
+        // base to call through - and because the two construction blocks below are otherwise near-identical
+        // twins, where anything added to only one silently does nothing whenever the other is in use
+        // (Preferences > Integrated bar decides which, so a miss is invisible on the developer's own setup).
+        auto applyRequest = [&](auto* frame) {
+            for (const auto& d : req.folders) frame->openFolderPath(d);   // last folder wins: the browser is single-root
+            // Files (as tabs or into the split), per-file :line[:col], the launch-wide -g/-e (or +N),
+            // -R/-M read-only and +/{pattern} - all shared with the reuse-window path (openRequestFiles).
+            const wxArrayString opened = frame->openRequestFiles(req);
+            if (req.hasStdin) frame->openStdinBuffer(req.stdinText);       // '-': piped input into a new "(stdin)" buffer
+            if (wait) frame->enterWaitMode(opened);   // only wait on tabs that actually opened, or we'd never return
+        };
 #ifdef WXN_HAS_BORDERLESS
         // Integrated top bar (Settings > Preferences, restart-to-apply): a borderless frame whose chrome is
         // our own title bar. Only available where the wxBorderlessFrame backend exists (Windows + Linux/GTK).
@@ -8885,30 +10215,34 @@ public:
         {
             auto* frame = new WxnIntegratedFrame(dark);
             frame->Show(true);
-            frame->restoreSession();
+            if (!wait && !g_cleanMode) frame->restoreSession();   // --clean: no session AND no recovery restore (restoreSession does both)
             if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(kIpcServiceName); }
-            for (const auto& f : files) frame->openPath(f);
-            if (!files.IsEmpty()) frame->applyGotoAndEncoding(gotoLine, gotoCol, forceEnc);
+            applyRequest(frame);
             return true;
         }
 #endif
         auto* frame = new WxnShellFrame(dark);
         frame->Show(true);
-        frame->restoreSession();                                   // reopen files from a theme-restart
+        if (!wait && !g_cleanMode) frame->restoreSession();   // reopen files from a theme-restart. -w: a dedicated
+                                                // one-file window; leave Session/Pending set so the next real launch
+                                                // still restores the user's tabs. --clean: skip session AND recovery
+                                                // restore entirely (restoreSession drives both) for a pristine launch
         if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(kIpcServiceName); }
-        for (const auto& f : files) frame->openPath(f);             // open any files passed on the command line
-        if (!files.IsEmpty()) frame->applyGotoAndEncoding(gotoLine, gotoCol, forceEnc);
+        applyRequest(frame);
         return true;
     }
     int OnExit() override
     {
-#ifdef __WXMSW__
-        const wxString fontDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "fonts" + wxFILE_SEP_PATH;
-        ::RemoveFontResourceExW((fontDir + "JetBrainsMono-Regular.ttf").wc_str(), FR_PRIVATE, nullptr);
-        ::RemoveFontResourceExW((fontDir + "JetBrainsMono-Bold.ttf").wc_str(), FR_PRIVATE, nullptr);
-#endif
+        // No font teardown here: the bundled fonts go through wxFont::AddPrivateFont (see OnInit), which
+        // has no removal counterpart - the registrations are process-private and die with the process on
+        // every platform. The old ::RemoveFontResourceExW pair this replaced was Windows-only anyway.
         delete m_ipcServer;
         delete m_checker;
+        // The terminal backends' kill-sweep threads (descendant tree-kill / SIGKILL escalation)
+        // must be joined here, after every backend dtor has run and before wx teardown: abandoned
+        // at process exit they die mid-walk (re-orphaning the child tree they exist to reap) or
+        // race destroyed wx logging state. See term_backend.cpp's g_sweepThreads.
+        TermBackend::joinKillSweeps();
         return wxApp::OnExit();
     }
 

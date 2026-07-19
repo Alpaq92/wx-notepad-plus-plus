@@ -148,11 +148,22 @@ No code was taken from any of these; each contributed ideas, structure, or
 
 Full modification records: `resources/icons*/CREDITS.md`.
 
-## Font
+## Fonts
 
-- **[JetBrains Mono](https://github.com/JetBrains/JetBrainsMono)** (SIL OFL
-  1.1) — the bundled default editor font, unmodified, chosen to replace the
-  non-redistributable Consolas.
+Two monospace families are bundled, both SIL OFL 1.1 and both unmodified,
+chosen to replace the non-redistributable Consolas:
+
+- **[Cascadia Mono](https://github.com/microsoft/cascadia-code)** (© Microsoft)
+  — the **default** editor font, and the face the editor falls back to when the
+  configured font is missing. Its OFL notice carries the Reserved Font Name
+  `Cascadia Code`, so it may be redistributed as-is but not renamed or patched
+  under that name — see `LICENSING.md`.
+- **[JetBrains Mono](https://github.com/JetBrains/JetBrainsMono)** (© the
+  JetBrains Mono Project Authors) — the second bundled choice, pinned in the
+  font picker. No Reserved Font Name.
+
+Details and the rationale for Cascadia *Mono* over Cascadia *Code*:
+`resources/fonts/CREDITS.md`.
 
 ## Themes & palettes
 

@@ -9,12 +9,14 @@
 ## TL;DR
 
 **wxNote is distributed under the Apache License 2.0** (see [`LICENSE`](LICENSE)),
-with two exceptions among the optional plugins that ship:
-`packages/npp-bridge/` and `packages/udl-compat/` (see below) both stay
-**GPL-3.0-or-later** because each reproduces a Notepad++ interoperability
-surface — npp-bridge the plugin ABI, udl-compat the `userDefineLang.xml` UDL
-format. (npp-bridge's never-shipped, Windows-only test fixture
-`packages/test_plugin/` tracks the same GPL license for the same reason.) It
+with three exceptions among the optional plugins that ship:
+`packages/npp-bridge/`, `packages/udl-compat/`, and
+`packages/npp-shortcuts-compat/` (see below) all stay **GPL-3.0-or-later**
+because each reproduces a Notepad++ interoperability surface — npp-bridge the
+plugin ABI, udl-compat the `userDefineLang.xml` UDL format, and
+npp-shortcuts-compat the `shortcuts.xml` keybinding format. (npp-bridge's
+never-shipped, Windows-only test fixture `packages/test_plugin/` tracks the
+same GPL license for the same reason.) It
 is an *independent reimplementation* — no Notepad++ source code is copied
 into `src/`; Notepad++ serves only as a functional reference and a test
 target (see [`NOTICE`](NOTICE)).
@@ -51,13 +53,14 @@ splitting it out makes the boundary unambiguous rather than just documented.
 | Toolbar icons — `resources/icons/` | **MIT** | Tabler © Paweł Kuna, Open Color © Heeyeun Jeong |
 | Colored toolbar icon option — `resources/icons-solar/` | **CC BY 4.0** | Solar Icons (Bold Duotone) © 480 Design, recoloured to Open Color green-8 / green-3 |
 | Colored toolbar icon option — `resources/icons-iconpark/` | **Apache-2.0** | IconPark © ByteDance, recoloured to Open Color teal-7 / lime-5 |
-| Default editor font — `resources/fonts/` | **SIL OFL 1.1** | JetBrains Mono, unmodified, bundled in place of the proprietary Consolas |
+| Bundled editor fonts — `resources/fonts/` | **SIL OFL 1.1** (both) | **Cascadia Mono** © Microsoft (the default *and* the fallback face) and **JetBrains Mono** © the JetBrains Mono Project Authors — both unmodified, bundled in place of the proprietary Consolas. Cascadia carries a **Reserved Font Name**; see the note below |
 | Menu structure — `src/menu_builder.h` + `src/menu_data_*.h` | **Apache-2.0** (original code) | an original 11-menu hierarchy, designed from research across five editors — no longer reproduces N++'s menu structure; the within-menu item ordering is likewise wxNote's own frequency/affinity arrangement, not N++'s (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)). Only the frozen numeric command-id *values* and the shared command labels carry over, via the core's own `src/command_ids.h` (see below) |
 | Command ids — `src/command_ids.h` | **Apache-2.0** | the core's own, authoritative id table (original `kCmd*` constants, grouped by wxNote's own menus). The core includes **nothing** from `include/npp-compat`. Only the numeric *values* are frozen — kept value-identical with the plugin ABI's ids so npp-bridge's `NPPM_MENUCOMMAND` passthrough dispatches correctly, an interoperability fact enforced by static_asserts. The macro-name vocabulary, formatting, and organization are wxNote's own (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)) |
 | Regenerated themes + `stylers.model.xml` | **Apache-2.0** | our data: factual Lexilla structure + permissive palettes |
 | Kept third-party themes — `resources/themes/` | **MIT** (© Fabio Zendhi Nagao, Oren Farhi, Renato Silva) / **CC BY 3.0** (© Paul Neubauer) | each file keeps its original author header; see the removal note below |
 | Scintilla / Lexilla — `third_party/` | **HPND** (permissive) | the editing/highlighting engine |
 | Native language engine — Lua + LPeg + Scintillua `lexer.lua` | **MIT** (each) | wxNote's own custom-language engine: Lua 5.4.7 © Lua.org/PUC-Rio, LPeg 1.1.0 © Roberto Ierusalimschy/PUC-Rio, and Scintillua `lexer.lua` © orbitalquark. Fetched at build and linked as the `lua_lpeg` static lib; `lexer.lua` ships as a resource (`lexers/lexer.lua`). The host glue that embeds them — `src/scintillua_engine.{h,cpp}` — is wxNote's own **Apache-2.0** code. This is the core's native language-definition mechanism (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)) |
+| Terminal-emulation core — libvterm | **MIT** | © 2008 Paul Evans — the VT520/xterm escape-sequence parser/state machine also used by Neovim and emacs-libvterm. Fetched at build (like Lua/LPeg) from the [neovim/libvterm](https://github.com/neovim/libvterm) GitHub mirror — Neovim's fork of Paul Evans' upstream, now archived read-only — pinned to tag `v0.3.3` by SHA256, and built as the `vterm` static lib; it backs the integrated terminal's emulation. Two tiny generated DEC charset tables it `#include`s are vendored at `third_party/libvterm-tables/` (same MIT license and copyright — mechanical transformations of upstream's `.tbl` data; provenance in that directory's `README.md`) |
 | wxBorderlessFrame (wxbf) — `third_party/wxbf/` | wxWindows Licence (LGPL + static-link exception) | vendored; Windows/Linux only (no macOS backend) |
 | wxWidgets | wxWindows Licence (LGPL + static-link exception) | fetched at build, not vendored |
 | Project site — `site/` | **MIT** (matches its template's license) | adapted from codewithsadee/vcard-personal-portfolio (MIT) — see [`site/CREDITS.md`](site/CREDITS.md) |
@@ -65,6 +68,7 @@ splitting it out makes the boundary unambiguous rather than just documented.
 | **`packages/npp-bridge/`** | **GPL-3.0-or-later** | its own [`LICENSE`](packages/npp-bridge/LICENSE); see "Why npp-bridge (and its test fixture) stay GPL" above |
 | **`packages/test_plugin/`** | **GPL-3.0-or-later** | its own [`LICENSE`](packages/test_plugin/LICENSE); a Windows-only test fixture that consumes the same N++ ABI as npp-bridge, so it tracks the same license rather than the Apache default |
 | **`packages/udl-compat/`** | **GPL-3.0-or-later** | its own [`LICENSE`](packages/udl-compat/LICENSE); optional, cross-platform plugin that reproduces Notepad++'s UDL (`userDefineLang.xml`) format to translate legacy definitions into Scintillua lexers. Like npp-bridge, it reproduces an N++ format for interoperability, so it stays GPL and out of the Apache core (which uses [Scintillua](https://github.com/orbitalquark/scintillua) — MIT — as its native language engine). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| **`packages/npp-shortcuts-compat/`** | **GPL-3.0-or-later** | its own [`LICENSE`](packages/npp-shortcuts-compat/LICENSE); optional, cross-platform plugin that reproduces Notepad++'s `shortcuts.xml` keybinding format (its five sections, the Windows-VK decimal key encoding, the attribute schema) to import those bindings into the core as a named scheme via the generic `nib.keymap/1` capability. Like udl-compat, it reproduces an N++ format for interoperability, so it stays GPL and out of the Apache core (whose keymap surface knows nothing about `shortcuts.xml`). It never executes the shell command lines a `shortcuts.xml` can carry — they are imported as data, not run. |
 
 > **Removed theme (2026-07-11):** `DansLeRuSH-Dark.xml` (© Franck Albaret) was dropped from the shipped
 > set. Its header contains MIT-style permission text, but that text is labeled "[ LEGAL DISCLAIMER ]"
@@ -75,6 +79,18 @@ splitting it out makes the boundary unambiguous rather than just documented.
 > do not rely on the pasted MIT text. A NonCommercial asset is incompatible with this project's
 > redistribution goals (and with non-free policies of Debian/Fedora/Flathub), so the theme is not
 > shipped. It can return if the author grants a permissive license for our redistribution.
+
+> **Reserved Font Name — Cascadia Mono.** The two bundled font families are both SIL OFL 1.1, but they
+> are *not* interchangeable in what they permit. JetBrains Mono's OFL notice declares **no** Reserved
+> Font Name. Cascadia's declares one — its notice reads "Copyright (c) 2019 - Present, Microsoft
+> Corporation, with Reserved Font Name Cascadia Code" (`resources/fonts/CascadiaMono-OFL.txt`). Under
+> OFL §3 a Reserved Font Name may not be carried by a *modified* version, so the Cascadia files may be
+> redistributed **unmodified** — which is all this repository does — but must not be renamed,
+> subsetted, re-hinted or otherwise patched while still using the reserved name; a modified cut would
+> have to be renamed first. This is worth flagging because Cascadia Mono is now both the **default**
+> editor font and the **fallback** face `effectiveFontFace()` returns when the configured font is
+> missing, so it is the one that ships in the hot path. Details in
+> [`resources/fonts/CREDITS.md`](resources/fonts/CREDITS.md).
 
 ## Compatibility surface (ABI)
 

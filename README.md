@@ -34,8 +34,9 @@ highlight-all, and an n-of-m match counter), **find-driven multi-cursor** (Selec
 Next), Go-to-line, dark mode, auto-indent / brace-match / smart-highlight, **code folding** (built-in
 lexers and custom Scintillua languages), bookmarks, a **Document Map**
 (minimap), a **Function List** (symbol tree, with rules derived independently from each language's own
-grammar — C++, Python, JS/TS, Java, C#, Go, Rust, Lua), an **integrated terminal** (multi-tab, with a
-per-platform shell picker), a **Clipboard History** panel, a **Project Panel** (workspace tree of
+grammar — C++, Python, JS/TS, Java, C#, Go, Rust, Lua), a **real integrated terminal** (a genuine ConPTY/`forkpty` pseudo-terminal with libvterm emulation,
+so `vim`, `htop`, ANSI colour and the shell's own line editing all work; multi-tab, with a
+per-platform shell picker, and a redirected-pipe fallback on Windows older than 10 1809), a **Clipboard History** panel, a **Project Panel** (workspace tree of
 folders + files, saved as `.xml`) and folder-as-workspace, pinned tabs, **Restore Recent Closed File**
 (Ctrl+Shift+T) + MRU Ctrl+Tab switching, an **interactive status bar** (double-click to go-to-line,
 convert EOL or encoding, or toggle INS/OVR), EOL detection, session restore, print + print preview,
@@ -109,7 +110,7 @@ include/npp-compat/  clean-room Notepad++-ABI headers (consumed only by packages
                      packages/test_plugin — the core includes nothing from here)
 resources/           toolbar icons (icons/ = Tabler default, icons-solar/, icons-iconpark/), themes,
                      default styler, fonts, locale/ (8-language i18n catalogs)
-third_party/         scintilla + lexilla (both permissive, HPND), lua + lpeg + scintillua (the custom-language engine, all MIT), wxbf (wxBorderlessFrame, wxWindows Licence)
+third_party/         scintilla + lexilla (both permissive, HPND), lua + lpeg + scintillua (the custom-language engine, all MIT), libvterm-tables (generated DEC tables for the fetched libvterm terminal core, MIT), wxbf (wxBorderlessFrame, wxWindows Licence)
 installer/           packaging scripts: windows/ (NSIS), linux/ (AppImage, .deb, .rpm, Flatpak), macos/ (.dmg)
 docs/                GOALS.md (why the project exists), ARCHITECTURE.md (how the editor is put
                      together), CREDITS.md (everything used or consulted during development)
@@ -142,12 +143,24 @@ wxnote [options] [files...]
 -e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be
 -n, --new-instance        always open a new window
 -r, --reuse-instance      reuse an already-running window
+-w, --wait                do not return until the file is closed
+    --safe                start without loading any plugins
+-v, --version             print the version and exit
+-h, --help                show the usage message
 ```
 
 Files given on the command line are opened in tabs. By default every launch opens its own window;
 turning on Preferences > General > "Reuse an existing window" makes a second launch hand its files to
 the already-running window instead (over a local IPC connection) and exit — `-n`/`-r` override that
 setting for a single launch either way.
+
+`-w`/`--wait` makes wxnote usable as `$EDITOR` / `git config core.editor "wxnote --wait"`. It
+deliberately **implies `-n`**: the IPC handoff path exits immediately, so without forcing a new
+instance the caller would unblock before the tab even opened. On Windows, note that a bare `cmd.exe`
+prompt does not wait on GUI-subsystem processes at all (use `start /wait wxnote -w <file>`), whereas
+git, `sh` and `make` wait on the process handle and block correctly.
+
+Full reference: [the manual's Command Line page](https://alpaq92.github.io/wx-notepad-plus-plus/docs/#/command-line).
 
 ## Contributing
 
@@ -180,10 +193,11 @@ design references — is in [`docs/CREDITS.md`](docs/CREDITS.md). The headliners
 - [Notepad++](https://github.com/notepad-plus-plus/notepad-plus-plus) — Don Ho (GPL v3): the editor whose behavior served as the original reference and test target. Its plugin ABI is reimplemented **clean-room and cross-platform** in our own `include/npp-compat/`, consumed only by the optional `packages/npp-bridge` bridge — no Notepad++ source is used (see [`LICENSING.md`](LICENSING.md)).
 - [Scintilla & Lexilla](https://www.scintilla.org/) — Neil Hodgson (permissive): the editing / syntax-highlighting engine.
 - [Lua](https://www.lua.org/) 5.4.7 (MIT), [LPeg](http://www.inf.puc-rio.br/~roberto/lpeg/) 1.1.0 (MIT), and [Scintillua](https://github.com/orbitalquark/scintillua) — © Mitchell (MIT): embedded to power wxNote's native custom-language engine.
+- [libvterm](https://github.com/neovim/libvterm) — © 2008 Paul Evans (MIT): the VT/xterm terminal-emulation core behind the integrated terminal, fetched at build (Neovim's now-archived mirror, pinned to tag `v0.3.3` by SHA256); two generated DEC charset tables it needs are vendored in `third_party/libvterm-tables/`.
 - [wxWidgets](https://www.wxwidgets.org/): the cross-platform UI toolkit.
 - Toolbar icon sets (Settings > Preferences > General > Toolbar icon style — see each set's own CREDITS.md for exact modifications):
   - [Tabler Icons](https://tabler.io/icons) (MIT) + [Open Color](https://yeun.github.io/open-color/) (MIT) — the default line-icon set (`resources/icons/CREDITS.md`).
   - [Solar Icons](https://icon-sets.iconify.design/solar/) (Bold Duotone) — © 480 Design (CC BY 4.0, attribution required; `resources/icons-solar/CREDITS.md`).
   - [IconPark](https://github.com/bytedance/IconPark) — © ByteDance (Apache-2.0; `resources/icons-iconpark/CREDITS.md`).
-- [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) (SIL OFL 1.1) — the default editor font, bundled in place of the proprietary Consolas (`resources/fonts/CREDITS.md`).
+- Bundled editor fonts, both SIL OFL 1.1 and both unmodified, shipped in place of the proprietary Consolas (`resources/fonts/CREDITS.md`): [Cascadia Mono](https://github.com/microsoft/cascadia-code) — © Microsoft, the **default** and fallback face, and carrying the Reserved Font Name `Cascadia Code` (see [`LICENSING.md`](LICENSING.md)) — and [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) — © the JetBrains Mono Project Authors, no Reserved Font Name.
 - Color themes: kept third-party themes are MIT (© Fabio Zendhi Nagao; Bespin © Oren Farhi) or CC BY 3.0 (© Paul Neubauer); regenerated themes + the default styler use permissive palettes (GitHub Primer, Atom One, Nord, Dracula, VS Code — all MIT; canonical Zenburn/Obsidian colors). [Markdown Preview Enhanced](https://github.com/shd101wyy/vscode-markdown-preview-enhanced) (NCSA) was reviewed as a permissive palette source.

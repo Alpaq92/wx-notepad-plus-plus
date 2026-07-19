@@ -7,7 +7,7 @@
 // the niche maintenance action (validate the shortcuts XML) is separated below
 // so power-user tooling never crowds the primary control.
 static const MenuItemDef kRunMenuItems[] = {
-    { MenuItemKind::Normal, kCmdExecuteBase,                       &Label::RunExecute,              "run.execute" },
+    { MenuItemKind::Normal, kCmdExecuteBase,                       &Label::RunExecute,              "run.execute", nullptr, 0, false, "F5" },
     { MenuItemKind::Separator },
     { MenuItemKind::Normal, kCmdExecuteValidateShortcutsXml, &Label::RunValidateShortcutsXml,  "run.validateShortcutsXml" },
 };

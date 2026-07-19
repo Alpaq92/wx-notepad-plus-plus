@@ -10,5 +10,5 @@ inline const wxString HelpDocumentation()      { return _("wxNote Documentation"
 inline const wxString HelpReportIssue()        { return _("Report an Issue"); }
 inline const wxString HelpCheckForUpdates()    { return _("Check for Updates"); }
 inline const wxString HelpDebugInfo()          { return _("Debug Info..."); }
-inline const wxString HelpAbout()              { return _("About wxNote\tF1"); }
+inline const wxString HelpAbout()              { return _("About wxNote"); }
 }

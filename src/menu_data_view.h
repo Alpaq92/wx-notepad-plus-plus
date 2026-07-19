@@ -29,9 +29,13 @@ static const MenuItemDef kViewShowSymbolItems[] = {
     { MenuItemKind::Check, kCmdViewWrapSymbol,    &Label::ViewShowWrapSymbol,    "view.showSymbol.wrapSymbol" },
 };
 
+// Ctrl+= / Ctrl+- are the strong-5 consensus zoom chords (every surveyed editor except IntelliJ; "=" is
+// the unshifted "+" key, and Scintilla's own Ctrl+Numpad+/- built-ins keep working besides). Zoom
+// restore stays keyless on purpose: the consensus Ctrl+0 is booby-trapped differently in every editor
+// that ships it, and the research marks it KEEP-OUT.
 static const MenuItemDef kViewZoomItems[] = {
-    { MenuItemKind::Normal, kCmdViewZoomin,      &Label::ViewZoomIn,      "view.zoom.in" },
-    { MenuItemKind::Normal, kCmdViewZoomout,     &Label::ViewZoomOut,     "view.zoom.out" },
+    { MenuItemKind::Normal, kCmdViewZoomin,      &Label::ViewZoomIn,      "view.zoom.in", nullptr, 0, false, "Ctrl+=" },
+    { MenuItemKind::Normal, kCmdViewZoomout,     &Label::ViewZoomOut,     "view.zoom.out", nullptr, 0, false, "Ctrl+-" },
     { MenuItemKind::Normal, kCmdViewZoomrestore, &Label::ViewZoomRestore, "view.zoom.restore" },
 };
 
@@ -44,20 +48,20 @@ static const MenuItemDef kViewMoveCloneCurrentDocumentItems[] = {
 };
 
 static const MenuItemDef kViewTabItems[] = {
-    { MenuItemKind::Normal, kCmdViewTab1, &Label::ViewTab1, "view.tab.tab1" },
-    { MenuItemKind::Normal, kCmdViewTab2, &Label::ViewTab2, "view.tab.tab2" },
-    { MenuItemKind::Normal, kCmdViewTab3, &Label::ViewTab3, "view.tab.tab3" },
-    { MenuItemKind::Normal, kCmdViewTab4, &Label::ViewTab4, "view.tab.tab4" },
-    { MenuItemKind::Normal, kCmdViewTab5, &Label::ViewTab5, "view.tab.tab5" },
-    { MenuItemKind::Normal, kCmdViewTab6, &Label::ViewTab6, "view.tab.tab6" },
-    { MenuItemKind::Normal, kCmdViewTab7, &Label::ViewTab7, "view.tab.tab7" },
-    { MenuItemKind::Normal, kCmdViewTab8, &Label::ViewTab8, "view.tab.tab8" },
-    { MenuItemKind::Normal, kCmdViewTab9, &Label::ViewTab9, "view.tab.tab9" },
+    { MenuItemKind::Normal, kCmdViewTab1, &Label::ViewTab1, "view.tab.tab1", nullptr, 0, false, "Ctrl+1" },
+    { MenuItemKind::Normal, kCmdViewTab2, &Label::ViewTab2, "view.tab.tab2", nullptr, 0, false, "Ctrl+2" },
+    { MenuItemKind::Normal, kCmdViewTab3, &Label::ViewTab3, "view.tab.tab3", nullptr, 0, false, "Ctrl+3" },
+    { MenuItemKind::Normal, kCmdViewTab4, &Label::ViewTab4, "view.tab.tab4", nullptr, 0, false, "Ctrl+4" },
+    { MenuItemKind::Normal, kCmdViewTab5, &Label::ViewTab5, "view.tab.tab5", nullptr, 0, false, "Ctrl+5" },
+    { MenuItemKind::Normal, kCmdViewTab6, &Label::ViewTab6, "view.tab.tab6", nullptr, 0, false, "Ctrl+6" },
+    { MenuItemKind::Normal, kCmdViewTab7, &Label::ViewTab7, "view.tab.tab7", nullptr, 0, false, "Ctrl+7" },
+    { MenuItemKind::Normal, kCmdViewTab8, &Label::ViewTab8, "view.tab.tab8", nullptr, 0, false, "Ctrl+8" },
+    { MenuItemKind::Normal, kCmdViewTab9, &Label::ViewTab9, "view.tab.tab9", nullptr, 0, false, "Ctrl+9" },
     { MenuItemKind::Separator },
     { MenuItemKind::Normal, kCmdViewTabStart, &Label::ViewTabFirst, "view.tab.first" },
     { MenuItemKind::Normal, kCmdViewTabEnd,   &Label::ViewTabLast,  "view.tab.last" },
-    { MenuItemKind::Normal, kCmdViewTabNext,  &Label::ViewTabNext,  "view.tab.next" },
-    { MenuItemKind::Normal, kCmdViewTabPrev,  &Label::ViewTabPrev,  "view.tab.prev" },
+    { MenuItemKind::Normal, kCmdViewTabNext,  &Label::ViewTabNext,  "view.tab.next", nullptr, 0, false, "Ctrl+Tab" },
+    { MenuItemKind::Normal, kCmdViewTabPrev,  &Label::ViewTabPrev,  "view.tab.prev", nullptr, 0, false, "Ctrl+Shift+Tab" },
     { MenuItemKind::Separator },
     { MenuItemKind::Normal, kCmdViewGotoStart,          &Label::ViewMoveToStart,      "view.tab.moveToStart" },
     { MenuItemKind::Normal, kCmdViewGotoEnd,            &Label::ViewMoveToEnd,        "view.tab.moveToEnd" },
@@ -73,25 +77,25 @@ static const MenuItemDef kViewTabItems[] = {
 };
 
 static const MenuItemDef kViewFoldLevelItems[] = {
-    { MenuItemKind::Normal, kCmdViewFold1, &Label::ViewFold1, "view.foldLevel.1" },
-    { MenuItemKind::Normal, kCmdViewFold2, &Label::ViewFold2, "view.foldLevel.2" },
-    { MenuItemKind::Normal, kCmdViewFold3, &Label::ViewFold3, "view.foldLevel.3" },
-    { MenuItemKind::Normal, kCmdViewFold4, &Label::ViewFold4, "view.foldLevel.4" },
-    { MenuItemKind::Normal, kCmdViewFold5, &Label::ViewFold5, "view.foldLevel.5" },
-    { MenuItemKind::Normal, kCmdViewFold6, &Label::ViewFold6, "view.foldLevel.6" },
-    { MenuItemKind::Normal, kCmdViewFold7, &Label::ViewFold7, "view.foldLevel.7" },
-    { MenuItemKind::Normal, kCmdViewFold8, &Label::ViewFold8, "view.foldLevel.8" },
+    { MenuItemKind::Normal, kCmdViewFold1, &Label::ViewFold1, "view.foldLevel.1", nullptr, 0, false, "Alt+1" },
+    { MenuItemKind::Normal, kCmdViewFold2, &Label::ViewFold2, "view.foldLevel.2", nullptr, 0, false, "Alt+2" },
+    { MenuItemKind::Normal, kCmdViewFold3, &Label::ViewFold3, "view.foldLevel.3", nullptr, 0, false, "Alt+3" },
+    { MenuItemKind::Normal, kCmdViewFold4, &Label::ViewFold4, "view.foldLevel.4", nullptr, 0, false, "Alt+4" },
+    { MenuItemKind::Normal, kCmdViewFold5, &Label::ViewFold5, "view.foldLevel.5", nullptr, 0, false, "Alt+5" },
+    { MenuItemKind::Normal, kCmdViewFold6, &Label::ViewFold6, "view.foldLevel.6", nullptr, 0, false, "Alt+6" },
+    { MenuItemKind::Normal, kCmdViewFold7, &Label::ViewFold7, "view.foldLevel.7", nullptr, 0, false, "Alt+7" },
+    { MenuItemKind::Normal, kCmdViewFold8, &Label::ViewFold8, "view.foldLevel.8", nullptr, 0, false, "Alt+8" },
 };
 
 static const MenuItemDef kViewUnfoldLevelItems[] = {
-    { MenuItemKind::Normal, kCmdViewUnfold1, &Label::ViewUnfold1, "view.unfoldLevel.1" },
-    { MenuItemKind::Normal, kCmdViewUnfold2, &Label::ViewUnfold2, "view.unfoldLevel.2" },
-    { MenuItemKind::Normal, kCmdViewUnfold3, &Label::ViewUnfold3, "view.unfoldLevel.3" },
-    { MenuItemKind::Normal, kCmdViewUnfold4, &Label::ViewUnfold4, "view.unfoldLevel.4" },
-    { MenuItemKind::Normal, kCmdViewUnfold5, &Label::ViewUnfold5, "view.unfoldLevel.5" },
-    { MenuItemKind::Normal, kCmdViewUnfold6, &Label::ViewUnfold6, "view.unfoldLevel.6" },
-    { MenuItemKind::Normal, kCmdViewUnfold7, &Label::ViewUnfold7, "view.unfoldLevel.7" },
-    { MenuItemKind::Normal, kCmdViewUnfold8, &Label::ViewUnfold8, "view.unfoldLevel.8" },
+    { MenuItemKind::Normal, kCmdViewUnfold1, &Label::ViewUnfold1, "view.unfoldLevel.1", nullptr, 0, false, "Alt+Shift+1" },
+    { MenuItemKind::Normal, kCmdViewUnfold2, &Label::ViewUnfold2, "view.unfoldLevel.2", nullptr, 0, false, "Alt+Shift+2" },
+    { MenuItemKind::Normal, kCmdViewUnfold3, &Label::ViewUnfold3, "view.unfoldLevel.3", nullptr, 0, false, "Alt+Shift+3" },
+    { MenuItemKind::Normal, kCmdViewUnfold4, &Label::ViewUnfold4, "view.unfoldLevel.4", nullptr, 0, false, "Alt+Shift+4" },
+    { MenuItemKind::Normal, kCmdViewUnfold5, &Label::ViewUnfold5, "view.unfoldLevel.5", nullptr, 0, false, "Alt+Shift+5" },
+    { MenuItemKind::Normal, kCmdViewUnfold6, &Label::ViewUnfold6, "view.unfoldLevel.6", nullptr, 0, false, "Alt+Shift+6" },
+    { MenuItemKind::Normal, kCmdViewUnfold7, &Label::ViewUnfold7, "view.unfoldLevel.7", nullptr, 0, false, "Alt+Shift+7" },
+    { MenuItemKind::Normal, kCmdViewUnfold8, &Label::ViewUnfold8, "view.unfoldLevel.8", nullptr, 0, false, "Alt+Shift+8" },
 };
 
 static const MenuItemDef kViewProjectPanelsItems[] = {
@@ -108,7 +112,11 @@ static const MenuItemDef kViewMenuItems[] = {
     { MenuItemKind::Normal, kCmdViewFilebrowser, &Label::ViewFileBrowser, "view.fileBrowser" },
     { MenuItemKind::Submenu, 0, &Label::ViewProjectPanels, "view.projectPanels",
       kViewProjectPanelsItems, WXSIZEOF(kViewProjectPanelsItems) },
-    { MenuItemKind::Check,  myID_VIEW_TERMINAL,   &Label::ViewTerminal,    "view.terminal" },
+    // Ctrl+` is the integrated-terminal convention among the surveyed editors that have one
+    // (VSCode/Pulsar; even Sublime's Ctrl+` is its embedded console). Note the frame accel table is
+    // emptied while the terminal owns focus (the Phase-0 scope gate), so this chord OPENS the terminal
+    // from the editor; closing from inside the terminal remains the panel's own affair.
+    { MenuItemKind::Check,  myID_VIEW_TERMINAL,   &Label::ViewTerminal,    "view.terminal", nullptr, 0, false, "Ctrl+`" },
     { MenuItemKind::Check, kCmdViewMonitoring, &Label::ViewMonitoring, "view.monitoring" },
     { MenuItemKind::Separator },
     // Display toggles -- how the current buffer is rendered.
@@ -120,10 +128,10 @@ static const MenuItemDef kViewMenuItems[] = {
     { MenuItemKind::Normal, kCmdViewSummary, &Label::ViewSummary, "view.summary" },
     { MenuItemKind::Separator },
     // Folding -- collapse/expand structure.
-    { MenuItemKind::Normal, kCmdViewFoldall,        &Label::ViewFoldAll,        "view.foldAll" },
-    { MenuItemKind::Normal, kCmdViewUnfoldall,      &Label::ViewUnfoldAll,      "view.unfoldAll" },
-    { MenuItemKind::Normal, kCmdViewFoldCurrent,   &Label::ViewFoldCurrent,    "view.foldCurrent" },
-    { MenuItemKind::Normal, kCmdViewUnfoldCurrent, &Label::ViewUnfoldCurrent,  "view.unfoldCurrent" },
+    { MenuItemKind::Normal, kCmdViewFoldall,        &Label::ViewFoldAll,        "view.foldAll", nullptr, 0, false, "Alt+0" },
+    { MenuItemKind::Normal, kCmdViewUnfoldall,      &Label::ViewUnfoldAll,      "view.unfoldAll", nullptr, 0, false, "Alt+Shift+0" },
+    { MenuItemKind::Normal, kCmdViewFoldCurrent,   &Label::ViewFoldCurrent,    "view.foldCurrent", nullptr, 0, false, "Ctrl+Alt+F" },
+    { MenuItemKind::Normal, kCmdViewUnfoldCurrent, &Label::ViewUnfoldCurrent,  "view.unfoldCurrent", nullptr, 0, false, "Ctrl+Alt+Shift+F" },
     { MenuItemKind::Submenu, 0, &Label::ViewFoldLevel, "view.foldLevel",
       kViewFoldLevelItems, WXSIZEOF(kViewFoldLevelItems) },
     { MenuItemKind::Submenu, 0, &Label::ViewUnfoldLevel, "view.unfoldLevel",
@@ -137,9 +145,9 @@ static const MenuItemDef kViewMenuItems[] = {
       kViewMoveCloneCurrentDocumentItems, WXSIZEOF(kViewMoveCloneCurrentDocumentItems) },
     { MenuItemKind::Separator },
     // Window-state modes.
-    { MenuItemKind::Check, kCmdViewFullScreenToggle, &Label::ViewFullScreenToggle,   "view.fullScreenToggle" },
+    { MenuItemKind::Check, kCmdViewFullScreenToggle, &Label::ViewFullScreenToggle,   "view.fullScreenToggle", nullptr, 0, false, "F11" },
     { MenuItemKind::Check, kCmdViewAlwaysontop,      &Label::ViewAlwaysOnTop,        "view.alwaysOnTop" },
-    { MenuItemKind::Check, kCmdViewPostit,           &Label::ViewPostIt,             "view.postIt" },
+    { MenuItemKind::Check, kCmdViewPostit,           &Label::ViewPostIt,             "view.postIt", nullptr, 0, false, "F12" },
     { MenuItemKind::Check, kCmdViewDistractionFree,  &Label::ViewDistractionFree,    "view.distractionFree" },
     { MenuItemKind::Separator },
     // Text direction.

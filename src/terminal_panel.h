@@ -3,12 +3,15 @@
 // a wxAuiNotebook of shell tabs, with a "+" button and a shell picker (Windows: cmd / PowerShell /
 // pwsh-if-installed / Cygwin-if-installed / WSL-if-installed; Linux: $SHELL (+bash); macOS: zsh/bash).
 //
-// v1 BACKEND IS A PIPE CONSOLE, deliberately: the child runs with redirected stdin/stdout/stderr
-// (wxProcess::Redirect), NOT a real TTY. That covers the NppExec-style 80% (git, compilers, scripts,
-// dir/ls, simple REPLs) but not full-screen TUI apps (vim/htop) or shells' native line editing - the
-// researched v2 upgrade (ConPTY on Windows + forkpty on Unix feeding a vendored MIT libvterm into a
-// cell-grid renderer) slots in behind this same panel/tab/picker UI without changing it. ANSI escape
-// sequences in the output are stripped rather than rendered for now, so coloured tools stay readable.
+// v2 BACKEND IS A REAL PTY: TermBackend (term_backend.h - ConPTY on Windows 10 1809+, forkpty on
+// POSIX) spawns the shell on a pseudo-terminal and TermView (term_view.h - an owner-drawn libvterm
+// cell grid) renders its raw VT byte stream, so full-screen TUI apps (vim/htop), the shell's own
+// line editing/history/completion and ANSI colour all work. The v1 PIPE CONSOLE (wxProcess::Redirect
+// into a wxSTC buffer, ANSI stripped) is KEPT INTACT below as the fallback: TermBackend::spawn()
+// returns nullptr on Windows < 10 1809 (no ConPTY) or any pty failure, and the tab builds the pipe
+// console instead - same panel/tab/picker chrome, same public tab surface, either way.
+#include "term_backend.h"   // the PTY process side (ConPTY / forkpty); spawn() nullptr = use the v1 fallback
+#include "term_view.h"      // the libvterm cell-grid renderer the PTY bytes feed
 #include <wx/wx.h>
 #include <wx/aui/auibook.h>
 #include <wx/stc/stc.h>
@@ -17,6 +20,7 @@
 #include <wx/filename.h>
 #include <wx/regex.h>
 #include <wx/popupwin.h>   // wxPopupTransientWindow - the themed shell picker (native combo popups can't be dark-themed on MSW)
+#include <wx/display.h>    // wxDisplay - clamp the upward-opening list onto the screen (see TermListPopup::showAbove)
 #include <wx/bmpbndl.h>    // wxBitmapBundle - the toolbar's SVG glyphs (see termGlyph)
 #include <wx/graphics.h>   // wxGraphicsContext - antialiasing the hover pill (GDI can't; see onPaint)
 #include <memory>
@@ -155,6 +159,13 @@ inline std::vector<OpenHereTool> detectMacTerminalApps()
 }
 #endif
 
+// TEST HOOK: forces TerminalTab to skip TermBackend::spawn() and build the legacy pipe console, so
+// the selftest can exercise the fallback path on a machine where ConPTY/forkpty would otherwise
+// always succeed. A function-static behind an inline function (not a namespace-scope object): this
+// all-inline header is compiled into both wxnote and terminal_selftest, and this shape guarantees
+// one shared flag per binary with no ODR risk.
+inline bool& termForceLegacyBackend() { static bool v = false; return v; }
+
 class TerminalTab : public wxPanel
 {
 public:
@@ -162,6 +173,62 @@ public:
         : wxPanel(parent), m_oem(shell.oem)
     {
         auto* s = new wxBoxSizer(wxVERTICAL);
+        SetSizer(s);
+
+        // ---- v2: real PTY + cell-grid renderer (the normal path) -----------------------------
+        // The view is built before spawn() so the pty starts at the view's grid; that grid stays
+        // the 80x24 default until the pane's first real layout (deliberate - see term_view.h), and
+        // the onResizeRequest wired below resizes the pty the moment the real size arrives.
+        if (!termForceLegacyBackend())
+        {
+            auto* view = new TermView(this, fontFace, /*fontSize=*/10, dark);
+#ifdef __WXMSW__
+            // The ConPTY spawn inherits OUR environment verbatim (no wxExecuteEnv on this path,
+            // unlike the v1 wxExecute below), so Cygwin's CHERE_INVOKING must be set on the app's
+            // own env or a --login bash jumps to ~ instead of keeping cwd. Set around the spawn
+            // and restored right after, so the app's environment isn't permanently mutated for
+            // every later wxExecute in the program.
+            wxString prevChere;
+            const bool hadChere = wxGetEnv("CHERE_INVOKING", &prevChere);
+            wxSetEnv("CHERE_INVOKING", "1");
+#endif
+            m_backend = TermBackend::spawn(shell.cmd, cwd, view->cols(), view->rows());
+#ifdef __WXMSW__
+            if (hadChere) wxSetEnv("CHERE_INVOKING", prevChere);
+            else          wxUnsetEnv("CHERE_INVOKING");
+#endif
+            if (m_backend)
+            {
+                m_view = view;
+                s->Add(m_view, 1, wxEXPAND);
+                // All four callbacks are assigned SYNCHRONOUSLY, before returning to the event
+                // loop, per both contracts: backend chunks read meanwhile are queued (not lost)
+                // but a callback still unset when its queued event runs is dropped; and view
+                // input typed before onOutput is set would be discarded.
+                m_backend->onData = [this](const char* d, size_t n){ if (m_view) m_view->feed(d, n); };
+                m_backend->onExit = [this](int code)
+                {
+                    // Reuses the v1 banner's exact msgid so both modes report an exit identically
+                    // (and no new catalog entry is needed). SGR reset first: the child may have
+                    // died mid-colour, and the banner must not inherit its attributes.
+                    if (!m_view) return;
+                    const wxString banner = wxString("\r\n\x1b[0m")
+                        + wxString::Format(_("[process exited with code %d]"), code) + "\r\n";
+                    const wxScopedCharBuffer u = banner.utf8_str();
+                    m_view->feed(u.data(), u.length());
+                };
+                m_view->onOutput        = [this](const char* d, size_t n){ if (m_backend) m_backend->write(d, n); };
+                m_view->onResizeRequest = [this](int c, int r){ if (m_backend) m_backend->resize(c, r); };
+                return;   // PTY route wired; none of the v1 pipe machinery below is needed
+            }
+            view->Destroy();   // spawn failed (old Windows / pty error): the view never joined the sizer
+        }
+
+        // ---- v1 FALLBACK: redirected-pipe console (kept intact) ------------------------------
+        // Reached only when TermBackend::spawn() returned nullptr (Windows < 10 1809, or a pty
+        // failure) or the test hook forced it. Everything from here to the end of the ctor is the
+        // original v1 pipe console, unchanged: wxProcess with redirected stdio, ANSI stripped,
+        // OEM-codepage conversion, input-mark line editing.
         m_out = new wxStyledTextCtrl(this, wxID_ANY);
         for (int i = 0; i < 5; ++i) m_out->SetMarginWidth(i, 0);
         m_out->SetWrapMode(wxSTC_WRAP_CHAR);
@@ -171,7 +238,6 @@ public:
         applyTheme(dark);
         m_out->SetCaretLineVisible(false);
         s->Add(m_out, 1, wxEXPAND);
-        SetSizer(s);
 
         m_proc = new wxProcess(this);
         m_proc->Redirect();
@@ -205,6 +271,16 @@ public:
     // no child shell outlives the app and no timer can fire into a dying window.
     void shutdown()
     {
+        if (m_backend)
+        {
+            // v2: the backend's kill() carries the same no-orphans guarantee as the v1 path below
+            // (TerminateProcess + a detached wxKILL_CHILDREN tree sweep on MSW; killpg on POSIX),
+            // and is likewise safe to call repeatedly - it no-ops once the child is gone. The
+            // backend object itself stays alive until the tab is destroyed: its destructor is the
+            // thread-join point and must run on the UI thread anyway (see term_backend.h).
+            m_backend->kill();
+            return;
+        }
         m_poll.Stop();
         if (m_proc)
         {
@@ -224,12 +300,24 @@ public:
             m_pid = 0;
         }
     }
-    void focusInput() { m_out->SetFocus(); m_out->GotoPos(m_out->GetLength()); }
+    void focusInput()
+    {
+        if (m_view) { m_view->SetFocus(); return; }   // v2: the grid takes the keys; the pty owns the caret
+        m_out->SetFocus(); m_out->GotoPos(m_out->GetLength());
+    }
+
+    // Which mode this tab runs. For the selftest (asserting the fallback actually engaged) and
+    // diagnostics; the panel itself never needs to know.
+    bool usingPty() const { return m_view != nullptr; }
 
     // Re-colour for a light/dark switch (the toolbar's "lights" toggle). Re-applies the styles in
     // place rather than rebuilding the control, so the scrollback and the running shell survive it.
     void applyTheme(bool dark)
     {
+        // v2: one palette swap - TermView recolours default-flagged and ANSI-indexed cells
+        // retroactively, scrollback included, so this honours the same "restyle in place, shell
+        // keeps running" contract as the v1 body below.
+        if (m_view) { m_view->setDark(dark); return; }
         m_out->StyleSetBackground(wxSTC_STYLE_DEFAULT, dark ? wxColour(24, 24, 24) : wxColour(252, 252, 252));
         m_out->StyleSetForeground(wxSTC_STYLE_DEFAULT, dark ? wxColour(220, 220, 220) : wxColour(30, 30, 30));
         m_out->StyleClearAll();   // propagate STYLE_DEFAULT to every style; safe to re-run
@@ -432,6 +520,15 @@ private:
         delete m_proc; m_proc = nullptr; m_pid = 0;
     }
 
+    // ---- v2 PTY mode (both null/empty when the tab fell back to the pipe console) --------------
+    // Destruction order is load-bearing: members die after the dtor body but BEFORE the base
+    // wxPanel destroys its child windows, so m_backend (whose dtor nulls the shared state's owner
+    // and joins the reader threads) is gone before m_view - a chunk still queued via CallAfter can
+    // never feed() a destroyed view.
+    TermView*                    m_view = nullptr;   // v2 renderer; null = legacy pipe mode
+    std::unique_ptr<TermBackend> m_backend;          // v2 pty process; null = legacy pipe mode
+
+    // ---- v1 pipe-console mode (all unused in PTY mode) -----------------------------------------
     wxStyledTextCtrl* m_out = nullptr;
     wxProcess*        m_proc = nullptr;
     long              m_pid = 0;
@@ -785,6 +882,24 @@ public:
         // as size.y - handing it the anchor's full size drops the list diagonally down-RIGHT of the
         // button instead of under it. Only the vertical drop is wanted.
         Position(origin, wxSize(0, anchor->GetSize().y));
+        popupFocused();
+    }
+
+    // Drop the list ABOVE `anchor` - for anchors on the status bar, which sits at the bottom of the
+    // WINDOW but usually nowhere near the bottom of the SCREEN. SetPosition, deliberately NOT the base
+    // Position(): Position()'s whole job is to auto-flip the popup to keep it on screen, so with room
+    // below the window it would happily drop the list downwards, over the very anchor that opened it.
+    // Only the horizontal clamp is kept, done by hand. GetSize() is valid here - the ctor's SetClientSize
+    // has already sized the popup.
+    void showAbove(wxWindow* anchor, bool alignRight = false)
+    {
+        wxPoint origin = anchor->GetScreenPosition();
+        if (alignRight) origin.x += anchor->GetSize().x - GetSize().x;
+        origin.y -= GetSize().y;
+        const wxRect area = wxDisplay(wxDisplay::GetFromWindow(anchor)).GetClientArea();
+        origin.x = wxMax(area.GetLeft(), wxMin(origin.x, area.GetRight() - GetSize().x + 1));
+        if (origin.y < area.GetTop()) origin.y = area.GetTop();
+        SetPosition(origin);
         popupFocused();
     }
 

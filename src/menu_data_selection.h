@@ -12,7 +12,7 @@
 // trails last as the most situational entry. Separators mark those four intent clusters.
 
 static const MenuItemDef kSelectionMenuItems[] = {
-    { MenuItemKind::Normal,  kCmdEditSelectall,                 &Label::EditSelectAll,               "selection.selectAll" },
+    { MenuItemKind::Normal,  kCmdEditSelectall,                 &Label::EditSelectAll,               "selection.selectAll", nullptr, 0, false, "Ctrl+A" },
     { MenuItemKind::Normal,  kCmdEditBeginEndSelect,            &Label::EditBeginEndSelect,           "selection.beginEndSelect" },
     { MenuItemKind::Normal,  kCmdEditBeginEndSelectColumnmode, &Label::EditBeginEndSelectColumnMode, "selection.beginEndSelectColumnMode" },
     { MenuItemKind::Separator },
