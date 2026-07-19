@@ -241,7 +241,10 @@ if(WIN32)
     target_link_libraries(wxnote PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme)
 endif()
 if(MSVC)
-    target_compile_options(wxnote PRIVATE /utf-8)
+    # /bigobj: main.cpp emits more COFF sections than the default object format allows - the arm64
+    # target crossed the limit first (fatal C1128 on the 0.9.5 CI while x64 still fit) because section
+    # counts differ per target architecture.
+    target_compile_options(wxnote PRIVATE /utf-8 /bigobj)
 endif()
 
 # ---- terminal_selftest: behavioural self-test for the Terminal panel ------------------------------

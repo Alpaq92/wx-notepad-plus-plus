@@ -10161,6 +10161,12 @@ public:
         // the system picked for "JetBrains Mono" - i.e. the bundled default was shipped but never used on
         // two of the three platforms. wxLogNull: a font that fails to register just isn't offered, which
         // effectiveFontFace()/the picker already handle; it must not raise a dialog at startup.
+        //
+        // wxUSE_PRIVATE_FONTS guard: the API is a wx BUILD OPTION, not a given - our Linux CI's static
+        // wxGTK compiles with it OFF, where wxFont::AddPrivateFont does not exist at all (0.9.5 CI broke
+        // on exactly this). Without it the bundled faces simply aren't registered and the picker's
+        // fallback chain applies - same behaviour the pre-AddPrivateFont code had on those platforms.
+#if wxUSE_PRIVATE_FONTS
         { wxLogNull noPopup;
           const wxString fontDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "fonts" + wxFILE_SEP_PATH;
           // Cascadia MONO, not Cascadia Code: Mono is the ligature-free cut, which is the right one here
@@ -10173,6 +10179,7 @@ public:
           for (const char* f : { "JetBrainsMono-Regular.ttf", "JetBrainsMono-Bold.ttf",
                                  "CascadiaMono-Regular.ttf",  "CascadiaMono-Bold.ttf" })
               wxFont::AddPrivateFont(fontDir + f); }
+#endif
         // (UI localization used to be Init()ed here; it moved above the command-line parser so that the
         //  parser's own _()-wrapped help strings - i.e. `wxnote --help` - are translated too.)
         const bool dark = resolveDark(readThemeMode());
