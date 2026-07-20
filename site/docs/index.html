@@ -173,6 +173,11 @@
       .sidebar        { width: 380px; }
       .content        { left: 380px; }
       .sidebar-toggle { width: 364px; }
+      /* Docsify's stock fold transform is translateX(-300px), tuned for its 300px sidebar; ours is
+         380px, so -300px left an 80px strip of the sidebar still on screen when "folded". Slide it fully
+         off and let the content reclaim the whole width. */
+      body.close .sidebar { transform: translateX(-100%); }
+      body.close .content { left: 0; }
     }
 
     /* ---------- content ---------- */
