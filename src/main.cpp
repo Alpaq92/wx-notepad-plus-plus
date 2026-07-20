@@ -9935,7 +9935,7 @@ private:
             { wxID_PREVIEW_LAST,     "last",    true  }, { wxID_PREVIEW_ZOOM_OUT, "zoomout", true },
             { wxID_PREVIEW_ZOOM_IN,  "zoomin",  true  },
         };
-        const wxSize btnSize = FromDIP(wxSize(26, 24));   // uniform -> all icons share a baseline and align
+        const wxSize btnSize = this->FromDIP(wxSize(26, 24));   // uniform -> all icons share a baseline and align
         wxWindow* controlBar = nullptr;
         for (const auto& b : kBtns)
             if (wxWindow* old = frame->FindWindow(b.id))
@@ -9985,10 +9985,10 @@ private:
             for (size_t i = 0; i < sz->GetItemCount(); ++i)
                 if (wxSizerItem* it = sz->GetItem(i); it && it->IsWindow())
                     it->SetFlag((it->GetFlag() & ~(wxALIGN_TOP | wxALIGN_BOTTOM | wxEXPAND | wxTOP | wxBOTTOM)) | wxALIGN_CENTER_VERTICAL);
-            sz->PrependSpacer(FromDIP(6));   // small left indent before the print icon, like the main toolbar
+            sz->PrependSpacer(this->FromDIP(6));   // small left indent before the print icon, like the main toolbar
             // Fixed, roomier bar height: taller than every item so they ALL centre on one shared midline (the
             // page field no longer rides off-centre from the icons), with vertical breathing room top & bottom.
-            controlBar->SetMinSize(wxSize(-1, FromDIP(40)));
+            controlBar->SetMinSize(wxSize(-1, this->FromDIP(40)));
             controlBar->Layout();
             // Suppress wxPreviewControlBar::OnPaint's hard black separator line along the bar's bottom edge -
             // it sits right under the flat icons and reads as a stray dark line. Just fill the strip with its
