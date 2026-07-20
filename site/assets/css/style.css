@@ -214,7 +214,7 @@ a { text-decoration: none; }
 
 li { list-style: none; }
 
-img, ion-icon, a, button, time, span { display: block; }
+img, svg, a, button, time, span { display: block; }
 
 button {
   font: inherit;
@@ -302,7 +302,6 @@ article {
   z-index: -1;
 }
 
-.icon-box ion-icon { --ionicon-stroke-width: 35px; }
 
 article { display: none; }
 
@@ -652,9 +651,10 @@ main {
 
 .service-icon-box img { margin: auto; }
 
-.service-icon-box ion-icon {
+.service-icon-box svg {
   margin: auto;
-  font-size: 34px;
+  width: 34px;
+  height: 34px;
   color: var(--accent);
 }
 
@@ -1082,7 +1082,7 @@ main {
   font-weight: var(--fw-500);
 }
 
-.changelog-link ion-icon { font-size: 14px; }
+.changelog-link svg { width: 14px; height: 14px; }
 
 .changelog-footer {
   display: flex;
@@ -1146,8 +1146,9 @@ main {
   padding-top: 25px;
 }
 
-.platform-card > ion-icon {
-  font-size: 36px;
+.platform-card > svg {
+  width: 36px;
+  height: 36px;
   color: var(--accent);
   margin: 0 auto 10px;
 }
@@ -1283,7 +1284,7 @@ main {
 .img-pre__header { background: rgba(0, 0, 0, var(--header-bg-opacity, 0.75)) !important; }
 
 /* The "1 / 7" counter (three spans: current / delimiter / total) was stacking onto three lines
-   because this stylesheet's own global reset - `img, ion-icon, a, button, time, span { display:
+   because this stylesheet's own global reset - `img, svg, a, button, time, span { display:
    block }` (search "span { display: block" above) - makes EVERY span a block element, so the
    img-previewer counter's spans each take their own line. Force just these back to inline so the
    whole "1 / 7" sits on one line. */
@@ -1414,7 +1415,7 @@ main {
     font-size: var(--fs-8);
   }
 
-  .info_more-btn ion-icon { display: none; }
+  .info_more-btn svg { display: none; }
 
   .separator { margin: 32px 0; }
 

@@ -22,7 +22,7 @@
 | Reuse an existing window | off | *restart* — when on, a second launch hands its files to the first window over IPC and exits. `-n` / `-r` override this per launch |
 | Show integrated top bar | — | *restart* — only present on platforms with borderless-window support and on macOS |
 | Localization | English | *restart* — the UI language; the same list as **Settings&nbsp;&rsaquo; Localization** |
-| Toolbar icon style | Tabler icons (line) | *restart* — also Solar icons (green) and IconPark icons (teal/lime) |
+| Toolbar icon style | Tabler icons (line) | *restart* — also Solar icons (green), IconPark icons (teal/lime) and Streamline icons (green/teal) |
 | Toolbar icon size | — | *restart* — 16, 20, 24 or 32&nbsp;px |
 | Theme | System | *restart* — System, Dark or Light |
 

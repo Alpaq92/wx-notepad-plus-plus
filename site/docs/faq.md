@@ -96,9 +96,9 @@ certain percentages are reachable and the field always shows the one it actually
 
 ## My User Defined Language stopped working
 
-wxNote's own built-in UDL engine was removed; legacy `userDefineLang.xml` files are now handled by the
-optional `udl-compat` plugin, which translates them into Scintillua lexers. If that plugin is not
-installed, those files do not load. See [Languages &amp; Syntax](languages.md).
+Legacy `userDefineLang.xml` files are handled by the optional `udl-compat` plugin, which translates
+them into Scintillua lexers. If that plugin is not installed, those files do not load. See
+[Languages &amp; Syntax](languages.md).
 
 ## Does it lose my work if it crashes?
 

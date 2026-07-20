@@ -472,6 +472,7 @@ struct WxnOpenRequest
     wxString findPattern;                             // +/{pattern}: put the caret on the first match in the last-opened file
     bool hasStdin = false;                            // '-': a piped-stdin buffer was captured (never travels over IPC - forces a new instance)
     wxString stdinText;                               // the captured stdin bytes (decoded UTF-8)
+    wxString pluginMessage;                           // -pluginMessage=<text>, forwarded over the reuse-window IPC handoff too
 };
 
 // Set by the frame: a second wxnote launch handed its file args (+ optional -g/-e) to us over IPC
@@ -498,6 +499,11 @@ static bool          g_cleanMode = false;
 // `wxnote --locale ja README.md` (screenshotting/QA'ing a catalog) doesn't silently repoint the editor.
 // -1 = not given / not a language we ship a catalog for; see the raw-argv pre-scan in WxnApp::OnInit.
 static int           g_localeOverride = -1;
+// ---- -pluginMessage=<text>: a message handed to plugins at startup ---------------------------------
+// Notepad++'s -pluginMessage command-line argument: the string is delivered to every loaded plugin once,
+// after plugins are up (the GPL npp-bridge forwards it as NPPN_CMDLINEPLUGINMSG). Captured by the raw-argv
+// pre-scan in WxnApp::OnInit (also registered with the parser so it shows in --help); empty when not given.
+static wxString      g_pluginMessage;
 
 // ---- single-instance "reuse window" IPC (Preferences > General; off by default) ------------------
 // A second wxnote process, on finding one already running (wxSingleInstanceChecker), connects here as a
@@ -559,6 +565,13 @@ public:
                 // so an unsplit "\x01FIND=" is really {0x1F,'I','N','D','='} and Mid(6) would mis-slice it
                 // (the exact trap the ENC=/DIR= comment above documents). Count Mid() from the split form: 6.
                 req.findPattern = line.Mid(6);
+            } else if (line.StartsWith("\x01PLUGINMSG=")) {
+                // -pluginMessage=<text>, forwarded so it still fires NPPN_CMDLINEPLUGINMSG in the reused
+                // window (see g_ipcOpenRequest) instead of being silently dropped by the handoff. 'P' is
+                // not a hex digit so this key is safe unsplit, like GOTO=/RO=/SPLIT= above. NOTE: like
+                // FIND=, this does not escape an embedded newline in the message text - the same known
+                // corner case as the pattern above (not reachable from a normal shell command line).
+                req.pluginMessage = line.Mid(11);
             } else if (!line.empty()) req.paths.Add(line);
         }
         if (g_ipcOpenRequest) g_ipcOpenRequest(req);
@@ -1631,6 +1644,13 @@ struct NibSub { NibEventKind kind; NibEventFn fn; void* user; bool v2; };
 static std::vector<NibSub> g_nibSubs;
 static void nibSubscribe(NibHost*, NibEventKind kind, NibEventFn fn, void* u)   { g_nibSubs.push_back({ kind, fn, u, false }); }
 static void nibSubscribeV2(NibHost*, NibEventKind kind, NibEventFn fn, void* u) { g_nibSubs.push_back({ kind, fn, u, true  }); }
+// nib.events/3 set_modified_mask: the union of Scintilla modificationType flags a subscriber wants
+// NIB_EV_TEXT_MODIFIED fired for. 0 (the default) means "never fire it" - onStcModified checks this mask
+// FIRST, so with no opt-in the high-volume SCN_MODIFIED path costs a single branch and crosses the ABI
+// boundary zero times. A plugin arms it through the v3 table (the GPL bridge does so from
+// NPPM_ADDSCNMODIFIEDFLAGS); unloadNibPlugins() resets it to 0 when the last plugin goes away.
+static uint32_t g_nibModifiedMask = 0;
+static void nibSetModifiedMask(NibHost*, uint32_t mask) { g_nibModifiedMask = mask; }
 enum NibFireGate { NIB_FIRE_ALL, NIB_FIRE_V1_ONLY, NIB_FIRE_V2_ONLY };
 static void nibFireEvent(const NibEvent& ev, NibFireGate gate = NIB_FIRE_ALL)   // called by the editor handlers below
 {
@@ -1644,6 +1664,17 @@ static void nibFireDocEvent(NibEventKind kind, void* page, NibFireGate gate = NI
     NibEvent ev{}; ev.kind = kind; ev.struct_size = sizeof(NibEvent);
     ev.as.document.id = reinterpret_cast<intptr_t>(page);
     nibFireEvent(ev, gate);
+}
+// v4 NIB_EV_CMDLINE_PLUGIN_MSG: deliver the -pluginMessage command-line text to subscribers (the GPL
+// npp-bridge maps it to NPPN_CMDLINEPLUGINMSG). The UTF-8 buffer is stack-owned and outlives the
+// synchronous fire, matching the "valid only during the callback" contract in nib.h. Also the direct
+// test seam the selftest calls (no second process launch).
+static void nibFireCmdlinePluginMsg(const wxString& msg)
+{
+    const wxScopedCharBuffer u8 = msg.utf8_str();
+    NibEvent ev{}; ev.kind = NIB_EV_CMDLINE_PLUGIN_MSG; ev.struct_size = sizeof(NibEvent);
+    ev.as.cmdline.msg_utf8 = u8.data();
+    nibFireEvent(ev);
 }
 // nib.panels/1 - the frame installs these (they need m_aui + the frame as parent), matching g_coreSciCall.
 static std::function<void*(const char*, const char*, int)> g_nibCreatePanel;
@@ -1663,6 +1694,29 @@ static std::function<intptr_t()>              g_nibDocActiveId;    // v2: stable
 static std::function<int(intptr_t,char*,int)> g_nibDocPathFromId;  // v2: copy a document id's UTF-8 path -> length, 0 if no such id
 static std::function<int()>                   g_nibDocActiveView;  // v3: which view holds the active doc (0=main, 1=sub)
 static std::function<int(int,char*,int)>      g_nibDocPathAt;      // v4: UTF-8 path of the open doc at a flat index
+// v5: per-view buffer model + per-buffer properties (the frame installs these; each needs the tab list /
+// the active view's editor / the page's own fields). Kept NUL-/gate-guarded like every other nib.* seam.
+static std::function<int(int)>                    g_nibDocViewCount;      // open docs in a view (0=main, 1=sub)
+static std::function<intptr_t(int,int)>           g_nibDocIdAt;           // buffer id at (view, index); 0 if out of range
+static std::function<int(intptr_t,int,int*,int*)> g_nibDocPosOf;          // locate an id -> (view, index); 1 if found
+static std::function<int(int)>                    g_nibDocIndexOfActive;  // active doc's index in a view; -1 if empty
+static std::function<int(int,int)>                g_nibDocActivateAt;     // activate the doc at (view, index)
+static std::function<int(intptr_t,int)>           g_nibDocSetLangById;    // force a Language (host cmd id) on a buffer
+static std::function<int(intptr_t)>               g_nibDocEncodingGet;    // on-disk encoding enum of a buffer; -1 if none
+static std::function<int(intptr_t,int)>           g_nibDocEncodingSet;    // set it (save-to-apply); 1 on success
+static std::function<int(intptr_t)>               g_nibDocEolGet;         // EOL mode (SC_EOL_*) of a buffer; -1 if none
+static std::function<int(intptr_t,int)>           g_nibDocEolSet;         // set+convert it, marks dirty; 1 on success
+static std::function<int(const char*,int)>        g_nibDocSaveActiveAs;   // save active as / a copy of it
+static std::function<int(intptr_t)>               g_nibDocSaveById;       // save a (possibly background) buffer by id
+static std::function<int()>                       g_nibDocSetDirtyActive; // make the active buffer dirty
+static std::function<int(intptr_t,const char*)>   g_nibDocRenameUntitled; // rename an untitled buffer's tab label
+static std::function<int(int,int)>                g_nibDocTabColorId;     // tab colour palette slot 0..4, or -1
+// Programmatic (no-UI) rename/delete of the active document's on-disk file - the dialog-free cores of
+// renameFile()/recycleFile(), so the file-lifecycle events (v4 rename/delete kinds) can be driven without
+// a modal file dialog (used by bridge_selftest; also a clean automation seam). Each fires the same
+// before/after event pair its menu-driven wrapper does.
+static std::function<int(const char*)>            g_nibRenameActive;      // rename active file -> newPath (fires BEFORE_RENAME + RENAMED/CANCEL)
+static std::function<int()>                       g_nibRecycleActive;     // delete active file (fires BEFORE_DELETE + DELETED/DELETE_FAILED)
 static int nibDocCount(NibHost*)                      { return g_nibDocCount ? g_nibDocCount() : 0; }
 static int nibDocActivePath(NibHost*, char* b, int c) { return g_nibDocActivePath ? g_nibDocActivePath(b, c) : 0; }
 static int nibDocOpen(NibHost*, const char* p)        { return g_nibDocOpen ? g_nibDocOpen(p) : 0; }
@@ -1671,6 +1725,21 @@ static intptr_t nibDocActiveId(NibHost*)                              { return g
 static int      nibDocPathFromId(NibHost*, intptr_t id, char* b, int c) { return g_nibDocPathFromId ? g_nibDocPathFromId(id, b, c) : 0; }
 static int      nibDocActiveView(NibHost*)                             { return g_nibDocActiveView ? g_nibDocActiveView() : 0; }
 static int      nibDocPathAt(NibHost*, int index, char* b, int c)       { return g_nibDocPathAt ? g_nibDocPathAt(index, b, c) : 0; }
+static int      nibDocViewCount(NibHost*, int v)                        { return g_nibDocViewCount ? g_nibDocViewCount(v) : 0; }
+static intptr_t nibDocIdAt(NibHost*, int v, int i)                      { return g_nibDocIdAt ? g_nibDocIdAt(v, i) : 0; }
+static int      nibDocPosOf(NibHost*, intptr_t id, int pv, int* ov, int* oi) { return g_nibDocPosOf ? g_nibDocPosOf(id, pv, ov, oi) : 0; }
+static int      nibDocIndexOfActive(NibHost*, int v)                    { return g_nibDocIndexOfActive ? g_nibDocIndexOfActive(v) : -1; }
+static int      nibDocActivateAt(NibHost*, int v, int i)                { return g_nibDocActivateAt ? g_nibDocActivateAt(v, i) : 0; }
+static int      nibDocSetLangById(NibHost*, intptr_t id, int c)         { return g_nibDocSetLangById ? g_nibDocSetLangById(id, c) : 0; }
+static int      nibDocEncodingGet(NibHost*, intptr_t id)               { return g_nibDocEncodingGet ? g_nibDocEncodingGet(id) : -1; }
+static int      nibDocEncodingSet(NibHost*, intptr_t id, int e)        { return g_nibDocEncodingSet ? g_nibDocEncodingSet(id, e) : 0; }
+static int      nibDocEolGet(NibHost*, intptr_t id)                    { return g_nibDocEolGet ? g_nibDocEolGet(id) : -1; }
+static int      nibDocEolSet(NibHost*, intptr_t id, int m)            { return g_nibDocEolSet ? g_nibDocEolSet(id, m) : 0; }
+static int      nibDocSaveActiveAs(NibHost*, const char* p, int c)     { return g_nibDocSaveActiveAs ? g_nibDocSaveActiveAs(p, c) : 0; }
+static int      nibDocSaveById(NibHost*, intptr_t id)                  { return g_nibDocSaveById ? g_nibDocSaveById(id) : 0; }
+static int      nibDocSetDirtyActive(NibHost*)                         { return g_nibDocSetDirtyActive ? g_nibDocSetDirtyActive() : 0; }
+static int      nibDocRenameUntitled(NibHost*, intptr_t id, const char* n) { return g_nibDocRenameUntitled ? g_nibDocRenameUntitled(id, n) : 0; }
+static int      nibDocTabColorId(NibHost*, int v, int i)               { return g_nibDocTabColorId ? g_nibDocTabColorId(v, i) : -1; }
 #ifdef __WXMSW__
 // nib.win32/1 - Windows-only native-handle capability (the GPL npp-bridge uses it to rebuild NppData).
 static std::function<void*()> g_nibMainWindow, g_nibEditorMain, g_nibEditorSecond, g_nibPluginsMenu;
@@ -1765,8 +1834,15 @@ static void nibKmDiscard(NibHost*, NibKeymapScheme* s)
 { if (g_nibKmDiscard && s) g_nibKmDiscard(s); }
 static int nibKmCommit(NibHost*, NibKeymapScheme* s, int activate)
 { return (g_nibKmCommit && s) ? g_nibKmCommit(s, activate) : 0; }
-static const NibKeymapApi g_nibKeymapApi = { 1, sizeof(NibKeymapApi),
-    nibKmBegin, nibKmBindId, nibKmBindName, nibKmBindEditor, nibKmDiscard, nibKmCommit };
+// nib.keymap/2 read hook: the effective shortcut bound to a host command id, as portable modifiers + key
+// (the frame installs it against its m_keymap; the GPL bridge maps it to the N++ ShortcutKey ABI for
+// NPPM_GETSHORTCUTBYCMDID). Read-only, so it stays a plain frame-installed hook like g_nibUiIsDark.
+static std::function<int(int, uint32_t*, uint32_t*)> g_nibKmEffectiveShortcut;
+static int nibKmEffectiveShortcut(NibHost*, int cmd_id, uint32_t* mods, uint32_t* key)
+{ return (g_nibKmEffectiveShortcut && mods && key) ? g_nibKmEffectiveShortcut(cmd_id, mods, key) : 0; }
+static const NibKeymapApi g_nibKeymapApi = { 2, sizeof(NibKeymapApi),
+    nibKmBegin, nibKmBindId, nibKmBindName, nibKmBindEditor, nibKmDiscard, nibKmCommit,
+    nibKmEffectiveShortcut };
 
 // nib.paths/1 - well-known host directories.
 static std::function<int(char*, int)> g_nibUserDataDir;
@@ -1787,7 +1863,51 @@ static std::function<int(NibUiDarkColors*)>   g_nibUiDarkColors;
 static int nibUiMenuCheck(NibHost*, int id, int on)        { return g_nibUiMenuCheck ? g_nibUiMenuCheck(id, on != 0) : 0; }
 static int nibUiIsDark(NibHost*)                           { return g_nibUiIsDark ? g_nibUiIsDark() : 0; }
 static int nibUiDarkColorsFn(NibHost*, NibUiDarkColors* c) { return (g_nibUiDarkColors && c) ? g_nibUiDarkColors(c) : 0; }
-static const NibUiApi g_nibUiApi = { 1, sizeof(NibUiApi), nibUiMenuCheck, nibUiIsDark, nibUiDarkColorsFn };
+// nib.ui/2 additions: host chrome visibility (toolbar/menubar/statusbar/doclist) + editor/UI state
+// getters (line-number width policy, auto-indent, macro state, icon set, locale). Frame-installed hooks;
+// the trampolines stay NUL-guarded so a late call after teardown degrades to the documented 0 return.
+static std::function<int(int)>                g_nibUiChromeGet;
+static std::function<int(int, int)>           g_nibUiChromeSet;
+static std::function<int()>                   g_nibUiWidthModeGet;
+static std::function<int(int)>                g_nibUiWidthModeSet;
+static std::function<int()>                   g_nibUiAutoIndent;
+static std::function<int()>                   g_nibUiMacroState;
+static std::function<int()>                   g_nibUiIconSet;
+static std::function<int(char*, int)>         g_nibUiLocaleName;
+static int nibUiChromeGet(NibHost*, int which)          { return g_nibUiChromeGet ? g_nibUiChromeGet(which) : 0; }
+static int nibUiChromeSet(NibHost*, int which, int vis) { return g_nibUiChromeSet ? g_nibUiChromeSet(which, vis) : 0; }
+static int nibUiWidthModeGet(NibHost*)                  { return g_nibUiWidthModeGet ? g_nibUiWidthModeGet() : 0; }
+static int nibUiWidthModeSet(NibHost*, int mode)        { return g_nibUiWidthModeSet ? g_nibUiWidthModeSet(mode) : 0; }
+static int nibUiAutoIndentOn(NibHost*)                  { return g_nibUiAutoIndent ? g_nibUiAutoIndent() : 0; }
+static int nibUiMacroState(NibHost*)                    { return g_nibUiMacroState ? g_nibUiMacroState() : 0; }
+static int nibUiIconSetChoice(NibHost*)                 { return g_nibUiIconSet ? g_nibUiIconSet() : 0; }
+static int nibUiLocaleName(NibHost*, char* b, int c)    { return g_nibUiLocaleName ? g_nibUiLocaleName(b, c) : 0; }
+static const NibUiApi g_nibUiApi = { 2, sizeof(NibUiApi), nibUiMenuCheck, nibUiIsDark, nibUiDarkColorsFn,
+    nibUiChromeGet, nibUiChromeSet, nibUiWidthModeGet, nibUiWidthModeSet, nibUiAutoIndentOn, nibUiMacroState,
+    nibUiIconSetChoice, nibUiLocaleName };
+
+// nib.session/1 - save/load/enumerate session files BY PATH (the GPL npp-bridge serves the Notepad++
+// *SESSION* messages from it). The frame installs the hooks against its own session reader/writer.
+static std::function<int(const char*)>                          g_nibSessSaveCurrent;
+static std::function<int(const char*, const char* const*, int)> g_nibSessSaveFiles;
+static std::function<int(const char*)>                          g_nibSessLoad;
+static std::function<int(const char*, int*)>                    g_nibSessFileCount;
+static std::function<int(const char*, int, char*, int)>         g_nibSessFileAt;
+static int nibSessSaveCurrent(NibHost*, const char* p)          { return (g_nibSessSaveCurrent && p) ? g_nibSessSaveCurrent(p) : 0; }
+static int nibSessSaveFiles(NibHost*, const char* p, const char* const* f, int n) { return (g_nibSessSaveFiles && p) ? g_nibSessSaveFiles(p, f, n) : 0; }
+static int nibSessLoad(NibHost*, const char* p)                 { return (g_nibSessLoad && p) ? g_nibSessLoad(p) : 0; }
+static int nibSessFileCount(NibHost*, const char* p, int* v)    { return (g_nibSessFileCount && p) ? g_nibSessFileCount(p, v) : 0; }
+static int nibSessFileAt(NibHost*, const char* p, int i, char* b, int c) { return (g_nibSessFileAt && p) ? g_nibSessFileAt(p, i, b, c) : 0; }
+static const NibSessionApi g_nibSessionApi = { 1, sizeof(NibSessionApi),
+    nibSessSaveCurrent, nibSessSaveFiles, nibSessLoad, nibSessFileCount, nibSessFileAt };
+
+// nib.lexer/1 - create a Lexilla ILexer by name + count user-registered languages (portable: Lexilla is
+// built into the host on every OS, so the GPL bridge can serve NPPM_CREATELEXER for a recompiled plugin).
+static std::function<intptr_t(const char*)> g_nibLexerCreate;
+static std::function<int()>                 g_nibLexerUserLangCount;
+static intptr_t nibLexerCreate(NibHost*, const char* n) { return (g_nibLexerCreate && n) ? g_nibLexerCreate(n) : 0; }
+static int nibLexerUserLangCount(NibHost*)              { return g_nibLexerUserLangCount ? g_nibLexerUserLangCount() : 0; }
+static const NibLexerApi g_nibLexerApi = { 1, sizeof(NibLexerApi), nibLexerCreate, nibLexerUserLangCount };
 
 // nib.toolbar/1 - plugin toolbar buttons. add_tool copies the RGBA pixels + tooltip immediately (no
 // plugin memory retained); the button's command id dispatches through onCommand exactly like a menu
@@ -1856,32 +1976,41 @@ static uint32_t     nibHostAbi(NibHost*) { return NIB_ABI_VERSION; }
 static const NibHostApi     g_nibHostApi     = { 1, sizeof(NibHostApi),     nibHostName, nibHostAbi };
 static const NibEditorApi   g_nibEditorApi   = { 1, sizeof(NibEditorApi),   nibEdLength, nibEdInsert, nibEdReplSel, nibEdSelStart, nibEdSelEnd, nibEdGetText };
 static const NibCommandsApi g_nibCommandsApi = { 2, sizeof(NibCommandsApi), nibCmdRegister, nibInvokeCommand };
-static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibSubscribe };     // v1: savepoint-derived DOCUMENT_SAVED
-static const NibEventsApi   g_nibEventsApiV2 = { 2, sizeof(NibEventsApi),   nibSubscribeV2 };   // v2: id-carrying SAVING/SAVED/BEFORE_OPEN
+static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibSubscribe,   nullptr };            // v1: savepoint-derived DOCUMENT_SAVED
+static const NibEventsApi   g_nibEventsApiV2 = { 2, sizeof(NibEventsApi),   nibSubscribeV2, nullptr };            // v2: id-carrying SAVING/SAVED/BEFORE_OPEN
+static const NibEventsApi   g_nibEventsApiV3 = { 3, sizeof(NibEventsApi),   nibSubscribeV2, nibSetModifiedMask }; // v3: + modified-mask, language/style/shortcut/shutdown kinds
+static const NibEventsApi   g_nibEventsApiV4 = { 4, sizeof(NibEventsApi),   nibSubscribeV2, nibSetModifiedMask }; // v4: + long-tail file lifecycle (rename/delete/order/readonly/before-load) + cmdline plugin message
 static const NibPanelsApi   g_nibPanelsApi   = { 1, sizeof(NibPanelsApi),   nibPanelRegister, nibPanelSetText, nibPanelAppend, nibPanelShow };
-static const NibDocumentsApi g_nibDocumentsApi = { 4, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen, nibDocSave, nibDocActiveId, nibDocPathFromId, nibDocActiveView, nibDocPathAt };
+static const NibDocumentsApi g_nibDocumentsApi = { 5, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen, nibDocSave, nibDocActiveId, nibDocPathFromId, nibDocActiveView, nibDocPathAt,
+    nibDocViewCount, nibDocIdAt, nibDocPosOf, nibDocIndexOfActive, nibDocActivateAt, nibDocSetLangById,
+    nibDocEncodingGet, nibDocEncodingSet, nibDocEolGet, nibDocEolSet, nibDocSaveActiveAs, nibDocSaveById,
+    nibDocSetDirtyActive, nibDocRenameUntitled, nibDocTabColorId };
 
 static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
 {
     if (!iface) return nullptr;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_HOST)     == 0) return &g_nibHostApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_EDITOR)   == 0) return &g_nibEditorApi;
-    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_DOCUMENTS)== 0) return &g_nibDocumentsApi;
+    if (minv <= 5 && std::strcmp(iface, NIB_IFACE_DOCUMENTS)== 0) return &g_nibDocumentsApi;   // grow-in-place: one struct, caller checks ->version
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_COMMANDS) == 0) return &g_nibCommandsApi;
     if (std::strcmp(iface, NIB_IFACE_EVENTS) == 0)   // version-gated: which table a plugin gets decides
     {                                                // its DOCUMENT_SAVED semantics (see nib.h)
         if (minv <= 1) return &g_nibEventsApi;
         if (minv == 2) return &g_nibEventsApiV2;
+        if (minv == 3) return &g_nibEventsApiV3;   // + set_modified_mask + v3 event kinds
+        if (minv == 4) return &g_nibEventsApiV4;   // + v4 long-tail file-lifecycle + cmdline plugin message kinds
         return nullptr;
     }
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PANELS)   == 0) return &g_nibPanelsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_LANGDEF)  == 0) return &g_nibLangDefApi;
-    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_KEYMAP)   == 0) return &g_nibKeymapApi;
+    if (minv <= 2 && std::strcmp(iface, NIB_IFACE_KEYMAP)   == 0) return &g_nibKeymapApi;   // grow-in-place: caller checks ->version for the v2 read hook
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PATHS)    == 0) return &g_nibPathsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_SCI)      == 0) return &g_nibSciApi;   // portable: every OS
-    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_UI)       == 0) return &g_nibUiApi;
+    if (minv <= 2 && std::strcmp(iface, NIB_IFACE_UI)       == 0) return &g_nibUiApi;   // grow-in-place: caller checks ->version for the v2 chrome/state getters
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_TOOLBAR)  == 0) return &g_nibToolbarApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_ALLOC)    == 0) return &g_nibAllocApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_SESSION)  == 0) return &g_nibSessionApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_LEXER)    == 0) return &g_nibLexerApi;
 #ifdef __WXMSW__
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_WIN32)    == 0) return &g_nibWin32Api;
 #endif
@@ -1944,6 +2073,7 @@ static void unloadNibPlugins()
     // events (text/selection/savepoint/doc-activated) can still fire while the frame's children are torn
     // down after this call returns, and nibFireEvent() would otherwise call straight into unmapped memory.
     g_nibSubs.clear();
+    g_nibModifiedMask = 0;     // no subscriber left to arm NIB_EV_TEXT_MODIFIED - restore the perf default (never fire it)
     g_nibCommands.clear();
     g_nibAllocSinks.clear();   // nib.alloc command sinks: raw plugin fn pointers, same hazard class as g_nibSubs
     // Remove any plugin toolbar buttons BEFORE FreeLibrary, so no button whose command id targets a
@@ -2429,6 +2559,26 @@ public:
             dropNibKmBuilder(b);               // the handle is consumed - free the builder, do not reuse
             return 1;
         };
+        // nib.keymap/2 read hook: report the effective (primary, plain-global) shortcut of a command id as
+        // portable modifiers + key. Parses the store's own accel spelling with wxAcceleratorEntry so the
+        // Ctrl/Alt/Shift + keycode it yields matches exactly what the menu/accel table installs.
+        g_nibKmEffectiveShortcut = [this](int cmdId, uint32_t* mods, uint32_t* key) -> int {
+            if (!m_keymapReady) return 0;
+            const EffectiveBinding* b = m_keymap.effectiveByCmd(cmdId);
+            if (!b) return 0;
+            const wxString raw = b->primaryRaw();   // first plain, non-chord Global accel; empty if unbound
+            if (raw.empty()) return 0;
+            wxAcceleratorEntry e;
+            if (!e.FromString(raw)) return 0;   // same parse the store/menu feed use (keySpell::canonical)
+            const int f = e.GetFlags();
+            uint32_t m = 0;
+            if (f & (wxACCEL_CTRL | wxACCEL_CMD)) m |= 1;   // fold macOS Cmd into the Ctrl bit (N++ plugins think in Ctrl)
+            if (f & wxACCEL_ALT)                  m |= 2;
+            if (f & wxACCEL_SHIFT)                m |= 4;
+            *mods = m;
+            *key  = static_cast<uint32_t>(e.GetKeyCode());   // uppercase ASCII for letters/digits; WXK_* for named keys
+            return 1;
+        };
         g_nibUserDataDir = [this](char* b, int c) -> int { return nibCopyUtf8(userDataDir().utf8_string(), b, c); };
         g_nibDocCount      = [this]() -> int { const int n = (m_main.tabs ? (int)m_main.tabs->GetPageCount() : 0) + (m_sub.tabs ? (int)m_sub.tabs->GetPageCount() : 0); return n > 0 ? n : 1; };   // across BOTH views
         g_nibDocActivePath = [this](char* b, int c) -> int {   // active document's full path (UTF-8); 0 if untitled
@@ -2461,6 +2611,131 @@ public:
             }
             return 0;
         };
+        // ---- v5: per-view buffer model + per-buffer properties (see the nib.h field comments) ----------
+        // view 0 = MAIN, 1 = SUB; the frame keeps two notebooks (m_main/m_sub). Buffer ids are EditorPage*.
+        g_nibDocViewCount = [this](int view) -> int {
+            wxAuiNotebook* nb = (view == 1) ? m_sub.tabs : m_main.tabs;
+            return nb ? (int)nb->GetPageCount() : 0;
+        };
+        g_nibDocIdAt = [this](int view, int index) -> intptr_t {
+            wxAuiNotebook* nb = (view == 1) ? m_sub.tabs : m_main.tabs;
+            if (!nb || index < 0 || index >= (int)nb->GetPageCount()) return 0;
+            return reinterpret_cast<intptr_t>(nb->GetPage(index));
+        };
+        g_nibDocPosOf = [this](intptr_t id, int priorityView, int* outView, int* outIndex) -> int {
+            const int order[2] = { priorityView == 1 ? 1 : 0, priorityView == 1 ? 0 : 1 };
+            for (int oi = 0; oi < 2; ++oi) {
+                const int view = order[oi];
+                wxAuiNotebook* nb = (view == 1) ? m_sub.tabs : m_main.tabs;
+                if (!nb) continue;
+                for (size_t k = 0; k < nb->GetPageCount(); ++k)
+                    if (reinterpret_cast<intptr_t>(nb->GetPage(k)) == id) {
+                        if (outView) *outView = view;
+                        if (outIndex) *outIndex = (int)k;
+                        return 1;
+                    }
+            }
+            return 0;   // no open document has that id
+        };
+        g_nibDocIndexOfActive = [this](int view) -> int {
+            wxAuiNotebook* nb = (view == 1) ? m_sub.tabs : m_main.tabs;
+            if (!nb || nb->GetPageCount() == 0) return -1;
+            const int s = nb->GetSelection();
+            return s == wxNOT_FOUND ? -1 : s;
+        };
+        g_nibDocActivateAt = [this](int view, int index) -> int {
+            wxAuiNotebook* nb = (view == 1) ? m_sub.tabs : m_main.tabs;
+            if (!nb || index < 0 || index >= (int)nb->GetPageCount()) return 0;
+            activatePage(static_cast<EditorPage*>(nb->GetPage(index)));
+            return 1;
+        };
+        g_nibDocSetLangById = [this](intptr_t id, int langCmdId) -> int {
+            EditorPage* p = pageFromId(id);
+            if (!p) return 0;
+            wxString lexer, name; bool ok = false;
+            if (langCmdId == kCmdLangText) { name = _("Normal text file"); ok = true; }               // Normal Text ("" lexer)
+            else if (const WxnLang* L = wxnLangFind(langCmdId)) { lexer = wxString::FromUTF8(L->lexer); name = wxString::FromUTF8(L->name); ok = true; }
+            if (!ok) return 0;
+            p->langForced = true; p->forcedLexer = lexer; p->forcedName = name; p->sciLang.clear();
+            if (p == activePage()) { setLexerForFile(p->path); updateStatus(); if (m_stc) m_stc->Refresh(); }  // background pages re-lex on activation (activateBuffer honours langForced)
+            nibFireDocEvent(NIB_EV_LANGUAGE_CHANGED, p);   // -> NPPN_LANGCHANGED (this buffer's id)
+            return 1;
+        };
+        g_nibDocEncodingGet = [this](intptr_t id) -> int {
+            EditorPage* p = pageFromId(id);
+            return p ? p->encoding : -1;
+        };
+        g_nibDocEncodingSet = [this](intptr_t id, int enc) -> int {
+            EditorPage* p = pageFromId(id);
+            if (!p || enc < ENC_UTF8 || enc > ENC_ANSI) return 0;   // charset(5) needs a codepage - can't set blind
+            p->encoding = enc;                                       // save-to-apply (documented divergence from N++'s immediate re-decode)
+            if (p == activePage()) { updateEncodingMenuChecks(); updateStatus(); }
+            return 1;
+        };
+        g_nibDocEolGet = [this](intptr_t id) -> int {
+            EditorPage* p = pageFromId(id);
+            if (!p) return -1;
+            int mode = -1;
+            peekDoc(p, [&]{ mode = (int)sci(SCI_GETEOLMODE); });     // background buffer: doc-swap peek (caret restored)
+            return mode;
+        };
+        g_nibDocEolSet = [this](intptr_t id, int mode) -> int {
+            EditorPage* p = pageFromId(id);
+            if (!p || mode < 0 || mode > 2) return 0;
+            peekDoc(p, [&]{ sci(SCI_SETEOLMODE, mode); sci(SCI_CONVERTEOLS, mode); });   // convert existing line endings
+            if (p == activePage()) { refreshTab(p); updateUiState(); }   // active: its own modified event already fired
+            else { p->dirty = true; refreshTabLabel(p); }               // background: the swap was quiet, mark it here
+            return 1;
+        };
+        g_nibDocSaveActiveAs = [this](const char* path, int asCopy) -> int {
+            return (path && *path && saveActiveAs(wxString::FromUTF8(path), asCopy != 0)) ? 1 : 0;
+        };
+        g_nibDocSaveById = [this](intptr_t id) -> int {
+            EditorPage* p = pageFromId(id);
+            if (!p || p->path.empty()) return 0;
+            if (p == activePage()) return writeFile(p->path) ? 1 : 0;
+            int rc = 0;
+            peekDoc(p, [&]{ rc = writePageToDisk(p) ? 1 : 0; });        // background buffer: write it without activation churn
+            if (rc) refreshTabLabel(p);
+            return rc;
+        };
+        g_nibDocSetDirtyActive = [this]() -> int {
+            EditorPage* p = activePage();
+            if (!p || !m_stc) return 0;
+            // Scintilla has no "mark modified" message; adding a container undo action moves the document
+            // off its save point (SCI_GETMODIFY becomes true) without changing a byte - the documented way
+            // a container forces the dirty state. The tab "*", Save-enable and close-prompt follow from it.
+            sci(SCI_ADDUNDOACTION, 0, 0);
+            p->dirty = true; refreshTab(p); updateUiState();
+            return 1;
+        };
+        g_nibDocRenameUntitled = [this](intptr_t id, const char* name) -> int {
+            EditorPage* p = pageFromId(id);
+            if (!p || !name || !*name || !p->path.empty()) return 0;   // has an on-disk path -> not untitled, reject
+            const wxString nm = wxString::FromUTF8(name);
+            if (nm.find('/') != wxString::npos || nm.find('\\') != wxString::npos) return 0;   // a tab label, not a path
+            p->title = nm;
+            if (p == activePage()) refreshTab(p);   // refreshTab updates the tab label AND the title bar
+            else refreshTabLabel(p);
+            return 1;
+        };
+        g_nibDocTabColorId = [this](int view, int index) -> int {
+            wxAuiNotebook* nb = (view == 1) ? m_sub.tabs : m_main.tabs;
+            if (!nb || index < 0 || index >= (int)nb->GetPageCount()) return -1;
+            EditorPage* p = static_cast<EditorPage*>(nb->GetPage(index));
+            if (!p || !p->tabColour.IsOk()) return -1;
+            for (int i = 0; i < 5; ++i) if (tabPaletteColour(i) == p->tabColour) return i;   // palette slot [0..4]
+            return -1;   // a colour not from the host palette -> no id we can name
+        };
+        // No-UI rename/delete of the active file: fire the same v4 lifecycle events the menu wrappers do.
+        g_nibRenameActive = [this](const char* newPathUtf8) -> int {
+            if (!newPathUtf8 || !*newPathUtf8) return 0;
+            EditorPage* ep = activePage();
+            if (!ep || ep->path.empty()) return 0;
+            nibFireDocEvent(NIB_EV_FILE_BEFORE_RENAME, ep);   // -> NPPN_FILEBEFORERENAME (before the operation)
+            return renameActiveTo(wxString::FromUTF8(newPathUtf8)) ? 1 : 0;   // fires RENAMED or RENAME_CANCEL
+        };
+        g_nibRecycleActive = [this]() -> int { return recycleActive() ? 1 : 0; };
 #ifdef __WXMSW__   // nib.win32: hand the (optional, GPL) N++ bridge the native handles it needs
         g_nibMainWindow   = [this]() -> void* { return static_cast<HWND>(GetHandle()); };
         g_nibEditorMain   = [this]() -> void* { return m_main.sci; };   // _scintillaMainHandle is always the MAIN view (not the active alias)
@@ -2535,6 +2810,93 @@ public:
             c->disabled_edge     = 0x484848;
             return 1;
         };
+        // nib.ui/2: host chrome visibility (which: 0=toolbar, 1=menubar, 2=statusbar, 3=doc list) +
+        // editor/UI state getters. chrome_set returns the PREVIOUS visibility so the bridge can report
+        // Notepad++'s "old status". The MENUBAR is a portable documented NO-OP (a global macOS menubar
+        // can't be hidden, so - identically on every OS, no per-platform detach hack - it always reports
+        // shown and hide is ignored); toolbar/statusbar/doclist toggle for real.
+        g_nibUiChromeGet = [this](int which) -> int {
+            switch (which) {
+                case 0: return m_showToolbar ? 1 : 0;
+                case 1: return 1;   // menubar: always shown (documented no-op)
+                case 2: return m_showStatusbar ? 1 : 0;
+                case 3: { if (!m_docList) return 0; wxAuiPaneInfo& pi = m_aui.GetPane(m_docList); return (pi.IsOk() && pi.IsShown()) ? 1 : 0; }
+                default: return 0;
+            }
+        };
+        g_nibUiChromeSet = [this](int which, int visible) -> int {
+            const bool vis = visible != 0;
+            switch (which) {
+                case 0: { const int old = m_showToolbar ? 1 : 0; m_showToolbar = vis; showToolBar(vis); return old; }
+                case 1: return 1;   // menubar: documented portable no-op - stays shown, nothing detached
+                case 2: { const int old = m_showStatusbar ? 1 : 0; m_showStatusbar = vis;
+                          if (auto* sb = GetStatusBar()) sb->Show(vis); SendSizeEvent(); return old; }
+                case 3: {
+                    if (!m_docList) buildDocList();
+                    wxAuiPaneInfo& pi = m_aui.GetPane(m_docList);
+                    const int old = (pi.IsOk() && pi.IsShown()) ? 1 : 0;
+                    if (pi.IsOk()) { pi.Show(vis); m_aui.Update(); if (vis) refreshDocList(); }
+                    return old;
+                }
+                default: return 0;
+            }
+        };
+        g_nibUiWidthModeGet = [this]() -> int { return m_lineNumWidthMode; };
+        g_nibUiWidthModeSet = [this](int mode) -> int {
+            if (mode != 0 && mode != 1) return 0;
+            m_lineNumWidthMode = mode;
+            if (m_lineNumbers) updateLineMargin();   // re-size the margin to the new policy
+            return 1;
+        };
+        g_nibUiAutoIndent = [this]() -> int { return m_autoindent ? 1 : 0; };
+        g_nibUiMacroState = [this]() -> int {
+            // 0 idle, 1 recording, 2 recorded-macro-available (stopped), 3 playing. wxNote has no
+            // observable re-entrant playback state, so playback is not reported; a recorded macro waiting
+            // to play reports "stopped" (2).
+            if (m_recording) return 1;
+            return (!m_macro.empty() || !m_savedMacros.empty()) ? 2 : 0;
+        };
+        g_nibUiIconSet = [this]() -> int { return m_iconStyle; };
+        g_nibUiLocaleName = [](char* b, int c) -> int {
+            wxLocale* loc = wxGetLocale();                        // the app's active locale (App::m_locale)
+            const wxString canon = loc ? loc->GetCanonicalName() : wxString();   // "en" / "pl" / "ja_JP" ...
+            return canon.empty() ? 0 : nibCopyUtf8(canon.utf8_string(), b, c);
+        };
+        // nib.session/1: save/load/enumerate session files by explicit path (factored out of the File >
+        // Save/Load Session dialogs into saveSessionToPath/loadSessionFromPath/sessionFileList below).
+        g_nibSessSaveCurrent = [this](const char* path) -> int {
+            return (path && *path && saveSessionToPath(wxString::FromUTF8(path)) >= 0) ? 1 : 0;
+        };
+        g_nibSessSaveFiles = [this](const char* path, const char* const* files, int n) -> int {
+            if (!path || !*path) return 0;
+            std::vector<wxString> list;
+            for (int i = 0; i < n; ++i) if (files && files[i]) list.push_back(wxString::FromUTF8(files[i]));
+            return saveSessionFilesToPath(wxString::FromUTF8(path), list) ? 1 : 0;
+        };
+        g_nibSessLoad = [this](const char* path) -> int {
+            return (path && *path && loadSessionFromPath(wxString::FromUTF8(path)) >= 0) ? 1 : 0;
+        };
+        g_nibSessFileCount = [this](const char* path, int* valid) -> int {
+            if (valid) *valid = 0;
+            if (!path || !*path) return 0;
+            bool v = false;
+            const int n = sessionFileList(wxString::FromUTF8(path), nullptr, &v);
+            if (valid) *valid = v ? 1 : 0;
+            return n;
+        };
+        g_nibSessFileAt = [this](const char* path, int index, char* b, int c) -> int {
+            if (!path || !*path || index < 0) return 0;
+            std::vector<wxString> files;
+            sessionFileList(wxString::FromUTF8(path), &files, nullptr);
+            if (index >= (int)files.size()) return 0;
+            return nibCopyUtf8(files[index].utf8_string(), b, c);
+        };
+        // nib.lexer/1: create a Lexilla ILexer by name (portable on every OS) + count registered languages.
+        g_nibLexerCreate = [this](const char* name) -> intptr_t {
+            if (!name || !*name) return 0;
+            return reinterpret_cast<intptr_t>(CreateLexer(name));   // Lexilla; NULL for an unknown lexer name
+        };
+        g_nibLexerUserLangCount = [this]() -> int { return (int)m_sciLangs.size(); };
         // nib.toolbar/1: plugin toolbar buttons. The pixels/tooltip are copied HERE (nothing plugin-
         // owned is retained); the button dispatches its command id through the frame's normal command
         // path - on MSW that is MSWWindowProc's WM_COMMAND redispatch into onCommand (unsigned 16-bit
@@ -2600,6 +2962,10 @@ public:
             // file's :line[:col], the launch-wide -g/-e (or +N), -R/-M read-only and +/{pattern}. -w/stdin
             // never reach here (both force a new instance in OnInit), so no wait/stdin handling is needed.
             openRequestFiles(r);
+            // -pluginMessage=<text>, handed to us over the IPC payload (PLUGINMSG=) because plugins are
+            // already loaded in THIS (reused) window - the new-window path fires the same event from
+            // applyRequest() in OnInit; this is the reuse-window twin of that call.
+            if (!r.pluginMessage.empty()) nibFireCmdlinePluginMsg(r.pluginMessage);
             Raise(); if (IsIconized()) Iconize(false);   // a background launch handed us files - come to front
         };
         SetDropTarget(new FileDrop([this](const wxArrayString& fs) { for (const auto& f : fs) openPath(f); }));
@@ -2813,6 +3179,7 @@ public:
             setAllText(content);   // deliberately NOT SCI_SETSAVEPOINT - stays flagged unsaved, like the edits it's replacing
             pg->recoveryId = id;   // so a later Save (or another silent discard) updates/clears the SAME backup instead of orphaning it
             refreshTab(pg);
+            nibFireDocEvent(NIB_EV_SNAPSHOT_DIRTY_LOADED, pg);   // -> NPPN_SNAPSHOTDIRTYFILELOADED (restored dirty backup)
         }
     }
 
@@ -2916,6 +3283,29 @@ private:
         v.tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE,   &WxnShellFrameT::onPageClose,   this);
         v.tabs->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &WxnShellFrameT::onPageChanged, this);
         v.tabs->Bind(wxEVT_AUINOTEBOOK_TAB_RIGHT_UP, &WxnShellFrameT::onTabContext,  this);
+        // A finished tab drag reorders the strip -> NPPN_DOCORDERCHANGED (the previously-unbound END_DRAG
+        // anchor). wxEVT_AUINOTEBOOK_END_DRAG lands even when the tab did not actually move (e.g. a
+        // click+release with no net drag) - snapshot the page order at BEGIN_DRAG and only fire when
+        // END_DRAG's order differs, so the "fires once per reorder" contract (nib.h / bridge README) holds.
+        auto dragOrder = std::make_shared<std::vector<EditorPage*>>();
+        v.tabs->Bind(wxEVT_AUINOTEBOOK_BEGIN_DRAG, [dragOrder](wxAuiNotebookEvent& e) {
+            wxAuiNotebook* nb = static_cast<wxAuiNotebook*>(e.GetEventObject());
+            dragOrder->clear();
+            if (nb) for (size_t i = 0; i < nb->GetPageCount(); ++i) dragOrder->push_back(static_cast<EditorPage*>(nb->GetPage(i)));
+            e.Skip();
+        });
+        v.tabs->Bind(wxEVT_AUINOTEBOOK_END_DRAG, [this, dragOrder](wxAuiNotebookEvent& e) {
+            wxAuiNotebook* nb = static_cast<wxAuiNotebook*>(e.GetEventObject());
+            bool changed = !nb || nb->GetPageCount() != dragOrder->size();
+            if (!changed)
+                for (size_t i = 0; i < nb->GetPageCount(); ++i)
+                    if (static_cast<EditorPage*>(nb->GetPage(i)) != (*dragOrder)[i]) { changed = true; break; }
+            if (changed) {
+                EditorPage* p = (nb && e.GetSelection() != wxNOT_FOUND) ? static_cast<EditorPage*>(nb->GetPage(e.GetSelection())) : activePage();
+                nibFireDocEvent(NIB_EV_DOC_ORDER_CHANGED, p);   // -> NPPN_DOCORDERCHANGED
+            }
+            e.Skip();
+        });
         v.stc = new wxStyledTextCtrl(v.tabs, wxID_ANY);
         v.stc->Hide();                                       // activateBuffer mounts it onto the active page
 #ifdef __WXMSW__
@@ -3039,6 +3429,19 @@ private:
             ev.as.text.pos     = e.GetPosition();
             ev.as.text.added   = (mt & SC_MOD_INSERTTEXT) ? e.GetLength() : 0;
             ev.as.text.removed = (mt & SC_MOD_DELETETEXT) ? e.GetLength() : 0;
+            nibFireEvent(ev);
+        }
+        // v3 NIB_EV_TEXT_MODIFIED: the RAW modification, but ONLY when its flags intersect the mask a
+        // plugin armed via nib.events set_modified_mask. The mask is 0 by default, so this whole path is
+        // a single branch until something opts in - the perf gate for the highest-volume editor signal.
+        if (g_nibModifiedMask && (static_cast<uint32_t>(mt) & g_nibModifiedMask))
+        {
+            NibEvent ev{};
+            ev.kind = NIB_EV_TEXT_MODIFIED; ev.struct_size = sizeof(NibEvent);
+            ev.as.modified.pos               = e.GetPosition();
+            ev.as.modified.length            = e.GetLength();
+            ev.as.modified.lines_added       = e.GetLinesAdded();
+            ev.as.modified.modification_type = static_cast<uint32_t>(mt);
             nibFireEvent(ev);
         }
         if (mt & SC_MOD_CHANGEFOLD) m_lastFoldSection = -2;   // fold structure changed -> re-evaluate nested-square accent on next caret move
@@ -3987,73 +4390,168 @@ private:
         if (wxExecute(full, wxEXEC_ASYNC) == 0) wxMessageBox(_("Failed to run:\n") + full, _("Run"), wxOK | wxICON_ERROR, this);
     }
 
-    // ----- sessions (File > Save / Load Session) ------------------------
-    // Session XML: <wxNote><Session><mainView><File .../></mainView></Session>. loadSession never
-    // checks the root's own tag name, so old <NotepadPlus>-rooted session files still load fine.
-    // Beyond the file list, each entry persists what's needed to restore the *editing position*, not
-    // just the document set: caret position, first-visible line (scroll), and bookmark lines.
+    // ----- sessions (File > Save / Load Session + the nib.session/1 by-path surface) ------------------
+    // Session XML is written in the portable Notepad++ session shape - root <NotepadPlus>, then
+    // <Session activeView><mainView activeIndex><File filename lang position startPos endPos
+    // firstVisibleLine><Mark line/></File>...</mainView><subView.../></Session> - so the file both
+    // round-trips in wxNote AND parses as a Notepad++ session (loadSessionFromPath never checks the
+    // root's own tag name, so older <wxNote>-rooted files still load). Beyond the file list, the active
+    // tab persists its editing position: caret, first-visible line (scroll), and bookmark lines.
+    // The interactive File > Save/Load Session commands and the by-path nib.session hooks (which the GPL
+    // npp-bridge serves the Notepad++ *SESSION* messages from) share the three by-path helpers below.
+
+    // Build a <File> node in the session shape. `pos`/`firstVisibleLine` capture the editing position
+    // (0 for a non-active/plain entry); the caller adds any <Mark> children.
+    static wxXmlNode* makeSessionFileNode(const wxString& filename, const wxString& lang, int pos, int firstVisibleLine)
+    {
+        auto* f = new wxXmlNode(wxXML_ELEMENT_NODE, "File");
+        f->AddAttribute("firstVisibleLine", wxString::Format("%d", firstVisibleLine));
+        f->AddAttribute("startPos", wxString::Format("%d", pos));   // Notepad++'s caret attributes
+        f->AddAttribute("endPos",   wxString::Format("%d", pos));
+        f->AddAttribute("position", wxString::Format("%d", pos));   // wxNote's own round-trip attribute
+        f->AddAttribute("lang",     lang.empty() ? wxString("Normal Text") : lang);
+        f->AddAttribute("filename", filename);
+        return f;
+    }
+    // Save the currently-open on-disk documents (both views) as a session file. Returns the number of
+    // files written (>= 0), or -1 on write failure. Only the globally-active page carries caret/marks.
+    int saveSessionToPath(const wxString& path)
+    {
+        wxXmlDocument doc;
+        auto* root = new wxXmlNode(wxXML_ELEMENT_NODE, "NotepadPlus");
+        auto* sess = new wxXmlNode(wxXML_ELEMENT_NODE, "Session");
+        sess->AddAttribute("activeView", m_active == &m_sub ? "1" : "0");
+        root->AddChild(sess); doc.SetRoot(root);
+        EditorPage* activeP = activePage();
+        struct ViewSpec { wxAuiNotebook* tabs; const char* tag; };
+        const ViewSpec views[2] = { { m_main.tabs, "mainView" }, { m_sub.tabs, "subView" } };
+        int total = 0;
+        for (const auto& vs : views)
+        {
+            auto* viewNode = new wxXmlNode(wxXML_ELEMENT_NODE, vs.tag);
+            int saved = 0, sessActive = 0;
+            if (vs.tabs) for (size_t i = 0; i < vs.tabs->GetPageCount(); ++i)
+            {
+                auto* p = static_cast<EditorPage*>(vs.tabs->GetPage(i));
+                if (!p || p->path.empty()) continue;              // only real (saved) files go in a session
+                wxXmlNode* f;
+                if (p == activeP) {                               // the live editor holds this page's caret/scroll/marks
+                    f = makeSessionFileNode(p->path, p->lang, (int)sci(SCI_GETCURRENTPOS), (int)sci(SCI_GETFIRSTVISIBLELINE));
+                    int ln = -1; const int lc = (int)sci(SCI_GETLINECOUNT);
+                    while ((ln = (int)sci(SCI_MARKERNEXT, ln + 1, 1 << MARK_BOOKMARK)) >= 0 && ln < lc)
+                    { auto* mk = new wxXmlNode(wxXML_ELEMENT_NODE, "Mark"); mk->AddAttribute("line", wxString::Format("%d", ln)); f->AddChild(mk); }
+                    sessActive = saved;
+                } else {
+                    f = makeSessionFileNode(p->path, p->lang, 0, 0);
+                }
+                viewNode->AddChild(f); ++saved; ++total;
+            }
+            viewNode->AddAttribute("activeIndex", wxString::Format("%d", sessActive));
+            sess->AddChild(viewNode);
+        }
+        wxLogNull noLog;
+        return doc.Save(path) ? total : -1;
+    }
+    // Save an explicit list of file paths as a session file (no editor state). Returns true on success.
+    bool saveSessionFilesToPath(const wxString& path, const std::vector<wxString>& files)
+    {
+        wxXmlDocument doc;
+        auto* root = new wxXmlNode(wxXML_ELEMENT_NODE, "NotepadPlus");
+        auto* sess = new wxXmlNode(wxXML_ELEMENT_NODE, "Session"); sess->AddAttribute("activeView", "0");
+        root->AddChild(sess); doc.SetRoot(root);
+        auto* mainView = new wxXmlNode(wxXML_ELEMENT_NODE, "mainView"); mainView->AddAttribute("activeIndex", "0");
+        for (const auto& fp : files) if (!fp.empty()) mainView->AddChild(makeSessionFileNode(fp, wxString(), 0, 0));
+        sess->AddChild(mainView);
+        auto* subView = new wxXmlNode(wxXML_ELEMENT_NODE, "subView"); subView->AddAttribute("activeIndex", "0");
+        sess->AddChild(subView);                                  // Notepad++ always writes both views
+        wxLogNull noLog;
+        return doc.Save(path);
+    }
+    // Locate the <Session> node's view children under a session document's root (tolerant of the root
+    // tag name, and of a bare <mainView> root). Returns the first view node to iterate from, or nullptr.
+    static wxXmlNode* sessionViewScan(wxXmlDocument& doc)
+    {
+        if (!doc.GetRoot()) return nullptr;
+        for (wxXmlNode* a = doc.GetRoot()->GetChildren(); a; a = a->GetNext())
+            if (a->GetName() == "Session") return a->GetChildren();
+        return doc.GetRoot()->GetChildren();                      // no <Session> wrapper: scan the root directly
+    }
+    // Enumerate the files a session file lists (across both views, in document order). Returns the count;
+    // when `out` is non-null it is filled with the paths; when `valid` is non-null it is set true iff the
+    // file parsed as a well-formed session (has at least one <mainView>/<subView> node).
+    int sessionFileList(const wxString& path, std::vector<wxString>* out, bool* valid)
+    {
+        if (valid) *valid = false;
+        wxXmlDocument doc;
+        { wxLogNull noLog; if (!doc.Load(path) || !doc.GetRoot()) return 0; }
+        int count = 0; bool anyView = false;
+        for (wxXmlNode* v = sessionViewScan(doc); v; v = v->GetNext())
+        {
+            if (v->GetName() != "mainView" && v->GetName() != "subView") continue;
+            anyView = true;
+            for (wxXmlNode* f = v->GetChildren(); f; f = f->GetNext())
+            {
+                if (f->GetName() != "File") continue;
+                const wxString fp = f->GetAttribute("filename");
+                if (fp.empty()) continue;
+                if (out) out->push_back(fp);
+                ++count;
+            }
+        }
+        if (valid) *valid = anyView;
+        return count;
+    }
+    // Open every file listed in a session file (both views open into the active view). Returns the number
+    // of files actually opened (>= 0) if the file parsed as a session, or -1 if it is unreadable / not a
+    // session. Restores each opened file's caret/scroll/bookmarks.
+    int loadSessionFromPath(const wxString& path)
+    {
+        wxXmlDocument doc;
+        { wxLogNull noLog; if (!doc.Load(path) || !doc.GetRoot()) return -1; }
+        std::vector<EditorPage*> opened;
+        int mainActiveIndex = -1; bool anyView = false;
+        for (wxXmlNode* v = sessionViewScan(doc); v; v = v->GetNext())
+        {
+            if (v->GetName() != "mainView" && v->GetName() != "subView") continue;
+            anyView = true;
+            const bool isMain = v->GetName() == "mainView";
+            const int ai = wxAtoi(v->GetAttribute("activeIndex", "-1"));
+            int localIdx = 0;
+            for (wxXmlNode* f = v->GetChildren(); f; f = f->GetNext())
+            {
+                if (f->GetName() != "File") continue;
+                const int idxHere = localIdx++;
+                const wxString fp = f->GetAttribute("filename");
+                if (fp.empty() || !wxFileExists(fp)) continue;
+                openPath(fp);                                     // opens it in a new tab and makes it active
+                sci(SCI_GOTOPOS, wxAtoi(f->GetAttribute("position", f->GetAttribute("startPos", "0"))));
+                sci(SCI_SETFIRSTVISIBLELINE, wxAtoi(f->GetAttribute("firstVisibleLine", "0")));
+                for (wxXmlNode* mk = f->GetChildren(); mk; mk = mk->GetNext())
+                    if (mk->GetName() == "Mark") sci(SCI_MARKERADD, wxAtoi(mk->GetAttribute("line", "0")), MARK_BOOKMARK);
+                if (isMain && idxHere == ai && mainActiveIndex < 0) mainActiveIndex = (int)opened.size();
+                opened.push_back(activePage());
+            }
+        }
+        if (!anyView) return -1;
+        if (mainActiveIndex >= 0 && mainActiveIndex < (int)opened.size() && opened[mainActiveIndex] && m_tabs)
+        { const int idx = m_tabs->GetPageIndex(opened[mainActiveIndex]); if (idx != wxNOT_FOUND) m_tabs->SetSelection(idx); }
+        return (int)opened.size();
+    }
     void saveSession()
     {
         if (!m_tabs) return;
         wxFileDialog d(this, _("Save Session"), "", "session.xml", _("Session files (*.xml)|*.xml|All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
         if (d.ShowModal() != wxID_OK) return;
-        const int active = m_tabs->GetSelection();
-        wxXmlDocument doc;
-        auto* root = new wxXmlNode(wxXML_ELEMENT_NODE, "wxNote");
-        auto* sess = new wxXmlNode(wxXML_ELEMENT_NODE, "Session"); sess->AddAttribute("activeView", "0");
-        auto* view = new wxXmlNode(wxXML_ELEMENT_NODE, "mainView");
-        int saved = 0, sessActive = 0;
-        for (size_t i = 0; i < m_tabs->GetPageCount(); ++i)
-        {
-            auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i));
-            if (p->path.empty()) continue;                       // only real (saved) files go in a session
-            auto* f = new wxXmlNode(wxXML_ELEMENT_NODE, "File");
-            f->AddAttribute("filename", p->path); f->AddAttribute("lang", p->lang);
-            if ((int)i == active)                                // the live view holds caret/scroll/marks for the active tab
-            {
-                f->AddAttribute("position", wxString::Format("%d", (int)sci(SCI_GETCURRENTPOS)));
-                f->AddAttribute("firstVisibleLine", wxString::Format("%d", (int)sci(SCI_GETFIRSTVISIBLELINE)));
-                int ln = -1; const int lc = (int)sci(SCI_GETLINECOUNT);
-                while ((ln = (int)sci(SCI_MARKERNEXT, ln + 1, 1 << MARK_BOOKMARK)) >= 0 && ln < lc)
-                { auto* mk = new wxXmlNode(wxXML_ELEMENT_NODE, "Mark"); mk->AddAttribute("line", wxString::Format("%d", ln)); f->AddChild(mk); }
-                sessActive = saved;
-            }
-            else { f->AddAttribute("position", "0"); f->AddAttribute("firstVisibleLine", "0"); }
-            view->AddChild(f); ++saved;
-        }
-        view->AddAttribute("activeIndex", wxString::Format("%d", sessActive));
-        sess->AddChild(view); root->AddChild(sess); doc.SetRoot(root);
-        if (doc.Save(d.GetPath())) { setStatus(0, wxString::Format(_("Session saved - %d file(s)"), saved)); m_hint = true; }
+        const int saved = saveSessionToPath(d.GetPath());
+        if (saved >= 0) { setStatus(0, wxString::Format(_("Session saved - %d file(s)"), saved)); m_hint = true; }
     }
     void loadSession()
     {
         wxFileDialog d(this, _("Load Session"), "", "", _("Session files (*.xml)|*.xml|All files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
         if (d.ShowModal() != wxID_OK) return;
-        wxXmlDocument doc;
-        if (!doc.Load(d.GetPath()) || !doc.GetRoot()) { wxMessageBox(_("Could not read the session file."), _("Load Session"), wxOK | wxICON_ERROR, this); return; }
-        wxXmlNode* view = nullptr;
-        for (wxXmlNode* a = doc.GetRoot()->GetChildren(); a && !view; a = a->GetNext())
-            if (a->GetName() == "Session")
-                for (wxXmlNode* b = a->GetChildren(); b; b = b->GetNext())
-                    if (b->GetName() == "mainView") { view = b; break; }
-        if (!view) { wxMessageBox(_("No session data in this file."), _("Load Session"), wxOK | wxICON_WARNING, this); return; }
-        const int activeIndex = wxAtoi(view->GetAttribute("activeIndex", "0"));
-        std::vector<EditorPage*> opened;
-        for (wxXmlNode* f = view->GetChildren(); f; f = f->GetNext())
-        {
-            if (f->GetName() != "File") continue;
-            const wxString path = f->GetAttribute("filename");
-            if (path.empty() || !wxFileExists(path)) continue;
-            openPath(path);                                      // opens it in a new tab and makes it active
-            sci(SCI_GOTOPOS, wxAtoi(f->GetAttribute("position", "0")));
-            sci(SCI_SETFIRSTVISIBLELINE, wxAtoi(f->GetAttribute("firstVisibleLine", "0")));
-            for (wxXmlNode* mk = f->GetChildren(); mk; mk = mk->GetNext())
-                if (mk->GetName() == "Mark") sci(SCI_MARKERADD, wxAtoi(mk->GetAttribute("line", "0")), MARK_BOOKMARK);
-            opened.push_back(activePage());
-        }
-        if (activeIndex >= 0 && activeIndex < (int)opened.size() && opened[activeIndex])
-        { const int idx = m_tabs->GetPageIndex(opened[activeIndex]); if (idx != wxNOT_FOUND) m_tabs->SetSelection(idx); }
-        setStatus(0, wxString::Format(_("Session loaded - %d file(s)"), (int)opened.size())); m_hint = true;
+        const int opened = loadSessionFromPath(d.GetPath());
+        if (opened < 0) { wxMessageBox(_("Could not read the session file."), _("Load Session"), wxOK | wxICON_ERROR, this); return; }
+        setStatus(0, wxString::Format(_("Session loaded - %d file(s)"), opened)); m_hint = true;
     }
 
     // ----- auto-completion (word / keyword / path) ----------------------
@@ -4361,6 +4859,9 @@ private:
         activateBuffer(page);                  // ensure it (the first AddPage may not fire PAGE_CHANGED); idempotent
         if (!path.empty())
         {
+            // v4: a global "a file is about to load from disk" signal (id 0, before the content is read),
+            // ahead of the id-carrying BEFORE_OPEN. The N++ bridge maps it to NPPN_FILEBEFORELOAD.
+            nibFireDocEvent(NIB_EV_DOCUMENT_BEFORE_LOAD, nullptr);
             // Notify subscribers (nib.events v2 -> the N++ bridge's NPPN_FILEBEFOREOPEN) that this file
             // document exists but its content is about to load. Fired AFTER AddPage on purpose: the page
             // is already enumerable, so the id and its path resolve through nib.documents from inside the
@@ -4608,6 +5109,48 @@ private:
             if (nb) for (size_t i = 0; i < nb->GetPageCount(); ++i) v.push_back(static_cast<EditorPage*>(nb->GetPage(i)));
         return v;
     }
+    // The open page whose EditorPage* IS buffer id `id` (a nib.documents buffer id), across BOTH views;
+    // nullptr if no open document has that id. The reverse of active_id/id_at. (allPages() not the m_tabs
+    // alias, so a buffer living in the SUB view is found too - the cross-view lifecycle invariant.)
+    EditorPage* pageFromId(intptr_t id)
+    {
+        if (!id) return nullptr;
+        for (EditorPage* p : allPages()) if (reinterpret_cast<intptr_t>(p) == id) return p;
+        return nullptr;
+    }
+    // Run `fn` with page p's Scintilla document mounted on the ACTIVE view's editor. If p is already the
+    // active page, fn runs directly. Otherwise p's doc is swapped in via a raw doc-pointer swap (NOT
+    // activateBuffer - the active view's lexer/status/minimap/tab selection are untouched) with editor
+    // events quiet, and the active view's OWN document + caret/scroll are restored afterwards (a doc swap
+    // clears the per-view selection - the documented doc-pointer-swap-loses-caret pitfall; the OTHER view
+    // is never touched). Mirrors onSaveAll's background-buffer peek. Read-only or content-modifying `fn`.
+    template <class Fn>
+    void peekDoc(EditorPage* p, Fn&& fn)
+    {
+        if (!p || !m_stc) return;
+        if (p == activePage()) { fn(); return; }
+        const sptr_t savedDoc    = sci(SCI_GETDOCPOINTER);
+        const int    savedAnchor = static_cast<int>(sci(SCI_GETANCHOR));
+        const int    savedCaret  = static_cast<int>(sci(SCI_GETCURRENTPOS));
+        const int    savedTop    = static_cast<int>(sci(SCI_GETFIRSTVISIBLELINE));
+        sci(SCI_SETMODEVENTMASK, 0);                 // quiet: the active view must not react to the peeked doc
+        sci(SCI_SETDOCPOINTER, 0, p->doc);
+        fn();
+        sci(SCI_SETDOCPOINTER, 0, savedDoc);         // remount the active view's own document...
+        sci(SCI_SETSEL, savedAnchor, savedCaret);    // ...and restore its caret/selection (lost by the swap)
+        sci(SCI_SETFIRSTVISIBLELINE, savedTop);
+        sci(SCI_SETMODEVENTMASK, SC_MODEVENTMASKALL);
+    }
+    // Save the active document to `path`. asCopy: write a copy WITHOUT rebinding the active buffer to it
+    // (its path/title/dirty/lexer are untouched, and no save events fire - it is a copy, not "the save");
+    // else Save-As (writeFile rebinds path/title/lexer/MRU and fires the SAVING/SAVED events). Returns
+    // false on write failure or if there is no active document.
+    bool saveActiveAs(const wxString& path, bool asCopy)
+    {
+        EditorPage* p = activePage();
+        if (!p || !m_stc) return false;
+        return asCopy ? writeMountedDoc(p, path) : writeFile(path);
+    }
     // Before deleting page `p`, move view `v`'s persistent editor off it (to the notebook, hidden) so the
     // page's destruction can't take the editor with it - matters when p is the view's only remaining page
     // (wxAui has no sibling page to re-home it onto). activateBuffer re-mounts it on the next activation.
@@ -4730,6 +5273,7 @@ private:
         }
         if (keepActive) { const int idx = m_tabs->GetPageIndex(keepActive); if (idx != wxNOT_FOUND) m_tabs->SetSelection(idx); }
         setStatus(0, _("Tabs sorted")); m_hint = true;
+        nibFireDocEvent(NIB_EV_DOC_ORDER_CHANGED, keepActive);   // -> NPPN_DOCORDERCHANGED (the tab order changed)
     }
     enum { kTabColourNone = 7100, kTabColourBase = 7101 };   // local ids for the tab "Apply Colour" submenu
     static wxColour tabPaletteColour(int i)
@@ -5047,9 +5591,14 @@ private:
     // On window close / app exit, prompt for every modified document; a Cancel aborts the close.
     void onCloseWindow(wxCloseEvent& e)
     {
+        // A shutdown is being attempted (-> NPPN_BEFORESHUTDOWN). It is not yet committed: if a modified
+        // document's save prompt below is cancelled we veto and fire NIB_EV_SHUTDOWN_CANCEL instead, and
+        // the frame stays open. The FINAL teardown signal (NPPN_SHUTDOWN) is still the CallAfter-deferred
+        // unloadNibPlugins() below - never moved (the plugin-unload-crash fix); this is only the "begin".
+        nibFireDocEvent(NIB_EV_SHUTDOWN_BEGIN, nullptr);
         if (e.CanVeto())   // a forced close (e.g. the theme-restart) skips prompts and just exits
             for (EditorPage* p : allPages())   // prompt EVERY modified doc across BOTH views - none lost on exit
-                if (!confirmClose(p, /*exiting=*/true)) { e.Veto(); return; }
+                if (!confirmClose(p, /*exiting=*/true)) { nibFireDocEvent(NIB_EV_SHUTDOWN_CANCEL, nullptr); e.Veto(); return; }   // -> NPPN_CANCELSHUTDOWN
         saveSettings();    // persist any in-session View-menu toggle changes
         if (!g_waitMode)   // a --wait window is ephemeral (a commit message is not a session): without this every
                            // `git commit` would overwrite the user's saved tabs with .git/COMMIT_EDITMSG and the
@@ -5092,6 +5641,27 @@ private:
         g_nibUiIsDark      = nullptr;
         g_nibUiDarkColors  = nullptr;
         g_nibInvokeCommand = nullptr;
+        g_nibKmEffectiveShortcut = nullptr;   // reads m_keymap (a frame member) - null before the frame dies (NPPM_GETSHORTCUTBYCMDID at shutdown)
+        // nib.ui/2 + nib.session/1 + nib.lexer/1 hooks all capture `this` (chrome/state, the session
+        // reader/writer, Lexilla) - a plugin can still reach them from its NPPN_SHUTDOWN handler, which is
+        // delivered from the CallAfter-deferred unload AFTER this frame is destroyed, so null them here too.
+        g_nibUiChromeGet = nullptr;     g_nibUiChromeSet = nullptr;
+        g_nibUiWidthModeGet = nullptr;  g_nibUiWidthModeSet = nullptr;
+        g_nibUiAutoIndent = nullptr;    g_nibUiMacroState = nullptr;
+        g_nibUiIconSet = nullptr;       g_nibUiLocaleName = nullptr;
+        g_nibSessSaveCurrent = nullptr; g_nibSessSaveFiles = nullptr;  g_nibSessLoad = nullptr;
+        g_nibSessFileCount = nullptr;   g_nibSessFileAt = nullptr;
+        g_nibLexerCreate = nullptr;     g_nibLexerUserLangCount = nullptr;
+        // nib.documents v5 (per-view buffer model + buffer properties, main.cpp:2608-2721) hooks all
+        // capture `this` too, and are reachable the same way from a late NPPN_SHUTDOWN handler - null
+        // them here for the identical reason as the block above. Every nibDoc* C trampoline is already
+        // NUL-guarded (falls back to its documented "capability unavailable" 0/-1 return).
+        g_nibDocViewCount = nullptr;      g_nibDocIdAt = nullptr;         g_nibDocPosOf = nullptr;
+        g_nibDocIndexOfActive = nullptr;  g_nibDocActivateAt = nullptr;   g_nibDocSetLangById = nullptr;
+        g_nibDocEncodingGet = nullptr;    g_nibDocEncodingSet = nullptr;
+        g_nibDocEolGet = nullptr;         g_nibDocEolSet = nullptr;
+        g_nibDocSaveActiveAs = nullptr;   g_nibDocSaveById = nullptr;     g_nibDocSetDirtyActive = nullptr;
+        g_nibDocRenameUntitled = nullptr; g_nibDocTabColorId = nullptr;
         CallAfter([this] { unloadNibPlugins(); });
         e.Skip();
     }
@@ -7143,27 +7713,55 @@ private:
         wxFile f(dlg.GetPath(), wxFile::write);
         if (f.IsOpened()) { f.Write(body.data(), body.size()); setStatus(0, wxString::Format(_("Copy saved: %s"), dlg.GetPath())); }
     }
+    // The rename operation itself (no dialog): fires NPPN_FILERENAMED on success or NPPN_FILERENAMECANCEL
+    // on failure, via the nib.events v4 kinds. Callers fire NIB_EV_FILE_BEFORE_RENAME BEFORE calling this,
+    // so the before/renamed(or cancel) pair brackets the attempt. Returns success.
+    bool renameActiveTo(const wxString& newPath)
+    {
+        EditorPage* ep = activePage();
+        const wxString old = ep ? ep->path : wxString();
+        if (!ep || old.empty() || newPath.empty()) return false;
+        if (!wxRenameFile(old, newPath)) { nibFireDocEvent(NIB_EV_FILE_RENAME_CANCEL, ep); return false; }   // -> NPPN_FILERENAMECANCEL
+        ep->path = newPath; ep->title = wxFileNameFromPath(newPath); setLexerForFile(newPath); refreshTab(ep); setWindowTitle(ep->title);
+        nibFireDocEvent(NIB_EV_FILE_RENAMED, ep);   // -> NPPN_FILERENAMED (this buffer's id)
+        return true;
+    }
     void renameFile()
     {
+        EditorPage* ep = activePage();
         const wxString p = curPath();
         if (p.empty()) { notImpl(_("Rename (save the file first)")); return; }
+        nibFireDocEvent(NIB_EV_FILE_BEFORE_RENAME, ep);   // -> NPPN_FILEBEFORERENAME (before the rename UI)
         wxFileDialog dlg(this, _("Rename"), wxFileName(p).GetPath(), wxFileNameFromPath(p), _("All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
-        if (dlg.ShowModal() != wxID_OK) return;
-        if (wxRenameFile(p, dlg.GetPath()))
-        { if (auto* ep = activePage()) { ep->path = dlg.GetPath(); ep->title = wxFileNameFromPath(dlg.GetPath()); setLexerForFile(dlg.GetPath()); refreshTab(ep); setWindowTitle(ep->title); } }
+        if (dlg.ShowModal() != wxID_OK) { nibFireDocEvent(NIB_EV_FILE_RENAME_CANCEL, ep); return; }   // user cancelled -> NPPN_FILERENAMECANCEL
+        renameActiveTo(dlg.GetPath());
+    }
+    // The delete operation itself (no confirm dialog): fires NIB_EV_FILE_BEFORE_DELETE, deletes the active
+    // document's on-disk file, then NIB_EV_FILE_DELETED (success, fired while the buffer id is still
+    // resolvable) or NIB_EV_FILE_DELETE_FAILED. On success the tab is closed. Returns success.
+    bool recycleActive()
+    {
+        EditorPage* ep = activePage();
+        const wxString p = curPath();
+        if (!ep || p.empty()) return false;
+        nibFireDocEvent(NIB_EV_FILE_BEFORE_DELETE, ep);   // -> NPPN_FILEBEFOREDELETE
+#ifdef __WXMSW__
+        std::wstring from = p.ToStdWstring(); from.push_back(L'\0'); from.push_back(L'\0');   // double-NUL terminated list
+        SHFILEOPSTRUCTW op{}; op.wFunc = FO_DELETE; op.pFrom = from.c_str(); op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+        const bool ok = (SHFileOperationW(&op) == 0);
+#else
+        const bool ok = wxRemoveFile(p);
+#endif
+        if (ok) { nibFireDocEvent(NIB_EV_FILE_DELETED, ep); closeActive(); }   // -> NPPN_FILEDELETED (id still valid), then close the tab
+        else    { nibFireDocEvent(NIB_EV_FILE_DELETE_FAILED, ep); }             // -> NPPN_FILEDELETEFAILED
+        return ok;
     }
     void recycleFile()
     {
         const wxString p = curPath();
         if (p.empty()) { notImpl(_("Move to Recycle Bin (save the file first)")); return; }
         if (wxMessageBox(wxString::Format(_("Move \"%s\" to the Recycle Bin?"), wxFileNameFromPath(p)), "wxNote", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
-#ifdef __WXMSW__
-        std::wstring from = p.ToStdWstring(); from.push_back(L'\0'); from.push_back(L'\0');   // double-NUL terminated list
-        SHFILEOPSTRUCTW op{}; op.wFunc = FO_DELETE; op.pFrom = from.c_str(); op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
-        if (SHFileOperationW(&op) == 0) closeActive();
-#else
-        if (wxRemoveFile(p)) closeActive();
-#endif
+        recycleActive();
     }
     void closeAllSide(bool toRight)
     {
@@ -7188,7 +7786,7 @@ private:
     }
 
     // ---- read-only ----
-    void toggleReadOnly() { const bool ro = sci(SCI_GETREADONLY) != 0; sci(SCI_SETREADONLY, ro ? 0 : 1); setStatus(0, ro ? _("Read/Write") : _("Read-Only")); }
+    void toggleReadOnly() { const bool ro = sci(SCI_GETREADONLY) != 0; sci(SCI_SETREADONLY, ro ? 0 : 1); setStatus(0, ro ? _("Read/Write") : _("Read-Only")); nibFireDocEvent(NIB_EV_READONLY_CHANGED, activePage()); }   // -> NPPN_READONLYCHANGED (this buffer's id)
     void toggleSystemReadOnly()
     {
         const wxString p = curPath(); if (p.empty()) { notImpl(_("Read-Only Attribute (save the file first)")); return; }
@@ -7198,6 +7796,7 @@ private:
         a ^= FILE_ATTRIBUTE_READONLY; SetFileAttributesW(w.c_str(), a);
         const bool ro = (a & FILE_ATTRIBUTE_READONLY) != 0; sci(SCI_SETREADONLY, ro ? 1 : 0);
         setStatus(0, ro ? _("File attribute: Read-Only") : _("File attribute: Read/Write"));
+        nibFireDocEvent(NIB_EV_READONLY_CHANGED, activePage());   // -> NPPN_READONLYCHANGED
 #else
         notImpl(_("Read-Only Attribute (Windows only)"));
 #endif
@@ -7452,6 +8051,7 @@ private:
         setLexerForFile(p->path);
         updateStatus();
         if (m_stc) m_stc->Refresh();
+        nibFireDocEvent(NIB_EV_LANGUAGE_CHANGED, p);   // -> NPPN_LANGCHANGED (Language-menu pick on the active buffer)
     }
     // Rebuild the Language menu's dynamic section: one entry per registered Scintillua language
     // (from nib.langdef, e.g. the udl-compat plugin). Called at startup and whenever a language is
@@ -7609,6 +8209,7 @@ private:
         setLexerForFile(p->path);
         updateStatus();
         if (m_stc) m_stc->Refresh();
+        nibFireDocEvent(NIB_EV_LANGUAGE_CHANGED, p);   // -> NPPN_LANGCHANGED (a registered Scintillua language pick)
     }
 
     // ----- search engine (drives the Find/Replace dialog) ----------------
@@ -8241,7 +8842,8 @@ private:
         if (!mb || !m_keymapReady) { notImpl(_("Shortcut Mapper")); return; }
         ShortcutMapperDialog dlg(this, m_keymap, mb, m_dark,
                                  [this](wxWindow* w){ themeDialog(w); },
-                                 [this]{ refreshAccelerators(m_accelScope); reapplyEditorKeymaps(); });
+                                 [this]{ refreshAccelerators(m_accelScope); reapplyEditorKeymaps();
+                                         nibFireDocEvent(NIB_EV_SHORTCUTS_CHANGED, nullptr); });   // -> NPPN_SHORTCUTREMAPPED
         dlg.ShowModal();
     }
 
@@ -8772,6 +9374,7 @@ private:
         applyEditorTheme(m_dark);
         if (auto* p = activePage()) setLexerForFile(p->path);   // re-apply per-token colours for the active doc
         if (m_stc) m_stc->Refresh();
+        nibFireDocEvent(NIB_EV_STYLE_UPDATED, activePage());   // -> NPPN_WORDSTYLESUPDATED (editor styles re-applied)
     }
     // ---- Style Configurator colour helpers + write-back to the theme XML ----
     static wxColour bgrToColour(int bgr) { return bgr < 0 ? wxColour(*wxBLACK) : wxColour(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF); }
@@ -9784,9 +10387,14 @@ private:
     void updateLineMargin()   // right-justified numbers in a width sized to the digit count
     {
         if (!m_lineNumbers) { sci(SCI_SETMARGINWIDTHN, 0, 0); return; }   // line-number margin disabled in Preferences
-        const int lines = static_cast<int>(sci(SCI_GETLINECOUNT));
-        int digits = 1; for (int n = lines; n >= 10; n /= 10) ++digits;
-        if (digits < 2) digits = 2;
+        int digits;
+        if (m_lineNumWidthMode == 1) {           // CONSTANT policy: a fixed width, independent of line count
+            digits = 4;
+        } else {                                  // DYNAMIC policy (default): sized to the current line count
+            const int lines = static_cast<int>(sci(SCI_GETLINECOUNT));
+            digits = 1; for (int n = lines; n >= 10; n /= 10) ++digits;
+            if (digits < 2) digits = 2;
+        }
         const std::string nines(static_cast<size_t>(digits), '9');
         const int w = static_cast<int>(sci(SCI_TEXTWIDTH, STYLE_LINENUMBER, reinterpret_cast<sptr_t>(nines.c_str())));
         sci(SCI_SETMARGINWIDTHN, 0, w + 10);   // small left pad + a little right pad; right-justified, flush to text
@@ -10020,6 +10628,7 @@ private:
     wxString    m_fontFace = "Cascadia Mono";    // Preferences > Editing "Font"; effectiveFontFace() falls back to this if it's no longer installed
     int         m_tabWidth = 4;                                   // persisted editor preferences (Settings > Preferences)
     bool        m_useTabs = true, m_lineNumbers = true, m_wrapSymbol = false, m_showToolbar = true, m_showStatusbar = true;
+    int         m_lineNumWidthMode = 0;   // line-number margin width policy (nib.ui/NPPM_*LINENUMBERWIDTHMODE): 0 = dynamic, 1 = constant
     // Off by default: the zoom combo is a power-user affordance, and Ctrl+wheel / View > Zoom work
     // without it. When off, status-bar field 6 is collapsed to width 0 so no empty slot is left behind.
     bool        m_showZoomField = false;
@@ -10221,6 +10830,19 @@ public:
             break;                        // first --locale wins; an unshipped one falls back silently
         }
 
+        // ---- -pluginMessage=<text> pre-scan: raw argv (same reasons as --locale) -----------------------
+        // Notepad++'s form is single-dash `-pluginMessage="..."`; also accept the wx-idiomatic `--pluginMessage`
+        // and a following-arg spelling. Captured here (not the parser) so the exact N++ single-dash long form
+        // is honoured regardless of wxCmdLineParser's dash handling; the value is delivered to plugins after
+        // they load (see the fire in the frame-construction block below). Registered with the parser too, for
+        // --help. The string may hold arbitrary text (a plugin's private protocol), so it is copied verbatim.
+        for (int i = 1; i < argc; ++i)
+        {
+            wxString arg(argv[i]), val;
+            if (arg == "-pluginMessage" || arg == "--pluginMessage") { if (i + 1 >= argc) break; g_pluginMessage = argv[i + 1]; break; }
+            if (arg.StartsWith("-pluginMessage=", &val) || arg.StartsWith("--pluginMessage=", &val)) { g_pluginMessage = val; break; }
+        }
+
         // ---- positional-token pre-scan: +N / +N,col, +/{pattern} and a lone '-' -----------------------
         // These are vim/less-style POSITIONAL syntax, not switches: '+' is not in SetSwitchChars("-"), and a
         // bare '-' is (per wxCmdLineParser) a parameter, so none of them collide with any -x flag. wx would
@@ -10294,6 +10916,9 @@ public:
         // Registered so it shows up in --help and doesn't trip "unknown option"; the VALUE is read by the
         // raw-argv pre-scan far above, because the catalog has to be installed before this parser is built.
         parser.AddOption("", "locale", _("UI language for this run (e.g. pl, de, ja)"), wxCMD_LINE_VAL_STRING);
+        // Registered so it appears in --help and doesn't trip "unknown option"; the VALUE is read by the
+        // raw-argv pre-scan above (to honour Notepad++'s single-dash -pluginMessage spelling exactly).
+        parser.AddOption("", "pluginMessage", _("message delivered to plugins at startup"), wxCMD_LINE_VAL_STRING);
         parser.AddSwitch("v", "version", _("print the version and exit"));
         // Registered explicitly: without it -h is just an unknown option, so the usage text is preceded by an
         // error. wxCMD_LINE_OPTION_HELP makes Parse() print the usage itself and return -1, which the
@@ -10409,6 +11034,11 @@ public:
                     if (req.readOnly) payload += "\x01" "RO=1\n";
                     if (req.split)    payload += "\x01" "SPLIT=1\n";
                     if (!req.findPattern.empty()) payload += "\x01" "FIND=" + req.findPattern + "\n";
+                    // -pluginMessage=<text>: without this it would silently work for a NEW window but be
+                    // dropped whenever "reuse window" is on - the exact bug class the comment above
+                    // documents for RO/SPLIT/FIND. g_pluginMessage is captured by the raw-argv pre-scan
+                    // above (this process never reaches applyRequest(), which is where a new window fires it).
+                    if (!g_pluginMessage.empty()) payload += "\x01PLUGINMSG=" + g_pluginMessage + "\n";
                     conn->Execute(payload);
                     conn->Disconnect();
                     delete conn;
@@ -10480,6 +11110,9 @@ public:
             const wxArrayString opened = frame->openRequestFiles(req);
             if (req.hasStdin) frame->openStdinBuffer(req.stdinText);       // '-': piped input into a new "(stdin)" buffer
             if (wait) frame->enterWaitMode(opened);   // only wait on tabs that actually opened, or we'd never return
+            // -pluginMessage=<text>: hand it to plugins now that they are loaded and the startup files are in
+            // (the GPL npp-bridge forwards it as NPPN_CMDLINEPLUGINMSG). --safe (no plugins) makes this inert.
+            if (!g_pluginMessage.empty()) nibFireCmdlinePluginMsg(g_pluginMessage);
         };
 #ifdef WXN_HAS_BORDERLESS
         // Integrated top bar (Settings > Preferences, restart-to-apply): a borderless frame whose chrome is

@@ -102,8 +102,59 @@
     .sidebar ul li.active > a { color: var(--accent); font-weight: 500; border-right: none; }
     .sidebar ul li ul { padding-left: 14px; }
     .sidebar-toggle { background: transparent; }
-    .sidebar-toggle .sidebar-toggle-button:hover { opacity: 0.6; }
+    /* Docsify's default .sidebar-toggle-button is an unstyled div that just fills the whole (364px)
+       toggle bar, so its 3 bars sit directly over whatever sidebar text happens to scroll underneath -
+       there's no visible boundary telling you it's a button. Shrink it to a small fixed badge instead,
+       filled with the sidebar's own surface colour so it reads as a clean round button sitting ON the
+       panel rather than bars floating over the last nav item. */
+    .sidebar-toggle .sidebar-toggle-button {
+      width: 34px;
+      height: 34px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface);
+      border-radius: 50%;
+    }
+    .sidebar-toggle .sidebar-toggle-button span:last-child { margin-bottom: 0; }
+    /* vue.css ships `.sidebar-toggle:hover .sidebar-toggle-button { opacity: .4 }` - a fade that turns
+       the whole badge (background included) translucent, letting sidebar text show through it on hover.
+       Same specificity as this block's selectors, so this later rule wins: pin opacity and tint the
+       fill instead. */
+    .sidebar-toggle:hover .sidebar-toggle-button {
+      opacity: 1;
+      background: var(--surface-2);
+    }
     .sidebar-toggle span { background-color: var(--accent); }
+
+    /* ---------- scrollbars ----------
+       Two regions scroll on a long page: the page body (main content) and the sidebar nav. Docsify's
+       stock sidebar scrollbar is 4px and transparent until hover, so it flickers in and out and reads
+       as broken. Replace it - and the default body bar - with a quiet, always-present slim thumb that
+       matches the theme. The transparent border + padding-box clip makes the thumb float with a margin,
+       so it works on any background (body, surface, code) without per-element colour matching. */
+    body::-webkit-scrollbar,
+    .sidebar::-webkit-scrollbar { width: 12px; }
+    .markdown-section pre::-webkit-scrollbar { height: 10px; }
+    body::-webkit-scrollbar-thumb,
+    .sidebar::-webkit-scrollbar-thumb,
+    .markdown-section pre::-webkit-scrollbar-thumb {
+      background-color: var(--border);
+      border-radius: 8px;
+      border: 3px solid transparent;
+      background-clip: padding-box;
+    }
+    body:hover::-webkit-scrollbar-thumb,
+    .sidebar:hover::-webkit-scrollbar-thumb,
+    .markdown-section pre:hover::-webkit-scrollbar-thumb { background-color: var(--text-muted); }
+    body::-webkit-scrollbar-track,
+    .sidebar::-webkit-scrollbar-track,
+    .markdown-section pre::-webkit-scrollbar-track { background: transparent; }
+    /* Firefox has no ::-webkit pseudo-elements; its two-keyword form covers the same regions. */
+    body,
+    .sidebar,
+    .markdown-section pre { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 
     /* Docsify's stock GitHub corner (from the repo: option below) is a top-right wedge that collides with
        the theme switcher. Mirroring it into the bottom corner does NOT work: the wedge and the octocat
@@ -276,8 +327,7 @@
     }
     .doc-controls a.home-link:hover { color: var(--accent); }
     /* Labelled, matching .home-link exactly - same gap, font-size and padding - so the two read as a
-       matched pair inside the pill rather than "a link and an icon". The hairline divider keeps the two
-       labels from running together now that both carry text. */
+       matched pair inside the pill rather than "a link and an icon". */
     .doc-controls a.gh-link {
       display: flex;
       align-items: center;
@@ -287,7 +337,6 @@
       border-radius: 999px;
       color: var(--text-muted);
       text-decoration: none;
-      border-left: 1px solid var(--border);
     }
     .doc-controls a.gh-link:hover { color: var(--accent); }
     .doc-controls a.gh-link svg { width: 15px; height: 15px; fill: currentColor; display: block; }

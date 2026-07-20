@@ -62,9 +62,9 @@ return lex
 
 ## Legacy Notepad++ User-Defined Languages
 
-wxNote's own built-in UDL engine was **removed**. Legacy `userDefineLang.xml` files are instead handled
-by the optional **`udl-compat`** plugin, which parses the Notepad++ UDL format, translates each
-definition into a Scintillua lexer, and registers it through `nib.langdef`.
+Legacy `userDefineLang.xml` files are handled by the optional **`udl-compat`** plugin, which parses the
+Notepad++ UDL format, translates each definition into a Scintillua lexer, and registers it through
+`nib.langdef`.
 
 Practical consequences:
 

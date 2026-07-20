@@ -74,6 +74,11 @@ struct TermView::Impl
 
     int cols = 80, rows = 24;   // stays the 80x24 default until the first real wxEVT_SIZE
     int cellW = 8, cellH = 16;
+    // Inset the cell grid from the widget edge so text isn't glued to the left/top border. Applied
+    // uniformly to every col*cellW / row*cellH transform below (paint, cursor, damage rects, mouse
+    // hit-test) AND subtracted (x2, for both edges) from the client size in updateGrid, so the grid
+    // shrinks to leave a symmetric margin rather than clipping the last row/column off-screen.
+    static constexpr int padX = 6, padY = 3;
 
     wxString face;
     int      pt = 10;
@@ -220,22 +225,22 @@ struct TermView::Impl
     {
         // Live rows render sbOffset rows lower while the view is scrolled back; wx clips whatever
         // lands below the client area.
-        q->RefreshRect(wxRect(r.start_col * cellW,
-                              (r.start_row + sbOffset) * cellH,
+        q->RefreshRect(wxRect(padX + r.start_col * cellW,
+                              padY + (r.start_row + sbOffset) * cellH,
                               (r.end_col - r.start_col) * cellW,
                               (r.end_row - r.start_row) * cellH));
     }
     void refreshCursorCell()
     {
         // Two cells wide: the cursor may sit on a double-width glyph.
-        q->RefreshRect(wxRect(cursor.col * cellW, (cursor.row + sbOffset) * cellH,
+        q->RefreshRect(wxRect(padX + cursor.col * cellW, padY + (cursor.row + sbOffset) * cellH,
                               2 * cellW, cellH));
     }
     VTermPos gridAt(const wxPoint& p) const   // pixel -> live-grid cell, clamped inside the grid
     {
         VTermPos g;
-        g.col = std::max(0, std::min(cols - 1, p.x / std::max(1, cellW)));
-        g.row = std::max(0, std::min(rows - 1, p.y / std::max(1, cellH)));
+        g.col = std::max(0, std::min(cols - 1, (p.x - padX) / std::max(1, cellW)));
+        g.row = std::max(0, std::min(rows - 1, (p.y - padY) / std::max(1, cellH)));
         return g;
     }
     AbsPos absAt(const wxPoint& p) const      // pixel -> absolute (scrollback-aware) cell
@@ -359,9 +364,9 @@ struct TermView::Impl
     {
         // Pre-layout sizes (0x0 or sub-cell) would collapse the grid to 1x1 and shove 23 blank
         // lines into scrollback before the pane is even shown - keep the 80x24 default instead.
-        if (client.x < cellW || client.y < cellH) return;
-        const int nc = std::max(1, client.x / cellW);
-        const int nr = std::max(1, client.y / cellH);
+        if (client.x < cellW + 2 * padX || client.y < cellH + 2 * padY) return;
+        const int nc = std::max(1, (client.x - 2 * padX) / cellW);
+        const int nr = std::max(1, (client.y - 2 * padY) / cellH);
         if (nc == cols && nr == rows) return;
         cols = nc;
         rows = nr;
@@ -472,7 +477,7 @@ struct TermView::Impl
         VTermScreenCell cell;
         for (int r = 0; r < rows; ++r)
         {
-            const int y = r * cellH;
+            const int y = padY + r * cellH;
             // Run state: consecutive same-attr cells accumulate into one DrawText (per-cell
             // DrawText was an order of magnitude slower on full-screen repaints).
             wxString run;
@@ -522,7 +527,7 @@ struct TermView::Impl
                     flush();
                 if (!haveRun)
                 {
-                    runX    = c * cellW;
+                    runX    = padX + c * cellW;
                     runFg   = fg;   runBg   = bg;
                     runBold = bold; runItal = ital;
                     runUl   = ul;   runStrike = strike;
@@ -551,8 +556,8 @@ struct TermView::Impl
         // over historical text pins a phantom block onto unrelated content.
         if (!cursorVisible || sbOffset != 0) return;
         if (cursor.row < 0 || cursor.row >= rows || cursor.col < 0 || cursor.col >= cols) return;
-        const int x = cursor.col * cellW;
-        const int y = cursor.row * cellH;
+        const int x = padX + cursor.col * cellW;
+        const int y = padY + cursor.row * cellH;
         if (!focused)
         {
             dc.SetBrush(*wxTRANSPARENT_BRUSH);

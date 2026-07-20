@@ -285,7 +285,7 @@ async function loadChangelog() {
         <div class="content-card changelog-card">
           <p class="changelog-text">Couldn't load releases from GitHub right now.</p>
           <a class="changelog-link" href="${REPO_URL}/releases" target="_blank" rel="noopener">
-            View releases on GitHub <ion-icon name="arrow-forward-outline"></ion-icon>
+            View releases on GitHub <svg viewBox="0 0 512 512" width="1em" height="1em" fill="currentColor" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="48" d="M268 112l144 144-144 144M392 256H100"/></svg>
           </a>
         </div>
       </li>`;
@@ -312,7 +312,7 @@ async function loadChangelog() {
             <h3 class="h3 changelog-title">${title}</h3>
             <p class="changelog-text">See what changed in this release on GitHub.</p>
             <a class="changelog-link" href="${url}" target="_blank" rel="noopener">
-              Read full notes <ion-icon name="arrow-forward-outline"></ion-icon>
+              Read full notes <svg viewBox="0 0 512 512" width="1em" height="1em" fill="currentColor" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="48" d="M268 112l144 144-144 144M392 256H100"/></svg>
             </a>
           </div>
         </li>`;

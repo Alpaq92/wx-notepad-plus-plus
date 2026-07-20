@@ -6,11 +6,12 @@ into two views), any number of dockable panels, and a status bar.
 ## Toolbar
 
 The toolbar is optional (**Preferences&nbsp;&rsaquo; General&nbsp;&rsaquo; Show toolbar**) and its icons
-are SVG, so they stay crisp at any size. Three icon sets ship:
+are SVG, so they stay crisp at any size. Four icon sets ship:
 
 - **Tabler icons (line)** — the theme-adaptive default,
 - **Solar icons (green)**,
-- **IconPark icons (teal/lime)**.
+- **IconPark icons (teal/lime)**,
+- **Streamline icons (green/teal)**.
 
 Both the set and the icon size (16, 20, 24 or 32&nbsp;px) are chosen in
 **Preferences&nbsp;&rsaquo; General** and applied on restart. Buttons that do not apply right now are

@@ -76,7 +76,15 @@ static const NibCommandsApi*  g_cmds  = nullptr;  // nib.commands - invoke a bui
 static const NibUiApi*        g_ui      = nullptr;  // nib.ui - menu checkmarks + dark probe/palette (SETMENUITEMCHECK, ISDARKMODEENABLED, GETDARKMODECOLORS)
 static const NibToolbarApi*   g_toolbar = nullptr;  // nib.toolbar - plugin toolbar buttons (ADDTOOLBARICON*); NULL on old hosts
 static const NibAllocApi*     g_alloc   = nullptr;  // nib.alloc - cmd-id/marker/indicator grants (ALLOCATE* + FuncItem cmdIDs)
+static const NibKeymapApi*    g_keymap  = nullptr;  // nib.keymap - v2 effective_shortcut read (NPPM_GETSHORTCUTBYCMDID); NULL on old hosts
+static const NibEventsApi*    g_eventsV3 = nullptr; // nib.events v3 table - set_modified_mask + the v3 event kinds; NULL on old hosts
+static const NibSessionApi*   g_session = nullptr;  // nib.session - save/load/enumerate session files (NPPM_*SESSION*); NULL on old hosts
+static const NibLexerApi*     g_lexer   = nullptr;  // nib.lexer - Lexilla CreateLexer + user-lang count (NPPM_CREATELEXER/GETNBUSERLANG); NULL on old hosts
+static const NibEventsApi*    g_eventsV4 = nullptr; // nib.events v4 table - long-tail file lifecycle + cmdline plugin message; NULL on old hosts
 static bool                   g_eventsV2 = false;   // host speaks nib.events v2 (id-carrying SAVING/SAVED/BEFORE_OPEN)
+static unsigned               g_scnModifiedMask = 0;  // union of SCN modificationType flags plugins opted into via NPPM_ADDSCNMODIFIEDFLAGS
+                                                       // (N++'s single global _scintillaModifiedFlags accumulator); pushed to the host
+                                                       // so it filters per modification before crossing the ABI (the perf gate).
 
 struct NppPlugin {              // a loaded N++ plugin (kept alive for its FuncItem pointers + Stage-3 notifications)
     DllHandle    lib;
@@ -148,16 +156,16 @@ static std::wstring wFromUtf8(const char* s)
 }
 #endif
 
-// The directory the app runs from (the "N++ install dir" NPPM family). Wide on both OSes.
+// The FULL path of the running executable (the "notepad++.exe full path" NPPM_GETNPPFULLFILEPATH
+// reports). Wide on both OSes; empty only if the OS query fails.
 #ifdef _WIN32
-static std::wstring exeDir()
+static std::wstring exeFullPathW()
 {
     wchar_t buf[MAX_PATH]; DWORD n = ::GetModuleFileNameW(nullptr, buf, MAX_PATH);
-    std::wstring p(buf, n); size_t s = p.find_last_of(L"\\/");
-    return s == std::wstring::npos ? L"." : p.substr(0, s);
+    return std::wstring(buf, n);
 }
 #else
-static std::wstring exeDir()
+static std::wstring exeFullPathW()
 {
     std::string p;
   #ifdef __APPLE__
@@ -168,11 +176,17 @@ static std::wstring exeDir()
     ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
     if (n > 0) { buf[n] = '\0'; p = buf; }
   #endif
-    const size_t s = p.find_last_of('/');
-    if (s != std::string::npos) p.resize(s); else p = ".";
-    return wFromUtf8(p.c_str());   // OS gives UTF-8; match the Windows exeDir return type
+    return wFromUtf8(p.c_str());   // OS gives UTF-8; match the Windows return type
 }
 #endif
+// The directory the app runs from (the "N++ install dir" NPPM family), derived from the exe path.
+// Handles both separators so it is correct on every OS.
+static std::wstring exeDir()
+{
+    const std::wstring p = exeFullPathW();
+    const size_t s = p.find_last_of(L"\\/");
+    return s == std::wstring::npos ? std::wstring(L".") : p.substr(0, s);
+}
 
 // The base a recompiled plugin's NPPM_GETPLUGINHOMEPATH/GETPLUGINSCONFIGDIR should report - the SAME
 // place the loader reads plugins from, using the platform's own separator: <exe>/plugins on Windows,
@@ -284,6 +298,125 @@ static void on_nib_event_v2(NibHost*, const NibEvent* ev, void*)
         case NIB_EV_DOCUMENT_SAVED:       notifyNpp(NPPN_FILESAVED,      static_cast<uptr_t>(ev->as.document.id)); break;
         case NIB_EV_DOCUMENT_BEFORE_OPEN: notifyNpp(NPPN_FILEBEFOREOPEN, static_cast<uptr_t>(ev->as.document.id)); break;
         default: break;
+    }
+}
+
+// The Phase-4 (event-fidelity) pipeline: the nib.events v3 kinds, forwarded to every loaded plugin.
+//   * NIB_EV_TEXT_MODIFIED  -> NPPN_GLOBALMODIFIED carrying the REAL Scintilla modificationType (plus
+//     position/length/linesAdded), the payload ComparePlus/diff plugins need. The host already filtered
+//     by the opted-in union mask (set via NPPM_ADDSCNMODIFIEDFLAGS), so this only fires for modifications
+//     a plugin asked for; the `& g_scnModifiedMask` guard is a cheap backstop. N++'s modified-flags
+//     subscription is a single global accumulator, so - as in N++ - the resulting notification reaches
+//     every loaded plugin (the mask is the union of all opt-ins).
+//   * NIB_EV_LANGUAGE_CHANGED -> NPPN_LANGCHANGED (buffer id in idFrom).
+//   * NIB_EV_STYLE_UPDATED    -> NPPN_WORDSTYLESUPDATED (active buffer id in idFrom).
+//   * NIB_EV_SHORTCUTS_CHANGED-> NPPN_SHORTCUTREMAPPED.
+//   * NIB_EV_SHUTDOWN_BEGIN   -> NPPN_BEFORESHUTDOWN, NIB_EV_SHUTDOWN_CANCEL -> NPPN_CANCELSHUTDOWN. These
+//     are the shutdown-attempt / veto pair; NPPN_SHUTDOWN itself stays where it was (deactivate()).
+static void on_nib_event_v3(NibHost*, const NibEvent* ev, void*)
+{
+    switch (ev->kind) {
+        case NIB_EV_TEXT_MODIFIED: {
+            const unsigned mt = ev->as.modified.modification_type;
+            if (g_scnModifiedMask && !(mt & g_scnModifiedMask)) break;   // backstop: only the opted-in flags
+            SCNotification scn = {};
+            scn.nmhdr.hwndFrom = g_npp._nppHandle;
+            scn.nmhdr.code     = NPPN_GLOBALMODIFIED;
+            scn.nmhdr.idFrom   = (g_docs && g_docs->version >= 2 && g_docs->active_id)   // the modified buffer (N++ puts it here)
+                                     ? static_cast<uptr_t>(g_docs->active_id(g_host)) : 0;
+            scn.modificationType = static_cast<int>(mt);
+            scn.position         = ev->as.modified.pos;
+            scn.length           = ev->as.modified.length;
+            scn.linesAdded       = ev->as.modified.lines_added;
+            for (const auto& p : g_plugins) if (p.beNotified) p.beNotified(&scn);
+            return;
+        }
+        case NIB_EV_LANGUAGE_CHANGED: notifyNpp(NPPN_LANGCHANGED,       static_cast<uptr_t>(ev->as.document.id)); break;
+        case NIB_EV_STYLE_UPDATED:    notifyNpp(NPPN_WORDSTYLESUPDATED, static_cast<uptr_t>(ev->as.document.id)); break;
+        case NIB_EV_SHORTCUTS_CHANGED:notifyNpp(NPPN_SHORTCUTREMAPPED);  break;
+        case NIB_EV_SHUTDOWN_BEGIN:   notifyNpp(NPPN_BEFORESHUTDOWN);    break;
+        case NIB_EV_SHUTDOWN_CANCEL:  notifyNpp(NPPN_CANCELSHUTDOWN);    break;
+        default: break;
+    }
+}
+
+// The Phase-6 (long-tail file lifecycle) pipeline: the nib.events v4 kinds, forwarded to every loaded
+// plugin. Each carries the affected buffer id (0 for the app-global BEFORE_LOAD) in NPPN idFrom - the same
+// id space as every other file notification, so a plugin resolves the path via NPPM_GETFULLPATHFROMBUFFERID.
+//   * BEFORE_LOAD -> NPPN_FILEBEFORELOAD (id 0, matching N++'s "buffer not created yet").
+//   * READONLY_CHANGED -> NPPN_READONLYCHANGED; DOC_ORDER_CHANGED -> NPPN_DOCORDERCHANGED. N++ also stashes
+//     the doc-status flags / new tab index in nmhdr.hwndFrom; the portable event does not carry them (a
+//     documented reduction - the plugin reads the current state via NPPM instead). hwndFrom stays the frame.
+//   * SNAPSHOT_DIRTY_LOADED -> NPPN_SNAPSHOTDIRTYFILELOADED (a restored dirty recovery backup).
+//   * the rename/delete before/after/cancel triples -> the matching NPPN_FILE*RENAME*/NPPN_FILE*DELETE*.
+//   * CMDLINE_PLUGIN_MSG -> NPPN_CMDLINEPLUGINMSG. N++ passes the message string in nmhdr.hwndFrom (a
+//     const wchar_t*) with idFrom 0; the host hands us UTF-8, which the bridge widens into a local buffer
+//     that outlives the synchronous delivery below.
+static void on_nib_event_v4(NibHost*, const NibEvent* ev, void*)
+{
+    switch (ev->kind) {
+        case NIB_EV_DOCUMENT_BEFORE_LOAD:   notifyNpp(NPPN_FILEBEFORELOAD, 0); break;
+        case NIB_EV_READONLY_CHANGED:       notifyNpp(NPPN_READONLYCHANGED,       static_cast<uptr_t>(ev->as.document.id)); break;
+        case NIB_EV_DOC_ORDER_CHANGED:      notifyNpp(NPPN_DOCORDERCHANGED,       static_cast<uptr_t>(ev->as.document.id)); break;
+        case NIB_EV_SNAPSHOT_DIRTY_LOADED:  notifyNpp(NPPN_SNAPSHOTDIRTYFILELOADED,static_cast<uptr_t>(ev->as.document.id)); break;
+        case NIB_EV_FILE_BEFORE_RENAME:     notifyNpp(NPPN_FILEBEFORERENAME,      static_cast<uptr_t>(ev->as.document.id)); break;
+        case NIB_EV_FILE_RENAME_CANCEL:     notifyNpp(NPPN_FILERENAMECANCEL,      static_cast<uptr_t>(ev->as.document.id)); break;
+        case NIB_EV_FILE_RENAMED:           notifyNpp(NPPN_FILERENAMED,           static_cast<uptr_t>(ev->as.document.id)); break;
+        case NIB_EV_FILE_BEFORE_DELETE:     notifyNpp(NPPN_FILEBEFOREDELETE,      static_cast<uptr_t>(ev->as.document.id)); break;
+        case NIB_EV_FILE_DELETE_FAILED:     notifyNpp(NPPN_FILEDELETEFAILED,      static_cast<uptr_t>(ev->as.document.id)); break;
+        case NIB_EV_FILE_DELETED:           notifyNpp(NPPN_FILEDELETED,           static_cast<uptr_t>(ev->as.document.id)); break;
+        case NIB_EV_CMDLINE_PLUGIN_MSG: {
+            const std::wstring msg = wFromUtf8(ev->as.cmdline.msg_utf8);   // widen once; c_str() stays valid for the loop
+            SCNotification scn = {};
+            scn.nmhdr.hwndFrom = reinterpret_cast<void*>(const_cast<wchar_t*>(msg.c_str()));   // N++: the message string lives here
+            scn.nmhdr.code     = NPPN_CMDLINEPLUGINMSG;
+            scn.nmhdr.idFrom   = 0;
+            for (const auto& p : g_plugins) if (p.beNotified) p.beNotified(&scn);
+            break;
+        }
+        default: break;
+    }
+}
+
+// Map a host accelerator key code (a wx key code: uppercase ASCII for letters/digits/punctuation, or a
+// wx WXK_* constant for named keys) to a Notepad++ ShortcutKey virtual-key code (VK_*). Letters/digits
+// are identity (VK_A..VK_Z == 'A'..'Z', VK_0..VK_9 == '0'..'9'); a compact table covers the common named
+// keys. wx WXK_* values are a long-stable wx ABI and the VK numbers are the Win32 ABI this GPL bridge
+// targets - both are just data (no platform call), so this stays portable and needs no <windows.h>.
+static unsigned char wxKeyToVk(uint32_t k)
+{
+    if (k >= 'a' && k <= 'z') return static_cast<unsigned char>(k - 'a' + 'A');   // -> VK_A..VK_Z
+    if (k == 127)             return 0x2E;                                        // WXK_DELETE -> VK_DELETE (ASCII DEL differs)
+    // US-layout OEM punctuation keys: on Win32 the VK_OEM_* codes name the PHYSICAL key, not a character,
+    // so BOTH the unshifted and shifted glyph on the same key (e.g. '-' and '_') map to the same VK -
+    // unlike letters/digits/control keys, ASCII punctuation is NOT its own VK code (checked against
+    // WinUser.h's VK_OEM_1..VK_OEM_7 / VK_OEM_PLUS / VK_OEM_MINUS/COMMA/PERIOD). Falling through to the
+    // "k < 0x80 -> return k" branch below silently handed out raw ASCII here, e.g. '=' (0x3D) instead of
+    // VK_OEM_PLUS (0xBB) for the Ctrl+= zoom-in default - wrong for any plugin comparing against a VK_*
+    // constant. This is a data-only table (no platform call, no #ifdef _WIN32 needed): both the wx WXK_*
+    // input and the VK_* output are just numeric ABI constants, portable on every OS this bridge targets.
+    switch (k) {
+        case '`': case '~': return 0xC0;   // VK_OEM_3
+        case '-': case '_': return 0xBD;   // VK_OEM_MINUS
+        case '=': case '+': return 0xBB;   // VK_OEM_PLUS
+        case '[': case '{': return 0xDB;   // VK_OEM_4
+        case ']': case '}': return 0xDD;   // VK_OEM_6
+        case '\\': case '|': return 0xDC;  // VK_OEM_5
+        case ';': case ':': return 0xBA;   // VK_OEM_1
+        case '\'': case '"': return 0xDE;  // VK_OEM_7
+        case ',': case '<': return 0xBC;   // VK_OEM_COMMA
+        case '.': case '>': return 0xBE;   // VK_OEM_PERIOD
+        case '/': case '?': return 0xBF;   // VK_OEM_2
+        default: break;
+    }
+    if (k < 0x80)             return static_cast<unsigned char>(k);               // A-Z, 0-9, Back/Tab/Return/Escape/Space == their VK
+    if (k >= 340 && k <= 363) return static_cast<unsigned char>(0x70 + (k - 340)); // WXK_F1..WXK_F24 -> VK_F1..VK_F24
+    switch (k) {
+        case 314: return 0x25;  case 315: return 0x26;  case 316: return 0x27;  case 317: return 0x28;  // Left/Up/Right/Down
+        case 313: return 0x24;  case 312: return 0x23;                                                  // Home / End
+        case 366: return 0x21;  case 367: return 0x22;                                                  // PageUp / PageDown
+        case 322: return 0x2D;                                                                          // Insert
+        default:  return static_cast<unsigned char>(k & 0xFF);                                          // any other named key: best effort
     }
 }
 
@@ -471,6 +604,154 @@ static LRESULT putPath(WPARAM wParam, LPARAM lParam, const std::wstring& s)
     if (lParam) copyWideZ(reinterpret_cast<wchar_t*>(lParam), s.c_str(), wParam ? static_cast<int>(wParam) : MAX_PATH);
     return static_cast<LRESULT>(s.size());
 }
+
+// ---- Phase-2 helpers: NppExec-style text/word getters, language tables, misc constants -----------
+// All bridge-internal: they reach nib.sci / nib.paths only, so the whole family lands identically on
+// every OS from the shared router (no HWND, no host hook).
+
+// The host's per-user data dir (nib.paths), wide; empty if unavailable. Backs NPPM_GETNPPSETTINGSDIRPATH
+// (Windows N++ keeps its settings in the registry; wxNote keeps them under this dir on every OS).
+static std::wstring userDataDirW()
+{
+    if (g_host && g_paths && g_paths->user_data_dir) {
+        char buf[2048];
+        const int n = g_paths->user_data_dir(g_host, buf, static_cast<int>(sizeof(buf)));
+        if (n > 0) return wFromUtf8(buf);
+    }
+    return {};
+}
+
+// A raw nib.sci call on the given view (0 if nib.sci is unavailable).
+static intptr_t sciNum(int view, unsigned msg, uintptr_t w = 0, intptr_t l = 0)
+{
+    return g_sci ? g_sci->sci_call(g_host, view, msg, w, l) : 0;
+}
+// Read bytes [start,end) from a view into a UTF-8 std::string, one SCI_GETCHARAT at a time. The ranges
+// these getters need (a word, a filename token, a line) are short, so a bulk Sci_TextRange copy - which
+// would drag the Sci_TextRange struct ABI in - is not worth it.
+static std::string sciByteRange(int view, intptr_t start, intptr_t end)
+{
+    std::string s;
+    for (intptr_t p = start; p < end; ++p)
+        s.push_back(static_cast<char>(sciNum(view, SCI_GETCHARAT, static_cast<uintptr_t>(p), 0) & 0xFF));
+    return s;
+}
+// The word under the caret, or the selection if there is one - NPPM_GETCURRENTWORD.
+static std::wstring currentWordW()
+{
+    const int v = activeView();
+    const intptr_t selS = sciNum(v, SCI_GETSELECTIONSTART), selE = sciNum(v, SCI_GETSELECTIONEND);
+    intptr_t s, e;
+    if (selE > selS) { s = selS; e = selE; }
+    else {
+        const intptr_t c = sciNum(v, SCI_GETCURRENTPOS);
+        s = sciNum(v, SCI_WORDSTARTPOSITION, static_cast<uintptr_t>(c), 1);   // onlyWordCharacters = true
+        e = sciNum(v, SCI_WORDENDPOSITION,   static_cast<uintptr_t>(c), 1);
+    }
+    return wFromUtf8(sciByteRange(v, s, e).c_str());
+}
+// The caret's whole line with its trailing EOL stripped - NPPM_GETCURRENTLINESTR.
+static std::wstring currentLineStrW()
+{
+    const int v = activeView();
+    const intptr_t line = sciNum(v, SCI_LINEFROMPOSITION, static_cast<uintptr_t>(sciNum(v, SCI_GETCURRENTPOS)));
+    const intptr_t ls   = sciNum(v, SCI_POSITIONFROMLINE, static_cast<uintptr_t>(line));
+    const intptr_t len  = sciNum(v, SCI_LINELENGTH, static_cast<uintptr_t>(line));
+    std::string s = sciByteRange(v, ls, ls + len);
+    while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
+    return wFromUtf8(s.c_str());
+}
+// A byte belongs to a filename-at-cursor token: N++'s charset is word chars plus the path punctuation
+// . / \ : - . Bytes >= 0x80 are kept so a non-ASCII (UTF-8) filename is not split mid-character.
+static bool isFnameByte(unsigned char b)
+{
+    return b >= 0x80 || (b >= '0' && b <= '9') || (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z')
+        || b == '_' || b == '.' || b == '/' || b == '\\' || b == ':' || b == '-';
+}
+// The filename-like token under the caret - NPPM_GETFILENAMEATCURSOR (approximate; see isFnameByte).
+static std::wstring filenameAtCursorW()
+{
+    const int v = activeView();
+    const intptr_t caret = sciNum(v, SCI_GETCURRENTPOS);
+    const intptr_t docLen = sciNum(v, SCI_GETLENGTH);
+    intptr_t s = caret, e = caret;
+    while (s > 0     && isFnameByte(static_cast<unsigned char>(sciNum(v, SCI_GETCHARAT, static_cast<uintptr_t>(s - 1), 0) & 0xFF))) --s;
+    while (e < docLen && isFnameByte(static_cast<unsigned char>(sciNum(v, SCI_GETCHARAT, static_cast<uintptr_t>(e),     0) & 0xFF))) ++e;
+    return wFromUtf8(sciByteRange(v, s, e).c_str());
+}
+
+// Copy a bridge-owned (short, bounded) string into the plugin's wchar buffer with a generous cap and
+// return its length. NPPM_GETLANGUAGENAME/DESC pass the LangType in wParam (not a cap), so - matching
+// N++ - the plugin is expected to first call with lParam == NULL to learn the length, then allocate.
+static LRESULT putBoundedStr(LPARAM lParam, const wchar_t* s)
+{
+    const std::wstring w = s ? s : L"";
+    if (lParam) copyWideZ(reinterpret_cast<wchar_t*>(lParam), w.c_str(), 256);
+    return static_cast<LRESULT>(w.size());
+}
+// LangType -> its short display name (NPPM_GETLANGUAGENAME) and human description (NPPM_GETLANGUAGEDESC).
+// The L_* enum is Notepad++ ABI, so - like langTypeForPath/menuIdForLangType - this table lives in the
+// GPL bridge. Only the common languages carry entries; anything else answers an empty string (length 0).
+static void langNameDesc(int lt, const wchar_t** name, const wchar_t** desc)
+{
+    switch (lt) {
+        case L_TEXT:       *name = L"Normal text"; *desc = L"Normal text file"; return;
+        case L_C:          *name = L"C";           *desc = L"C source file"; return;
+        case L_CPP:        *name = L"C++";         *desc = L"C++ source file"; return;
+        case L_CS:         *name = L"C#";          *desc = L"C# source file"; return;
+        case L_OBJC:       *name = L"Objective-C"; *desc = L"Objective-C source file"; return;
+        case L_JAVA:       *name = L"Java";        *desc = L"Java source file"; return;
+        case L_RC:         *name = L"RC";          *desc = L"Windows resource file"; return;
+        case L_HTML:       *name = L"HTML";        *desc = L"Hyper Text Markup Language file"; return;
+        case L_XML:        *name = L"XML";         *desc = L"eXtensible Markup Language file"; return;
+        case L_CSS:        *name = L"CSS";         *desc = L"Cascade Style Sheets file"; return;
+        case L_JAVASCRIPT: *name = L"JavaScript";  *desc = L"JavaScript file"; return;
+        case L_TYPESCRIPT: *name = L"TypeScript";  *desc = L"TypeScript file"; return;
+        case L_JSON:       *name = L"JSON";        *desc = L"JSON file"; return;
+        case L_PHP:        *name = L"PHP";         *desc = L"PHP Hypertext Preprocessor file"; return;
+        case L_PYTHON:     *name = L"Python";      *desc = L"Python file"; return;
+        case L_PERL:       *name = L"Perl";        *desc = L"Perl source file"; return;
+        case L_RUBY:       *name = L"Ruby";        *desc = L"Ruby source file"; return;
+        case L_LUA:        *name = L"Lua";         *desc = L"Lua source file"; return;
+        case L_SQL:        *name = L"SQL";         *desc = L"Structured Query Language file"; return;
+        case L_BASH:       *name = L"Shell";       *desc = L"Unix script file"; return;
+        case L_BATCH:      *name = L"Batch";       *desc = L"Batch file"; return;
+        case L_POWERSHELL: *name = L"PowerShell";  *desc = L"PowerShell file"; return;
+        case L_INI:        *name = L"ini";         *desc = L"MS ini file"; return;
+        case L_YAML:       *name = L"YAML";        *desc = L"YAML Ain't Markup Language file"; return;
+        case L_MAKEFILE:   *name = L"Makefile";    *desc = L"Makefile"; return;
+        case L_DIFF:       *name = L"Diff";        *desc = L"Diff file"; return;
+        case L_RUST:       *name = L"Rust";        *desc = L"Rust source file"; return;
+        case L_GOLANG:     *name = L"Go";          *desc = L"Go source file"; return;
+        default:           *name = L"";            *desc = L""; return;
+    }
+}
+
+#ifdef _WIN32
+// The running Windows edition as a Notepad++ winVer enum. Uses RtlGetVersion (ntdll) - it reports the
+// TRUE OS version, unlike GetVersionEx which caps at 6.2 without an app-compat manifest we do not carry.
+// This is the one small, self-contained #ifdef the message needs: a Windows version is a Windows fact,
+// so off-Windows the router answers WV_UNKNOWN (the honest cross-platform value; see below).
+static int windowsVersionEnum()
+{
+    typedef LONG (WINAPI *RtlGetVersionFn)(void*);
+    OSVERSIONINFOW osvi = {}; osvi.dwOSVersionInfoSize = sizeof(osvi);
+    if (HMODULE nt = ::GetModuleHandleW(L"ntdll.dll"))
+        if (auto fn = reinterpret_cast<RtlGetVersionFn>(reinterpret_cast<void*>(::GetProcAddress(nt, "RtlGetVersion"))))
+            fn(&osvi);
+    const DWORD maj = osvi.dwMajorVersion, mnr = osvi.dwMinorVersion, build = osvi.dwBuildNumber;
+    if (maj == 10)                 return build >= 22000 ? WV_WIN11 : WV_WIN10;   // Win11 == build 22000+
+    if (maj == 6 && mnr == 3)      return WV_WIN81;
+    if (maj == 6 && mnr == 2)      return WV_WIN8;
+    if (maj == 6 && mnr == 1)      return WV_WIN7;
+    if (maj == 6 && mnr == 0)      return WV_VISTA;
+    return WV_UNKNOWN;
+}
+#endif
+
+// wxNote's Scintilla buffers always hold UTF-8 (SC_CP_UTF8), so NPPM_ENCODESCI/DECODESCI are no-ops that
+// honestly report the UTF-8 UniMode. (Notepad++ UniMode enum: uni8Bit=0, uniUTF8=1, ...)
+static constexpr LRESULT kNppUniModeUtf8 = 1;
 
 // ---- Phase-1 helpers: plugin relay, allocated-command dispatch, dark palette, language map -------
 
@@ -699,13 +980,68 @@ static bool hiconToRgba(HICON hic, std::vector<unsigned char>& rgba, int& w, int
 }
 #endif // _WIN32
 
+// ---- Phase-3 helpers: per-view buffer model translation (nib.documents v5 <-> the N++ buffer ABI) ----
+// wxNote's on-disk encoding enum (nib.documents v5 encoding_get/set_by_id) <-> Notepad++'s UniMode (the
+// NPPM_*BUFFERENCODING ABI). Kept in this GPL bridge because UniMode is N++ ABI; the host speaks only its
+// own Enc. Host Enc:  0=UTF-8, 1=UTF-8 BOM, 2=UTF-16 LE, 3=UTF-16 BE, 4=ANSI, 5=codepage.
+// N++ UniMode: uni8Bit=0, uniUTF8=1(BOM), uni16BE=2, uni16LE=3, uniCookie=4(UTF-8 no BOM), uni7Bit=5,
+//              uni16BE_NoBOM=6, uni16LE_NoBOM=7.
+static int wxEncToUniMode(int enc)
+{
+    switch (enc) {
+        case 0:  return 4;   // UTF-8 (no BOM) -> uniCookie
+        case 1:  return 1;   // UTF-8 BOM      -> uniUTF8
+        case 2:  return 3;   // UTF-16 LE      -> uni16LE
+        case 3:  return 2;   // UTF-16 BE      -> uni16BE
+        case 4:  return 0;   // ANSI           -> uni8Bit
+        case 5:  return 0;   // codepage       -> uni8Bit (closest: a codepage-based 8-bit encoding)
+        default: return 0;
+    }
+}
+static int uniModeToWxEnc(int uni)
+{
+    switch (uni) {
+        case 0:  return 4;   // uni8Bit       -> ANSI
+        case 1:  return 1;   // uniUTF8       -> UTF-8 BOM
+        case 2:  return 3;   // uni16BE       -> UTF-16 BE
+        case 3:  return 2;   // uni16LE       -> UTF-16 LE
+        case 4:  return 0;   // uniCookie     -> UTF-8 (no BOM)
+        case 5:  return 0;   // uni7Bit       -> UTF-8 (7-bit ASCII is a UTF-8 subset)
+        case 6:  return 3;   // uni16BE_NoBOM -> UTF-16 BE (the host always writes the BOM - documented)
+        case 7:  return 2;   // uni16LE_NoBOM -> UTF-16 LE
+        default: return -1;  // unknown UniMode -> reject
+    }
+}
+// Copy up to `nbFile` (lParam) open-document paths of ONE view into the plugin's wchar_t*[] (wParam),
+// mirroring NPPM_GETOPENFILENAMES but for a single view. Needs nib.documents v5 (per-view enumeration);
+// returns the number of slots filled. Serves NPPM_GETOPENFILENAMES{PRIMARY,SECOND}_DEPRECATED.
+static LRESULT putOpenFilenames(WPARAM wParam, LPARAM lParam, int view)
+{
+    wchar_t** names = reinterpret_cast<wchar_t**>(wParam);
+    const int nb = static_cast<int>(lParam);
+    if (!names || !g_docs || g_docs->version < 5 || !g_docs->view_count || !g_docs->id_at) return 0;
+    const int total = g_docs->view_count(g_host, view);
+    int filled = 0;
+    for (; filled < nb && filled < total; ++filled) {
+        const std::wstring p = pathFromIdW(g_docs->id_at(g_host, view, filled));
+        if (names[filled]) copyWideZ(names[filled], p.c_str(), MAX_PATH);
+    }
+    return filled;
+}
+
 static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& out)
 {
     switch (msg) {
         case NPPM_GETCURRENTSCINTILLA: if (lParam) *reinterpret_cast<int*>(lParam) = activeView(); out = TRUE; return true;   // 0=main, 1=sub
         case NPPM_GETCURRENTLANGTYPE:  if (lParam) *reinterpret_cast<int*>(lParam) = langTypeForPath(activePathW()); out = TRUE; return true;
         case NPPM_GETNPPVERSION:       out = MAKELONG(96, 8); return true;
-        case NPPM_GETNBOPENFILES:      out = g_docs ? g_docs->count(g_host) : 1; return true;
+        case NPPM_GETNBOPENFILES:      // lParam filters the count: ALL_OPEN_FILES=0 / PRIMARY_VIEW=1 / SECOND_VIEW=2
+            if (g_docs && g_docs->version >= 5 && g_docs->view_count) {
+                if      (lParam == PRIMARY_VIEW) out = g_docs->view_count(g_host, 0);
+                else if (lParam == SECOND_VIEW)  out = g_docs->view_count(g_host, 1);
+                else                             out = g_docs->view_count(g_host, 0) + g_docs->view_count(g_host, 1);
+            } else out = g_docs ? g_docs->count(g_host) : 1;   // pre-v5 host: total only (filter unavailable)
+            return true;
         case NPPM_GETOPENFILENAMES_DEPRECATED: {   // classic "list every open file's path" (the value plugins still send)
             wchar_t** names = reinterpret_cast<wchar_t**>(wParam);
             const int nb = static_cast<int>(lParam);
@@ -908,6 +1244,369 @@ static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& o
             out = (g_alloc && g_alloc->alloc_indicators && lParam
                    && g_alloc->alloc_indicators(g_host, static_cast<int>(wParam), reinterpret_cast<int*>(lParam))) ? TRUE : FALSE;
             return true;
+
+        // ================================================================================================
+        //  Phase 2 - trivial sweep: NppExec/PythonScript-style getters + constants, all bridge-internal.
+        // ================================================================================================
+        // NppExec's $(CURRENT_WORD)/$(CURRENT_LINESTR)/$(GETFILENAMEATCURSOR) variables, via nib.sci.
+        case NPPM_GETCURRENTWORD:        out = putPath(wParam, lParam, currentWordW()); return true;
+        case NPPM_GETCURRENTLINESTR:     out = putPath(wParam, lParam, currentLineStrW()); return true;
+        case NPPM_GETFILENAMEATCURSOR:   out = putPath(wParam, lParam, filenameAtCursorW()); return true;
+        case NPPM_GETNPPFULLFILEPATH:    out = putPath(wParam, lParam, exeFullPathW()); return true;
+        case NPPM_GETNPPSETTINGSDIRPATH: if (lParam) copyWideZ(reinterpret_cast<wchar_t*>(lParam), userDataDirW().c_str(), wParam ? static_cast<int>(wParam) : MAX_PATH); out = TRUE; return true;
+        case NPPM_GETCURRENTNATIVELANGENCODING: out = 65001; return true;   // wxNote's native-language files are UTF-8 (code page 65001)
+        case NPPM_GETWINDOWSVERSION:
+#ifdef _WIN32
+            out = windowsVersionEnum();
+#else
+            out = WV_UNKNOWN;   // a Windows version is a Windows fact; WV_UNKNOWN is the honest answer off-Windows
+#endif
+            return true;
+        case NPPM_GETCURRENTCMDLINE:
+#ifdef _WIN32
+            out = putPath(wParam, lParam, ::GetCommandLineW());
+#else
+            // Off-Windows the bridge cannot reach the process command line without a host hook (deferred);
+            // report an empty string rather than a Linux-only /proc read that would not work on macOS.
+            out = putPath(wParam, lParam, L"");
+#endif
+            return true;
+        case NPPM_GETLANGUAGENAME: { const wchar_t* nm; const wchar_t* ds; langNameDesc(static_cast<int>(wParam), &nm, &ds); out = putBoundedStr(lParam, nm); return true; }
+        case NPPM_GETLANGUAGEDESC: { const wchar_t* nm; const wchar_t* ds; langNameDesc(static_cast<int>(wParam), &nm, &ds); out = putBoundedStr(lParam, ds); return true; }
+        case NPPM_GETBOOKMARKID:   out = 2; return true;   // MARK_BOOKMARK (host-frozen; see main.cpp's MARK_BOOKMARK = 2)
+        case NPPM_GETAPPDATAPLUGINSALLOWED:
+            // wxNote has no N++-style "block %APPDATA% plugins" lock-down: plugins always load from the
+            // user-writable data dir, so the honest, cross-platform answer is TRUE (allowed).
+            out = TRUE; return true;
+        case NPPM_SETSMOOTHFONT:
+            // lParam != 0 -> LCD-optimised antialiasing, else the platform default; applied to both views.
+            if (g_sci) { const intptr_t q = lParam ? SC_EFF_QUALITY_LCD_OPTIMIZED : SC_EFF_QUALITY_DEFAULT;
+                         g_sci->sci_call(g_host, 0, SCI_SETFONTQUALITY, static_cast<uintptr_t>(q), 0);
+                         g_sci->sci_call(g_host, 1, SCI_SETFONTQUALITY, static_cast<uintptr_t>(q), 0); }
+            out = TRUE; return true;
+        case NPPM_LAUNCHFINDINFILESDLG:
+            // Open the host's Find in Files dialog (frozen IDM_SEARCH_FINDINFILES), through the wx command
+            // dispatcher. The dir2Search (wParam) / filter (lParam) prefill args are dropped (documented).
+            if (g_cmds && g_cmds->version >= 2 && g_cmds->invoke_command) g_cmds->invoke_command(g_host, IDM_SEARCH_FINDINFILES);
+            out = TRUE; return true;
+        case NPPM_RELOADBUFFERID: {
+            // wParam = buffer id to reload (lParam's "with alert" flag not honoured). Resolve its path,
+            // switch to it, then File > Reload re-reads the now-active buffer from disk - as NPPM_RELOADFILE.
+            const std::wstring p = pathFromIdW(static_cast<intptr_t>(wParam));
+            if (p.empty() || !g_docs || !g_docs->open(g_host, toUtf8(p.c_str()).c_str())) { out = FALSE; return true; }
+            if (g_cmds && g_cmds->version >= 2 && g_cmds->invoke_command) g_cmds->invoke_command(g_host, IDM_FILE_RELOAD);
+            out = TRUE; return true;
+        }
+
+        // ================================================================================================
+        //  Phase 3 - per-view buffer model + per-buffer properties, all served from nib.documents v5.
+        //  Buffer ids are the host's opaque per-document ids (wParam where the ABI passes a BufferID). All
+        //  cross-platform: buffer ids, per-view enumeration and background-buffer save/peek are portable.
+        // ================================================================================================
+        // -- enumeration + addressing (view 0 = MAIN, 1 = SUB) --
+        case NPPM_GETCURRENTDOCINDEX:     // wParam 0, lParam = view; 0-based index of that view's active doc, -1 if empty/hidden
+            out = (g_docs && g_docs->version >= 5 && g_docs->index_of_active)
+                ? g_docs->index_of_active(g_host, static_cast<int>(lParam)) : -1;
+            return true;
+        case NPPM_ACTIVATEDOC:            // wParam = view, lParam = index; select+focus that document
+            out = (g_docs && g_docs->version >= 5 && g_docs->activate_at
+                   && g_docs->activate_at(g_host, static_cast<int>(wParam), static_cast<int>(lParam))) ? TRUE : FALSE;
+            return true;
+        case NPPM_GETPOSFROMBUFFERID: {   // wParam = bufferID, lParam = priorityView; -> (view<<30)|index, or -1
+            int view = 0, index = 0;
+            if (!g_docs || g_docs->version < 5 || !g_docs->pos_of
+                || !g_docs->pos_of(g_host, static_cast<intptr_t>(wParam), static_cast<int>(lParam), &view, &index))
+            { out = -1; return true; }
+            out = (static_cast<LRESULT>(view) << 30) | index;   // N++ packing: view in the 2 high bits, index in the low 30
+            return true;
+        }
+        case NPPM_GETBUFFERIDFROMPOS:     // wParam = index, lParam = view; -> the buffer id, or 0 (NULL) if out of range
+            out = (g_docs && g_docs->version >= 5 && g_docs->id_at)
+                ? static_cast<LRESULT>(g_docs->id_at(g_host, static_cast<int>(lParam), static_cast<int>(wParam))) : 0;
+            return true;
+        case NPPM_GETOPENFILENAMESPRIMARY_DEPRECATED:  out = putOpenFilenames(wParam, lParam, 0); return true;   // main view only
+        case NPPM_GETOPENFILENAMESSECOND_DEPRECATED:   out = putOpenFilenames(wParam, lParam, 1); return true;   // sub view only
+        // -- per-buffer properties (wParam = bufferID) --
+        case NPPM_SETBUFFERLANGTYPE: {    // lParam = LangType; force it via the host's frozen IDM_LANG_* command
+            const int cmdId = menuIdForLangType(static_cast<int>(lParam));
+            out = (cmdId && g_docs && g_docs->version >= 5 && g_docs->set_lang_by_id
+                   && g_docs->set_lang_by_id(g_host, static_cast<intptr_t>(wParam), cmdId)) ? TRUE : FALSE;
+            return true;
+        }
+        case NPPM_GETBUFFERENCODING: {    // -> the buffer's UniMode (host Enc translated), or -1
+            if (!g_docs || g_docs->version < 5 || !g_docs->encoding_get_by_id) { out = -1; return true; }
+            const int enc = g_docs->encoding_get_by_id(g_host, static_cast<intptr_t>(wParam));
+            out = (enc < 0) ? -1 : wxEncToUniMode(enc);
+            return true;
+        }
+        case NPPM_SETBUFFERENCODING: {    // lParam = UniMode; save-to-apply (documented divergence from N++)
+            if (!g_docs || g_docs->version < 5 || !g_docs->encoding_set_by_id) { out = FALSE; return true; }
+            const int enc = uniModeToWxEnc(static_cast<int>(lParam));
+            out = (enc >= 0 && g_docs->encoding_set_by_id(g_host, static_cast<intptr_t>(wParam), enc)) ? TRUE : FALSE;
+            return true;
+        }
+        case NPPM_GETBUFFERFORMAT:        // -> the buffer's EOL mode (SC_EOL_* == N++ EolType: 0=CRLF,1=CR,2=LF), or -1
+            out = (g_docs && g_docs->version >= 5 && g_docs->eol_get_by_id)
+                ? g_docs->eol_get_by_id(g_host, static_cast<intptr_t>(wParam)) : -1;
+            return true;
+        case NPPM_SETBUFFERFORMAT:        // lParam = EolType; convert the buffer's line endings + mark it dirty
+            out = (g_docs && g_docs->version >= 5 && g_docs->eol_set_by_id
+                   && g_docs->eol_set_by_id(g_host, static_cast<intptr_t>(wParam), static_cast<int>(lParam))) ? TRUE : FALSE;
+            return true;
+        case NPPM_GETTABCOLORID: {        // wParam = view (-1 = current), lParam = tabIndex (-1 = current); -> slot 0..4 or -1
+            if (!g_docs || g_docs->version < 5 || !g_docs->tab_color_id) { out = -1; return true; }
+            int view = static_cast<int>(wParam), index = static_cast<int>(lParam);
+            if (view < 0) view = activeView();
+            if (index < 0) index = (g_docs->index_of_active ? g_docs->index_of_active(g_host, view) : -1);
+            out = (index < 0) ? -1 : g_docs->tab_color_id(g_host, view, index);
+            return true;
+        }
+        // -- save / dirty / rename --
+        case NPPM_SAVECURRENTFILEAS: {    // wParam = asCopy (BOOL), lParam = full path to save to
+            const wchar_t* wp = reinterpret_cast<const wchar_t*>(lParam);
+            out = (wp && *wp && g_docs && g_docs->version >= 5 && g_docs->save_active_as
+                   && g_docs->save_active_as(g_host, toUtf8(wp).c_str(), wParam ? 1 : 0)) ? TRUE : FALSE;
+            return true;
+        }
+        case NPPM_SAVEFILE: {             // lParam = full path of an ALREADY-OPEN file to save (any view)
+            const wchar_t* wp = reinterpret_cast<const wchar_t*>(lParam);
+            out = FALSE;
+            if (!wp || !*wp || !g_docs || g_docs->version < 5 || !g_docs->view_count || !g_docs->id_at || !g_docs->save_by_id) return true;
+            const std::wstring want = wp;
+            for (int view = 0; view < 2 && out == FALSE; ++view) {
+                const int n = g_docs->view_count(g_host, view);
+                for (int i = 0; i < n; ++i) {
+                    const intptr_t id = g_docs->id_at(g_host, view, i);
+                    if (id && pathFromIdW(id) == want) { out = g_docs->save_by_id(g_host, id) ? TRUE : FALSE; break; }
+                }
+            }
+            return true;
+        }
+        case NPPM_MAKECURRENTBUFFERDIRTY:
+            out = (g_docs && g_docs->version >= 5 && g_docs->set_dirty_active && g_docs->set_dirty_active(g_host)) ? TRUE : FALSE;
+            return true;
+        case NPPM_SETUNTITLEDNAME: {      // wParam = bufferID (0 = active), lParam = the new tab label (not a path)
+            const wchar_t* wn = reinterpret_cast<const wchar_t*>(lParam);
+            if (!wn || !*wn || !g_docs || g_docs->version < 5 || !g_docs->rename_untitled) { out = FALSE; return true; }
+            intptr_t id = static_cast<intptr_t>(wParam);
+            if (!id && g_docs->version >= 2 && g_docs->active_id) id = g_docs->active_id(g_host);   // 0 -> the active buffer (convenience)
+            out = (id && g_docs->rename_untitled(g_host, id, toUtf8(wn).c_str())) ? TRUE : FALSE;
+            return true;
+        }
+
+        // ================================================================================================
+        //  Documented no-op / interim stubs. From here every one of the 118 NPPM_* returns a documented
+        //  value - there are ZERO silent drops (plugins branch on return values). None of these is counted
+        //  as implemented coverage; each returns the honest constant for what this host can answer today.
+        //  Values identical on every platform (no fragile Windows-only paths); see the bridge README table.
+        // ================================================================================================
+
+        // -- "wont" / ABI-correct no-ops (deprecated, or conceptually void in an always-UTF-8 host) -------
+        case NPPM_DESTROYSCINTILLAHANDLE_DEPRECATED: out = TRUE; return true;   // N++ itself no-ops it
+        case NPPM_ENCODESCI:
+        case NPPM_DECODESCI:                         out = kNppUniModeUtf8; return true;   // buffers are always UTF-8
+        case NPPM_GETENABLETHEMETEXTUREFUNC_DEPRECATED: out = 0; return true;   // deprecated Win-theming fn ptr
+        case NPPM_DOCLISTDISABLEEXTCOLUMN:
+        case NPPM_DOCLISTDISABLEPATHCOLUMN:          out = TRUE; return true;   // the host doc list has no columns to disable
+        case NPPM_DISABLEAUTOUPDATE:                 out = TRUE; return true;   // no auto-updater exists to disable
+        case NPPM_GETSETTINGSONCLOUDPATH:            out = putPath(wParam, lParam, L""); return true;   // no cloud-settings concept
+        case NPPM_GETEXTERNALLEXERAUTOINDENTMODE:
+        case NPPM_SETEXTERNALLEXERAUTOINDENTMODE:    out = FALSE; return true;   // external-lexer concept replaced by Scintillua
+
+        // -- Annex W (HWND-bound): INTENTIONALLY UNSUPPORTED - portable no-ops. These four take/return real
+        //    payload HWNDs a recompiled plugin can never produce, and N++ implements them with native window
+        //    subclassing / IsDialogMessage relays / SetWindowLongPtr. Rather than a fragile Windows-only path,
+        //    the bridge answers the SAME honest value on EVERY OS (the user's portability rule; see the bridge
+        //    README's "Annex W" table). ----------------------------------------------------------------------
+        case NPPM_MODELESSDIALOG:      out = lParam; return true;   // accept + echo the passed handle (N++'s own return for ADD/REMOVE); no IsDialogMessage relay, so keyboard nav falls to the OS default pump
+        case NPPM_DMMVIEWOTHERTAB:     out = 0; return true;        // cannot switch a docked container's tab (no docking-tab tracking): NULL
+        case NPPM_DMMGETPLUGINHWNDBYNAME: out = 0; return true;     // no plugin dialog HWND to hand back: NULL
+        case NPPM_SETEDITORBORDEREDGE: out = FALSE; return true;    // cannot set WS_EX_CLIENTEDGE on an editor HWND portably: FALSE (not applied)
+
+        // -- Hard tail: host-owned dynamic Scintilla handles / zero-height tab bar / per-control dark
+        //    subclassing are not built; the interim documented constants degrade gracefully. --------------
+        case NPPM_CREATESCINTILLAHANDLE:     out = 0; return true;       // NULL: no host-owned hidden editors yet
+        case NPPM_HIDETABBAR:
+        case NPPM_ISTABBARHIDDEN:            out = FALSE; return true;   // tab bar is always shown
+        case NPPM_DARKMODESUBCLASSANDTHEME:  out = 0; return true;       // plugin dialogs stay light (graceful)
+
+        // ================================================================================================
+        //  Phase 4 - event fidelity: the SCN-modified opt-in + the effective-shortcut lookup.
+        // ================================================================================================
+        case NPPM_ADDSCNMODIFIEDFLAGS:
+            // lParam = SCN modificationType flags to ADD to the forwarded set (N++'s global
+            // _scintillaModifiedFlags accumulator). OR them in and push the running union to the host so it
+            // filters SCN_MODIFIED per modification BEFORE crossing the ABI - the perf gate. Needs
+            // nib.events v3; on an older host there is no host-side filter, so the opt-in cannot be honoured.
+            g_scnModifiedMask |= static_cast<unsigned>(lParam);
+            if (g_eventsV3 && g_eventsV3->set_modified_mask) g_eventsV3->set_modified_mask(g_host, g_scnModifiedMask);
+            out = TRUE; return true;
+        case NPPM_GETSHORTCUTBYCMDID: {
+            // wParam = command id, lParam = ShortcutKey* to fill. TRUE (and fills *sk) iff a shortcut is
+            // bound. The host reports the effective binding as portable modifiers + key (nib.keymap v2);
+            // this GPL bridge maps the key code to the N++ ShortcutKey virtual-key ABI (wxKeyToVk).
+            auto* sk = reinterpret_cast<ShortcutKey*>(lParam);
+            uint32_t mods = 0, key = 0;
+            if (!sk || !g_keymap || g_keymap->version < 2 || !g_keymap->effective_shortcut
+                || !g_keymap->effective_shortcut(g_host, static_cast<int>(wParam), &mods, &key)) { out = FALSE; return true; }
+            sk->_isCtrl  = (mods & 1) != 0;
+            sk->_isAlt   = (mods & 2) != 0;
+            sk->_isShift = (mods & 4) != 0;
+            sk->_key     = wxKeyToVk(key);
+            out = TRUE; return true;
+        }
+
+        // ================================================================================================
+        //  Phase 5 - sessions (nib.session), UI-chrome + editor state (nib.ui v2), lexer registry
+        //  (nib.lexer). All cross-platform: session XML is by-path, chrome visibility is a portable model
+        //  (the macOS global menubar is a documented no-op, NOT a per-platform detach hack), and Lexilla's
+        //  CreateLexer is built into the host on every OS.
+        // ================================================================================================
+        // -- sessions (all by explicit path; the written XML is Notepad++-session-parseable) --
+        case NPPM_SAVECURRENTSESSION: {   // lParam = session file path; save the currently-open files
+            const wchar_t* path = reinterpret_cast<const wchar_t*>(lParam);
+            out = 0;
+            if (path && *path && g_session && g_session->save_current
+                && g_session->save_current(g_host, toUtf8(path).c_str()))
+                out = static_cast<LRESULT>(lParam);   // N++ returns the session path on success, NULL otherwise
+            return true;
+        }
+        case NPPM_SAVESESSION: {          // lParam = sessionInfo* (explicit file list to save)
+            const sessionInfo* si = reinterpret_cast<const sessionInfo*>(lParam);
+            out = 0;
+            if (!si || !si->sessionFilePathName || !g_session || !g_session->save_files) return true;
+            std::vector<std::string> utf8;   // own the UTF-8 conversions...
+            std::vector<const char*> ptrs;   // ...then a stable const char*[] for the ABI
+            for (int i = 0; i < si->nbFile; ++i) utf8.push_back(si->files && si->files[i] ? toUtf8(si->files[i]) : std::string());
+            for (const auto& s : utf8) ptrs.push_back(s.c_str());
+            if (g_session->save_files(g_host, toUtf8(si->sessionFilePathName).c_str(),
+                                      ptrs.empty() ? nullptr : ptrs.data(), static_cast<int>(ptrs.size())))
+                out = reinterpret_cast<LRESULT>(si->sessionFilePathName);   // N++ returns the path back
+            return true;
+        }
+        case NPPM_LOADSESSION: {          // lParam = session file path; open its files
+            const wchar_t* path = reinterpret_cast<const wchar_t*>(lParam);
+            out = (path && *path && g_session && g_session->load
+                   && g_session->load(g_host, toUtf8(path).c_str())) ? TRUE : FALSE;
+            return true;
+        }
+        case NPPM_GETNBSESSIONFILES: {    // wParam = optional BOOL* pbIsValidXML, lParam = session file path
+            const wchar_t* path = reinterpret_cast<const wchar_t*>(lParam);
+            BOOL* valid = reinterpret_cast<BOOL*>(wParam);
+            if (valid) *valid = FALSE;
+            out = 0;
+            if (!path || !*path || !g_session || !g_session->file_count) return true;
+            int v = 0;
+            out = g_session->file_count(g_host, toUtf8(path).c_str(), &v);
+            if (valid) *valid = v ? TRUE : FALSE;
+            return true;
+        }
+        case NPPM_GETSESSIONFILES: {      // wParam = wchar_t** (caller-sized via GETNBSESSIONFILES), lParam = path
+            wchar_t** arr = reinterpret_cast<wchar_t**>(wParam);
+            const wchar_t* path = reinterpret_cast<const wchar_t*>(lParam);
+            out = FALSE;
+            if (!arr || !path || !*path || !g_session || !g_session->file_count || !g_session->file_at) return true;
+            const std::string p = toUtf8(path);
+            const int n = g_session->file_count(g_host, p.c_str(), nullptr);
+            for (int i = 0; i < n; ++i) {
+                char buf[MAX_PATH * 3] = {0};
+                g_session->file_at(g_host, p.c_str(), i, buf, static_cast<int>(sizeof(buf)));
+                if (arr[i]) copyWideZ(arr[i], wFromUtf8(buf).c_str(), MAX_PATH);
+            }
+            out = TRUE; return true;
+        }
+        // -- UI chrome visibility (nib.ui v2). HIDE* return the OLD hidden status; IS* return TRUE when
+        //    hidden. which: 0 = toolbar, 1 = menubar, 2 = statusbar, 3 = doc list. --
+        case NPPM_HIDETOOLBAR: {          // lParam = hideOrNot
+            if (!g_ui || g_ui->version < 2 || !g_ui->chrome_set) { out = FALSE; return true; }
+            const int wasVisible = g_ui->chrome_set(g_host, 0, lParam ? 0 : 1);
+            out = wasVisible ? FALSE : TRUE;   // old status = was it hidden
+            return true;
+        }
+        case NPPM_ISTOOLBARHIDDEN:
+            out = (g_ui && g_ui->version >= 2 && g_ui->chrome_get && !g_ui->chrome_get(g_host, 0)) ? TRUE : FALSE;
+            return true;
+        case NPPM_HIDEMENU: {             // lParam = hideOrNot. Portable documented no-op: the menubar stays
+            if (!g_ui || g_ui->version < 2 || !g_ui->chrome_set) { out = FALSE; return true; }
+            const int wasVisible = g_ui->chrome_set(g_host, 1, lParam ? 0 : 1);   // always returns 1 (stays shown)
+            out = wasVisible ? FALSE : TRUE;
+            return true;
+        }
+        case NPPM_ISMENUHIDDEN:           // menubar is a documented no-op -> never hidden
+            out = (g_ui && g_ui->version >= 2 && g_ui->chrome_get && !g_ui->chrome_get(g_host, 1)) ? TRUE : FALSE;
+            return true;
+        case NPPM_HIDESTATUSBAR: {        // lParam = hideOrNot
+            if (!g_ui || g_ui->version < 2 || !g_ui->chrome_set) { out = FALSE; return true; }
+            const int wasVisible = g_ui->chrome_set(g_host, 2, lParam ? 0 : 1);
+            out = wasVisible ? FALSE : TRUE;
+            return true;
+        }
+        case NPPM_ISSTATUSBARHIDDEN:
+            out = (g_ui && g_ui->version >= 2 && g_ui->chrome_get && !g_ui->chrome_get(g_host, 2)) ? TRUE : FALSE;
+            return true;
+        case NPPM_SHOWDOCLIST:            // lParam = showOrNot (SHOW, not toggle)
+            if (g_ui && g_ui->version >= 2 && g_ui->chrome_set) g_ui->chrome_set(g_host, 3, lParam ? 1 : 0);
+            out = TRUE; return true;
+        case NPPM_ISDOCLISTSHOWN:
+            out = (g_ui && g_ui->version >= 2 && g_ui->chrome_get && g_ui->chrome_get(g_host, 3)) ? TRUE : FALSE;
+            return true;
+        // -- line-number margin width mode + the editor/UI state getters (nib.ui v2) --
+        case NPPM_SETLINENUMBERWIDTHMODE:   // lParam = LINENUMWIDTH_DYNAMIC(0) / _CONSTANT(1)
+            out = (g_ui && g_ui->version >= 2 && g_ui->width_mode_set
+                   && g_ui->width_mode_set(g_host, static_cast<int>(lParam))) ? TRUE : FALSE;
+            return true;
+        case NPPM_GETLINENUMBERWIDTHMODE:
+            out = (g_ui && g_ui->version >= 2 && g_ui->width_mode_get)
+                ? g_ui->width_mode_get(g_host) : LINENUMWIDTH_DYNAMIC;
+            return true;
+        case NPPM_ISAUTOINDENTON:
+            out = (g_ui && g_ui->version >= 2 && g_ui->auto_indent_on && g_ui->auto_indent_on(g_host)) ? TRUE : FALSE;
+            return true;
+        case NPPM_GETCURRENTMACROSTATUS:    // 0 Idle / 1 RecordInProgress / 2 RecordingStopped / 3 PlayingBack
+            out = (g_ui && g_ui->version >= 2 && g_ui->macro_state)
+                ? g_ui->macro_state(g_host) : static_cast<LRESULT>(MacroStatus::Idle);
+            return true;
+        case NPPM_GETTOOLBARICONSETCHOICE:  // the host's own toolbar icon-set ordering (approximate mapping)
+            out = (g_ui && g_ui->version >= 2 && g_ui->icon_set_choice) ? g_ui->icon_set_choice(g_host) : 0;
+            return true;
+        case NPPM_GETNATIVELANGFILENAME: {
+            // N++ hands back the native-language xml filename; wxNote localises via gettext catalogs (no
+            // such file), so - honestly, not a fabricated ".xml" name - it reports the active UI locale
+            // canonical name ("en"/"pl"/...). Writes a CHAR buffer (lParam), length cap in wParam.
+            char buf[128] = {0};
+            if (g_ui && g_ui->version >= 2 && g_ui->locale_name) g_ui->locale_name(g_host, buf, static_cast<int>(sizeof(buf)));
+            const std::string s = buf;
+            const int cap = static_cast<int>(wParam);   // buffer capacity; N++ callers pass it (0 => length probe only)
+            if (lParam && cap > 0) {
+                char* dst = reinterpret_cast<char*>(lParam);
+                int i = 0;
+                for (; i < cap - 1 && s[i]; ++i) dst[i] = s[i];
+                dst[i] = '\0';
+            }
+            out = static_cast<LRESULT>(s.size());
+            return true;
+        }
+        // -- lexer registry (nib.lexer): Lexilla CreateLexer + the user-language count --
+        case NPPM_CREATELEXER: {           // lParam = lexer name (wide); -> ILexer* as LRESULT, or NULL
+            const wchar_t* wn = reinterpret_cast<const wchar_t*>(lParam);
+            out = (wn && *wn && g_lexer && g_lexer->create_lexer)
+                ? static_cast<LRESULT>(g_lexer->create_lexer(g_host, toUtf8(wn).c_str())) : 0;
+            return true;
+        }
+        case NPPM_GETNBUSERLANG:
+            out = (g_lexer && g_lexer->user_lang_count) ? g_lexer->user_lang_count(g_host) : 0;
+            return true;
+
+        // -- Phase 5, deliberately NOT implemented (documented no-op FALSE; see the bridge README) -------
+        //  * NPPM_REMOVESHORTCUTBYCMDID: removing a binding by command id would mutate the user's ACTIVE
+        //    keymap scheme in place - which the nib.keymap contract categorically forbids a plugin from
+        //    doing (bindings are scheme-scoped, never live-scheme mutations). Plugin FuncItem commands
+        //    carry no keymap entry to remove anyway, so FALSE (nothing removed) is the honest answer.
+        //  * NPPM_TRIGGERTABBARCONTEXTMENU: popping a context menu needs a real right-click position/UI
+        //    context a message cannot supply; rule-1 (no fragile hacks) -> a clean documented no-op.
+        case NPPM_REMOVESHORTCUTBYCMDID:
+        case NPPM_TRIGGERTABBARCONTEXTMENU:  out = FALSE; return true;
+
         default:                       return false;   // not one of ours -> caller falls through (DefSubclassProc / 0)
     }
 }
@@ -998,6 +1697,9 @@ static void activate(NibHost* host, NibQueryFn query)
     g_ui      = static_cast<const NibUiApi*>(query(host, NIB_IFACE_UI, 1));            // menu checks + dark palette
     g_toolbar = static_cast<const NibToolbarApi*>(query(host, NIB_IFACE_TOOLBAR, 1));  // plugin toolbar buttons
     g_alloc   = static_cast<const NibAllocApi*>(query(host, NIB_IFACE_ALLOC, 1));      // cmd/marker/indicator grants
+    g_keymap  = static_cast<const NibKeymapApi*>(query(host, NIB_IFACE_KEYMAP, 2));    // v2 effective_shortcut read (NPPM_GETSHORTCUTBYCMDID); NULL on old hosts
+    g_session = static_cast<const NibSessionApi*>(query(host, NIB_IFACE_SESSION, 1));  // session save/load/enumerate (NPPM_*SESSION*); NULL on old hosts
+    g_lexer   = static_cast<const NibLexerApi*>(query(host, NIB_IFACE_LEXER, 1));      // Lexilla CreateLexer + user-lang count; NULL on old hosts
     // The bridge's one command sink: fired allocated ids dispatch FuncItem actions and relay dynamic
     // NPPM_ALLOCATECMDID ids to every plugin's messageProc (see on_alloc_command). Registered BEFORE
     // the plugins load so the very first granted id is already routable; the HOST drops the sink
@@ -1035,7 +1737,11 @@ static void activate(NibHost* host, NibQueryFn query)
     // bridge falls back to deriving FILESAVED from the savepoint (see on_nib_event).
     const NibEventsApi* events   = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 1));
     const NibEventsApi* eventsV2 = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 2));
+    const NibEventsApi* eventsV3 = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 3));
+    const NibEventsApi* eventsV4 = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 4));
     g_eventsV2 = eventsV2 != nullptr;
+    g_eventsV3 = eventsV3;   // stashed for NPPM_ADDSCNMODIFIEDFLAGS -> set_modified_mask
+    g_eventsV4 = eventsV4;
     if (events) {
         events->subscribe(host, NIB_EV_TEXT_CHANGED,       on_nib_event, nullptr);
         events->subscribe(host, NIB_EV_SELECTION_CHANGED,  on_nib_event, nullptr);
@@ -1048,6 +1754,31 @@ static void activate(NibHost* host, NibQueryFn query)
         eventsV2->subscribe(host, NIB_EV_DOCUMENT_SAVING,      on_nib_event_v2, nullptr);  // -> NPPN_FILEBEFORESAVE
         eventsV2->subscribe(host, NIB_EV_DOCUMENT_SAVED,       on_nib_event_v2, nullptr);  // -> NPPN_FILESAVED (id-carrying)
         eventsV2->subscribe(host, NIB_EV_DOCUMENT_BEFORE_OPEN, on_nib_event_v2, nullptr);  // -> NPPN_FILEBEFOREOPEN
+    }
+    if (eventsV3) {
+        // Phase 4 (event fidelity). The raw modified stream stays dormant until a plugin calls
+        // NPPM_ADDSCNMODIFIEDFLAGS (which arms set_modified_mask), so subscribing here is free until then.
+        eventsV3->subscribe(host, NIB_EV_TEXT_MODIFIED,     on_nib_event_v3, nullptr);  // -> NPPN_GLOBALMODIFIED (masked)
+        eventsV3->subscribe(host, NIB_EV_LANGUAGE_CHANGED,  on_nib_event_v3, nullptr);  // -> NPPN_LANGCHANGED
+        eventsV3->subscribe(host, NIB_EV_STYLE_UPDATED,     on_nib_event_v3, nullptr);  // -> NPPN_WORDSTYLESUPDATED
+        eventsV3->subscribe(host, NIB_EV_SHORTCUTS_CHANGED, on_nib_event_v3, nullptr);  // -> NPPN_SHORTCUTREMAPPED
+        eventsV3->subscribe(host, NIB_EV_SHUTDOWN_BEGIN,    on_nib_event_v3, nullptr);  // -> NPPN_BEFORESHUTDOWN
+        eventsV3->subscribe(host, NIB_EV_SHUTDOWN_CANCEL,   on_nib_event_v3, nullptr);  // -> NPPN_CANCELSHUTDOWN
+    }
+    if (eventsV4) {
+        // Phase 6 (long-tail file lifecycle). All id-carrying (0 for BEFORE_LOAD / the cmdline message),
+        // so they cost nothing until the host fires one; see on_nib_event_v4 for the NPPN_* mapping.
+        eventsV4->subscribe(host, NIB_EV_DOCUMENT_BEFORE_LOAD,  on_nib_event_v4, nullptr);  // -> NPPN_FILEBEFORELOAD
+        eventsV4->subscribe(host, NIB_EV_READONLY_CHANGED,      on_nib_event_v4, nullptr);  // -> NPPN_READONLYCHANGED
+        eventsV4->subscribe(host, NIB_EV_DOC_ORDER_CHANGED,     on_nib_event_v4, nullptr);  // -> NPPN_DOCORDERCHANGED
+        eventsV4->subscribe(host, NIB_EV_SNAPSHOT_DIRTY_LOADED, on_nib_event_v4, nullptr);  // -> NPPN_SNAPSHOTDIRTYFILELOADED
+        eventsV4->subscribe(host, NIB_EV_FILE_BEFORE_RENAME,    on_nib_event_v4, nullptr);  // -> NPPN_FILEBEFORERENAME
+        eventsV4->subscribe(host, NIB_EV_FILE_RENAME_CANCEL,    on_nib_event_v4, nullptr);  // -> NPPN_FILERENAMECANCEL
+        eventsV4->subscribe(host, NIB_EV_FILE_RENAMED,          on_nib_event_v4, nullptr);  // -> NPPN_FILERENAMED
+        eventsV4->subscribe(host, NIB_EV_FILE_BEFORE_DELETE,    on_nib_event_v4, nullptr);  // -> NPPN_FILEBEFOREDELETE
+        eventsV4->subscribe(host, NIB_EV_FILE_DELETE_FAILED,    on_nib_event_v4, nullptr);  // -> NPPN_FILEDELETEFAILED
+        eventsV4->subscribe(host, NIB_EV_FILE_DELETED,          on_nib_event_v4, nullptr);  // -> NPPN_FILEDELETED
+        eventsV4->subscribe(host, NIB_EV_CMDLINE_PLUGIN_MSG,    on_nib_event_v4, nullptr);  // -> NPPN_CMDLINEPLUGINMSG
     }
 
     // Real Notepad++ sends NPPN_READY once its UI is up; the bridge sends it after finishing loading +
