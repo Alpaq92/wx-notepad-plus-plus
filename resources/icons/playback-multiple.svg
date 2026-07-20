@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" color="#343a40" role="img" aria-label="Run a Macro Multiple Times">
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="Run a Macro Multiple Times">
   <title>Run a Macro Multiple Times</title>
-  <path d="M5 7v10l6 -5l-6 -5" fill="#2f9e44" stroke="#2f9e44" />
-  <path d="M13 7v10l6 -5l-6 -5" fill="#2f9e44" stroke="#2f9e44" />
+  <path d="M20 12a8 8 0 1 1-2.3-5.6" fill="none" stroke="#2f9e44" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M20 4v4h-4" fill="none" stroke="#2f9e44" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M10 9.5 15 12 10 14.5Z" fill="#2f9e44" />
 </svg>
