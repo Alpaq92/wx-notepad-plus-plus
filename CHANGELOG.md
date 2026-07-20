@@ -3,6 +3,42 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.7] - 2026-07-20
+
+### Added
+- **Cross-platform Notepad++ plugin support — complete `NPPM_*` coverage (Phases 2–6).** The GPL
+  `npp-bridge` now answers **all 118 `NPPM_*` messages** — up from ~44 — with **zero silent drops**:
+  every message either performs a real action or returns a documented value, and each Windows-only
+  concept is an explicitly-commented no-op. Notifications grow to **27 `NPPN_*`** types. The additive
+  work spans a per-view buffer model, full session save/load (`NPPM_SAVESESSION` / `LOADSESSION` /
+  `GETSESSIONFILES` via `nib.session/1`), Lexilla lexer creation (`NPPM_CREATELEXER` via
+  `nib.lexer/1`), and the long-tail file-lifecycle notifications (`NPPN_FILEBEFOREDELETE` /
+  `FILEDELETED` / `FILERENAMED` and friends). A headless `bridge_selftest` (175 checks) exercises the
+  whole surface, including that a registered plugin's toolbar button rasterizes a real, non-blank image.
+- **24 more colored toolbar icons** — drive, removable-media and file-type glyphs for the **Solar**
+  and **IconPark** sets, matching the existing Streamline coverage.
+- **File&nbsp;&rsaquo; Print Preview** — a cross-platform preview window (`wxPrintPreview` +
+  `wxPreviewFrame`, reusing the existing `SciPrintout`), translated into all eight languages. The
+  Windows print dialog's own preview pane still reads "not supported" — that pane is only fed by the
+  Windows-only modern print API, which the portable printing path can't use — so this is the portable
+  answer, working identically on Windows, Linux and macOS.
+
+### Fixed
+- **Plugin-unload crash on exit.** A Notepad++-ABI plugin's event/command subscriptions were cleared
+  only *after* `deactivate()` + `FreeLibrary`, so a late frame notification could call into unmapped
+  memory; and running the unload inside the frame's own `WM_CLOSE` reentrantly deferred a
+  `RemoveWindowSubclass`, leaving a dangling subclass after `FreeLibrary`. Subscriptions are now cleared
+  first, and the whole unload is deferred via `CallAfter` past the close dispatch.
+- **Integrated terminal rendering.** Text no longer sits flush against the top-left edge (a small
+  cell-grid margin was added), and the shell no longer starts one blank line down on Windows `cmd` (the
+  codepage switch is now followed by a `cls`).
+- **Landing-page icon tooltips.** Hovering a sidebar or toolbar glyph showed the icon's raw internal
+  name ("Pricetag", "Language", …) instead of the surrounding label. Every icon is now inline SVG with
+  its embedded `<title>` stripped, and the ionicons CDN dependency is gone.
+- **Docs manual: scrollbar and phones.** The sidebar's stock 4px transparent-until-hover scrollbar
+  flickered and read as broken; it and the page scrollbar are now a quiet, always-present themed slim
+  bar. Verified no horizontal overflow at phone widths.
+
 ## [0.9.6] - 2026-07-19
 
 ### Added

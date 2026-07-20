@@ -49,7 +49,10 @@ inline std::vector<TermShell> detectTermShells()
     std::vector<TermShell> v;
 #ifdef __WXMSW__
     wxString comspec; wxGetEnv("COMSPEC", &comspec); if (comspec.empty()) comspec = "cmd.exe";
-    v.push_back({ "cmd", comspec + " /K chcp 65001>nul", false });   // flip the session to UTF-8 so non-ASCII output isn't mojibake
+    // /K chcp: flip the session to UTF-8 so non-ASCII output isn't mojibake. The trailing `& cls`
+    // wipes the blank line cmd leaves after running the /K command, so the first prompt sits at the
+    // top of the pane instead of on row 2 (PowerShell -NoLogo already starts clean).
+    v.push_back({ "cmd", comspec + " /K \"chcp 65001>nul & cls\"", false });
     v.push_back({ "PowerShell", "powershell.exe -NoLogo", true });
     { wxPathList pl; pl.AddEnvList("PATH");
       if (!pl.FindAbsoluteValidPath("pwsh.exe").empty()) v.push_back({ "pwsh", "pwsh.exe -NoLogo", true }); }

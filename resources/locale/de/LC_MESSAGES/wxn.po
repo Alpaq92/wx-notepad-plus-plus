@@ -2891,3 +2891,9 @@ msgstr "(Bereich: %s)"
 
 msgid "Warning: %s is also assigned to \"%s\"."
 msgstr "Warnung: %s ist bereits \"%s\" zugewiesen."
+
+msgid "Print Pre&view..."
+msgstr "Druck&vorschau..."
+
+msgid "Print Preview"
+msgstr "Druckvorschau"

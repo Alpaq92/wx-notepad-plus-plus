@@ -50,6 +50,7 @@ namespace Label
     inline const wxString FileSaveSession() { return _("Save Sess&ion..."); }
 
     inline const wxString FilePrint() { return _("&Print..."); }
+    inline const wxString FilePrintPreview() { return _("Print Pre&view..."); }
     inline const wxString FilePrintNow() { return _("Print No&w"); }
 
     inline const wxString FileExit() { return _("E&xit"); }

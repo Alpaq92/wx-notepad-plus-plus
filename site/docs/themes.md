@@ -81,6 +81,7 @@ repository's `resources/fonts/CREDITS.md` and `LICENSING.md`.
 
 ## Toolbar icons
 
-Independent of both theme settings, **Preferences&nbsp;&rsaquo; General** offers three toolbar icon
-sets — **Tabler** (line, theme-adaptive), **Solar** (green) and **IconPark** (teal/lime) — at 16, 20, 24
-or 32&nbsp;px. Both settings apply on restart. Icons are SVG, so any size stays sharp.
+Independent of both theme settings, **Preferences&nbsp;&rsaquo; General** offers four toolbar icon
+sets — **Tabler** (line, theme-adaptive), **Solar** (green), **IconPark** (teal/lime) and
+**Streamline** (green/teal) — at 16, 20, 24 or 32&nbsp;px. Both settings apply on restart. Icons are
+SVG, so any size stays sharp.

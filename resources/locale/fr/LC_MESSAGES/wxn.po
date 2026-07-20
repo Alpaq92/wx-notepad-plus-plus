@@ -2891,3 +2891,9 @@ msgstr "(portée : %s)"
 
 msgid "Warning: %s is also assigned to \"%s\"."
 msgstr "Avertissement : %s est déjà assigné à « %s »."
+
+msgid "Print Pre&view..."
+msgstr "Aperçu a&vant impression..."
+
+msgid "Print Preview"
+msgstr "Aperçu avant impression"

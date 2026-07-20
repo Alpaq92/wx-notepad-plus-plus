@@ -85,6 +85,7 @@ static const MenuItemDef kFileMenuItems[] = {
     { MenuItemKind::Separator },
     // Print.
     { MenuItemKind::Normal,  kCmdFilePrint,                 &Label::FilePrint,                 "file.print", nullptr, 0, false, "Ctrl+P" },
+    { MenuItemKind::Normal,  kCmdFilePrintPreview,          &Label::FilePrintPreview,          "file.printPreview" },
     { MenuItemKind::Normal,  kCmdFilePrintnow,              &Label::FilePrintNow,              "file.printNow" },
     { MenuItemKind::Separator },
     // The "Recent Files" submenu (wxFileHistory) is inserted here at runtime by buildMenuBar().

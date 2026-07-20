@@ -2891,3 +2891,9 @@ msgstr "（スコープ: %s）"
 
 msgid "Warning: %s is also assigned to \"%s\"."
 msgstr "警告: %s は既に「%s」に割り当てられています。"
+
+msgid "Print Pre&view..."
+msgstr "印刷プレビュー(&V)..."
+
+msgid "Print Preview"
+msgstr "印刷プレビュー"

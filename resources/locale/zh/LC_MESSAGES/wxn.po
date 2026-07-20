@@ -2891,3 +2891,9 @@ msgstr "（范围：%s）"
 
 msgid "Warning: %s is also assigned to \"%s\"."
 msgstr "警告：%s 已分配给“%s”。"
+
+msgid "Print Pre&view..."
+msgstr "打印预览(&V)..."
+
+msgid "Print Preview"
+msgstr "打印预览"
