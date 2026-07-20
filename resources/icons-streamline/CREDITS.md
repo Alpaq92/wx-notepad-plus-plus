@@ -33,7 +33,10 @@ byte-for-byte.
   set keeps its designed visual weight) and the dark detail with **teal-8 (`#099268`)**.
   These baked colours are tuned for LIGHT chrome; in dark mode `iconColored()` in
   `src/main.cpp` retints both at runtime (green-4 → green-3 `#8ce99a`,
-  teal-8 → teal-4 `#38d9a9`) so the glyphs pop against dark chrome instead of vanishing.
+  teal-8 → teal-6 `#0ca678`) so the glyphs pop against dark chrome instead of vanishing.
+  (An earlier retint used teal-4 `#38d9a9` for the detail paint, but that sat too close
+  in luminance to green-3, reading as visually flat at 16px; teal-6 restores a gap
+  closer to the light-mode bake's own fill/detail separation.)
 - **Composited concepts.** The free Core set has no direct glyph for a few toolbar
   concepts, so these files were assembled from the downloaded glyphs' own paths plus
   simple primitives, keeping the pack's two-paint flat discipline: `zoom-in`/`zoom-out`

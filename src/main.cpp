@@ -2206,7 +2206,18 @@ public:
     // other macro ($(FULL_PATH) etc.) is resolved by the caller first, since those don't depend on pagination.
     SciPrintout(wxStyledTextCtrl* stc, const wxString& title, const wxPageSetupDialogData& pageSetup,
                 const wxString& header = wxString(), const wxString& footer = wxString())
-        : wxPrintout(title), m_stc(stc), m_pageSetup(pageSetup), m_header(header), m_footer(footer) {}
+        : wxPrintout(title), m_stc(stc), m_pageSetup(pageSetup), m_header(header), m_footer(footer)
+    {
+        // Print on clean white paper, not the on-screen editor theme: a dark editor theme would otherwise
+        // paint the document lines with its dark background (the "black stripe" behind printed text). A dark
+        // theme prints plain black-on-white (its light syntax colours would be invisible on white, and
+        // inverting the background only yields a grey stripe, not white); a light theme keeps its syntax
+        // colours but forces every background white. SetPrintColourMode only affects SCI_FORMATRANGE, never
+        // the on-screen view.
+        const wxColour bg = stc->StyleGetBackground(wxSTC_STYLE_DEFAULT);
+        const bool darkEditor = (bg.Red() * 299 + bg.Green() * 587 + bg.Blue() * 114) < 128 * 1000;
+        stc->SetPrintColourMode(darkEditor ? wxSTC_PRINT_BLACKONWHITE : wxSTC_PRINT_COLOURONWHITE);
+    }
 
     bool OnPrintPage(int page) override
     {
@@ -2292,6 +2303,26 @@ private:
     wxString               m_header, m_footer;
     std::vector<int>       m_pageEnds;   // m_pageEnds[i] = the char position where page i+1 ends (exclusive)
     wxRect                 m_pageRect, m_printRect;
+};
+
+// wxNote's Print Preview frame. Same as wxPreviewFrame but its control bar is built WITHOUT the editable
+// page field (wxPREVIEW_GOTO): a native single-line edit can't align cleanly among the flat toolbar icons
+// (its box and its digit can't both sit on the shared midline, and its dark-theme border can't be stripped),
+// so stylePreviewWindow() adds a centred static "cur / total" readout instead. Everything else is stock.
+class WxnPreviewFrame : public wxPreviewFrame
+{
+public:
+    WxnPreviewFrame(wxPrintPreviewBase* preview, wxWindow* parent, const wxString& title,
+                    const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize)
+        : wxPreviewFrame(preview, parent, title, pos, size) {}
+    void CreateControlBar() override
+    {
+        m_controlBar = new wxPreviewControlBar(
+            m_printPreview,
+            wxPREVIEW_PRINT | wxPREVIEW_FIRST | wxPREVIEW_PREVIOUS | wxPREVIEW_NEXT | wxPREVIEW_LAST | wxPREVIEW_ZOOM,
+            this);
+        m_controlBar->CreateButtons();
+    }
 };
 
 // The shell frame is a template on its chrome base so the same ~3300 lines work whether the base is the
@@ -6453,14 +6484,18 @@ private:
             // Streamline's flat two-paint pair is baked for LIGHT chrome (green-4 fill + teal-8
             // detail, both matching the stock blues' weight - see the pack's CREDITS.md). On dark
             // chrome teal-8 has too little luminance contrast (the same "enabled reads as disabled"
-            // failure the IconPark strokes had), so lighten BOTH paints a la Solar: the detail paint
-            // to teal-4 and the fill to green-3, which keeps the fill/detail separation while the
-            // whole glyph pops against dark chrome. The bare-hex replace covers fills and the couple
-            // of stroked prompt glyphs (terminal) alike; the save-macro badge's #fff stays.
+            // failure the IconPark strokes had), so lighten BOTH paints a la Solar: fill to green-3
+            // (unchanged) and detail to teal-6 (was teal-4). Teal-4 first-drafted here made the two
+            // paints nearly the SAME luminance (~0.70 vs green-3's ~0.81, a ~0.11 gap) - the pair read
+            // as visually flat/low-contrast at 16px, losing the fill/detail separation that makes the
+            // glyph legible; teal-6 sits further from green-3 (~0.51, a ~0.30 gap matching the light-
+            // mode bake's own ~0.29 gap) while staying well clear of the too-dim teal-8 baseline. The
+            // bare-hex replace covers fills and the couple of stroked prompt glyphs (terminal) alike;
+            // the save-macro badge's #fff stays.
             wxFile f(path); wxString svg;
             if (f.IsOpened() && f.ReadAll(&svg))
             {
-                svg.Replace("#099268", "#38d9a9");   // Open Color teal-8  -> teal-4
+                svg.Replace("#099268", "#0ca678");   // Open Color teal-8  -> teal-6
                 svg.Replace("#69db7c", "#8ce99a");   // Open Color green-4 -> green-3
                 const wxScopedCharBuffer u = svg.utf8_str();
                 return wxBitmapBundle::FromSVG(u.data(), wxSize(px, px));
@@ -6524,6 +6559,35 @@ private:
         const wxScopedCharBuffer u = svg.utf8_str();
         return wxBitmapBundle::FromSVG(u.data(), wxSize(16, 16));
     }
+    // Synthesized Print-Preview toolbar glyphs (page-nav chevrons, zoom +/-, and the close X), drawn as clean
+    // line icons in the ACTIVE pack's accent so they read clearly and sit with icon()'s print glyph on that
+    // toolbar. The packs ship print but no page-nav arrows, and their filled zoom magnifiers turn muddy at
+    // 16px, so these are drawn here rather than as SVGs per pack. Solar/Streamline -> their signature green,
+    // IconPark -> its teal, Tabler/line -> the themed grey (like icon()'s currentColor resolve).
+    wxBitmapBundle previewGlyph(const char* kind, int px = 16)
+    {
+        // Theme-aware so the glyph reads at the same weight as icon()'s (fixed-colour) print glyph on the
+        // themed toolbar: a bright pack accent on the dark bar, the deeper accent on the light bar.
+        const wxString col =
+            m_iconStyle == 1 ? (m_dark ? "#69db7c" : "#2f9e44") :   // Solar
+            m_iconStyle == 2 ? (m_dark ? "#38d9a9" : "#0ca678") :   // IconPark (teal)
+            m_iconStyle >= 3 ? (m_dark ? "#69db7c" : "#099268") :   // Streamline
+            (m_dark ? "#dee2e6" : "#343a40");                       // Tabler / line: themed grey
+        wxString paths;   // separate <path>/<circle> elements (one multi-subpath 'd' can confuse the SVG parser)
+        if      (!strcmp(kind, "prev"))    paths = "<path d='M15 6l-6 6l6 6'/>";
+        else if (!strcmp(kind, "next"))    paths = "<path d='M9 6l6 6l-6 6'/>";
+        else if (!strcmp(kind, "first"))   paths = "<path d='M6 6v12'/><path d='M18 6l-6 6l6 6'/>";
+        else if (!strcmp(kind, "last"))    paths = "<path d='M6 6l6 6l-6 6'/><path d='M18 6v12'/>";
+        else if (!strcmp(kind, "zoomout")) paths = "<circle cx='10' cy='10' r='6'/><path d='M7 10h6'/><path d='M15 15l4.5 4.5'/>";
+        else if (!strcmp(kind, "zoomin"))  paths = "<circle cx='10' cy='10' r='6'/><path d='M7 10h6'/><path d='M10 7v6'/><path d='M15 15l4.5 4.5'/>";
+        else /* close */                   paths = "<path d='M6 6l12 12'/><path d='M18 6l-12 12'/>";
+        const wxString svg = wxString::Format(
+            "<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' "
+            "fill='none' stroke='%s' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'>"
+            "%s</svg>", col, paths);
+        const wxScopedCharBuffer u = svg.utf8_str();
+        return wxBitmapBundle::FromSVG(u.data(), wxSize(px, px));
+    }
     // The "v" caption dropdown: list the open documents and switch to the chosen one.
     void onDocList()
     {
@@ -6579,6 +6643,7 @@ private:
         T(kCmdFileSave, "save", _("Save"));        T(kCmdFileSaveall, "save-all", _("Save All"));
         T(kCmdFileClose, "close", _("Close"));     T(kCmdFileCloseall, "close-all", _("Close All"));
         T(kCmdFilePrint, "print", _("Print"));
+        T(kCmdFilePrintPreview, "print-preview", _("Print Preview"));
         tb->AddSeparator();
         T(kCmdEditCut, "cut", _("Cut"));           T(kCmdEditCopy, "copy", _("Copy"));           T(kCmdEditPaste, "paste", _("Paste"));
         tb->AddSeparator();
@@ -9839,11 +9904,119 @@ private:
             themedInfo(_("There was a problem printing.\nPerhaps your current printer is not set up correctly."), _("Print Preview"));
             return;
         }
-        auto* frame = new wxPreviewFrame(preview, this, _("Print Preview"), wxDefaultPosition, wxSize(820, 720));
+        auto* frame = new WxnPreviewFrame(preview, this, _("Print Preview"), wxDefaultPosition, wxSize(820, 720));
         frame->Centre(wxBOTH);
-        frame->Initialize();
+        frame->Initialize();   // builds the control bar + canvas (its stock wxArtProvider buttons now exist)
+        themeDialog(frame);    // theme the title bar + toolbar strip first; the pass below then overrides the
+                               // controls themeDialog would otherwise leave mis-styled (raised buttons, dark canvas)
+        stylePreviewWindow(frame, preview);
         frame->Show();
         frame->Raise();   // integrated/borderless parent can leave a new top-level frame behind it
+    }
+    // Make the stock wxPreviewFrame read like the rest of wxNote: a flat icon toolbar matching the main
+    // window, and a paper viewport that stays neutral regardless of the app theme (a printed sheet is white -
+    // tinting its backdrop near-black, as themeDialog's blanket recolour does, looks wrong). Runs AFTER
+    // themeDialog so these per-control overrides win.
+    void stylePreviewWindow(wxWindow* frame, wxPrintPreviewBase* preview)
+    {
+        // Control-bar buttons: give them wxNote's icons and make them FLAT (no raised button face, background
+        // blended into the strip) so only the icon shows, like the main window's wxToolBar. print -> the active
+        // pack's icon(); page-nav/zoom -> previewGlyph() (clean line glyphs; the pack's own filled zoom
+        // magnifiers turn muddy at 16px). The stock buttons are keyed by wxID_PREVIEW_*
+        // (wxPreviewControlBar::CreateButtons); flatness must come from wxBORDER_NONE at CONSTRUCTION - flipping
+        // the style post-hoc recreates the HWND and dangles the sizer/handlers (crash). So each is swapped for a
+        // fresh borderless button of the same id via wxSizer::Replace: the base bar's id-keyed
+        // EVT_BUTTON/EVT_UPDATE_UI handlers still fire (events bubble to the control bar), and the base never
+        // dereferences the swapped buttons, so nothing is left dangling. All get one uniform size so they line
+        // up vertically across the row.
+        static const struct { int id; const char* name; bool synth; } kBtns[] = {
+            { wxID_PREVIEW_PRINT,    "print",   false }, { wxID_PREVIEW_FIRST,    "first",   true },
+            { wxID_PREVIEW_PREVIOUS, "prev",    true  }, { wxID_PREVIEW_NEXT,     "next",    true },
+            { wxID_PREVIEW_LAST,     "last",    true  }, { wxID_PREVIEW_ZOOM_OUT, "zoomout", true },
+            { wxID_PREVIEW_ZOOM_IN,  "zoomin",  true  },
+        };
+        const wxSize btnSize = FromDIP(wxSize(26, 24));   // uniform -> all icons share a baseline and align
+        wxWindow* controlBar = nullptr;
+        for (const auto& b : kBtns)
+            if (wxWindow* old = frame->FindWindow(b.id))
+            {
+                controlBar = old->GetParent();
+                const wxBitmapBundle bmp = b.synth ? previewGlyph(b.name, 16) : icon(b.name, 16);
+                auto* flat = new wxBitmapButton(controlBar, b.id, bmp, wxDefaultPosition, btnSize, wxBORDER_NONE);
+                flat->SetToolTip(old->GetToolTipText());
+                flat->SetBackgroundColour(controlBar->GetBackgroundColour());
+                if (wxSizer* sz = controlBar->GetSizer()) sz->Replace(old, flat);
+                old->Destroy();
+            }
+        // Drop the toolbar's Close button: the window's own title-bar close (X) already does this, so a second
+        // one is redundant. Detach from the sizer, then destroy it.
+        if (wxWindow* closeBtn = frame->FindWindow(wxID_PREVIEW_CLOSE))
+        {
+            if (!controlBar) controlBar = closeBtn->GetParent();
+            if (wxSizer* sz = closeBtn->GetParent()->GetSizer()) sz->Detach(closeBtn);
+            closeBtn->Destroy();
+        }
+        if (wxSizer* sz = controlBar ? controlBar->GetSizer() : nullptr)
+        {
+            // wxNote's page indicator: the classical "cur / total" readout between the prev/next chevrons, but
+            // as ONE static label - drawn text has no native box, so it sits exactly on the icons' midline (the
+            // stock editable field never could, which is why WxnPreviewFrame omits it). Kept in sync as the
+            // arrows move and once pagination settles (GetMaxPage isn't final until the first render).
+            if (preview)
+            {
+                auto* pageText = new wxStaticText(controlBar, wxID_ANY, "1 / 1");
+                if (m_dark)   // created after themeDialog's recolour pass, so theme it by hand
+                { pageText->SetForegroundColour(wxColour(220, 220, 220)); pageText->SetBackgroundColour(controlBar->GetBackgroundColour()); }
+                pageText->Bind(wxEVT_UPDATE_UI, [pageText, preview](wxUpdateUIEvent&) {
+                    const wxString s = wxString::Format("%d / %d", wxMax(1, preview->GetCurrentPage()), wxMax(1, preview->GetMaxPage()));
+                    if (pageText->GetLabel() != s) { pageText->SetLabel(s); if (wxWindow* p = pageText->GetParent()) p->Layout(); }
+                });
+                // Slot it where the stock field sat: just before the "next page" chevron.
+                int at = -1;
+                for (size_t i = 0; i < sz->GetItemCount(); ++i)
+                    if (wxSizerItem* it = sz->GetItem(i); it && it->IsWindow() && it->GetWindow()->GetId() == wxID_PREVIEW_NEXT) { at = static_cast<int>(i); break; }
+                // A default-width gap on the LEFT only: every stock button already carries its own left
+                // border, so the "next" chevron supplies the right-hand gap - an own wxRIGHT border on top
+                // of that doubled it (the readout sat noticeably farther from ">" than from "<").
+                const wxSizerFlags fl = wxSizerFlags().Border(wxLEFT, wxSizerFlags::GetDefaultBorder()).Center();
+                if (at >= 0) sz->Insert(static_cast<size_t>(at), pageText, fl); else sz->Add(pageText, fl);
+            }
+            // Everything on one centred baseline, with no top/bottom border throwing an item off the midline.
+            for (size_t i = 0; i < sz->GetItemCount(); ++i)
+                if (wxSizerItem* it = sz->GetItem(i); it && it->IsWindow())
+                    it->SetFlag((it->GetFlag() & ~(wxALIGN_TOP | wxALIGN_BOTTOM | wxEXPAND | wxTOP | wxBOTTOM)) | wxALIGN_CENTER_VERTICAL);
+            sz->PrependSpacer(FromDIP(6));   // small left indent before the print icon, like the main toolbar
+            // Fixed, roomier bar height: taller than every item so they ALL centre on one shared midline (the
+            // page field no longer rides off-centre from the icons), with vertical breathing room top & bottom.
+            controlBar->SetMinSize(wxSize(-1, FromDIP(40)));
+            controlBar->Layout();
+            // Suppress wxPreviewControlBar::OnPaint's hard black separator line along the bar's bottom edge -
+            // it sits right under the flat icons and reads as a stray dark line. Just fill the strip with its
+            // own colour (not calling Skip() stops the stock painter from drawing the line).
+            controlBar->Bind(wxEVT_PAINT, [](wxPaintEvent& ev) {
+                wxWindow* w = static_cast<wxWindow*>(ev.GetEventObject());
+                wxPaintDC dc(w);
+                dc.SetBackground(wxBrush(w->GetBackgroundColour()));
+                dc.Clear();
+            });
+        }
+        // Paper viewport: an Open-Color grey backdrop so the white sheet + its drop shadow read well - a light
+        // grey (gray-5) in light mode and a deeper grey (gray-7) in dark mode (not the near-black the blanket
+        // theme gave, which looked wrong). Re-pinned on an OS colour-scheme flip while the (modeless) preview
+        // is open, since wxPreviewCanvas's own EVT_SYS_COLOUR_CHANGED handler would otherwise repaint it with a
+        // system colour.
+        const wxColour canvasBg = m_dark ? wxColour(0x49, 0x50, 0x57)    // Open Color gray-7
+                                         : wxColour(0xad, 0xb5, 0xbd);   // Open Color gray-5
+        for (wxWindow* c : frame->GetChildren())
+            if (auto* canvas = wxDynamicCast(c, wxPreviewCanvas))
+            {
+                canvas->SetBackgroundColour(canvasBg);
+                canvas->Bind(wxEVT_SYS_COLOUR_CHANGED, [canvas, canvasBg](wxSysColourChangedEvent& e)
+                             { canvas->SetBackgroundColour(canvasBg); canvas->Refresh(); e.Skip(); });
+                canvas->Refresh();
+                break;
+            }
+        frame->Layout();   // re-flow the frame so the control bar picks up its new (taller) height
     }
     void setStatus(int field, const wxString& text) { SetStatusText(" " + text, field); }  // leading space ~ 4px left margin
     // Interactive status bar: double-click a field to act on it.
