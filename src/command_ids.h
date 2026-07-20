@@ -36,6 +36,7 @@ inline constexpr int kCmdFileOpenFolderAsWorkspace       = 41022;
 inline constexpr int kCmdFileOpenPowershell              = 41027;
 inline constexpr int kCmdFilePrint                       = 41010;
 inline constexpr int kCmdFilePrintnow                    = 1001;
+inline constexpr int kCmdFilePrintPreview                = 41028;  // wxNote-only (no N++ IDM_FILE equivalent; N++ stops at +27)
 inline constexpr int kCmdFileReload                      = 41014;
 inline constexpr int kCmdFileRename                      = 41017;
 inline constexpr int kCmdFileRestoreLastClosedFile       = 41021;

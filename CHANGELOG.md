@@ -17,6 +17,11 @@ All notable changes to wxNote are documented here. Format loosely follows
   whole surface, including that a registered plugin's toolbar button rasterizes a real, non-blank image.
 - **24 more colored toolbar icons** — drive, removable-media and file-type glyphs for the **Solar**
   and **IconPark** sets, matching the existing Streamline coverage.
+- **File&nbsp;&rsaquo; Print Preview** — a cross-platform preview window (`wxPrintPreview` +
+  `wxPreviewFrame`, reusing the existing `SciPrintout`), translated into all eight languages. The
+  Windows print dialog's own preview pane still reads "not supported" — that pane is only fed by the
+  Windows-only modern print API, which the portable printing path can't use — so this is the portable
+  answer, working identically on Windows, Linux and macOS.
 
 ### Fixed
 - **Plugin-unload crash on exit.** A Notepad++-ABI plugin's event/command subscriptions were cleared

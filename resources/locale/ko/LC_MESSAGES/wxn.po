@@ -2891,3 +2891,9 @@ msgstr "(범위: %s)"
 
 msgid "Warning: %s is also assigned to \"%s\"."
 msgstr "경고: %s은(는) 이미 \"%s\"에 지정되어 있습니다."
+
+msgid "Print Pre&view..."
+msgstr "인쇄 미리 보기(&V)..."
+
+msgid "Print Preview"
+msgstr "인쇄 미리 보기"

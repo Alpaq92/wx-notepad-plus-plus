@@ -9815,6 +9815,35 @@ private:
         m_printData = printer.GetPrintDialogData().GetPrintData();
         setStatus(0, wxString::Format(_("Printed %s"), title)); m_hint = true;
     }
+    // File > Print Preview... - wxNote's own cross-platform preview (wxPrintPreview + wxPreviewFrame),
+    // reusing the same SciPrintout as doPrint(). This is deliberately NOT the Windows print dialog's own
+    // preview pane: that pane is only populated by the Windows-only modern print API (XPS/WinRT), which the
+    // portable GDI printing path can't feed - so the dialog shows "no preview", and this window is the
+    // portable answer. The preview OWNS its two heap printouts; SciPrintout copies the page-setup by value
+    // and only borrows the editor pointer (which outlives this modeless frame), so nothing dangles.
+    void doPrintPreview()
+    {
+        if (m_printing || !m_stc) return;
+        wxPrintDialogData pdd(m_printData);
+        wxPageSetupDialogData pageSetup(m_printData);
+        auto* page = activePage();
+        const wxString title = (page && !page->title.empty()) ? page->title : wxString("Untitled");
+        const wxString hdr = resolvePrintMacros(m_printHeader), ftr = resolvePrintMacros(m_printFooter);
+        auto* preview = new wxPrintPreview(new SciPrintout(m_stc, title, pageSetup, hdr, ftr),
+                                           new SciPrintout(m_stc, title, pageSetup, hdr, ftr), &pdd);
+        if (!preview->IsOk())
+        {
+            delete preview;
+            // Reuse the already-translated Print error - the actionable part (printer not set up) is
+            // identical, so this adds no new untranslated string.
+            themedInfo(_("There was a problem printing.\nPerhaps your current printer is not set up correctly."), _("Print Preview"));
+            return;
+        }
+        auto* frame = new wxPreviewFrame(preview, this, _("Print Preview"), wxDefaultPosition, wxSize(820, 720));
+        frame->Centre(wxBOTH);
+        frame->Initialize();
+        frame->Show();
+    }
     void setStatus(int field, const wxString& text) { SetStatusText(" " + text, field); }  // leading space ~ 4px left margin
     // Interactive status bar: double-click a field to act on it.
     void onStatusDClick(wxMouseEvent& e)
@@ -10126,6 +10155,7 @@ private:
             case wxID_ABOUT: case kCmdAboutBase: showAbout(); break;
 
             case kCmdFilePrint: doPrint(true); break;
+            case kCmdFilePrintPreview: doPrintPreview(); break;
             case kCmdFilePrintnow: doPrint(false); break;
             case kCmdViewDocMap: toggleDocMap(); break;
             case kCmdViewFuncList: toggleFuncList(); break;

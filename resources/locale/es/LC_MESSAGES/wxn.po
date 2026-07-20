@@ -2891,3 +2891,9 @@ msgstr "(ámbito: %s)"
 
 msgid "Warning: %s is also assigned to \"%s\"."
 msgstr "Advertencia: %s ya está asignado a «%s»."
+
+msgid "Print Pre&view..."
+msgstr "Vista &previa de impresión..."
+
+msgid "Print Preview"
+msgstr "Vista previa de impresión"

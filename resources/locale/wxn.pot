@@ -2893,3 +2893,9 @@ msgstr ""
 
 msgid "Warning: %s is also assigned to \"%s\"."
 msgstr ""
+
+msgid "Print Pre&view..."
+msgstr ""
+
+msgid "Print Preview"
+msgstr ""
