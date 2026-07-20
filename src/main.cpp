@@ -9843,6 +9843,7 @@ private:
         frame->Centre(wxBOTH);
         frame->Initialize();
         frame->Show();
+        frame->Raise();   // integrated/borderless parent can leave a new top-level frame behind it
     }
     void setStatus(int field, const wxString& text) { SetStatusText(" " + text, field); }  // leading space ~ 4px left margin
     // Interactive status bar: double-click a field to act on it.
