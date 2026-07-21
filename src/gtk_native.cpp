@@ -46,6 +46,7 @@
 // re-calling with a new `dark` reloads it live. (The identical GTK CSS-provider pattern is already used by
 // third_party/wxbf/src/borderless_frame_gtk.cpp, which proves these symbols link in this build.)
 #include <gtk/gtk.h>
+#include <stdlib.h>   // malloc - wxn_LoadSymbolicWindowIcon returns a caller-freed RGBA buffer
 
 // Recursively add `provider` (at G_MAXUINT) to every GtkScrollbar's own style context under `w`. Uses
 // gtk_container_forall (not _foreach) so a GtkScrolledWindow's scrollbars - which are INTERNAL children and
@@ -240,49 +241,50 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
     }
 }
 
-// ---- Integrated bar: native CSD window buttons ("System-native window buttons" preference) -----------
+// ---- Integrated bar: theme glyphs for the window buttons ("System-native window buttons" preference) --
 //
-// The borderless frame (third_party/wxbf) forces client-side decorations by installing an EMPTY, HIDDEN
-// GtkHeaderBar as the window's titlebar - the CSD switch is what removes the WM's own bar, and the header
-// itself was never meant to be seen. Native-buttons mode surfaces that same header: showing it and setting
-// show-close-button makes GTK render the user's real minimize/maximize/close cluster - the desktop theme's
-// own button drawing, honouring the gtk-decoration-layout setting (which buttons, their order AND side,
-// e.g. close-on-the-left setups), with dragging, double-click maximize and the right-click window menu all
-// handled by GTK because this is a genuine titlebar.
-//
-// The compaction CSS is attached to the HEADER'S OWN style context, not screen-wide: a screen-wide
-// `headerbar` rule would also restyle every GtkFileChooser dialog's header bar. Per GTK3 semantics a
-// widget-scoped provider does not cascade to child widgets, so the buttons themselves stay 100%
-// theme-styled. Deliberately NO background/colour overrides here: the theme's button glyphs are drawn for
-// the theme's own bar colour, and repainting the strip to the app's chrome would leave light-theme glyphs
-// invisible on dark chrome (and vice versa). The strip looking like the desktop theme - not the app - is
-// what "native" means.
-extern "C" void wxn_EnableNativeHeaderButtons(void* gtkWindowWidget, int barHeightPx)
+// Rather than surface a second GtkHeaderBar strip (the only way to get GTK to DRAW real caption buttons -
+// but it stacks a whole extra titlebar above the app's integrated bar), the app keeps its single bar and
+// its own flat min/max/close buttons, and just swaps their GLYPH for the desktop theme's own symbolic
+// window-control icon. This is the Linux analog of the Windows path, which likewise draws the OS's MDL2/
+// Fluent glyphs inside our own buttons. Loads "window-close-symbolic" & co. from the user's icon theme,
+// recoloured to the bar's foreground, as a px*px RGBA8888 buffer the caller (main.cpp winControlGlyph)
+// turns into a wxBitmap and frees with free(). Returns null if the theme has no such icon.
+extern "C" unsigned char* wxn_LoadSymbolicWindowIcon(const char* iconName, int px, int r, int g, int b)
 {
-    if (!gtkWindowWidget) return;
-    GtkWidget* header = gtk_window_get_titlebar(GTK_WINDOW(gtkWindowWidget));
-    if (!header || !GTK_IS_HEADER_BAR(header)) return;
+    if (!iconName || px <= 0) return nullptr;
+    GtkIconTheme* theme = gtk_icon_theme_get_default();
+    if (!theme) return nullptr;
+    GtkIconInfo* info = gtk_icon_theme_lookup_icon(theme, iconName, px, (GtkIconLookupFlags)0);
+    if (!info) return nullptr;
 
-    gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header), TRUE);
+    GdkRGBA fg;
+    fg.red = r / 255.0; fg.green = g / 255.0; fg.blue = b / 255.0; fg.alpha = 1.0;
+    GError* err = nullptr;
+    GdkPixbuf* pb = gtk_icon_info_load_symbolic(info, &fg, nullptr, nullptr, nullptr, nullptr, &err);
+    g_object_unref(info);
+    if (!pb) { if (err) g_error_free(err); return nullptr; }
 
-    // Nudge the strip toward the app's own bar height (Adwaita's default headerbar is ~46px tall). The
-    // theme's button min-sizes still win if they need more - "as compact as the theme allows", not a clamp.
-    char css[160];
-    g_snprintf(css, sizeof(css), "headerbar { min-height: %dpx; padding-top: 0; padding-bottom: 0; }",
-               barHeightPx > 0 ? barHeightPx : 30);
-    GtkCssProvider* compact = gtk_css_provider_new();
-    gtk_css_provider_load_from_data(compact, css, -1, nullptr);
-    gtk_style_context_add_provider(gtk_widget_get_style_context(header),
-                                   GTK_STYLE_PROVIDER(compact), G_MAXUINT);
-    g_object_unref(compact);   // the style context holds its own reference
+    const int w = gdk_pixbuf_get_width(pb);
+    const int h = gdk_pixbuf_get_height(pb);
+    const int nch = gdk_pixbuf_get_n_channels(pb);
+    const int stride = gdk_pixbuf_get_rowstride(pb);
+    const gboolean hasAlpha = gdk_pixbuf_get_has_alpha(pb);
+    const guchar* src = gdk_pixbuf_get_pixels(pb);
 
-    gtk_widget_show_all(header);
-}
-
-extern "C" void wxn_SetHeaderBarTitle(void* gtkWindowWidget, const char* utf8Title)
-{
-    if (!gtkWindowWidget || !utf8Title) return;
-    GtkWidget* header = gtk_window_get_titlebar(GTK_WINDOW(gtkWindowWidget));
-    if (header && GTK_IS_HEADER_BAR(header))
-        gtk_header_bar_set_title(GTK_HEADER_BAR(header), utf8Title);
+    unsigned char* out = (unsigned char*)malloc((size_t)px * px * 4);
+    if (!out) { g_object_unref(pb); return nullptr; }
+    // Nearest-sample into the exact px*px the caller asked for (the theme may hand back a nearby size).
+    for (int y = 0; y < px; ++y)
+        for (int x = 0; x < px; ++x)
+        {
+            const int sx = (w == px) ? x : x * w / px;
+            const int sy = (h == px) ? y : y * h / px;
+            const guchar* p = src + sy * stride + sx * nch;
+            unsigned char* o = out + ((size_t)y * px + x) * 4;
+            o[0] = p[0]; o[1] = p[1]; o[2] = p[2];
+            o[3] = (hasAlpha && nch == 4) ? p[3] : 255;
+        }
+    g_object_unref(pb);
+    return out;
 }

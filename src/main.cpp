@@ -117,13 +117,13 @@ extern "C" void wxn_DragWindow(void* nsWindow);             // native window dra
 // GtkWidget*s (from GetHandle()) to resolve the GdkScreen AND as the tree-walk root; passed as a void* so this
 // header stays free of GTK types, and may be null (then only the screen-wide provider is installed).
 extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
-// Integrated bar, "System-native window buttons" mode (also gtk_native.cpp): surface the CSD GtkHeaderBar
-// wxbf installed (hidden/empty, purely to suppress the WM's own titlebar) with the user's real
-// minimize/maximize/close cluster, compacted toward barHeightPx. The second call keeps the header's title
-// in sync with the frame's (wxbf only sets it once at Create). Both take the top-level GtkWidget* from
-// GetHandle() as void* to keep this header free of GTK types; both no-op safely if there is no header bar.
-extern "C" void wxn_EnableNativeHeaderButtons(void* gtkWindowWidget, int barHeightPx);
-extern "C" void wxn_SetHeaderBarTitle(void* gtkWindowWidget, const char* utf8Title);
+// Integrated bar, "System-native window buttons" mode (also gtk_native.cpp): load a symbolic window-
+// control icon ("window-close-symbolic" etc.) from the user's GTK icon theme, recoloured to (r,g,b), as
+// a px*px RGBA8888 buffer the caller frees with free() - NULL if the theme has no such icon (caller then
+// falls back to the bundled glyph). This lets the integrated bar's own min/max/close buttons pick up the
+// desktop theme's glyphs WITHOUT surfacing a second GtkHeaderBar strip (the Linux analog of the MDL2/
+// Fluent glyphs the Windows buttons use).
+extern "C" unsigned char* wxn_LoadSymbolicWindowIcon(const char* iconName, int px, int r, int g, int b);
 #endif
 
 #include <string>
@@ -5806,17 +5806,7 @@ private:
         (void)docPart; SetTitle(wxString());   // keep the native bar blank (titleVisibility is also hidden, see ctor)
 #else
         const wxString t = docPart + " - wxNote";
-        if (GetTitle() != t)
-        {
-            SetTitle(t);
-#if defined(__WXGTK__) && defined(WXN_HAS_BORDERLESS)
-            // Native-buttons mode shows the CSD header-bar strip: keep its title (a separate GtkHeaderBar
-            // property wxbf only seeds once at Create) in step with the frame's. Inside the change guard:
-            // an unchanged frame title means the header already holds it.
-            if constexpr (kBorderless)
-                if (m_nativeWinButtons) wxn_SetHeaderBarTitle(this->GetHandle(), t.utf8_str());
-#endif
-        }
+        if (GetTitle() != t) SetTitle(t);
 #endif
     }
 
@@ -6504,32 +6494,23 @@ private:
             return b;
 #else
             (void)mdl2Glyph;
-            auto* b = new TitleBarBtn(m_titleBar, wxID_ANY, wxSize(46, kTitleBarH), winGlyph(svgPath), barBg, hot);
+            // Non-native: our bundled SVG glyph. Native-buttons mode swaps in the desktop theme's own
+            // symbolic window-control icon (winControlGlyph), keeping the SAME single integrated bar and
+            // the SAME flat buttons - only the glyph source changes, so no second GtkHeaderBar strip
+            // appears. (This mirrors the Windows path, which likewise draws native glyphs in our own bar.)
+            const char* sym = which == 0 ? "window-minimize-symbolic"
+                            : which == 1 ? (IsMaximized() ? "window-restore-symbolic" : "window-maximize-symbolic")
+                                         : "window-close-symbolic";
+            auto* b = new TitleBarBtn(m_titleBar, wxID_ANY, wxSize(46, kTitleBarH), winControlGlyph(svgPath, sym), barBg, hot);
             b->Bind(wxEVT_BUTTON, [this, which](wxCommandEvent&) { onWindowControl(which); });
             sz->Add(b, 0, wxEXPAND);
             return b;
 #endif
         };
         const wxColour hover = m_dark ? wxColour(63, 63, 70) : wxColour(220, 220, 220);
-#if !defined(__WXMSW__)
-        if (m_nativeWinButtons)
-        {
-            // GTK native-buttons mode: no app-drawn window controls at all. wxbf already installed a
-            // GtkHeaderBar as this window's CSD titlebar (that's what suppresses the WM's own bar) but
-            // keeps it empty and hidden; surface it with the user's real min/max/close cluster - theme
-            // rendering, gtk-decoration-layout order/side, GTK-handled drag/double-click/window menu all
-            // included. See wxn_EnableNativeHeaderButtons in gtk_native.cpp. (The strip follows the
-            // desktop theme, not the app's dark chrome, by design - recolouring it would leave the
-            // theme's button glyphs unreadable under the opposite palette.)
-            wxn_EnableNativeHeaderButtons(this->GetHandle(), this->FromDIP((int)kTitleBarH));
-        }
-        else
-#endif
-        {
-            ctrl(0xE921, GLYPH_MIN, 0, hover);                                                                 // minimize
-            m_maxBtn = ctrl(IsMaximized() ? 0xE923 : 0xE922, IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX, 1, hover);  // max/restore
-            ctrl(0xE8BB, GLYPH_CLOSE, 2, wxColour(232, 17, 35));                                                // close (red hover)
-        }
+        ctrl(0xE921, GLYPH_MIN, 0, hover);                                                                 // minimize
+        m_maxBtn = ctrl(IsMaximized() ? 0xE923 : 0xE922, IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX, 1, hover);  // max/restore
+        ctrl(0xE8BB, GLYPH_CLOSE, 2, wxColour(232, 17, 35));                                                // close (red hover)
 #ifdef __WXMSW__
         if (m_nativeWinButtons)
         {
@@ -6582,13 +6563,40 @@ private:
             path, col);
         return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(12, 12));
     }
+    // The glyph for one integrated-bar window control. Default mode: our bundled SVG (svgPath). GTK
+    // native-buttons mode: the desktop theme's own symbolic icon (symbolicName), so the buttons match
+    // the user's theme while staying in our single bar - falls back to the SVG if the theme lacks it.
+    wxBitmapBundle winControlGlyph(const char* svgPath, const char* symbolicName) const
+    {
+#ifdef __WXGTK__
+        if (m_nativeWinButtons)
+        {
+            const wxColour fg = m_dark ? wxColour(0xf0, 0xf0, 0xf0) : wxColour(0x17, 0x17, 0x17);
+            const int px = 16;
+            if (unsigned char* rgba = wxn_LoadSymbolicWindowIcon(symbolicName, px, fg.Red(), fg.Green(), fg.Blue()))
+            {
+                wxImage img(px, px); img.InitAlpha();
+                unsigned char* rgb = img.GetData(); unsigned char* a = img.GetAlpha();
+                for (int i = 0; i < px * px; ++i)
+                { rgb[i * 3] = rgba[i * 4]; rgb[i * 3 + 1] = rgba[i * 4 + 1]; rgb[i * 3 + 2] = rgba[i * 4 + 2]; a[i] = rgba[i * 4 + 3]; }
+                free(rgba);
+                return wxBitmapBundle(wxBitmap(img));
+            }
+        }
+#else
+        (void)symbolicName;
+#endif
+        return winGlyph(svgPath);
+    }
     void updateMaxGlyph()
     {
         if (!m_maxBtn) return;
 #ifdef __WXMSW__
         static_cast<wxButton*>(m_maxBtn)->SetLabel(wxString(wxUniChar(IsMaximized() ? 0xE923 : 0xE922)));   // ChromeRestore / ChromeMaximize
 #else
-        static_cast<TitleBarBtn*>(m_maxBtn)->SetGlyph(winGlyph(IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX));
+        static_cast<TitleBarBtn*>(m_maxBtn)->SetGlyph(winControlGlyph(
+            IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX,
+            IsMaximized() ? "window-restore-symbolic" : "window-maximize-symbolic"));
 #endif
     }
     void onWindowControl(int which)
@@ -9143,11 +9151,11 @@ private:
         // (the labels' wording is frozen - the .po catalogs key on these exact strings).
         // wxRESIZE_BORDER: some languages' longer labels (e.g. Polish's "Automatycznie ukrywaj pasek
         // narzędzi...") leave the General page's last row (the Theme combo) with no vertical breathing
-        // room at the fixed 620x440 size - letting the user drag the dialog taller is the direct fix,
-        // and a floor via SetMinSize below keeps it from being shrunk back into that cramped state.
-        wxDialog dlg(this, wxID_ANY, _("Preferences"), wxDefaultPosition, wxSize(620, 470),
+        // room - so the dialog is sized to its content (Fit, at the end of this function) rather than a
+        // fixed height, which adapts to GTK's taller controls where a hardcoded height clipped the last
+        // combo. Width is still pinned to 620 for the combo-column alignment, and it stays resizable.
+        wxDialog dlg(this, wxID_ANY, _("Preferences"), wxDefaultPosition, wxDefaultSize,
                     wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
-        dlg.SetMinSize(wxSize(620, 470));
         // wxListbook's default style (wxLB_DEFAULT == wxBK_DEFAULT == 0) is resolved by wx to a *horizontal
         // top strip* on macOS but a *left column* on Win/Linux (wx/src/generic/listbkg.cpp Create():
         // #ifdef __WXMAC__ style |= wxBK_TOP; #else style |= wxBK_LEFT). That top strip squashed the page
@@ -9413,12 +9421,14 @@ private:
         auto* okBtn = new wxButton(&dlg, wxID_OK, _("OK")); okBtn->SetDefault();
         btn->Add(okBtn, 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL); top->Add(book, 1, wxEXPAND | wxALL, 8); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
-        // Layout() explicitly, not just SetSizer: this dialog is opened at a fixed size with no
-        // post-show resize, and on GTK SetSizer alone doesn't lay children out until an actual size
-        // event - so the wxDefaultSize checkboxes/choices would render at their unlaid-out construction
-        // geometry (clipped labels, collapsed combos, dead space). MSW reflows on the initial show, so
-        // this is a no-op there. Layout() (not Fit/SetSizerAndFit) keeps the deliberate 620x440 size.
-        dlg.SetSizer(top); dlg.Layout(); themeDialog(&dlg);
+        // SetSizerAndFit sizes the dialog to the content's real best height on THIS platform (GTK's
+        // taller controls get the room they need instead of being clipped by a hardcoded height); it also
+        // lays the children out, so GTK doesn't render them at unlaid-out construction geometry. Width is
+        // then pinned to 620 for the combo-column alignment, and that fitted size becomes the resize floor.
+        dlg.SetSizerAndFit(top);
+        dlg.SetSize(wxSize(620, dlg.GetSize().GetHeight()));
+        dlg.SetMinSize(dlg.GetSize());
+        themeDialog(&dlg);
         // The nav list's row selection is native/generic list-control highlighting. Override it ONLY where
         // the platform actually gets it wrong, and deliberately leave it alone otherwise:
         //   - macOS can render the selected row's fill as plain white regardless of dark mode (instead of
