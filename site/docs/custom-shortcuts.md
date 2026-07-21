@@ -106,9 +106,11 @@ written by a *newer* wxNote (a higher `"version"`) is opened read-only — the M
 
 A **scheme** is a named, switchable set of divergences from wxNote's own defaults — the model
 JetBrains IDEs use for their keymaps. The picker at the top of the Shortcut Mapper switches schemes;
-the choice persists as `"activeScheme"`.
+the choice persists as `"activeScheme"`. **Add Mapping…** next to the picker prompts for a name and
+creates a new scheme by duplicating the currently active one — the GUI equivalent of hand-writing the
+`"schemes"` entry below — and switches to it immediately.
 
-One bundled, read-only preset ships: **wxNote default** — the stock keys; an empty delta. The stock
+One bundled, read-only preset ships: **wxNote** — the stock keys; an empty delta. The stock
 keys follow the consensus of today's mainstream editors (VS&nbsp;Code, JetBrains, Sublime&nbsp;Text,
 …) on the classic CUA base Notepad++ shares. There is deliberately no bundled Notepad++ preset: the
 headline bindings (Save, Find, Undo, …) already match — and rather than shipping a guess at the
@@ -116,7 +118,7 @@ remaining divergences, wxNote imports your *actual* Notepad++ keys from a `short
 optional `npp-shortcuts-compat` plugin (see
 [Importing Notepad++ shortcuts](#importing-notepad-shortcuts)). If your `shortcuts.json` still
 selects a scheme that no longer exists, the stock keys apply and the selection is migrated back to
-*wxNote default* the next time the file is written.
+*wxNote* the next time the file is written.
 
 Your own Mapper edits live in a **user layer above the active scheme**: they win over whatever the
 scheme says, and switching schemes never discards them. Bundled presets themselves can never be

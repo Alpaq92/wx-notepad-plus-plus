@@ -2045,7 +2045,13 @@ msgstr ""
 msgid "Marked %d - style 5"
 msgstr ""
 
-msgid "wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
+msgid "wxNote %s (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nUI language: %s\nTheme: %s (%s)\nToolbar: %s, %d px\nPlugins: %s\n\nExecutable:\n%s\n\nUser data:\n%s\n\nSettings:\n%s"
+msgstr ""
+
+msgid "disabled (Safe Mode)"
+msgstr ""
+
+msgid "enabled"
 msgstr ""
 
 msgid "Debug Info"
@@ -2352,6 +2358,9 @@ msgid "Close current"
 msgstr ""
 
 msgid "Match whole word only"
+msgstr ""
+
+msgid "wxNote Homepage"
 msgstr ""
 
 msgid "wxNote on GitHub"
@@ -2697,6 +2706,15 @@ msgid "Default"
 msgstr ""
 
 msgid "Keymap scheme:"
+msgstr ""
+
+msgid "Add Mapping..."
+msgstr ""
+
+msgid "Add Mapping"
+msgstr ""
+
+msgid "Mapping name:"
 msgstr ""
 
 msgid "Filter by name or shortcut"

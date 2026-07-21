@@ -236,7 +236,7 @@ This menu is window management only. Configuration lives under **Settings**.
 
 ## Help
 
-- **wxNote on GitHub** · **wxNote Releases** · **wxNote Documentation** · **Report an Issue**
+- **wxNote Homepage** · **wxNote on GitHub** · **wxNote Releases** · **wxNote Documentation** · **Report an Issue**
 - **Check for Updates** — opens the Releases page
 - **Command Line Arguments…** — a summary dialog. It is **abridged**: it lists only `-g`, `-e`, `-n`
   and `-r`. For `-w/--wait`, `--safe`, `-v` and `-h` see [Command Line](command-line.md)

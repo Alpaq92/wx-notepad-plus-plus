@@ -6,7 +6,7 @@
 // bundled preset is one the app ships and the user can never overwrite in place (edits copy-on-write into
 // a user scheme, or land in the user layer - KeymapStore::duplicateScheme / rebind).
 //
-// Exactly ONE preset ships: "wxNote default" (id "wxnote.default") - the IDENTITY preset: no deltas, it
+// Exactly ONE preset ships: "wxNote" (id "wxnote.default") - the IDENTITY preset: no deltas, it
 // simply IS wxNote's own Tier-0 defaults. It exists so a scheme picker can list/select "the built-in
 // keys" by name; KeymapStore::activeSchemeChain() treats "wxnote.default" as the chain root and never
 // walks its (empty) delta list, so it is a pure label with zero resolution cost.
@@ -67,5 +67,5 @@ inline void registerBundledScheme(KeymapStore& store, const wxString& id, const 
 // and so load()'s "keep bundled, drop user" cleanup preserves these on a reload).
 inline void registerKeymapSchemes(KeymapStore& store)
 {
-    registerBundledScheme(store, "wxnote.default", "wxNote default", wxString(), nullptr, 0);
+    registerBundledScheme(store, "wxnote.default", "wxNote", wxString(), nullptr, 0);
 }

@@ -626,7 +626,7 @@ public:
             registerTestPreset(ss);           // + the synthetic delta preset
             ss.resolveAll();
 
-            check(ss.activeScheme() == "wxnote.default", "store starts on the wxNote default scheme");
+            check(ss.activeScheme() == "wxnote.default", "store starts on the wxNote scheme");
             const EffectiveBinding* tab1 = ss.effective("view.tab.tab1");
             check(tab1 && tab1->primaryRaw() == "Ctrl+1", "default scheme: tab1 is Ctrl+1");
             const EffectiveBinding* setSingle = ss.effective("edit.commentUncomment.setSingle");

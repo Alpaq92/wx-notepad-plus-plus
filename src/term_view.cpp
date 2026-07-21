@@ -661,7 +661,20 @@ TermView::~TermView()
 void TermView::feed(const char* data, size_t len)
 {
     vterm_input_write(m->vt, data, len);
-    vterm_screen_flush_damage(m->vts);   // deliver the merged damage now, while the model is settled
+    vterm_screen_flush_damage(m->vts);   // deliver the merged damage now, while the model is settled -
+                                          // this Invalidate()s via RefreshRect (see cbDamage), it does not paint
+    // Force that invalidated region onto the screen SYNCHRONOUSLY, right here, instead of waiting for the
+    // platform to get around to it. On GTK, RefreshRect only queues a redraw (gtk_widget_queue_draw_area) at
+    // GDK's normal priority, while wx's own idle handler that drains queued PTY chunks into further feed()
+    // calls runs at G_PRIORITY_LOW - LOWER than that queued redraw. A shell that echoes a keystroke and then
+    // immediately re-colours it (zsh-syntax-highlighting, fish, PSReadLine-style live highlighting) does so
+    // as two separate PTY writes -> two separate feed() calls; GTK paints the FIRST (uncoloured, reads as
+    // plain white) call's frame before wx's own low-priority idle source even gets to run the second, so the
+    // correction only reaches the screen on the NEXT unrelated repaint (next keystroke, Enter). Windows never
+    // shows this: WM_PAINT is synthesized only once the message queue is empty, so both feed() calls already
+    // ran before the first paint happens there. Update() forces the already-invalidated region to paint NOW,
+    // closing that window on every platform (a harmless no-op on Windows, where it was never open).
+    Update();
 }
 
 void TermView::setDark(bool dark)

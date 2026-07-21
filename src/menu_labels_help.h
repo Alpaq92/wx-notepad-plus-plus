@@ -4,6 +4,7 @@
 namespace Label {
 inline const wxString MenuHelp()               { return _("&Help"); }
 inline const wxString HelpCmdLineArguments()   { return _("Command Line Arguments..."); }
+inline const wxString HelpHomepage()           { return _("wxNote Homepage"); }
 inline const wxString HelpGitHub()             { return _("wxNote on GitHub"); }
 inline const wxString HelpReleases()           { return _("wxNote Releases"); }
 inline const wxString HelpDocumentation()      { return _("wxNote Documentation"); }

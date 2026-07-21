@@ -2022,8 +2022,14 @@ msgstr "Отмечено %d - стиль 4"
 msgid "Marked %d - style 5"
 msgstr "Отмечено %d - стиль 5"
 
-msgid "wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
-msgstr "wxNote (экспериментальная версия)\n\nwxWidgets %d.%d.%d\n%s\n\nИсполняемый файл:\n%s"
+msgid "wxNote %s (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nUI language: %s\nTheme: %s (%s)\nToolbar: %s, %d px\nPlugins: %s\n\nExecutable:\n%s\n\nUser data:\n%s\n\nSettings:\n%s"
+msgstr "wxNote %s (экспериментальная версия)\n\nwxWidgets %d.%d.%d\n%s\n\nЯзык интерфейса: %s\nТема: %s (%s)\nПанель инструментов: %s, %d px\nПлагины: %s\n\nИсполняемый файл:\n%s\n\nПользовательские данные:\n%s\n\nНастройки:\n%s"
+
+msgid "disabled (Safe Mode)"
+msgstr "отключены (безопасный режим)"
+
+msgid "enabled"
+msgstr "включены"
 
 msgid "Debug Info"
 msgstr "Отладочная информация"
@@ -2351,6 +2357,9 @@ msgstr "Закрыть текущий"
 
 msgid "Match whole word only"
 msgstr "Только целое слово"
+
+msgid "wxNote Homepage"
+msgstr "Домашняя страница wxNote"
 
 msgid "wxNote on GitHub"
 msgstr "wxNote на GitHub"
@@ -2696,6 +2705,15 @@ msgstr "По умолчанию"
 
 msgid "Keymap scheme:"
 msgstr "Схема раскладки:"
+
+msgid "Add Mapping..."
+msgstr "Добавить сопоставление..."
+
+msgid "Add Mapping"
+msgstr "Добавить сопоставление"
+
+msgid "Mapping name:"
+msgstr "Имя сопоставления:"
 
 msgid "Filter by name or shortcut"
 msgstr "Фильтр по имени или сочетанию"

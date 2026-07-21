@@ -1,7 +1,7 @@
 # Keyboard Shortcuts
 
 Every shortcut below is a real menu accelerator taken from the application's menu definitions — the
-**defaults**, i.e. what the bundled *wxNote default* keymap scheme gives you. All of them can be
+**defaults**, i.e. what the bundled *wxNote* keymap scheme gives you. All of them can be
 remapped, cleared or reset in **Settings&nbsp;&rsaquo; Shortcut Mapper…**, along with a curated set of
 the editor's own Scintilla keys (word-wise movement, line deletion, and so on) that are not menu
 accelerators and therefore not listed here. See [Customizing Shortcuts](custom-shortcuts.md).
