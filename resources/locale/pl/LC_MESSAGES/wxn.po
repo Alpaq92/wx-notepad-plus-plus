@@ -1590,6 +1590,9 @@ msgstr "Pokaż pasek stanu"
 msgid "Show integrated top bar"
 msgstr "Pokaż zintegrowany górny pasek"
 
+msgid "System-native window buttons"
+msgstr "Systemowe przyciski okna"
+
 msgid "Localization:"
 msgstr "Lokalizacja:"
 

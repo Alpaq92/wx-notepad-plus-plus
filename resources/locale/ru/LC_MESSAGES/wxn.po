@@ -1590,6 +1590,9 @@ msgstr "Показывать строку состояния"
 msgid "Show integrated top bar"
 msgstr "Показывать встроенную верхнюю панель"
 
+msgid "System-native window buttons"
+msgstr "Системные кнопки окна"
+
 msgid "Localization:"
 msgstr "Локализация:"
 

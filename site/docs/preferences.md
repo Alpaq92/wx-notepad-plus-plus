@@ -4,9 +4,9 @@
 **General**, **Editing**, **Indentation**, **Auto-Completion**, **New Document**, **Tab Bar**,
 **Recent Files History** and **Print**.
 
-> **There is no Cancel button.** The dialog has a single **Close** button, and changes are applied and
-> saved when it closes. Settings that cannot change inside a running process (marked *restart* below)
-> instead prompt for a restart when you close the dialog.
+> **OK** applies and saves every change; **Cancel** (or Esc, or the window's own close button) discards
+> them all and leaves every setting exactly as it was. Settings that cannot change inside a running
+> process (marked *restart* below) prompt for a restart only after OK.
 
 ---
 
@@ -21,6 +21,7 @@
 | Auto-hide toolbar in full screen | **off** | when on, full screen hides the toolbar (macOS-style) |
 | Reuse an existing window | off | *restart* — when on, a second launch hands its files to the first window over IPC and exits. `-n` / `-r` override this per launch |
 | Show integrated top bar | — | *restart* — only present on platforms with borderless-window support and on macOS |
+| System-native window buttons | **off** | *restart* — Windows and Linux only (macOS always keeps its native traffic lights), and only affects the integrated top bar. **Windows**: same button look, but the bar and its buttons are handed back to the OS — Windows&nbsp;11 snap layouts pop up over the maximize button, dragging/snapping/Aero&nbsp;Shake and double-click-maximize become the OS's own, and Windows&nbsp;11's Segoe Fluent Icons glyphs are used where installed. **Linux**: the custom-drawn buttons are replaced by the real GTK header-bar cluster in a native strip above the menu row — your desktop theme's buttons, in the order and on the side your `gtk-decoration-layout` setting says |
 | Localization | English | *restart* — the UI language; the same list as **Settings&nbsp;&rsaquo; Localization** |
 | Toolbar icon style | Tabler icons (line) | *restart* — also Solar icons (green), IconPark icons (teal/lime) and Streamline icons (green/teal) |
 | Toolbar icon size | — | *restart* — 16, 20, 24 or 32&nbsp;px |
@@ -135,10 +136,10 @@ The two page macros are resolved per page as the document prints; the rest are r
 
 ## What needs a restart
 
-Closing Preferences prompts to restart if any of these changed: **Theme**, **Localization**, **Toolbar
+Clicking **OK** prompts to restart if any of these changed: **Theme**, **Localization**, **Toolbar
 icon style**, **Toolbar icon size**, **Reuse an existing window**, **Show close button on each tab**,
-**Max number of entries** (recent files), or **Show integrated top bar**. Everything else applies
-immediately.
+**Max number of entries** (recent files), **Show integrated top bar**, or **System-native window
+buttons**. Everything else applies immediately.
 
 If a restart is offered while documents have unsaved changes, the save prompt runs first — the new
 values are only written once the restart is actually confirmed, so cancelling out leaves the old

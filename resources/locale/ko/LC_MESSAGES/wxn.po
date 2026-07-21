@@ -1590,6 +1590,9 @@ msgstr "상태 표시줄 표시"
 msgid "Show integrated top bar"
 msgstr "통합 상단 바 표시"
 
+msgid "System-native window buttons"
+msgstr "시스템 기본 창 버튼"
+
 msgid "Localization:"
 msgstr "지역화:"
 

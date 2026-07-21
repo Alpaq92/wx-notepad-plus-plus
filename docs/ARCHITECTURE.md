@@ -206,7 +206,12 @@ The main window is a template, `WxnShellFrameT<FB>`, instantiated two ways:
 - `WxnShellFrameT<wxFrame>` — native OS chrome;
 - `WxnShellFrameT<wxBorderlessFrame>` (only where `WXN_HAS_BORDERLESS` is
   defined: Windows and Linux) — the integrated top bar, where the menu
-  buttons, toolbar, and custom min/max/close controls live in one row. On
+  buttons, toolbar, and custom min/max/close controls live in one row. The
+  "System-native window buttons" preference swaps those custom controls for
+  platform ones: on Windows the bar/buttons become hit-test-transparent so the
+  OS gets real `HTCAPTION`/`HT*BUTTON` codes (snap layouts, native drag); on
+  Linux the (otherwise hidden) CSD `GtkHeaderBar` is surfaced with the theme's
+  own button cluster (`src/gtk_native.cpp`). On
   macOS the same integrated look is achieved differently: the frame stays a
   `wxFrame` and `src/macos_native.mm` makes the native title bar transparent
   and re-centres the traffic lights into the toolbar row.

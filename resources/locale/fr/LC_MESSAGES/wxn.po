@@ -1590,6 +1590,9 @@ msgstr "Afficher la barre d’état"
 msgid "Show integrated top bar"
 msgstr "Afficher la barre supérieure intégrée"
 
+msgid "System-native window buttons"
+msgstr "Boutons de fenêtre natifs du système"
+
 msgid "Localization:"
 msgstr "Localisation :"
 

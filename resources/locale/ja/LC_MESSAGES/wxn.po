@@ -1590,6 +1590,9 @@ msgstr "ステータスバーを表示"
 msgid "Show integrated top bar"
 msgstr "統合トップバーを表示"
 
+msgid "System-native window buttons"
+msgstr "システムネイティブのウィンドウボタン"
+
 msgid "Localization:"
 msgstr "ローカライズ:"
 
