@@ -3,6 +3,20 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.10] - 2026-07-21
+
+### Changed
+- **"System-native window buttons" on Linux** no longer surfaces a second GtkHeaderBar strip above the
+  integrated bar. The buttons now stay in the single integrated bar, in place of the custom ones, and
+  simply borrow the desktop theme's own symbolic min/max/close glyphs (falling back to the bundled
+  glyphs if the theme lacks them) — mirroring how the Windows path draws the OS's glyphs in the same
+  bar. (0.9.9 stacked a native header bar on top, which read as two title bars.)
+
+### Fixed
+- **Preferences dialog clipped its last row on Linux** (the Theme combo fell off the bottom, and the
+  window was too small). The dialog now sizes itself to its content per platform instead of a fixed
+  height, so GTK's taller controls fit; the width stays fixed and it stays resizable.
+
 ## [0.9.9] - 2026-07-21
 
 ### Fixed
