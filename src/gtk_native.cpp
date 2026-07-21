@@ -155,6 +155,16 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
         "toolbar, toolbar.horizontal, toolbar.primary-toolbar {"
         "  background-color: #202020; background-image: none;"
         "  box-shadow: none; border: none; }"
+        // Toolbar/control tooltips (e.g. hovering "Word Wrap") are a native GtkTooltip popup - a
+        // separate top-level window, not a descendant of any wx-managed widget, so nothing else in
+        // this file reaches it; only this screen-wide G_MAXUINT provider can. Left unstyled it renders
+        // in GTK's stock light/blue-accented box regardless of the app's own dark chrome. Match the
+        // same (45,45,45)/(220,220,220) pair themeDialog() already uses for every wxNote dialog.
+        "tooltip, tooltip.background, tooltip decoration {"
+        "  background-color: #2d2d2d; background-image: none;"
+        "  color: #dcdcdc; border: 1px solid #4a4a4a; border-radius: 4px;"
+        "  box-shadow: none; padding: 4px 8px; }"
+        "tooltip label { color: #dcdcdc; }"
         WXN_TOOLBAR_COMPACT_CSS;
 
     static const char* const css_light =
@@ -194,6 +204,14 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
         "toolbar, toolbar.horizontal, toolbar.primary-toolbar {"   // match the AUI dock gap (#f0f0f0 == wxColour(240,240,240)) - seamless full-width toolbar
         "  background-color: #f0f0f0; background-image: none;"
         "  box-shadow: none; border: none; }"
+        // Light-mode tooltip: a clean neutral box instead of the stock theme's blue-accented one, so it
+        // reads as intentional/branded chrome rather than a leftover default. See the dark palette above
+        // for why a screen-wide provider is the only way to reach this native GtkTooltip popup at all.
+        "tooltip, tooltip.background, tooltip decoration {"
+        "  background-color: #fafafa; background-image: none;"
+        "  color: #202020; border: 1px solid #c8c8c8; border-radius: 4px;"
+        "  box-shadow: none; padding: 4px 8px; }"
+        "tooltip label { color: #202020; }"
         WXN_TOOLBAR_COMPACT_CSS;
 
     gtk_css_provider_load_from_data(provider, dark ? css_dark : css_light, -1, nullptr);

@@ -2319,8 +2319,14 @@ msgstr "个字符起"
 msgid "times"
 msgstr "次"
 
-msgid "wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
-msgstr "wxNote（实验版）\n\nwxWidgets %d.%d.%d\n%s\n\n可执行文件：\n%s"
+msgid "wxNote %s (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nUI language: %s\nTheme: %s (%s)\nToolbar: %s, %d px\nPlugins: %s\n\nExecutable:\n%s\n\nUser data:\n%s\n\nSettings:\n%s"
+msgstr "wxNote %s（实验版）\n\nwxWidgets %d.%d.%d\n%s\n\n界面语言：%s\n主题：%s（%s）\n工具栏：%s，%d px\n插件：%s\n\n可执行文件：\n%s\n\n用户数据：\n%s\n\n设置：\n%s"
+
+msgid "disabled (Safe Mode)"
+msgstr "已禁用（安全模式）"
+
+msgid "enabled"
+msgstr "已启用"
 
 msgid "Theme:"
 msgstr "主题："
@@ -2351,6 +2357,9 @@ msgstr "关闭当前"
 
 msgid "Match whole word only"
 msgstr "仅匹配整个单词"
+
+msgid "wxNote Homepage"
+msgstr "wxNote 主页"
 
 msgid "wxNote on GitHub"
 msgstr "GitHub 上的 wxNote"
@@ -2696,6 +2705,15 @@ msgstr "默认"
 
 msgid "Keymap scheme:"
 msgstr "键位方案："
+
+msgid "Add Mapping..."
+msgstr "添加映射..."
+
+msgid "Add Mapping"
+msgstr "添加映射"
+
+msgid "Mapping name:"
+msgstr "映射名称："
 
 msgid "Filter by name or shortcut"
 msgstr "按名称或快捷键筛选"

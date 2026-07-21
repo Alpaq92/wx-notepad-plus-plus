@@ -32,6 +32,7 @@
 #include <wx/sizer.h>
 #include <wx/button.h>
 #include <wx/textctrl.h>
+#include <wx/textdlg.h>    // wxGetTextFromUser - name a new scheme (Add Mapping...)
 #include <wx/arrstr.h>     // wxSplit (filter tokenization)
 #include <functional>
 #include <vector>
@@ -185,15 +186,24 @@ private:
         // --- scheme picker row ---
         auto* schemeRow = new wxBoxSizer(wxHORIZONTAL);
         schemeRow->Add(new wxStaticText(panel, wxID_ANY, _("Keymap scheme:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
-        m_scheme = new wxChoice(panel, wxID_ANY);
+        // Explicit width: an unsized wxChoice shrinks to fit whatever the CURRENTLY selected entry's text
+        // measures at construction time (here, the shortest bundled name, "wxNote") - a longer user-typed
+        // mapping name (or the imported "Notepad++ (imported)" scheme) would then render clipped/ellipsized
+        // until something else made the control relayout.
+        m_scheme = new wxChoice(panel, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(220, -1)));
         fillSchemeChoice();
         schemeRow->Add(m_scheme, 0, wxALIGN_CENTRE_VERTICAL);
+        // Duplicates the active scheme under a new user-chosen name (KeymapStore::duplicateScheme) and
+        // switches to it - the GUI front door for what custom-shortcuts.md calls a "user-defined scheme".
+        m_btnAddMapping = new wxButton(panel, wxID_ANY, _("Add Mapping..."));
+        schemeRow->Add(m_btnAddMapping, 0, wxALIGN_CENTRE_VERTICAL | wxLEFT, 8);
         // Read-only store (shortcuts.json written by a NEWER wxNote - save() refuses to clobber it):
         // freeze the mutating UI and say so, instead of letting edits apply live all session and then
         // silently vanish on restart. "Read-Only" is the status-bar string, already in every catalog.
         if (m_store.isReadOnly())
         {
             m_scheme->Disable();
+            m_btnAddMapping->Disable();
             auto* roNote = new wxStaticText(panel, wxID_ANY, _("Read-Only"));
             roNote->SetForegroundColour(wxColour(0xC0, 0x80, 0x20));
             schemeRow->Add(roNote, 0, wxALIGN_CENTRE_VERTICAL | wxLEFT, 12);
@@ -253,6 +263,7 @@ private:
 
         // events
         m_scheme->Bind(wxEVT_CHOICE, [this](wxCommandEvent&){ onSchemePicked(); });
+        m_btnAddMapping->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){ onAddMapping(); });
         m_filter->Bind(wxEVT_TEXT,   [this](wxCommandEvent&){ refillGrid(); });
         m_filter->Bind(wxEVT_SEARCH, [this](wxCommandEvent&){ refillGrid(); });
         m_filter->Bind(wxEVT_SEARCH_CANCEL, [this](wxCommandEvent&){ m_filter->ChangeValue(wxEmptyString); refillGrid(); });
@@ -330,6 +341,44 @@ private:
         m_store.save();
         if (m_apply) m_apply();
         rebuildEngine();
+        refillGrid();
+        updateButtons();
+    }
+
+    // "Add Mapping...": prompt for a display name, then duplicateScheme() the currently active scheme
+    // under a fresh ascii id derived from that name (KeymapStore::duplicateScheme is the copy-on-write
+    // primitive custom-shortcuts.md documents for hand-written "schemes" entries - this is its GUI
+    // front door). The new scheme starts identical to whatever is active (inherits every effective
+    // binding through the parent chain, stores only future edits as deltas) and is switched to
+    // immediately, exactly like picking it from the combo would.
+    void onAddMapping()
+    {
+        if (m_store.isReadOnly()) return;
+        wxString name = wxGetTextFromUser(_("Mapping name:"), _("Add Mapping"), wxString(), this);
+        name.Trim(true).Trim(false);
+        if (name.empty()) return;
+        wxString slug;
+        for (size_t i = 0; i < name.length(); ++i)
+        {
+            const wxUniChar c = name[i];
+            if (wxIsalnum(c)) slug += wxUniChar(wxTolower(c));
+            else if (!slug.empty() && slug.Last() != '-') slug += '-';
+        }
+        while (!slug.empty() && slug.Last() == '-') slug.RemoveLast();
+        if (slug.empty()) slug = "mapping";
+        const wxString baseId = "user." + slug;
+        wxString newId = baseId;
+        wxString created = m_store.duplicateScheme(m_store.activeScheme(), newId, name, true);
+        for (int suffix = 2; created.empty() && suffix < 100; ++suffix)   // id collision: disambiguate
+        {
+            newId = wxString::Format("%s-%d", baseId, suffix);
+            created = m_store.duplicateScheme(m_store.activeScheme(), newId, name, true);
+        }
+        if (created.empty()) return;
+        m_store.save();
+        if (m_apply) m_apply();
+        rebuildEngine();
+        fillSchemeChoice();
         refillGrid();
         updateButtons();
     }
@@ -909,6 +958,7 @@ private:
     std::vector<wxString>        m_schemeIds;   // parallel to m_scheme entries
 
     wxChoice*        m_scheme = nullptr;
+    wxButton*        m_btnAddMapping = nullptr;
     wxSearchCtrl*    m_filter = nullptr;
     wxToggleButton*  m_record = nullptr;
     wxDataViewCtrl*  m_grid   = nullptr;

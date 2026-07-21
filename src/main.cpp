@@ -152,7 +152,7 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 #include "nib.h"               // our own permissive, cross-platform plugin API (Nib)
 #include "terminal_panel.h"    // View > Show Terminal - bottom multi-tab shell panel (defines myID_VIEW_TERMINAL, used by menu_data_view.h below)
 #include "menu_builder.h"      // data-driven menu bar builder (menu_model.h/menu_data_*.h) - replaces the old inline menu construction
-#include "keymap_schemes.h"    // bundled read-only keymap presets ("wxNote default" + "Notepad++") - Tier 1 of the shortcut model
+#include "keymap_schemes.h"    // bundled read-only keymap presets ("wxNote" + "Notepad++") - Tier 1 of the shortcut model
 #include "shortcut_mapper_dialog.h"  // the Shortcut Mapper dialog + conflict engine (implements kCmdSettingShortcutMapper 48009)
 #include "shortcut_labels.h"   // curated Scintilla "Editor commands" tier: seedEditorKeymapDefaults + wx<->SCK translation
 #include "scintillua_engine.h" // embedded Lua+LPeg+Scintillua engine (the native language-definition engine)
@@ -2421,6 +2421,31 @@ public:
 #endif
         m_dark = dark;          // chrome darkness is fixed for this process (restart-to-apply)
         loadSettings();         // restore preferences incl. the chosen editor theme (before loadTheme reads m_themeName)
+        // Apply the size/position loadSettings() just read into m_normalRect. No saved position (first
+        // run, X/Y still wxDefaultCoord) falls back to Centre() rather than pinning the window to a
+        // screen corner; a saved position that lands off-screen (the display it was last on got
+        // unplugged, or shrank) falls back the same way instead of stranding the window. Maximized state
+        // is restored separately, post-Show(), in OnInit (Maximize() before the native peer exists is a
+        // no-op on some ports).
+        if (m_normalRect.width > 100 && m_normalRect.height > 100)
+        {
+            const bool hasPos = m_normalRect.x != wxDefaultCoord && m_normalRect.y != wxDefaultCoord;
+            wxRect r = m_normalRect;
+            int dispIdx = hasPos ? wxDisplay::GetFromPoint(r.GetPosition()) : wxNOT_FOUND;
+            if (dispIdx == wxNOT_FOUND) dispIdx = wxDisplay::GetFromWindow(this);
+            if (dispIdx == wxNOT_FOUND) dispIdx = 0;
+            const wxRect area = wxDisplay(static_cast<unsigned>(dispIdx)).GetClientArea();
+            r.width  = wxMin(r.width,  area.GetWidth());
+            r.height = wxMin(r.height, area.GetHeight());
+            SetSize(r.width, r.height);
+            if (hasPos && area.Contains(wxPoint(r.x, r.y))) Move(r.GetPosition());
+            else Centre();
+            m_normalRect = wxRect(GetPosition(), GetSize());   // reflects whatever we actually ended up with (clamped size, centred position)
+        }
+        // Keep m_normalRect current while the window ISN'T maximized, so saveSettings() always has a
+        // real "restore to this" rect on hand even if the user closes while maximized.
+        this->Bind(wxEVT_SIZE, [this](wxSizeEvent& e){ if (!IsMaximized()) m_normalRect.SetSize(GetSize()); e.Skip(); });
+        this->Bind(wxEVT_MOVE, [this](wxMoveEvent& e){ if (!IsMaximized()) m_normalRect.SetPosition(GetPosition()); e.Skip(); });
         loadTheme();            // parse the active theme XML for exact colours
         { long z = 0; wxConfigBase::Get()->Read("Zoom", &z, 0L); m_zoom = static_cast<int>(z); }   // restore zoom
         // Seed a concrete paper size/orientation so File > Print's page geometry is never (0,0) before the
@@ -3019,6 +3044,10 @@ public:
     // A positional directory (`wxnote .`, `wxnote C:\src\proj`) roots the workspace browser rather than
     // opening a tab. Public wrapper: showFileBrowserRooted() itself lives in the private section below.
     void openFolderPath(const wxString& p) { showFileBrowserRooted(p); }
+    // Applies the maximized state loadSettings() read into m_wasMaximized. Called post-Show() in OnInit
+    // rather than from the constructor: Maximize() before the native peer exists is a documented no-op on
+    // some wx ports, so it has to run after Show() has realized the window.
+    void applySavedWindowState() { if (m_wasMaximized) Maximize(true); }
     // -w/--wait: the paths the launching process is blocked on. Also force the save prompt ON for this run
     // only (not persisted - saveSettings() skips the AskBeforeClose write in wait mode): m_askBeforeClose
     // defaults to OFF, i.e. a modified buffer is discarded silently - which for a commit message would hand
@@ -4109,6 +4138,24 @@ private:
             tree->SetItemImage(child, idx, wxTreeItemIcon_Selected);
         }
     }
+    // wxGenericDirCtrl auto-expands (and populates) every ancestor of `root` during construction to reveal
+    // and select it - but that auto-expansion is done internally (SetPath/ExpandPath), which does NOT fire
+    // wxEVT_TREE_ITEM_EXPANDED, so the single applyBrowserIcons() call below for the true tree root (whose
+    // own children are Desktop-level items, not `root`'s) never reaches any of the levels in between,
+    // including `root` itself. Walk every already-populated (expanded) folder recursively instead, so the
+    // whole auto-revealed chain gets themed up front; the EVT_TREE_ITEM_EXPANDED binding still covers
+    // folders the user expands by hand afterward, which DO fire the event.
+    void applyBrowserIconsRecursive(wxTreeCtrl* tree, const wxTreeItemId& parent)
+    {
+        if (!tree || !parent.IsOk()) return;
+        applyBrowserIcons(tree, parent);
+        wxTreeItemIdValue cookie;
+        for (wxTreeItemId child = tree->GetFirstChild(parent, cookie); child.IsOk(); child = tree->GetNextChild(parent, cookie))
+        {
+            const auto* d = dynamic_cast<wxDirItemData*>(tree->GetItemData(child));
+            if (d && d->m_isDir && tree->IsExpanded(child)) applyBrowserIconsRecursive(tree, child);
+        }
+    }
     void createFileBrowser(const wxString& root)
     {
         patchFileBrowserIcons();
@@ -4126,7 +4173,7 @@ private:
         if (auto* tree = m_fileBrowser->GetTreeCtrl())
         {
             themeToEditor(tree);   // theme the tree to the editor's colours
-            applyBrowserIcons(tree, tree->GetRootItem());   // root's children are already populated synchronously
+            applyBrowserIconsRecursive(tree, tree->GetRootItem());   // themes root PLUS every level auto-expanded to reveal `root`
             tree->Bind(wxEVT_TREE_ITEM_EXPANDED, [this, tree](wxTreeEvent& ev) { applyBrowserIcons(tree, ev.GetItem()); ev.Skip(); });
         }
         m_fileBrowser->Bind(wxEVT_DIRCTRL_FILEACTIVATED, [this](wxTreeEvent&) {
@@ -6227,7 +6274,7 @@ private:
             }
         }
         // Shortcut store: seed Tier 0 from the menu data's defaultAccel, register the bundled read-only
-        // preset (Tier 1: the "wxNote default" identity; Notepad++ keys come only via the optional
+        // preset (Tier 1: the "wxNote" identity; Notepad++ keys come only via the optional
         // npp-shortcuts-compat import), then layer shortcuts.json's active-scheme selection + user
         // deltas on top (best-effort/hand-editable). Ordering is load-bearing: schemes must be
         // registered BEFORE load() so a saved activeScheme resolves at startup (an id that no longer
@@ -8839,6 +8886,11 @@ private:
         c->Read("Print/Footer", &m_printFooter, wxEmptyString);
         long se = 0; c->Read("Editing/SearchEngine", &se, 0L); m_searchEngine = (int)se;
         c->Read("Editing/FontFace", &m_fontFace, "Cascadia Mono");
+        long wx_ = wxDefaultCoord, wy_ = wxDefaultCoord, ww = 1100, wh = 720;
+        c->Read("Window/X", &wx_, (long)wxDefaultCoord); c->Read("Window/Y", &wy_, (long)wxDefaultCoord);
+        c->Read("Window/W", &ww, 1100L);                 c->Read("Window/H", &wh, 720L);
+        m_normalRect = wxRect(wxPoint((int)wx_, (int)wy_), wxSize((int)ww, (int)wh));
+        c->Read("Window/Maximized", &m_wasMaximized, false);
     }
     void saveSettings()
     {
@@ -8867,6 +8919,12 @@ private:
         c->Write("Editing/CustomGutterColour", m_customGutterColor);
         c->Write("Editing/GutterColourValue", m_gutterColorValue);
         c->Write("Editing/FontFace", m_fontFace);
+        // m_normalRect is kept live by the wxEVT_SIZE/MOVE binds in the constructor rather than read here
+        // via GetSize()/GetPosition(): while the window IS currently maximized, those report the
+        // maximized bounds, not what a later un-maximize should restore to.
+        c->Write("Window/X", (long)m_normalRect.x);      c->Write("Window/Y", (long)m_normalRect.y);
+        c->Write("Window/W", (long)m_normalRect.width);  c->Write("Window/H", (long)m_normalRect.height);
+        c->Write("Window/Maximized", IsMaximized());
         c->Flush();
     }
     void applySettings()   // push the current preferences onto the editor view + chrome
@@ -8916,7 +8974,13 @@ private:
     {
         // Page layout: General / Editing / Indentation / Auto-Completion / Dark Mode
         // (the labels' wording is frozen - the .po catalogs key on these exact strings).
-        wxDialog dlg(this, wxID_ANY, _("Preferences"), wxDefaultPosition, wxSize(620, 440));
+        // wxRESIZE_BORDER: some languages' longer labels (e.g. Polish's "Automatycznie ukrywaj pasek
+        // narzędzi...") leave the General page's last row (the Theme combo) with no vertical breathing
+        // room at the fixed 620x440 size - letting the user drag the dialog taller is the direct fix,
+        // and a floor via SetMinSize below keeps it from being shrunk back into that cramped state.
+        wxDialog dlg(this, wxID_ANY, _("Preferences"), wxDefaultPosition, wxSize(620, 440),
+                    wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+        dlg.SetMinSize(wxSize(620, 440));
         // wxListbook's default style (wxLB_DEFAULT == wxBK_DEFAULT == 0) is resolved by wx to a *horizontal
         // top strip* on macOS but a *left column* on Win/Linux (wx/src/generic/listbkg.cpp Create():
         // #ifdef __WXMAC__ style |= wxBK_TOP; #else style |= wxBK_LEFT). That top strip squashed the page
@@ -10099,6 +10163,44 @@ private:
         themeDialog(&dlg);
         dlg.ShowModal();
     }
+    // Help > Debug Info: everything a bug report needs beyond what About already shows - resolved
+    // (not just configured) settings, since "Theme: System" alone doesn't say whether that resolved to
+    // dark or light on this machine. Icon style names are the exact Preferences combo strings (same
+    // _() call sites, so no new catalog entries), and the settings-storage line is the one thing that
+    // genuinely differs by platform: the registry on Windows, a file under the user's config directory
+    // everywhere else (userDataDir()/preferences.md's own wording).
+    void showDebugInfo()
+    {
+        wxLocale* loc = wxGetLocale();
+        const wxString lang = loc ? loc->GetCanonicalName() : wxString("?");
+        static const wxString kThemeModes[] = { _("System"), _("Dark"), _("Light") };
+        static const wxString kIconStyles[] = {
+            _("Tabler icons (line)"), _("Solar icons (green)"),
+            _("IconPark icons (teal/lime)"), _("Streamline icons (green/teal)")
+        };
+        const wxString themeMode = kThemeModes[(m_themeMode >= 0 && m_themeMode < 3) ? m_themeMode : 0];
+        const wxString iconStyle = kIconStyles[(m_iconStyle >= 0 && m_iconStyle < 4) ? m_iconStyle : 0];
+#ifdef __WXMSW__
+        const wxString settingsLoc = "Windows Registry (HKCU\\Software\\wxNote)";
+#else
+        const wxString settingsLoc = wxStandardPaths::Get().GetUserConfigDir();
+#endif
+        themedInfo(wxString::Format(
+            _("wxNote %s (experimental)\n\n"
+              "wxWidgets %d.%d.%d\n%s\n\n"
+              "UI language: %s\n"
+              "Theme: %s (%s)\n"
+              "Toolbar: %s, %d px\n"
+              "Plugins: %s\n\n"
+              "Executable:\n%s\n\n"
+              "User data:\n%s\n\n"
+              "Settings:\n%s"),
+            WXN_VERSION, wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER, wxGetOsDescription(),
+            lang, m_dark ? _("Dark") : _("Light"), themeMode, iconStyle, m_toolbarIconSize,
+            g_safeMode ? _("disabled (Safe Mode)") : _("enabled"),
+            wxStandardPaths::Get().GetExecutablePath(), userDataDir(), settingsLoc),
+            _("Debug Info"));
+    }
 
 #ifdef __WXMSW__
     // wxToolBar::MSWCommand sign-extends the 16-bit WM_COMMAND id to a signed short, so command ids
@@ -10129,11 +10231,40 @@ private:
                 {
                     case CDDS_PREPAINT: return CDRF_NOTIFYITEMDRAW;
                     case CDDS_ITEMPREPAINT:
+                    {
                         // Pale green-2 reads as a soft highlight on the light toolbar but glares against
                         // a dark one - dark mode uses the same Open Color family's deep end (green-9)
                         // instead, so the hover cue stays a recognizable "green" without the mismatch.
-                        cd->clrHighlightHotTrack = m_dark ? RGB(0x2b, 0x8a, 0x3e) : RGB(0xb2, 0xf2, 0xbb);
+                        const COLORREF activeFill = m_dark ? RGB(0x2b, 0x8a, 0x3e) : RGB(0xb2, 0xf2, 0xbb);
+                        // A CHECKED check-tool (Word Wrap, Show All Characters, ...) is the SAME problem one
+                        // level worse: comctl32 paints its themed "pressed" background - a system-accent BLUE
+                        // box we never chose - and unlike hot-track there is no NM_CUSTOMDRAW flag to redirect
+                        // it (TBCDRF_HILITEHOTTRACK only ever applies to the transient hover state). The only
+                        // way to recolour it is to paint the checked button entirely ourselves: fill with the
+                        // same green used for hover (one consistent "active" colour) and blit the icon on top.
+                        if (m_toolBarPtr->GetToolState(static_cast<int>(cd->nmcd.dwItemSpec)))
+                        {
+                            HBRUSH br = ::CreateSolidBrush(activeFill);
+                            ::FillRect(cd->nmcd.hdc, &cd->nmcd.rc, br);
+                            ::DeleteObject(br);
+                            if (wxToolBarToolBase* tool = m_toolBarPtr->FindById(static_cast<int>(cd->nmcd.dwItemSpec)))
+                            {
+                                const wxBitmap bmp = tool->GetNormalBitmap(wxSize(m_toolbarIconSize, m_toolbarIconSize));
+                                if (bmp.IsOk())
+                                {
+                                    const int w = bmp.GetWidth(), hgt = bmp.GetHeight();
+                                    const int x = cd->nmcd.rc.left + ((cd->nmcd.rc.right - cd->nmcd.rc.left) - w) / 2;
+                                    const int y = cd->nmcd.rc.top + ((cd->nmcd.rc.bottom - cd->nmcd.rc.top) - hgt) / 2;
+                                    wxMemoryDC memDC; memDC.SelectObjectAsSource(bmp);
+                                    BLENDFUNCTION bf{ AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+                                    ::AlphaBlend(cd->nmcd.hdc, x, y, w, hgt, (HDC)memDC.GetHDC(), 0, 0, w, hgt, bf);
+                                }
+                            }
+                            return CDRF_SKIPDEFAULT;
+                        }
+                        cd->clrHighlightHotTrack = activeFill;
                         return CDRF_DODEFAULT | TBCDRF_HILITEHOTTRACK;
+                    }
                 }
             }
         }
@@ -10531,12 +10662,12 @@ private:
             case kCmdLangOpenudldir: { wxLogNull noLog; wxFileName::Mkdir(udlDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL); openFolder(udlDir()); break; }   // create-then-open the per-user dir
 
             // ---- Help: external links + info ----
+            case kCmdHomepage: wxLaunchDefaultBrowser("https://alpaq92.github.io/wx-notepad-plus-plus/"); break;
             case kCmdHomeSweetHome: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus"); break;
             case kCmdProjectpage: case kCmdUpdateNpp: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/releases"); break;
             case kCmdOnlineDocument: wxLaunchDefaultBrowser("https://alpaq92.github.io/wx-notepad-plus-plus/docs/"); break;   // the user manual on the project site (repo docs/ holds developer notes, not a manual)
             case kCmdForum: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/issues"); break;
-            case kCmdDebuginfo: themedInfo(wxString::Format(_("wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"),
-                wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER, wxGetOsDescription(), wxStandardPaths::Get().GetExecutablePath()), _("Debug Info")); break;
+            case kCmdDebuginfo: showDebugInfo(); break;
             case kCmdCmdLineArguments: themedInfo(_("Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"), _("Command Line Arguments")); break;
 
             case kCmdExecuteBase: onRun(); break;   // Run... (F5)
@@ -10823,6 +10954,13 @@ private:
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
     bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON
+    // Window/X,Y,W,H,Maximized: the last known NON-maximized frame geometry (kept live by the
+    // wxEVT_SIZE/MOVE binds in the constructor - GetSize()/GetPosition() while actually maximized report
+    // the maximized bounds, not what to restore to) plus whether the window was maximized at last close.
+    // wxDefaultCoord X/Y means "never saved a position" (first run) - the constructor falls back to
+    // Centre() in that case rather than pinning to a corner.
+    wxRect      m_normalRect{wxDefaultCoord, wxDefaultCoord, 1100, 720};
+    bool        m_wasMaximized = false;   // applied via Maximize(true) post-Show() in OnInit
     int         m_themeMode = 1;   // Preferences > General "Theme": 0 = System, 1 = Dark, 2 = Light (restart-to-apply)
     bool        m_askBeforeClose = false;   // Preferences > General "Ask before closing unsaved changes" (off by default)
     bool        m_fsAutohideToolbar = false; // Preferences > General "Auto-hide toolbar in full screen" (off by default: toolbar stays)
@@ -11327,6 +11465,7 @@ public:
         {
             auto* frame = new WxnIntegratedFrame(dark);
             frame->Show(true);
+            frame->applySavedWindowState();   // Maximize() before Show() is a no-op on some ports
             if (!wait && !g_cleanMode) frame->restoreSession();   // --clean: no session AND no recovery restore (restoreSession does both)
             if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(kIpcServiceName); }
             applyRequest(frame);
@@ -11335,6 +11474,7 @@ public:
 #endif
         auto* frame = new WxnShellFrame(dark);
         frame->Show(true);
+        frame->applySavedWindowState();   // Maximize() before Show() is a no-op on some ports
         if (!wait && !g_cleanMode) frame->restoreSession();   // reopen files from a theme-restart. -w: a dedicated
                                                 // one-file window; leave Session/Pending set so the next real launch
                                                 // still restores the user's tabs. --clean: skip session AND recovery

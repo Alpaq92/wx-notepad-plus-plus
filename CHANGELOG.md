@@ -3,6 +3,53 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.8] - 2026-07-21
+
+### Added
+- **"Add Mapping..." for the Shortcut Mapper.** The keymap-scheme picker gets a button to duplicate the
+  active scheme under a new name (`KeymapStore::duplicateScheme`, previously wired but never exposed in
+  the UI) and switch to it immediately — the GUI front door for what `custom-shortcuts.md` already
+  documented as hand-written `"schemes"` entries. The picker itself is now a fixed, wider 220px so a
+  longer scheme name doesn't clip. The bundled preset's display name is shortened from "wxNote default"
+  to plain **"wxNote"**.
+- **Help&nbsp;&rsaquo; wxNote Homepage.** A new link to the project's landing page, first in the Help
+  menu's web-resource cluster, translated into all eight languages.
+- **Richer Help&nbsp;&rsaquo; Debug Info.** Now also reports the app version (previously missing
+  entirely), UI language, resolved theme (dark/light *and* the configured System/Dark/Light mode),
+  toolbar icon pack + size, plugin/Safe&nbsp;Mode status, the user-data directory, and where settings
+  are stored (the registry key on Windows, the config directory elsewhere) — everything a bug report
+  needs beyond what About already shows.
+- **Window geometry now persists.** Size, position and maximized state are remembered across restarts —
+  previously every launch reset to a fixed 1100×720 regardless of how the window was last left. A saved
+  position that would land off-screen (the display it was last on is gone or shrank) falls back to
+  centering instead of stranding the window.
+
+### Fixed
+- **Folder as Workspace showed native OS icons on the folder's own top level.** The custom SVG icon
+  theming (`applyBrowserIcons`) only ever ran for a folder's children once the user manually expanded it
+  — the level auto-revealed when a workspace first opens (via "Open Folder as Workspace" or
+  `wxnote <dir>`) never got themed, silently falling back to whatever the OS resolved for extensions
+  outside the curated set (`.gitignore`, `.gitattributes`, and similar dotfiles were the most visible
+  case). Now walks every already-populated (auto-expanded) level recursively, not just the tree's true
+  root.
+- **Checked toolbar buttons used the native Windows blue highlight**, clashing with the app's own green
+  theme. Custom-painted via `NM_CUSTOMDRAW` instead (`AlphaBlend`-composited icon over a themed fill),
+  verified in both light and dark mode.
+- **Preferences dialog couldn't be resized**, cramping the last row on languages with longer labels
+  (e.g. Polish). Added `wxRESIZE_BORDER` and a matching minimum size.
+- **Terminal text could render white until the next keystroke.** A GTK/GDK event-loop priority
+  inversion — invalidating a region only *queues* a redraw at normal priority, while the idle handler
+  draining buffered PTY output ran at lower priority — let an uncolored frame (from a shell like
+  zsh-syntax-highlighting that echoes, then recolors, in two separate writes) stick until an unrelated
+  repaint. Fixed with a synchronous `Update()` after each PTY chunk; harmless no-op on Windows, where
+  `WM_PAINT`'s own lowest-priority synthesis meant this was never visible there.
+- **Toolbar tooltips read the OS's native (unstyled) popup on Linux.** `GtkTooltip` is a separate
+  top-level window, reachable only through the existing screen-wide GTK CSS provider — themed to match
+  the rest of the app in both light and dark mode.
+- Screenshots gallery on the project site realigned to the current asset set (several files were
+  renamed; new packs/panels/platforms gained tiles: Tabler and Streamline icon packs, large toolbar
+  icons, Document Map, Integrated Terminal, native Windows).
+
 ## [0.9.7] - 2026-07-20
 
 ### Added

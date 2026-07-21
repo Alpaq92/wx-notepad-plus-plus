@@ -2022,8 +2022,14 @@ msgstr "Zaznaczono %d - styl 4"
 msgid "Marked %d - style 5"
 msgstr "Zaznaczono %d - styl 5"
 
-msgid "wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
-msgstr "wxNote (eksperymentalny)\n\nwxWidgets %d.%d.%d\n%s\n\nPlik wykonywalny:\n%s"
+msgid "wxNote %s (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nUI language: %s\nTheme: %s (%s)\nToolbar: %s, %d px\nPlugins: %s\n\nExecutable:\n%s\n\nUser data:\n%s\n\nSettings:\n%s"
+msgstr "wxNote %s (eksperymentalny)\n\nwxWidgets %d.%d.%d\n%s\n\nJęzyk interfejsu: %s\nMotyw: %s (%s)\nPasek narzędzi: %s, %d px\nWtyczki: %s\n\nPlik wykonywalny:\n%s\n\nDane użytkownika:\n%s\n\nUstawienia:\n%s"
+
+msgid "disabled (Safe Mode)"
+msgstr "wyłączone (tryb awaryjny)"
+
+msgid "enabled"
+msgstr "włączone"
 
 msgid "Debug Info"
 msgstr "Informacje debugowania"
@@ -2351,6 +2357,9 @@ msgstr "Zamknij bieżący"
 
 msgid "Match whole word only"
 msgstr "Dopasuj tylko całe słowo"
+
+msgid "wxNote Homepage"
+msgstr "Strona główna wxNote"
 
 msgid "wxNote on GitHub"
 msgstr "wxNote na GitHubie"
@@ -2696,6 +2705,15 @@ msgstr "Domyślny"
 
 msgid "Keymap scheme:"
 msgstr "Schemat klawiszy:"
+
+msgid "Add Mapping..."
+msgstr "Dodaj mapowanie..."
+
+msgid "Add Mapping"
+msgstr "Dodaj mapowanie"
+
+msgid "Mapping name:"
+msgstr "Nazwa mapowania:"
 
 msgid "Filter by name or shortcut"
 msgstr "Filtruj według nazwy lub skrótu"

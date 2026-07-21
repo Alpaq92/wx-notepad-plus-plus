@@ -509,6 +509,7 @@ inline constexpr int kCmdAboutBase        = 47000;
 inline constexpr int kCmdCmdLineArguments = 47010;
 inline constexpr int kCmdDebuginfo        = 47012;
 inline constexpr int kCmdForum            = 47004;
+inline constexpr int kCmdHomepage         = 47005;  // wxNote-only (N++'s IDM_ABOUT+5 is unused in the real ABI)
 inline constexpr int kCmdHomeSweetHome    = 47001;
 inline constexpr int kCmdOnlineDocument   = 47003;
 inline constexpr int kCmdProjectpage      = 47002;

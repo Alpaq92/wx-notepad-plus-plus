@@ -5,11 +5,13 @@
 
 // wxNote Help menu grouping (wxNote's own arrangement):
 //   Web-resource links lead, since visiting the project online is the most
-//   common reason to open Help: GitHub, Releases, Documentation, Report Issue.
-//   Then update-checking on its own, then the diagnostics cluster
-//   (Command-line Arguments + Debug Info) for troubleshooting, and About last
-//   per the CUA convention of parking the identity item at the bottom.
+//   common reason to open Help: Homepage, GitHub, Releases, Documentation,
+//   Report Issue. Then update-checking on its own, then the diagnostics
+//   cluster (Command-line Arguments + Debug Info) for troubleshooting, and
+//   About last per the CUA convention of parking the identity item at the
+//   bottom.
 static const MenuItemDef kHelpMenuItems[] = {
+    { MenuItemKind::Normal, kCmdHomepage,        &Label::HelpHomepage,      "help.homepage" },
     { MenuItemKind::Normal, kCmdHomeSweetHome,   &Label::HelpGitHub,        "help.gitHub" },
     { MenuItemKind::Normal, kCmdProjectpage,     &Label::HelpReleases,      "help.releases" },
     { MenuItemKind::Normal, kCmdOnlineDocument,  &Label::HelpDocumentation, "help.documentation" },

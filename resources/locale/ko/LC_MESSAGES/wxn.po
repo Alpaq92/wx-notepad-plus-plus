@@ -2022,8 +2022,14 @@ msgstr "%d개 표시됨 - 스타일 4"
 msgid "Marked %d - style 5"
 msgstr "%d개 표시됨 - 스타일 5"
 
-msgid "wxNote (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nExecutable:\n%s"
-msgstr "wxNote(실험적)\n\nwxWidgets %d.%d.%d\n%s\n\n실행 파일:\n%s"
+msgid "wxNote %s (experimental)\n\nwxWidgets %d.%d.%d\n%s\n\nUI language: %s\nTheme: %s (%s)\nToolbar: %s, %d px\nPlugins: %s\n\nExecutable:\n%s\n\nUser data:\n%s\n\nSettings:\n%s"
+msgstr "wxNote %s(실험적)\n\nwxWidgets %d.%d.%d\n%s\n\nUI 언어: %s\n테마: %s (%s)\n도구 모음: %s, %d px\n플러그인: %s\n\n실행 파일:\n%s\n\n사용자 데이터:\n%s\n\n설정:\n%s"
+
+msgid "disabled (Safe Mode)"
+msgstr "비활성화됨 (안전 모드)"
+
+msgid "enabled"
+msgstr "활성화됨"
 
 msgid "Debug Info"
 msgstr "디버그 정보"
@@ -2351,6 +2357,9 @@ msgstr "현재 문서 닫기"
 
 msgid "Match whole word only"
 msgstr "단어 단위로만 일치"
+
+msgid "wxNote Homepage"
+msgstr "wxNote 홈페이지"
 
 msgid "wxNote on GitHub"
 msgstr "GitHub의 wxNote"
@@ -2696,6 +2705,15 @@ msgstr "기본값"
 
 msgid "Keymap scheme:"
 msgstr "키맵 구성표:"
+
+msgid "Add Mapping..."
+msgstr "매핑 추가..."
+
+msgid "Add Mapping"
+msgstr "매핑 추가"
+
+msgid "Mapping name:"
+msgstr "매핑 이름:"
 
 msgid "Filter by name or shortcut"
 msgstr "이름 또는 단축키로 필터링"
