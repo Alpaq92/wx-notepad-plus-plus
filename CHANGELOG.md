@@ -3,6 +3,36 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.9] - 2026-07-21
+
+### Fixed
+- **The intermittent 0.9.8 crash (0xc0000005, "unknown module")** that could strike at exit, while
+  idle, or mid-use whenever the integrated top bar was on. Root cause in the vendored borderless-frame
+  library: `wxWindowDestroyEvent` propagates, so any child window's destruction (the first happens
+  seconds after every launch, when session restore closes the initial blank tab) bubbled up to the
+  frame and made its four drop-shadow windows destroy themselves early — leaving the frame's shadow
+  pointers dangling for a later teardown to `delete` through recycled memory. The shadows now ignore
+  destroy events that aren't the frame's own, the frame's destructor detaches before deleting, and a
+  dangling event-reference capture in the activation handler is gone. (As a visible bonus, the window's
+  drop shadow no longer silently disappears after the first tab closes.)
+
+### Added
+- **"System-native window buttons"** (Preferences > General, restart-to-apply, Windows/Linux, off by
+  default) — an opt-in for platform-native window controls in the integrated top bar. On **Linux** the
+  custom-drawn min/max/close give way to the real GTK header-bar cluster: the desktop theme's own
+  buttons, in the order and on the side the user's `gtk-decoration-layout` prescribes, with dragging,
+  double-click-maximize and the window menu handled by GTK (the strip follows the desktop theme by
+  design). On **Windows** the buttons keep their native-identical look but the bar is handed back to
+  OS hit-testing (`HTCAPTION`/`HTMINBUTTON`/`HTMAXBUTTON`/`HTCLOSE`): Windows 11's snap-layouts flyout
+  appears over the maximize button, drag/snap/Aero Shake/double-click become the OS's own, and the
+  glyphs upgrade to Segoe Fluent Icons where installed. macOS is untouched — its integrated bar always
+  had the native traffic lights.
+- **Preferences now has a Cancel button.** Previously the dialog only offered a single "Close" button
+  that always applied every change, so the only way to undo something was to reopen Preferences and set
+  it back by hand. **OK** applies and saves as before; **Cancel** (or Esc, or the window's own close
+  button — all three already mapped to `wxID_CANCEL`) now discards every control's value and leaves
+  settings exactly as they were.
+
 ## [0.9.8] - 2026-07-21
 
 ### Added

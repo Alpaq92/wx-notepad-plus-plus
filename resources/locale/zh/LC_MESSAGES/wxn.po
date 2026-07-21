@@ -1908,6 +1908,9 @@ msgstr "显示缩进参考线"
 msgid "Show integrated top bar"
 msgstr "显示集成顶栏"
 
+msgid "System-native window buttons"
+msgstr "系统原生窗口按钮"
+
 msgid "Show status bar"
 msgstr "显示状态栏"
 

@@ -69,7 +69,14 @@ bool wxBorderlessFrameMSW::Create(wxWindow* parent,
 wxBorderlessFrameMSW::~wxBorderlessFrameMSW()
 {
     for (int i = 0; i < 4; i++) {
+        if (!m_shadow[i]) {
+            continue;
+        }
+        // unbind from this frame first so the shadow's teardown can never
+        // re-enter a handler bound to a half-destructed frame
+        m_shadow[i]->DetachFromWindow();
         delete m_shadow[i];
+        m_shadow[i] = nullptr;
     }
 }
 

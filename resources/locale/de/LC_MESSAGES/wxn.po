@@ -1590,6 +1590,9 @@ msgstr "Statusleiste anzeigen"
 msgid "Show integrated top bar"
 msgstr "Integrierte obere Leiste anzeigen"
 
+msgid "System-native window buttons"
+msgstr "Systemeigene Fensterschaltflächen"
+
 msgid "Localization:"
 msgstr "Lokalisierung:"
 

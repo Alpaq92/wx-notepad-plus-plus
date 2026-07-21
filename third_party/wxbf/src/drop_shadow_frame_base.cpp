@@ -206,6 +206,17 @@ void wxDropShadowFrameBase::OnAttachedActivate(wxActivateEvent& evnt)
 
 void wxDropShadowFrameBase::OnAttachedDestroy(wxWindowDestroyEvent& evnt)
 {
+    // wxWindowDestroyEvent derives from wxCommandEvent, so it PROPAGATES: a
+    // destroy event for any descendant of the attached frame (a closed tab
+    // page, a torn-down control, ...) bubbles up to the frame's handlers and
+    // lands here too. Only the attached frame's own destruction may tear the
+    // shadow down - self-destroying on a child's event leaves the frame's
+    // m_shadow[] pointing at freed objects, and its destructor's delete then
+    // jumps through a recycled vtable (0xc0000005, "unknown module").
+    if (evnt.GetWindow() != m_attachedFrame) {
+        evnt.Skip();
+        return;
+    }
     DetachFromWindow();
     Destroy();
     evnt.Skip();
@@ -214,8 +225,11 @@ void wxDropShadowFrameBase::OnAttachedDestroy(wxWindowDestroyEvent& evnt)
 void wxDropShadowFrameBase::OnActivate(wxActivateEvent& evnt)
 {
     if (evnt.GetActive() && m_attachedFrame) {
-        CallAfter([this, &evnt]() {
-            m_attachedFrame->SetFocus();
+        // no &evnt capture (dangling by the time CallAfter runs), and the
+        // frame may have been detached/destroyed before the deferred call
+        CallAfter([this]() {
+            if (m_attachedFrame)
+                m_attachedFrame->SetFocus();
         });
     }
 }

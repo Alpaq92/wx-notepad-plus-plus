@@ -239,3 +239,50 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
         wxn_restyle_scrollbars(top ? top : GTK_WIDGET(gtkWidgetOrNull), provider);
     }
 }
+
+// ---- Integrated bar: native CSD window buttons ("System-native window buttons" preference) -----------
+//
+// The borderless frame (third_party/wxbf) forces client-side decorations by installing an EMPTY, HIDDEN
+// GtkHeaderBar as the window's titlebar - the CSD switch is what removes the WM's own bar, and the header
+// itself was never meant to be seen. Native-buttons mode surfaces that same header: showing it and setting
+// show-close-button makes GTK render the user's real minimize/maximize/close cluster - the desktop theme's
+// own button drawing, honouring the gtk-decoration-layout setting (which buttons, their order AND side,
+// e.g. close-on-the-left setups), with dragging, double-click maximize and the right-click window menu all
+// handled by GTK because this is a genuine titlebar.
+//
+// The compaction CSS is attached to the HEADER'S OWN style context, not screen-wide: a screen-wide
+// `headerbar` rule would also restyle every GtkFileChooser dialog's header bar. Per GTK3 semantics a
+// widget-scoped provider does not cascade to child widgets, so the buttons themselves stay 100%
+// theme-styled. Deliberately NO background/colour overrides here: the theme's button glyphs are drawn for
+// the theme's own bar colour, and repainting the strip to the app's chrome would leave light-theme glyphs
+// invisible on dark chrome (and vice versa). The strip looking like the desktop theme - not the app - is
+// what "native" means.
+extern "C" void wxn_EnableNativeHeaderButtons(void* gtkWindowWidget, int barHeightPx)
+{
+    if (!gtkWindowWidget) return;
+    GtkWidget* header = gtk_window_get_titlebar(GTK_WINDOW(gtkWindowWidget));
+    if (!header || !GTK_IS_HEADER_BAR(header)) return;
+
+    gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header), TRUE);
+
+    // Nudge the strip toward the app's own bar height (Adwaita's default headerbar is ~46px tall). The
+    // theme's button min-sizes still win if they need more - "as compact as the theme allows", not a clamp.
+    char css[160];
+    g_snprintf(css, sizeof(css), "headerbar { min-height: %dpx; padding-top: 0; padding-bottom: 0; }",
+               barHeightPx > 0 ? barHeightPx : 30);
+    GtkCssProvider* compact = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(compact, css, -1, nullptr);
+    gtk_style_context_add_provider(gtk_widget_get_style_context(header),
+                                   GTK_STYLE_PROVIDER(compact), G_MAXUINT);
+    g_object_unref(compact);   // the style context holds its own reference
+
+    gtk_widget_show_all(header);
+}
+
+extern "C" void wxn_SetHeaderBarTitle(void* gtkWindowWidget, const char* utf8Title)
+{
+    if (!gtkWindowWidget || !utf8Title) return;
+    GtkWidget* header = gtk_window_get_titlebar(GTK_WINDOW(gtkWindowWidget));
+    if (header && GTK_IS_HEADER_BAR(header))
+        gtk_header_bar_set_title(GTK_HEADER_BAR(header), utf8Title);
+}

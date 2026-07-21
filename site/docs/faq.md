@@ -40,19 +40,14 @@ than 10 version 1809**, where ConPTY does not exist: there the tab falls back to
 pipe-based console, which handles line-oriented tools only. Details in
 [Integrated Terminal](terminal.md#a-real-terminal).
 
-## Preferences has no Cancel button. Is that a bug?
-
-No. The dialog applies and saves on close by design. If you want to undo a change, reopen Preferences
-and change it back. The **Style Configurator** *does* have Cancel, because editing a colour scheme is
-the kind of exploratory work you may well want to abandon.
-
 ## Why do some settings need a restart?
 
-Theme, UI language, toolbar icon set and size, tab close buttons, recent-files length, window reuse and
-the integrated top bar are all fixed per process — they are read once while the chrome is being built.
-Closing Preferences after changing one of them offers a restart. If documents have unsaved changes, the
-save prompt runs first, and the new values are only written once the restart is actually confirmed, so
-cancelling out leaves your old settings intact.
+Theme, UI language, toolbar icon set and size, tab close buttons, recent-files length, window reuse,
+the integrated top bar and its system-native window buttons are all fixed per process — they are read
+once while the chrome is being built. Clicking **OK** in Preferences after changing one of them offers
+a restart (Cancel discards the changes instead). If documents have unsaved changes, the save prompt
+runs first, and the new values are only written once the restart is actually confirmed, so cancelling
+out leaves your old settings intact.
 
 ## My file opened as garbled characters
 

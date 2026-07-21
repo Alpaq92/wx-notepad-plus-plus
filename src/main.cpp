@@ -66,6 +66,7 @@
 #ifdef WXN_HAS_BORDERLESS
 #include <type_traits>                  // std::is_base_of - detect the borderless base in WxnShellFrameT<FB>
 #include <vector>                       // std::vector - accelerator-entry list for refreshAccelerators
+#include <wx/weakref.h>                 // wxWeakRef - self-nulling caption-button refs (native-buttons mode NC handlers)
 #include <wxbf/borderless_frame.h>      // wxBorderlessFrame - the optional integrated/borderless title bar (Windows + GTK)
 #include <wxbf/window_gripper.h>        // wxWindowGripper - cross-platform window move (MSW + GTK begin_move_drag)
 #endif
@@ -116,6 +117,13 @@ extern "C" void wxn_DragWindow(void* nsWindow);             // native window dra
 // GtkWidget*s (from GetHandle()) to resolve the GdkScreen AND as the tree-walk root; passed as a void* so this
 // header stays free of GTK types, and may be null (then only the screen-wide provider is installed).
 extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
+// Integrated bar, "System-native window buttons" mode (also gtk_native.cpp): surface the CSD GtkHeaderBar
+// wxbf installed (hidden/empty, purely to suppress the WM's own titlebar) with the user's real
+// minimize/maximize/close cluster, compacted toward barHeightPx. The second call keeps the header's title
+// in sync with the frame's (wxbf only sets it once at Create). Both take the top-level GtkWidget* from
+// GetHandle() as void* to keep this header free of GTK types; both no-op safely if there is no header bar.
+extern "C" void wxn_EnableNativeHeaderButtons(void* gtkWindowWidget, int barHeightPx);
+extern "C" void wxn_SetHeaderBarTitle(void* gtkWindowWidget, const char* utf8Title);
 #endif
 
 #include <string>
@@ -2195,6 +2203,26 @@ private:
     bool m_hot = false;
 };
 
+#if defined(WXN_HAS_BORDERLESS) && defined(__WXMSW__)
+// Native-buttons mode only (see buildIntegratedTitleBar): hit-test-transparent variants of the caption
+// buttons and the title-bar panel. Windows resolves WM_NCHITTEST at the deepest child window and stops
+// there, so as long as the buttons/panel answer HTCLIENT the borderless frame's own hit-test - the one
+// that can report HTCAPTION/HTMINBUTTON/HTMAXBUTTON/HTCLOSE to the OS - never runs over the title bar.
+// HTTRANSPARENT forwards the query through button -> panel -> frame (same-thread propagation), which is
+// what lights up the Win11 snap-layout flyout on the maximize button and hands drag/snap/shake/double-
+// click to the OS. Cost: transparent windows get no mouse messages at all, so clicks and hover arrive
+// as the frame's wxEVT_NC_* events instead (handled in buildIntegratedTitleBar). The menu buttons stay
+// plain wxButtons - they keep normal client hit-testing and are unaffected.
+template <class W> class HitPass : public W
+{
+public:
+    using W::W;
+protected:
+    WXLRESULT MSWWindowProc(WXUINT msg, WXWPARAM wParam, WXLPARAM lParam) override
+    { return msg == WM_NCHITTEST ? HTTRANSPARENT : W::MSWWindowProc(msg, wParam, lParam); }
+};
+#endif
+
 // File > Print (Ctrl+P) / Print Now: paginate + render the active document through Scintilla's
 // FormatRange (wx's cross-platform wrapper around SCI_FORMATRANGE). Follows the pattern from wxWidgets' own
 // samples/stc/edit.cpp (EditPrint) - measure page breaks with a dry (non-drawing) pass over the whole
@@ -2324,6 +2352,31 @@ public:
         m_controlBar->CreateButtons();
     }
 };
+
+// Current scroll offset of one axis of a scrolled window, in pixels (view start is in scroll units).
+static long long previewScrollPx(wxScrolledWindow* w, bool vertical)
+{
+    int ux, uy; w->GetScrollPixelsPerUnit(&ux, &uy);
+    int vx, vy; w->GetViewStart(&vx, &vy);
+    return vertical ? (long long)vy * uy : (long long)vx * ux;
+}
+
+// Overlay-scrollbar thumb for the print-preview canvas (its native scrollbars are hidden - see
+// stylePreviewWindow): the track is the full client edge and is never drawn, so the "background" is just
+// the canvas itself. Returns an empty rect when that axis has nothing to scroll.
+static wxRect previewThumbRect(wxScrolledWindow* w, bool vertical)
+{
+    const wxSize cl = w->GetClientSize(), virt = w->GetVirtualSize();
+    const int client = vertical ? cl.y : cl.x, total = vertical ? virt.y : virt.x;
+    if (total <= client || client <= 0) return wxRect();
+    const int span  = wxMax(w->FromDIP(24), (int)((long long)client * client / total));
+    const int maxPx = total - client;
+    const int cur   = wxMin((int)previewScrollPx(w, vertical), maxPx);
+    const int pos   = (int)((long long)(client - span) * cur / maxPx);
+    const int th    = w->FromDIP(6), inset = w->FromDIP(2);
+    return vertical ? wxRect(cl.x - th - inset, pos, th, span)
+                    : wxRect(pos, cl.y - th - inset, span, th);
+}
 
 // The shell frame is a template on its chrome base so the same ~3300 lines work whether the base is the
 // native wxFrame or the borderless wxBorderlessFrame. The base is chosen at startup (restart-to-apply)
@@ -5753,7 +5806,17 @@ private:
         (void)docPart; SetTitle(wxString());   // keep the native bar blank (titleVisibility is also hidden, see ctor)
 #else
         const wxString t = docPart + " - wxNote";
-        if (GetTitle() != t) SetTitle(t);
+        if (GetTitle() != t)
+        {
+            SetTitle(t);
+#if defined(__WXGTK__) && defined(WXN_HAS_BORDERLESS)
+            // Native-buttons mode shows the CSD header-bar strip: keep its title (a separate GtkHeaderBar
+            // property wxbf only seeds once at Create) in step with the frame's. Inside the change guard:
+            // an unchanged frame title means the header already holds it.
+            if constexpr (kBorderless)
+                if (m_nativeWinButtons) wxn_SetHeaderBarTitle(this->GetHandle(), t.utf8_str());
+#endif
+        }
 #endif
     }
 
@@ -6311,9 +6374,28 @@ private:
     // ---- integrated/borderless top bar (compiled only where wxBorderlessFrame exists; instantiated only
     //      for the borderless frame, i.e. kBorderless - the native frame never reaches these) ------------
 
-    // Borderless hit-testing. We use real child controls for the menu/window buttons and a manual drag
-    // (onTitleBarDrag), so the inner area is plain client; the lib still handles the resize borders itself.
-    wxWindowPart GetWindowPart(wxPoint) const { return wxWP_CLIENT_AREA; }
+    // Borderless hit-testing. Default mode: real child controls for the menu/window buttons + a manual
+    // drag (onTitleBarDrag), so the inner area is plain client and this is never consulted over the bar
+    // (the children answer WM_NCHITTEST first); the lib still handles the resize borders itself.
+    // MSW native-buttons mode: the bar and its caption buttons are hit-test-transparent (see HitPass
+    // above for the full mechanism), so the query does propagate down to the frame - report the real
+    // window parts and wxbf's WM_NCHITTEST translates them 1:1 to HTCAPTION/HTMINBUTTON/HTMAXBUTTON/
+    // HTCLOSE. `screenPos` is in screen coordinates on both backends (wxGetMousePosition() on MSW,
+    // ClientToScreen() on GTK).
+    wxWindowPart GetWindowPart(wxPoint screenPos) const
+    {
+#ifdef __WXMSW__
+        if (m_nativeWinButtons && m_titleBar)
+        {
+            static const wxWindowPart kParts[3] = { wxWP_MINIMIZE_BUTTON, wxWP_MAXIMIZE_BUTTON, wxWP_CLOSE_BUTTON };
+            const int i = capBtnAtScreen(screenPos);
+            if (i >= 0) return kParts[i];
+            if (m_titleBar->GetScreenRect().Contains(screenPos)) return wxWP_TITLEBAR;
+        }
+#endif
+        (void)screenPos;
+        return wxWP_CLIENT_AREA;
+    }
 
     void buildIntegratedTitleBar(wxMenuBar* mb)
     {
@@ -6337,7 +6419,15 @@ private:
         { DWORD corner = DWMWCP_DONOTROUND;
           ::DwmSetWindowAttribute(static_cast<HWND>(this->GetHandle()), DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner)); }
 #endif
-        m_titleBar = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, kTitleBarH));
+        // MSW native-buttons mode gets the hit-test-transparent panel variant (see HitPass): the drag/
+        // double-click binds below then never fire - the panel receives no mouse messages - and the OS
+        // handles both natively via HTCAPTION instead. Two-phase Create keeps one argument list.
+#ifdef __WXMSW__
+        m_titleBar = m_nativeWinButtons ? new HitPass<wxPanel> : new wxPanel;
+#else
+        m_titleBar = new wxPanel;
+#endif
+        m_titleBar->Create(this, wxID_ANY, wxDefaultPosition, wxSize(-1, kTitleBarH));
         m_titleBar->SetBackgroundColour(barBg);
         m_titleBar->Bind(wxEVT_LEFT_DOWN, &WxnShellFrameT::onTitleBarDrag, this);     // drag empty area to move
         m_titleBar->Bind(wxEVT_LEFT_DCLICK, [this](wxMouseEvent&){ onWindowControl(1); });   // double-click = maximize/restore
@@ -6382,22 +6472,34 @@ private:
 #ifdef __WXMSW__
         // Windows draws its caption buttons from the Segoe MDL2 Assets icon font - use the very same font
         // + glyphs (Chrome{Minimize,Maximize,Restore,Close}) so the controls are pixel-identical to native.
-        const wxFont mdl2(wxFontInfo(10).FaceName("Segoe MDL2 Assets"));
+        // Native-buttons mode upgrades to Win11's Segoe Fluent Icons where installed (identical codepoints
+        // for these four glyphs); the default mode stays on MDL2 so OFF remains byte-identical to before.
+        const bool fluent = m_nativeWinButtons && wxFontEnumerator::IsValidFacename("Segoe Fluent Icons");
+        const wxFont mdl2(wxFontInfo(10).FaceName(fluent ? "Segoe Fluent Icons" : "Segoe MDL2 Assets"));
 #endif
         auto ctrl = [&](wchar_t mdl2Glyph, const char* svgPath, int which, const wxColour& hot) -> wxWindow* {
 #ifdef __WXMSW__
             // Windows: native wxButton, pixel-identical to the OS's own caption buttons (see mdl2 above).
             // This path has no hover-repaint issue - MSW's native wxButton doesn't run its own independent
             // theme-driven repaint cycle behind wx's back the way GTK's does (see TitleBarBtn above).
-            auto* b = new wxButton(m_titleBar, wxID_ANY, "", wxDefaultPosition,
-                                   wxSize(46, kTitleBarH), wxBU_EXACTFIT | wxBORDER_NONE);
+            // Native-buttons mode swaps in the hit-test-transparent variant (see HitPass): same rendering,
+            // but clicks and hover are then driven by the frame's wxEVT_NC_* handlers below, not client
+            // events. Two-phase Create keeps a single argument list across the two variants.
+            wxButton* b = m_nativeWinButtons ? new HitPass<wxButton> : new wxButton;
+            b->Create(m_titleBar, wxID_ANY, "", wxDefaultPosition,
+                      wxSize(46, kTitleBarH), wxBU_EXACTFIT | wxBORDER_NONE);
             b->SetFont(mdl2); b->SetLabel(wxString(wxUniChar(mdl2Glyph)));
             b->SetForegroundColour(m_dark ? wxColour(240, 240, 240) : wxColour(20, 20, 20));
             (void)svgPath;
             b->SetBackgroundColour(barBg);
-            b->Bind(wxEVT_BUTTON,       [this, which](wxCommandEvent&) { onWindowControl(which); });
-            b->Bind(wxEVT_ENTER_WINDOW, [b, hot](wxMouseEvent& e)   { b->SetBackgroundColour(hot);   b->Refresh(); e.Skip(); });
-            b->Bind(wxEVT_LEAVE_WINDOW, [b, barBg](wxMouseEvent& e) { b->SetBackgroundColour(barBg); b->Refresh(); e.Skip(); });
+            if (m_nativeWinButtons)
+                m_capBtns[which] = { b, hot };
+            else
+            {
+                b->Bind(wxEVT_BUTTON,       [this, which](wxCommandEvent&) { onWindowControl(which); });
+                b->Bind(wxEVT_ENTER_WINDOW, [b, hot](wxMouseEvent& e)   { b->SetBackgroundColour(hot);   b->Refresh(); e.Skip(); });
+                b->Bind(wxEVT_LEAVE_WINDOW, [b, barBg](wxMouseEvent& e) { b->SetBackgroundColour(barBg); b->Refresh(); e.Skip(); });
+            }
             sz->Add(b, 0, wxEXPAND);
             return b;
 #else
@@ -6409,9 +6511,51 @@ private:
 #endif
         };
         const wxColour hover = m_dark ? wxColour(63, 63, 70) : wxColour(220, 220, 220);
-        ctrl(0xE921, GLYPH_MIN, 0, hover);                                                                 // minimize
-        m_maxBtn = ctrl(IsMaximized() ? 0xE923 : 0xE922, IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX, 1, hover);  // max/restore
-        ctrl(0xE8BB, GLYPH_CLOSE, 2, wxColour(232, 17, 35));                                                // close (red hover)
+#if !defined(__WXMSW__)
+        if (m_nativeWinButtons)
+        {
+            // GTK native-buttons mode: no app-drawn window controls at all. wxbf already installed a
+            // GtkHeaderBar as this window's CSD titlebar (that's what suppresses the WM's own bar) but
+            // keeps it empty and hidden; surface it with the user's real min/max/close cluster - theme
+            // rendering, gtk-decoration-layout order/side, GTK-handled drag/double-click/window menu all
+            // included. See wxn_EnableNativeHeaderButtons in gtk_native.cpp. (The strip follows the
+            // desktop theme, not the app's dark chrome, by design - recolouring it would leave the
+            // theme's button glyphs unreadable under the opposite palette.)
+            wxn_EnableNativeHeaderButtons(this->GetHandle(), this->FromDIP((int)kTitleBarH));
+        }
+        else
+#endif
+        {
+            ctrl(0xE921, GLYPH_MIN, 0, hover);                                                                 // minimize
+            m_maxBtn = ctrl(IsMaximized() ? 0xE923 : 0xE922, IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX, 1, hover);  // max/restore
+            ctrl(0xE8BB, GLYPH_CLOSE, 2, wxColour(232, 17, 35));                                                // close (red hover)
+        }
+#ifdef __WXMSW__
+        if (m_nativeWinButtons)
+        {
+            // Input for the hit-test-transparent caption buttons: wxbf swallows the OS default for
+            // HTMINBUTTON/HTMAXBUTTON/HTCLOSE and re-posts the NC mouse traffic as wxEVT_NC_* events in
+            // frame-client coordinates - hover highlight rides NC_MOTION/NC_LEAVE, activation is a
+            // press+release pair on the SAME button (m_capPressed latches the down; a release anywhere
+            // else cancels, matching native caption behaviour - without the latch, press-on-minimize/
+            // slide/release-on-close would close the window). NC_LEAVE keeps the hover when the cursor
+            // is still over the hot button: entering the Win11 snap-layout flyout (a separate shell
+            // window) fires WM_NCMOUSELEAVE, and native caption buttons stay lit under their flyout.
+            this->Bind(wxEVT_NC_MOTION,    [this](wxMouseEvent& e){ setCapHover(capBtnAt(e.GetPosition())); e.Skip(); });
+            this->Bind(wxEVT_NC_LEAVE,     [this](wxMouseEvent& e){ setCapHover(capBtnAt(e.GetPosition())); e.Skip(); });
+            this->Bind(wxEVT_NC_LEFT_DOWN, [this](wxMouseEvent& e){
+                m_capPressed = capBtnAt(e.GetPosition());
+                if (m_capPressed < 0) e.Skip();
+            });
+            this->Bind(wxEVT_NC_LEFT_UP, [this](wxMouseEvent& e){
+                const int i = capBtnAt(e.GetPosition());
+                const int pressed = m_capPressed;
+                m_capPressed = -1;
+                if (i >= 0 && i == pressed) onWindowControl(i);
+                else if (i < 0) e.Skip();
+            });
+        }
+#endif
 
         m_titleBar->SetSizer(sz);
         m_aui.AddPane(m_titleBar, wxAuiPaneInfo().Name("titlebar").Top().Layer(2)
@@ -6453,6 +6597,28 @@ private:
         else if (which == 1) { Maximize(!IsMaximized()); updateMaxGlyph(); }
         else                 Close();
     }
+#ifdef __WXMSW__
+    // Native-buttons mode support: the caption buttons are hit-test-transparent, so hover/click state is
+    // reconstructed here from the frame's wxEVT_NC_* stream (positions are frame-client coordinates).
+    // capBtnAtScreen is the single hit-test - GetWindowPart and the WM_NCLBUTTONDBLCLK path use it too.
+    int capBtnAtScreen(const wxPoint& screenPos) const
+    {
+        for (int i = 0; i < 3; ++i)
+            if (m_capBtns[i].win && m_capBtns[i].win->GetScreenRect().Contains(screenPos)) return i;
+        return -1;
+    }
+    int capBtnAt(const wxPoint& clientPos) const { return capBtnAtScreen(ClientToScreen(clientPos)); }
+    void setCapHover(int i)
+    {
+        if (i == m_capHover) return;
+        const wxColour barBg = m_titleBar->GetBackgroundColour();   // the bar chrome colour, by construction
+        if (m_capHover >= 0 && m_capBtns[m_capHover].win)
+        { m_capBtns[m_capHover].win->SetBackgroundColour(barBg); m_capBtns[m_capHover].win->Refresh(); }
+        m_capHover = i;
+        if (i >= 0 && m_capBtns[i].win)
+        { m_capBtns[i].win->SetBackgroundColour(m_capBtns[i].hot); m_capBtns[i].win->Refresh(); }
+    }
+#endif
 
     wxToolBar* makeIntegratedToolBar()
     {
@@ -8842,6 +9008,7 @@ private:
     {
         auto* c = wxConfigBase::Get();
         c->Read("IntegratedBar", &m_integratedBar, false);
+        c->Read("NativeWinButtons", &m_nativeWinButtons, false);
         m_themeMode = (int)readThemeMode();   // also resolved in OnInit (before the frame/config exist as members here)
         c->Read("AskBeforeClose", &m_askBeforeClose, false);
         c->Read("FullscreenAutohideToolbar", &m_fsAutohideToolbar, false);
@@ -8978,9 +9145,9 @@ private:
         // narzędzi...") leave the General page's last row (the Theme combo) with no vertical breathing
         // room at the fixed 620x440 size - letting the user drag the dialog taller is the direct fix,
         // and a floor via SetMinSize below keeps it from being shrunk back into that cramped state.
-        wxDialog dlg(this, wxID_ANY, _("Preferences"), wxDefaultPosition, wxSize(620, 440),
+        wxDialog dlg(this, wxID_ANY, _("Preferences"), wxDefaultPosition, wxSize(620, 470),
                     wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
-        dlg.SetMinSize(wxSize(620, 440));
+        dlg.SetMinSize(wxSize(620, 470));
         // wxListbook's default style (wxLB_DEFAULT == wxBK_DEFAULT == 0) is resolved by wx to a *horizontal
         // top strip* on macOS but a *left column* on Win/Linux (wx/src/generic/listbkg.cpp Create():
         // #ifdef __WXMAC__ style |= wxBK_TOP; #else style |= wxBK_LEFT). That top strip squashed the page
@@ -9015,6 +9182,13 @@ private:
 #if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
         auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, _("Show integrated top bar"));
         cbIntBar->SetValue(m_integratedBar); row(gs, cbIntBar);
+#endif
+#ifdef WXN_HAS_BORDERLESS
+        // Narrower guard than cbIntBar's on purpose: macOS's integrated bar always keeps the native
+        // traffic lights, so a native-vs-custom choice only exists where the borderless frame does
+        // (Windows + Linux). Only takes effect while the integrated bar is on.
+        auto* cbNativeBtns = new wxCheckBox(gen, wxID_ANY, _("System-native window buttons"));
+        cbNativeBtns->SetValue(m_nativeWinButtons); row(gs, cbNativeBtns);
 #endif
         // Localization: pick the UI language (restart-to-apply, like dark mode). Same shared table
         // (UI_LANG_IDS/UI_LANG_ENDONYMS) as the top-level Localization menu.
@@ -9235,7 +9409,9 @@ private:
             lv->InvalidateBestSize();
         }
 
-        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer(); btn->Add(new wxButton(&dlg, wxID_OK, _("Close")), 0);
+        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
+        auto* okBtn = new wxButton(&dlg, wxID_OK, _("OK")); okBtn->SetDefault();
+        btn->Add(okBtn, 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL); top->Add(book, 1, wxEXPAND | wxALL, 8); top->Add(btn, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
         // Layout() explicitly, not just SetSizer: this dialog is opened at a fixed size with no
         // post-show resize, and on GTK SetSizer alone doesn't lay children out until an actual size
@@ -9277,7 +9453,7 @@ private:
             restyle(book->GetSelection());
             book->Bind(wxEVT_LISTBOOK_PAGE_CHANGED, [=](wxBookCtrlEvent& e) { restyle(e.GetSelection()); e.Skip(); });
         }
-        dlg.ShowModal();   // Preferences has no Cancel - changes apply on close
+        if (dlg.ShowModal() != wxID_OK) return;   // Cancel (or Esc / the window's own close button, both -> wxID_CANCEL): discard every control's value below untouched
         const int newThemeMode = chTheme->GetSelection();
         m_showToolbar = cbToolbar->GetValue(); m_showStatusbar = cbStatus->GetValue();
         m_showZoomField = cbZoomField->GetValue();
@@ -9311,6 +9487,9 @@ private:
 #if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
         const bool newIntBar = cbIntBar->GetValue();
 #endif
+#ifdef WXN_HAS_BORDERLESS
+        const bool newNativeBtns = cbNativeBtns->GetValue();
+#endif
         const int newIconStyle = chIconStyle->GetSelection();
         const int iconSel = chIconSize->GetSelection();   // always 0..3 (a selection is always set); guard the index anyway
         const int newIconSize = kIconSizes[iconSel < 0 ? 0 : iconSel];
@@ -9320,6 +9499,18 @@ private:
 #if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
         needRestart = needRestart || (newIntBar != m_integratedBar);
 #endif
+#ifdef WXN_HAS_BORDERLESS
+        if (newNativeBtns != m_nativeWinButtons)
+        {
+            // Only meaningful with the integrated bar (before or after this OK): a restart then applies
+            // it. With the bar off on both sides the relaunched app would be pixel-identical, so persist
+            // the choice directly instead of dragging the user through a pointless restart cycle - the
+            // commit lambda below is otherwise this setting's ONLY write path, and a restart the user
+            // backs out of (Cancel on a save prompt) would silently discard the checkbox change.
+            if (newIntBar || m_integratedBar) needRestart = true;
+            else { wxConfigBase::Get()->Write("NativeWinButtons", newNativeBtns); m_nativeWinButtons = newNativeBtns; }
+        }
+#endif
         if (needRestart)
             restartWithTheme([=] {
                 m_themeMode = newThemeMode;
@@ -9327,6 +9518,9 @@ private:
                 if (newUi != curUi) cfg->Write("UILanguage", (long)newUi);
 #if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
                 if (newIntBar != m_integratedBar) cfg->Write("IntegratedBar", newIntBar);
+#endif
+#ifdef WXN_HAS_BORDERLESS
+                if (newNativeBtns != m_nativeWinButtons) cfg->Write("NativeWinButtons", newNativeBtns);
 #endif
                 if (newIconStyle != m_iconStyle) cfg->Write("ToolbarIconStyle", (long)newIconStyle);
                 if (newIconSize != m_toolbarIconSize) cfg->Write("ToolbarIconSize", (long)newIconSize);
@@ -9958,8 +10152,14 @@ private:
         auto* page = activePage();
         const wxString title = (page && !page->title.empty()) ? page->title : wxString("Untitled");
         const wxString hdr = resolvePrintMacros(m_printHeader), ftr = resolvePrintMacros(m_printFooter);
-        auto* preview = new wxPrintPreview(new SciPrintout(m_stc, title, pageSetup, hdr, ftr),
-                                           new SciPrintout(m_stc, title, pageSetup, hdr, ftr), &pdd);
+        // Ask wxPrintFactory for the CONCRETE preview object rather than constructing the wxPrintPreview
+        // wrapper: the wrapper is a pimpl shell whose CalcRects is NOT forwarded (it would run against the
+        // shell's stale zoom/scale state), while on the factory's real object CalcRects is public AND
+        // correct - which is what lets stylePreviewWindow erase the stock drop shadow geometrically
+        // instead of pixel-scanning for it. Everything downstream already speaks wxPrintPreviewBase*.
+        wxPrintPreviewBase* preview = wxPrintFactory::GetFactory()->CreatePrintPreview(
+            new SciPrintout(m_stc, title, pageSetup, hdr, ftr),
+            new SciPrintout(m_stc, title, pageSetup, hdr, ftr), &pdd);
         if (!preview->IsOk())
         {
             delete preview;
@@ -9983,6 +10183,14 @@ private:
     // themeDialog so these per-control overrides win.
     void stylePreviewWindow(wxWindow* frame, wxPrintPreviewBase* preview)
     {
+        // Shared palette for the paper viewport + its chrome accents (Open Color greys; see the canvas
+        // block below for why the backdrop is grey, not the blanket near-black theme colour).
+        const wxColour canvasBg = m_dark ? wxColour(0x49, 0x50, 0x57)    // gray-7
+                                         : wxColour(0xad, 0xb5, 0xbd);   // gray-5
+        const wxColour sepCol   = m_dark ? wxColour(0x34, 0x3a, 0x40)    // gray-8 on the gray-7 canvas
+                                         : wxColour(0x86, 0x8e, 0x96);   // gray-6 on the gray-5 canvas
+        const wxColour thumbCol = m_dark ? wxColour(0xad, 0xb5, 0xbd)    // gray-5 thumb on the gray-7 canvas
+                                         : wxColour(0x86, 0x8e, 0x96);   // gray-6 thumb on the gray-5 canvas
         // Control-bar buttons: give them wxNote's icons and make them FLAT (no raised button face, background
         // blended into the strip) so only the icon shows, like the main window's wxToolBar. print -> the active
         // pack's icon(); page-nav/zoom -> previewGlyph() (clean line glyphs; the pack's own filled zoom
@@ -10054,29 +10262,123 @@ private:
             // page field no longer rides off-centre from the icons), with vertical breathing room top & bottom.
             controlBar->SetMinSize(wxSize(-1, this->FromDIP(40)));
             controlBar->Layout();
-            // Suppress wxPreviewControlBar::OnPaint's hard black separator line along the bar's bottom edge -
-            // it sits right under the flat icons and reads as a stray dark line. Just fill the strip with its
-            // own colour (not calling Skip() stops the stock painter from drawing the line).
-            controlBar->Bind(wxEVT_PAINT, [](wxPaintEvent& ev) {
+            // Replace wxPreviewControlBar::OnPaint's hard BLACK separator along the bar's bottom edge with a
+            // themed one (not calling Skip() stops the stock painter). Drawn here rather than on the canvas
+            // because the bar spans the frame's full width, so the line runs edge to edge.
+            controlBar->Bind(wxEVT_PAINT, [sepCol](wxPaintEvent& ev) {
                 wxWindow* w = static_cast<wxWindow*>(ev.GetEventObject());
                 wxPaintDC dc(w);
                 dc.SetBackground(wxBrush(w->GetBackgroundColour()));
                 dc.Clear();
+                const wxSize s = w->GetClientSize();
+                dc.SetPen(wxPen(sepCol));
+                dc.DrawLine(0, s.y - 1, s.x, s.y - 1);
             });
         }
-        // Paper viewport: an Open-Color grey backdrop so the white sheet + its drop shadow read well - a light
-        // grey (gray-5) in light mode and a deeper grey (gray-7) in dark mode (not the near-black the blanket
-        // theme gave, which looked wrong). Re-pinned on an OS colour-scheme flip while the (modeless) preview
-        // is open, since wxPreviewCanvas's own EVT_SYS_COLOUR_CHANGED handler would otherwise repaint it with a
-        // system colour.
-        const wxColour canvasBg = m_dark ? wxColour(0x49, 0x50, 0x57)    // Open Color gray-7
-                                         : wxColour(0xad, 0xb5, 0xbd);   // Open Color gray-5
+        // Paper viewport: an Open-Color grey backdrop so the white sheet reads well - a light grey (gray-5)
+        // in light mode and a deeper grey (gray-7) in dark mode (not the near-black the blanket theme gave,
+        // which looked wrong; the actual colours are defined at the top of this function). Re-pinned on an
+        // OS colour-scheme flip while the (modeless) preview is open, since wxPreviewCanvas's own
+        // EVT_SYS_COLOUR_CHANGED handler would otherwise repaint it with a system colour.
         for (wxWindow* c : frame->GetChildren())
             if (auto* canvas = wxDynamicCast(c, wxPreviewCanvas))
             {
                 canvas->SetBackgroundColour(canvasBg);
                 canvas->Bind(wxEVT_SYS_COLOUR_CHANGED, [canvas, canvasBg](wxSysColourChangedEvent& e)
                              { canvas->SetBackgroundColour(canvasBg); canvas->Refresh(); e.Skip(); });
+                // Native scrollbars off: their track is an opaque system-coloured strip that can't be
+                // recoloured to blend with the grey canvas on MSW. Overlay thumbs (previewThumbRect) are
+                // drawn in the paint handler below instead - no track, so the "background" is simply the
+                // canvas - and stay draggable via the mouse binds further down. EnableScrolling(false)
+                // additionally disables the physical ScrollWindow blit so every scroll repaints in full
+                // (we're double-buffered, so this is flicker-free) - without it the blit would drag the
+                // painted thumbs along with the page.
+                canvas->ShowScrollbars(wxSHOW_SB_NEVER, wxSHOW_SB_NEVER);
+                canvas->EnableScrolling(false, false);
+                // Replace wxPreviewCanvas::OnPaint (a dynamic Bind runs before the class event table, and
+                // not calling Skip() keeps the stock handler out): the stock painter hard-codes a BLACK
+                // drop shadow behind the sheet (wxPrintPreviewBase::DrawBlankPage - two rects at paperRect
+                // offset by FromDIP(4)) with no way to opt out. Render the stock output into an offscreen
+                // buffer, then erase exactly those two rects - CalcRects is public and correct on the
+                // factory-made concrete preview (see doPrintPreview), so the geometry is exact at any
+                // zoom, scroll position, or paper size. The bottom strip's first row/col coincides with
+                // the sheet's outline, so the outline ring is redrawn after the erase, exactly as the
+                // stock painter draws it. Then blit and top it with the overlay scroll thumbs. (The
+                // offscreen pass also double-buffers the canvas, removing the stock resize flicker.)
+                canvas->Bind(wxEVT_PAINT, [canvas, preview, canvasBg, thumbCol](wxPaintEvent&) {
+                    const wxSize sz = canvas->GetClientSize();
+                    if (sz.x <= 0 || sz.y <= 0) return;
+                    wxBitmap buf(sz.x, sz.y, 24);
+                    {
+                        wxMemoryDC mdc(buf);
+                        mdc.SetBackground(wxBrush(canvasBg));
+                        mdc.Clear();
+                        canvas->PrepareDC(mdc);   // apply the scroll offset, like the stock OnPaint does
+                        preview->PaintPage(canvas, mdc);
+                        wxRect pageRect, paperRect;
+                        preview->CalcRects(canvas, pageRect, paperRect);
+                        const wxCoord off = mdc.FromDIP(4);   // same DC the stock shadow was sized on
+                        mdc.SetPen(*wxTRANSPARENT_PEN);
+                        mdc.SetBrush(wxBrush(canvasBg));
+                        mdc.DrawRectangle(paperRect.x + off, paperRect.y + paperRect.height,
+                                          paperRect.width + 1, off + 1);
+                        mdc.DrawRectangle(paperRect.x + paperRect.width, paperRect.y + off,
+                                          off + 1, paperRect.height + 1);
+                        const wxCoord penW = mdc.FromDIP(1);
+                        const wxCoord bo = wxRound(penW / 2.0);
+                        mdc.SetPen(wxPen(*wxBLACK, penW));
+                        mdc.SetBrush(*wxTRANSPARENT_BRUSH);
+                        mdc.DrawRectangle(paperRect.x - bo, paperRect.y - bo,
+                                          paperRect.width + 2 * bo, paperRect.height + 2 * bo);
+                    }
+                    wxPaintDC dc(canvas);
+                    dc.DrawBitmap(buf, 0, 0);
+                    dc.SetPen(*wxTRANSPARENT_PEN);
+                    dc.SetBrush(wxBrush(thumbCol));
+                    for (bool vert : { true, false })
+                    {
+                        const wxRect t = previewThumbRect(canvas, vert);
+                        if (!t.IsEmpty()) dc.DrawRoundedRectangle(t, canvas->FromDIP(3));
+                    }
+                });
+                // Drag support for the overlay thumbs. State lives in a shared_ptr so all four handlers
+                // (and nothing else) own it; it dies with the canvas.
+                struct ThumbDrag { bool active = false; bool vert = true; int start = 0; long long startPx = 0; };
+                auto drag = std::make_shared<ThumbDrag>();
+                canvas->Bind(wxEVT_LEFT_DOWN, [canvas, drag](wxMouseEvent& e) {
+                    for (bool vert : { true, false })
+                    {
+                        wxRect t = previewThumbRect(canvas, vert);
+                        if (t.IsEmpty() || !t.Inflate(canvas->FromDIP(2)).Contains(e.GetPosition())) continue;
+                        drag->active = true; drag->vert = vert;
+                        drag->start = vert ? e.GetY() : e.GetX();
+                        drag->startPx = previewScrollPx(canvas, vert);
+                        canvas->CaptureMouse();
+                        return;
+                    }
+                    e.Skip();
+                });
+                canvas->Bind(wxEVT_MOTION, [canvas, drag](wxMouseEvent& e) {
+                    if (!drag->active) { e.Skip(); return; }
+                    const bool vert = drag->vert;
+                    const wxSize cl = canvas->GetClientSize(), virt = canvas->GetVirtualSize();
+                    const int client = vert ? cl.y : cl.x, total = vert ? virt.y : virt.x;
+                    const wxRect t = previewThumbRect(canvas, vert);
+                    const int span = vert ? t.height : t.width;
+                    int ux, uy; canvas->GetScrollPixelsPerUnit(&ux, &uy);
+                    const int unit = vert ? uy : ux;
+                    if (t.IsEmpty() || client - span <= 0 || unit <= 0) return;
+                    const int delta = (vert ? e.GetY() : e.GetX()) - drag->start;
+                    const long long px = wxMax(0LL, drag->startPx + (long long)delta * (total - client) / (client - span));
+                    int vx, vy; canvas->GetViewStart(&vx, &vy);
+                    canvas->Scroll(vert ? vx : (int)(px / unit), vert ? (int)(px / unit) : vy);
+                });
+                canvas->Bind(wxEVT_LEFT_UP, [canvas, drag](wxMouseEvent& e) {
+                    if (!drag->active) { e.Skip(); return; }
+                    drag->active = false;
+                    if (canvas->HasCapture()) canvas->ReleaseMouse();
+                });
+                canvas->Bind(wxEVT_MOUSE_CAPTURE_LOST, [drag](wxMouseCaptureLostEvent&) { drag->active = false; });
                 canvas->Refresh();
                 break;
             }
@@ -10216,6 +10518,22 @@ private:
             onCommand(ce);
             return 0;
         }
+#ifdef WXN_HAS_BORDERLESS
+        // Native-buttons mode: wxbf swallows the OS default for single NC clicks on the three caption-
+        // button hit codes, but WM_NCLBUTTONDBLCLK is not in its routed set - Windows promotes the second
+        // press of a fast double-click to it, and unhandled it would fall to DefWindowProc's own caption-
+        // button tracking loop (issuing a duplicate SC_* on top of our queued action). Treat it as the
+        // press of an ordinary second click: latch the pressed button and swallow the default; the
+        // matching WM_NCLBUTTONUP (which wxbf does route) then fires the action - so rapid clicks act on
+        // every click, like a native caption button.
+        if constexpr (kBorderless)
+            if (message == WM_NCLBUTTONDBLCLK && m_nativeWinButtons &&
+                (wParam == HTMINBUTTON || wParam == HTMAXBUTTON || wParam == HTCLOSE))
+            {
+                m_capPressed = capBtnAtScreen(wxPoint((short)LOWORD(lParam), (short)HIWORD(lParam)));
+                return 0;
+            }
+#endif
         // Recolour the toolbar's hover/hot-track highlight from the Windows theme default (a pale system-
         // accent blue, independent of anything we choose - confirmed by disabling all our own icon/colour
         // code and still seeing it) to an Open Color green, via NM_CUSTOMDRAW. TBCDRF_HILITEHOTTRACK tells
@@ -10938,8 +11256,17 @@ private:
 #ifdef WXN_HAS_BORDERLESS
     wxPanel*    m_titleBar  = nullptr;            // integrated top bar (icon + menu-buttons + window controls)
     wxMenuBar*  m_menuOwner = nullptr;            // owns the wxMenus the title-bar buttons pop (never attached as a real menu bar)
-    wxWindow*   m_maxBtn    = nullptr;            // the maximize/restore button - a wxButton (MSW) or TitleBarBtn (else); its glyph tracks IsMaximized()
+    wxWindow*   m_maxBtn    = nullptr;            // the maximize/restore button - a wxButton (MSW) or TitleBarBtn (else); its glyph tracks IsMaximized(); null in GTK native-buttons mode
     wxWindowGripper* m_gripper = nullptr;         // lib helper for cross-platform window move (drag the bar)
+#ifdef __WXMSW__
+    // wxWeakRef, not a raw pointer: NC events are queued (wxPostEvent) and could in principle be
+    // delivered in the window between a button's destruction and the frame's - the weak ref self-nulls
+    // on the button's death, and is safe in either destruction order (frame-member-first or child-first).
+    struct CapBtn { wxWeakRef<wxWindow> win; wxColour hot; };
+    CapBtn      m_capBtns[3];                     // native-buttons mode: min/max/close, input arrives via wxEVT_NC_* (see buildIntegratedTitleBar)
+    int         m_capHover = -1;                  // which of m_capBtns is hover-highlighted (driven by wxEVT_NC_MOTION; -1 = none)
+    int         m_capPressed = -1;                // which button the current NC press started on (-1 = none); release only fires on a match
+#endif
 #endif
     wxToolBar*  m_toolBarPtr = nullptr;          // the toolbar (frame's own in native mode, aui-paned in integrated) - see toolBar()
     std::vector<int> m_nibToolIds;               // plugin toolbar buttons (nib.toolbar/1) - torn down before plugin unload
@@ -10949,6 +11276,7 @@ private:
     int          m_macToolbarRowH = 0;            // integrated bar: toolbar row height = the re-centred traffic lights' band height
 #endif
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
+    bool        m_nativeWinButtons = false;      // setting: platform-native window buttons in the integrated bar (restart-to-apply; Win/Linux only - macOS is always native)
     int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Solar, 2 = IconPark, 3 = Streamline (restart-to-apply)
     int         m_toolbarIconSize = 16;          // toolbar icon size in px (16/20/24/32, default 16; restart-to-apply)
     wxTimer     m_timer;
