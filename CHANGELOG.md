@@ -3,7 +3,17 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.9.10] - 2026-07-21
+## [0.9.11] - 2026-07-21
+
+### Changed
+- **"System-native window buttons" on Linux now gives REAL theme window buttons.** 0.9.10 only swapped
+  the glyph inside our own flat buttons, which still didn't look native (no theme button chrome/hover).
+  The integrated bar now *becomes* GTK's own header bar: the whole menu row is re-parented into wxbf's
+  GtkHeaderBar (the wx-sanctioned whole-widget move, the same one wx uses for `wxToolBar`), and GTK draws
+  the desktop theme's actual min/max/close on the right — proper chrome, hover, and `gtk-decoration-layout`
+  order/side — with GTK handling window drag, double-click-maximize and the window menu. Still one bar.
+  The header strip follows the system theme (not the app's dark/light), which is what "native" means.
+  Windows is unchanged.
 
 ### Changed
 - **"System-native window buttons" on Linux** no longer surfaces a second GtkHeaderBar strip above the

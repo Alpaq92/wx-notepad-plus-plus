@@ -207,12 +207,14 @@ The main window is a template, `WxnShellFrameT<FB>`, instantiated two ways:
 - `WxnShellFrameT<wxBorderlessFrame>` (only where `WXN_HAS_BORDERLESS` is
   defined: Windows and Linux) — the integrated top bar, where the menu
   buttons, toolbar, and custom min/max/close controls live in one row. The
-  "System-native window buttons" preference keeps the same single bar and
-  buttons but swaps their glyphs/behaviour for platform-native ones: on Windows
-  the bar/buttons become hit-test-transparent so the OS gets real
-  `HTCAPTION`/`HT*BUTTON` codes (snap layouts, native drag); on Linux the
-  min/max/close glyphs come from the desktop theme's symbolic icons via
-  `src/gtk_native.cpp` (no second header bar). On
+  "System-native window buttons" preference keeps a single bar but gives its
+  buttons a platform-native identity: on Windows the bar/buttons become
+  hit-test-transparent so the OS gets real `HTCAPTION`/`HT*BUTTON` codes (snap
+  layouts, native drag); on Linux the whole menu panel is re-parented into
+  wxbf's own `GtkHeaderBar` (via `src/gtk_native.cpp`'s `wxn_HostInHeaderBar`),
+  so GTK draws the desktop theme's real min/max/close on the right — the
+  wx-sanctioned whole-widget move, the same one wx uses to host controls in
+  `wxToolBar`. On
   macOS the same integrated look is achieved differently: the frame stays a
   `wxFrame` and `src/macos_native.mm` makes the native title bar transparent
   and re-centres the traffic lights into the toolbar row.
