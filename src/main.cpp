@@ -117,13 +117,13 @@ extern "C" void wxn_DragWindow(void* nsWindow);             // native window dra
 // GtkWidget*s (from GetHandle()) to resolve the GdkScreen AND as the tree-walk root; passed as a void* so this
 // header stays free of GTK types, and may be null (then only the screen-wide provider is installed).
 extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
-// Integrated bar, "System-native window buttons" mode (also gtk_native.cpp): load a symbolic window-
-// control icon ("window-close-symbolic" etc.) from the user's GTK icon theme, recoloured to (r,g,b), as
-// a px*px RGBA8888 buffer the caller frees with free() - NULL if the theme has no such icon (caller then
-// falls back to the bundled glyph). This lets the integrated bar's own min/max/close buttons pick up the
-// desktop theme's glyphs WITHOUT surfacing a second GtkHeaderBar strip (the Linux analog of the MDL2/
-// Fluent glyphs the Windows buttons use).
-extern "C" unsigned char* wxn_LoadSymbolicWindowIcon(const char* iconName, int px, int r, int g, int b);
+// Integrated bar, "System-native window buttons" mode (also gtk_native.cpp): make wxbf's CSD GtkHeaderBar
+// the ONE integrated bar. Re-parents the app's whole title-bar wxPanel (its GtkWidget) into that header
+// bar and turns on the header's real theme min/max/close - so the desktop's actual window buttons (chrome
+// + hover, Firefox-style) sit at the right while our icon+menu row fills the left, in a single strip. The
+// whole-panel move is the wx-sanctioned path (wx does the same for wxToolBar); moving individual buttons
+// is not safe. barHeightPx is the panel's height floor (the theme's button size may make the bar taller).
+extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidget, int barHeightPx);
 #endif
 
 #include <string>
@@ -6418,10 +6418,23 @@ private:
         m_titleBar = new wxPanel;
 #endif
         m_titleBar->Create(this, wxID_ANY, wxDefaultPosition, wxSize(-1, kTitleBarH));
-        m_titleBar->SetBackgroundColour(barBg);
-        m_titleBar->Bind(wxEVT_LEFT_DOWN, &WxnShellFrameT::onTitleBarDrag, this);     // drag empty area to move
-        m_titleBar->Bind(wxEVT_LEFT_DCLICK, [this](wxMouseEvent&){ onWindowControl(1); });   // double-click = maximize/restore
-        this->Bind(wxEVT_SIZE, [this](wxSizeEvent& e){ updateMaxGlyph(); e.Skip(); });       // keep the glyph synced (snap, Win+Up)
+        // GTK "header-bar mode": the whole menu panel is re-parented INTO wxbf's GtkHeaderBar (see
+        // wxn_HostInHeaderBar below), which then draws the desktop theme's real min/max/close and handles
+        // window drag / double-click-maximize / right-click window-menu itself. So in that mode none of
+        // our own chrome applies: no panel background (the header's theme shows through), no drag binds,
+        // no app-drawn window-control buttons, and no AUI docking (it lives in the header bar instead).
+#ifdef __WXGTK__
+        const bool hbMode = m_nativeWinButtons;
+#else
+        const bool hbMode = false;
+#endif
+        if (!hbMode)
+        {
+            m_titleBar->SetBackgroundColour(barBg);
+            m_titleBar->Bind(wxEVT_LEFT_DOWN, &WxnShellFrameT::onTitleBarDrag, this);     // drag empty area to move
+            m_titleBar->Bind(wxEVT_LEFT_DCLICK, [this](wxMouseEvent&){ onWindowControl(1); });   // double-click = maximize/restore
+            this->Bind(wxEVT_SIZE, [this](wxSizeEvent& e){ updateMaxGlyph(); e.Skip(); });       // keep the glyph synced (snap, Win+Up)
+        }
 
         auto* sz = new wxBoxSizer(wxHORIZONTAL);
 
@@ -6436,7 +6449,7 @@ private:
             wxMenu* menu = mb->GetMenu(i);
             auto* b = new wxButton(m_titleBar, wxID_ANY, mb->GetMenuLabelText(i),
                                    wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT | wxBORDER_NONE);
-            b->SetBackgroundColour(barBg); b->SetForegroundColour(barFg);
+            if (!hbMode) { b->SetBackgroundColour(barBg); b->SetForegroundColour(barFg); }   // hbMode: theme-coloured, flattened by the shim
             b->Bind(wxEVT_BUTTON, [this, b, menu](wxCommandEvent&) {
                 wxPoint p = this->ScreenToClient(b->GetParent()->ClientToScreen(
                                 b->GetPosition() + wxPoint(0, b->GetSize().y)));
@@ -6494,23 +6507,21 @@ private:
             return b;
 #else
             (void)mdl2Glyph;
-            // Non-native: our bundled SVG glyph. Native-buttons mode swaps in the desktop theme's own
-            // symbolic window-control icon (winControlGlyph), keeping the SAME single integrated bar and
-            // the SAME flat buttons - only the glyph source changes, so no second GtkHeaderBar strip
-            // appears. (This mirrors the Windows path, which likewise draws native glyphs in our own bar.)
-            const char* sym = which == 0 ? "window-minimize-symbolic"
-                            : which == 1 ? (IsMaximized() ? "window-restore-symbolic" : "window-maximize-symbolic")
-                                         : "window-close-symbolic";
-            auto* b = new TitleBarBtn(m_titleBar, wxID_ANY, wxSize(46, kTitleBarH), winControlGlyph(svgPath, sym), barBg, hot);
+            // GTK non-native: our bundled SVG glyph in a flat TitleBarBtn. (GTK native-buttons mode never
+            // reaches here - it's hbMode, where the desktop theme draws the real buttons in the header bar.)
+            auto* b = new TitleBarBtn(m_titleBar, wxID_ANY, wxSize(46, kTitleBarH), winGlyph(svgPath), barBg, hot);
             b->Bind(wxEVT_BUTTON, [this, which](wxCommandEvent&) { onWindowControl(which); });
             sz->Add(b, 0, wxEXPAND);
             return b;
 #endif
         };
         const wxColour hover = m_dark ? wxColour(63, 63, 70) : wxColour(220, 220, 220);
-        ctrl(0xE921, GLYPH_MIN, 0, hover);                                                                 // minimize
-        m_maxBtn = ctrl(IsMaximized() ? 0xE923 : 0xE922, IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX, 1, hover);  // max/restore
-        ctrl(0xE8BB, GLYPH_CLOSE, 2, wxColour(232, 17, 35));                                                // close (red hover)
+        if (!hbMode)   // hbMode: GTK's header bar draws the real theme min/max/close - we draw none
+        {
+            ctrl(0xE921, GLYPH_MIN, 0, hover);                                                                 // minimize
+            m_maxBtn = ctrl(IsMaximized() ? 0xE923 : 0xE922, IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX, 1, hover);  // max/restore
+            ctrl(0xE8BB, GLYPH_CLOSE, 2, wxColour(232, 17, 35));                                                // close (red hover)
+        }
 #ifdef __WXMSW__
         if (m_nativeWinButtons)
         {
@@ -6539,10 +6550,23 @@ private:
 #endif
 
         m_titleBar->SetSizer(sz);
-        m_aui.AddPane(m_titleBar, wxAuiPaneInfo().Name("titlebar").Top().Layer(2)
-            .CaptionVisible(false).PaneBorder(false).Gripper(false).Floatable(false).Movable(false)
-            .Dockable(false).DockFixed().Resizable(false).MinSize(-1, kTitleBarH).MaxSize(-1, kTitleBarH));
-        m_aui.Update();
+#ifdef __WXGTK__
+        if (hbMode)
+        {
+            // Hand the whole panel to wxbf's GtkHeaderBar and let GTK render the real theme buttons. The
+            // panel stays a wx child object (so wx owns its lifetime + teardown order); only its GtkWidget
+            // moves into the header bar. Lay it out first so the menu buttons have sizes before the move.
+            m_titleBar->Layout();
+            wxn_HostInHeaderBar(this->GetHandle(), m_titleBar->GetHandle(), this->FromDIP((int)kTitleBarH));
+        }
+        else
+#endif
+        {
+            m_aui.AddPane(m_titleBar, wxAuiPaneInfo().Name("titlebar").Top().Layer(2)
+                .CaptionVisible(false).PaneBorder(false).Gripper(false).Floatable(false).Movable(false)
+                .Dockable(false).DockFixed().Resizable(false).MinSize(-1, kTitleBarH).MaxSize(-1, kTitleBarH));
+            m_aui.Update();
+        }
     }
 
     void onTitleBarDrag(wxMouseEvent& ev)
@@ -6563,40 +6587,13 @@ private:
             path, col);
         return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(12, 12));
     }
-    // The glyph for one integrated-bar window control. Default mode: our bundled SVG (svgPath). GTK
-    // native-buttons mode: the desktop theme's own symbolic icon (symbolicName), so the buttons match
-    // the user's theme while staying in our single bar - falls back to the SVG if the theme lacks it.
-    wxBitmapBundle winControlGlyph(const char* svgPath, const char* symbolicName) const
-    {
-#ifdef __WXGTK__
-        if (m_nativeWinButtons)
-        {
-            const wxColour fg = m_dark ? wxColour(0xf0, 0xf0, 0xf0) : wxColour(0x17, 0x17, 0x17);
-            const int px = 16;
-            if (unsigned char* rgba = wxn_LoadSymbolicWindowIcon(symbolicName, px, fg.Red(), fg.Green(), fg.Blue()))
-            {
-                wxImage img(px, px); img.InitAlpha();
-                unsigned char* rgb = img.GetData(); unsigned char* a = img.GetAlpha();
-                for (int i = 0; i < px * px; ++i)
-                { rgb[i * 3] = rgba[i * 4]; rgb[i * 3 + 1] = rgba[i * 4 + 1]; rgb[i * 3 + 2] = rgba[i * 4 + 2]; a[i] = rgba[i * 4 + 3]; }
-                free(rgba);
-                return wxBitmapBundle(wxBitmap(img));
-            }
-        }
-#else
-        (void)symbolicName;
-#endif
-        return winGlyph(svgPath);
-    }
     void updateMaxGlyph()
     {
-        if (!m_maxBtn) return;
+        if (!m_maxBtn) return;   // null in GTK header-bar mode (GTK draws the buttons) - nothing to sync
 #ifdef __WXMSW__
         static_cast<wxButton*>(m_maxBtn)->SetLabel(wxString(wxUniChar(IsMaximized() ? 0xE923 : 0xE922)));   // ChromeRestore / ChromeMaximize
 #else
-        static_cast<TitleBarBtn*>(m_maxBtn)->SetGlyph(winControlGlyph(
-            IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX,
-            IsMaximized() ? "window-restore-symbolic" : "window-maximize-symbolic"));
+        static_cast<TitleBarBtn*>(m_maxBtn)->SetGlyph(winGlyph(IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX));
 #endif
     }
     void onWindowControl(int which)

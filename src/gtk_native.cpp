@@ -46,7 +46,6 @@
 // re-calling with a new `dark` reloads it live. (The identical GTK CSS-provider pattern is already used by
 // third_party/wxbf/src/borderless_frame_gtk.cpp, which proves these symbols link in this build.)
 #include <gtk/gtk.h>
-#include <stdlib.h>   // malloc - wxn_LoadSymbolicWindowIcon returns a caller-freed RGBA buffer
 
 // Recursively add `provider` (at G_MAXUINT) to every GtkScrollbar's own style context under `w`. Uses
 // gtk_container_forall (not _foreach) so a GtkScrolledWindow's scrollbars - which are INTERNAL children and
@@ -241,50 +240,66 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark)
     }
 }
 
-// ---- Integrated bar: theme glyphs for the window buttons ("System-native window buttons" preference) --
+// ---- Integrated bar: host the menu row IN GTK's header bar ("System-native window buttons" preference) --
 //
-// Rather than surface a second GtkHeaderBar strip (the only way to get GTK to DRAW real caption buttons -
-// but it stacks a whole extra titlebar above the app's integrated bar), the app keeps its single bar and
-// its own flat min/max/close buttons, and just swaps their GLYPH for the desktop theme's own symbolic
-// window-control icon. This is the Linux analog of the Windows path, which likewise draws the OS's MDL2/
-// Fluent glyphs inside our own buttons. Loads "window-close-symbolic" & co. from the user's icon theme,
-// recoloured to the bar's foreground, as a px*px RGBA8888 buffer the caller (main.cpp winControlGlyph)
-// turns into a wxBitmap and frees with free(). Returns null if the theme has no such icon.
-extern "C" unsigned char* wxn_LoadSymbolicWindowIcon(const char* iconName, int px, int r, int g, int b)
+// The borderless frame (third_party/wxbf) already installs an empty, hidden GtkHeaderBar as the window's
+// titlebar (that's the client-side-decoration switch that removes the WM's own bar). To give the user REAL
+// theme window buttons (chrome + hover, Firefox-style) in a SINGLE bar, we make that header bar the
+// integrated bar: re-parent the app's whole title-bar wxPanel into it and turn on the header's own
+// min/max/close. GTK then draws the real buttons on the right and handles window drag / double-click-
+// maximize / the right-click window menu natively; our icon+menu row fills the left.
+//
+// The whole-panel move (not per-button) is the wx-sanctioned path: wxWidgets is designed to have its
+// widgets live in foreign, non-wxPizza GTK containers - it does exactly this for wxToolBar. The panel
+// stays a wx child object (main.cpp keeps it as a frame child, so wx owns its C++ lifetime and teardown
+// order); only its GtkWidget moves. wx flows the header's allocation back through the "size_allocate"
+// signal, and the panel is destroyed before the toplevel/header on teardown.
+
+// Recursively transparent-ise the moved panel's containers (a wxPanel can otherwise paint an opaque
+// window-background rectangle over the header-bar theme) and flatten its buttons so they read as header-
+// bar buttons. Widget-scoped providers don't cascade to children (see the scrollbar shim above), so we
+// walk the tree and touch each node's own context.
+static void wxn_hb_style(GtkWidget* w, gpointer provider)
 {
-    if (!iconName || px <= 0) return nullptr;
-    GtkIconTheme* theme = gtk_icon_theme_get_default();
-    if (!theme) return nullptr;
-    GtkIconInfo* info = gtk_icon_theme_lookup_icon(theme, iconName, px, (GtkIconLookupFlags)0);
-    if (!info) return nullptr;
+    if (!w) return;
+    if (GTK_IS_BUTTON(w))
+        gtk_style_context_add_class(gtk_widget_get_style_context(w), "flat");   // header-bar flat button look
+    else
+        gtk_style_context_add_provider(gtk_widget_get_style_context(w),
+                                       GTK_STYLE_PROVIDER(provider), G_MAXUINT);   // kill opaque bg on containers
+    if (GTK_IS_CONTAINER(w))
+        gtk_container_forall(GTK_CONTAINER(w), (GtkCallback)wxn_hb_style, provider);
+}
 
-    GdkRGBA fg;
-    fg.red = r / 255.0; fg.green = g / 255.0; fg.blue = b / 255.0; fg.alpha = 1.0;
-    GError* err = nullptr;
-    GdkPixbuf* pb = gtk_icon_info_load_symbolic(info, &fg, nullptr, nullptr, nullptr, nullptr, &err);
-    g_object_unref(info);
-    if (!pb) { if (err) g_error_free(err); return nullptr; }
+extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidget, int barHeightPx)
+{
+    if (!gtkWindowWidget || !childPanelWidget) return;
+    GtkWidget* hb = gtk_window_get_titlebar(GTK_WINDOW(gtkWindowWidget));
+    if (!hb || !GTK_IS_HEADER_BAR(hb)) return;
+    GtkWidget* child = GTK_WIDGET(childPanelWidget);
 
-    const int w = gdk_pixbuf_get_width(pb);
-    const int h = gdk_pixbuf_get_height(pb);
-    const int nch = gdk_pixbuf_get_n_channels(pb);
-    const int stride = gdk_pixbuf_get_rowstride(pb);
-    const gboolean hasAlpha = gdk_pixbuf_get_has_alpha(pb);
-    const guchar* src = gdk_pixbuf_get_pixels(pb);
+    // Real theme min/max/close on the right (decoration_layout left at the desktop default, so it honours
+    // gtk-decoration-layout); drop wxbf's centered title text so our menu row is the only content.
+    gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(hb), TRUE);
+    gtk_header_bar_set_has_subtitle(GTK_HEADER_BAR(hb), FALSE);
+    gtk_header_bar_set_custom_title(GTK_HEADER_BAR(hb), nullptr);
 
-    unsigned char* out = (unsigned char*)malloc((size_t)px * px * 4);
-    if (!out) { g_object_unref(pb); return nullptr; }
-    // Nearest-sample into the exact px*px the caller asked for (the theme may hand back a nearby size).
-    for (int y = 0; y < px; ++y)
-        for (int x = 0; x < px; ++x)
-        {
-            const int sx = (w == px) ? x : x * w / px;
-            const int sy = (h == px) ? y : y * h / px;
-            const guchar* p = src + sy * stride + sx * nch;
-            unsigned char* o = out + ((size_t)y * px + x) * 4;
-            o[0] = p[0]; o[1] = p[1]; o[2] = p[2];
-            o[3] = (hasAlpha && nch == 4) ? p[3] : 255;
-        }
-    g_object_unref(pb);
-    return out;
+    // Move the WHOLE panel (its wxPizza) as one unit. Ref across the reparent so the remove doesn't drop
+    // the last reference before the pack re-owns it.
+    GtkWidget* oldParent = gtk_widget_get_parent(child);
+    g_object_ref(child);
+    if (oldParent) gtk_container_remove(GTK_CONTAINER(oldParent), child);
+    gtk_widget_set_hexpand(child, TRUE);
+    // wxPizza reports size only from its size-request; without one the header bar collapses it to 0 height.
+    gtk_widget_set_size_request(child, -1, barHeightPx > 0 ? barHeightPx : 30);
+    gtk_header_bar_pack_start(GTK_HEADER_BAR(hb), child);
+    g_object_unref(child);
+
+    GtkCssProvider* prov = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(prov,
+        "* { background-color: transparent; background-image: none; }", -1, nullptr);
+    wxn_hb_style(child, prov);
+    g_object_unref(prov);   // each context we added it to holds its own reference
+
+    gtk_widget_show_all(hb);
 }
