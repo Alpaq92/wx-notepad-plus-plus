@@ -279,17 +279,41 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
     GtkWidget* child = GTK_WIDGET(childPanelWidget);
 
     // Real theme min/max/close on the right (decoration_layout left at the desktop default, so it honours
-    // gtk-decoration-layout); drop wxbf's centered title text so our menu row is the only content.
+    // gtk-decoration-layout).
     gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(hb), TRUE);
     gtk_header_bar_set_has_subtitle(GTK_HEADER_BAR(hb), FALSE);
-    gtk_header_bar_set_custom_title(GTK_HEADER_BAR(hb), nullptr);
+    // No title text ("new 1 - wxNote"): an EMPTY custom-title label replaces the default title label (which
+    // shows the window title) AND collapses the header bar's reserved centre area to ~0 - that centre
+    // reservation is what was squeezing / clipping the menu row. The window's taskbar title is unaffected.
+    gtk_header_bar_set_custom_title(GTK_HEADER_BAR(hb), gtk_label_new(""));
 
-    // Move the WHOLE panel (its wxPizza) as one unit. Ref across the reparent so the remove doesn't drop
-    // the last reference before the pack re-owns it.
+    // Compact the bar: a themed header bar defaults to ~46px, far taller than our 30px chrome. Scope the
+    // compaction to THIS header bar with a style class + a SCREEN-WIDE provider (only a screen-wide
+    // provider's selectors reach the header's own titlebutton child nodes; the class keeps it off
+    // GtkFileChooser/other header bars). G_MAXUINT beats the theme's own min-heights.
+    gtk_style_context_add_class(gtk_widget_get_style_context(hb), "wxn-hb");
+    static gboolean s_compactAdded = FALSE;
+    if (!s_compactAdded)
+    {
+        GtkCssProvider* compact = gtk_css_provider_new();
+        gtk_css_provider_load_from_data(compact,
+            "headerbar.wxn-hb { min-height: 0; padding-top: 0; padding-bottom: 0; }"
+            // Keep a little padding (2px) so the theme's hover/focus highlight still has room to draw -
+            // zeroing it can flatten the min/max/close feedback. min-height 24 (< the panel's 30, which
+            // then drives the bar height) is what actually removes the theme's tall-button floor.
+            "headerbar.wxn-hb button.titlebutton { min-height: 24px; min-width: 24px; padding: 2px; margin: 0; }",
+            -1, nullptr);
+        if (GdkScreen* screen = gdk_screen_get_default())
+            gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(compact), G_MAXUINT);
+        g_object_unref(compact);
+        s_compactAdded = TRUE;
+    }
+
+    // Move the WHOLE panel (its wxPizza) as one unit to the header bar's start. Ref across the reparent so
+    // the remove doesn't drop the last reference before the pack re-owns it.
     GtkWidget* oldParent = gtk_widget_get_parent(child);
     g_object_ref(child);
     if (oldParent) gtk_container_remove(GTK_CONTAINER(oldParent), child);
-    gtk_widget_set_hexpand(child, TRUE);
     // wxPizza reports size only from its size-request; without one the header bar collapses it to 0 height.
     gtk_widget_set_size_request(child, -1, barHeightPx > 0 ? barHeightPx : 30);
     gtk_header_bar_pack_start(GTK_HEADER_BAR(hb), child);

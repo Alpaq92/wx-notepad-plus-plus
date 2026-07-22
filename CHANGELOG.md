@@ -3,6 +3,17 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.12] - 2026-07-22
+
+### Fixed
+- **GTK header-bar mode polish** (the Linux "System-native window buttons" bar from 0.9.11):
+  - The bar is no longer the theme's full ~46px height — it's compacted (scoped CSS on our header bar
+    only) so it matches the toolbar row below it.
+  - The centered window-title text is gone (an empty custom title replaces GTK's default label; the
+    taskbar title is unaffected).
+  - The menu row is no longer clipped — removing the reserved centered-title area frees the full width,
+    so all top-level menus show.
+
 ## [0.9.11] - 2026-07-21
 
 ### Changed
@@ -14,6 +25,8 @@ All notable changes to wxNote are documented here. Format loosely follows
   order/side — with GTK handling window drag, double-click-maximize and the window menu. Still one bar.
   The header strip follows the system theme (not the app's dark/light), which is what "native" means.
   Windows is unchanged.
+
+## [0.9.10] - 2026-07-21
 
 ### Changed
 - **"System-native window buttons" on Linux** no longer surfaces a second GtkHeaderBar strip above the
