@@ -14,6 +14,8 @@ All notable changes to wxNote are documented here. Format loosely follows
   - The menu row is no longer clipped — removing the reserved centered-title area frees the full width,
     so all top-level menus show.
 
+## [0.9.11] - 2026-07-21
+
 ### Changed
 - **"System-native window buttons" on Linux now gives REAL theme window buttons.** 0.9.10 only swapped
   the glyph inside our own flat buttons, which still didn't look native (no theme button chrome/hover).
@@ -23,6 +25,8 @@ All notable changes to wxNote are documented here. Format loosely follows
   order/side — with GTK handling window drag, double-click-maximize and the window menu. Still one bar.
   The header strip follows the system theme (not the app's dark/light), which is what "native" means.
   Windows is unchanged.
+
+## [0.9.10] - 2026-07-21
 
 ### Changed
 - **"System-native window buttons" on Linux** no longer surfaces a second GtkHeaderBar strip above the
