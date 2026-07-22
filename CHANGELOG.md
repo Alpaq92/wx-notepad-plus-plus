@@ -3,6 +3,15 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.14] - 2026-07-22
+
+### Fixed
+- **GTK header-bar mode: menu items were vertically cropped and their hover highlight cramped.** The bar
+  is a touch taller now (36px vs the toolbar's 30, still well under the theme's ~46px default), and each
+  menu button gets a taller wx-driven min-height so its flat hover/pressed highlight has top/bottom
+  breathing room. (The height is pinned in wx, not CSS: wx caches a button's size at layout and ignores
+  later CSS padding, so a CSS-only approach would have left the hover unchanged.)
+
 ## [0.9.13] - 2026-07-22
 
 ### Fixed

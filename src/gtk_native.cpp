@@ -299,9 +299,15 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
         gtk_css_provider_load_from_data(compact,
             "headerbar.wxn-hb { min-height: 0; padding-top: 0; padding-bottom: 0; }"
             // Keep a little padding (2px) so the theme's hover/focus highlight still has room to draw -
-            // zeroing it can flatten the min/max/close feedback. min-height 24 (< the panel's 30, which
-            // then drives the bar height) is what actually removes the theme's tall-button floor.
-            "headerbar.wxn-hb button.titlebutton { min-height: 24px; min-width: 24px; padding: 2px; margin: 0; }",
+            // zeroing it can flatten the min/max/close feedback. min-height 24 (< the panel's height, which
+            // drives the bar) is what actually removes the theme's tall-button floor.
+            "headerbar.wxn-hb button.titlebutton { min-height: 24px; min-width: 24px; padding: 2px; margin: 0; }"
+            // The menu buttons' height is set in wx (SetMinSize in main.cpp) so the flat hover highlight
+            // gets vertical room. Here we just clear the theme's own floors so wx is the sole authority:
+            // min-height:0 drops the theme's vertical min (which could otherwise fight wx's 30px), and
+            // padding/margin:0 stops the theme re-inflating the box against the width wx already froze at
+            // best+16px. Scoped to our bar via the class + :not(.titlebutton) (leaves window controls alone).
+            "headerbar.wxn-hb button:not(.titlebutton) { min-height: 0; padding: 0; margin: 0; }",
             -1, nullptr);
         if (GdkScreen* screen = gdk_screen_get_default())
             gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(compact), G_MAXUINT);
