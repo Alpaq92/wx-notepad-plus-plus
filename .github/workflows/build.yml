@@ -81,11 +81,29 @@ jobs:
           Architectures: riscv64
           EOF
           sudo dpkg --add-architecture riscv64
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build pkg-config \
-            g++-riscv64-linux-gnu qemu-user-static binfmt-support \
-            libgtk-3-dev:riscv64
+          # ports.ubuntu.com occasionally serves a momentarily-inconsistent index mid-publish: a partial
+          # krb5/cups set makes libgtk-3-dev:riscv64's dep chain briefly "not installable" (seen as
+          # "libcups2t64:riscv64 Depends libgssapi-krb5-2:riscv64 (>= 1.17) but it is not installable").
+          # It self-heals within minutes, and snapshot.ubuntu.com carries no -ports tree to pin against, so
+          # refresh the index and retry instead of failing the whole release on a transient upstream skew.
+          # A healthy index installs on the first pass (no sleeps); only a real skew pays the backoff -
+          # up to 8 attempts spaced 90s apart, i.e. ~10 min of retrying (7 sleeps) before giving up.
+          install_riscv_sysroot() {
+            sudo apt-get update && sudo apt-get install -y --no-install-recommends \
+              build-essential cmake ninja-build pkg-config \
+              g++-riscv64-linux-gnu qemu-user-static binfmt-support \
+              libgtk-3-dev:riscv64
+          }
+          tries=0; max_tries=8
+          until install_riscv_sysroot; do
+            tries=$((tries+1))
+            if [ "$tries" -ge "$max_tries" ]; then
+              echo "::error::riscv64 GTK sysroot still not installable after $max_tries attempts - ports archive skew persisted; re-run this leg once ports.ubuntu.com re-syncs." >&2
+              exit 1
+            fi
+            echo "riscv64 sysroot apt install failed (attempt $tries of $max_tries); ports index may be mid-publish, retrying in 90s..." >&2
+            sleep 90
+          done
           sudo update-binfmts --enable qemu-riscv64 || true
           qemu-riscv64-static --version
 
