@@ -271,7 +271,7 @@ static void wxn_hb_style(GtkWidget* w, gpointer provider)
         gtk_container_forall(GTK_CONTAINER(w), (GtkCallback)wxn_hb_style, provider);
 }
 
-extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidget, int barHeightPx)
+extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidget, int barWidthPx, int barHeightPx)
 {
     if (!gtkWindowWidget || !childPanelWidget) return;
     GtkWidget* hb = gtk_window_get_titlebar(GTK_WINDOW(gtkWindowWidget));
@@ -304,7 +304,7 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
             "headerbar.wxn-hb button.titlebutton { min-height: 24px; min-width: 24px; padding: 2px; margin: 0; }"
             // The menu buttons' height is set in wx (SetMinSize in main.cpp) so the flat hover highlight
             // gets vertical room. Here we just clear the theme's own floors so wx is the sole authority:
-            // min-height:0 drops the theme's vertical min (which could otherwise fight wx's 30px), and
+            // min-height:0 drops the theme's vertical min (which could otherwise fight the wx height), and
             // padding/margin:0 stops the theme re-inflating the box against the width wx already froze at
             // best+16px. Scoped to our bar via the class + :not(.titlebutton) (leaves window controls alone).
             "headerbar.wxn-hb button:not(.titlebutton) { min-height: 0; padding: 0; margin: 0; }",
@@ -326,8 +326,11 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
     // the empty custom title (above) freeing the centre, that's the full width up to the window buttons,
     // so every menu shows and nothing clips.
     gtk_widget_set_hexpand(child, TRUE);
-    // Likewise the header bar collapses the panel to 0 HEIGHT without an explicit height size-request.
-    gtk_widget_set_size_request(child, -1, barHeightPx > 0 ? barHeightPx : 30);
+    // Size-request BOTH axes: wxPizza reports its natural size only from the size-request, so leaving the
+    // width at -1 makes GTK read the panel's natural width as 0 and allocate too little - the menu row
+    // clips on the right. Pass the panel's real wx best width (barWidthPx) so every menu gets room; the
+    // height keeps the bar compact (the header would otherwise collapse the panel to 0 height).
+    gtk_widget_set_size_request(child, barWidthPx > 0 ? barWidthPx : -1, barHeightPx > 0 ? barHeightPx : 30);
     gtk_header_bar_pack_start(GTK_HEADER_BAR(hb), child);
     g_object_unref(child);
 

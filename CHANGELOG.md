@@ -3,6 +3,22 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.15] - 2026-07-22
+
+### Changed
+- **"System-native window buttons" is now a Linux-only setting.** The checkbox appears on Linux alone,
+  where the two modes look genuinely different (our own flat buttons vs. hosting the bar in GTK's real
+  header bar). On Windows the native-buttons behaviour (OS hit-testing — snap layouts, native drag,
+  Fluent glyphs) is now always on with no toggle, since the alternative differed only in subtle glyph
+  rendering. macOS was already always-native (traffic lights) with no checkbox.
+
+### Fixed
+- **GTK header bar: the menu row could still clip its rightmost menus even in a wide window** — the
+  hosted panel wasn't given a width request, so GTK read its natural width as 0. It now receives the
+  real menu-row width and shows every menu.
+- **GTK header bar: the menu-button hover highlight was too tall** (nearly filled the bar). The button
+  height is now clearly shorter than the bar, so the hover floats with breathing room above and below.
+
 ## [0.9.14] - 2026-07-22
 
 ### Fixed
