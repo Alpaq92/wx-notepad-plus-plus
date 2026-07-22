@@ -1593,6 +1593,9 @@ msgstr "Integrierte obere Leiste anzeigen"
 msgid "System-native window buttons"
 msgstr "Systemeigene Fensterschaltflächen"
 
+msgid "Ignore platform decoration (sharp corners)"
+msgstr "Plattform-Dekoration ignorieren (scharfe Ecken)"
+
 msgid "Localization:"
 msgstr "Lokalisierung:"
 

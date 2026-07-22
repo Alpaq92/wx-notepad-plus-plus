@@ -123,8 +123,9 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 // + hover, Firefox-style) sit at the right while our icon+menu row fills the left, in a single strip. The
 // whole-panel move is the wx-sanctioned path (wx does the same for wxToolBar); moving individual buttons
 // is not safe. barWidthPx = the panel's natural width (so GTK allocates room for every menu - wxPizza
-// reports 0 natural width otherwise and the row clips); barHeightPx = the panel/bar height.
-extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidget, int barWidthPx, int barHeightPx);
+// reports 0 natural width otherwise and the row clips); barHeightPx = the panel/bar height; sharpCorners
+// != 0 keeps the window corners square ("Ignore platform decoration"), else they round to match the theme.
+extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidget, int barWidthPx, int barHeightPx, int sharpCorners);
 #endif
 
 #include <string>
@@ -6569,9 +6570,9 @@ private:
             // moves into the header bar. Lay it out first so the menu buttons have sizes before the move.
             m_titleBar->Layout();
             // Pass the panel's real natural WIDTH so GTK gives the menu row room for every menu (wxPizza
-            // reports 0 natural width, which clips it otherwise), and a compact height.
+            // reports 0 natural width, which clips it otherwise), a compact height, and the corner style.
             wxn_HostInHeaderBar(this->GetHandle(), m_titleBar->GetHandle(),
-                                m_titleBar->GetBestSize().x, this->FromDIP(32));
+                                m_titleBar->GetBestSize().x, this->FromDIP(32), m_ignorePlatformDeco ? 1 : 0);
         }
         else
 #endif
@@ -9036,6 +9037,7 @@ private:
         m_nativeWinButtons = true;
 #elif defined(__WXGTK__)
         c->Read("NativeWinButtons", &m_nativeWinButtons, false);
+        c->Read("IgnorePlatformDeco", &m_ignorePlatformDeco, false);
 #endif
         m_themeMode = (int)readThemeMode();   // also resolved in OnInit (before the frame/config exist as members here)
         c->Read("AskBeforeClose", &m_askBeforeClose, false);
@@ -9218,6 +9220,10 @@ private:
         // Only takes effect while the integrated bar is on.
         auto* cbNativeBtns = new wxCheckBox(gen, wxID_ANY, _("System-native window buttons"));
         cbNativeBtns->SetValue(m_nativeWinButtons); row(gs, cbNativeBtns);
+        // Companion to the native header bar: keep the window corners square instead of rounding them to
+        // match the desktop theme. Only has an effect while the native header bar is on.
+        auto* cbIgnoreDeco = new wxCheckBox(gen, wxID_ANY, _("Ignore platform decoration (sharp corners)"));
+        cbIgnoreDeco->SetValue(m_ignorePlatformDeco); row(gs, cbIgnoreDeco);
 #endif
         // Localization: pick the UI language (restart-to-apply, like dark mode). Same shared table
         // (UI_LANG_IDS/UI_LANG_ENDONYMS) as the top-level Localization menu.
@@ -9520,6 +9526,7 @@ private:
 #endif
 #ifdef __WXGTK__
         const bool newNativeBtns = cbNativeBtns->GetValue();
+        const bool newIgnoreDeco = cbIgnoreDeco->GetValue();
 #endif
         const int newIconStyle = chIconStyle->GetSelection();
         const int iconSel = chIconSize->GetSelection();   // always 0..3 (a selection is always set); guard the index anyway
@@ -9541,6 +9548,14 @@ private:
             if (newIntBar || m_integratedBar) needRestart = true;
             else { wxConfigBase::Get()->Write("NativeWinButtons", newNativeBtns); m_nativeWinButtons = newNativeBtns; }
         }
+        if (newIgnoreDeco != m_ignorePlatformDeco)
+        {
+            // Same reasoning as native buttons: only matters with the integrated bar (it re-styles the
+            // header-bar window's corners at build time), so restart to apply when the bar is/will be on;
+            // otherwise persist directly rather than force a pointless restart.
+            if (newIntBar || m_integratedBar) needRestart = true;
+            else { wxConfigBase::Get()->Write("IgnorePlatformDeco", newIgnoreDeco); m_ignorePlatformDeco = newIgnoreDeco; }
+        }
 #endif
         if (needRestart)
             restartWithTheme([=] {
@@ -9552,6 +9567,7 @@ private:
 #endif
 #ifdef __WXGTK__
                 if (newNativeBtns != m_nativeWinButtons) cfg->Write("NativeWinButtons", newNativeBtns);
+                if (newIgnoreDeco != m_ignorePlatformDeco) cfg->Write("IgnorePlatformDeco", newIgnoreDeco);
 #endif
                 if (newIconStyle != m_iconStyle) cfg->Write("ToolbarIconStyle", (long)newIconStyle);
                 if (newIconSize != m_toolbarIconSize) cfg->Write("ToolbarIconSize", (long)newIconSize);
@@ -11308,6 +11324,7 @@ private:
 #endif
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
     bool        m_nativeWinButtons = false;      // native window buttons in the integrated bar: a Linux-only user toggle (restart-to-apply); forced true on Windows; macOS always uses native traffic lights
+    bool        m_ignorePlatformDeco = false;    // Linux/GTK native header bar: keep the window corners SHARP (skip the platform-matching rounding); restart-to-apply
     int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Solar, 2 = IconPark, 3 = Streamline (restart-to-apply)
     int         m_toolbarIconSize = 16;          // toolbar icon size in px (16/20/24/32, default 16; restart-to-apply)
     wxTimer     m_timer;

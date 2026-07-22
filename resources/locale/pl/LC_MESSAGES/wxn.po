@@ -1593,6 +1593,9 @@ msgstr "Pokaż zintegrowany górny pasek"
 msgid "System-native window buttons"
 msgstr "Systemowe przyciski okna"
 
+msgid "Ignore platform decoration (sharp corners)"
+msgstr "Ignoruj dekoracje systemowe (ostre rogi)"
+
 msgid "Localization:"
 msgstr "Lokalizacja:"
 

@@ -1593,6 +1593,9 @@ msgstr "통합 상단 바 표시"
 msgid "System-native window buttons"
 msgstr "시스템 기본 창 버튼"
 
+msgid "Ignore platform decoration (sharp corners)"
+msgstr "플랫폼 장식 무시(직각 모서리)"
+
 msgid "Localization:"
 msgstr "지역화:"
 

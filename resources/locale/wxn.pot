@@ -1811,6 +1811,9 @@ msgstr ""
 msgid "System-native window buttons"
 msgstr ""
 
+msgid "Ignore platform decoration (sharp corners)"
+msgstr ""
+
 msgid "Tabler icons (line)"
 msgstr ""
 

@@ -3,6 +3,19 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.16] - 2026-07-22
+
+### Added
+- **"Ignore platform decoration (sharp corners)"** — a Linux-only Preferences option (companion to the
+  native header bar). By default the native-header-bar window now rounds its top corners to match the
+  desktop theme; turn this on to keep them square, the flat look wxNote's integrated bar had before.
+
+### Fixed
+- **GTK native header bar: the window's top corners are now rounded** to match the desktop theme, instead
+  of the square frame that clashed with the theme's rounded header bar (the "weird corners"). wxbf's own
+  1px border is softened so it doesn't leave a dark hairline round the curve, and the corners square off
+  correctly when the window is maximized or edge-snapped (incl. Cinnamon/Muffin's per-edge tiling).
+
 ## [0.9.15] - 2026-07-22
 
 ### Changed

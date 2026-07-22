@@ -43,8 +43,8 @@ pipe-based console, which handles line-oriented tools only. Details in
 ## Why do some settings need a restart?
 
 Theme, UI language, toolbar icon set and size, tab close buttons, recent-files length, window reuse,
-the integrated top bar and its system-native window buttons are all fixed per process — they are read
-once while the chrome is being built. Clicking **OK** in Preferences after changing one of them offers
+the integrated top bar, its system-native window buttons and (on Linux) the platform-decoration
+sharp-corners override are all fixed per process — they are read once while the chrome is being built. Clicking **OK** in Preferences after changing one of them offers
 a restart (Cancel discards the changes instead). If documents have unsaved changes, the save prompt
 runs first, and the new values are only written once the restart is actually confirmed, so cancelling
 out leaves your old settings intact.

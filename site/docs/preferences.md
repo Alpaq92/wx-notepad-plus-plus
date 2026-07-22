@@ -21,6 +21,7 @@
 | Auto-hide toolbar in full screen | **off** | when on, full screen hides the toolbar (macOS-style) |
 | Reuse an existing window | off | *restart* — when on, a second launch hands its files to the first window over IPC and exits. `-n` / `-r` override this per launch |
 | Show integrated top bar | — | *restart* — only present on platforms with borderless-window support and on macOS |
+| Ignore platform decoration (sharp corners) | **off** | *restart* — **Linux only**, and only takes effect when **System-native window buttons** (below) is on — it restyles that native header-bar window's corners. By default that window rounds its top corners to match your desktop theme. Turn this on to keep the corners **square** instead — the flat look wxNote's integrated bar had before |
 | System-native window buttons | **off** | *restart* — **Linux only** (the checkbox appears on Linux alone), and only affects the integrated top bar. When on, the integrated bar *becomes* GTK's own header bar — your desktop theme's real minimize/maximize/close (with their proper chrome and hover, like other GTK apps) sit on the right, in the order and on the side your `gtk-decoration-layout` says, while the menu row fills the left. GTK handles window dragging, double-click-maximize and the right-click window menu. The header strip follows your **system** theme (not the app's dark/light setting), which is what makes it look native. On **Windows** there is no checkbox — the integrated bar always hands its buttons back to the OS (Windows&nbsp;11 snap layouts over maximize, native drag/snap/Aero&nbsp;Shake/double-click, Segoe Fluent Icons where installed). On **macOS** the integrated bar always keeps the native traffic lights |
 | Localization | English | *restart* — the UI language; the same list as **Settings&nbsp;&rsaquo; Localization** |
 | Toolbar icon style | Tabler icons (line) | *restart* — also Solar icons (green), IconPark icons (teal/lime) and Streamline icons (green/teal) |
@@ -138,8 +139,8 @@ The two page macros are resolved per page as the document prints; the rest are r
 
 Clicking **OK** prompts to restart if any of these changed: **Theme**, **Localization**, **Toolbar
 icon style**, **Toolbar icon size**, **Reuse an existing window**, **Show close button on each tab**,
-**Max number of entries** (recent files), **Show integrated top bar**, or **System-native window
-buttons**. Everything else applies immediately.
+**Max number of entries** (recent files), **Show integrated top bar**, **System-native window
+buttons**, or **Ignore platform decoration**. Everything else applies immediately.
 
 If a restart is offered while documents have unsaved changes, the save prompt runs first — the new
 values are only written once the restart is actually confirmed, so cancelling out leaves the old

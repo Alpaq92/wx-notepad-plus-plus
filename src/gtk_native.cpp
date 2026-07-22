@@ -271,7 +271,7 @@ static void wxn_hb_style(GtkWidget* w, gpointer provider)
         gtk_container_forall(GTK_CONTAINER(w), (GtkCallback)wxn_hb_style, provider);
 }
 
-extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidget, int barWidthPx, int barHeightPx)
+extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidget, int barWidthPx, int barHeightPx, int sharpCorners)
 {
     if (!gtkWindowWidget || !childPanelWidget) return;
     GtkWidget* hb = gtk_window_get_titlebar(GTK_WINDOW(gtkWindowWidget));
@@ -292,6 +292,13 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
     // provider's selectors reach the header's own titlebutton child nodes; the class keeps it off
     // GtkFileChooser/other header bars). G_MAXUINT beats the theme's own min-heights.
     gtk_style_context_add_class(gtk_widget_get_style_context(hb), "wxn-hb");
+    // Corner style, scoped to THIS window via a class (so it doesn't touch dialogs). wxbf's own decoration
+    // CSS forces border-radius:0 (square), a leftover from its square custom-chrome design; against the
+    // theme's rounded header bar that reads as "weird corners". Default (sharpCorners == 0): round the
+    // decoration AND the header bar to the same radius so they match the platform. sharpCorners != 0
+    // ("Ignore platform decoration"): force both square, restoring the flat custom-chrome look.
+    gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(gtkWindowWidget)),
+                                sharpCorners ? "wxn-hbsharp" : "wxn-hbround");
     static gboolean s_compactAdded = FALSE;
     if (!s_compactAdded)
     {
@@ -307,7 +314,25 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
             // min-height:0 drops the theme's vertical min (which could otherwise fight the wx height), and
             // padding/margin:0 stops the theme re-inflating the box against the width wx already froze at
             // best+16px. Scoped to our bar via the class + :not(.titlebutton) (leaves window controls alone).
-            "headerbar.wxn-hb button:not(.titlebutton) { min-height: 0; padding: 0; margin: 0; }",
+            "headerbar.wxn-hb button:not(.titlebutton) { min-height: 0; padding: 0; margin: 0; }"
+            // Rounded (default): round the window's top corners to match the header bar (overriding wxbf's
+            // border-radius:0), square when maximized/tiled/fullscreen where the window fills to a hard edge.
+            // border-color softens wxbf's 1px decoration border (main.cpp sets it to the app chrome, which is
+            // near-black in dark mode) so it doesn't paint a hard curved hairline round a light system header;
+            // the 1px width stays (edge definition, since the drop shadow is off when inactive). The per-edge
+            // tiled-* classes matter on Cinnamon/Muffin (Mint), which snaps with those, not the bare `.tiled`.
+            ".wxn-hbround decoration { border-radius: 8px 8px 0 0; border-color: rgba(0,0,0,0.18); }"
+            ".wxn-hbround.maximized decoration, .wxn-hbround.fullscreen decoration,"
+            " .wxn-hbround.tiled decoration, .wxn-hbround.tiled-top decoration, .wxn-hbround.tiled-right decoration,"
+            " .wxn-hbround.tiled-bottom decoration, .wxn-hbround.tiled-left decoration { border-radius: 0; }"
+            ".wxn-hbround headerbar.wxn-hb { border-radius: 8px 8px 0 0; }"
+            // Sharp ("Ignore platform decoration"): keep every corner square, for the flat look wxNote had
+            // before the native-header-bar work. wxbf's own provider already squares the decoration node, so
+            // that rule is a defensive restatement (sharp mode stays square even if wxbf's border-radius:0
+            // ever changes); the headerbar rule is the one that does real work - it overrides the theme's
+            // own header-bar top rounding, which nothing else touches.
+            ".wxn-hbsharp decoration { border-radius: 0; }"
+            ".wxn-hbsharp headerbar.wxn-hb { border-radius: 0; }",
             -1, nullptr);
         if (GdkScreen* screen = gdk_screen_get_default())
             gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(compact), G_MAXUINT);
