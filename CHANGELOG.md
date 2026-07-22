@@ -3,6 +3,14 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.13] - 2026-07-22
+
+### Fixed
+- **GTK header-bar mode: the app icon and menu row vanished** in 0.9.12. Compacting the bar dropped the
+  panel's `hexpand`, and since wxWidgets' GTK container reports its natural *width* as 0, the header bar
+  allocated the menu panel zero width. Restored — and because 0.9.12 also removed the centered title,
+  the panel now fills the full width, so every top-level menu shows (0.9.11 still clipped a couple).
+
 ## [0.9.12] - 2026-07-22
 
 ### Fixed
