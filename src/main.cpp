@@ -6463,8 +6463,15 @@ private:
             // the ~"padding: 4px 8px" a native GTK menubar item gets. MSW's native button already
             // reserves internal horizontal margin, so adding more there reads too widely spaced.
             // (The AddStretchSpacer below absorbs the width, so no overflow.)
+            //
+            // In GTK header-bar mode also pin a taller min HEIGHT so the flat hover/pressed highlight has
+            // vertical room. It MUST be a wx min-size, not CSS padding: wx caches each button's best size
+            // at Layout() and only re-queries it on SetFont (which these never get), so CSS padding added
+            // later (in wxn_HostInHeaderBar) can't grow the sizer-fixed allocation the hover paints across
+            // - it would only re-inset the label. GetEffectiveMinSize consumes this height directly and the
+            // GtkButton background fills it. FromDIP(30) sits comfortably inside the 36px bar.
 #ifndef __WXMSW__
-            b->SetMinSize(wxSize(b->GetBestSize().x + b->FromDIP(16), -1));
+            b->SetMinSize(wxSize(b->GetBestSize().x + b->FromDIP(16), hbMode ? b->FromDIP(30) : -1));
 #endif
             sz->Add(b, 0, wxALIGN_CENTRE_VERTICAL);
         }
@@ -6557,7 +6564,9 @@ private:
             // panel stays a wx child object (so wx owns its lifetime + teardown order); only its GtkWidget
             // moves into the header bar. Lay it out first so the menu buttons have sizes before the move.
             m_titleBar->Layout();
-            wxn_HostInHeaderBar(this->GetHandle(), m_titleBar->GetHandle(), this->FromDIP((int)kTitleBarH));
+            // A touch taller than the toolbar's kTitleBarH (30): the menu buttons need vertical room so
+            // their hover highlight isn't cropped, while staying well under the theme's ~46px default.
+            wxn_HostInHeaderBar(this->GetHandle(), m_titleBar->GetHandle(), this->FromDIP(36));
         }
         else
 #endif
