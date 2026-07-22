@@ -314,7 +314,13 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
     GtkWidget* oldParent = gtk_widget_get_parent(child);
     g_object_ref(child);
     if (oldParent) gtk_container_remove(GTK_CONTAINER(oldParent), child);
-    // wxPizza reports size only from its size-request; without one the header bar collapses it to 0 height.
+    // hexpand is REQUIRED, not cosmetic: wxPizza reports its natural size only from the size-request, and
+    // the width there is -1, so GTK reads the panel's natural WIDTH as 0 and would allocate it zero width
+    // (menu row + icon vanish). hexpand tells the header bar to give it the available width instead; with
+    // the empty custom title (above) freeing the centre, that's the full width up to the window buttons,
+    // so every menu shows and nothing clips.
+    gtk_widget_set_hexpand(child, TRUE);
+    // Likewise the header bar collapses the panel to 0 HEIGHT without an explicit height size-request.
     gtk_widget_set_size_request(child, -1, barHeightPx > 0 ? barHeightPx : 30);
     gtk_header_bar_pack_start(GTK_HEADER_BAR(hb), child);
     g_object_unref(child);
