@@ -122,8 +122,9 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 // bar and turns on the header's real theme min/max/close - so the desktop's actual window buttons (chrome
 // + hover, Firefox-style) sit at the right while our icon+menu row fills the left, in a single strip. The
 // whole-panel move is the wx-sanctioned path (wx does the same for wxToolBar); moving individual buttons
-// is not safe. barHeightPx is the panel's height floor (the theme's button size may make the bar taller).
-extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidget, int barHeightPx);
+// is not safe. barWidthPx = the panel's natural width (so GTK allocates room for every menu - wxPizza
+// reports 0 natural width otherwise and the row clips); barHeightPx = the panel/bar height.
+extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidget, int barWidthPx, int barHeightPx);
 #endif
 
 #include <string>
@@ -6469,9 +6470,12 @@ private:
             // at Layout() and only re-queries it on SetFont (which these never get), so CSS padding added
             // later (in wxn_HostInHeaderBar) can't grow the sizer-fixed allocation the hover paints across
             // - it would only re-inset the label. GetEffectiveMinSize consumes this height directly and the
-            // GtkButton background fills it. FromDIP(30) sits comfortably inside the 36px bar.
+            // GtkButton background fills it. The hover must be clearly SHORTER than the bar to float
+            // inside it (not nearly fill it): FromDIP(24) button in the FromDIP(32) bar = ~4px clear top
+            // and bottom. (Lowering the button and the bar by the same amount would leave the proportion
+            // unchanged - the button has to drop more than the bar.)
 #ifndef __WXMSW__
-            b->SetMinSize(wxSize(b->GetBestSize().x + b->FromDIP(16), hbMode ? b->FromDIP(30) : -1));
+            b->SetMinSize(wxSize(b->GetBestSize().x + b->FromDIP(16), hbMode ? b->FromDIP(24) : -1));
 #endif
             sz->Add(b, 0, wxALIGN_CENTRE_VERTICAL);
         }
@@ -6564,9 +6568,10 @@ private:
             // panel stays a wx child object (so wx owns its lifetime + teardown order); only its GtkWidget
             // moves into the header bar. Lay it out first so the menu buttons have sizes before the move.
             m_titleBar->Layout();
-            // A touch taller than the toolbar's kTitleBarH (30): the menu buttons need vertical room so
-            // their hover highlight isn't cropped, while staying well under the theme's ~46px default.
-            wxn_HostInHeaderBar(this->GetHandle(), m_titleBar->GetHandle(), this->FromDIP(36));
+            // Pass the panel's real natural WIDTH so GTK gives the menu row room for every menu (wxPizza
+            // reports 0 natural width, which clips it otherwise), and a compact height.
+            wxn_HostInHeaderBar(this->GetHandle(), m_titleBar->GetHandle(),
+                                m_titleBar->GetBestSize().x, this->FromDIP(32));
         }
         else
 #endif
@@ -9022,7 +9027,16 @@ private:
     {
         auto* c = wxConfigBase::Get();
         c->Read("IntegratedBar", &m_integratedBar, false);
+        // "Native window buttons" is a user choice only on Linux, where the two modes look visibly
+        // different (our own flat buttons vs. hosting the bar in GTK's real header bar). On Windows it's
+        // always on - the native-buttons path (OS hit-testing: snap layouts, native drag, Fluent glyphs)
+        // is strictly the better one and the alternative differs only in subtle glyph rendering, so there's
+        // no meaningful toggle to offer. On macOS the integrated bar always uses the native traffic lights.
+#ifdef __WXMSW__
+        m_nativeWinButtons = true;
+#elif defined(__WXGTK__)
         c->Read("NativeWinButtons", &m_nativeWinButtons, false);
+#endif
         m_themeMode = (int)readThemeMode();   // also resolved in OnInit (before the frame/config exist as members here)
         c->Read("AskBeforeClose", &m_askBeforeClose, false);
         c->Read("FullscreenAutohideToolbar", &m_fsAutohideToolbar, false);
@@ -9197,10 +9211,11 @@ private:
         auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, _("Show integrated top bar"));
         cbIntBar->SetValue(m_integratedBar); row(gs, cbIntBar);
 #endif
-#ifdef WXN_HAS_BORDERLESS
-        // Narrower guard than cbIntBar's on purpose: macOS's integrated bar always keeps the native
-        // traffic lights, so a native-vs-custom choice only exists where the borderless frame does
-        // (Windows + Linux). Only takes effect while the integrated bar is on.
+#ifdef __WXGTK__
+        // Linux only: the native-vs-custom choice is a real one here (our own flat buttons vs. hosting
+        // the bar in GTK's real header bar). On Windows the native path is always on (no toggle) and on
+        // macOS the bar always keeps the native traffic lights - so the checkbox appears on GTK alone.
+        // Only takes effect while the integrated bar is on.
         auto* cbNativeBtns = new wxCheckBox(gen, wxID_ANY, _("System-native window buttons"));
         cbNativeBtns->SetValue(m_nativeWinButtons); row(gs, cbNativeBtns);
 #endif
@@ -9503,7 +9518,7 @@ private:
 #if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
         const bool newIntBar = cbIntBar->GetValue();
 #endif
-#ifdef WXN_HAS_BORDERLESS
+#ifdef __WXGTK__
         const bool newNativeBtns = cbNativeBtns->GetValue();
 #endif
         const int newIconStyle = chIconStyle->GetSelection();
@@ -9515,7 +9530,7 @@ private:
 #if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
         needRestart = needRestart || (newIntBar != m_integratedBar);
 #endif
-#ifdef WXN_HAS_BORDERLESS
+#ifdef __WXGTK__
         if (newNativeBtns != m_nativeWinButtons)
         {
             // Only meaningful with the integrated bar (before or after this OK): a restart then applies
@@ -9535,7 +9550,7 @@ private:
 #if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
                 if (newIntBar != m_integratedBar) cfg->Write("IntegratedBar", newIntBar);
 #endif
-#ifdef WXN_HAS_BORDERLESS
+#ifdef __WXGTK__
                 if (newNativeBtns != m_nativeWinButtons) cfg->Write("NativeWinButtons", newNativeBtns);
 #endif
                 if (newIconStyle != m_iconStyle) cfg->Write("ToolbarIconStyle", (long)newIconStyle);
@@ -11292,7 +11307,7 @@ private:
     int          m_macToolbarRowH = 0;            // integrated bar: toolbar row height = the re-centred traffic lights' band height
 #endif
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
-    bool        m_nativeWinButtons = false;      // setting: platform-native window buttons in the integrated bar (restart-to-apply; Win/Linux only - macOS is always native)
+    bool        m_nativeWinButtons = false;      // native window buttons in the integrated bar: a Linux-only user toggle (restart-to-apply); forced true on Windows; macOS always uses native traffic lights
     int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Solar, 2 = IconPark, 3 = Streamline (restart-to-apply)
     int         m_toolbarIconSize = 16;          // toolbar icon size in px (16/20/24/32, default 16; restart-to-apply)
     wxTimer     m_timer;
