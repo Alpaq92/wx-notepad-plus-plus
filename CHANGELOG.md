@@ -3,7 +3,16 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.9.11] - 2026-07-21
+## [0.9.12] - 2026-07-22
+
+### Fixed
+- **GTK header-bar mode polish** (the Linux "System-native window buttons" bar from 0.9.11):
+  - The bar is no longer the theme's full ~46px height — it's compacted (scoped CSS on our header bar
+    only) so it matches the toolbar row below it.
+  - The centered window-title text is gone (an empty custom title replaces GTK's default label; the
+    taskbar title is unaffected).
+  - The menu row is no longer clipped — removing the reserved centered-title area frees the full width,
+    so all top-level menus show.
 
 ### Changed
 - **"System-native window buttons" on Linux now gives REAL theme window buttons.** 0.9.10 only swapped
