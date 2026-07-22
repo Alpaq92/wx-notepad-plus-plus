@@ -140,7 +140,9 @@ The two page macros are resolved per page as the document prints; the rest are r
 Clicking **OK** prompts to restart if any of these changed: **Theme**, **Localization**, **Toolbar
 icon style**, **Toolbar icon size**, **Reuse an existing window**, **Show close button on each tab**,
 **Max number of entries** (recent files), **Show integrated top bar**, **System-native window
-buttons**, or **Ignore platform decoration**. Everything else applies immediately.
+buttons**, or **Ignore platform decoration**. Everything else applies immediately. The last two —
+**System-native window buttons** and **Ignore platform decoration** — only prompt a restart when the
+integrated top bar is on; with it off they have no visible effect and are saved silently, no restart.
 
 If a restart is offered while documents have unsaved changes, the save prompt runs first — the new
 values are only written once the restart is actually confirmed, so cancelling out leaves the old

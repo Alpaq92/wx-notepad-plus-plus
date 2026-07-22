@@ -44,10 +44,12 @@ pipe-based console, which handles line-oriented tools only. Details in
 
 Theme, UI language, toolbar icon set and size, tab close buttons, recent-files length, window reuse,
 the integrated top bar, its system-native window buttons and (on Linux) the platform-decoration
-sharp-corners override are all fixed per process — they are read once while the chrome is being built. Clicking **OK** in Preferences after changing one of them offers
-a restart (Cancel discards the changes instead). If documents have unsaved changes, the save prompt
-runs first, and the new values are only written once the restart is actually confirmed, so cancelling
-out leaves your old settings intact.
+sharp-corners override are all fixed per process — they are read once while the chrome is being built.
+Clicking **OK** in Preferences after changing one of them offers a restart (Cancel discards the changes
+instead) — except the two Linux header-bar settings (system-native window buttons and the sharp-corners
+override), which only need one when the integrated top bar is on, since they do nothing without it. If
+documents have unsaved changes, the save prompt runs first, and the new values are only written once the
+restart is actually confirmed, so cancelling out leaves your old settings intact.
 
 ## My file opened as garbled characters
 

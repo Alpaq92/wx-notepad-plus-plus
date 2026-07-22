@@ -322,10 +322,16 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
             // the 1px width stays (edge definition, since the drop shadow is off when inactive). The per-edge
             // tiled-* classes matter on Cinnamon/Muffin (Mint), which snaps with those, not the bare `.tiled`.
             ".wxn-hbround decoration { border-radius: 8px 8px 0 0; border-color: rgba(0,0,0,0.18); }"
+            ".wxn-hbround headerbar.wxn-hb { border-radius: 8px 8px 0 0; }"
+            // Square BOTH nodes in those states: squaring only the decoration would leave the header bar's
+            // own rounded top corners poking past the screen-filling edge (the decoration is square but the
+            // headerbar inside it still curved). Keep the two lists in lockstep.
             ".wxn-hbround.maximized decoration, .wxn-hbround.fullscreen decoration,"
             " .wxn-hbround.tiled decoration, .wxn-hbround.tiled-top decoration, .wxn-hbround.tiled-right decoration,"
-            " .wxn-hbround.tiled-bottom decoration, .wxn-hbround.tiled-left decoration { border-radius: 0; }"
-            ".wxn-hbround headerbar.wxn-hb { border-radius: 8px 8px 0 0; }"
+            " .wxn-hbround.tiled-bottom decoration, .wxn-hbround.tiled-left decoration,"
+            " .wxn-hbround.maximized headerbar.wxn-hb, .wxn-hbround.fullscreen headerbar.wxn-hb,"
+            " .wxn-hbround.tiled headerbar.wxn-hb, .wxn-hbround.tiled-top headerbar.wxn-hb, .wxn-hbround.tiled-right headerbar.wxn-hb,"
+            " .wxn-hbround.tiled-bottom headerbar.wxn-hb, .wxn-hbround.tiled-left headerbar.wxn-hb { border-radius: 0; }"
             // Sharp ("Ignore platform decoration"): keep every corner square, for the flat look wxNote had
             // before the native-header-bar work. wxbf's own provider already squares the decoration node, so
             // that rule is a defensive restatement (sharp mode stays square even if wxbf's border-radius:0
