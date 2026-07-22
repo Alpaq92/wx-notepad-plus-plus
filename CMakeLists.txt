@@ -11,7 +11,7 @@
 
 cmake_minimum_required(VERSION 3.20)
 # C is enabled for the vendored Lua + LPeg (Scintillua's runtime) - both are C.
-project(wxNote VERSION 0.9.15 LANGUAGES CXX C)
+project(wxNote VERSION 0.9.16 LANGUAGES CXX C)
 
 include(FetchContent)
 

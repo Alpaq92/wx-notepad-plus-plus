@@ -1593,6 +1593,9 @@ msgstr "Mostrar barra superior integrada"
 msgid "System-native window buttons"
 msgstr "Botones de ventana nativos del sistema"
 
+msgid "Ignore platform decoration (sharp corners)"
+msgstr "Ignorar la decoración de la plataforma (esquinas rectas)"
+
 msgid "Localization:"
 msgstr "Localización:"
 

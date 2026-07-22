@@ -1593,6 +1593,9 @@ msgstr "統合トップバーを表示"
 msgid "System-native window buttons"
 msgstr "システムネイティブのウィンドウボタン"
 
+msgid "Ignore platform decoration (sharp corners)"
+msgstr "プラットフォームの装飾を無視（角を四角に）"
+
 msgid "Localization:"
 msgstr "ローカライズ:"
 

@@ -1593,6 +1593,9 @@ msgstr "Показывать встроенную верхнюю панель"
 msgid "System-native window buttons"
 msgstr "Системные кнопки окна"
 
+msgid "Ignore platform decoration (sharp corners)"
+msgstr "Игнорировать системное оформление (острые углы)"
+
 msgid "Localization:"
 msgstr "Локализация:"
 
