@@ -81,12 +81,34 @@ endif()
 
 # Scintillua's lexer.lua (the engine's Lua half); staged so the resource copy below ships it.
 set(SCINTILLUA_LEXER_LUA "${CMAKE_BINARY_DIR}/scintillua/lexer.lua")
-if(NOT EXISTS "${SCINTILLUA_LEXER_LUA}")
-    file(DOWNLOAD "https://raw.githubusercontent.com/orbitalquark/scintillua/default/lexers/lexer.lua"
-         "${SCINTILLUA_LEXER_LUA}" STATUS _sl_status)
-    list(GET _sl_status 0 _sl_code)
+# A zero-byte file from a previously interrupted configure would otherwise be treated as "already
+# downloaded" and ship an empty lexer, so require non-empty, not just present.
+if(EXISTS "${SCINTILLUA_LEXER_LUA}")
+    file(SIZE "${SCINTILLUA_LEXER_LUA}" _sl_have)
+else()
+    set(_sl_have 0)
+endif()
+if(NOT _sl_have GREATER 0)
+    # Retry the fetch: CI runners intermittently hit transient TLS/network errors against
+    # raw.githubusercontent.com (curl 35 "SSL connect error"), which would otherwise fail a whole
+    # release configure. Try a handful of times with timeouts before giving up.
+    set(_sl_code 1)
+    foreach(_sl_try RANGE 1 5)
+        file(DOWNLOAD "https://raw.githubusercontent.com/orbitalquark/scintillua/default/lexers/lexer.lua"
+             "${SCINTILLUA_LEXER_LUA}"
+             STATUS _sl_status
+             TLS_VERIFY ON
+             INACTIVITY_TIMEOUT 30
+             TIMEOUT 120)
+        list(GET _sl_status 0 _sl_code)
+        if(_sl_code EQUAL 0)
+            break()
+        endif()
+        message(STATUS "[wxnote] Scintillua lexer.lua download attempt ${_sl_try}/5 failed (${_sl_status}); retrying...")
+        file(REMOVE "${SCINTILLUA_LEXER_LUA}")   # drop any partial/empty file before the next try
+    endforeach()
     if(NOT _sl_code EQUAL 0)
-        message(FATAL_ERROR "failed to download Scintillua lexer.lua: ${_sl_status}")
+        message(FATAL_ERROR "failed to download Scintillua lexer.lua after 5 attempts: ${_sl_status}")
     endif()
 endif()
 
