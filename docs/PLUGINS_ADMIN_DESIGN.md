@@ -30,6 +30,42 @@ correct, right-sized, already-permissive answer. It is a file you own, with no s
 copyleft. Design DNA worth borrowing: Open VSX's REST API shape + its `targetPlatform` naming, and
 AppStream's MetaInfo metadata shape (incl. its mandatory SPDX license field) — as *references*, not backends.
 
+## Prior art surveyed: Pulsar, VS Code, Sublime (2026-07)
+
+Three editors were studied as the three distinct archetypes of editor plugin distribution. None targets
+wxNote's actual problem (native per-`(os,arch)` binaries incl. riscv64, from a solo maintainer with no
+server budget), and each fails in an instructive way — together they argue *for* the bespoke design below.
+
+| Axis | **Pulsar** (Atom fork) | **VS Code** (MS / Open VSX) | **Sublime** (Package Control) |
+| --- | --- | --- | --- |
+| Catalog | Live self-hosted registry: Node + Express + **PostgreSQL** + Google Cloud Storage on App Engine | Live marketplace: MS proprietary / Open VSX = **Spring Boot + PostgreSQL + Elasticsearch + React** | Curated-PR git repo **+ a live crawler** → one compiled `channel_v3.json` (~5 TB/mo) |
+| Who runs it forever | Volunteer team, **donation-funded** | Microsoft / Eclipse Foundation | 1 person for ~a decade → **handed to a company (2026)** |
+| A "package" is | npm `package.json` in a public GitHub repo | `.vsix` (ZIP/OPC) of **JS/TS** + manifest | git-tag repo or `.sublime-package` zip; **pure Python** |
+| Native per-`(os,arch)` | ✗ **compile-on-install** (node-gyp vs Electron headers) | `targetPlatform` enum — **no `riscv64` slot** | ✗ (interpreted) |
+| Signing | ✗ none (TLS + TOFU + curation) | MS signs & verifies each VSIX; Open VSX weaker | ✗ none (TLS + TOFU + curation) |
+| Cautionary tale | atom.io's death *is why Pulsar exists* | MS ToS legally bars non-MS clients from the Marketplace | **2021 CVE**: re-registered username + moved tag shipped as an "upgrade" |
+| License | MIT | proprietary / EPL-2.0 | MIT |
+
+**What each teaches:**
+- **Pulsar = the ops-burden cautionary tale.** Resurrecting atom.io meant a live DB + API + cloud storage
+  that must run forever (donation-funded, single point of failure); its native story is *compile on the
+  user's machine*, unworkable for a no-runtime app and with no better story for riscv64. → Against any
+  always-on server and against compile-on-install; for "registry = thin metadata pointing at GitHub."
+- **VS Code = the conventions reference you can't actually use.** `targetPlatform` (one version, many
+  per-`(os,arch)` artifacts) is the right *shape*, but the enum has **no riscv64**, so an existing
+  marketplace physically cannot represent wxNote's target; MS's ToS bars non-MS clients; Open VSX is a
+  heavy JVM stack under EPL-2.0. Worth stealing: **sign every artifact and verify on install.**
+- **Sublime = the closest kin and the clearest security lesson.** Curated JSON entries by PR, bytes
+  offloaded to GitHub, a single index blob the client GETs — almost exactly this design. But it needs a
+  live crawler resolving *mutable git tags* and has *no signing*, and that combination is what the 2021
+  CVE exploited. → Borrow curated-PR + single-static-index + index-points-at-bytes; drop the crawler and
+  the mutable-tag trust.
+
+**Convergence:** all three point back at the bespoke **static JSON catalog + per-plugin GitHub-Release
+assets + compiled-in-key Ed25519 signing + curated PRs** — the only shape that satisfies native-per-arch,
+riscv64, no-server, and permissive-license at once. The one sharpening the survey forces: **pull signing
+forward to Phase 1** (see Trust).
+
 ## The design (when built)
 
 ### Catalog
@@ -61,6 +97,21 @@ incl. riscv64. This upgrades trust from "trust the host" to "trust the key." (TU
 key-rotation/rollback too, but there is no C/C++ TUF client — reimplementing it is disproportionate for a
 solo-curated catalog. Defer TUF; ship Ed25519.)
 
+**Threat model (why signing is not optional — Sublime, Feb 2021).** Package Control shipped for years on
+TLS + trust-on-first-use + curation and *no artifact signing*. An attacker deleted a package's GitHub/
+BitBucket account, re-registered the same username, recreated the repo, and pushed a higher version tag —
+which the crawler distributed to every user as a legitimate "upgrade" (32 accounts found vulnerable;
+reported by Apple Information Security). The fix was purely operational (offline sources now need manual
+re-review), not cryptographic. That is exactly the attack a hash-in-a-JSON does **not** stop but a
+signature does: a re-registered account cannot produce a signature valid under the maintainer's compiled-in
+key. Three consequences for wxNote:
+- **Sign in Phase 1, not Phase 2.** The signature is the one trust gate a compromised host or a
+  re-registered account cannot forge; it is ~200 LOC and must not ship after an unsigned install window.
+- **Pin immutable artifacts.** Store the **Release-asset URL + `sha256` + `size`**, never a "latest tag"
+  on a third-party account — closing the moved-/re-registered-tag class before the signature check even runs.
+- **MVP trust = a single maintainer key** (you curate → you sign). Per-publisher keys can come later; do
+  not build a PKI for a solo-curated catalog.
+
 ### Curation
 The **PR into the catalog is the trust event** — the one thing no package registry provides and the actual
 product surface. MVP = maintainer-only allowlist; open to third-party PRs later with schema + hash-reachability
@@ -69,11 +120,12 @@ code" notice.
 
 ## Phased plan (when justified)
 - **Phase 0 — loader groundwork** (~2–3 days): per-user plugins root scan + `installed.json` + vendor a SHA-256.
-- **Phase 1 — MVP install-from-catalog** (~1–1.5 wks): menu entry + `wxWebRequest` fetch → SHA-256 verify →
-  extract → per-user dir → restart. Hand-maintained catalog repo + JSON-schema CI, seeded with the reference
-  plugins.
-- **Phase 2 — updates + trust** (~1 wk): Updates tab (version compare), scheduled uninstall, kind/arch/ABI
-  grey-out, license badges, **minisign the catalog + verify in-app**.
+- **Phase 1 — MVP install-from-catalog, signed** (~1.5–2 wks): menu entry + `wxWebRequest` fetch → SHA-256
+  verify → **Ed25519 signature verify against the compiled-in key** → extract → per-user dir → restart.
+  Hand-maintained catalog repo (immutable Release-asset URL + `sha256` + `size` per entry) + JSON-schema CI,
+  seeded with the reference plugins. Signing is *in* the MVP — see Trust's threat model, moved up from Phase 2.
+- **Phase 2 — updates + polish** (~1 wk): Updates tab (version compare), scheduled uninstall, kind/arch/ABI
+  grey-out, license badges, and a documented (even if manual) key-rotation story.
 
 Total to shippable: ~3–4 weeks — the bulk in the download/verify/extract pipeline and the catalog tooling,
 not the dialog. New UI strings must go through `_()` into `wxn.pot` (the standing i18n gap).

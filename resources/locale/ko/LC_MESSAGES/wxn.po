@@ -3071,3 +3071,6 @@ msgstr "\n\n다운로드하여 설치하시겠습니까?"
 
 msgid "Download failed. Check your internet connection and try again."
 msgstr "다운로드에 실패했습니다. 인터넷 연결을 확인하고 다시 시도하세요."
+
+msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
+msgstr "이 빌드에서는 사전 다운로드를 사용할 수 없습니다. 대신 \"파일에서 추가...\"를 사용하세요."

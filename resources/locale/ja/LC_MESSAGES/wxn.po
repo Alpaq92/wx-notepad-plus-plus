@@ -3071,3 +3071,6 @@ msgstr "\n\nダウンロードしてインストールしますか？"
 
 msgid "Download failed. Check your internet connection and try again."
 msgstr "ダウンロードに失敗しました。インターネット接続を確認して再試行してください。"
+
+msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
+msgstr "このビルドでは辞書のダウンロードは利用できません。代わりに「ファイルから追加...」を使用してください。"
