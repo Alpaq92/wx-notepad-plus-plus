@@ -8262,8 +8262,12 @@ private:
         wxLogNull noLog; if (!wxDirExists(dir)) wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
         return dir;
     }
+    // wxWebRequest requires a backend enabled in the wx BUILD: WinHTTP (Windows) / NSURLSession (macOS) are
+    // always present, but Linux needs libcurl at wx-build time. When it's off (wxUSE_WEBREQUEST==0) these
+    // stub out and the Download button is disabled - Add-from-file still works.
     // Synchronous HTTP GET saving the body to destPath; true on HTTP 200 + saved. (First HTTP in the app.)
     bool httpDownloadFile(const wxString& url, const wxString& destPath) {
+#if wxUSE_WEBREQUEST
         wxWebRequestSync req = wxWebSessionSync::GetDefault().CreateRequest(url);
         if (!req.IsOk()) return false;
         // Storage_Memory (the default) keeps the body in RAM (dictionaries are ~1 MB) and streams it straight
@@ -8278,13 +8282,20 @@ private:
         if (!out.IsOk()) return false;
         out.Write(*in);
         return out.IsOk();
+#else
+        (void)url; (void)destPath; return false;
+#endif
     }
     wxString httpGetText(const wxString& url) {
+#if wxUSE_WEBREQUEST
         wxWebRequestSync req = wxWebSessionSync::GetDefault().CreateRequest(url);
         if (!req.IsOk()) return wxString();
         const wxWebRequestBase::Result r = req.Execute();
         if (r.state != wxWebRequestBase::State_Completed || req.GetResponse().GetStatus() != 200) return wxString();
         return req.GetResponse().AsString();
+#else
+        (void)url; return wxString();
+#endif
     }
     // "Add from file..." - copy a chosen .aff + its sibling .dic into the user dictionaries dir; true if added.
     bool importSpellDictionary(wxWindow* parent) {
@@ -8309,6 +8320,11 @@ private:
     }
     // "Download..." - fetch a language's dictionary from wooorm/dictionaries (index.aff/.dic + its license).
     bool downloadSpellDictionary(wxWindow* parent) {
+#if !wxUSE_WEBREQUEST
+        wxMessageBox(_("Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."),
+                     _("Download dictionary"), wxOK | wxICON_INFORMATION, parent);
+        return false;
+#else
         // wooorm folder names (hyphenated); saved on disk with underscores so makeHunspellEngine finds them.
         static const char* kLangs[] = { "en","en-GB","en-AU","en-CA","de","de-AT","fr","es","es-MX",
                                         "it","pt","pt-PT","ru","pl","nl","sv","cs","uk" };
@@ -8339,6 +8355,7 @@ private:
         if (!ok) wxMessageBox(_("Download failed. Check your internet connection and try again."),
                               _("Download dictionary"), wxOK | wxICON_ERROR, parent);
         return ok;
+#endif  // wxUSE_WEBREQUEST
     }
 
     // ---- right-click on a misspelled word: suggestions + Add to Dictionary + Ignore ----
@@ -9091,9 +9108,10 @@ private:
         SetWindowPos(static_cast<HWND>(GetHandle()), m_onTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 #else
         // Portable everywhere else: toggle the wxSTAY_ON_TOP top-level style (GTK window hint / NSWindow level).
-        long style = GetWindowStyleFlag();
+        // this-> is required: in this template frame class GCC/Clang won't find dependent-base members otherwise.
+        long style = this->GetWindowStyleFlag();
         if (m_onTop) style |= wxSTAY_ON_TOP; else style &= ~wxSTAY_ON_TOP;
-        SetWindowStyleFlag(style);
+        this->SetWindowStyleFlag(style);
 #endif
         setStatus(0, m_onTop ? _("Always on Top: ON") : _("Always on Top: OFF"));
     }
@@ -10269,6 +10287,9 @@ private:
         auto* addDictBtn = new wxButton(sp, wxID_ANY, _("Add from file..."));
         auto* dlDictBtn  = new wxButton(sp, wxID_ANY, _("Download..."));
         dbrow->Add(addDictBtn, 0, wxRIGHT, 6); dbrow->Add(dlDictBtn, 0);
+#if !wxUSE_WEBREQUEST
+        dlDictBtn->Disable();   // no HTTP backend in this build (e.g. Linux without libcurl) - use "Add from file..."
+#endif
         sps->Add(dbrow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
         auto* spHint = new wxStaticText(sp, wxID_ANY,
             _("Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nView > Spell Check > Dictionary."));
