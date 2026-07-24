@@ -3,7 +3,7 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.10.0] - 2026-07-24
 
 ### Added
 - **Spell check** — **View ▸ Spell Check** is a submenu: **Enable** (off by default), **Check only comments
