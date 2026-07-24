@@ -72,6 +72,25 @@ libvterm
   third_party/libvterm-tables/ (same MIT license and copyright - mechanical
   transformations of upstream's .tbl data; see that directory's README.md).
 
+Hunspell (spell-check engine)
+  Copyright (c) László Németh and contributors.
+  Tri-licensed MPL-1.1 / GPL-2.0-or-later / LGPL-2.1-or-later; wxNote uses it
+  under the Mozilla Public License, Version 1.1. Only the libhunspell subset
+  (src/hunspell/) is compiled - never the GPL command-line tools in src/tools/ -
+  and it is not modified. Fetched at build time from the hunspell/hunspell GitHub
+  repository at tag v1.7.3 (pinned by SHA256) and linked as the static "hunspell"
+  library; the unmodified source under that tag is thereby available under the
+  MPL to recipients of the executable. The MPL 1.1 text and the per-file license
+  header ship at third_party/hunspell/COPYING.MPL and
+  third_party/hunspell/license.hunspell.
+
+English spell-check dictionary — resources/dictionaries/en_US.{aff,dic}
+  American-English Hunspell dictionary derived from SCOWL. Word lists
+  Copyright 2000-2018 by Kevin Atkinson; the affix file Copyright 1993 by Geoff
+  Kuenning (BSD license). Permissive (BSD/MIT-style), no copyleft. From the
+  en-wl/wordlist release rel-2026.02.25. The upstream copyright and permission
+  notice is preserved verbatim in resources/dictionaries/en_US_README.txt.
+
 Toolbar icons — "wxNote Toolbar Icons (Tabler x Open Color)"
   A derivative work of two MIT-licensed projects, released under the MIT License:
     * Tabler Icons   - Copyright (c) Pawel Kuna,      MIT License.

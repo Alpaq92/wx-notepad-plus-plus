@@ -1662,8 +1662,8 @@ msgstr "只读属性（仅限 Windows）"
 msgid "Read-Only Attribute (save the file first)"
 msgstr "只读属性（请先保存文件）"
 
-msgid "Read-Only Attribute in Windows"
-msgstr "Windows 中的只读属性"
+msgid "Read-Only Attribute"
+msgstr "只读属性"
 
 msgid "Read-Only for All Documents"
 msgstr "所有文档只读"
@@ -2921,3 +2921,153 @@ msgstr "打印预览(&V)..."
 
 msgid "Print Preview"
 msgstr "打印预览"
+
+msgid "Copy as HTML"
+msgstr "复制为 HTML"
+
+msgid "Copy as RTF"
+msgstr "复制为 RTF"
+
+msgid "File changed on disk"
+msgstr "文件已在磁盘上更改"
+
+msgid "\"%s\" was changed by another program.\n\nReload it from disk?"
+msgstr "“%s” 已被其他程序更改。\n\n是否从磁盘重新载入？"
+
+msgid "\"%s\" was changed by another program, and you have unsaved changes here.\n\nReload from disk and discard your changes?"
+msgstr "“%s” 已被其他程序更改，而您在此处有未保存的更改。\n\n是否从磁盘重新载入并放弃您的更改？"
+
+msgid "Character set not available on this platform: %s"
+msgstr "此平台不支持该字符集：%s"
+
+msgid "&Compare"
+msgstr "比较(&C)"
+
+msgid "Compare with &File..."
+msgstr "与文件比较(&F)…"
+
+msgid "Compare with Cli&pboard"
+msgstr "与剪贴板比较(&P)"
+
+msgid "&Next Difference"
+msgstr "下一处差异(&N)"
+
+msgid "&Previous Difference"
+msgstr "上一处差异(&P)"
+
+msgid "C&lear Compare"
+msgstr "清除比较(&L)"
+
+msgid "Diff: %s"
+msgstr "差异: %s"
+
+msgid "current document"
+msgstr "当前文档"
+
+msgid "clipboard"
+msgstr "剪贴板"
+
+msgid "Compare: files too large or dissimilar for a detailed diff"
+msgstr "比较：文件太大或差异太大，无法进行详细比较"
+
+msgid "Compare: %d changed, %d added, %d removed"
+msgstr "比较：%d 处更改，%d 处新增，%d 处删除"
+
+msgid "Compare cleared"
+msgstr "已清除比较"
+
+msgid "Compare current document with file"
+msgstr "将当前文档与文件比较"
+
+msgid "Clipboard is empty"
+msgstr "剪贴板为空"
+
+msgid "Spell Chec&k"
+msgstr "拼写检查(&K)"
+
+msgid "Spell check is not available on this system"
+msgstr "此系统不支持拼写检查"
+
+msgid "Spell check: ON"
+msgstr "拼写检查：开"
+
+msgid "Spell check: OFF"
+msgstr "拼写检查：关"
+
+msgid "(no spelling suggestions)"
+msgstr "(无拼写建议)"
+
+msgid "Add to Dictionary"
+msgstr "添加到词典"
+
+msgid "Ignore"
+msgstr "忽略"
+
+msgid "This document is read-only"
+msgstr "此文档为只读"
+
+msgid "Spell-check engine:"
+msgstr "拼写检查引擎："
+
+msgid "System (OS spell checker)"
+msgstr "系统（操作系统拼写检查器）"
+
+msgid "System, then bundled dictionary"
+msgstr "系统，然后使用内置词典"
+
+msgid "Bundled dictionary (Hunspell)"
+msgstr "内置词典（Hunspell）"
+
+msgid "&Enable"
+msgstr "启用(&E)"
+
+msgid "Check only &comments and strings"
+msgstr "仅检查注释和字符串(&C)"
+
+msgid "&Manage dictionaries..."
+msgstr "管理词典(&M)..."
+
+msgid "Spell Check"
+msgstr "拼写检查"
+
+msgid "Installed dictionaries:"
+msgstr "已安装的词典："
+
+msgid "Add from file..."
+msgstr "从文件添加..."
+
+msgid "Download..."
+msgstr "下载..."
+
+msgid "Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nView > Spell Check > Dictionary."
+msgstr "词典存储在您的用户数据文件夹中。下载来自 wooorm/dictionaries\n项目，并保留各自的许可证（下载前显示）。在\n视图 > 拼写检查 > 词典 中选择当前使用的词典。"
+
+msgid "Select a dictionary affix file"
+msgstr "选择词典的词缀文件"
+
+msgid "Hunspell affix file (*.aff)|*.aff"
+msgstr "Hunspell 词缀文件 (*.aff)|*.aff"
+
+msgid "The matching .dic file must be next to the .aff file (with the same name)."
+msgstr "对应的 .dic 文件必须与 .aff 文件在同一位置且同名。"
+
+msgid "Add dictionary"
+msgstr "添加词典"
+
+msgid "Could not copy the dictionary into your user data folder."
+msgstr "无法将词典复制到您的用户数据文件夹。"
+
+msgid "Choose a language to download:"
+msgstr "选择要下载的语言："
+
+msgid "Download dictionary"
+msgstr "下载词典"
+
+msgid "This dictionary is provided under the following license:\n\n"
+msgstr "此词典依据以下许可证提供：\n\n"
+
+msgid "\n\nDownload and install it?"
+msgstr "\n\n是否下载并安装？"
+
+msgid "Download failed. Check your internet connection and try again."
+msgstr "下载失败。请检查您的网络连接后重试。"

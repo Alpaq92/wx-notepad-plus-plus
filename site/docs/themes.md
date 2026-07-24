@@ -53,13 +53,16 @@ preferences rather than palette entries:
 
 ## The editor font
 
-Two monospace families are **bundled with the editor**, so the same font is available on Windows, Linux
+Five monospace families are **bundled with the editor**, so the same font is available on Windows, Linux
 and macOS without installing anything:
 
 | Font | Role |
 | --- | --- |
 | **Cascadia Mono** | the **default**, and the face the editor falls back to if the configured font is missing |
 | **JetBrains Mono** | the second bundled choice |
+| **IBM Plex Mono** | humanist coding face (SIL OFL 1.1) |
+| **Hack** | DejaVu-heritage workhorse (MIT + Bitstream Vera) |
+| **Iosevka Fixed** | narrow / condensed — more code per line (SIL OFL 1.1) |
 
 Both are pinned to the top of the **Preferences&nbsp;&rsaquo; Editing&nbsp;&rsaquo; Font** dropdown,
 above a divider line, with every installed system font listed alphabetically below it. Both ship in

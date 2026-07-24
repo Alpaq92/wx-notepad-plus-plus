@@ -438,8 +438,8 @@ msgstr "Enlever la lecture seule pour tous les documents"
 msgid "Read-&Only"
 msgstr "Lecture &seule"
 
-msgid "Read-Only Attribute in Windows"
-msgstr "Attribut de lecture seule dans Windows"
+msgid "Read-Only Attribute"
+msgstr "Attribut de lecture seule"
 
 msgid "&Edit"
 msgstr "&Édition"
@@ -2921,3 +2921,153 @@ msgstr "Aperçu a&vant impression..."
 
 msgid "Print Preview"
 msgstr "Aperçu avant impression"
+
+msgid "Copy as HTML"
+msgstr "Copier au format HTML"
+
+msgid "Copy as RTF"
+msgstr "Copier au format RTF"
+
+msgid "File changed on disk"
+msgstr "Fichier modifié sur le disque"
+
+msgid "\"%s\" was changed by another program.\n\nReload it from disk?"
+msgstr "« %s » a été modifié par un autre programme.\n\nLe recharger depuis le disque ?"
+
+msgid "\"%s\" was changed by another program, and you have unsaved changes here.\n\nReload from disk and discard your changes?"
+msgstr "« %s » a été modifié par un autre programme, et vous avez des modifications non enregistrées ici.\n\nRecharger depuis le disque et abandonner vos modifications ?"
+
+msgid "Character set not available on this platform: %s"
+msgstr "Jeu de caractères non disponible sur cette plateforme : %s"
+
+msgid "&Compare"
+msgstr "&Comparer"
+
+msgid "Compare with &File..."
+msgstr "Comparer avec un &fichier…"
+
+msgid "Compare with Cli&pboard"
+msgstr "Comparer avec le &presse-papiers"
+
+msgid "&Next Difference"
+msgstr "Différence &suivante"
+
+msgid "&Previous Difference"
+msgstr "Différence &précédente"
+
+msgid "C&lear Compare"
+msgstr "&Effacer la comparaison"
+
+msgid "Diff: %s"
+msgstr "Diff : %s"
+
+msgid "current document"
+msgstr "document actuel"
+
+msgid "clipboard"
+msgstr "presse-papiers"
+
+msgid "Compare: files too large or dissimilar for a detailed diff"
+msgstr "Comparaison : fichiers trop volumineux ou trop différents pour un diff détaillé"
+
+msgid "Compare: %d changed, %d added, %d removed"
+msgstr "Comparaison : %d modifiées, %d ajoutées, %d supprimées"
+
+msgid "Compare cleared"
+msgstr "Comparaison effacée"
+
+msgid "Compare current document with file"
+msgstr "Comparer le document actuel avec un fichier"
+
+msgid "Clipboard is empty"
+msgstr "Le presse-papiers est vide"
+
+msgid "Spell Chec&k"
+msgstr "&Vérification orthographique"
+
+msgid "Spell check is not available on this system"
+msgstr "La vérification orthographique n'est pas disponible sur ce système"
+
+msgid "Spell check: ON"
+msgstr "Vérification orthographique : activée"
+
+msgid "Spell check: OFF"
+msgstr "Vérification orthographique : désactivée"
+
+msgid "(no spelling suggestions)"
+msgstr "(aucune suggestion orthographique)"
+
+msgid "Add to Dictionary"
+msgstr "Ajouter au dictionnaire"
+
+msgid "Ignore"
+msgstr "Ignorer"
+
+msgid "This document is read-only"
+msgstr "Ce document est en lecture seule"
+
+msgid "Spell-check engine:"
+msgstr "Moteur de vérification orthographique :"
+
+msgid "System (OS spell checker)"
+msgstr "Système (correcteur de l'OS)"
+
+msgid "System, then bundled dictionary"
+msgstr "Système, puis dictionnaire intégré"
+
+msgid "Bundled dictionary (Hunspell)"
+msgstr "Dictionnaire intégré (Hunspell)"
+
+msgid "&Enable"
+msgstr "&Activer"
+
+msgid "Check only &comments and strings"
+msgstr "Vérifier seulement les &commentaires et chaînes"
+
+msgid "&Manage dictionaries..."
+msgstr "&Gérer les dictionnaires..."
+
+msgid "Spell Check"
+msgstr "Vérification orthographique"
+
+msgid "Installed dictionaries:"
+msgstr "Dictionnaires installés :"
+
+msgid "Add from file..."
+msgstr "Ajouter depuis un fichier..."
+
+msgid "Download..."
+msgstr "Télécharger..."
+
+msgid "Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nView > Spell Check > Dictionary."
+msgstr "Les dictionnaires sont stockés dans votre dossier de données. Les téléchargements proviennent du projet\nwooorm/dictionaries et conservent leurs propres licences (affichées avant le téléchargement). Choisissez l'actif dans\nAffichage > Vérification orthographique > Dictionnaire."
+
+msgid "Select a dictionary affix file"
+msgstr "Sélectionner un fichier affixe de dictionnaire"
+
+msgid "Hunspell affix file (*.aff)|*.aff"
+msgstr "Fichier affixe Hunspell (*.aff)|*.aff"
+
+msgid "The matching .dic file must be next to the .aff file (with the same name)."
+msgstr "Le fichier .dic correspondant doit se trouver à côté du fichier .aff (même nom)."
+
+msgid "Add dictionary"
+msgstr "Ajouter un dictionnaire"
+
+msgid "Could not copy the dictionary into your user data folder."
+msgstr "Impossible de copier le dictionnaire dans votre dossier de données."
+
+msgid "Choose a language to download:"
+msgstr "Choisissez une langue à télécharger :"
+
+msgid "Download dictionary"
+msgstr "Télécharger un dictionnaire"
+
+msgid "This dictionary is provided under the following license:\n\n"
+msgstr "Ce dictionnaire est fourni sous la licence suivante :\n\n"
+
+msgid "\n\nDownload and install it?"
+msgstr "\n\nLe télécharger et l'installer ?"
+
+msgid "Download failed. Check your internet connection and try again."
+msgstr "Échec du téléchargement. Vérifiez votre connexion Internet et réessayez."

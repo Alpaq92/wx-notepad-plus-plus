@@ -71,7 +71,7 @@ A few notes before the list:
 | **Indent ▸** | Increase Line Indent · Decrease Line Indent |
 | **Line Operations ▸** | Duplicate / Move Up / Move Down / Split / Join · Remove Duplicate Lines · Remove Consecutive Duplicate Lines · Remove Empty Lines (with or without blank characters) · Insert Blank Line Above / Below · Reverse Line Order · Randomize Line Order · and fourteen sort variants — lexicographic, lexicographic ignoring case, locale order, integer, decimal (comma), decimal (dot) and length, each ascending and descending |
 | **Blank Operations ▸** | Trim Trailing / Leading / Both · EOL to Space · Trim both and EOL to Space · TAB to Space · Space to TAB (All) · Space to TAB (Leading) |
-| **Paste Special ▸** | Paste HTML Content · Paste RTF Content · Copy / Cut / Paste Binary Content |
+| **Paste Special ▸** | Copy as HTML · Copy as RTF · Paste HTML Content · Paste RTF Content · Copy / Cut / Paste Binary Content |
 | **Auto-Completion ▸** | Function Completion · Word Completion · Function Parameters Hint (and Previous / Next Hint) · Path Completion |
 | **EOL Conversion ▸** | Windows (CR LF) · Unix (LF) · Macintosh (CR) |
 | **Insert ▸** | Date Time (short) · Date Time (long) · Date Time (customized) |
@@ -88,7 +88,8 @@ A few notes before the list:
 
 - **Read-Only ▸** — Read-Only on Current Document · Read-Only for All Documents · Clear Read-Only for
   All Documents
-- **Read-Only Attribute in Windows** — toggles the file-system attribute (Windows only)
+- **Read-Only Attribute** — toggles the file's on-disk read-only attribute (the DOS
+  read-only bit on Windows; the owner write permission on Linux/macOS)
 
 ---
 
@@ -153,6 +154,17 @@ toggles and a live match count. <kbd>Enter</kbd> jumps to the next match, <kbd>E
 
 **Panels:** Function List · Document Map · Document List · Folder as Workspace · Project Panels ▸ ·
 Show Terminal · Monitoring (tail -f).
+
+**Compare ▸** — a side-by-side diff of the current document against a file (**Compare with File…**) or
+the clipboard (**Compare with Clipboard**), shown in the split view. Changed / added / removed lines are
+colour-highlighted, the changed part *within* a line is underlined, blank filler keeps the two sides
+row-aligned, and the panes scroll together. **Next / Previous Difference** jump between changes; **Clear
+Compare** removes the highlighting. The two sides open as read-only scratch tabs, so your real files are
+never modified.
+
+**Spell Check** — toggles red squiggles under misspelled words (in the visible text), using the operating
+system's own spell checker and dictionaries (Windows and macOS today; Linux is planned). Identifiers are
+split on camelCase / snake_case boundaries before checking, so code isn't a sea of red.
 
 **Display:** Word wrap · **Show Symbol ▸** (space and tab, end of line, non-printing characters,
 control characters &amp; Unicode EOL, all characters, indent guide, wrap symbol) · **Zoom ▸** (In / Out /

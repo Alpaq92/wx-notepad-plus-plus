@@ -1,16 +1,24 @@
 # Bundled editor fonts — attribution
 
-Two monospace families are bundled, both under the
-[SIL Open Font License, Version 1.1](https://openfontlicense.org). **Cascadia Mono is the default**;
-JetBrains Mono is the second bundled choice and remains pinned in the font picker.
+Five monospace families are bundled. **Cascadia Mono is the default**; JetBrains Mono, IBM Plex Mono,
+Hack and Iosevka Fixed are the additional bundled choices, all pinned in the font picker. Cascadia Mono,
+JetBrains Mono, IBM Plex Mono and Iosevka Fixed are under the
+[SIL Open Font License, Version 1.1](https://openfontlicense.org); Hack is under the MIT License plus the
+Bitstream Vera License (both permissive).
 
 | Family | Copyright | Reserved Font Name | Files | License text |
 |---|---|---|---|---|
 | **Cascadia Mono** | © 2019 – Present, Microsoft Corporation | **yes** — `Cascadia Code` | `CascadiaMono-Regular.ttf`, `CascadiaMono-Bold.ttf` | `CascadiaMono-OFL.txt` |
 | **JetBrains Mono** | © the JetBrains Mono Project Authors | **none** | `JetBrainsMono-Regular.ttf`, `JetBrainsMono-Bold.ttf` | `JetBrainsMono-OFL.txt` |
+| **IBM Plex Mono** | © 2017 IBM Corp. | **yes** — `Plex` | `IBMPlexMono-Regular.ttf`, `IBMPlexMono-Bold.ttf` | `IBMPlexMono-OFL.txt` |
+| **Hack** | © 2018 Source Foundry Authors; Bitstream Vera © 2003 Bitstream, Inc. | **none** (MIT + Bitstream Vera) | `Hack-Regular.ttf`, `Hack-Bold.ttf` | `Hack-LICENSE.md` |
+| **Iosevka Fixed** | © 2015 – 2026 Renzhi Li (Belleve Invis) | **yes** — `Iosevka` | `IosevkaFixed-Regular.ttf`, `IosevkaFixed-Bold.ttf` | `IosevkaFixed-OFL.txt` |
 
 - Cascadia Mono — <https://github.com/microsoft/cascadia-code>
 - JetBrains Mono — <https://github.com/JetBrains/JetBrainsMono>
+- IBM Plex Mono — <https://github.com/IBM/plex>
+- Hack — <https://github.com/source-foundry/Hack>
+- Iosevka Fixed — <https://github.com/be5invis/Iosevka> (the "Fixed", no-ligature build)
 
 Only the Regular and Bold weights of each are bundled, **unmodified from upstream**.
 
@@ -49,7 +57,7 @@ SemiBold falls into.
 
 ## How they're loaded
 
-`wxFont::AddPrivateFont()` in `WxnApp::OnInit` (`src/main.cpp`) registers all four files for the
+`wxFont::AddPrivateFont()` in `WxnApp::OnInit` (`src/main.cpp`) registers all ten files for the
 current process only — on Windows, on Linux (via fontconfig) and on macOS (via CoreText). No
 installation, no admin rights, and nothing is added to the user's system-wide font list; the
 registrations die with the process, so `OnExit` has no teardown to do.

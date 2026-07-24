@@ -309,9 +309,10 @@ Style Configurator edits the active theme XML in place.
 
 `wxLocale` with catalog `wxn`, loaded from `<exe>/locale/`. Eight languages
 ship (pl, de, fr, es, ru, ja, zh, ko); English is the source text.
-`resources/locale/po2mo.py` is a self-contained `.po` → `.mo` compiler (the
-GNU gettext *format*, no gettext tooling dependency); compiled catalogs are
-committed and deployed by the build's resource-copy step.
+`tools/po2mo.c` (built as the optional `po2mo` CMake dev target) is a
+self-contained `.po` → `.mo` compiler (the GNU gettext *format*, no gettext
+tooling dependency); compiled catalogs are committed and deployed by the
+build's resource-copy step.
 
 ## Custom languages (Scintillua)
 

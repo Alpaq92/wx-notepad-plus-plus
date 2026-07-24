@@ -102,9 +102,10 @@ on CI), cap parallelism: `cmake --build build --target wxnote --parallel 2`.
 - **User-visible strings must be translatable.** Wrap them in `_()`, add the
   new msgid to `resources/locale/wxn.pot` and to all eight language catalogs
   (`{pl,de,fr,es,ru,ja,zh,ko}/LC_MESSAGES/wxn.po`), then recompile the `.mo`
-  files with `resources/locale/po2mo.py` (the region-qualified directories
-  such as `pl_PL/` and `zh_CN/` ship byte-identical copies of their
-  short-code sibling's `.mo`). Untranslated
+  files with the `po2mo` dev tool (build it once via
+  `cmake --build build --target po2mo`; source at `tools/po2mo.c`). The
+  region-qualified directories such as `pl_PL/` and `zh_CN/` ship byte-identical
+  copies of their short-code sibling's `.mo`. Untranslated
   strings fall back to English, so a missing translation degrades
   gracefully — but please don't ship new UI strings without at least the
   `.pot` entry.
@@ -115,8 +116,9 @@ on CI), cap parallelism: `cmake --build build --target wxnote --parallel 2`.
 ## Translations
 
 Improving an existing catalog is the easiest first contribution: edit the
-language's `resources/locale/<lang>/LC_MESSAGES/wxn.po`, recompile with
-`python resources/locale/po2mo.py <in>.po <out>.mo`, and refresh the
+language's `resources/locale/<lang>/LC_MESSAGES/wxn.po`, recompile with the
+`po2mo` tool (`cmake --build build --target po2mo`, then
+`build/bin/po2mo <in>.po <out>.mo`), and refresh the
 region-qualified copy if one exists. To add a new language, copy
 `resources/locale/wxn.pot` to `<lang>/LC_MESSAGES/wxn.po`, translate, and
 compile the same way — wxWidgets picks it up by directory name.

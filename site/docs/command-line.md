@@ -14,6 +14,7 @@ never mistaken for options.
 | Short | Long | Argument | Effect |
 | --- | --- | --- | --- |
 | `-g` | `--goto` | `line[,col]` | open at this line, optionally column, in the last file opened |
+| | `--end` | | put the caret at the **end** of the last file opened (wins over `-g`/`+N`; useful for logs) |
 | `-e` | `--encoding` | `ansi\|utf8\|utf8bom\|utf16le\|utf16be` | force the encoding used to decode the files |
 | `-n` | `--new-instance` | — | always open a new window |
 | `-r` | `--reuse-instance` | — | hand the files to an already-running window |

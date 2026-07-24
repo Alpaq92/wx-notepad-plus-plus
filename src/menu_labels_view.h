@@ -5,6 +5,17 @@ namespace Label
 {
     inline const wxString MenuView() { return _("&View"); }
 
+    inline const wxString ViewCompare()          { return _("&Compare"); }
+    inline const wxString ViewCompareFile()       { return _("Compare with &File..."); }
+    inline const wxString ViewCompareClipboard()  { return _("Compare with Cli&pboard"); }
+    inline const wxString ViewCompareNext()       { return _("&Next Difference"); }
+    inline const wxString ViewComparePrev()       { return _("&Previous Difference"); }
+    inline const wxString ViewCompareClear()      { return _("C&lear Compare"); }
+    inline const wxString ViewSpellCheck()        { return _("Spell Chec&k"); }
+    inline const wxString ViewSpellEnable()       { return _("&Enable"); }
+    inline const wxString ViewSpellCommentsOnly() { return _("Check only &comments and strings"); }
+    inline const wxString ViewSpellManage()       { return _("&Manage dictionaries..."); }
+
     inline const wxString ViewAlwaysOnTop() { return _("Always on &Top"); }
     inline const wxString ViewFullScreenToggle() { return _("To&ggle Full Screen Mode"); }
     inline const wxString ViewPostIt() { return _("&Post-It"); }

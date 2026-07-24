@@ -88,6 +88,29 @@ Legacy Notepad++ `userDefineLang.xml` files are handled *outside* the core by th
 GPL `packages/udl-compat/` plugin, which translates each UDL into a Scintillua lexer and
 registers it via the `nib.langdef` API — see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
+## Hunspell & SCOWL — spell check
+
+wxNote's spell-checker (`src/spell_engine.h`, Apache-2.0) is native-first — the
+OS engine on Windows (`ISpellChecker`) and macOS (`NSSpellChecker`) — backed
+everywhere by:
+
+- **[Hunspell](https://github.com/hunspell/hunspell)** 1.7.3 (László Németh and
+  contributors; MPL-1.1 / GPL-2.0-or-later / LGPL-2.1-or-later tri-license,
+  used under **MPL-1.1**) — the spell/suggest engine used on Linux and as the
+  always-available cross-platform fallback (so a machine whose OS lacks the
+  requested language still gets real English checking). Only the `src/hunspell/`
+  library subset is compiled — never the GPL command-line tools — fetched at
+  build time (pinned by SHA256) and linked as the static `hunspell` library.
+- **[SCOWL](http://wordlist.aspell.net)** — the bundled American-English
+  dictionary `resources/dictionaries/en_US.{aff,dic}` (word lists © 2000-2018
+  Kevin Atkinson; affix file © 1993 Geoff Kuenning, BSD — permissive, no
+  copyleft), from the [en-wl/wordlist](https://github.com/en-wl/wordlist)
+  `rel-2026.02.25` release. Users can drop additional-language `.aff`/`.dic`
+  pairs into `<userDataDir>/dictionaries/`.
+
+The identifier-aware tokenizer (splitting `camelCase`/`snake_case`) is wxNote's
+own, informed by **[CSpell](https://cspell.org/)**'s approach to checking code.
+
 ## CMake & Ninja — the build
 
 [CMake](https://cmake.org/) (≥ 3.20) with the [Ninja](https://ninja-build.org/)
@@ -155,19 +178,29 @@ Full modification records: `resources/icons*/CREDITS.md`.
 
 ## Fonts
 
-Two monospace families are bundled, both SIL OFL 1.1 and both unmodified,
-chosen to replace the non-redistributable Consolas:
+Five monospace families are bundled, all unmodified, chosen to replace the
+non-redistributable Consolas. Four are under the SIL OFL 1.1; Hack is under the
+MIT + Bitstream Vera licenses (both permissive):
 
-- **[Cascadia Mono](https://github.com/microsoft/cascadia-code)** (© Microsoft)
-  — the **default** editor font, and the face the editor falls back to when the
-  configured font is missing. Its OFL notice carries the Reserved Font Name
-  `Cascadia Code`, so it may be redistributed as-is but not renamed or patched
-  under that name — see `LICENSING.md`.
+- **[Cascadia Mono](https://github.com/microsoft/cascadia-code)** (© Microsoft,
+  OFL 1.1) — the **default** editor font, and the face the editor falls back to
+  when the configured font is missing. Its OFL notice carries the Reserved Font
+  Name `Cascadia Code`, so it may be redistributed as-is but not renamed or
+  patched under that name — see `LICENSING.md`.
 - **[JetBrains Mono](https://github.com/JetBrains/JetBrainsMono)** (© the
-  JetBrains Mono Project Authors) — the second bundled choice, pinned in the
-  font picker. No Reserved Font Name.
+  JetBrains Mono Project Authors, OFL 1.1) — pinned in the font picker. No
+  Reserved Font Name.
+- **[IBM Plex Mono](https://github.com/IBM/plex)** (© 2017 IBM Corp., OFL 1.1)
+  — Reserved Font Name `Plex`.
+- **[Hack](https://github.com/source-foundry/Hack)** (© 2018 Source Foundry
+  Authors; Bitstream Vera © 2003 Bitstream, Inc.; MIT + Bitstream Vera) — no
+  Reserved Font Name.
+- **[Iosevka Fixed](https://github.com/be5invis/Iosevka)** (© Renzhi Li /
+  Belleve Invis, OFL 1.1) — the no-ligature "Fixed" build; Reserved Font Name
+  `Iosevka`.
 
-Details and the rationale for Cascadia *Mono* over Cascadia *Code*:
+Only the Regular and Bold weights of each are bundled. Details, the per-font
+attribution table, and the rationale for Cascadia *Mono* over Cascadia *Code*:
 `resources/fonts/CREDITS.md`.
 
 ## Themes & palettes
@@ -222,6 +255,6 @@ Details: `site/CREDITS.md` and `site/assets/vendor/img-previewer/CREDITS.md`.
   (`actions/*`, `ilammy/msvc-dev-cmd`).
 - **GTK3** (LGPL) — the Linux toolkit backend wxWidgets builds against.
 - **CPython's `Tools/i18n/msgfmt.py`** — the format reference for
-  `resources/locale/po2mo.py`, this repo's own dependency-free `.po` → `.mo`
+  `tools/po2mo.c`, this repo's own dependency-free `.po` → `.mo`
   compiler (the GNU gettext catalog *format* is used; GNU gettext tooling is
   never invoked or linked).

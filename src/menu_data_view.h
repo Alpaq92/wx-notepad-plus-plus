@@ -104,6 +104,26 @@ static const MenuItemDef kViewProjectPanelsItems[] = {
     { MenuItemKind::Normal, kCmdViewProjectPanel3, &Label::ViewProjectPanel3, "view.projectPanels.3" },
 };
 
+static const MenuItemDef kViewCompareItems[] = {
+    { MenuItemKind::Normal, myID_CMP_FILE,  &Label::ViewCompareFile,      "view.compare.file" },
+    { MenuItemKind::Normal, myID_CMP_CLIP,  &Label::ViewCompareClipboard, "view.compare.clipboard" },
+    { MenuItemKind::Separator },
+    { MenuItemKind::Normal, myID_CMP_NEXT,  &Label::ViewCompareNext,      "view.compare.next" },
+    { MenuItemKind::Normal, myID_CMP_PREV,  &Label::ViewComparePrev,      "view.compare.prev" },
+    { MenuItemKind::Separator },
+    { MenuItemKind::Normal, myID_CMP_CLEAR, &Label::ViewCompareClear,     "view.compare.clear" },
+};
+
+// The Dictionary radio list (myID_SPELL_DICT_BASE + i) is appended at runtime by rebuildSpellDictMenu(),
+// after these static items - like the Language menu's Scintillua entries.
+static const MenuItemDef kViewSpellItems[] = {
+    { MenuItemKind::Check,  myID_SPELLCHECK,         &Label::ViewSpellEnable,       "view.spell.enable" },
+    { MenuItemKind::Check,  myID_SPELL_COMMENTSONLY, &Label::ViewSpellCommentsOnly, "view.spell.commentsOnly" },
+    { MenuItemKind::Separator },
+    { MenuItemKind::Normal, myID_SPELL_MANAGE,       &Label::ViewSpellManage,       "view.spell.manage" },
+    { MenuItemKind::Separator },
+};
+
 static const MenuItemDef kViewMenuItems[] = {
     // Panels -- the everyday "show me a panel" actions come first.
     { MenuItemKind::Normal, kCmdViewFuncList,   &Label::ViewFuncList,    "view.funcList" },
@@ -118,6 +138,10 @@ static const MenuItemDef kViewMenuItems[] = {
     // from the editor; closing from inside the terminal remains the panel's own affair.
     { MenuItemKind::Check,  myID_VIEW_TERMINAL,   &Label::ViewTerminal,    "view.terminal", nullptr, 0, false, "Ctrl+`" },
     { MenuItemKind::Check, kCmdViewMonitoring, &Label::ViewMonitoring, "view.monitoring" },
+    { MenuItemKind::Submenu, 0, &Label::ViewCompare, "view.compare",
+      kViewCompareItems, WXSIZEOF(kViewCompareItems) },
+    { MenuItemKind::Submenu, 0, &Label::ViewSpellCheck, "view.spellCheck",
+      kViewSpellItems, WXSIZEOF(kViewSpellItems) },
     { MenuItemKind::Separator },
     // Display toggles -- how the current buffer is rendered.
     { MenuItemKind::Check,  kCmdViewWrap,      &Label::ViewWordWrap,  "view.wordWrap" },

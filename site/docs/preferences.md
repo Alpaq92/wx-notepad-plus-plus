@@ -75,7 +75,7 @@ reachable percentages to move with it.
 
 | Setting | Notes |
 | --- | --- |
-| Font | **Cascadia Mono** by default. The two bundled faces (**Cascadia Mono**, then **JetBrains Mono**) are pinned at the top of the list, above a divider, followed by every installed system font in alphabetical order. If the chosen face is later uninstalled — or the divider line itself is somehow selected — rendering falls back to **Cascadia Mono**. See [Fonts](themes.md#the-editor-font) |
+| Font | **Cascadia Mono** by default. The five bundled faces (**Cascadia Mono**, then **JetBrains Mono**, **IBM Plex Mono**, **Hack** and **Iosevka Fixed**) are pinned at the top of the list, above a divider, followed by every installed system font in alphabetical order. If the chosen face is later uninstalled — or the divider line itself is somehow selected — rendering falls back to **Cascadia Mono**. See [Fonts](themes.md#the-editor-font) |
 | Display line number | |
 | Show indentation guide | |
 | Show white space and TAB | |
@@ -88,6 +88,7 @@ reachable percentages to move with it.
 | Vertical edge at column | 0–300; **0 = off** |
 | Caret blink rate (ms) | 0–2000; **0 = steady** |
 | Use a custom line-number margin colour | off by default — the gutter follows the theme. When on, the colour picker beside it becomes active and takes effect immediately, no restart |
+| Spell-check engine | **Windows / macOS only** (Linux always uses the bundled dictionary). Chooses what backs **View ▸ Spell Check**: *System (OS spell checker)*, *System, then bundled dictionary* (default — uses the OS checker, falling back to the bundled English dictionary when it lacks the language), or *Bundled dictionary (Hunspell)*. Applies immediately, no restart |
 
 ## Indentation
 
@@ -132,6 +133,21 @@ $(CURRENT_PRINTING_PAGE)   $(TOTAL_PRINTING_PAGES)
 ```
 
 The two page macros are resolved per page as the document prints; the rest are resolved once.
+
+## Spell Check
+
+Manages the Hunspell dictionaries used by **View ▸ Spell Check** (the same page opens from that menu's
+*Manage dictionaries…*).
+
+- **Installed dictionaries** — every dictionary found in your user data folder plus the bundled English one.
+- **Add from file…** — import a local Hunspell dictionary: pick its `.aff` file (the matching `.dic` must sit
+  next to it with the same name); both are copied into `<user-data>/dictionaries/`.
+- **Download…** — fetch a language from the
+  [wooorm/dictionaries](https://github.com/wooorm/dictionaries) project. Each dictionary's own license
+  (which varies — some are permissive, some GPL) is shown for you to accept before it downloads.
+
+Pick the **active** dictionary, toggle **Check only comments and strings**, and enable/disable checking from
+**View ▸ Spell Check**. The engine choice (System / bundled Hunspell) is on the **Editing** page above.
 
 ---
 

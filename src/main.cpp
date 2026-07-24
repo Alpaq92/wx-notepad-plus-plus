@@ -21,6 +21,8 @@
 #include <wx/imagpng.h>        // wxPNGHandler - loading raster PNG icons (the colored toolbar icon set)
 #include <wx/notebook.h>
 #include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
+#include <wx/webrequest.h>     // wxWebRequestSync - download Hunspell dictionaries (Preferences > Spell Check)
+#include <wx/wfstream.h>       // wxFileOutputStream - stream a downloaded dictionary to disk
 #include <wx/display.h>        // wxDisplay::GetClientArea/GetFromPoint - clamp the initial window to the usable screen (macOS)
 #include <wx/listctrl.h>       // wxListView - wxListbook's page list (we widen it so labels don't truncate)
 #include <wx/clrpicker.h>      // wxColourPickerCtrl - Style Configurator foreground/background pickers
@@ -78,8 +80,6 @@
 #include <uxtheme.h>
 #include <wx/msw/darkmode.h>   // wxDarkModeSettings - recolour wx's native dark menu bar (see WxnDarkModeSettings)
 #include <shellapi.h>          // ShellExecuteW / SHFileOperationW - File menu shell commands (Explorer, cmd, Recycle Bin)
-#include <bcrypt.h>            // BCrypt* - MD5 / SHA digests for the Tools menu
-#pragma comment(lib, "bcrypt.lib")
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
@@ -91,6 +91,7 @@
 #endif
 #else
 #include <unistd.h>          // isatty()/read() - the POSIX side of `wxnote -` (read piped stdin into a buffer)
+#include <sys/stat.h>        // stat()/chmod() - the POSIX side of File > Read-Only Attribute
 using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/sciSend() message-id params
 #endif
 
@@ -153,6 +154,9 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 #include <cstring>             // strcmp / memcpy (Nib host)
 #include "command_ids.h"
 #include "app_icon_svg.h"
+#include "hash_algos.h"          // portable MD5/SHA-1/SHA-256/SHA-512 for the Tools > digest generators
+#include "diff_myers.h"          // Myers O(ND) diff engine + side-by-side plan for File Compare
+#include "spell_engine.h"        // pluggable spell-check backend (OS-native: ISpellChecker / NSSpellChecker)
 
 // Set from the project() version by CMake (see CMakeLists.txt); fall back so a stray standalone
 // compile still builds. Shown in the About dialog.
@@ -161,6 +165,10 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 #endif
 #include "nib.h"               // our own permissive, cross-platform plugin API (Nib)
 #include "terminal_panel.h"    // View > Show Terminal - bottom multi-tab shell panel (defines myID_VIEW_TERMINAL, used by menu_data_view.h below)
+// File Compare command ids (wxNote-only; private range like myID_VIEW_TERMINAL). Defined BEFORE menu_builder.h
+// so the View menu table (menu_data_view.h) can reference them.
+enum { myID_CMP_FILE = 60220, myID_CMP_CLIP, myID_CMP_CLEAR, myID_CMP_NEXT, myID_CMP_PREV, myID_SPELLCHECK,
+       myID_SPELL_COMMENTSONLY, myID_SPELL_MANAGE };   // 60226/60227 - View ▸ Spell Check submenu items (in menu_data_view.h)
 #include "menu_builder.h"      // data-driven menu bar builder (menu_model.h/menu_data_*.h) - replaces the old inline menu construction
 #include "keymap_schemes.h"    // bundled read-only keymap presets ("wxNote" + "Notepad++") - Tier 1 of the shortcut model
 #include "shortcut_mapper_dialog.h"  // the Shortcut Mapper dialog + conflict engine (implements kCmdSettingShortcutMapper 48009)
@@ -173,7 +181,20 @@ static const int  SMART_INDIC   = 10;     // indicator number for smart-highligh
 static const int  MARK_STYLE_BASE = 21;   // "Mark All Ext 1-5" style indicators (21..25) - the 5 mark-style colours
 static const unsigned MARK_STYLE_COLOUR[5] = { 0x1F90FF, 0xE0A020, 0x50B050, 0xC060C0, 0x30B0C0 };  // BGR: orange, blue, green, purple, olive
 static const int  URL_INDIC = 11;         // clickable-URL underline indicator
-enum { myID_TIMER = 60000, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER, myID_MONTIMER };   // fixed ids, above the kCmd* range
+// File Compare decorations (free of the above: markers 3-5 are unused - bookmark=2, fold=25-31; indicator
+// 12 is in the free 12..20 pool). Line-background markers colour whole added/removed/changed lines; the
+// indicator underlines the changed byte spans inside a modified line.
+static const int  CMP_MARK_ADDED   = 3;
+static const int  CMP_MARK_REMOVED = 4;
+static const int  CMP_MARK_CHANGED = 5;
+static const int  CMP_INDIC        = 12;
+static const int  SPELL_INDIC      = 13;   // red squiggle under misspelled words (free 12..20 indicator pool)
+// Spell-check right-click popup ids (runtime-only, private range; not menu-data so they can live here).
+static const int  myID_SPELL_ADD          = 60240;
+static const int  myID_SPELL_IGNORE       = 60241;
+static const int  myID_SPELL_SUGGEST_BASE = 60250;   // + 0..8 (up to 9 suggestions)
+static const int  myID_SPELL_DICT_BASE    = 60130;   // + 0..31: dynamic Dictionary radio list (View ▸ Spell Check; runtime-built, not menu-data)
+enum { myID_TIMER = 60000, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER, myID_MONTIMER, myID_BACKUPTIMER };   // fixed ids, above the kCmd* range
 // UI language selection - shared by the top-level Localization menu and Preferences > General.
 // Endonyms are ALWAYS shown in their own language (never translated); index 0 is "System default".
 static const int myID_UILANG_FIRST = 60100;   // 10 radio items (myID_UILANG_FIRST + 0..9), clear of the 61xxx/62xxx/63xxx bases
@@ -257,6 +278,7 @@ public:
     wxColour tabColour;                    // optional per-tab colour (invalid = none) - drawn as a stripe by PinTabArt
     bool     monitored = false;            // View > Monitoring (tail -f): reload on external change, caret to end
     wxLongLong monMtime = 0; wxULongLong monSize = 0;   // last-seen on-disk stats; background tabs catch up by re-comparing on activation
+    wxLongLong diskMtime = 0; wxULongLong diskSize = 0; // on-disk stats last loaded/saved; drives the "changed on disk?" watch (0/0 = not yet stamped)
     wxString recoveryId;                   // set once this page's unsaved edits have been backed up (see backupUnsavedChanges); empty = nothing pending
 };
 
@@ -477,6 +499,7 @@ struct WxnOpenRequest
     wxArrayString folders;                            // existing DIRECTORIES, absolute; last one roots the browser
     wxArrayInt    lines, cols;                        // parallel to paths: a `file:line[:col]` suffix, or -1
     int gotoLine = -1, gotoCol = -1, forceEnc = -1;   // the launch-wide -g / -e (or +N) switches (-1 = not given)
+    bool gotoEnd = false;                             // --end: put the caret at the END of the last-opened file
     bool readOnly = false;                            // -R/-M/--read-only: open THIS launch's files read-only
     bool split    = false;                            // -o/-O/--split: route THIS launch's files into the split view
     wxString findPattern;                             // +/{pattern}: put the caret on the first match in the last-opened file
@@ -566,6 +589,8 @@ public:
                 rest.BeforeFirst(',').ToLong(&l); if (rest.Contains(",")) rest.AfterFirst(',').ToLong(&c);
                 while ((long)req.lines.GetCount() <= i) { req.lines.Add(-1); req.cols.Add(-1); }
                 if (i >= 0) { req.lines[i] = (int)l; req.cols[i] = (int)c; }
+            } else if (line.StartsWith("\x01" "END=")) {
+                req.gotoEnd = true;                    // --end: jump the forwarded file to its last line in the reused window too
             } else if (line.StartsWith("\x01" "RO=")) {
                 req.readOnly = true;                   // -R/-M: open the forwarded file(s) read-only in the reused window too
             } else if (line.StartsWith("\x01" "SPLIT=")) {
@@ -2513,6 +2538,7 @@ public:
         buildEditor();
         buildMenuBar();
         rebuildUserLangMenu();   // populate the Language menu's per-UDL section from what loadAllUdls() found
+        refreshSpellMenu();      // populate View ▸ Spell Check's dynamic Dictionary list + sync the toggle states
 #ifdef __WXMAC__
         // Host panel for the docked (non-native) macOS toolbar (see buildToolBar). A direct frame child so
         // it can be a wxAui pane; the toolbar is parented to THIS (not the frame) so wxToolBar::Create leaves
@@ -3054,6 +3080,9 @@ public:
 
         Bind(wxEVT_MENU, &WxnShellFrameT::onCommand, this);          // one dispatcher for all menu+toolbar ids
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) { updateStatus(); updateUiState(); }, myID_TIMER);
+        Bind(wxEVT_TIMER, &WxnShellFrameT::onBackupTimer, this, myID_BACKUPTIMER);   // periodic crash-safety snapshot
+        m_backupTimer = new wxTimer(this, myID_BACKUPTIMER);
+        m_backupTimer->Start(30000);                                  // every 30s: back up any buffer with unsaved edits
 #ifdef WXN_HAS_BORDERLESS
         // Focus-scoped accelerators (see refreshAccelerators / onChildFocus). Only the borderless frame
         // owns a wxAcceleratorTable, so only it needs the gate: when focus moves into the terminal panel
@@ -3081,6 +3110,7 @@ public:
         };
         SetDropTarget(new FileDrop([this](const wxArrayString& fs) { for (const auto& f : fs) openPath(f); }));
         Bind(wxEVT_CLOSE_WINDOW, &WxnShellFrameT::onCloseWindow, this);                 // prompt to save on exit
+        Bind(wxEVT_ACTIVATE, [this](wxActivateEvent& e){ if (e.GetActive()) CallAfter([this]{ checkExternalChange(activePage()); }); e.Skip(); });   // "changed on disk?" watch on refocus
         m_timer.Start(150);
         applyTheme(m_dark);     // style for the mode this process was launched in
         applySettings();        // apply persisted preferences (tab size, wrap, line numbers, toolbar/status visibility)
@@ -3112,10 +3142,11 @@ public:
     // Apply -g (goto line[,col]) / -e (force encoding) to whichever page is active after opening some
     // CLI/IPC-supplied paths - the switches apply to the file just opened, and since addDocument()
     // always activates the newest page, that's simply activePage().
-    void applyGotoAndEncoding(int gotoLine, int gotoCol, int forceEnc)
+    void applyGotoAndEncoding(int gotoLine, int gotoCol, int forceEnc, bool gotoEnd = false)
     {
         if (forceEnc >= 0) interpretAs(forceEnc);
-        if (gotoLine >= 0)
+        if (gotoEnd) { sci(SCI_DOCUMENTEND); sci(SCI_SCROLLCARET); }   // --end wins over -g/+N: jump to the last line
+        else if (gotoLine >= 0)
         {
             const sptr_t pos = gotoCol > 0 ? sci(SCI_FINDCOLUMN, gotoLine - 1, gotoCol - 1) : sci(SCI_POSITIONFROMLINE, gotoLine - 1);
             sci(SCI_GOTOPOS, pos);
@@ -3150,7 +3181,7 @@ public:
         // The launch-wide -g/-e (or +N) goes last, so an explicit -g still wins over a suffix on the final
         // file. Runs while the LAST-opened page is still active (so goto/find land on it, matching wxNote's
         // documented "last file opened" semantics), then we hand focus back to MAIN for the split case.
-        if (!req.paths.IsEmpty()) applyGotoAndEncoding(req.gotoLine, req.gotoCol, req.forceEnc);
+        if (!req.paths.IsEmpty()) applyGotoAndEncoding(req.gotoLine, req.gotoCol, req.forceEnc, req.gotoEnd);
         if (!req.findPattern.empty() && !openedPages.empty()) findOnOpen(req.findPattern);
         if (req.readOnly) setReadOnlyForPages(openedPages);
         if (doSplit) setActiveView(&m_main);
@@ -5305,6 +5336,7 @@ private:
     {
         setActiveView(viewOfEvent(e));   // route by the notebook that fired
         if (auto* p = activePage()) { activateBuffer(p); noteMru(p); }
+        CallAfter([this]{ checkExternalChange(activePage()); });   // re-stat the newly-active buffer against disk
         e.Skip();
     }
     // ---- Most-recently-used tab order (Ctrl+Tab) + Restore Recent Closed File (Ctrl+Shift+T) ------
@@ -5740,7 +5772,7 @@ private:
         wxConfigBase::Get()->Flush();
         if (m_terminal) m_terminal->shutdownAll();   // kill child shells + stop their poll timers before AUI teardown
         // stop + free the owned timers so no WM_TIMER can Notify() into the frame while teardown pumps messages
-        for (wxTimer** t : { &m_monTimer, &m_flTimer }) if (*t) { (*t)->Stop(); delete *t; *t = nullptr; }
+        for (wxTimer** t : { &m_monTimer, &m_flTimer, &m_backupTimer }) if (*t) { (*t)->Stop(); delete *t; *t = nullptr; }
         m_timer.Stop();
         m_aui.UnInit();
         // Defer the actual unload past this call stack (CallAfter -> next idle event), not a synchronous
@@ -5991,6 +6023,10 @@ private:
         if (!m_stc) return;
         const bool hasSel = sci(SCI_GETSELECTIONEMPTY) == 0;
         wxMenu menu;
+        // If spell check is on and the click is over a misspelled word, lead with suggestions + Add/Ignore.
+        const int spellPos = (screenX == -1 && screenY == -1) ? (int)m_stc->GetCurrentPos()
+                             : (int)m_stc->PositionFromPoint(m_stc->ScreenToClient(wxPoint(screenX, screenY)));
+        addSpellContext(menu, spellPos);
         for (const auto& entry : loadPopupContextMenu())
         {
             if (entry.separator) { if (menu.GetMenuItemCount() > 0) menu.AppendSeparator(); continue; }
@@ -6879,8 +6915,7 @@ private:
         T(kCmdFilePrintPreview, "print-preview", _("Print Preview"));
         tb->AddSeparator();
         T(kCmdEditCut, "cut", _("Cut"));           T(kCmdEditCopy, "copy", _("Copy"));           T(kCmdEditPaste, "paste", _("Paste"));
-        tb->AddSeparator();
-        T(kCmdEditUndo, "undo", _("Undo"));        T(kCmdEditRedo, "redo", _("Redo"));
+        T(kCmdEditUndo, "undo", _("Undo"));        T(kCmdEditRedo, "redo", _("Redo"));   // one Edit cluster (clipboard + history), per Notepad++/VS convention
         tb->AddSeparator();
         T(kCmdSearchFind, "find", _("Find"));      T(kCmdSearchReplace, "replace", _("Replace"));
         tb->AddSeparator();
@@ -7346,6 +7381,33 @@ private:
         const int bn = WideCharToMultiByte(cp, 0, w.data(), wn, nullptr, 0, nullptr, nullptr); if (bn <= 0) return u8;
         std::string out((size_t)bn, '\0'); WideCharToMultiByte(cp, 0, w.data(), wn, &out[0], bn, nullptr, nullptr); return out;
     }
+#else
+    // Canonical iconv/charset name for a Windows code-page number (portable decode/encode path, non-Windows
+    // only). "" => no portable mapping, so the caller reports the charset as unavailable on this platform
+    // rather than emitting garbage. On POSIX every page routes through the platform's iconv via wxCSConv;
+    // CP720 (Arabic DOS) is intentionally absent because libiconv/glibc don't ship it.
+    static wxString charsetNameForCp(int cp)
+    {
+        switch (cp)
+        {
+            case 1250: return "CP1250"; case 1251: return "CP1251"; case 1252: return "CP1252";
+            case 1253: return "CP1253"; case 1254: return "CP1254"; case 1255: return "CP1255";
+            case 1256: return "CP1256"; case 1257: return "CP1257"; case 1258: return "CP1258";
+            case 28591: return "ISO-8859-1";  case 28592: return "ISO-8859-2";  case 28593: return "ISO-8859-3";
+            case 28594: return "ISO-8859-4";  case 28595: return "ISO-8859-5";  case 28596: return "ISO-8859-6";
+            case 28597: return "ISO-8859-7";  case 28598: return "ISO-8859-8";  case 28599: return "ISO-8859-9";
+            case 28603: return "ISO-8859-13"; case 28604: return "ISO-8859-14"; case 28605: return "ISO-8859-15";
+            case 437: return "CP437"; case 737: return "CP737"; case 775: return "CP775";
+            case 850: return "CP850"; case 852: return "CP852"; case 855: return "CP855";
+            case 857: return "CP857"; case 858: return "CP858"; case 860: return "CP860";
+            case 861: return "CP861"; case 862: return "CP862"; case 863: return "CP863";
+            case 865: return "CP865"; case 866: return "CP866"; case 869: return "CP869";
+            case 20866: return "KOI8-R"; case 21866: return "KOI8-U"; case 10007: return "MacCyrillic";
+            case 932: return "CP932"; case 936: return "CP936"; case 950: return "CP950";
+            case 949: return "CP949"; case 51949: return "EUC-KR"; case 874: return "CP874";
+            default: return "";   // e.g. 720 (Arabic DOS): unavailable via iconv
+        }
+    }
 #endif
     static int codepageForId(int id)   // Encoding > character-set menu item -> Windows code page (0 = not a charset item)
     {
@@ -7372,24 +7434,46 @@ private:
     }
     void interpretCharset(int cp, const wxString& name)   // re-read the file decoded as that code page
     {
-#ifdef __WXMSW__
         const wxString p = curPath();
+        std::string decoded;
+#ifdef __WXMSW__
+        if (!p.empty()) decoded = cpToUtf8((UINT)cp, readRawBytes(p));
+#else
+        const wxString csName = charsetNameForCp(cp);
+        if (csName.empty()) { setStatus(0, wxString::Format(_("Character set not available on this platform: %s"), name)); return; }
+        if (!p.empty())
+        {
+            const std::string raw = readRawBytes(p);
+            wxString s(raw.data(), wxCSConv(csName), raw.size());
+            if (!raw.empty() && s.empty()) { setStatus(0, wxString::Format(_("Character set not available on this platform: %s"), name)); return; }
+            decoded = std::string(s.utf8_str());
+        }
+#endif
         if (!p.empty())
         {
             if (sci(SCI_GETMODIFY) && wxMessageBox(_("Re-interpreting the encoding discards unsaved changes. Continue?"), _("Encoding"), wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
-            setDocUtf8(cpToUtf8((UINT)cp, readRawBytes(p))); sci(SCI_EMPTYUNDOBUFFER); sci(SCI_SETSAVEPOINT);
+            setDocUtf8(decoded); sci(SCI_EMPTYUNDOBUFFER); sci(SCI_SETSAVEPOINT);
         }
         if (auto* pg = activePage()) { pg->encoding = ENC_CHARSET; pg->codepage = cp; pg->encLabel = name; }
         updateStatus(); updateEncodingMenuChecks();
-#else
-        (void)cp; notImpl(wxString::Format(_("%s (Windows only)"), name));
-#endif
     }
     std::string encodeForPage(const std::string& u, EditorPage* p)   // bytes to write for this buffer's encoding
     {
+        if (p && p->encoding == ENC_CHARSET)
+        {
 #ifdef __WXMSW__
-        if (p && p->encoding == ENC_CHARSET) return utf8ToCp((UINT)p->codepage, u);
+            return utf8ToCp((UINT)p->codepage, u);
+#else
+            const wxString csName = charsetNameForCp(p->codepage);
+            if (!csName.empty())
+            {
+                wxString s = wxString::FromUTF8(u.data(), u.size());
+                wxScopedCharBuffer b = s.mb_str(wxCSConv(csName));
+                if (u.empty() || b.length() > 0) return std::string(b.data(), b.length());
+            }
+            return u;   // no mapping / conversion failed: keep UTF-8 (a charset page exists only if decode succeeded)
 #endif
+        }
         return encodeFromUtf8(u, p ? p->encoding : ENC_UTF8);
     }
     wxString encDisplay(EditorPage* p) { return (p && p->encoding == ENC_CHARSET) ? p->encLabel : wxString(encName(p ? p->encoding : ENC_UTF8)); }
@@ -7448,13 +7532,44 @@ private:
                 sci(SCI_SETEOLMODE, (crlf >= lf && crlf >= cr) ? SC_EOL_CRLF : (lf >= cr ? SC_EOL_LF : SC_EOL_CR));
         }
         sci(SCI_EMPTYUNDOBUFFER); sci(SCI_GOTOPOS, 0); sci(SCI_SETSAVEPOINT);
-        if (auto* p = activePage()) p->path = path;
+        if (auto* p = activePage()) { p->path = path; stampDiskStat(p); }
         m_path = path; setDocTitle(wxFileNameFromPath(path));
         setLexerForFile(path);
         updateEncodingMenuChecks();
     }
     void onOpen() { wxFileDialog d(this, _("Open"), "", "", _("All files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST); if (d.ShowModal() == wxID_OK) addDocument(d.GetPath(), wxFileNameFromPath(d.GetPath())); }
     void onReload() { if (!m_path.empty()) loadFile(m_path); }
+
+    // ---- External-change watch: warn when an open file is modified/replaced by another program ----
+    // (a git checkout, another editor, a formatter). Each buffer records the on-disk mtime+size it last
+    // loaded or saved (stampDiskStat); on window activation and tab switch we re-stat and, if it moved,
+    // offer to reload. Monitored (tail -f) pages are skipped - they reload themselves. Reuses monStat().
+    bool m_extChangePrompting = false;                 // re-entrancy guard (activation re-fires while the dialog is up)
+    void stampDiskStat(EditorPage* p)
+    {
+        if (!p || p->path.empty()) return;
+        wxLongLong mt = 0; wxULongLong sz = 0;
+        if (monStat(p->path, mt, sz)) { p->diskMtime = mt; p->diskSize = sz; }
+    }
+    void checkExternalChange(EditorPage* p)
+    {
+        if (m_extChangePrompting || !p || p->path.empty() || p->monitored) return;
+        wxLongLong mt = 0; wxULongLong sz = 0;
+        if (!monStat(p->path, mt, sz)) return;                         // gone/unreadable this pass: don't nag
+        if (p->diskMtime == 0 && p->diskSize == 0) { p->diskMtime = mt; p->diskSize = sz; return; }   // first sight -> baseline
+        if (mt == p->diskMtime && sz == p->diskSize) return;           // unchanged
+        p->diskMtime = mt; p->diskSize = sz;                           // adopt the new state so we prompt only once per change
+        m_extChangePrompting = true;
+        const wxString name = wxFileNameFromPath(p->path);
+        const bool dirty = (p == activePage()) ? (sci(SCI_GETMODIFY) != 0) : p->dirty;
+        const wxString msg = dirty
+            ? wxString::Format(_("\"%s\" was changed by another program, and you have unsaved changes here.\n\nReload from disk and discard your changes?"), name)
+            : wxString::Format(_("\"%s\" was changed by another program.\n\nReload it from disk?"), name);
+        if (wxMessageBox(msg, _("File changed on disk"), wxYES_NO | (dirty ? wxICON_EXCLAMATION : wxICON_QUESTION), this) == wxYES
+            && p == activePage())
+            loadFile(p->path);                                         // re-reads + re-stamps (same path as File > Reload from Disk)
+        m_extChangePrompting = false;
+    }
 
     // ---- View > Monitoring (tail -f): poll monitored files for external changes; reload + jump to end ----
     static bool monStat(const wxString& path, wxLongLong& mtime, wxULongLong& size)
@@ -7528,6 +7643,18 @@ private:
     }
     // Poll only the ACTIVE page: background monitored tabs catch up with one stat-compare on activation
     // (see activateBuffer), so they cost nothing per tick and can never clobber an edited buffer.
+    // A page has unsaved edits: live SCI_GETMODIFY for the active tab, the cached flag for background tabs.
+    bool pageDirty(EditorPage* p) { return p && ((p == activePage()) ? (sci(SCI_GETMODIFY) != 0) : p->dirty); }
+    // Periodic crash-safety snapshot: back up every buffer with unsaved edits to its recovery .bak, so a
+    // crash or power loss between saves is recoverable next launch (the on-exit backup only fires on a clean
+    // quit). backupUnsavedChanges reads getAllText(), so a background page is peeked in via its own document
+    // (peekDoc leaves the active view's tab/caret/lexer untouched). Saving a buffer clears its .bak.
+    void onBackupTimer(wxTimerEvent&)
+    {
+        for (EditorPage* p : allPages())
+            if (pageDirty(p))
+                peekDoc(p, [this, p]{ backupUnsavedChanges(p); });
+    }
     void onMonTimer(wxTimerEvent&)
     {
         EditorPage* p = activePage();
@@ -7602,7 +7729,7 @@ private:
         nibFireDocEvent(NIB_EV_DOCUMENT_SAVING, p);
         if (!writeMountedDoc(p, path)) return false;
         sci(SCI_SETSAVEPOINT);                        // fires the v1 savepoint-derived DOCUMENT_SAVED
-        if (p) { p->path = path; clearRecovery(p); }   // content is safely on disk now - no recovery copy needed
+        if (p) { p->path = path; clearRecovery(p); stampDiskStat(p); }   // safely on disk - drop recovery copy + refresh the change-watch baseline
         m_path = path; setDocTitle(wxFileNameFromPath(path)); setLexerForFile(path); addToMRU(path);
         nibFireDocEvent(NIB_EV_DOCUMENT_SAVED, p, NIB_FIRE_V2_ONLY);   // v2: the REAL save signal, with the saved buffer's id
         return true;
@@ -7615,7 +7742,7 @@ private:
         if (!p || p->path.empty()) return false;
         nibFireDocEvent(NIB_EV_DOCUMENT_SAVING, p);   // v2 - carries THIS page's id, not the active one's
         if (!writeMountedDoc(p, p->path)) return false;
-        sci(SCI_SETSAVEPOINT); clearRecovery(p); p->dirty = false;
+        sci(SCI_SETSAVEPOINT); clearRecovery(p); p->dirty = false; stampDiskStat(p);
         nibFireDocEvent(NIB_EV_DOCUMENT_SAVED, p, NIB_FIRE_V2_ONLY);   // v2: right id even for a background Save All write
         return true;
     }
@@ -7812,20 +7939,480 @@ private:
     wxString curPath() const { auto* p = activePage(); return p ? p->path : wxString(); }
     void copyToClip(const wxString& t) { if (!t.empty() && wxTheClipboard->Open()) { wxTheClipboard->SetData(new wxTextDataObject(t)); wxTheClipboard->Close(); } }
     wxString getClipText() { wxString t; if (wxTheClipboard->Open()) { if (wxTheClipboard->IsSupported(wxDF_UNICODETEXT)) { wxTextDataObject d; wxTheClipboard->GetData(d); t = d.GetText(); } wxTheClipboard->Close(); } return t; }
-    // Paste Special: the selection's raw bytes (embedded nulls and all - getSelUtf8() already preserves
-    // them via a known length, not strlen) round-tripped through a private registered clipboard format.
-    // Plain Win32 SetClipboardData (immediate rendering) instead of wx's wxDataObject/OLE clipboard path -
-    // the latter uses delayed rendering for custom formats and a same-process write-then-read-back never
-    // saw the format as available (IsSupported() false immediately after our own SetData()). Also writes
-    // CF_UNICODETEXT in the same session, so pasting into another app still gets ordinary text.
+
+    // ================= File Compare (side-by-side diff, engine in src/diff_myers.h) =================
+    // Renders A vs B as two read-only scratch tabs in the split (A=MAIN, B=SUB): line-background markers
+    // for added/removed/changed, blank annotation filler for row alignment, intra-line indicators on
+    // changed lines, and mirrored vertical scrolling. Scratch tabs never touch the user's real files.
+    bool m_comparing = false;
+    bool m_cmpScrollGuard = false;   // reentrancy guard for the two-view scroll mirror
+    bool m_cmpSyncBound = false;     // the scroll-sync handlers are bound once, lazily
+    EditorPage* m_cmpA = nullptr;
+    EditorPage* m_cmpB = nullptr;
+
+    // splitLines() drops the phantom empty line a trailing '\n' would add; Scintilla keeps it. Rendering the
+    // JOINED splitLines output makes the editor's line indices match the diff plan's exactly.
+    static std::string joinLines(const std::string& t)
+    {
+        const std::vector<std::string> ls = wxn::diff::splitLines(t);
+        std::string o; for (size_t i = 0; i < ls.size(); ++i) { if (i) o += '\n'; o += ls[i]; } return o;
+    }
+
+    void defineCompareDecorations(wxStyledTextCtrl* stc)
+    {
+        if (!stc) return;
+        const bool d = m_dark;
+        stc->MarkerDefine(CMP_MARK_ADDED,   wxSTC_MARK_BACKGROUND);
+        stc->MarkerSetBackground(CMP_MARK_ADDED,   d ? wxColour(30, 60, 30) : wxColour(215, 245, 215));
+        stc->MarkerDefine(CMP_MARK_REMOVED, wxSTC_MARK_BACKGROUND);
+        stc->MarkerSetBackground(CMP_MARK_REMOVED, d ? wxColour(70, 30, 30) : wxColour(255, 220, 220));
+        stc->MarkerDefine(CMP_MARK_CHANGED, wxSTC_MARK_BACKGROUND);
+        stc->MarkerSetBackground(CMP_MARK_CHANGED, d ? wxColour(70, 60, 20) : wxColour(255, 244, 200));
+        stc->IndicatorSetStyle(CMP_INDIC, wxSTC_INDIC_ROUNDBOX);
+        stc->IndicatorSetForeground(CMP_INDIC, d ? wxColour(230, 180, 60) : wxColour(200, 120, 0));
+        stc->AnnotationSetVisible(wxSTC_ANNOTATION_STANDARD);
+    }
+
+    void applyCompareSide(wxStyledTextCtrl* stc, const std::vector<wxn::diff::VisualRow>& side)
+    {
+        if (!stc) return;
+        using namespace wxn::diff;
+        for (const VisualRow& v : side) {
+            if (v.filler || v.line < 0) continue;
+            int mk = -1;
+            if      (v.marker == Marker::Added)   mk = CMP_MARK_ADDED;
+            else if (v.marker == Marker::Removed) mk = CMP_MARK_REMOVED;
+            else if (v.marker == Marker::Changed) mk = CMP_MARK_CHANGED;
+            if (mk >= 0) stc->MarkerAdd(v.line, mk);
+        }
+        for (const FillerRun& r : fillerRuns(side)) {
+            if (r.afterLine < 0) continue;   // a leading run can't sit above line 0 (annotations are below-line)
+            wxString blanks; for (int i = 0; i < r.count; ++i) { if (i) blanks += "\n"; blanks += " "; }
+            stc->AnnotationSetText(r.afterLine, blanks);
+        }
+    }
+
+    EditorPage* makeCompareTab(ViewPane& view, const wxString& title, const std::string& utf8)
+    {
+        setActiveView(&view);
+        EditorPage* p = addDocument("", title);
+        m_stc->SetReadOnly(false);
+        m_stc->SetText(wxString::FromUTF8(utf8.data(), utf8.size()));
+        m_stc->EmptyUndoBuffer();
+        m_stc->SetSavePoint();
+        m_stc->SetReadOnly(true);
+        return p;
+    }
+
+    void bindCompareScrollSync()
+    {
+        if (m_cmpSyncBound) return;
+        m_cmpSyncBound = true;
+        auto sync = [this](wxStyledTextEvent& e) {
+            if (m_comparing && !m_cmpScrollGuard) {
+                auto* src = static_cast<wxStyledTextCtrl*>(e.GetEventObject());
+                wxStyledTextCtrl* dst = (src == m_main.stc) ? m_sub.stc : (src == m_sub.stc ? m_main.stc : nullptr);
+                if (src && dst) {
+                    const int f = src->GetFirstVisibleLine();
+                    if (dst->GetFirstVisibleLine() != f) { m_cmpScrollGuard = true; dst->SetFirstVisibleLine(f); m_cmpScrollGuard = false; }
+                }
+            }
+            e.Skip();
+        };
+        if (m_main.stc) m_main.stc->Bind(wxEVT_STC_UPDATEUI, sync);
+        if (m_sub.stc)  m_sub.stc->Bind(wxEVT_STC_UPDATEUI, sync);
+    }
+
+    void compareWith(const std::string& textB, const wxString& labelB)
+    {
+        const std::string textA = getDocUtf8();
+        const wxString labelA = curPath().empty() ? _("current document") : wxFileNameFromPath(curPath());
+        if (m_comparing) clearCompare();
+        ensureSplit();
+
+        m_cmpA = makeCompareTab(m_main, wxString::Format(_("Diff: %s"), labelA), joinLines(textA));
+        m_cmpB = makeCompareTab(m_sub,  wxString::Format(_("Diff: %s"), labelB), joinLines(textB));
+        defineCompareDecorations(m_main.stc);
+        defineCompareDecorations(m_sub.stc);
+
+        const wxn::diff::ComparePlan plan = wxn::diff::compareTexts(textA, textB);
+        applyCompareSide(m_main.stc, plan.left);
+        applyCompareSide(m_sub.stc,  plan.right);
+
+        // Intra-line: underline the changed byte spans on each side of every aligned Changed row.
+        auto stripEol = [](std::string s) { while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back(); return s; };
+        for (size_t i = 0; i < plan.left.size(); ++i) {
+            const wxn::diff::VisualRow& L = plan.left[i];
+            const wxn::diff::VisualRow& R = plan.right[i];
+            if (L.filler || R.filler || L.marker != wxn::diff::Marker::Changed) continue;
+            const wxString lLine = m_main.stc->GetLine(L.line);
+            const wxString rLine = m_sub.stc->GetLine(R.line);
+            const wxn::diff::CharDiff cd = wxn::diff::diffChars(stripEol(std::string(lLine.utf8_str())), stripEol(std::string(rLine.utf8_str())));
+            const int aStart = (int)m_main.stc->PositionFromLine(L.line);
+            const int bStart = (int)m_sub.stc->PositionFromLine(R.line);
+            m_main.stc->SetIndicatorCurrent(CMP_INDIC);
+            for (const auto& s : cd.aDeleted)  m_main.stc->IndicatorFillRange(aStart + s.start, s.len);
+            m_sub.stc->SetIndicatorCurrent(CMP_INDIC);
+            for (const auto& s : cd.bInserted) m_sub.stc->IndicatorFillRange(bStart + s.start, s.len);
+        }
+
+        bindCompareScrollSync();
+        m_comparing = true;
+        setActiveView(&m_main);
+        if (plan.hitGuard) setStatus(0, _("Compare: files too large or dissimilar for a detailed diff"));
+        else setStatus(0, wxString::Format(_("Compare: %d changed, %d added, %d removed"), plan.changed, plan.added, plan.removed));
+    }
+
+    void clearCompare()
+    {
+        m_comparing = false;
+        for (wxStyledTextCtrl* stc : { m_main.stc, m_sub.stc }) {
+            if (!stc) continue;
+            for (int mk : { CMP_MARK_ADDED, CMP_MARK_REMOVED, CMP_MARK_CHANGED }) stc->MarkerDeleteAll(mk);
+            stc->AnnotationClearAll();
+            stc->SetIndicatorCurrent(CMP_INDIC);
+            stc->IndicatorClearRange(0, stc->GetTextLength());
+        }
+        m_cmpA = m_cmpB = nullptr;
+        setStatus(0, _("Compare cleared"));
+    }
+
+    void compareGotoDiff(bool next)
+    {
+        if (!m_comparing || !m_stc) return;
+        const int mask = (1 << CMP_MARK_ADDED) | (1 << CMP_MARK_REMOVED) | (1 << CMP_MARK_CHANGED);
+        const int cur = (int)m_stc->GetCurrentLine();
+        int line = next ? (int)m_stc->MarkerNext(cur + 1, mask) : (int)m_stc->MarkerPrevious(cur - 1, mask);
+        if (line < 0) line = next ? (int)m_stc->MarkerNext(0, mask) : (int)m_stc->MarkerPrevious(m_stc->GetLineCount() - 1, mask);   // wrap around
+        if (line >= 0) { m_stc->GotoLine(line); m_stc->EnsureVisibleEnforcePolicy(line); }
+    }
+
+    void compareWithFile()
+    {
+        wxFileDialog dlg(this, _("Compare current document with file"), wxEmptyString, wxEmptyString,
+                          _("All files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (dlg.ShowModal() != wxID_OK) return;
+        int enc = ENC_UTF8;
+        const std::string b = decodeToUtf8(readRawBytes(dlg.GetPath()), enc);
+        compareWith(b, wxFileNameFromPath(dlg.GetPath()));
+    }
+
+    void compareWithClipboard()
+    {
+        const wxString t = getClipText();
+        if (t.empty()) { setStatus(0, _("Clipboard is empty")); return; }
+        compareWith(std::string(t.utf8_str()), _("clipboard"));
+    }
+
+    // ================= Spell check (engine in src/spell_engine.h; OS-native backend) =================
+    // Squiggles misspelled words in the visible range using the platform spell checker. Identifiers are
+    // split (camelCase/snake_case) before checking so code isn't a sea of red. Re-checks on scroll/edit
+    // via UPDATEUI, bounded to the visible range so it stays cheap on big files.
+    std::unique_ptr<wxn::spell::Engine> m_spell;
+    bool m_spellOn = false, m_spellBound = false;
+    int  m_spellLastFirst = -1, m_spellLastLen = -1;
+    int  m_spellBackend = 1;   // Preferences > Editing "Spell-check engine" (Win/mac): 0=Native 1=Native+Hunspell (default) 2=Hunspell; wxn::spell::Backend
+    std::string m_spellDict = "en_US";   // active dictionary basename (View > Spell Check > Dictionary); dash-form is passed to makeEngine
+    bool m_spellCommentsOnly = true;     // in syntax-highlighted files, check only comments & strings (View > Spell Check toggle)
+    // "en_US" -> "en-US": OS engines want a BCP-47 tag; makeHunspellEngine converts it back to the on-disk basename.
+    std::string spellLangArg() const { std::string s = m_spellDict; for (char& c : s) if (c == '_') c = '-'; return s; }
+
+    void defineSpellIndicator(wxStyledTextCtrl* stc)
+    {
+        if (!stc) return;
+        stc->IndicatorSetStyle(SPELL_INDIC, wxSTC_INDIC_SQUIGGLE);
+        stc->IndicatorSetForeground(SPELL_INDIC, wxColour(220, 40, 40));
+    }
+    void bindSpellRecheck()
+    {
+        if (m_spellBound) return;
+        m_spellBound = true;
+        auto h = [this](wxStyledTextEvent& e) { if (m_spellOn) onSpellUpdate(); e.Skip(); };
+        if (m_main.stc) m_main.stc->Bind(wxEVT_STC_UPDATEUI, h);
+        if (m_sub.stc)  m_sub.stc->Bind(wxEVT_STC_UPDATEUI, h);
+    }
+    void onSpellUpdate()
+    {
+        if (!m_spellOn || !m_spell || !m_stc) return;
+        const int fv = m_stc->GetFirstVisibleLine(), len = (int)m_stc->GetTextLength();
+        if (fv == m_spellLastFirst && len == m_spellLastLen) return;   // nothing scrolled or edited
+        checkVisibleSpelling();
+    }
+    void checkVisibleSpelling()
+    {
+        if (!m_spellOn || !m_spell || !m_stc) return;
+        const int lineCount = (int)m_stc->GetLineCount();
+        const int firstVis  = m_stc->GetFirstVisibleLine();
+        const int onScreen  = (int)m_stc->LinesOnScreen();
+        int startLine = (int)m_stc->DocLineFromVisible(firstVis);
+        int endLine   = std::min(lineCount - 1, (int)m_stc->DocLineFromVisible(firstVis + onScreen) + 1);
+        if (startLine < 0) startLine = 0;
+        if (endLine < startLine) endLine = startLine;
+        const int startPos = (int)m_stc->PositionFromLine(startLine);
+        const int endPos   = (int)m_stc->GetLineEndPosition(endLine);
+        m_spellLastFirst = firstVis;
+        m_spellLastLen   = (int)m_stc->GetTextLength();
+        m_stc->SetIndicatorCurrent(SPELL_INDIC);
+        m_stc->IndicatorClearRange(startPos, endPos - startPos);
+        // "Check comments & strings only" (View ▸ Spell Check): in a syntax-highlighted document, skip code
+        // identifiers/keywords and check only COMMENTS and STRINGS. Plain-text docs (no lexer) are checked
+        // in full. Works across BOTH lexer kinds: the Scintillua CONTAINER lexer (styles set manually, so we
+        // match sciTagToStyle's comment/string numbers) and Lexilla lexers (which report each style's
+        // semantic tags via TagsOfStyle - e.g. "comment", "literal string"). Scintilla styles LAZILY on
+        // paint, so force-lex the range first or GetStyleAt could read stale/default styles.
+        const int lexer = m_stc->GetLexer();
+        bool gate = m_spellCommentsOnly && (lexer != wxSTC_LEX_NULL);
+        std::set<int> proseStyles;
+        if (gate) {
+            if (m_stc->GetEndStyled() < endPos) m_stc->Colourise(0, endPos);
+            if (lexer == wxSTC_LEX_CONTAINER) {                          // Scintillua: our own style numbers
+                proseStyles.insert(sciTagToStyle("comment"));            // 3
+                proseStyles.insert(sciTagToStyle("string"));            // 2 (also character / regex)
+            } else {                                                     // Lexilla: query per-style tags
+                const int n = (int)m_stc->GetNamedStyles();
+                for (int i = 0; i < n; ++i) {
+                    const wxString tags = m_stc->TagsOfStyle(i);
+                    if (tags.Contains("comment") || tags.Contains("string")) proseStyles.insert(i);
+                }
+            }
+            if (proseStyles.empty()) gate = false;   // lexer exposes no comment/string metadata -> check all
+        }
+        const std::string text = std::string(m_stc->GetTextRange(startPos, endPos).utf8_str());
+        for (const wxn::spell::WordSpan& w : wxn::spell::tokenizeForSpell(text)) {
+            const int wpos = startPos + w.start;
+            if (gate && proseStyles.find((int)m_stc->GetStyleAt(wpos)) == proseStyles.end()) continue;   // skip code
+            const std::string word = text.substr(w.start, w.len);
+            if (std::find(m_spellIgnore.begin(), m_spellIgnore.end(), word) != m_spellIgnore.end()) continue;
+            if (!m_spell->check(word)) m_stc->IndicatorFillRange(wpos, w.len);
+        }
+    }
+    void toggleSpellCheck()
+    {
+        if (!m_spell) m_spell = wxn::spell::makeEngine(spellLangArg(), (wxn::spell::Backend)m_spellBackend);
+        if (!m_spell || !m_spell->available()) {
+            m_spellOn = false;
+            if (auto* mb = menuBar()) mb->Check(myID_SPELLCHECK, false);
+            setStatus(0, _("Spell check is not available on this system"));
+            return;
+        }
+        m_spellOn = !m_spellOn;
+        if (auto* mb = menuBar()) mb->Check(myID_SPELLCHECK, m_spellOn);
+        if (m_spellOn) {
+            defineSpellIndicator(m_stc);
+            bindSpellRecheck();
+            m_spellLastFirst = m_spellLastLen = -1;
+            checkVisibleSpelling();
+            setStatus(0, _("Spell check: ON"));
+        } else {
+            if (m_stc) { m_stc->SetIndicatorCurrent(SPELL_INDIC); m_stc->IndicatorClearRange(0, m_stc->GetTextLength()); }
+            setStatus(0, _("Spell check: OFF"));
+        }
+    }
+
+    // ---- View ▸ Spell Check submenu: dynamic Dictionary list + the two toggle states -------------------
+    std::vector<std::string> m_spellDicts;   // installed dictionary basenames, index-aligned with the radio ids
+
+    wxString spellDictLabel(const std::string& base) const {
+        wxString tag = wxString::FromUTF8(base.c_str()); tag.Replace("_", "-");   // "en_US" -> "en-US"
+        if (const wxLanguageInfo* li = wxLocale::FindLanguageInfo(tag)) return li->Description + " (" + tag + ")";
+        return tag;
+    }
+    // Sync the Enable + "comments only" check states and (re)build the installed-dictionary radio list at the
+    // bottom of the Spell Check submenu. Call after settings load and whenever the installed dictionaries change.
+    void refreshSpellMenu() {
+        auto* mb = menuBar(); if (!mb) return;
+        if (auto* it = mb->FindItem(myID_SPELLCHECK))         it->Check(m_spellOn);
+        if (auto* it = mb->FindItem(myID_SPELL_COMMENTSONLY)) it->Check(m_spellCommentsOnly);
+        wxMenu* sub = nullptr; mb->FindItem(myID_SPELLCHECK, &sub); if (!sub) return;
+        for (int i = 0; i < 32; ++i) if (wxMenuItem* it = sub->FindItem(myID_SPELL_DICT_BASE + i)) sub->Destroy(it);
+        m_spellDicts = wxn::spell::listDictionaries();
+        for (size_t i = 0; i < m_spellDicts.size() && i < 32; ++i) {
+            wxMenuItem* it = sub->AppendRadioItem(myID_SPELL_DICT_BASE + (int)i, spellDictLabel(m_spellDicts[i]));
+            if (it && m_spellDicts[i] == m_spellDict) it->Check();
+        }
+    }
+    // Drop the cached engine and, if spell-check is on, rebuild it with the current dictionary + backend and
+    // re-check live - or turn spell-check off if the new combination has no usable dictionary.
+    void rebuildSpellEngineLive() {
+        m_spell.reset();
+        if (!m_spellOn) return;
+        m_spell = wxn::spell::makeEngine(spellLangArg(), (wxn::spell::Backend)m_spellBackend);
+        if (m_spell && m_spell->available()) { m_spellLastFirst = m_spellLastLen = -1; checkVisibleSpelling(); return; }
+        m_spellOn = false;
+        if (auto* mb = menuBar()) mb->Check(myID_SPELLCHECK, false);
+        if (m_stc) { m_stc->SetIndicatorCurrent(SPELL_INDIC); m_stc->IndicatorClearRange(0, m_stc->GetTextLength()); }
+        setStatus(0, _("Spell check is not available on this system"));
+    }
+    void selectSpellDict(int index) {
+        if (index < 0 || index >= (int)m_spellDicts.size() || m_spellDicts[index] == m_spellDict) return;
+        m_spellDict = m_spellDicts[index];
+        saveSettings();
+        rebuildSpellEngineLive();
+    }
+    void toggleSpellCommentsOnly() {
+        m_spellCommentsOnly = !m_spellCommentsOnly;
+        if (auto* mb = menuBar()) mb->Check(myID_SPELL_COMMENTSONLY, m_spellCommentsOnly);
+        saveSettings();
+        if (m_spellOn) { m_spellLastFirst = m_spellLastLen = -1; checkVisibleSpelling(); }
+    }
+
+    // ---- Preferences ▸ Spell Check: import / download dictionaries into <userDataDir>/dictionaries -----
+    wxString spellDictsDir() {
+        const wxString dir = userDataDir() + wxFILE_SEP_PATH + "dictionaries";
+        wxLogNull noLog; if (!wxDirExists(dir)) wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        return dir;
+    }
+    // Synchronous HTTP GET saving the body to destPath; true on HTTP 200 + saved. (First HTTP in the app.)
+    bool httpDownloadFile(const wxString& url, const wxString& destPath) {
+        wxWebRequestSync req = wxWebSessionSync::GetDefault().CreateRequest(url);
+        if (!req.IsOk()) return false;
+        // Storage_Memory (the default) keeps the body in RAM (dictionaries are ~1 MB) and streams it straight
+        // to the file - so wxWebRequest never creates a temp file it might later fail to delete (error 32 ->
+        // a wxLog error dialog, as Storage_File did).
+        const wxWebRequestBase::Result r = req.Execute();
+        if (r.state != wxWebRequestBase::State_Completed || req.GetResponse().GetStatus() != 200) return false;
+        wxInputStream* in = req.GetResponse().GetStream();
+        if (!in) return false;
+        wxLogNull noLog;
+        wxFileOutputStream out(destPath);
+        if (!out.IsOk()) return false;
+        out.Write(*in);
+        return out.IsOk();
+    }
+    wxString httpGetText(const wxString& url) {
+        wxWebRequestSync req = wxWebSessionSync::GetDefault().CreateRequest(url);
+        if (!req.IsOk()) return wxString();
+        const wxWebRequestBase::Result r = req.Execute();
+        if (r.state != wxWebRequestBase::State_Completed || req.GetResponse().GetStatus() != 200) return wxString();
+        return req.GetResponse().AsString();
+    }
+    // "Add from file..." - copy a chosen .aff + its sibling .dic into the user dictionaries dir; true if added.
+    bool importSpellDictionary(wxWindow* parent) {
+        wxFileDialog fd(parent, _("Select a dictionary affix file"), "", "",
+                        _("Hunspell affix file (*.aff)|*.aff"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (fd.ShowModal() != wxID_OK) return false;
+        const wxString aff = fd.GetPath();
+        const wxString dic = aff.BeforeLast('.') + ".dic";
+        if (!wxFileExists(dic)) {
+            wxMessageBox(_("The matching .dic file must be next to the .aff file (with the same name)."),
+                         _("Add dictionary"), wxOK | wxICON_WARNING, parent);
+            return false;
+        }
+        const wxString base = wxFileNameFromPath(aff).BeforeLast('.');   // "en_GB.aff" -> "en_GB"
+        const wxString dir = spellDictsDir();
+        wxLogNull noLog;
+        const bool ok = wxCopyFile(aff, dir + wxFILE_SEP_PATH + base + ".aff", true) &&
+                        wxCopyFile(dic, dir + wxFILE_SEP_PATH + base + ".dic", true);
+        if (!ok) wxMessageBox(_("Could not copy the dictionary into your user data folder."),
+                              _("Add dictionary"), wxOK | wxICON_ERROR, parent);
+        return ok;
+    }
+    // "Download..." - fetch a language's dictionary from wooorm/dictionaries (index.aff/.dic + its license).
+    bool downloadSpellDictionary(wxWindow* parent) {
+        // wooorm folder names (hyphenated); saved on disk with underscores so makeHunspellEngine finds them.
+        static const char* kLangs[] = { "en","en-GB","en-AU","en-CA","de","de-AT","fr","es","es-MX",
+                                        "it","pt","pt-PT","ru","pl","nl","sv","cs","uk" };
+        wxArrayString choices;
+        for (const char* l : kLangs) choices.Add(spellDictLabel(std::string(l)));
+        wxSingleChoiceDialog pick(parent, _("Choose a language to download:"), _("Download dictionary"), choices);
+        if (pick.ShowModal() != wxID_OK) return false;
+        const wxString lang = wxString::FromUTF8(kLangs[pick.GetSelection()]);       // "en-GB"
+        wxString base = lang; base.Replace("-", "_");                                // "en_GB"
+        const wxString baseUrl = "https://raw.githubusercontent.com/wooorm/dictionaries/main/dictionaries/" + lang + "/";
+        wxBusyCursor busy;
+        // License first (it varies per language - some are GPL): show it and require the user to accept.
+        const wxString license = httpGetText(baseUrl + "license");
+        if (!license.empty()) {
+            wxString shown = license.Left(2000); if (license.length() > 2000) shown += "\n...";
+            if (wxMessageBox(_("This dictionary is provided under the following license:\n\n") + shown +
+                             _("\n\nDownload and install it?"), _("Download dictionary"),
+                             wxYES_NO | wxICON_INFORMATION, parent) != wxYES) return false;
+        }
+        const wxString dir = spellDictsDir();
+        const bool ok = httpDownloadFile(baseUrl + "index.aff", dir + wxFILE_SEP_PATH + base + ".aff") &&
+                        httpDownloadFile(baseUrl + "index.dic", dir + wxFILE_SEP_PATH + base + ".dic");
+        if (ok && !license.empty()) {   // keep the license alongside the dictionary for attribution
+            wxLogNull noLog; wxFile lf;
+            if (lf.Open(dir + wxFILE_SEP_PATH + base + "_README.txt", wxFile::write))
+                { const wxScopedCharBuffer u = license.utf8_str(); lf.Write(u.data(), u.length()); }
+        }
+        if (!ok) wxMessageBox(_("Download failed. Check your internet connection and try again."),
+                              _("Download dictionary"), wxOK | wxICON_ERROR, parent);
+        return ok;
+    }
+
+    // ---- right-click on a misspelled word: suggestions + Add to Dictionary + Ignore ----
+    std::vector<std::string> m_spellIgnore;                 // session-only "ignore this word" list
+    std::vector<std::string> m_spellCtxSug;                 // suggestions for the word under the last right-click
+    wxStyledTextCtrl* m_spellCtxStc = nullptr;
+    int m_spellCtxStart = -1, m_spellCtxEnd = -1;
+    std::string m_spellCtxWord;
+
+    // If `docPos` sits on a misspelled (SPELL_INDIC) word, prepend suggestions + Add/Ignore to `menu` and
+    // return true. Called from showEditorContext before the normal items.
+    bool addSpellContext(wxMenu& menu, int docPos)
+    {
+        if (!m_spellOn || !m_spell || !m_stc || docPos < 0) return false;
+        if (m_stc->IndicatorValueAt(SPELL_INDIC, docPos) == 0) return false;
+        const int start = (int)m_stc->IndicatorStart(SPELL_INDIC, docPos);
+        const int end   = (int)m_stc->IndicatorEnd(SPELL_INDIC, docPos);
+        if (end <= start) return false;
+        m_spellCtxStc = m_stc; m_spellCtxStart = start; m_spellCtxEnd = end;
+        m_spellCtxWord = std::string(m_stc->GetTextRange(start, end).utf8_str());
+        m_spellCtxSug  = m_spell->suggest(m_spellCtxWord);
+        if (m_spellCtxSug.empty())
+            menu.Append(wxID_ANY, _("(no spelling suggestions)"))->Enable(false);
+        else {
+            int i = 0;
+            for (const std::string& s : m_spellCtxSug) { if (i >= 9) break; menu.Append(myID_SPELL_SUGGEST_BASE + i, wxString::FromUTF8(s.data(), s.size())); ++i; }
+        }
+        menu.AppendSeparator();
+        menu.Append(myID_SPELL_ADD, _("Add to Dictionary"));
+        menu.Append(myID_SPELL_IGNORE, _("Ignore"));
+        menu.AppendSeparator();
+        return true;
+    }
+    void applySpellSuggestion(int index)
+    {
+        if (!m_spellCtxStc || index < 0 || index >= (int)m_spellCtxSug.size()) return;
+        if (m_spellCtxStc->GetReadOnly()) { setStatus(0, _("This document is read-only")); return; }
+        m_spellCtxStc->SetTargetStart(m_spellCtxStart);
+        m_spellCtxStc->SetTargetEnd(m_spellCtxEnd);
+        const wxString rep = wxString::FromUTF8(m_spellCtxSug[index].data(), m_spellCtxSug[index].size());
+        m_spellCtxStc->ReplaceTarget(rep);
+        m_spellLastFirst = m_spellLastLen = -1;
+        checkVisibleSpelling();
+    }
+    void spellAddWord()
+    {
+        if (m_spell && !m_spellCtxWord.empty()) m_spell->add(m_spellCtxWord);
+        m_spellLastFirst = m_spellLastLen = -1; checkVisibleSpelling();
+    }
+    void spellIgnoreWord()
+    {
+        if (!m_spellCtxWord.empty() && std::find(m_spellIgnore.begin(), m_spellIgnore.end(), m_spellCtxWord) == m_spellIgnore.end())
+            m_spellIgnore.push_back(m_spellCtxWord);
+        m_spellLastFirst = m_spellLastLen = -1; checkVisibleSpelling();
+    }
+    // Paste Special: the selection's raw bytes (embedded nulls and all - getSelUtf8() preserves them via a
+    // known length, not strlen) round-tripped through a private clipboard format, plus plain UTF-8 text so
+    // pasting into another app still gets ordinary text.
+    // Windows uses plain Win32 SetClipboardData (immediate rendering) instead of wx's wxDataObject/OLE path:
+    // that path uses delayed rendering for custom formats and a same-process write-then-read-back never saw
+    // the format as available (IsSupported() false right after our own SetData()). Off Windows the wx
+    // clipboards (GTK selections / NSPasteboard) service a same-process request directly, so a portable
+    // wxCustomDataObject round-trips fine there with no raw platform code.
 #ifdef __WXMSW__
     static UINT cfBinary() { static UINT cf = ::RegisterClipboardFormatW(L"wxNoteBinary"); return cf; }
+#else
+    // Reverse-DNS name so macOS's UTI sanitizer leaves it intact; the identical string is used by copy+paste.
+    static wxDataFormat binaryClipFormat() { return wxDataFormat(wxString::FromUTF8("org.wxnote.binary")); }
 #endif
     void copyCutBinary(bool cut)
     {
-#ifdef __WXMSW__
         const std::string data = getSelUtf8();
         if (data.empty()) return;
+#ifdef __WXMSW__
         if (::OpenClipboard(GetHwnd()))
         {
             ::EmptyClipboard();
@@ -7848,10 +8435,21 @@ private:
             }
             ::CloseClipboard();
         }
-        if (cut) sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(""));
 #else
-        (void)cut; notImpl(_("Binary Clipboard (Windows only)"));
+        if (wxTheClipboard->Open())
+        {
+            // Composite: our private exact-bytes format (round-trip) + plain UTF-8 text (for other apps).
+            // wxCustomDataObject records the exact byte count, so no [length] framing is needed off Windows.
+            auto* comp = new wxDataObjectComposite;
+            auto* bin  = new wxCustomDataObject(binaryClipFormat());
+            bin->SetData(data.size(), data.data());
+            comp->Add(bin, /*preferred*/ true);
+            comp->Add(new wxTextDataObject(wxString::FromUTF8(data.data(), data.size())));
+            wxTheClipboard->SetData(comp);   // clipboard takes ownership of comp and its children
+            wxTheClipboard->Close();
+        }
 #endif
+        if (cut) sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(""));
     }
     void pasteBinary()
     {
@@ -7870,31 +8468,263 @@ private:
         }
         ::CloseClipboard();
 #else
-        notImpl(_("Paste Binary Content (Windows only)"));
+        if (!wxTheClipboard->Open()) return;
+        if (wxTheClipboard->IsSupported(binaryClipFormat()))
+        {
+            wxCustomDataObject obj(binaryClipFormat());
+            if (wxTheClipboard->GetData(obj) && obj.GetData())
+            {
+                sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(""));
+                sci(SCI_ADDTEXT, (uptr_t)obj.GetSize(), reinterpret_cast<sptr_t>(obj.GetData()));
+            }
+        }
+        else notImpl(_("Paste Binary Content (clipboard has no matching content)"));
+        wxTheClipboard->Close();
 #endif
     }
-    // Paste HTML/RTF Content: the raw markup source apps register when copying rich content ("HTML Format" /
-    // "Rich Text Format" are real Windows clipboard format NAMES, e.g. what a browser or Word puts there) -
-    // inserted as literal text, not rendered. Both are conventionally null-terminated, unlike our own binary format.
-    void pasteRichFormat(const wxString& formatName)
+    // Paste HTML/RTF Content: pull the markup SOURCE another app placed on the clipboard (what a browser or
+    // Word registers when copying rich content) and insert it as literal text, not rendered. Cross-platform:
+    // HTML rides wx's built-in wxDF_HTML, which wx maps per platform ("HTML Format"/text/html/public.html) and
+    // on Windows strips the CF_HTML "Version:/StartFragment:" header for us, so every platform gets the clean
+    // fragment. RTF has no wx built-in (there is no wxDF_RTF), so it stays a named custom format whose
+    // clipboard name differs per OS.
+    void insertClipMarkup(const char* p, size_t n)
     {
-#ifdef __WXMSW__
-        wxDataFormat fmt(formatName);
+        if (!p) return;
+        n = strnlen(p, n);   // NUL-terminated on Windows, exact-size elsewhere; markup never holds embedded NULs
+        sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(""));
+        sci(SCI_ADDTEXT, (uptr_t)n, reinterpret_cast<sptr_t>(p));
+    }
+    void noMatchingClipContent() { wxMessageBox(_("Clipboard has no matching content."), _("Paste"), wxOK | wxICON_INFORMATION, this); }
+    void pasteHtmlContent()
+    {
         if (!wxTheClipboard->Open()) return;
-        if (wxTheClipboard->IsSupported(fmt))
+        if (wxTheClipboard->IsSupported(wxDF_HTML))
         {
-            wxCustomDataObject obj(fmt);
+            wxHTMLDataObject obj;
             wxTheClipboard->GetData(obj);
-            const char* p = static_cast<const char*>(obj.GetData());
-            const size_t n = strnlen(p, obj.GetSize());
-            sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(""));
-            sci(SCI_ADDTEXT, (uptr_t)n, reinterpret_cast<sptr_t>(p));
+            const wxString html = obj.GetHTML();   // keep alive: utf8_str() may reference it in UTF8 builds
+            const wxScopedCharBuffer utf8 = html.utf8_str();
+            insertClipMarkup(utf8.data(), utf8.length());
         }
-        else wxMessageBox(_("Clipboard has no matching content."), _("Paste"), wxOK | wxICON_INFORMATION, this);
+        else noMatchingClipContent();
         wxTheClipboard->Close();
+    }
+    void pasteRtfContent()
+    {
+        // No portable wxDF_RTF, so the clipboard format name is per-OS. Probe the conventional name(s) for
+        // this platform (GTK apps split between text/rtf and application/rtf, so try both).
+#if defined(__WXMSW__)
+        static const char* const kRtfNames[] = { "Rich Text Format" };
+#elif defined(__WXMAC__)
+        static const char* const kRtfNames[] = { "public.rtf" };
 #else
-        notImpl(wxString::Format(_("Paste %s (Windows only)"), formatName));
+        static const char* const kRtfNames[] = { "text/rtf", "application/rtf" };
 #endif
+        if (!wxTheClipboard->Open()) return;
+        bool pasted = false;
+        for (const char* name : kRtfNames)
+        {
+            wxDataFormat fmt(wxString::FromUTF8(name));
+            if (!wxTheClipboard->IsSupported(fmt)) continue;
+            wxCustomDataObject obj(fmt);
+            if (wxTheClipboard->GetData(obj)) { insertClipMarkup(static_cast<const char*>(obj.GetData()), obj.GetSize()); pasted = true; break; }
+        }
+        if (!pasted) noMatchingClipContent();
+        wxTheClipboard->Close();
+    }
+    // ---- Copy as HTML / RTF: export the selection (or whole document) as syntax-highlighted markup ----
+    // No wx serializer exists, so we render the markup from Scintilla's per-character styling. Both write
+    // through wxClipboard on every platform: unlike our private binary format, the OLE delayed-rendering
+    // caveat only bit a same-process read-BACK - another app pasting our HTML/RTF is an ordinary cross-
+    // process request. wxHTMLDataObject wraps the platform HTML clipboard format for us (incl. Windows'
+    // CF_HTML header), so the HTML lands correctly in Word/browsers/mail.
+    struct ExpStyle { int fore = 0, back = 0xFFFFFF, size = 10; bool bold = false, italic = false, underline = false; std::string font; };
+    ExpStyle readExpStyle(int s)
+    {
+        ExpStyle e;
+        e.fore = (int)sci(SCI_STYLEGETFORE, s);
+        e.back = (int)sci(SCI_STYLEGETBACK, s);
+        e.bold = sci(SCI_STYLEGETBOLD, s) != 0;
+        e.italic = sci(SCI_STYLEGETITALIC, s) != 0;
+        e.underline = sci(SCI_STYLEGETUNDERLINE, s) != 0;
+        e.size = (int)sci(SCI_STYLEGETSIZE, s);
+        const int fl = (int)sci(SCI_STYLEGETFONT, s, 0);
+        std::string f((size_t)(fl > 0 ? fl : 0) + 1, '\0');
+        if (fl > 0) sci(SCI_STYLEGETFONT, s, reinterpret_cast<sptr_t>(&f[0]));
+        f.resize(strlen(f.c_str()));
+        e.font = f.empty() ? std::string("monospace") : f;
+        return e;
+    }
+    // The byte ranges to export, in document order: every non-empty selection (so column/rectangular and
+    // multi-caret selections each contribute their real sub-ranges), else the whole document. Returning
+    // ranges - not one (start,end) - is what keeps GETSTYLEAT aligned with the emitted bytes for disjoint
+    // selections (GETSELTEXT concatenates the spans but GETSELECTIONSTART/END span the unselected gaps).
+    std::vector<std::pair<int,int>> exportRanges()
+    {
+        std::vector<std::pair<int,int>> r;
+        const int nsel = (int)sci(SCI_GETSELECTIONS);
+        for (int n = 0; n < nsel; ++n) { const int s = (int)sci(SCI_GETSELECTIONNSTART, n), e = (int)sci(SCI_GETSELECTIONNEND, n); if (s < e) r.push_back(std::make_pair(s, e)); }
+        std::sort(r.begin(), r.end());
+        if (r.empty()) { const int len = (int)sci(SCI_GETLENGTH); if (len > 0) r.push_back(std::make_pair(0, len)); }
+        return r;
+    }
+    // Read [s,e) into parallel bytes[]/styles[] (same length), with EOLs normalized to '\n' - so a \r\n or
+    // a lone \r can never straddle a style-run boundary and double up a line break.
+    void fetchStyledRun(int s, int e, std::string& bytes, std::vector<unsigned char>& styles)
+    {
+        for (int p = s; p < e; ++p)
+        {
+            const unsigned char c = (unsigned char)sci(SCI_GETCHARAT, p);
+            const unsigned char st = (unsigned char)sci(SCI_GETSTYLEAT, p);
+            if (c == '\r') { bytes += '\n'; styles.push_back(st); if (p + 1 < e && (unsigned char)sci(SCI_GETCHARAT, p + 1) == '\n') ++p; }
+            else { bytes += (char)c; styles.push_back(st); }
+        }
+    }
+    static std::string hexColour(int c)   // Scintilla colour is 0x00BBGGRR
+    {
+        static const char* const H = "0123456789ABCDEF";
+        const int r = c & 0xFF, g = (c >> 8) & 0xFF, bl = (c >> 16) & 0xFF;
+        std::string s = "#";
+        s += H[(r >> 4) & 0xF]; s += H[r & 0xF];
+        s += H[(g >> 4) & 0xF]; s += H[g & 0xF];
+        s += H[(bl >> 4) & 0xF]; s += H[bl & 0xF];
+        return s;
+    }
+    static wxDataFormat rtfClipFormat()
+    {
+#if defined(__WXMSW__)
+        return wxDataFormat(wxString::FromUTF8("Rich Text Format"));
+#elif defined(__WXMAC__)
+        return wxDataFormat(wxString::FromUTF8("public.rtf"));
+#else
+        return wxDataFormat(wxString::FromUTF8("text/rtf"));
+#endif
+    }
+    void copyAsHtml()
+    {
+        const auto ranges = exportRanges();
+        if (ranges.empty()) return;
+        std::vector<ExpStyle> sc(256); std::vector<char> got(256, 0);
+        auto styleOf = [&](int s) -> const ExpStyle& { if (s < 0 || s > 255) s = STYLE_DEFAULT; if (!got[s]) { sc[s] = readExpStyle(s); got[s] = 1; } return sc[s]; };
+        const ExpStyle def = styleOf(STYLE_DEFAULT);
+        std::string html = "<pre style=\"font-family:'" + def.font + "'; font-size:" + std::to_string(def.size)
+                         + "pt; color:" + hexColour(def.fore) + "; background-color:" + hexColour(def.back) + ";\">";
+        std::string plain;
+        for (size_t ri = 0; ri < ranges.size(); ++ri)
+        {
+            if (ri) { html += '\n'; plain += '\n'; }   // separate disjoint (e.g. column) selections
+            std::string bytes; std::vector<unsigned char> styles;
+            fetchStyledRun(ranges[ri].first, ranges[ri].second, bytes, styles);
+            plain += bytes;
+            for (size_t i = 0; i < bytes.size(); )
+            {
+                const int st = styles[i];
+                size_t j = i + 1;
+                while (j < bytes.size() && styles[j] == st) ++j;
+                const ExpStyle& e = styleOf(st);
+                html += "<span style=\"color:" + hexColour(e.fore) + ";";
+                if (e.back != def.back) html += "background-color:" + hexColour(e.back) + ";";
+                if (e.bold) html += "font-weight:bold;";
+                if (e.italic) html += "font-style:italic;";
+                if (e.underline) html += "text-decoration:underline;";
+                html += "\">";
+                for (size_t k = i; k < j; ++k)
+                {
+                    const char c = bytes[k];
+                    if (c == '&') html += "&amp;";
+                    else if (c == '<') html += "&lt;";
+                    else if (c == '>') html += "&gt;";
+                    else html += c;   // '\n' kept (a line break inside <pre>); '\r' was normalized away
+                }
+                html += "</span>";
+                i = j;
+            }
+        }
+        html += "</pre>";
+        if (wxTheClipboard->Open())
+        {
+            auto* comp = new wxDataObjectComposite;
+            comp->Add(new wxHTMLDataObject(wxString::FromUTF8(html)), /*preferred*/ true);
+            comp->Add(new wxTextDataObject(wxString::FromUTF8(plain.data(), plain.size())));
+            wxTheClipboard->SetData(comp);
+            wxTheClipboard->Close();
+        }
+    }
+    // RTF byte-escaping: brace/backslash escaped, tab/newline -> \tab/\par, non-ASCII -> \uN? escapes.
+    static void appendRtfEscaped(std::string& out, const std::string& text, size_t i, size_t j)
+    {
+        auto emit = [&](unsigned u) { out += "\\u" + std::to_string(u <= 0x7FFFu ? (int)u : (int)u - 0x10000) + "?"; };
+        for (size_t k = i; k < j; )
+        {
+            const unsigned char c = (unsigned char)text[k];
+            if (c == '\\' || c == '{' || c == '}') { out += '\\'; out += (char)c; ++k; }
+            else if (c == '\t') { out += "\\tab "; ++k; }
+            else if (c == '\n') { out += "\\par\n"; ++k; }   // '\r' is normalized to '\n' in fetchStyledRun
+            else if (c < 0x80) { out += (char)c; ++k; }
+            else
+            {
+                unsigned cp = 0; int extra = 0;
+                if ((c & 0xE0) == 0xC0) { cp = c & 0x1Fu; extra = 1; }
+                else if ((c & 0xF0) == 0xE0) { cp = c & 0x0Fu; extra = 2; }
+                else if ((c & 0xF8) == 0xF0) { cp = c & 0x07u; extra = 3; }
+                else { ++k; continue; }   // invalid lead byte
+                size_t kk = k + 1; bool ok = true;
+                for (int t = 0; t < extra; ++t) { if (kk >= j || ((unsigned char)text[kk] & 0xC0) != 0x80) { ok = false; break; } cp = (cp << 6) | ((unsigned char)text[kk] & 0x3Fu); ++kk; }
+                if (!ok) { ++k; continue; }
+                if (cp <= 0xFFFF) emit(cp);
+                else { cp -= 0x10000; emit(0xD800u + (cp >> 10)); emit(0xDC00u + (cp & 0x3FFu)); }
+                k = kk;
+            }
+        }
+    }
+    void copyAsRtf()
+    {
+        const auto ranges = exportRanges();
+        if (ranges.empty()) return;
+        std::vector<ExpStyle> sc(256); std::vector<char> got(256, 0);
+        auto styleOf = [&](int s) -> const ExpStyle& { if (s < 0 || s > 255) s = STYLE_DEFAULT; if (!got[s]) { sc[s] = readExpStyle(s); got[s] = 1; } return sc[s]; };
+        const ExpStyle def = styleOf(STYLE_DEFAULT);
+        std::vector<int> colours;                          // 1-based colour table (0 = default/auto)
+        auto colourId = [&](int c) { for (size_t n = 0; n < colours.size(); ++n) if (colours[n] == c) return (int)n + 1; colours.push_back(c); return (int)colours.size(); };
+        std::string body, plain;
+        for (size_t ri = 0; ri < ranges.size(); ++ri)
+        {
+            if (ri) { body += "\\par\n"; plain += '\n'; }   // separate disjoint (e.g. column) selections
+            std::string bytes; std::vector<unsigned char> styles;
+            fetchStyledRun(ranges[ri].first, ranges[ri].second, bytes, styles);
+            plain += bytes;
+            for (size_t i = 0; i < bytes.size(); )
+            {
+                const int st = styles[i];
+                size_t j = i + 1;
+                while (j < bytes.size() && styles[j] == st) ++j;
+                const ExpStyle& e = styleOf(st);
+                body += "\\cf" + std::to_string(colourId(e.fore)) + "\\highlight" + std::to_string(colourId(e.back));
+                if (e.bold) body += "\\b";
+                if (e.italic) body += "\\i";
+                if (e.underline) body += "\\ul";
+                body += " ";
+                appendRtfEscaped(body, bytes, i, j);
+                if (e.underline) body += "\\ul0";
+                if (e.italic) body += "\\i0";
+                if (e.bold) body += "\\b0";
+                i = j;
+            }
+        }
+        std::string rtf = "{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0\\fnil\\fcharset0 " + def.font + ";}}{\\colortbl;";
+        for (int c : colours) rtf += "\\red" + std::to_string(c & 0xFF) + "\\green" + std::to_string((c >> 8) & 0xFF) + "\\blue" + std::to_string((c >> 16) & 0xFF) + ";";
+        rtf += "}\n\\f0\\fs" + std::to_string(def.size * 2) + " " + body + "}";
+        if (wxTheClipboard->Open())
+        {
+            auto* comp = new wxDataObjectComposite;
+            auto* r = new wxCustomDataObject(rtfClipFormat());
+            r->SetData(rtf.size(), rtf.data());
+            comp->Add(r, /*preferred*/ true);
+            comp->Add(new wxTextDataObject(wxString::FromUTF8(plain.data(), plain.size())));
+            wxTheClipboard->SetData(comp);
+            wxTheClipboard->Close();
+        }
     }
     wxString allOpenPaths(bool namesOnly)
     {
@@ -8096,7 +8926,19 @@ private:
         setStatus(0, ro ? _("File attribute: Read-Only") : _("File attribute: Read/Write"));
         nibFireDocEvent(NIB_EV_READONLY_CHANGED, activePage());   // -> NPPN_READONLYCHANGED
 #else
-        notImpl(_("Read-Only Attribute (Windows only)"));
+        // POSIX equivalent of the DOS read-only attribute: toggle the write permission bits. Read-only =
+        // no write bit set; toggling clears all write bits (owner/group/other) or restores the owner's.
+        const wxCharBuffer cp = p.fn_str();
+        struct stat st;
+        if (::stat(cp, &st) != 0) return;
+        const bool wasRo = (st.st_mode & S_IWUSR) == 0;
+        const mode_t nm = wasRo ? (st.st_mode | S_IWUSR)
+                                : (st.st_mode & ~(mode_t)(S_IWUSR | S_IWGRP | S_IWOTH));
+        if (::chmod(cp, nm) != 0) return;
+        const bool ro = !wasRo;
+        sci(SCI_SETREADONLY, ro ? 1 : 0);
+        setStatus(0, ro ? _("File attribute: Read-Only") : _("File attribute: Read/Write"));
+        nibFireDocEvent(NIB_EV_READONLY_CHANGED, activePage());   // -> NPPN_READONLYCHANGED
 #endif
     }
     // Only one Scintilla view is shared across a tab strip's pages (see buildView) - peek every other
@@ -8243,13 +9085,17 @@ private:
     // ---- view ----
     void toggleAlwaysOnTop()
     {
-#ifdef __WXMSW__
         m_onTop = !m_onTop;
+#ifdef __WXMSW__
+        // Keep the raw Win32 path on Windows: it composes cleanly with the borderless/integrated frame.
         SetWindowPos(static_cast<HWND>(GetHandle()), m_onTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        setStatus(0, m_onTop ? _("Always on Top: ON") : _("Always on Top: OFF"));
 #else
-        notImpl(_("Always on Top (Windows only)"));
+        // Portable everywhere else: toggle the wxSTAY_ON_TOP top-level style (GTK window hint / NSWindow level).
+        long style = GetWindowStyleFlag();
+        if (m_onTop) style |= wxSTAY_ON_TOP; else style &= ~wxSTAY_ON_TOP;
+        SetWindowStyleFlag(style);
 #endif
+        setStatus(0, m_onTop ? _("Always on Top: ON") : _("Always on Top: OFF"));
     }
     void toggleWrapSymbol() { sci(SCI_SETWRAPVISUALFLAGS, sci(SCI_GETWRAPVISUALFLAGS) ? SC_WRAPVISUALFLAG_NONE : SC_WRAPVISUALFLAG_END); }
     void hideSelectedLines() { const int a = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONSTART)), b = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONEND)); sci(SCI_HIDELINES, a, b); }
@@ -8283,43 +9129,24 @@ private:
     }
 
     // ---- Tools: MD5 / SHA digests ----
-#ifdef __WXMSW__
-    // Hex digest of a raw byte buffer via CNG (BCrypt) - shared by hashSelection (selection/doc text) and
-    // hashFiles (raw file bytes, so non-UTF8 files hash correctly instead of being re-encoded first).
-    wxString hashBytes(const wchar_t* algo, const void* data, size_t size)
+    // Hex digest of a raw byte buffer via the portable engine (src/hash_algos.h) - shared by hashSelection
+    // (selection/doc text) and hashFiles (raw file bytes, so non-UTF8 files hash correctly instead of being
+    // re-encoded first). One code path on every platform (the old Win32 BCrypt fork is gone).
+    wxString hashBytes(wxn::hash::Algo algo, const void* data, size_t size)
     {
-        wxString hex; BCRYPT_ALG_HANDLE alg = nullptr; BCRYPT_HASH_HANDLE h = nullptr; DWORD len = 0, res = 0;
-        if (BCryptOpenAlgorithmProvider(&alg, algo, nullptr, 0) == 0)
-        {
-            BCryptGetProperty(alg, BCRYPT_HASH_LENGTH, reinterpret_cast<PUCHAR>(&len), sizeof(len), &res, 0);
-            if (BCryptCreateHash(alg, &h, nullptr, 0, nullptr, 0, 0) == 0)
-            {
-                BCryptHashData(h, reinterpret_cast<PUCHAR>(const_cast<void*>(data)), (ULONG)size, 0);
-                std::vector<unsigned char> dig(len); BCryptFinishHash(h, dig.data(), len, 0);
-                for (unsigned char c : dig) hex += wxString::Format("%02x", c);
-                BCryptDestroyHash(h);
-            }
-            BCryptCloseAlgorithmProvider(alg, 0);
-        }
-        return hex;
+        return wxString::FromAscii(wxn::hash::hexDigest(algo, data, size).c_str());
     }
-#endif
-    void hashSelection(const wchar_t* algo, const char* name, bool toClip)
+    void hashSelection(wxn::hash::Algo algo, const char* name, bool toClip)
     {
-#ifdef __WXMSW__
         std::string data = getSelUtf8(); if (data.empty()) data = getDocUtf8();
         const wxString hex = hashBytes(algo, data.data(), data.size());
         if (toClip) { copyToClip(hex); setStatus(0, wxString::Format(_("%s copied to clipboard"), name)); }
         else themedInfo(hex, wxString::Format(_("%s digest"), name));
-#else
-        (void)algo; (void)toClip; notImpl(wxString::Format(_("%s (Windows only)"), name));
-#endif
     }
     // Tools > <algo> > Generate from files...: hash each picked file's raw bytes (not its
     // wxSTC/UTF-8 text, so this matches externally-computed digests for any file, text or binary).
-    void hashFiles(const wchar_t* algo, const char* name)
+    void hashFiles(wxn::hash::Algo algo, const char* name)
     {
-#ifdef __WXMSW__
         wxFileDialog dlg(this, wxString::Format(_("%s - generate from files"), name), wxEmptyString, wxEmptyString,
                           _("All files (*.*)|*.*"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
         if (dlg.ShowModal() != wxID_OK) return;
@@ -8335,9 +9162,6 @@ private:
             out += wxFileNameFromPath(p) + ":  " + hashBytes(algo, buf.data(), buf.size()) + "\n";
         }
         themedInfo(out, wxString::Format(_("%s digest"), name));
-#else
-        (void)algo; notImpl(wxString::Format(_("%s (Windows only)"), name));
-#endif
     }
     // Manually force a language on the active buffer (Language menu). ext "" forces Normal Text. The
     // choice sticks across tab switches via EditorPage::langForced (setLexerForFile honours it over the
@@ -9049,8 +9873,8 @@ private:
         // full inversion against a dark theme rather than a subtle "this margin stands out" accent.
         const long gcDefault = m_dark ? 0x3E3A3AL : 0xE8E8E8L;
         long gc = gcDefault; c->Read("Editing/GutterColourValue", &gc, gcDefault); m_gutterColorValue = gc;
-        long is = 0; c->Read("ToolbarIconStyle", &is, 0L);
-        m_iconStyle = (is < 0 || is > 3) ? 2 : (int)is;   // 0 = line icons, 1 = Solar, 2 = IconPark, 3 = Streamline; clamp anything out of range into IconPark so the Preferences combo's SetSelection stays valid (a stale "3 = IconPark Bold" (removed) value now lands on Streamline - still a colored pack)
+        long is = 1; c->Read("ToolbarIconStyle", &is, 1L);   // default 1 = Solar (green)
+        m_iconStyle = (is < 0 || is > 3) ? 2 : (int)is;   // 0 = line icons, 1 = Solar (default), 2 = IconPark, 3 = Streamline; clamp anything out of range into IconPark so the Preferences combo's SetSelection stays valid (a stale "3 = IconPark Bold" (removed) value now lands on Streamline - still a colored pack)
         long tis = 16; c->Read("ToolbarIconSize", &tis, 16L);
         m_toolbarIconSize = (tis < 12 || tis > 64) ? 16 : (int)tis;   // px; clamp garbage/out-of-range back to the 16 default
         long mr = 10; c->Read("RecentFiles/Max", &mr, 10L); m_maxRecent = (int)mr;
@@ -9082,6 +9906,9 @@ private:
         c->Read("Print/Header", &m_printHeader, wxEmptyString);
         c->Read("Print/Footer", &m_printFooter, wxEmptyString);
         long se = 0; c->Read("Editing/SearchEngine", &se, 0L); m_searchEngine = (int)se;
+        long sb = 1; c->Read("Editing/SpellBackend", &sb, 1L); m_spellBackend = (sb < 0 || sb > 2) ? 1 : (int)sb;  // 0=Native 1=Native+Hunspell 2=Hunspell
+        { wxString sd; c->Read("Editing/SpellDict", &sd, "en_US"); if (!sd.empty()) m_spellDict = std::string(sd.utf8_str()); }
+        c->Read("Editing/SpellCommentsOnly", &m_spellCommentsOnly, true);
         c->Read("Editing/FontFace", &m_fontFace, "Cascadia Mono");
         long wx_ = wxDefaultCoord, wy_ = wxDefaultCoord, ww = 1100, wh = 720;
         c->Read("Window/X", &wx_, (long)wxDefaultCoord); c->Read("Window/Y", &wy_, (long)wxDefaultCoord);
@@ -9116,6 +9943,9 @@ private:
         c->Write("Editing/CustomGutterColour", m_customGutterColor);
         c->Write("Editing/GutterColourValue", m_gutterColorValue);
         c->Write("Editing/FontFace", m_fontFace);
+        c->Write("Editing/SpellBackend", (long)m_spellBackend);
+        c->Write("Editing/SpellDict", wxString::FromUTF8(m_spellDict.c_str()));
+        c->Write("Editing/SpellCommentsOnly", m_spellCommentsOnly);
         // m_normalRect is kept live by the wxEVT_SIZE/MOVE binds in the constructor rather than read here
         // via GetSize()/GetPosition(): while the window IS currently maximized, those report the
         // maximized bounds, not what a later un-maximize should restore to.
@@ -9167,7 +9997,7 @@ private:
         dlg.ShowModal();
     }
 
-    void onPreferences()
+    void onPreferences(bool startAtSpell = false)
     {
         // Page layout: General / Editing / Indentation / Auto-Completion / Dark Mode
         // (the labels' wording is frozen - the .po catalogs key on these exact strings).
@@ -9289,7 +10119,7 @@ private:
         // JetBrains Mono exactly as it would for any other uninstalled/invalid font.
         const wxString kFontSep = wxString(wxUniChar(0x2500), 20);
         const wxArrayString kBundledFonts = [] {
-            wxArrayString a; a.Add("Cascadia Mono"); a.Add("JetBrains Mono"); return a; }();
+            wxArrayString a; a.Add("Cascadia Mono"); a.Add("JetBrains Mono"); a.Add("IBM Plex Mono"); a.Add("Hack"); a.Add("Iosevka Fixed"); return a; }();
         wxArrayString fontNames = kBundledFonts; fontNames.Add(kFontSep);
         { wxArrayString sysFonts = wxFontEnumerator::GetFacenames(); sysFonts.Sort();
           for (const wxString& f : sysFonts) if (kBundledFonts.Index(f) == wxNOT_FOUND) fontNames.Add(f); }
@@ -9329,6 +10159,20 @@ private:
         cbGutter->Bind(wxEVT_CHECKBOX, [gutterPick](wxCommandEvent& e) { gutterPick->Enable(e.IsChecked()); });
         grow->Add(cbGutter, 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 10); grow->Add(gutterPick, 0);
         es->Add(grow, 0, wxALL, 10);
+#if defined(__WXMSW__) || defined(__WXMAC__)
+        // Spell-check engine (Windows/macOS only - Linux has no native checker, so it always uses the
+        // bundled Hunspell there). Applies immediately, not restart-to-apply. See wxn::spell::Backend.
+        auto* sprow = new wxBoxSizer(wxHORIZONTAL);
+        sprow->Add(new wxStaticText(ed, wxID_ANY, _("Spell-check engine:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        wxArrayString spellBackends;
+        spellBackends.Add(_("System (OS spell checker)"));            // Backend::Native
+        spellBackends.Add(_("System, then bundled dictionary"));      // Backend::NativeThenHunspell (default)
+        spellBackends.Add(_("Bundled dictionary (Hunspell)"));        // Backend::Hunspell
+        auto* chSpell = new wxChoice(ed, wxID_ANY, wxDefaultPosition, wxDefaultSize, spellBackends);
+        chSpell->SetSelection((m_spellBackend >= 0 && m_spellBackend <= 2) ? m_spellBackend : 1);
+        sprow->Add(chSpell, 1, wxALIGN_CENTRE_VERTICAL);
+        es->Add(sprow, 0, wxEXPAND | wxALL, 10);
+#endif
         ed->SetSizer(es);
 
 
@@ -9409,6 +10253,31 @@ private:
         prHint->SetForegroundColour(m_dark ? wxColour(150, 150, 150) : wxColour(110, 110, 110));
         prs->Add(prHint, 0, wxALL, 10);
         pr->SetSizer(prs);
+
+        // ---- Spell Check page: manage installed Hunspell dictionaries (list + add-from-file + download) ----
+        auto* sp = pg(_("Spell Check")); auto* sps = new wxBoxSizer(wxVERTICAL);
+        const int spellPageIndex = (int)book->GetPageCount() - 1;   // "Manage dictionaries..." jumps here
+        sps->Add(new wxStaticText(sp, wxID_ANY, _("Installed dictionaries:")), 0, wxLEFT | wxRIGHT | wxTOP, 10);
+        auto* dictList = new wxListBox(sp, wxID_ANY);
+        sps->Add(dictList, 1, wxEXPAND | wxALL, 10);
+        auto fillDicts = [this, dictList]() {
+            dictList->Clear();
+            for (const std::string& b : wxn::spell::listDictionaries()) dictList->Append(spellDictLabel(b));
+        };
+        fillDicts();
+        auto* dbrow = new wxBoxSizer(wxHORIZONTAL);
+        auto* addDictBtn = new wxButton(sp, wxID_ANY, _("Add from file..."));
+        auto* dlDictBtn  = new wxButton(sp, wxID_ANY, _("Download..."));
+        dbrow->Add(addDictBtn, 0, wxRIGHT, 6); dbrow->Add(dlDictBtn, 0);
+        sps->Add(dbrow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        auto* spHint = new wxStaticText(sp, wxID_ANY,
+            _("Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nView > Spell Check > Dictionary."));
+        spHint->SetForegroundColour(m_dark ? wxColour(150, 150, 150) : wxColour(110, 110, 110));
+        sps->Add(spHint, 0, wxALL, 10);
+        addDictBtn->Bind(wxEVT_BUTTON, [this, &dlg, fillDicts](wxCommandEvent&){ if (importSpellDictionary(&dlg))   { fillDicts(); refreshSpellMenu(); } });
+        dlDictBtn->Bind(wxEVT_BUTTON,  [this, &dlg, fillDicts](wxCommandEvent&){ if (downloadSpellDictionary(&dlg)) { fillDicts(); refreshSpellMenu(); } });
+        sp->SetSizer(sps);
+        if (startAtSpell) book->SetSelection(spellPageIndex);
 
         // wxListbook leaves its single-column page list too narrow, so the longer labels truncate
         // ("Auto-Comp...", "Recent Files ..."). Grow the column to the widest label - which feeds the list's
@@ -9510,12 +10379,36 @@ private:
         m_printHeader = txHeader->GetValue(); m_printFooter = txFooter->GetValue();
         m_customGutterColor = cbGutter->GetValue(); m_gutterColorValue = colourToBgr(gutterPick->GetColour());
         { const wxString sel = chFont->GetStringSelection(); if (sel != kFontSep) m_fontFace = sel; }
+#if defined(__WXMSW__) || defined(__WXMAC__)
+        const bool spellBackendChanged = (chSpell->GetSelection() != m_spellBackend);
+        m_spellBackend = chSpell->GetSelection();
+#endif
         applySettings(); saveSettings();
         // Gutter-colour override takes effect immediately, no restart needed - but applyEditorTheme's
         // StyleClearAll wipes the lexer's per-token colours, so re-run the full lexer pass (which itself
         // starts with applyEditorTheme) instead of the bare theme reset: closing Preferences used to
         // leave the active document highlight-less until the next tab switch.
         if (auto* p = activePage()) setLexerForFile(p->path); else applyEditorTheme(m_dark);
+#if defined(__WXMSW__) || defined(__WXMAC__)
+        // Spell-check engine changed: drop the cached engine so it rebuilds with the new backend, and if
+        // spell-check is currently on, rebuild + re-check live (or turn it off if the new backend has no
+        // usable dictionary - e.g. "System only" on an OS with no matching language pack).
+        if (spellBackendChanged) {
+            m_spell.reset();
+            if (m_spellOn) {
+                m_spell = wxn::spell::makeEngine(spellLangArg(), (wxn::spell::Backend)m_spellBackend);
+                if (m_spell && m_spell->available()) {
+                    m_spellLastFirst = m_spellLastLen = -1;
+                    checkVisibleSpelling();
+                } else {
+                    m_spellOn = false;
+                    if (auto* mb = menuBar()) mb->Check(myID_SPELLCHECK, false);
+                    if (m_stc) { m_stc->SetIndicatorCurrent(SPELL_INDIC); m_stc->IndicatorClearRange(0, m_stc->GetTextLength()); }
+                    setStatus(0, _("Spell check is not available on this system"));
+                }
+            }
+        }
+#endif
         // Chrome settings fixed per process (locale/toolbar-toggle/icon-set all need a relaunch to take effect).
         // The config writes ride restartWithTheme's commit callback, which only runs once the save-prompt loop
         // has actually confirmed the restart - writing them here unconditionally would apply the new value
@@ -10681,6 +11574,10 @@ private:
         { const size_t n = (size_t)(cmd - myID_MACRO_ITEM); if (n < m_savedMacros.size()) playMacro(m_savedMacros[n].second); return; }
         if (cmd >= myID_OPENFOLDER_TOOL_BASE && cmd < myID_OPENFOLDER_TOOL_BASE + (int)m_openFolderTools.size())
         { openHereToolAt(cmd - myID_OPENFOLDER_TOOL_BASE); return; }   // a dynamically-detected File > Open Containing Folder entry
+        if (cmd >= myID_SPELL_SUGGEST_BASE && cmd < myID_SPELL_SUGGEST_BASE + 9)   // spell right-click: apply a suggestion
+        { applySpellSuggestion(cmd - myID_SPELL_SUGGEST_BASE); return; }
+        if (cmd >= myID_SPELL_DICT_BASE && cmd < myID_SPELL_DICT_BASE + 32)         // View ▸ Spell Check ▸ Dictionary radio
+        { selectSpellDict(cmd - myID_SPELL_DICT_BASE); return; }
         // Win32 WM_COMMAND carries only a 16-bit id and wx sign-extends it, so command ids
         // above 32767 (all of the kCmd* range) arrive negative. Read it as unsigned 16-bit
         // (LOWORD(wParam) semantics).
@@ -10807,6 +11704,16 @@ private:
             case kCmdViewTab6: case kCmdViewTab7: case kCmdViewTab8: case kCmdViewTab9:
                 { const size_t n = (size_t)((e.GetId() & 0xFFFF) - kCmdViewTab1); if (n < m_tabs->GetPageCount()) m_tabs->SetSelection(n); break; }
             case myID_VIEW_TERMINAL: toggleTerminal(); break;      // View > Show Terminal
+            case myID_CMP_FILE:  compareWithFile(); break;         // View > Compare > with File...
+            case myID_CMP_CLIP:  compareWithClipboard(); break;    // View > Compare > with Clipboard
+            case myID_CMP_CLEAR: clearCompare(); break;            // View > Compare > Clear
+            case myID_CMP_NEXT:  compareGotoDiff(true); break;     // View > Compare > Next Difference
+            case myID_CMP_PREV:  compareGotoDiff(false); break;    // View > Compare > Previous Difference
+            case myID_SPELLCHECK: toggleSpellCheck(); break;       // View > Spell Check > Enable (toggle)
+            case myID_SPELL_COMMENTSONLY: toggleSpellCommentsOnly(); break;   // View > Spell Check > check only comments/strings
+            case myID_SPELL_MANAGE: onPreferences(true); break;    // View > Spell Check > Manage dictionaries... (opens the Spell Check prefs page)
+            case myID_SPELL_ADD:    spellAddWord(); break;         // spell right-click: add to dictionary
+            case myID_SPELL_IGNORE: spellIgnoreWord(); break;      // spell right-click: ignore this session
             case myID_CAP_NEW: doNew(); break;                      // "+" caption button
             case myID_CAP_CLOSE: closeActive(); break;             // "x" caption button
             case myID_DOCLIST: onDocList(); break;                 // "v" caption dropdown
@@ -10877,8 +11784,10 @@ private:
             case kCmdEditCopyBinary: copyCutBinary(false); break;
             case kCmdEditCutBinary: copyCutBinary(true); break;
             case kCmdEditPasteBinary: pasteBinary(); break;
-            case kCmdEditPasteAsHtml: pasteRichFormat("HTML Format"); break;
-            case kCmdEditPasteAsRtf: pasteRichFormat("Rich Text Format"); break;
+            case kCmdEditCopyAsHtml: copyAsHtml(); break;
+            case kCmdEditCopyAsRtf: copyAsRtf(); break;
+            case kCmdEditPasteAsHtml: pasteHtmlContent(); break;
+            case kCmdEditPasteAsRtf: pasteRtfContent(); break;
             case kCmdEditRandomcase: transformSel([](std::string& s){ std::mt19937 g{ std::random_device{}() }; for (char& c : s) if (std::isalpha((unsigned char)c)) c = (char)((g() & 1) ? std::toupper((unsigned char)c) : std::tolower((unsigned char)c)); }); break;
             case kCmdEditPropercaseBlend: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ if (st) c = (char)std::toupper((unsigned char)c); st = false; } else st = true; } }); break;
             case kCmdEditSentenceCaseBlend: transformSel([](std::string& s){ bool st = true; for (char& c : s){ if (std::isalpha((unsigned char)c)){ if (st) c = (char)std::toupper((unsigned char)c); st = false; } else if (c=='.'||c=='!'||c=='?') st = true; } }); break;
@@ -10975,18 +11884,18 @@ private:
             case kCmdViewPostit: case kCmdViewDistractionFree: toggleFullScreen(); break;
 
             // ---- Tools: MD5 / SHA digests ----
-            case kCmdToolMd5GenerateIntoClipboard: hashSelection(L"MD5", "MD5", true); break;
-            case kCmdToolSha1GenerateIntoClipboard: hashSelection(L"SHA1", "SHA-1", true); break;
-            case kCmdToolSha256GenerateIntoClipboard: hashSelection(L"SHA256", "SHA-256", true); break;
-            case kCmdToolSha512GenerateIntoClipboard: hashSelection(L"SHA512", "SHA-512", true); break;
-            case kCmdToolMd5Generate: hashSelection(L"MD5", "MD5", false); break;
-            case kCmdToolSha1Generate: hashSelection(L"SHA1", "SHA-1", false); break;
-            case kCmdToolSha256Generate: hashSelection(L"SHA256", "SHA-256", false); break;
-            case kCmdToolSha512Generate: hashSelection(L"SHA512", "SHA-512", false); break;
-            case kCmdToolMd5GenerateFromFile: hashFiles(L"MD5", "MD5"); break;
-            case kCmdToolSha1GenerateFromFile: hashFiles(L"SHA1", "SHA-1"); break;
-            case kCmdToolSha256GenerateFromFile: hashFiles(L"SHA256", "SHA-256"); break;
-            case kCmdToolSha512GenerateFromFile: hashFiles(L"SHA512", "SHA-512"); break;
+            case kCmdToolMd5GenerateIntoClipboard: hashSelection(wxn::hash::Algo::Md5, "MD5", true); break;
+            case kCmdToolSha1GenerateIntoClipboard: hashSelection(wxn::hash::Algo::Sha1, "SHA-1", true); break;
+            case kCmdToolSha256GenerateIntoClipboard: hashSelection(wxn::hash::Algo::Sha256, "SHA-256", true); break;
+            case kCmdToolSha512GenerateIntoClipboard: hashSelection(wxn::hash::Algo::Sha512, "SHA-512", true); break;
+            case kCmdToolMd5Generate: hashSelection(wxn::hash::Algo::Md5, "MD5", false); break;
+            case kCmdToolSha1Generate: hashSelection(wxn::hash::Algo::Sha1, "SHA-1", false); break;
+            case kCmdToolSha256Generate: hashSelection(wxn::hash::Algo::Sha256, "SHA-256", false); break;
+            case kCmdToolSha512Generate: hashSelection(wxn::hash::Algo::Sha512, "SHA-512", false); break;
+            case kCmdToolMd5GenerateFromFile: hashFiles(wxn::hash::Algo::Md5, "MD5"); break;
+            case kCmdToolSha1GenerateFromFile: hashFiles(wxn::hash::Algo::Sha1, "SHA-1"); break;
+            case kCmdToolSha256GenerateFromFile: hashFiles(wxn::hash::Algo::Sha256, "SHA-256"); break;
+            case kCmdToolSha512GenerateFromFile: hashFiles(wxn::hash::Algo::Sha512, "SHA-512"); break;
 
             // ---- Window / Settings / Language: list, folders, normal text ----
             case kCmdWindowWindows: showWindowsList(); break;
@@ -11033,7 +11942,7 @@ private:
             case kCmdOnlineDocument: wxLaunchDefaultBrowser("https://alpaq92.github.io/wx-notepad-plus-plus/docs/"); break;   // the user manual on the project site (repo docs/ holds developer notes, not a manual)
             case kCmdForum: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/issues"); break;
             case kCmdDebuginfo: showDebugInfo(); break;
-            case kCmdCmdLineArguments: themedInfo(_("Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"), _("Command Line Arguments")); break;
+            case kCmdCmdLineArguments: themedInfo(_("Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  --end                    put the caret at the end of the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"), _("Command Line Arguments")); break;
 
             case kCmdExecuteBase: onRun(); break;   // Run... (F5)
 
@@ -11288,6 +12197,7 @@ private:
     wxString    m_projWorkspace;            // the loaded/saved workspace .xml path ("" = unsaved)
     wxTreeCtrl* m_fifPanel = nullptr;       // Find result: docked Find-in-Files results tree
     wxTimer*    m_flTimer  = nullptr;        // debounce re-parse of the Function List after edits
+    wxTimer*    m_backupTimer = nullptr;     // periodic (30s) recovery-backup of buffers with unsaved edits
     wxTimer*    m_monTimer = nullptr;        // View > Monitoring (tail -f): 1s poll while any tab is monitored
     ZoomField*  m_zoomField = nullptr;       // editable zoom combo parked over status-bar field 6
     TermListPopup* m_zoomPopup = nullptr;    // its live preset list, if open (the caret toggles on it)
@@ -11325,7 +12235,7 @@ private:
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
     bool        m_nativeWinButtons = false;      // native window buttons in the integrated bar: a Linux-only user toggle (restart-to-apply); forced true on Windows; macOS always uses native traffic lights
     bool        m_ignorePlatformDeco = false;    // Linux/GTK native header bar: keep the window corners SHARP (skip the platform-matching rounding); restart-to-apply
-    int         m_iconStyle = 0;                 // toolbar icon style: 0 = line icons (default), 1 = Solar, 2 = IconPark, 3 = Streamline (restart-to-apply)
+    int         m_iconStyle = 1;                 // toolbar icon style: 0 = line icons, 1 = Solar (default), 2 = IconPark, 3 = Streamline (restart-to-apply)
     int         m_toolbarIconSize = 16;          // toolbar icon size in px (16/20/24/32, default 16; restart-to-apply)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
@@ -11614,6 +12524,7 @@ public:
         wxCmdLineParser parser(argc, argv);
         parser.SetSwitchChars("-");                              // don't also accept "/" (ambiguous with paths)
         parser.AddOption("g", "goto", _("open at line[,col]"), wxCMD_LINE_VAL_STRING);
+        parser.AddSwitch("", "end", _("put the caret at the end of the last file opened"));
         parser.AddOption("e", "encoding", _("force encoding: ansi|utf8|utf8bom|utf16le|utf16be"), wxCMD_LINE_VAL_STRING);
         // -R/-M/--read-only: open THIS launch's files read-only. -M is a second short form of the same soft
         // read-only (nvim's -M "disallow modifications"); wx has no multi-alias switch, so it's its own entry
@@ -11745,6 +12656,7 @@ public:
                     for (size_t i = 0; i < req.lines.GetCount(); ++i)
                         if (req.lines[i] > 0) payload += wxString::Format("\x01" "FGOTO=%d,%d,%d\n", (int)i, req.lines[i], req.cols[i]);
                     if (req.gotoLine >= 0) payload += wxString::Format("\x01GOTO=%d,%d\n", req.gotoLine, req.gotoCol);
+                    if (req.gotoEnd) payload += "\x01" "END=1\n";
                     if (req.forceEnc >= 0) payload += wxString::Format("\x01" "ENC=%d\n", req.forceEnc);
                     // -R/-M, -o/-O/--split and +/{pattern} must ride along too, or they'd silently work for a
                     // NEW window but be dropped whenever "reuse window" is on (the same class of bug the FGOTO
@@ -11800,7 +12712,10 @@ public:
           // the REAL Bold face rather than a GDI-synthesised one (which measures ~11% wider and pulls bold
           // tokens out of column alignment - the trap a separate-family weight cut like SemiBold falls into).
           for (const char* f : { "JetBrainsMono-Regular.ttf", "JetBrainsMono-Bold.ttf",
-                                 "CascadiaMono-Regular.ttf",  "CascadiaMono-Bold.ttf" })
+                                 "CascadiaMono-Regular.ttf",  "CascadiaMono-Bold.ttf",
+                                 "IBMPlexMono-Regular.ttf",   "IBMPlexMono-Bold.ttf",
+                                 "Hack-Regular.ttf",          "Hack-Bold.ttf",
+                                 "IosevkaFixed-Regular.ttf",  "IosevkaFixed-Bold.ttf" })
               wxFont::AddPrivateFont(fontDir + f); }
 #endif
         // (UI localization used to be Init()ed here; it moved above the command-line parser so that the

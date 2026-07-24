@@ -440,7 +440,7 @@ msgstr ""
 msgid "Read-&Only"
 msgstr ""
 
-msgid "Read-Only Attribute in Windows"
+msgid "Read-Only Attribute"
 msgstr ""
 
 msgid "&Edit"
@@ -2922,4 +2922,154 @@ msgid "Print Pre&view..."
 msgstr ""
 
 msgid "Print Preview"
+msgstr ""
+
+msgid "Copy as HTML"
+msgstr ""
+
+msgid "Copy as RTF"
+msgstr ""
+
+msgid "File changed on disk"
+msgstr ""
+
+msgid "\"%s\" was changed by another program.\n\nReload it from disk?"
+msgstr ""
+
+msgid "\"%s\" was changed by another program, and you have unsaved changes here.\n\nReload from disk and discard your changes?"
+msgstr ""
+
+msgid "Character set not available on this platform: %s"
+msgstr ""
+
+msgid "&Compare"
+msgstr ""
+
+msgid "Compare with &File..."
+msgstr ""
+
+msgid "Compare with Cli&pboard"
+msgstr ""
+
+msgid "&Next Difference"
+msgstr ""
+
+msgid "&Previous Difference"
+msgstr ""
+
+msgid "C&lear Compare"
+msgstr ""
+
+msgid "Diff: %s"
+msgstr ""
+
+msgid "current document"
+msgstr ""
+
+msgid "clipboard"
+msgstr ""
+
+msgid "Compare: files too large or dissimilar for a detailed diff"
+msgstr ""
+
+msgid "Compare: %d changed, %d added, %d removed"
+msgstr ""
+
+msgid "Compare cleared"
+msgstr ""
+
+msgid "Compare current document with file"
+msgstr ""
+
+msgid "Clipboard is empty"
+msgstr ""
+
+msgid "Spell Chec&k"
+msgstr ""
+
+msgid "Spell check is not available on this system"
+msgstr ""
+
+msgid "Spell check: ON"
+msgstr ""
+
+msgid "Spell check: OFF"
+msgstr ""
+
+msgid "(no spelling suggestions)"
+msgstr ""
+
+msgid "Add to Dictionary"
+msgstr ""
+
+msgid "Ignore"
+msgstr ""
+
+msgid "This document is read-only"
+msgstr ""
+
+msgid "Spell-check engine:"
+msgstr ""
+
+msgid "System (OS spell checker)"
+msgstr ""
+
+msgid "System, then bundled dictionary"
+msgstr ""
+
+msgid "Bundled dictionary (Hunspell)"
+msgstr ""
+
+msgid "&Enable"
+msgstr ""
+
+msgid "Check only &comments and strings"
+msgstr ""
+
+msgid "&Manage dictionaries..."
+msgstr ""
+
+msgid "Spell Check"
+msgstr ""
+
+msgid "Installed dictionaries:"
+msgstr ""
+
+msgid "Add from file..."
+msgstr ""
+
+msgid "Download..."
+msgstr ""
+
+msgid "Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nView > Spell Check > Dictionary."
+msgstr ""
+
+msgid "Select a dictionary affix file"
+msgstr ""
+
+msgid "Hunspell affix file (*.aff)|*.aff"
+msgstr ""
+
+msgid "The matching .dic file must be next to the .aff file (with the same name)."
+msgstr ""
+
+msgid "Add dictionary"
+msgstr ""
+
+msgid "Could not copy the dictionary into your user data folder."
+msgstr ""
+
+msgid "Choose a language to download:"
+msgstr ""
+
+msgid "Download dictionary"
+msgstr ""
+
+msgid "This dictionary is provided under the following license:\n\n"
+msgstr ""
+
+msgid "\n\nDownload and install it?"
+msgstr ""
+
+msgid "Download failed. Check your internet connection and try again."
 msgstr ""
