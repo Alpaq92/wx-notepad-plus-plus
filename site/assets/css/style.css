@@ -1280,8 +1280,14 @@ main {
 /* The vendored img-previewer stylesheet references var(--header-bg-opcity) - a typo for
    --header-bg-opacity, which is what its JS actually sets - so the header bar behind the counter and
    the reset/rotate/close buttons never gets a background. Restore it here (the vendored file stays
-   unmodified) using the correctly-spelled variable, with a fallback matching script.js's headerOpacity. */
-.img-pre__header { background: rgba(0, 0, 0, var(--header-bg-opacity, 0.75)) !important; }
+   unmodified). A translucent-black bar (rgba(0,0,0,...)) is the same colour as the lightbox's own
+   near-black modal backdrop, so over a dark-theme page the two blend and it never reads as a distinct
+   bar; use a solid grey plus a hairline border for guaranteed contrast. The lightbox is always a dark
+   overlay regardless of the host page's theme, so this is intentionally not tied to [data-theme]. */
+.img-pre__header {
+  background: rgb(75, 75, 82) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+}
 
 /* The "1 / 7" counter (three spans: current / delimiter / total) was stacking onto three lines
    because this stylesheet's own global reset - `img, svg, a, button, time, span { display:
