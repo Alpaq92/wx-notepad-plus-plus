@@ -3071,3 +3071,6 @@ msgstr "\n\nLe télécharger et l'installer ?"
 
 msgid "Download failed. Check your internet connection and try again."
 msgstr "Échec du téléchargement. Vérifiez votre connexion Internet et réessayez."
+
+msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
+msgstr "Le téléchargement de dictionnaires n'est pas disponible dans cette version. Utilisez « Ajouter depuis un fichier... » à la place."

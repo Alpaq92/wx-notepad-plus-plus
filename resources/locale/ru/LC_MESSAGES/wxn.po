@@ -3071,3 +3071,6 @@ msgstr "\n\nЗагрузить и установить?"
 
 msgid "Download failed. Check your internet connection and try again."
 msgstr "Не удалось загрузить. Проверьте подключение к Интернету и повторите попытку."
+
+msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
+msgstr "Загрузка словарей недоступна в этой сборке. Используйте «Добавить из файла...» вместо этого."

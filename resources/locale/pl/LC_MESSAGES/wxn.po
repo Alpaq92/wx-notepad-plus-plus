@@ -3071,3 +3071,6 @@ msgstr "\n\nPobrać i zainstalować?"
 
 msgid "Download failed. Check your internet connection and try again."
 msgstr "Pobieranie nie powiodło się. Sprawdź połączenie internetowe i spróbuj ponownie."
+
+msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
+msgstr "Pobieranie słowników nie jest dostępne w tej wersji. Zamiast tego użyj „Dodaj z pliku...”."

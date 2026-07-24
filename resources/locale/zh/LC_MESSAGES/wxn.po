@@ -3071,3 +3071,6 @@ msgstr "\n\n是否下载并安装？"
 
 msgid "Download failed. Check your internet connection and try again."
 msgstr "下载失败。请检查您的网络连接后重试。"
+
+msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
+msgstr "此版本不支持下载词典。请改用“从文件添加...”。"
