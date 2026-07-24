@@ -3073,3 +3073,6 @@ msgstr ""
 
 msgid "Download failed. Check your internet connection and try again."
 msgstr ""
+
+msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
+msgstr ""

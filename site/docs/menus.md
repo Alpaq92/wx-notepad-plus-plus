@@ -155,17 +155,6 @@ toggles and a live match count. <kbd>Enter</kbd> jumps to the next match, <kbd>E
 **Panels:** Function List · Document Map · Document List · Folder as Workspace · Project Panels ▸ ·
 Show Terminal · Monitoring (tail -f).
 
-**Compare ▸** — a side-by-side diff of the current document against a file (**Compare with File…**) or
-the clipboard (**Compare with Clipboard**), shown in the split view. Changed / added / removed lines are
-colour-highlighted, the changed part *within* a line is underlined, blank filler keeps the two sides
-row-aligned, and the panes scroll together. **Next / Previous Difference** jump between changes; **Clear
-Compare** removes the highlighting. The two sides open as read-only scratch tabs, so your real files are
-never modified.
-
-**Spell Check** — toggles red squiggles under misspelled words (in the visible text), using the operating
-system's own spell checker and dictionaries (Windows and macOS today; Linux is planned). Identifiers are
-split on camelCase / snake_case boundaries before checking, so code isn't a sea of red.
-
 **Display:** Word wrap · **Show Symbol ▸** (space and tab, end of line, non-printing characters,
 control characters &amp; Unicode EOL, all characters, indent guide, wrap symbol) · **Zoom ▸** (In / Out /
 Restore Default Zoom) · **Summary…**
@@ -196,6 +185,24 @@ Distraction Free Mode.
 
 The distinction matters: the top group *re-decodes* the bytes already on disk (use it when a file opened
 as mojibake); the Convert to group *changes* the encoding the file will be written in.
+
+**Compare ▸** — a side-by-side diff of the current document against a file (**Compare with File…**) or
+the clipboard (**Compare with Clipboard**), shown in the split view. Changed / added / removed lines are
+colour-highlighted, the changed part *within* a line is underlined, blank filler keeps the two sides
+row-aligned, and the panes scroll together. **Next / Previous Difference** jump between changes; **Clear
+Compare** removes the highlighting. The two sides open as read-only scratch tabs, so your real files are
+never modified.
+
+**Spell Check ▸** — a submenu that red-squiggles misspelled words in the visible text. **Enable** turns it
+on (off by default); **Check only comments and strings** (on by default) limits checking to comments and
+string literals in source files, so identifiers and keywords aren't flagged; the **Dictionary** list picks
+the active language; **Manage dictionaries…** opens the dictionary manager (also at **Preferences ▸ Spell
+Check**). Checking is native-first — the OS spell checker on Windows (`ISpellChecker`) and macOS
+(`NSSpellChecker`), with a **bundled Hunspell + English (SCOWL) dictionary** as the Linux engine *and* the
+cross-platform fallback, so every platform — and any machine whose OS lacks the requested language — gets
+real checking. **Right-click** a flagged word for suggestions, **Add to Dictionary** (persists across
+restarts) or **Ignore** (this session). Identifiers are split on camelCase / snake_case boundaries first,
+so code isn't a sea of red.
 
 ---
 
