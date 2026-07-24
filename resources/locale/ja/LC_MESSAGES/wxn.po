@@ -438,8 +438,8 @@ msgstr "すべての文書の読み取り専用を解除"
 msgid "Read-&Only"
 msgstr "読み取り専用(&O)"
 
-msgid "Read-Only Attribute in Windows"
-msgstr "Windows の読み取り専用属性"
+msgid "Read-Only Attribute"
+msgstr "読み取り専用属性"
 
 msgid "&Edit"
 msgstr "編集(&E)"
@@ -2921,3 +2921,153 @@ msgstr "印刷プレビュー(&V)..."
 
 msgid "Print Preview"
 msgstr "印刷プレビュー"
+
+msgid "Copy as HTML"
+msgstr "HTML としてコピー"
+
+msgid "Copy as RTF"
+msgstr "RTF としてコピー"
+
+msgid "File changed on disk"
+msgstr "ディスク上のファイルが変更されました"
+
+msgid "\"%s\" was changed by another program.\n\nReload it from disk?"
+msgstr "「%s」は別のプログラムによって変更されました。\n\nディスクから再読み込みしますか?"
+
+msgid "\"%s\" was changed by another program, and you have unsaved changes here.\n\nReload from disk and discard your changes?"
+msgstr "「%s」は別のプログラムによって変更されましたが、ここには未保存の変更があります。\n\nディスクから再読み込みして変更を破棄しますか?"
+
+msgid "Character set not available on this platform: %s"
+msgstr "この環境では利用できない文字セットです: %s"
+
+msgid "&Compare"
+msgstr "比較(&C)"
+
+msgid "Compare with &File..."
+msgstr "ファイルと比較(&F)…"
+
+msgid "Compare with Cli&pboard"
+msgstr "クリップボードと比較(&P)"
+
+msgid "&Next Difference"
+msgstr "次の差分(&N)"
+
+msgid "&Previous Difference"
+msgstr "前の差分(&P)"
+
+msgid "C&lear Compare"
+msgstr "比較をクリア(&L)"
+
+msgid "Diff: %s"
+msgstr "差分: %s"
+
+msgid "current document"
+msgstr "現在の文書"
+
+msgid "clipboard"
+msgstr "クリップボード"
+
+msgid "Compare: files too large or dissimilar for a detailed diff"
+msgstr "比較: 詳細な差分には大きすぎるか異なりすぎるファイルです"
+
+msgid "Compare: %d changed, %d added, %d removed"
+msgstr "比較: %d 変更, %d 追加, %d 削除"
+
+msgid "Compare cleared"
+msgstr "比較をクリアしました"
+
+msgid "Compare current document with file"
+msgstr "現在の文書をファイルと比較"
+
+msgid "Clipboard is empty"
+msgstr "クリップボードは空です"
+
+msgid "Spell Chec&k"
+msgstr "スペルチェック(&K)"
+
+msgid "Spell check is not available on this system"
+msgstr "この環境ではスペルチェックを利用できません"
+
+msgid "Spell check: ON"
+msgstr "スペルチェック: オン"
+
+msgid "Spell check: OFF"
+msgstr "スペルチェック: オフ"
+
+msgid "(no spelling suggestions)"
+msgstr "(修正候補なし)"
+
+msgid "Add to Dictionary"
+msgstr "辞書に追加"
+
+msgid "Ignore"
+msgstr "無視"
+
+msgid "This document is read-only"
+msgstr "この文書は読み取り専用です"
+
+msgid "Spell-check engine:"
+msgstr "スペルチェックエンジン:"
+
+msgid "System (OS spell checker)"
+msgstr "システム（OS のスペルチェッカー）"
+
+msgid "System, then bundled dictionary"
+msgstr "システム、次に付属辞書"
+
+msgid "Bundled dictionary (Hunspell)"
+msgstr "付属辞書（Hunspell）"
+
+msgid "&Enable"
+msgstr "有効にする(&E)"
+
+msgid "Check only &comments and strings"
+msgstr "コメントと文字列のみを確認(&C)"
+
+msgid "&Manage dictionaries..."
+msgstr "辞書の管理(&M)..."
+
+msgid "Spell Check"
+msgstr "スペルチェック"
+
+msgid "Installed dictionaries:"
+msgstr "インストール済みの辞書:"
+
+msgid "Add from file..."
+msgstr "ファイルから追加..."
+
+msgid "Download..."
+msgstr "ダウンロード..."
+
+msgid "Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nView > Spell Check > Dictionary."
+msgstr "辞書はユーザーデータフォルダーに保存されます。ダウンロードは wooorm/dictionaries\nプロジェクトから取得され、独自のライセンス（ダウンロード前に表示）を保持します。有効な辞書は\n表示 > スペルチェック > 辞書 で選択します。"
+
+msgid "Select a dictionary affix file"
+msgstr "辞書のアフィックスファイルを選択"
+
+msgid "Hunspell affix file (*.aff)|*.aff"
+msgstr "Hunspell アフィックスファイル (*.aff)|*.aff"
+
+msgid "The matching .dic file must be next to the .aff file (with the same name)."
+msgstr "対応する .dic ファイルは .aff ファイルと同じ場所に同じ名前で必要です。"
+
+msgid "Add dictionary"
+msgstr "辞書を追加"
+
+msgid "Could not copy the dictionary into your user data folder."
+msgstr "辞書をユーザーデータフォルダーにコピーできませんでした。"
+
+msgid "Choose a language to download:"
+msgstr "ダウンロードする言語を選択:"
+
+msgid "Download dictionary"
+msgstr "辞書のダウンロード"
+
+msgid "This dictionary is provided under the following license:\n\n"
+msgstr "この辞書は次のライセンスで提供されています:\n\n"
+
+msgid "\n\nDownload and install it?"
+msgstr "\n\nダウンロードしてインストールしますか？"
+
+msgid "Download failed. Check your internet connection and try again."
+msgstr "ダウンロードに失敗しました。インターネット接続を確認して再試行してください。"

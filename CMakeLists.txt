@@ -160,6 +160,21 @@ if(WIN32 OR (UNIX AND NOT APPLE))
     endif()
 endif()
 
+# ---- Hunspell (spell-check engine; MPL-1.1 arm of its tri-license) ---------------------------------
+# libhunspell only (src/hunspell/), fetched from the pinned v1.7.3 tag and built as a static lib by our
+# overlay (third_party/hunspell/CMakeLists.txt) - upstream ships no CMake. We compile ONLY src/hunspell/
+# and never src/tools/ (its CLI link-depends on GPL readline), so nothing GPL enters the build and the
+# MPL-1.1 arm combines cleanly with the Apache-2.0 core. Static + self-contained: AppImage/Flatpak and the
+# cross-built riscv64/arm64 legs need no system libhunspell-dev. Backs the Linux spell-check path and is
+# the always-available fallback everywhere (see src/spell_engine.h).
+message(STATUS "[wxnote] Fetching Hunspell 1.7.3...")
+FetchContent_Declare(hunspell
+    URL      https://github.com/hunspell/hunspell/archive/refs/tags/v1.7.3.tar.gz
+    URL_HASH SHA256=933be3dac6fd55f6e752331a170efb7e33800e40fae1156d8434cc8c85379a1b
+)
+FetchContent_MakeAvailable(hunspell)   # populates hunspell_SOURCE_DIR; no upstream CMake, so nothing is built here
+add_subdirectory(third_party/hunspell) # our overlay builds just src/hunspell/ into the static `hunspell` lib
+
 # ---- the wxNote executable --------------------------------------------------------------------
 # WIN32 = GUI-subsystem app on Windows; a plain executable elsewhere (GTK on Linux, Cocoa on macOS).
 if(WIN32)
@@ -217,17 +232,15 @@ target_include_directories(wxnote PRIVATE
     "${CMAKE_SOURCE_DIR}/src")                              # command_ids.h, app_icon_svg.h, menu_*.h - the core includes nothing from include/npp-compat (that ABI belongs to packages/npp-bridge alone)
 
 target_link_libraries(wxnote PRIVATE
-    wx::core wx::aui wx::base wx::xml wx::stc
+    wx::core wx::aui wx::base wx::xml wx::stc wx::net
     lexilla lua_lpeg
-    vterm)   # terminal-emulation core behind src/term_view.cpp (its include dir propagates from the vterm target)
+    vterm   # terminal-emulation core behind src/term_view.cpp (its include dir propagates from the vterm target)
+    hunspell)   # spell-check engine behind src/spell_engine.h (its <hunspell/*> include dir propagates too)
 
-# Single-instance "reuse window" IPC (wxServer/wxClient/wxConnection): on Windows these map to the
-# DDE classes, which live in wx::base itself (src/msw/dde.cpp) - no extra link needed there. Everywhere
-# else they map to wxTCPServer/wxTCPClient/wxTCPConnection, which live in wxWidgets' separate "net"
-# component (src/common/sckipc.cpp) and must be linked explicitly.
-if(UNIX)
-    target_link_libraries(wxnote PRIVATE wx::net)
-endif()
+# wx::net (linked above, all platforms) provides BOTH: (1) wxWebRequest - Preferences > Spell Check downloads
+# dictionaries from wooorm/dictionaries; and (2) the single-instance "reuse window" IPC on non-Windows
+# (wxTCPServer/Client/Connection live in src/common/sckipc.cpp; on Windows that IPC uses the DDE classes in
+# wx::base instead, but wxWebRequest still needs wx::net + the WinHTTP backend, so we link it everywhere).
 
 # Optional integrated/borderless title bar (Settings > Preferences): link the vendored wxBorderlessFrame
 # where it exists + let the code use it (WXN_HAS_BORDERLESS). Off on macOS (keeps the native bar).
@@ -238,7 +251,7 @@ endif()
 
 # Windows-only chrome + plugin host (all behind #ifdef __WXMSW__ in src/main.cpp).
 if(WIN32)
-    target_link_libraries(wxnote PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme)
+    target_link_libraries(wxnote PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme winhttp)   # winhttp: wxWebRequest backend
 endif()
 if(MSVC)
     # /bigobj: main.cpp emits more COFF sections than the default object format allows - the arm64
@@ -293,6 +306,77 @@ if(MSVC)
     target_compile_options(keymap_selftest PRIVATE /utf-8)
 endif()
 
+# ---- diff_myers_test: headless self-test for the Myers O(ND) diff engine (src/diff_myers.h) ---------
+# No GUI, no wx: the engine is pure STL, so this links nothing. The property test cross-checks Myers'
+# edit distance against an independent O(NM) DP over thousands of fixed-seed random pairs.
+#   cmake --build build --target diff_myers_test && build/bin/diff_myers_test
+add_executable(diff_myers_test tests/diff_myers_test.cpp)
+set_target_properties(diff_myers_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(diff_myers_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+if(MSVC)
+    target_compile_options(diff_myers_test PRIVATE /utf-8)
+endif()
+
+# ---- hash_test: headless self-test for the MD5/SHA-1/SHA-256/SHA-512 engine (src/hash_algos.h) ------
+# No GUI, no wx: pure STL. Known-answer vectors (vs Python hashlib) + block-boundary + incremental cases;
+# run it on every CI arch (riscv64/arm64 are the endian canaries).
+#   cmake --build build --target hash_test && build/bin/hash_test
+add_executable(hash_test tests/hash_test.cpp)
+set_target_properties(hash_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(hash_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+if(MSVC)
+    target_compile_options(hash_test PRIVATE /utf-8)
+endif()
+
+# ---- charset_selftest: round-trip test for the portable code-page path (wxCSConv name conversion) --
+# Links wx::base (wxCSConv). Exercises the iconv (Linux/macOS) / win32 (Windows) backends on the same
+# vectors so the ~50 Encoding > Character Set pages are validated per platform.
+#   cmake --build build --target charset_selftest && build/bin/charset_selftest
+add_executable(charset_selftest tests/charset_selftest.cpp)
+set_target_properties(charset_selftest PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(charset_selftest PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(charset_selftest PRIVATE wx::core wx::base)
+if(MSVC)
+    target_compile_options(charset_selftest PRIVATE /utf-8)
+endif()
+
+# ---- hunspell_selftest: headless self-test for the vendored Hunspell + bundled en_US dictionary -----
+# No GUI, no wx: links only the static `hunspell` lib, loads resources/dictionaries/en_US.{aff,dic}
+# (path injected via -DDICT_DIR) and asserts a correct word passes, a misspelling fails + suggests, and a
+# runtime add() takes. This is what gives REAL spell-engine verification on every CI arch - including the
+# Windows/MSVC runner - without needing a Linux box or a display.
+#   cmake --build build --target hunspell_selftest && build/bin/hunspell_selftest
+add_executable(hunspell_selftest tests/hunspell_selftest.cpp)
+set_target_properties(hunspell_selftest PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_link_libraries(hunspell_selftest PRIVATE hunspell)   # propagates the <hunspell/*> include dir
+target_compile_definitions(hunspell_selftest PRIVATE
+    DICT_DIR="${CMAKE_SOURCE_DIR}/resources/dictionaries")
+if(MSVC)
+    target_compile_options(hunspell_selftest PRIVATE /utf-8)
+endif()
+
+# ---- po2mo: dev-only .po -> .mo compiler (tools/po2mo.c), the C port of the former po2mo.py ---------
+# EXCLUDE_FROM_ALL: not built by default (nor in CI) - it is a maintainer tool run when a .po changes to
+# regenerate the committed .mo. Output is byte-identical to the old Python version.
+#   cmake --build build --target po2mo && build/bin/po2mo <in>.po <out>.mo
+add_executable(po2mo EXCLUDE_FROM_ALL tools/po2mo.c)
+set_target_properties(po2mo PROPERTIES
+    C_STANDARD 99
+    C_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
 # ---- bridge_selftest: end-to-end self-test of the npp-bridge Phase-1 surface -----------------------
 # Boots the REAL application (tests/bridge_selftest.cpp #includes src/main.cpp with wxIMPLEMENT_APP
 # neutralized and supplies its own app subclass + main() -> wxEntry), so the genuine host pipeline -
@@ -329,18 +413,16 @@ target_include_directories(bridge_selftest PRIVATE
     "${CMAKE_SOURCE_DIR}/include/npp-compat"    # Notepad_plus_msgs.h - the NPPN_*/NPPM_* codes the assertions speak
     "${CMAKE_SOURCE_DIR}/src")                  # main.cpp itself (textually included) + its headers
 target_link_libraries(bridge_selftest PRIVATE
-    wx::core wx::aui wx::base wx::xml wx::stc
+    wx::core wx::aui wx::base wx::xml wx::stc wx::net
     lexilla lua_lpeg
-    vterm)
-if(UNIX)
-    target_link_libraries(bridge_selftest PRIVATE wx::net)
-endif()
+    vterm
+    hunspell)   # it textually includes src/main.cpp -> src/spell_engine.h -> <hunspell/hunspell.hxx>; wx::net -> wxWebRequest
 if(WIN32 OR (UNIX AND NOT APPLE))
     target_link_libraries(bridge_selftest PRIVATE wxbf)
     target_compile_definitions(bridge_selftest PRIVATE WXN_HAS_BORDERLESS=1)
 endif()
 if(WIN32)
-    target_link_libraries(bridge_selftest PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme)
+    target_link_libraries(bridge_selftest PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme winhttp)
 endif()
 if(MSVC)
     target_compile_options(bridge_selftest PRIVATE /utf-8 /bigobj)
@@ -374,6 +456,8 @@ add_custom_command(TARGET wxnote POST_BUILD
         "${CMAKE_SOURCE_DIR}/resources/contextMenu.xml" "$<TARGET_FILE_DIR:wxnote>/contextMenu.xml"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/locale" "$<TARGET_FILE_DIR:wxnote>/locale"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/dictionaries" "$<TARGET_FILE_DIR:wxnote>/dictionaries"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${SCINTILLUA_LEXER_LUA}" "$<TARGET_FILE_DIR:wxnote>/lexers/lexer.lua"
     VERBATIM)

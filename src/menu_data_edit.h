@@ -132,6 +132,8 @@ static const MenuItemDef kEditBlankOperationsItems[] = {
 };
 
 static const MenuItemDef kEditPasteSpecialItems[] = {
+    { MenuItemKind::Normal, kCmdEditCopyAsHtml,  &Label::EditCopyAsHtml,  "edit.pasteSpecial.copyAsHtml" },
+    { MenuItemKind::Normal, kCmdEditCopyAsRtf,   &Label::EditCopyAsRtf,   "edit.pasteSpecial.copyAsRtf" },
     { MenuItemKind::Normal, kCmdEditPasteAsHtml, &Label::EditPasteAsHtml, "edit.pasteSpecial.asHtml" },
     { MenuItemKind::Normal, kCmdEditPasteAsRtf,  &Label::EditPasteAsRtf,  "edit.pasteSpecial.asRtf" },
     { MenuItemKind::Separator },

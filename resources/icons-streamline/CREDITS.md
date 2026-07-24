@@ -61,4 +61,4 @@ byte-for-byte.
 - No other modifications were made beyond selecting icons and the changes above.
 
 The full concept-to-source-glyph mapping and the re-bake/compositing pipeline live in
-`scripts/generate_streamline_icons.py`, which regenerates this directory.
+`tools/generate_streamline_icons.py`, which regenerates this directory.

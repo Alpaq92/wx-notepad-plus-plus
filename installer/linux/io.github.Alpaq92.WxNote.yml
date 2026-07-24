@@ -36,12 +36,11 @@ modules:
       - cp -r build-bin/icons-iconpark /app/bin/icons-iconpark
       - cp -r build-bin/icons-streamline /app/bin/icons-streamline
       - cp -r build-bin/themes /app/bin/themes
+      - cp -r build-bin/dictionaries /app/bin/dictionaries   # Hunspell en_US + user drop-in dir
       - mkdir -p /app/bin/locale
       - cp -r build-bin/locale/. /app/bin/locale/
       - find /app/bin/locale -name '*.po' -delete
       - find /app/bin/locale -name '*.pot' -delete
-      - find /app/bin/locale -name 'po2mo.py' -delete
-      - find /app/bin/locale -depth -type d -name '__pycache__' -exec rm -rf {} +
       - install -Dm644 build-bin/stylers.model.xml /app/bin/stylers.model.xml
       - install -Dm644 wxnote.desktop /app/share/applications/io.github.Alpaq92.WxNote.desktop
       - install -Dm644 wxnote.png /app/share/icons/hicolor/256x256/apps/io.github.Alpaq92.WxNote.png

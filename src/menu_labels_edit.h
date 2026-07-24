@@ -101,6 +101,8 @@ namespace Label
     inline const wxString EditBlankSpaceToTabLeading() { return _("Space to TAB (Leading)"); }
 
     inline const wxString EditPasteSpecial() { return _("&Paste Special"); }
+    inline const wxString EditCopyAsHtml() { return _("Copy as HTML"); }
+    inline const wxString EditCopyAsRtf() { return _("Copy as RTF"); }
     inline const wxString EditPasteAsHtml() { return _("Paste HTML Content"); }
     inline const wxString EditPasteAsRtf() { return _("Paste RTF Content"); }
     inline const wxString EditCopyBinary() { return _("Copy Binary Content"); }
@@ -145,5 +147,5 @@ namespace Label
     inline const wxString EditToggleReadOnly() { return _("Read-Only on Current Document"); }
     inline const wxString EditSetReadOnlyForAllDocs() { return _("Read-Only for All Documents"); }
     inline const wxString EditClearReadOnlyForAllDocs() { return _("Clear Read-Only for All Documents"); }
-    inline const wxString EditToggleSystemReadOnly() { return _("Read-Only Attribute in Windows"); }
+    inline const wxString EditToggleSystemReadOnly() { return _("Read-Only Attribute"); }
 }

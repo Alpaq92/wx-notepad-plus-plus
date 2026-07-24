@@ -3,6 +3,87 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Spell check** — **View ▸ Spell Check** is a submenu: **Enable** (off by default), **Check only comments
+  and strings** (on by default — in source files only comments/strings are checked, not code identifiers or
+  keywords, across both the Scintillua and Lexilla highlighters), a **Dictionary** radio-list of the
+  installed languages, and **Manage dictionaries…**. Native-first: the OS spell checker on Windows
+  (`ISpellChecker`) and macOS (`NSSpellChecker`), with a **bundled Hunspell + English (SCOWL) dictionary** as
+  the Linux engine *and* the cross-platform fallback — so a machine whose OS lacks the requested language
+  (e.g. a non-English Windows with no en-US pack) still gets real English checking instead of silently
+  matching the wrong language. **Right-click** a flagged word for correction suggestions, **Add to
+  Dictionary** (persists across restarts) or **Ignore** (this session). Identifiers are split on camelCase /
+  snake_case boundaries before checking.
+  - **Manage dictionaries** (**Preferences ▸ Spell Check**, or the submenu item): lists the installed
+    dictionaries and lets you **Add from file…** (import a local `.aff`+`.dic` pair) or **Download…** a
+    language from the [wooorm/dictionaries](https://github.com/wooorm/dictionaries) project — each
+    dictionary's own license is shown for you to accept before it downloads. They install into
+    `<user-data>/dictionaries/`.
+  - On Windows and macOS, **Preferences ▸ Editing ▸ Spell-check engine** chooses *System (OS spell checker)*,
+    *System, then bundled dictionary* (default), or *Bundled dictionary (Hunspell)* — applied immediately.
+  - The Hunspell library (MPL-1.1 arm of its tri-license) is fetched at build and statically linked — no
+    system dependency, so every package stays self-contained.
+- **File Compare (side-by-side diff)** — **View ▸ Compare ▸ Compare with File… / Compare with Clipboard**
+  shows the current document beside a file or the clipboard in the split view: changed / added / removed
+  lines are colour-highlighted, the changed span *within* a line is underlined, blank filler keeps the two
+  sides row-aligned, and the panes scroll together. **Next / Previous Difference** jump between changes and
+  **Clear Compare** removes the decorations. The two sides open as read-only scratch tabs, so your real
+  files are never touched. Built on a self-contained Myers O(ND) diff engine (no third-party dependency),
+  covered by 79 headless unit tests including a property cross-check against an independent algorithm.
+- **Three more bundled editor fonts** — **IBM Plex Mono** (OFL&nbsp;1.1), **Hack** (MIT + Bitstream Vera)
+  and **Iosevka Fixed** (OFL&nbsp;1.1), pinned in the **Preferences&nbsp;&rsaquo; Editing&nbsp;&rsaquo; Font**
+  picker alongside Cascadia Mono and JetBrains Mono. All permissively licensed and ligature-free (so they
+  render correctly under GDI).
+- **`--end` command-line switch** — open the given file(s) and put the caret at the **end** of the last
+  one (handy for logs). Wins over `-g`/`+N`, and rides the reuse-an-existing-window (`-r`) handoff too.
+- **Periodic backup (crash safety).** Buffers with unsaved changes are now snapshotted to the recovery
+  store **every 30 seconds**, not only on a clean exit — so a crash or power loss between saves is
+  recoverable on the next launch. Both foreground and background tabs are covered (background tabs are
+  read without disturbing your current tab or caret); saving a buffer clears its snapshot.
+- **"File changed on disk" detection.** When an open file is modified or replaced by another program (a
+  `git` checkout, another editor, a formatter), wxNote now notices on window refocus or tab switch and
+  offers to **reload** it — so an external change is no longer silently overwritten on your next save. If
+  you have unsaved edits, the prompt says so before you discard them. Monitored (tail&nbsp;-f) tabs keep
+  their own auto-follow behaviour.
+- **Copy as HTML / Copy as RTF** (Edit&nbsp;&rsaquo; Paste Special) — export the selection (or the whole
+  document when nothing is selected) as syntax-highlighted **HTML** or **RTF** to the clipboard, so you can
+  paste formatted, coloured code into Word, email, chat or a blog. The markup is rendered from the editor's
+  own per-character styling (colours, bold/italic/underline, font, background). Cross-platform, no new
+  dependency — `wxHTMLDataObject` wraps the platform HTML clipboard format (incl. Windows' CF_HTML header).
+
+### Changed
+- **Toolbar: the clipboard (Cut/Copy/Paste) and history (Undo/Redo) buttons are now one Edit group**
+  (the separator between them was removed), matching the Notepad++ and Visual Studio convention.
+- **New "Run a Macro Multiple Times" toolbar icon** — a play triangle with a trailing "more" ellipsis
+  (…), replacing the old replay-arrow glyph, in all three icon themes (Tabler, Solar, IconPark).
+- **Paste HTML Content / Paste RTF Content now work on Linux and macOS, not just Windows.** HTML rides
+  wx's portable clipboard format (`wxDF_HTML`) — and on Windows now pastes the clean HTML fragment
+  instead of the raw `CF_HTML` header block. RTF reads the platform's native clipboard type
+  (`text/rtf` / `application/rtf` on Linux, `public.rtf` on macOS, `Rich Text Format` on Windows). No
+  new dependency — uses only the bundled wxWidgets.
+- **Copy / Cut / Paste Binary Content now work on Linux and macOS too.** The private clipboard format
+  that preserves embedded NUL bytes uses a portable `wxCustomDataObject` off Windows (Windows keeps its
+  raw-Win32 path, which is still needed there); Copy/Cut also place plain UTF-8 text so other apps still
+  get ordinary text. Also no new dependency.
+- **View ▸ Always on Top now works on Linux and macOS, not just Windows** — the non-Windows path toggles
+  the portable `wxSTAY_ON_TOP` window style (Windows keeps its raw-Win32 path so it composes with the
+  borderless frame).
+- **File ▸ Read-Only Attribute now works on Linux and macOS, not just Windows** — off Windows it toggles
+  the file's owner-write permission (the POSIX equivalent of the DOS read-only bit) via `chmod`. The menu
+  item was renamed from "Read-Only Attribute in Windows" to just **Read-Only Attribute** to match.
+- **The MD5 / SHA-1 / SHA-256 / SHA-512 generators now work on Linux and macOS, not just Windows.** The
+  Windows-only BCrypt backend was replaced by a small self-contained hash engine used on every platform, so
+  the Tools digest commands (selection, document, files) run everywhere. Byte-identical to any standard
+  implementation (verified against published NIST/RFC test vectors), and it hashes files larger than 4 GB
+  correctly. No new dependency.
+- **Encoding ▸ Character Set now works on Linux and macOS, not just Windows.** The ~50 code pages
+  (Windows-125x, ISO-8859-*, KOI8, the DOS/OEM pages, and Shift-JIS/GBK/Big5/EUC-KR) convert via the
+  platform's own converter (`wxCSConv`/iconv) off Windows, with Windows keeping its exact native path. A
+  code page the platform's converter doesn't provide (e.g. CP720 Arabic-DOS on Linux/macOS) reports itself
+  unavailable in the status bar and leaves the document untouched rather than producing garbage.
+
 ## [0.9.16] - 2026-07-22
 
 ### Added

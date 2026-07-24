@@ -79,3 +79,98 @@ extern "C" void wxn_DragWindow(void* nsWindow)
     NSEvent* e = [NSApp currentEvent];
     if (e) [w performWindowDragWithEvent:e];
 }
+
+// ===== Native spell-check via NSSpellChecker (backs src/spell_engine.h's macOS Engine) =====
+// The C++ side (spell_engine.h) declares these extern "C" and wraps them in a MacEngine, so the
+// Scintilla squiggle/suggestion UX in main.cpp is engine-agnostic. Uses the shared system checker and
+// the user's own OS dictionaries - no bundled dictionary, no third-party library.
+#include <string.h>
+
+// Map a BCP-47 tag ("en-US") to the underscore identifier NSSpellChecker uses ("en_US"); "" -> nil.
+static NSString* wxnSpellLang(const char* bcp47)
+{
+    if (!bcp47 || !*bcp47) return nil;
+    NSString* t = [NSString stringWithUTF8String:bcp47];
+    return t ? [t stringByReplacingOccurrencesOfString:@"-" withString:@"_"] : nil;
+}
+
+extern "C" bool wxn_spell_available(void)
+{
+    return [NSSpellChecker sharedSpellChecker] != nil;
+}
+
+// true = the OS spell checker can check the requested language - exact, or a variant sharing its primary
+// subtag (so "en-US" is satisfied by an installed "en" or "en_GB"). Lets spell_engine.h fall through to the
+// bundled Hunspell dictionary when the OS lacks the requested language, mirroring the Windows path.
+extern "C" bool wxn_spell_language_available(const char* bcp47)
+{
+    @autoreleasepool {
+        NSSpellChecker* sc = [NSSpellChecker sharedSpellChecker];
+        NSString* want = wxnSpellLang(bcp47);
+        if (!sc || !want) return false;
+        NSString* wantPrimary = [[want componentsSeparatedByString:@"_"] firstObject];   // "en_US" -> "en"
+        for (NSString* lang in [sc availableLanguages]) {
+            if ([lang caseInsensitiveCompare:want] == NSOrderedSame) return true;
+            NSString* langPrimary = [[lang componentsSeparatedByString:@"_"] firstObject];
+            if (wantPrimary.length && [langPrimary caseInsensitiveCompare:wantPrimary] == NSOrderedSame)
+                return true;
+        }
+        return false;
+    }
+}
+
+// true = the word is spelled correctly in `bcp47lang`. Passing the language EXPLICITLY means the result
+// does not depend on the user's global spelling-language setting (the wrong-language-fallback fix).
+extern "C" bool wxn_spell_check(const char* utf8word, const char* bcp47lang)
+{
+    @autoreleasepool {
+        if (!utf8word) return true;
+        NSString* s = [NSString stringWithUTF8String:utf8word];
+        if (!s || s.length == 0) return true;
+        NSInteger wordCount = 0;
+        NSRange r = [[NSSpellChecker sharedSpellChecker] checkSpellingOfString:s
+                                                                   startingAt:0
+                                                                     language:wxnSpellLang(bcp47lang)
+                                                                         wrap:NO
+                                                       inSpellDocumentWithTag:0
+                                                                    wordCount:&wordCount];
+        return r.location == NSNotFound;
+    }
+}
+
+// '\n'-joined UTF-8 suggestions (up to 8) in `bcp47lang`, malloc'd for the caller to free(); NULL if none.
+extern "C" char* wxn_spell_suggest(const char* utf8word, const char* bcp47lang)
+{
+    @autoreleasepool {
+        if (!utf8word) return NULL;
+        NSString* s = [NSString stringWithUTF8String:utf8word];
+        if (!s || s.length == 0) return NULL;
+        NSSpellChecker* sc = [NSSpellChecker sharedSpellChecker];
+        NSArray<NSString*>* guesses = [sc guessesForWordRange:NSMakeRange(0, s.length)
+                                                     inString:s
+                                                     language:wxnSpellLang(bcp47lang)
+                                       inSpellDocumentWithTag:0];
+        if (!guesses || guesses.count == 0) return NULL;
+        NSMutableString* joined = [NSMutableString string];
+        NSUInteger i = 0;
+        for (NSString* g in guesses) {
+            if (i >= 8) break;
+            if (i) [joined appendString:@"\n"];
+            [joined appendString:g];
+            ++i;
+        }
+        const char* c = [joined UTF8String];
+        return c ? strdup(c) : NULL;
+    }
+}
+
+extern "C" bool wxn_spell_add(const char* utf8word)
+{
+    @autoreleasepool {
+        if (!utf8word) return false;
+        NSString* s = [NSString stringWithUTF8String:utf8word];
+        if (!s || s.length == 0) return false;
+        [[NSSpellChecker sharedSpellChecker] learnWord:s];
+        return true;
+    }
+}

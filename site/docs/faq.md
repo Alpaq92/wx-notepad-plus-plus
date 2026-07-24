@@ -16,9 +16,7 @@ Items that currently behave this way:
   `npp-shortcuts-compat` plugin is not installed; the item forwards to that plugin's Notepad++
   shortcut importer. See [Customizing Shortcuts](custom-shortcuts.md#importing-notepad-shortcuts).
 
-The same "not yet implemented in this build" wording is also reused for two other situations that are
-not missing features: a command that only exists on Windows (binary clipboard, the SHA/MD5 generators,
-Always on Top, the read-only file attribute) invoked elsewhere, and a command whose precondition is
+The same "not yet implemented in this build" wording is also reused for a command whose precondition is
 unmet (*"Rename (save the file first)"*, *"Open File (selection is not an existing path)"*). Read the
 text in the parentheses — it tells you which case you hit.
 
