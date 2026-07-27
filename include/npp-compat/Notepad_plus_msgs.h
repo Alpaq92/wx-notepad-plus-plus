@@ -294,6 +294,20 @@ enum Platform { PF_UNKNOWN, PF_X86, PF_X64, PF_IA64, PF_ARM64 };
 
 	#define NPPM_GETNPPSETTINGSDIRPATH (NPPMSG + 119)
 
+	// ---- wxNote host extensions -------------------------------------------------------------------
+	// NOT Notepad++ messages. Based well past the upstream block (which is still growing one id at a
+	// time from +119) so adding ours can never collide with an upstream addition, and so a plugin can
+	// probe for them safely: a real Notepad++ returns 0 for these, wxNote returns TRUE.
+	#define WXNMSG (NPPMSG + 5000)
+
+	// Add a toolbar button that the HOST draws from its own icon set, instead of from plugin-supplied
+	// pixels. wParam = command id, lParam = (const char*) UTF-8 asset name ("word-wrap", "udl-dlg", ...
+	// the base filename wxNote ships, no directory and no extension). Returns TRUE if the button was
+	// added. The point is theme fidelity: the host resolves the name through the user's current icon
+	// pack and light/dark setting, so the button keeps matching the built-in buttons when either
+	// changes - which NPPM_ADDTOOLBARICON* cannot do, since those pixels are frozen at registration.
+	#define NPPM_ADDTOOLBARICONBYNAME (WXNMSG + 1)
+
 	#define VAR_NOT_RECOGNIZED 0
 	#define FULL_CURRENT_PATH 1
 	#define CURRENT_DIRECTORY 2

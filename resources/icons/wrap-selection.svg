@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" color="#343a40" role="img" aria-label="Wrap Selection">
+  <title>Wrap Selection</title>
+  <path d="M8.5 4.5c-1.7 0-2.5.9-2.5 2.5v2c0 1.4-.8 2.5-2 2.5 1.2 0 2 1.1 2 2.5v2c0 1.6.8 2.5 2.5 2.5" />
+  <path d="M15.5 4.5c1.7 0 2.5.9 2.5 2.5v2c0 1.4.8 2.5 2 2.5-1.2 0-2 1.1-2 2.5v2c0 1.6-.8 2.5-2.5 2.5" />
+  <path d="M10 10h4" />
+  <path d="M10 14h3" />
+</svg>

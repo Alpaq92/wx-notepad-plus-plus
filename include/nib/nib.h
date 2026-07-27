@@ -497,6 +497,17 @@ typedef struct NibToolbarApi {
     // or an id from nib.alloc alloc_cmd_ids). One button per id - a second add with the same id fails.
     // Returns 1 on success, 0 on failure (no toolbar, bad icon, or duplicate id).
     int (*add_tool)(NibHost*, int cmd_id, const NibToolbarIcon* icon, const char* tooltip_utf8);
+    // ---- v2 ----
+    // Append one button drawn from the HOST'S OWN icon set, by asset name (e.g. "word-wrap", "udl-dlg" -
+    // the base filename the host ships, without directory or extension). Prefer this over add_tool when a
+    // stock glyph fits: the host resolves the name through whichever icon pack and light/dark theme the
+    // user has selected - including the per-pack colour retints - so the button is drawn by exactly the
+    // code path that draws the built-in buttons and keeps matching them when the user switches packs. A
+    // plugin cannot reproduce that with add_tool: pixels handed across the boundary are frozen at the
+    // theme and pack that were active when they were rasterised.
+    // Returns 1 on success, 0 on failure (no toolbar, unknown name, or duplicate id). Callers must check
+    // version >= 2 && struct_size > offsetof(NibToolbarApi, add_tool_named) before calling.
+    int (*add_tool_named)(NibHost*, int cmd_id, const char* icon_name_utf8, const char* tooltip_utf8);
 } NibToolbarApi;
 
 // ---- nib.alloc/1 : dynamic command-id / marker / indicator ranges --------------------------------

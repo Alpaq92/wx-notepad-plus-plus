@@ -34,6 +34,7 @@
 
 #include <cstdio>   // std::fopen/_wfopen + std::vsnprintf - the probe's JSON-lines log
 #include <cstdarg>  // va_list (probeLogLine)
+#include <cstring>  // std::memset - clear the toolbar DIB to transparent before painting
 #include <cwchar>   // std::wcscpy (menu-label copy); on libstdc++/libc++ it is NOT pulled in by <cstring>
 
 #ifdef _WIN32
@@ -170,64 +171,6 @@ void initProbeLog()
     probeLogLine("{\"k\":\"start\",\"pid\":%llu}", pid);
 }
 
-#ifdef _WIN32
-// A 16x16 32bpp DIB section for the toolbar registration. A DIB section reports bmBitsPixel == 32 with
-// a live alpha channel, so it takes the bridge's premultiplied-32bpp conversion path deterministically.
-//
-// Design: an OPAQUE teal badge (rounded corners) with a darker "[ ]" wrap-selection glyph on it - two
-// square brackets enclosing three short text lines, matching the button's "Wrap selection" name - in the
-// project's own Open Color teal, the accent the bundled Streamline icon set retints to, so a probe-plugin
-// button doesn't look like it wandered in from a different app. It is deliberately opaque, not a thin glyph on
-// a transparent field: an earlier transparent-background version registered fine and rasterized fine in
-// isolation, but painted BLANK on the live Windows toolbar - wxMSW composites every button into one DIB
-// and hands it to the native ToolbarWindow32, and a mostly-empty bitmap did not survive that path. A
-// near-opaque badge (only the four corner pixels are transparent, for the rounded look) always paints,
-// exactly as the original solid square did - just no longer a featureless block. bridge_selftest.cpp
-// asserts the registered button's stored bitmap is non-blank AND green-dominant to lock this in.
-HBITMAP makeProbeBitmap()
-{
-    BITMAPINFO bi = {};
-    bi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-    bi.bmiHeader.biWidth       = 16;
-    bi.bmiHeader.biHeight      = -16;   // top-down
-    bi.bmiHeader.biPlanes      = 1;
-    bi.bmiHeader.biBitCount    = 32;
-    bi.bmiHeader.biCompression = BI_RGB;
-    void* bits = nullptr;
-    HBITMAP hbm = ::CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
-    if (!hbm || !bits) return hbm;
-    auto* px = static_cast<unsigned char*>(bits);
-    auto setPx = [&](int x, int y, unsigned char b, unsigned char g, unsigned char r, unsigned char a) {
-        if (x < 0 || x > 15 || y < 0 || y > 15) return;
-        unsigned char* p = px + (y * 16 + x) * 4;   // BGRA, straight alpha
-        p[0] = b; p[1] = g; p[2] = r; p[3] = a;
-    };
-    auto rect = [&](int x0, int y0, int x1, int y1, unsigned char b, unsigned char g, unsigned char r) {
-        for (int y = y0; y <= y1; ++y) for (int x = x0; x <= x1; ++x) setPx(x, y, b, g, r, 0xFF);
-    };
-    // fill the whole badge opaque, then lay the border and glyph on top. The fill is a VIVID teal (not a
-    // pale mint): the toolbar chrome is light grey, so a washed-out fill is nearly invisible on it - this
-    // is the same saturation as the built-in bright-green buttons, which read clearly there.
-    const unsigned char fB = 0xA9, fG = 0xD9, fR = 0x38;   // Open Color teal-4  #38d9a9 (vivid fill)
-    const unsigned char bB = 0x78, bG = 0xA6, bR = 0x0C;   // Open Color teal-7  #0ca678 (border)
-    const unsigned char gB = 0x5B, gG = 0x7F, gR = 0x08;   // Open Color teal-9  #087f5b (dark glyph)
-    rect(0, 0, 15, 15, fB, fG, fR);                        // opaque mint field
-    rect(0, 0, 15, 0, bB, bG, bR);                         // border: top / bottom / left / right
-    rect(0, 15, 15, 15, bB, bG, bR);
-    rect(0, 0, 0, 15, bB, bG, bR);
-    rect(15, 0, 15, 15, bB, bG, bR);
-    // knock the four corners transparent for a rounded-badge silhouette (12px of 256 - still ~95% opaque)
-    setPx(0, 0, 0, 0, 0, 0x00); setPx(15, 0, 0, 0, 0, 0x00);
-    setPx(0, 15, 0, 0, 0, 0x00); setPx(15, 15, 0, 0, 0, 0x00);
-    // the "[ ]" wrap-selection glyph, dark teal on the vivid field: two brackets around three lines
-    rect(3, 4, 3, 11, gB, gG, gR); rect(3, 4, 4, 4, gB, gG, gR); rect(3, 11, 4, 11, gB, gG, gR);   // left bracket [
-    rect(12, 4, 12, 11, gB, gG, gR); rect(11, 4, 12, 4, gB, gG, gR); rect(11, 11, 12, 11, gB, gG, gR); // right bracket ]
-    rect(6, 6, 9, 6, gB, gG, gR);                          // text line 1
-    rect(6, 8, 9, 8, gB, gG, gR);                          // text line 2
-    rect(6, 10, 8, 10, gB, gG, gR);                        // text line 3 (short)
-    return hbm;
-}
-#endif
 
 // The one-shot probe pass, run from NPPN_TBMODIFICATION (the notification real plugins hang their
 // toolbar/alloc init off): toolbar icon + the three allocations + the dark-mode query, all logged.
@@ -236,18 +179,32 @@ void runProbeRegistrations()
     if (g_probed) return;
     g_probed = true;
 
-    // Toolbar button for our first FuncItem's bridge-assigned command id. Off-Windows a recompiled
-    // plugin cannot own an HBITMAP/HICON; the bridge documents the call as a no-op TRUE there, and
-    // logging the answer on every OS is exactly what the selftest wants to see.
+    // Toolbar button for our first FuncItem's bridge-assigned command id, drawn by the HOST from its own
+    // icon set (NPPM_ADDTOOLBARICONBYNAME, a wxNote extension) rather than from pixels this plugin
+    // rasterises. That is the whole point: the host resolves the name through the user's current icon pack
+    // and light/dark setting, so the button keeps matching the built-in buttons when either changes -
+    // plugin-supplied pixels are frozen at whatever was active when they were painted. It is also portable,
+    // with no HBITMAP anywhere, so unlike NPPM_ADDTOOLBARICON* this path is live on every OS.
+    //
+    // "wrap-selection" is this button's OWN asset, shipped in all four packs, so there is nothing to pick
+    // per pack: the host draws whichever variant matches the user's setting.
     const int tbCmd = g_funcs[0]._cmdID;
-    static toolbarIconsWithDarkMode icons = {};   // static: the host may keep the handle; N++ plugins do the same
-#ifdef _WIN32
-    icons.hToolbarBmp = makeProbeBitmap();
-#endif
-    const long long tbOk = static_cast<long long>(
-        ::SendMessage(g_npp._nppHandle, NPPM_ADDTOOLBARICON_FORDARKMODE,
-                      static_cast<WPARAM>(tbCmd), reinterpret_cast<LPARAM>(&icons)));
-    probeLogLine("{\"k\":\"tb\",\"ok\":%lld,\"cmd\":%d}", tbOk, tbCmd);
+    const char* iconName = "wrap-selection";
+    long long tbOk = static_cast<long long>(
+        ::SendMessage(g_npp._nppHandle, NPPM_ADDTOOLBARICONBYNAME,
+                      static_cast<WPARAM>(tbCmd), reinterpret_cast<LPARAM>(iconName)));
+    probeLogLine("{\"k\":\"tb\",\"ok\":%lld,\"cmd\":%d,\"icon\":\"%s\"}", tbOk, tbCmd, iconName);
+    if (!tbOk)
+    {
+        // Pre-extension host (or a real Notepad++): fall back to the stock ABI so the button still exists.
+        // No bitmap is supplied - N++ tolerates a null bmp - which keeps this path free of the per-pack
+        // pixel painting the named call exists to replace.
+        static toolbarIconsWithDarkMode icons = {};   // static: the host may keep the handle; N++ plugins do the same
+        tbOk = static_cast<long long>(
+            ::SendMessage(g_npp._nppHandle, NPPM_ADDTOOLBARICON_FORDARKMODE,
+                          static_cast<WPARAM>(tbCmd), reinterpret_cast<LPARAM>(&icons)));
+        probeLogLine("{\"k\":\"tb.fallback\",\"ok\":%lld,\"cmd\":%d}", tbOk, tbCmd);
+    }
 
     // The allocator family: 4 command ids + 1 marker + 1 indicator, results logged verbatim. The four
     // cmd ids are the triggers the selftest fires to drive the Phase-2/3/4/5 scripted tables (see messageProc).

@@ -59,6 +59,8 @@
 #include <cstdio>
 #include <cstring>
 #include <climits>
+#include <map>          // the probe-button image check's colour histogram
+#include <algorithm>    // std::max (same)
 
 static int g_pass = 0;
 static int g_failCount = 0;
@@ -371,15 +373,15 @@ private:
             check(i >= 0 && std::sscanf(L[i].c_str(), "{\"k\":\"tb\",\"ok\":%lld,\"cmd\":%d", &tbOk, &tbCmd) == 2,
                   "probe logged its toolbar registration");
         }
-        check(tbOk == TRUE, "NPPM_ADDTOOLBARICON_FORDARKMODE answered TRUE");
+        check(tbOk == TRUE, "the probe's toolbar registration answered TRUE (NPPM_ADDTOOLBARICONBYNAME)");
         check(tbCmd >= NIB_ALLOC_CMD_FIRST && tbCmd <= NIB_ALLOC_CMD_LAST,
               "the probe's FuncItem got a host-granted command id (bridge wrote it into _cmdID)");
 
         // ---- the registered button must actually carry a visible image on the host toolbar ---------
-        // Registration answering TRUE is not the same as a button a user can see: the stored bundle
-        // could rasterize blank (alpha lost somewhere in HBITMAP -> RGBA -> wxImage -> bundle) and this
-        // suite would still have been all-green. Rasterize what the toolbar actually holds and demand
-        // the glyph's pixels survived.
+        // Registration answering TRUE is not the same as a button a user can see: the stored bundle could
+        // rasterize blank (a bad asset name resolving to an empty bundle, or alpha lost on the way to the
+        // bundle) and this suite would still have been all-green. Rasterize what the toolbar actually
+        // holds and demand the glyph's pixels survived.
         {
             wxToolBar* tb = nullptr;
             if (auto* frame = wxDynamicCast(wxTheApp->GetTopWindow(), wxFrame))
@@ -392,21 +394,31 @@ private:
             check(tb != nullptr, "host toolbar located for the probe-button image check");
             wxToolBarToolBase* tool = tb ? tb->FindById(tbCmd & 0xFFFF) : nullptr;
             check(tool != nullptr, "probe toolbar button exists on the host toolbar (FindById)");
-            int visible = 0, greenish = 0;
+            // The button now carries a HOST asset (NPPM_ADDTOOLBARICONBYNAME), so its hue follows whichever
+            // icon pack and theme the host is running - this cannot assert a specific colour. What must hold
+            // for every pack is that the image is not blank AND not a featureless block: count opaque pixels,
+            // then count the ones that differ from the most common opaque colour - those are the glyph.
+            int visible = 0, glyph = 0;
             if (tb && tool)
             {
                 const wxBitmap bmp = tool->GetNormalBitmapBundle().GetBitmap(tb->GetToolBitmapSize());
                 const wxImage img = bmp.ConvertToImage();
+                std::map<unsigned, int> hist;
                 for (int y = 0; y < img.GetHeight(); ++y)
                     for (int x = 0; x < img.GetWidth(); ++x)
                     {
                         if (img.HasAlpha() && img.GetAlpha(x, y) < 128) continue;
                         ++visible;
-                        if (img.GetGreen(x, y) > img.GetRed(x, y) + 20) ++greenish;
+                        ++hist[(static_cast<unsigned>(img.GetRed(x, y)) << 16)
+                             | (static_cast<unsigned>(img.GetGreen(x, y)) << 8)
+                             |  static_cast<unsigned>(img.GetBlue(x, y))];
                     }
+                int modal = 0;
+                for (const auto& kv : hist) modal = std::max(modal, kv.second);
+                glyph = visible - modal;   // everything that is not the dominant field colour
             }
             check(visible >= 8, "probe button image is not blank (opaque pixels survived to the stored bundle)");
-            check(greenish >= 4, "probe button image kept its glyph (green-dominant pixels present)");
+            check(glyph >= 4, "probe button image kept its glyph (pixels distinct from the dominant colour)");
         }
 
         // ---- (c) allocator grants: inside the pools, disjoint from every host-reserved number ------

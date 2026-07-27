@@ -1229,6 +1229,19 @@ static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& o
 #endif
             return true;
         }
+        // wxNote extension: let the button be drawn from the HOST's icon set by asset name, so it follows
+        // the user's icon pack + light/dark instead of freezing plugin-rasterised pixels. Portable - unlike
+        // NPPM_ADDTOOLBARICON* there is no HBITMAP involved, so this one works on every OS. Fails cleanly
+        // (FALSE) against a pre-v2 host, which is exactly how a plugin should probe for it.
+        case NPPM_ADDTOOLBARICONBYNAME: {
+            const char* name = reinterpret_cast<const char*>(lParam);
+            if (!g_toolbar || g_toolbar->version < 2 || !g_toolbar->add_tool_named || !name || !*name)
+            { out = FALSE; return true; }
+            const FuncItem* fi = funcItemForCmd(static_cast<int>(wParam));   // tooltip = the item's menu name, as N++
+            const std::string tip = fi ? toUtf8(fi->_itemName) : std::string();
+            out = g_toolbar->add_tool_named(g_host, static_cast<int>(wParam), name, tip.c_str()) ? TRUE : FALSE;
+            return true;
+        }
         // ---- Phase 1: the allocator family (host-owned ranges; fired ids dispatch via wx events) ----
         case NPPM_ALLOCATESUPPORTED_DEPRECATED:   // == the pre-rename NPPM_ALLOCATESUPPORTED probe (DSpellCheck gates on it)
             out = TRUE; return true;
@@ -1695,7 +1708,8 @@ static void activate(NibHost* host, NibQueryFn query)
     const NibWin32Api* w = static_cast<const NibWin32Api*>(query(host, NIB_IFACE_WIN32, 1));
     g_win32 = w;   // docking (NPPM_DMM*) routes through nib.win32; NULL off-Windows
     g_ui      = static_cast<const NibUiApi*>(query(host, NIB_IFACE_UI, 1));            // menu checks + dark palette
-    g_toolbar = static_cast<const NibToolbarApi*>(query(host, NIB_IFACE_TOOLBAR, 1));  // plugin toolbar buttons
+    g_toolbar = static_cast<const NibToolbarApi*>(query(host, NIB_IFACE_TOOLBAR, 2));  // v2 add_tool_named (host-drawn icons); NULL on old hosts
+    if (!g_toolbar) g_toolbar = static_cast<const NibToolbarApi*>(query(host, NIB_IFACE_TOOLBAR, 1));
     g_alloc   = static_cast<const NibAllocApi*>(query(host, NIB_IFACE_ALLOC, 1));      // cmd/marker/indicator grants
     g_keymap  = static_cast<const NibKeymapApi*>(query(host, NIB_IFACE_KEYMAP, 2));    // v2 effective_shortcut read (NPPM_GETSHORTCUTBYCMDID); NULL on old hosts
     g_session = static_cast<const NibSessionApi*>(query(host, NIB_IFACE_SESSION, 1));  // session save/load/enumerate (NPPM_*SESSION*); NULL on old hosts
