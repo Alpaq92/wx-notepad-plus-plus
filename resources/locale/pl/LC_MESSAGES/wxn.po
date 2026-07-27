@@ -3074,3 +3074,42 @@ msgstr "Pobieranie nie powiodło się. Sprawdź połączenie internetowe i spró
 
 msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
 msgstr "Pobieranie słowników nie jest dostępne w tej wersji. Zamiast tego użyj „Dodaj z pliku...”."
+
+msgid "Large file (highlighting off)"
+msgstr "Duży plik (podświetlanie wyłączone)"
+
+msgid "Large file: syntax highlighting is off for performance. Pick a Language to force it on."
+msgstr "Duży plik: podświetlanie składni wyłączone dla wydajności. Wybierz język, aby je włączyć."
+
+msgid "This dictionary is provided under the following license:"
+msgstr "Ten słownik jest udostępniany na następującej licencji:"
+
+msgid "Download and install"
+msgstr "Pobierz i zainstaluj"
+
+msgid "Show:"
+msgstr "Pokaż:"
+
+msgid "All"
+msgstr "Wszystkie"
+
+msgid "Menu commands"
+msgstr "Polecenia menu"
+
+msgid "Editor commands"
+msgstr "Polecenia edytora"
+
+msgid "Macros"
+msgstr "Makra"
+
+msgid "Window buttons:"
+msgstr "Przyciski okna:"
+
+msgid "System-native"
+msgstr "Systemowe"
+
+msgid "Windows-style (flat)"
+msgstr "Styl Windows (płaskie)"
+
+msgid "Opera-style (rounded)"
+msgstr "Styl Opera (zaokrąglone)"

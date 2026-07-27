@@ -3074,3 +3074,42 @@ msgstr "Download fehlgeschlagen. Prüfen Sie Ihre Internetverbindung und versuch
 
 msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
 msgstr "Das Herunterladen von Wörterbüchern ist in diesem Build nicht verfügbar. Verwenden Sie stattdessen „Aus Datei hinzufügen...“."
+
+msgid "Large file (highlighting off)"
+msgstr "Große Datei (Hervorhebung aus)"
+
+msgid "Large file: syntax highlighting is off for performance. Pick a Language to force it on."
+msgstr "Große Datei: Syntaxhervorhebung aus Leistungsgründen deaktiviert. Wählen Sie eine Sprache, um sie zu aktivieren."
+
+msgid "This dictionary is provided under the following license:"
+msgstr "Dieses Wörterbuch wird unter der folgenden Lizenz bereitgestellt:"
+
+msgid "Download and install"
+msgstr "Herunterladen und installieren"
+
+msgid "Show:"
+msgstr "Anzeigen:"
+
+msgid "All"
+msgstr "Alle"
+
+msgid "Menu commands"
+msgstr "Menübefehle"
+
+msgid "Editor commands"
+msgstr "Editor-Befehle"
+
+msgid "Macros"
+msgstr "Makros"
+
+msgid "Window buttons:"
+msgstr "Fensterschaltflächen:"
+
+msgid "System-native"
+msgstr "Systemeigen"
+
+msgid "Windows-style (flat)"
+msgstr "Windows-Stil (flach)"
+
+msgid "Opera-style (rounded)"
+msgstr "Opera-Stil (abgerundet)"

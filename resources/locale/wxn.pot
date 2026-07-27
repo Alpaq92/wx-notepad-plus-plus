@@ -3076,3 +3076,42 @@ msgstr ""
 
 msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
 msgstr ""
+
+msgid "Large file (highlighting off)"
+msgstr ""
+
+msgid "Large file: syntax highlighting is off for performance. Pick a Language to force it on."
+msgstr ""
+
+msgid "This dictionary is provided under the following license:"
+msgstr ""
+
+msgid "Download and install"
+msgstr ""
+
+msgid "Show:"
+msgstr ""
+
+msgid "All"
+msgstr ""
+
+msgid "Menu commands"
+msgstr ""
+
+msgid "Editor commands"
+msgstr ""
+
+msgid "Macros"
+msgstr ""
+
+msgid "Window buttons:"
+msgstr ""
+
+msgid "System-native"
+msgstr ""
+
+msgid "Windows-style (flat)"
+msgstr ""
+
+msgid "Opera-style (rounded)"
+msgstr ""

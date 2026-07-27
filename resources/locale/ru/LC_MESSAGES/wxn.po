@@ -3074,3 +3074,42 @@ msgstr "Не удалось загрузить. Проверьте подклю�
 
 msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
 msgstr "Загрузка словарей недоступна в этой сборке. Используйте «Добавить из файла...» вместо этого."
+
+msgid "Large file (highlighting off)"
+msgstr "Большой файл (подсветка выключена)"
+
+msgid "Large file: syntax highlighting is off for performance. Pick a Language to force it on."
+msgstr "Большой файл: подсветка синтаксиса отключена для производительности. Выберите язык, чтобы включить её."
+
+msgid "This dictionary is provided under the following license:"
+msgstr "Этот словарь распространяется по следующей лицензии:"
+
+msgid "Download and install"
+msgstr "Загрузить и установить"
+
+msgid "Show:"
+msgstr "Показать:"
+
+msgid "All"
+msgstr "Все"
+
+msgid "Menu commands"
+msgstr "Команды меню"
+
+msgid "Editor commands"
+msgstr "Команды редактора"
+
+msgid "Macros"
+msgstr "Макросы"
+
+msgid "Window buttons:"
+msgstr "Кнопки окна:"
+
+msgid "System-native"
+msgstr "Системные"
+
+msgid "Windows-style (flat)"
+msgstr "В стиле Windows (плоские)"
+
+msgid "Opera-style (rounded)"
+msgstr "В стиле Opera (скруглённые)"
