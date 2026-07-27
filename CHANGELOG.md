@@ -3,7 +3,7 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.12.0] - 2026-07-27
 
 ### Added
 - **Manage Saved Macros** (**Automation ▸ Macro ▸ Manage Saved Macros…**) — rename, delete and reorder the
