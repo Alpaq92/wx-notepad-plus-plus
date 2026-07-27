@@ -3074,3 +3074,42 @@ msgstr "ダウンロードに失敗しました。インターネット接続を
 
 msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
 msgstr "このビルドでは辞書のダウンロードは利用できません。代わりに「ファイルから追加...」を使用してください。"
+
+msgid "Large file (highlighting off)"
+msgstr "大きなファイル（ハイライト無効）"
+
+msgid "Large file: syntax highlighting is off for performance. Pick a Language to force it on."
+msgstr "大きなファイル: パフォーマンスのため構文ハイライトは無効です。言語を選択すると有効になります。"
+
+msgid "This dictionary is provided under the following license:"
+msgstr "この辞書は次のライセンスで提供されています:"
+
+msgid "Download and install"
+msgstr "ダウンロードしてインストール"
+
+msgid "Show:"
+msgstr "表示:"
+
+msgid "All"
+msgstr "すべて"
+
+msgid "Menu commands"
+msgstr "メニューコマンド"
+
+msgid "Editor commands"
+msgstr "エディターコマンド"
+
+msgid "Macros"
+msgstr "マクロ"
+
+msgid "Window buttons:"
+msgstr "ウィンドウボタン:"
+
+msgid "System-native"
+msgstr "システム標準"
+
+msgid "Windows-style (flat)"
+msgstr "Windows スタイル（フラット）"
+
+msgid "Opera-style (rounded)"
+msgstr "Opera スタイル（角丸）"

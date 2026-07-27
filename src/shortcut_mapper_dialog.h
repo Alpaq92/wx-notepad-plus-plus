@@ -104,7 +104,11 @@ private:
     // accel suffix so a rebind never changes it), while re-resolving it per row per refill cost a
     // recursive wxMenuBar::FindItem walk on every filter keystroke. Appended last so the positional
     // initializers below stay valid.
-    struct Row { int cmdId = 0; wxString sym; bool editor = false; int sciCmd = 0; wxString name; };
+    // `macro` joins `editor` as a per-row category resolved ONCE in buildRows, for the same reason: the
+    // Category filter runs per row on every filter keystroke, so re-deriving it there (by re-testing the
+    // "macro.<uid>" symbolicName format that main.cpp's macroSym() owns) would put a cross-file string
+    // contract inside the refill hot loop.
+    struct Row { int cmdId = 0; wxString sym; bool editor = false; int sciCmd = 0; wxString name; bool macro = false; };
 
     // Menu name for a command id via the live menubar (follows the UI language). Falls back to the
     // symbolicName if the item isn't on the bar (shouldn't happen for seeded commands).
@@ -167,10 +171,12 @@ private:
         {
             if (!b || b->cmdId == 0) continue;
             // Only commands that actually sit on the menu bar are user-facing rows (dynamic ranges - Recent
-            // Files, plugin/macro/language entries - are excluded in this phase, exactly as the accel table
-            // and the grid are).
+            // Files, plugin/language entries - are excluded in this phase, exactly as the accel table and the
+            // grid are). SAVED MACROS are the exception: appendMacroMenuItems() puts them on the Macro menu
+            // before the mapper opens, so this FindItem test passes and they DO appear, under Category=Macros.
             if (m_mb && !m_mb->FindItem(b->cmdId)) continue;
-            m_rows.push_back({ b->cmdId, b->symbolicName, false, 0, cmdName(b->cmdId, b->symbolicName) });
+            m_rows.push_back({ b->cmdId, b->symbolicName, false, 0, cmdName(b->cmdId, b->symbolicName),
+                               b->symbolicName.StartsWith("macro.") });
         }
         // The curated Scintilla editor commands - Scope = Editor, remapped via CmdKeyAssign
         // rather than the accel table. Appended after the menu rows; the Scope column separates them.
@@ -213,6 +219,15 @@ private:
 
         // --- filter + record-keys row ---
         auto* filterRow = new wxBoxSizer(wxHORIZONTAL);
+        // Category selector: group the rows into Menu / Editor / Macros (Macros are the saved macros seeded
+        // into the store). "All" (default) keeps the flat list; conflict counts stay global regardless.
+        filterRow->Add(new wxStaticText(panel, wxID_ANY, _("Show:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 6);
+        m_category = new wxChoice(panel, wxID_ANY);
+        m_category->Append(_("All")); m_category->Append(_("Menu commands"));
+        m_category->Append(_("Editor commands")); m_category->Append(_("Macros"));
+        m_category->SetSelection(0);
+        m_category->Bind(wxEVT_CHOICE, [this](wxCommandEvent&){ refillGrid(); });
+        filterRow->Add(m_category, 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 12);
         m_filter = new wxSearchCtrl(panel, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
         m_filter->SetDescriptiveText(_("Filter by name or shortcut"));
         m_filter->ShowCancelButton(true);
@@ -406,6 +421,9 @@ private:
 
         const wxString filter = m_filter ? m_filter->GetValue().Lower() : wxString();
         wxArrayString terms = wxSplit(filter, ' ');
+        // Loop-invariant, like `filter` above: hoisted out of the per-row pass because refillGrid re-runs on
+        // every filter keystroke and GetSelection() is a window message on MSW. 0 = All (the common case).
+        const int catSel = m_category ? m_category->GetSelection() : 0;
 
         // Global-summary aggregation, folded into this same pass (no second full conflict scan): after a
         // data change (rebuildEngine marks the counts dirty) classify EVERY row - filtered-out and
@@ -425,6 +443,14 @@ private:
                 cls = r.editor ? m_engine.forEditor(r.sym).cls : m_engine.forCommand(r.cmdId).cls;
                 if      (cls == ConflictClass::Hard)           ++hardCount;
                 else if (cls == ConflictClass::NonEquivShadow) ++warnCount;
+            }
+
+            // Category grouping (display-only, after the global count above): 1=Menu, 2=Editor, 3=Macros.
+            if (catSel)
+            {
+                if      (catSel == 1 && (r.editor || r.macro)) continue;
+                else if (catSel == 2 && !r.editor)             continue;
+                else if (catSel == 3 && !r.macro)              continue;
             }
 
             wxString shortcut, scopeStr, srcStr;
@@ -960,6 +986,7 @@ private:
     wxChoice*        m_scheme = nullptr;
     wxButton*        m_btnAddMapping = nullptr;
     wxSearchCtrl*    m_filter = nullptr;
+    wxChoice*        m_category = nullptr;   // Show: All / Menu / Editor / Macros
     wxToggleButton*  m_record = nullptr;
     wxDataViewCtrl*  m_grid   = nullptr;
     MapperModel*     m_model  = nullptr;

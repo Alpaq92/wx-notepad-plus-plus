@@ -60,7 +60,7 @@ interface independently versioned, so structs grow only at the end.
 | `nib.documents/1` | document count, active path, open, save; **v2** buffer ids and path-from-id; **v3** active view (main/sub); **v4** enumerate every open document |
 | `nib.commands/1` | register a command (surfaced in the menu); **v2** invoke one of the host's own commands by id |
 | `nib.events/1` | subscribe to text changed, selection changed, document saved / activated / opened / closed; **v2** id-carrying save events that fire per real disk write (before and after), plus before-open |
-| `nib.toolbar/1` | add a main-toolbar button that fires a command id — the icon crosses as portable RGBA pixels, no native image types |
+| `nib.toolbar/1` | add a main-toolbar button that fires a command id — the icon crosses as portable RGBA pixels, no native image types; **v2** add a button that the *host* draws from one of its own icon assets, named as a string, so it follows the user's icon pack and light/dark theme |
 | `nib.ui/1` | host chrome state: check/uncheck a menu item, ask whether the chrome runs dark, read the host's dark palette |
 | `nib.alloc/1` | process-lifetime grants of command-id / marker / indicator ranges, so plugins never collide — plus a sink for fired allocated ids |
 | `nib.langdef/1` | register a language as a Scintillua Lua lexer — see [Languages &amp; Syntax](languages.md) |

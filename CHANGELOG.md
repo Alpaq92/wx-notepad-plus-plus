@@ -3,6 +3,43 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Autocomplete now covers ~25 languages** (was 4). The keyword source is a per-extension table that
+  reuses the syntax highlighter's own keyword sets and adds curated lists for PHP, Kotlin, Swift, R, YAML
+  and HTML — so Python, Go, Rust, Lua, SQL, CSS, Bash, Perl, Ruby, PowerShell, JSON, TypeScript and more
+  get keyword completion, not just document-word completion. No new dependency.
+- **Large-file guard.** Files over ~16 MiB (or with a single line longer than 50 000 characters) open in a
+  large-file mode that turns syntax highlighting off, so the editor no longer stalls re-lexing the whole
+  buffer on every keystroke. Pick a **Language** from the menu to force highlighting back on for that file.
+- **Saved macros persist and can be bound to a shortcut.** Recorded macros you save are now written to disk
+  and reload on the next launch, and each one appears in **Settings ▸ Shortcut Mapper** (new **Show: Macros**
+  category) where you can assign it a keystroke — the binding follows the macro across rename/reorder.
+- **Function List: more languages + user-extensible.** Added built-in symbol rules for **PHP, Ruby, SQL,
+  shell/bash and PowerShell** (13 languages total), and a `functionList.conf` in your user-data folder lets
+  you add or override languages with your own regex rules (merged over the built-ins).
+- **Window-button style for the integrated top bar** (**Preferences ▸ General ▸ Window buttons**, Windows and
+  Linux): **System-native** (Windows snap-layouts / the GTK header bar), **Windows-style (flat)**, or
+  **Opera-style (rounded)**. Restart to apply. The setting only affects the integrated top bar, so it greys
+  out while **Show integrated top bar** is unchecked — with a native frame the OS draws the caption itself.
+  macOS is unaffected and keeps its native traffic lights.
+- **Plugins can use the host's own toolbar icons.** New `add_tool_named` in the `nib.toolbar/2` API, and
+  `NPPM_ADDTOOLBARICONBYNAME` for Notepad++-ABI plugins through the bridge: a plugin names a wxNote icon
+  asset (e.g. `"wrap-selection"`) instead of supplying pixels, and the host draws it through the same path
+  as its built-in buttons. The button then follows the user's icon-pack and light/dark choice — including
+  the per-pack colour retints — which plugin-supplied pixels cannot do, since those are frozen at whatever
+  theme was active when they were rasterised. Unlike `NPPM_ADDTOOLBARICON*` no `HBITMAP` is involved, so
+  this works on Linux and macOS too. Unknown or path-like names are rejected.
+- **New `wrap-selection` toolbar icon** in all four icon packs (Tabler, Solar, IconPark, Streamline), each
+  drawn to its pack's own conventions. Original artwork — see each pack's `CREDITS.md`.
+
+### Changed
+- **Find in Files now uses the same regex engine as Find.** The standalone Find-in-Files menu command
+  previously used a separate byte-level `std::regex` scanner that matched differently from the editor's Find
+  (wrong on non-ASCII, and it ignored *whole word* in regex mode). It now shares Find's Scintilla engine, so
+  Find, the Find dialog's Find-in-Files tab, and the Find-in-Files menu all match identically.
+
 ## [0.10.0] - 2026-07-24
 
 ### Added

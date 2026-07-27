@@ -3074,3 +3074,42 @@ msgstr "Échec du téléchargement. Vérifiez votre connexion Internet et réess
 
 msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
 msgstr "Le téléchargement de dictionnaires n'est pas disponible dans cette version. Utilisez « Ajouter depuis un fichier... » à la place."
+
+msgid "Large file (highlighting off)"
+msgstr "Fichier volumineux (coloration désactivée)"
+
+msgid "Large file: syntax highlighting is off for performance. Pick a Language to force it on."
+msgstr "Fichier volumineux : coloration syntaxique désactivée pour les performances. Choisissez un langage pour l'activer."
+
+msgid "This dictionary is provided under the following license:"
+msgstr "Ce dictionnaire est fourni sous la licence suivante :"
+
+msgid "Download and install"
+msgstr "Télécharger et installer"
+
+msgid "Show:"
+msgstr "Afficher :"
+
+msgid "All"
+msgstr "Tout"
+
+msgid "Menu commands"
+msgstr "Commandes de menu"
+
+msgid "Editor commands"
+msgstr "Commandes de l'éditeur"
+
+msgid "Macros"
+msgstr "Macros"
+
+msgid "Window buttons:"
+msgstr "Boutons de fenêtre :"
+
+msgid "System-native"
+msgstr "Natifs du système"
+
+msgid "Windows-style (flat)"
+msgstr "Style Windows (plat)"
+
+msgid "Opera-style (rounded)"
+msgstr "Style Opera (arrondi)"

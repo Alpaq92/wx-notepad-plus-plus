@@ -3074,3 +3074,42 @@ msgstr "Error al descargar. Compruebe su conexión a Internet e inténtelo de nu
 
 msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
 msgstr "La descarga de diccionarios no está disponible en esta compilación. Use «Añadir desde archivo...» en su lugar."
+
+msgid "Large file (highlighting off)"
+msgstr "Archivo grande (resaltado desactivado)"
+
+msgid "Large file: syntax highlighting is off for performance. Pick a Language to force it on."
+msgstr "Archivo grande: resaltado de sintaxis desactivado por rendimiento. Elija un lenguaje para activarlo."
+
+msgid "This dictionary is provided under the following license:"
+msgstr "Este diccionario se ofrece bajo la siguiente licencia:"
+
+msgid "Download and install"
+msgstr "Descargar e instalar"
+
+msgid "Show:"
+msgstr "Mostrar:"
+
+msgid "All"
+msgstr "Todos"
+
+msgid "Menu commands"
+msgstr "Comandos de menú"
+
+msgid "Editor commands"
+msgstr "Comandos del editor"
+
+msgid "Macros"
+msgstr "Macros"
+
+msgid "Window buttons:"
+msgstr "Botones de ventana:"
+
+msgid "System-native"
+msgstr "Del sistema"
+
+msgid "Windows-style (flat)"
+msgstr "Estilo Windows (plano)"
+
+msgid "Opera-style (rounded)"
+msgstr "Estilo Opera (redondeado)"

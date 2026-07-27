@@ -58,7 +58,19 @@ byte-for-byte.
   place of the code chevrons, so the `filetype-*` file icons share one silhouette),
   and `filetype-audio` (the same file body with `music-note-1` scaled inside as the
   dark detail).
-- No other modifications were made beyond selecting icons and the changes above.
+- No other modifications were made beyond selecting icons, the changes above, and the
+  original glyph noted below.
+
+## Original glyphs (NOT from Streamline)
+
+One file in this directory is original wxNote artwork rather than a re-baked Streamline
+glyph, and is therefore **not** covered by the Streamline attribution above. It is licensed
+under the project's own licence (Apache-2.0, see the root `LICENSE`). It is also NOT
+produced by `tools/generate_streamline_icons.py`, so re-running that script leaves it alone:
+
+| File                 | Why it exists                                                        |
+| -------------------- | -------------------------------------------------------------------- |
+| `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". The free Streamline Core set has no glyph for this concept. Drawn on this set's 14x14 viewBox with its two-paint pair (green-4 `#69db7c` braces, teal-8 `#099268` text lines) so the dark-mode re-tint in `iconColored()` finds the same hexes as the re-baked files. |
 
 The full concept-to-source-glyph mapping and the re-bake/compositing pipeline live in
 `tools/generate_streamline_icons.py`, which regenerates this directory.

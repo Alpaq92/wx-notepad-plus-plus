@@ -23,6 +23,8 @@
 #include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
 #include <wx/webrequest.h>     // wxWebRequestSync - download Hunspell dictionaries (Preferences > Spell Check)
 #include <wx/wfstream.h>       // wxFileOutputStream - stream a downloaded dictionary to disk
+#include <wx/base64.h>         // wxBase64Encode/Decode - lossless macro name/text payloads in macros.dat
+#include <wx/graphics.h>       // wxGraphicsContext - antialiased rounded hover on the Windows caption buttons
 #include <wx/display.h>        // wxDisplay::GetClientArea/GetFromPoint - clamp the initial window to the usable screen (macOS)
 #include <wx/listctrl.h>       // wxListView - wxListbook's page list (we widen it so labels don't truncate)
 #include <wx/clrpicker.h>      // wxColourPickerCtrl - Style Configurator foreground/background pickers
@@ -53,7 +55,6 @@
 #include <wx/dcgraph.h>         // wxGCDC - antialiased drawing (symmetric spinner triangles)
 #include <wx/dcbuffer.h>        // wxAutoBufferedPaintDC - flicker-free custom paint (title-bar window-control buttons)
 #include <wx/dir.h>             // wxDir - scan the plugins/ folder + Find-in-Files traversal
-#include <wx/textfile.h>        // wxTextFile - read files line-by-line for Find in Files
 #include <wx/dirdlg.h>          // wxDirDialog - folder picker for Find in Files
 #include <wx/print.h>           // wxPrinter/wxPrintout - File > Print
 #include <wx/printdlg.h>        // wxPrintDialogData/wxPageSetupDialogData - the Print dialog + page geometry
@@ -233,6 +234,7 @@ static long readThemeMode()
 static bool resolveDark(long themeMode) { return themeMode == 1 ? true : themeMode == 2 ? false : wxSystemSettings::GetAppearance().AreAppsDark(); }
 static const int myID_DOCLIST_ITEM = 61000;   // base id for the document-list dropdown entries
 static const int myID_MACRO_ITEM   = 62100;   // base id for saved-macro entries at the bottom of the Macro menu
+static const int kMaxMacroItems    = 200;     // width of the reserved myID_MACRO_ITEM id block (menu entries + bindable commands)
 static const int myID_OPENFOLDER_TOOL_BASE = 60300;   // base id for File > Open Containing Folder's dynamically-detected entries
 
 // The one persistent editor view (set by the frame), used to release a tab's Document when its
@@ -257,6 +259,7 @@ static int encodingFromName(const wxString& name)
 
 // One recorded Scintilla command in a macro (Macro menu: record / playback / run multiple).
 struct MacroStep { int msg; uptr_t wparam; sptr_t lparam; bool hasText = false; std::string text; };
+struct SavedMacro { long uid = 0; wxString name; std::vector<MacroStep> steps; };   // persisted to macros.dat
 
 class EditorPage : public wxPanel
 {
@@ -269,6 +272,7 @@ public:
     wxString title;            // tab/window title without the unsaved "*" marker
     wxString lang  = _("Normal text file");   // status-bar language label
     bool     langForced = false;           // true once the user picks a language from the Language menu
+    bool     largeFile  = false;           // set once at load; suppresses styling/fold/wrap (large-file mode). Picking a Language (langForced) overrides it.
     wxString forcedLexer;                  // that pick's Lexilla lexer name ("" = forced Normal Text)
     wxString forcedName;                   // that pick's display label for the status bar, e.g. "C++"
     wxString sciLang;                      // name of a registered Scintillua language when active ("" = none); container-lexed via m_scintillua
@@ -411,6 +415,38 @@ static const char GO_KEYWORDS[] =
 static const char RUST_KEYWORDS[] =
     "as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub "
     "ref return self Self static struct super trait true type unsafe use where while bool char str u8 u32 u64 i32 i64 usize Vec String Option Result";
+// The lists below were curated from permissive sources - Scintillua's per-language lexers (MIT, (c)
+// Mitchell) and SciTE .properties (HPND, the same license as the vendored Lexilla) - as facts (a
+// language's reserved words + common builtins), not copied expression. Autocomplete keys purely on the
+// file extension, so these apply even for languages with no wired Lexilla lexer (they render as plain text).
+static const char PHP_KEYWORDS[] =
+    "abstract and array as break callable case catch class clone const continue declare default do echo "
+    "else elseif empty enddeclare endfor endforeach endif endswitch endwhile enum extends final finally fn "
+    "for foreach function global goto if implements include include_once instanceof insteadof interface isset "
+    "list match namespace new or print private protected public readonly require require_once return static "
+    "switch throw trait try unset use var while xor yield true false null __construct __destruct";
+static const char KOTLIN_KEYWORDS[] =
+    "abstract actual annotation as break by catch class companion const constructor continue crossinline data "
+    "do dynamic else enum expect external false final finally for fun get if import in infix init inline inner "
+    "interface internal is lateinit noinline null object open operator out override package private protected "
+    "public reified return sealed set super suspend tailrec this throw true try typealias val var vararg when "
+    "where while Int Long Float Double Boolean Char String Unit Any List Map Set";
+static const char SWIFT_KEYWORDS[] =
+    "actor as associatedtype async await break case catch class continue default defer deinit do else enum "
+    "extension fallthrough false fileprivate final for func guard if import in indirect init inout internal "
+    "is lazy let mutating nil nonmutating open operator private protocol public repeat rethrows return self "
+    "Self static struct subscript super switch throw throws true try typealias var weak where while "
+    "Int Double Float Bool String Character Array Dictionary Set Optional Any";
+static const char R_KEYWORDS[] =
+    "if else repeat while function for in next break TRUE FALSE NULL Inf NaN NA NA_integer_ NA_real_ "
+    "NA_character_ library require return invisible c list vector matrix data.frame factor print cat paste "
+    "paste0 sapply lapply vapply mapply apply names length nrow ncol dim sum mean median";
+static const char YAML_KEYWORDS[] = "true false null yes no on off";
+static const char HTML_KEYWORDS[] =   // common tag + attribute names for tag-context completion
+    "html head body title meta link script style div span p a img ul ol li table thead tbody tr td th form "
+    "input button select option textarea label nav header footer main section article aside h1 h2 h3 h4 h5 "
+    "h6 br hr strong em code pre blockquote iframe video audio canvas svg class id href src alt type value "
+    "name placeholder rel content charset width height onclick data";
 
 // nib.sci/1 - the portable Scintilla passthrough tail. The frame installs g_coreSciCall (it needs
 // m_main/m_sub/m_stc); coreSciCall routes a view index (0=main, 1=sub, -1=active) into that editor's
@@ -731,15 +767,23 @@ class FLItemData : public wxTreeItemData { public: int line; explicit FLItemData
 // Project Panel tree node: a folder (isFile=false) or a file reference (isFile=true, path = full path).
 class ProjItemData : public wxTreeItemData { public: bool isFile; wxString path; ProjItemData(bool f, const wxString& p = "") : isFile(f), path(p) {} };
 
+// User-supplied Function List rules (functionList.conf under userDataDir), overlaid on the built-ins below:
+// a language present here REPLACES (or, with "extend", adds to) the compiled-in rules. Loaded once at startup.
+static std::map<std::string, std::vector<FLRule>> g_flUserRules;
+static std::map<std::string, std::regex>          g_flUserComment;
+static std::map<std::string, std::string>         g_flUserExtToLang;   // lowercased ext -> language key
+
 static const std::vector<FLRule>* flRules(const std::string& lang)
 {
+    if (auto u = g_flUserRules.find(lang); u != g_flUserRules.end()) return &u->second;   // user overlay wins
     static std::map<std::string, std::vector<FLRule>> tbl;
     static bool built = false;
     if (!built)
     {
         built = true;
-        auto add = [&](const char* l, int kind, const char* pat, int grp) {
-            try { tbl[l].push_back({ kind, std::regex(pat, std::regex::ECMAScript | std::regex::optimize), grp }); } catch (...) {}
+        auto add = [&](const char* l, int kind, const char* pat, int grp, bool ic = false) {
+            auto fl = std::regex::ECMAScript | std::regex::optimize | (ic ? std::regex::icase : std::regex::flag_type{});
+            try { tbl[l].push_back({ kind, std::regex(pat, fl), grp }); } catch (...) {}
         };
         // ---- C / C++ ----
         // Class-key declarations per [class.pre]: `class|struct|union`, optional leading template<>,
@@ -832,6 +876,19 @@ static const std::vector<FLRule>* flRules(const std::string& lang)
         // method sugar) and the `Name = function(...)` assignment form.
         add("lua", 0, R"((?:^|\n)[ \t]*(?:local[ \t]+)?function[ \t]+([A-Za-z_]\w*(?:[.:][A-Za-z_]\w*)*)[ \t]*\()", 1);
         add("lua", 0, R"((?:^|\n)[ \t]*(?:local[ \t]+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)[ \t]*=[ \t]*function[ \t]*\()", 1);
+        // ---- PHP ----  class/interface/trait/enum + function definitions
+        add("php", 1, R"((?:^|\n)[ \t]*(?:(?:abstract|final)[ \t]+)*(?:class|interface|trait|enum)[ \t]+([A-Za-z_]\w*))", 1);
+        add("php", 0, R"((?:^|\n)[ \t]*(?:(?:public|private|protected|static|final|abstract)[ \t]+)*function[ \t]+&?[ \t]*([A-Za-z_]\w*)[ \t]*\()", 1);
+        // ---- Ruby ----  class/module + def (incl. self. and ?/!/= suffixes)
+        add("ruby", 1, R"((?:^|\n)[ \t]*(?:class|module)[ \t]+([A-Z]\w*))", 1);
+        add("ruby", 0, R"((?:^|\n)[ \t]*def[ \t]+((?:self\.)?[A-Za-z_]\w*[?!=]?))", 1);
+        // ---- SQL ----  CREATE [OR REPLACE] FUNCTION/PROCEDURE (keywords are case-insensitive)
+        add("sql", 0, R"((?:^|\n)\s*create\s+(?:or\s+replace\s+)?(?:function|procedure)\s+([A-Za-z_][\w.$]*))", 1, /*icase*/true);
+        // ---- POSIX sh / bash ----  name() { ... }  and  function name
+        add("sh", 0, R"((?:^|\n)[ \t]*(?:function[ \t]+)?([A-Za-z_]\w*)[ \t]*\(\)[ \t\r\n]*\{)", 1);
+        add("sh", 0, R"((?:^|\n)[ \t]*function[ \t]+([A-Za-z_]\w*))", 1);
+        // ---- PowerShell ----  function/filter (keyword is case-insensitive)
+        add("powershell", 0, R"((?:^|\n)[ \t]*(?:function|filter)[ \t]+([A-Za-z_][\w-]*))", 1, /*icase*/true);
     }
     auto it = tbl.find(lang);
     return it == tbl.end() ? nullptr : &it->second;
@@ -840,6 +897,7 @@ static const std::vector<FLRule>* flRules(const std::string& lang)
 // Comment + string spans to mask out, so keywords inside comments/strings aren't parsed as symbols.
 static const std::regex* flCommentRe(const std::string& lang)
 {
+    if (auto u = g_flUserComment.find(lang); u != g_flUserComment.end()) return &u->second;   // user overlay wins
     static std::map<std::string, std::regex> tbl;
     static bool built = false;
     if (!built)
@@ -861,10 +919,66 @@ static const std::regex* flCommentRe(const std::string& lang)
             // number of `=` signs on both ends; the line-comment alternative must come after the long
             // form so `--[[` prefers the block reading.
             tbl["lua"] = std::regex(R"(--\[(=*)\[[\s\S]*?\]\1\]|--[^\n]*|\[(=*)\[[\s\S]*?\]\2\]|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
+            // PHP: /* */, //, # line comments + strings.
+            tbl["php"]  = std::regex(R"(/\*[\s\S]*?\*/|//[^\n]*|#[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
+            // Ruby: # line comments + strings.
+            tbl["ruby"] = std::regex(R"(#[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
+            // sh/bash: # line comments + strings ('...' has no escapes).
+            tbl["sh"]   = std::regex(R"(#[^\n]*|"(?:\\.|[^"\\\n])*"|'[^']*')");
+            // SQL: -- and /* */ comments + '...' strings ('' escapes a quote inside).
+            tbl["sql"]  = std::regex(R"(--[^\n]*|/\*[\s\S]*?\*/|'(?:''|[^'])*')");
+            // PowerShell: <# #> block + # line comments + "..."/'...' strings (` is the escape).
+            tbl["powershell"] = std::regex(R"(<#[\s\S]*?#>|#[^\n]*|"(?:[^"`]|`.)*"|'[^']*')");
         } catch (...) {}
     }
     auto it = tbl.find(lang);
     return it == tbl.end() ? nullptr : &it->second;
+}
+
+// Load user Function List rules from functionList.conf (userDataDir), merged over the built-ins. Line format
+// (# starts a comment): a block "[lang <key>]" (or "[lang <key> extend]" to add to the built-in instead of
+// replacing it), then any of:  ext <e1> <e2>...  |  ignorecase  |  comment <regex>  |
+// func <group> <regex>  |  container <group> <regex>   (the regex is the rest of the line). Bad patterns are
+// dropped individually (try/catch), like the built-in table.
+static void loadFunctionListRules(const wxString& path)
+{
+    g_flUserRules.clear(); g_flUserComment.clear(); g_flUserExtToLang.clear();
+    wxLogNull noLog;
+    if (!wxFileExists(path)) return;
+    wxFile f(path); wxString raw;
+    if (!f.IsOpened() || !f.ReadAll(&raw, wxConvUTF8)) return;
+    std::string curLang; bool icase = false;
+    wxStringTokenizer lines(raw, "\n", wxTOKEN_STRTOK);
+    while (lines.HasMoreTokens())
+    {
+        wxString line = lines.GetNextToken(); line.Trim(true).Trim(false);
+        if (line.empty() || line[0] == '#') continue;
+        if (line.StartsWith("[") && line.EndsWith("]"))
+        {
+            wxStringTokenizer h(line.Mid(1, line.length() - 2), " ", wxTOKEN_STRTOK);
+            if (h.GetNextToken() != "lang") { curLang.clear(); continue; }
+            curLang = std::string(h.GetNextToken().utf8_str()); icase = false;
+            const bool extend = (h.GetNextToken() == "extend");
+            std::vector<FLRule> seed;
+            if (extend) { if (const auto* b = flRules(curLang)) seed = *b; }   // start from the built-in (no overlay for curLang yet)
+            g_flUserRules[curLang] = std::move(seed);
+            continue;
+        }
+        if (curLang.empty()) continue;
+        wxStringTokenizer tk(line, " ", wxTOKEN_STRTOK);
+        const wxString kw = tk.GetNextToken();
+        if (kw == "ignorecase") icase = true;
+        else if (kw == "ext") { while (tk.HasMoreTokens()) g_flUserExtToLang[std::string(tk.GetNextToken().Lower().utf8_str())] = curLang; }
+        else if (kw == "comment") { wxString rx = tk.GetString(); rx.Trim(false);
+            try { g_flUserComment[curLang] = std::regex(std::string(rx.utf8_str()), icase ? std::regex::icase : std::regex::flag_type{}); } catch (...) {} }
+        else if (kw == "func" || kw == "container") {
+            long grp = 1; tk.GetNextToken().ToLong(&grp);
+            wxString rest = tk.GetString(); rest.Trim(false);
+            const int kind = (kw == "container") ? 1 : 0;
+            auto fl = std::regex::ECMAScript | std::regex::optimize | (icase ? std::regex::icase : std::regex::flag_type{});
+            try { g_flUserRules[curLang].push_back({ kind, std::regex(std::string(rest.utf8_str()), fl), (int)grp }); } catch (...) {}
+        }
+    }
 }
 
 // One extracted symbol: byte positions in the scanned UTF-8 text. For containers (kind 1), rangeEnd
@@ -959,55 +1073,12 @@ static std::vector<FLSym> flCollect(const std::string& text, const std::string& 
 
 // ---- Find in Files --------------------------------------------------------------------------------
 struct FifHit { wxString file; int line; wxString text; };
+static const size_t kFifHitCap = 50000;   // safety cap on pathological Find-in-Files searches (menu command)
 class FifItemData : public wxTreeItemData { public: wxString file; int line; FifItemData(const wxString& f, int l) : file(f), line(l) {} };
 
-// Search every file under `dir` matching `filters` (e.g. "*.cpp;*.h", ';'-separated) for `term`,
-// line by line. Collects {file, line, text} hits; fills `searched` with the file count.
-static void findInFiles(const wxString& term, const wxString& dir, const wxString& filters,
-                        bool matchCase, bool wholeWord, bool useRegex, bool subdirs,
-                        std::vector<FifHit>& hits, int& searched)
-{
-    searched = 0;
-    if (term.empty() || !wxDirExists(dir)) return;
-    std::set<wxString> files;
-    wxArrayString pats = wxSplit(filters.empty() ? wxString("*.*") : filters, ';');
-    const int flags = wxDIR_FILES | (subdirs ? wxDIR_DIRS : 0);
-    for (wxString pat : pats) { pat.Trim(true).Trim(false); if (pat.empty()) continue;
-        wxArrayString f; wxDir::GetAllFiles(dir, &f, pat, flags); for (const auto& x : f) files.insert(x); }
-    std::regex re; bool re_ok = false;
-    if (useRegex) { try { auto fl = std::regex::ECMAScript; if (!matchCase) fl |= std::regex::icase; re = std::regex(term.ToStdString(), fl); re_ok = true; } catch (...) {} }
-    const wxString needle = matchCase ? term : term.Lower();
-    auto isWord = [](wxUniChar c) { return wxIsalnum(c) || c == '_'; };
-    for (const wxString& path : files)
-    {
-        wxTextFile tf(path);
-        if (!tf.Open()) continue;
-        ++searched;
-        for (size_t i = 0; i < tf.GetLineCount(); ++i)
-        {
-            const wxString& line = tf.GetLine(i);
-            bool m = false;
-            if (useRegex) { if (re_ok) { try { m = std::regex_search(line.ToStdString(), re); } catch (...) {} } }
-            else
-            {
-                const wxString hay = matchCase ? line : line.Lower();
-                size_t pos = hay.find(needle);
-                while (pos != wxString::npos)
-                {
-                    if (!wholeWord) { m = true; break; }
-                    const bool okB = (pos == 0) || !isWord(line[pos - 1]);
-                    const size_t end = pos + needle.length();
-                    const bool okA = (end >= line.length()) || !isWord(line[end]);
-                    if (okB && okA) { m = true; break; }
-                    pos = hay.find(needle, pos + 1);
-                }
-            }
-            if (m) hits.push_back({ path, (int)i + 1, line });
-            if (hits.size() > 50000) { tf.Close(); return; }    // safety cap on pathological searches
-        }
-        tf.Close();
-    }
-}
+// (The Find-in-Files MENU command's old byte-level std::regex scanner lived here; it diverged from the
+// in-editor Find engine on Unicode and ignored whole-word in regex mode. It now shares the same Scintilla
+// scratch-buffer engine as Find and the Find-dialog's Find-in-Files tab - see fifScanFile / onFindInFiles.)
 
 // NOTE: SCN_* notifications used to arrive here as Win32 WM_NOTIFY via a subclass on the page panel.
 // wxStyledTextCtrl (ScintillaWX) does NOT send WM_NOTIFY - it fires wxEVT_STC_* events instead - so the
@@ -1949,11 +2020,17 @@ static const NibLexerApi g_nibLexerApi = { 1, sizeof(NibLexerApi), nibLexerCreat
 // click (wx-event path - never raw WM_COMMAND, see the & 0xFFFF notes there). g_nibToolbarRemoveAll is
 // the teardown the frame installs: unloadNibPlugins()/onCloseWindow run it BEFORE FreeLibrary so no
 // button whose command targets a plugin outlives that plugin's mapped image.
+// v2 adds add_tool_named: the button is drawn from the host's OWN icon set by asset name, so it follows
+// the user's icon-pack and light/dark choice (retints included) instead of freezing whatever pixels the
+// plugin rasterised at registration time.
 static std::function<int(int, const NibToolbarIcon*, const char*)> g_nibToolbarAddTool;
+static std::function<int(int, const char*, const char*)>           g_nibToolbarAddToolNamed;
 static std::function<void()>                                       g_nibToolbarRemoveAll;
 static int nibToolbarAddTool(NibHost*, int cmdId, const NibToolbarIcon* icon, const char* tip)
 { return (g_nibToolbarAddTool && icon) ? g_nibToolbarAddTool(cmdId, icon, tip ? tip : "") : 0; }
-static const NibToolbarApi g_nibToolbarApi = { 1, sizeof(NibToolbarApi), nibToolbarAddTool };
+static int nibToolbarAddToolNamed(NibHost*, int cmdId, const char* name, const char* tip)
+{ return (g_nibToolbarAddToolNamed && name && *name) ? g_nibToolbarAddToolNamed(cmdId, name, tip ? tip : "") : 0; }
+static const NibToolbarApi g_nibToolbarApi = { 2, sizeof(NibToolbarApi), nibToolbarAddTool, nibToolbarAddToolNamed };
 
 // nib.alloc/1 - host-owned dynamic ranges of the shared number spaces. Reserved-number audit (what the
 // grants below are provably disjoint from):
@@ -2042,7 +2119,7 @@ static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PATHS)    == 0) return &g_nibPathsApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_SCI)      == 0) return &g_nibSciApi;   // portable: every OS
     if (minv <= 2 && std::strcmp(iface, NIB_IFACE_UI)       == 0) return &g_nibUiApi;   // grow-in-place: caller checks ->version for the v2 chrome/state getters
-    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_TOOLBAR)  == 0) return &g_nibToolbarApi;
+    if (minv <= 2 && std::strcmp(iface, NIB_IFACE_TOOLBAR)  == 0) return &g_nibToolbarApi;   // v2 adds add_tool_named
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_ALLOC)    == 0) return &g_nibAllocApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_SESSION)  == 0) return &g_nibSessionApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_LEXER)    == 0) return &g_nibLexerApi;
@@ -2195,11 +2272,41 @@ private:
 // the same widget is what produces the "hover highlight fills half the button, then catches up a moment
 // later" artifact. Painting the button entirely by hand removes the native GtkButton (and its independent
 // repaint cycle) from the picture - there is nothing left for wx's own Refresh() to race against.
+// Background painter shared by the two hand-drawn caption buttons (TitleBarBtn below, and the MSW-only
+// RoundCaptionBtn): the chrome fill, plus - when hovered - either the Opera-style inset rounded pill or the
+// Windows-style flat full-cell fill. Single-sourced deliberately: the pill geometry (margins + radius) was
+// settled over several rounds of visual feedback, and with a copy per class the next tweak would have to
+// find both. Takes the concrete wxAutoBufferedPaintDC (not wxDC&) because wxGraphicsContext::Create has no
+// wxDC& overload - passing the same static type both call sites already use keeps resolution identical.
+static void paintCaptionBtnBg(wxAutoBufferedPaintDC& dc, const wxWindow& win, const wxSize& sz,
+                              const wxColour& bg, const wxColour& hotBg, bool hot, bool rounded)
+{
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.SetBrush(wxBrush(bg));
+    dc.DrawRectangle(0, 0, sz.x, sz.y);
+    if (!hot) return;
+    if (rounded)   // Opera: an inset rounded pill smaller than the cell (antialiased)
+    {
+        const int mx = win.FromDIP(4), my = win.FromDIP(3);
+        if (wxGraphicsContext* gc = wxGraphicsContext::Create(dc))
+        {
+            gc->SetPen(wxNullPen); gc->SetBrush(wxBrush(hotBg));
+            gc->DrawRoundedRectangle(mx, my, sz.x - 2 * mx, sz.y - 2 * my, win.FromDIP(6));
+            delete gc;
+        }
+    }
+    else           // Windows-style: flat full-cell fill
+    {
+        dc.SetBrush(wxBrush(hotBg));
+        dc.DrawRectangle(0, 0, sz.x, sz.y);
+    }
+}
+
 class TitleBarBtn : public wxWindow
 {
 public:
-    TitleBarBtn(wxWindow* parent, wxWindowID id, const wxSize& size, const wxBitmapBundle& glyph, const wxColour& bg, const wxColour& hotBg, int glyphPx = 12)
-        : wxWindow(parent, id, wxDefaultPosition, size, wxBORDER_NONE), m_glyph(glyph), m_bg(bg), m_hotBg(hotBg), m_glyphPx(glyphPx)
+    TitleBarBtn(wxWindow* parent, wxWindowID id, const wxSize& size, const wxBitmapBundle& glyph, const wxColour& bg, const wxColour& hotBg, int glyphPx = 12, bool rounded = false)
+        : wxWindow(parent, id, wxDefaultPosition, size, wxBORDER_NONE), m_glyph(glyph), m_bg(bg), m_hotBg(hotBg), m_glyphPx(glyphPx), m_rounded(rounded)
     {
         SetBackgroundStyle(wxBG_STYLE_PAINT);   // we paint the whole background ourselves - no native erase
         Bind(wxEVT_PAINT, &TitleBarBtn::onPaint, this);
@@ -2217,18 +2324,56 @@ private:
     void onPaint(wxPaintEvent&)
     {
         wxAutoBufferedPaintDC dc(this);
-        dc.SetBrush(wxBrush(m_hot ? m_hotBg : m_bg));
-        dc.SetPen(*wxTRANSPARENT_PEN);
-        dc.DrawRectangle(wxPoint(0, 0), GetClientSize());
-        const wxBitmap bmp = m_glyph.GetBitmap(FromDIP(wxSize(m_glyphPx, m_glyphPx)));
         const wxSize sz = GetClientSize();
+        paintCaptionBtnBg(dc, *this, sz, m_bg, m_hotBg, m_hot, m_rounded);
+        const wxBitmap bmp = m_glyph.GetBitmap(FromDIP(wxSize(m_glyphPx, m_glyphPx)));
         dc.DrawBitmap(bmp, (sz.x - bmp.GetWidth()) / 2, (sz.y - bmp.GetHeight()) / 2, true);
     }
     wxBitmapBundle m_glyph;
     wxColour m_bg, m_hotBg;
     int m_glyphPx = 12;   // glyph render size (px, DIP-scaled): 12 for window controls, 16 for the tab caption +/v/x
+    bool m_rounded = false;
     bool m_hot = false;
 };
+
+#ifdef __WXMSW__
+// Opera-style rounded caption button for the integrated title bar's NON-native window controls: instead of a
+// native wxButton's flat full-cell hover fill, this paints an inset, antialiased rounded-rectangle behind the
+// Segoe/MDL2 font glyph (close goes red with a white glyph). Custom-drawn like TitleBarBtn so wx owns every pixel.
+class RoundCaptionBtn : public wxWindow
+{
+public:
+    RoundCaptionBtn(wxWindow* parent, wxWindowID id, const wxSize& size, wchar_t glyph, const wxFont& font,
+                    const wxColour& bg, const wxColour& hotBg, const wxColour& fg, const wxColour& hotFg, bool rounded)
+        : wxWindow(parent, id, wxDefaultPosition, size, wxBORDER_NONE),
+          m_glyph(glyph), m_font(font), m_bg(bg), m_hotBg(hotBg), m_fg(fg), m_hotFg(hotFg), m_rounded(rounded)
+    {
+        SetBackgroundStyle(wxBG_STYLE_PAINT);
+        Bind(wxEVT_PAINT, &RoundCaptionBtn::onPaint, this);
+        Bind(wxEVT_ENTER_WINDOW, [this](wxMouseEvent& e){ m_hot = true;  Refresh(); e.Skip(); });
+        Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent& e){ m_hot = false; Refresh(); e.Skip(); });
+        Bind(wxEVT_LEFT_UP, [this](wxMouseEvent&){ wxCommandEvent ev(wxEVT_BUTTON, GetId()); ev.SetEventObject(this); ProcessWindowEvent(ev); });
+    }
+    void SetGlyph(wchar_t g) { m_glyph = g; Refresh(); }
+private:
+    void onPaint(wxPaintEvent&)
+    {
+        wxAutoBufferedPaintDC dc(this);
+        const wxSize sz = GetClientSize();
+        paintCaptionBtnBg(dc, *this, sz, m_bg, m_hotBg, m_hot, m_rounded);
+        dc.SetFont(m_font);
+        dc.SetTextForeground(m_hot ? m_hotFg : m_fg);
+        const wxString g = wxString(wxUniChar(m_glyph));
+        const wxSize ts = dc.GetTextExtent(g);
+        dc.DrawText(g, (sz.x - ts.x) / 2, (sz.y - ts.y) / 2);
+    }
+    wchar_t  m_glyph;
+    wxFont   m_font;
+    wxColour m_bg, m_hotBg, m_fg, m_hotFg;
+    bool     m_rounded = false;   // always set from the ctor's required param; matches TitleBarBtn's default
+    bool     m_hot = false;
+};
+#endif
 
 #if defined(WXN_HAS_BORDERLESS) && defined(__WXMSW__)
 // Native-buttons mode only (see buildIntegratedTitleBar): hit-test-transparent variants of the caption
@@ -3053,12 +3198,26 @@ public:
                 { img.SetRGB(x, y, px[0], px[1], px[2]); img.SetAlpha(x, y, px[3]); }
             const int isz = m_toolbarIconSize;
             if (w != isz || h != isz) img.Rescale(isz, isz, wxIMAGE_QUALITY_HIGH);   // host icon size wins
-            const wxBitmapBundle bmp = wxBitmapBundle::FromBitmap(wxBitmap(img));
-            const wxString tipStr = wxString::FromUTF8(tip ? tip : "");
-            tb->AddTool(id, tipStr, bmp, iconDisabled(bmp, isz), wxITEM_NORMAL, tipStr);
-            tb->Realize();
-            m_nibToolIds.push_back(id);
-            return 1;
+            return addNibTool(id, wxBitmapBundle::FromBitmap(wxBitmap(img)), tip);
+        };
+        // nib.toolbar/2: same button, but drawn from OUR icon set by asset name - icon() resolves the
+        // user's pack + light/dark (retints included), so a plugin button keeps matching the built-in ones
+        // when the pack changes, which pixels handed across the ABI cannot do.
+        g_nibToolbarAddToolNamed = [this](int cmdId, const char* name, const char* tip) -> int {
+            wxToolBar* tb = toolBar();
+            if (!tb) return 0;
+            const int id = cmdId & 0xFFFF;
+            if (tb->FindById(id)) return 0;
+            // Names come from a plugin, so treat them as untrusted: a bare asset stem only - no directory
+            // separators, no "..", no extension - or icon() would happily resolve a traversal path. And
+            // require the asset to actually exist, since icon() falls back to wxART_QUESTION rather than
+            // failing, which would plant a "?" on the toolbar instead of reporting the bad name.
+            const wxString nm = wxString::FromUTF8(name);
+            if (nm.empty() || nm.length() > 64 || nm.Contains("..") ||
+                nm.Contains("/") || nm.Contains("\\") || nm.Contains(":")) return 0;
+            const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "icons" + wxFILE_SEP_PATH;
+            if (!wxFileExists(dir + nm + ".svg")) return 0;
+            return addNibTool(id, icon(nm, m_toolbarIconSize), tip);
         };
         g_nibToolbarRemoveAll = [this]() {
             if (wxToolBar* tb = toolBar())
@@ -3730,6 +3889,7 @@ private:
     std::string flLangKey()
     {
         wxString ext; if (auto* p = activePage()) ext = p->path.AfterLast('.').Lower();
+        if (auto u = g_flUserExtToLang.find(std::string(ext.utf8_str())); u != g_flUserExtToLang.end()) return u->second;   // user-mapped extension
         if (ext=="cpp"||ext=="cc"||ext=="cxx"||ext=="c"||ext=="h"||ext=="hpp"||ext=="hxx"||ext=="ino") return "cpp";
         if (ext=="py"||ext=="pyw") return "python";
         if (ext=="js"||ext=="jsx"||ext=="mjs"||ext=="ts"||ext=="tsx") return "js";
@@ -3738,6 +3898,11 @@ private:
         if (ext=="go") return "go";
         if (ext=="rs") return "rust";
         if (ext=="lua") return "lua";
+        if (ext=="php"||ext=="phtml"||ext=="php3") return "php";
+        if (ext=="rb") return "ruby";
+        if (ext=="sql"||ext=="ddl") return "sql";
+        if (ext=="sh"||ext=="bash"||ext=="zsh") return "sh";
+        if (ext=="ps1"||ext=="psm1"||ext=="psd1") return "powershell";
         return "";
     }
     void parseFuncList()
@@ -4500,10 +4665,19 @@ private:
         find->SetFocus();
         themeDialog(&dlg);
         if (dlg.ShowModal() != wxID_OK || find->GetValue().empty()) return;
-        std::vector<FifHit> hits; int searched = 0;
-        { wxBusyCursor busy; findInFiles(find->GetValue(), dirc->GetValue(), filt->GetValue(),
-                                         cc->IsChecked(), ww->IsChecked(), rx->IsChecked(), sd->IsChecked(), hits, searched); }
-        showFifResults(find->GetValue(), hits, searched);
+        FindOpts o; o.find = find->GetValue();
+        o.matchCase = cc->IsChecked(); o.wholeWord = ww->IsChecked(); o.regex = rx->IsChecked();
+        wxString dir2 = dirc->GetValue();
+        if (dir2.empty() || !wxDirExists(dir2)) { showFifResults(o.find, {}, 0); return; }
+        wxString filters = filt->GetValue(); filters.Trim(true).Trim(false); if (filters.empty()) filters = "*.*";
+        ensureFifScratch();
+        const wxArrayString files = fifCollectFiles(dir2, filters, sd->IsChecked());   // honour "In all sub-folders"
+        std::vector<FifHit> hits;
+        { wxBusyCursor busy;
+          // The cap has to break the FILE loop too: stopping only the current file would still open, read and
+          // load every remaining file into the scratch buffer - i.e. pay nearly all the work the cap exists to skip.
+          for (const auto& f : files) { fifScanFile(f, o, hits, kFifHitCap); if (hits.size() >= kFifHitCap) break; } }
+        showFifResults(o.find, hits, static_cast<int>(files.size()));
     }
     wxString curWord()   // the identifier under the caret (for $(CURRENT_WORD))
     {
@@ -4725,10 +4899,32 @@ private:
     std::string rangeText(int a, int b) { if (b <= a) return {}; sci(SCI_SETTARGETSTART, a); sci(SCI_SETTARGETEND, b); std::string s((size_t)(b - a) + 1, '\0'); sci(SCI_GETTARGETTEXT, 0, reinterpret_cast<sptr_t>(&s[0])); s.resize(b - a); return s; }
     static const char* keywordsForExt(const wxString& ext)
     {
-        if (ext == "js" || ext == "jsx" || ext == "ts" || ext == "tsx") return JS_KEYWORDS;
-        if (ext == "java") return JAVA_KEYWORDS;
-        if (ext == "cs") return CS_KEYWORDS;
-        if (ext == "c" || ext == "cpp" || ext == "cc" || ext == "cxx" || ext == "h" || ext == "hpp" || ext == "hxx" || ext == "rc") return CPP_KEYWORDS;
+        // Keyed on file extension. Most lists are the same constants the lexer-styling path already uses
+        // (SCI_SETKEYWORDS in setLexerForFile); a table makes adding a language a one-line entry. ts/tsx
+        // reuse JS_KEYWORDS, which already carries the TypeScript keywords.
+        struct KwMap { const char* ext; const char* words; };
+        static const KwMap TABLE[] = {
+            { "c", CPP_KEYWORDS }, { "cpp", CPP_KEYWORDS }, { "cc", CPP_KEYWORDS }, { "cxx", CPP_KEYWORDS },
+            { "h", CPP_KEYWORDS }, { "hpp", CPP_KEYWORDS }, { "hxx", CPP_KEYWORDS }, { "rc", CPP_KEYWORDS },
+            { "js", JS_KEYWORDS }, { "jsx", JS_KEYWORDS }, { "mjs", JS_KEYWORDS }, { "cjs", JS_KEYWORDS },
+            { "ts", JS_KEYWORDS }, { "tsx", JS_KEYWORDS },
+            { "java", JAVA_KEYWORDS }, { "cs", CS_KEYWORDS },
+            { "py", PY_KEYWORDS }, { "pyw", PY_KEYWORDS },
+            { "json", JSON_KEYWORDS }, { "sql", SQL_KEYWORDS },
+            { "css", CSS_KEYWORDS }, { "scss", CSS_KEYWORDS }, { "less", CSS_KEYWORDS },
+            { "lua", LUA_KEYWORDS },
+            { "sh", BASH_KEYWORDS }, { "bash", BASH_KEYWORDS }, { "zsh", BASH_KEYWORDS },
+            { "bat", BATCH_KEYWORDS }, { "cmd", BATCH_KEYWORDS },
+            { "pl", PERL_KEYWORDS }, { "pm", PERL_KEYWORDS },
+            { "rb", RUBY_KEYWORDS }, { "rs", RUST_KEYWORDS }, { "go", GO_KEYWORDS },
+            { "ps1", PS_KEYWORDS }, { "psm1", PS_KEYWORDS }, { "psd1", PS_KEYWORDS },
+            { "php", PHP_KEYWORDS }, { "php3", PHP_KEYWORDS }, { "phtml", PHP_KEYWORDS },
+            { "kt", KOTLIN_KEYWORDS }, { "kts", KOTLIN_KEYWORDS },
+            { "swift", SWIFT_KEYWORDS }, { "r", R_KEYWORDS },
+            { "yml", YAML_KEYWORDS }, { "yaml", YAML_KEYWORDS },
+            { "html", HTML_KEYWORDS }, { "htm", HTML_KEYWORDS }, { "xhtml", HTML_KEYWORDS },
+        };
+        for (const auto& m : TABLE) if (ext == m.ext) return m.words;
         return nullptr;   // no keyword list -> document-word completion only
     }
     const char* keywordsForActiveLang() { auto* p = activePage(); return p ? keywordsForExt(p->path.AfterLast('.').Lower()) : nullptr; }
@@ -5794,6 +5990,7 @@ private:
         // before FreeLibrary) without moving the deferred unload itself.
         if (g_nibToolbarRemoveAll) { g_nibToolbarRemoveAll(); g_nibToolbarRemoveAll = nullptr; }
         g_nibToolbarAddTool = nullptr;
+        g_nibToolbarAddToolNamed = nullptr;
         // Same teardown discipline for the other frame-capturing hooks a plugin can still reach from
         // its NPPN_SHUTDOWN handler: that notification is delivered from the CallAfter-deferred
         // unloadNibPlugins() below - AFTER e.Skip() has already destroyed this frame - so a plugin
@@ -5960,6 +6157,10 @@ private:
         m_split->UpdateSize();                               // let the surviving notebook fill the splitter
         setActiveView(&m_main);
         if (auto* p = activePage()) { activateBuffer(p); if (m_stc) m_stc->SetSize(p->GetClientSize()); }
+        // MAIN just re-widened from half to full; the notebook's own resize doesn't reliably re-fire, so
+        // re-anchor the +/v/x cap to the right edge explicitly (else it stays where the split-width left it).
+        positionCapBar();
+        CallAfter([this]{ positionCapBar(); });              // again after the splitter layout fully settles
     }
 
     // Popup (right-click) context menu, user-editable via Settings > Edit Popup ContextMenu ->
@@ -6375,8 +6576,12 @@ private:
         // now build the accel table + rewrite the menu labels from this store.
         seedKeymapDefaults(m_keymap);
         seedEditorKeymapDefaults(m_keymap);   // Tier 0 for the curated Scintilla "Editor commands"
+        loadSavedMacros();                    // restore saved macros from macros.dat...
+        appendMacroMenuItems();               // ...list them on the (already-built) Macro menu...
+        seedMacroKeymapDefaults();            // ...and register "macro.<uid>" so a stored binding resolves + the mapper shows them
         registerKeymapSchemes(m_keymap);
         m_keymap.load(userDataDir());
+        loadFunctionListRules(userDataDir() + wxFILE_SEP_PATH + "functionList.conf");   // user-defined Function List languages
         m_keymapReady = true;
         // Apply any editor-command overrides to the two persistent STCs now the store is loaded. buildEditor()
         // created them before this point (store empty then), so the setupScintilla-time apply was a no-op;
@@ -6413,7 +6618,7 @@ private:
     wxWindowPart GetWindowPart(wxPoint screenPos) const
     {
 #ifdef __WXMSW__
-        if (m_nativeWinButtons && m_titleBar)
+        if (nativeWinButtons() && m_titleBar)
         {
             static const wxWindowPart kParts[3] = { wxWP_MINIMIZE_BUTTON, wxWP_MAXIMIZE_BUTTON, wxWP_CLOSE_BUTTON };
             const int i = capBtnAtScreen(screenPos);
@@ -6451,7 +6656,7 @@ private:
         // double-click binds below then never fire - the panel receives no mouse messages - and the OS
         // handles both natively via HTCAPTION instead. Two-phase Create keeps one argument list.
 #ifdef __WXMSW__
-        m_titleBar = m_nativeWinButtons ? new HitPass<wxPanel> : new wxPanel;
+        m_titleBar = nativeWinButtons() ? new HitPass<wxPanel> : new wxPanel;
 #else
         m_titleBar = new wxPanel;
 #endif
@@ -6462,7 +6667,7 @@ private:
         // our own chrome applies: no panel background (the header's theme shows through), no drag binds,
         // no app-drawn window-control buttons, and no AUI docking (it lives in the header bar instead).
 #ifdef __WXGTK__
-        const bool hbMode = m_nativeWinButtons;
+        const bool hbMode = nativeWinButtons();
 #else
         const bool hbMode = false;
 #endif
@@ -6525,7 +6730,7 @@ private:
         // + glyphs (Chrome{Minimize,Maximize,Restore,Close}) so the controls are pixel-identical to native.
         // Native-buttons mode upgrades to Win11's Segoe Fluent Icons where installed (identical codepoints
         // for these four glyphs); the default mode stays on MDL2 so OFF remains byte-identical to before.
-        const bool fluent = m_nativeWinButtons && wxFontEnumerator::IsValidFacename("Segoe Fluent Icons");
+        const bool fluent = nativeWinButtons() && wxFontEnumerator::IsValidFacename("Segoe Fluent Icons");
         const wxFont mdl2(wxFontInfo(10).FaceName(fluent ? "Segoe Fluent Icons" : "Segoe MDL2 Assets"));
 #endif
         auto ctrl = [&](wchar_t mdl2Glyph, const char* svgPath, int which, const wxColour& hot) -> wxWindow* {
@@ -6536,28 +6741,32 @@ private:
             // Native-buttons mode swaps in the hit-test-transparent variant (see HitPass): same rendering,
             // but clicks and hover are then driven by the frame's wxEVT_NC_* handlers below, not client
             // events. Two-phase Create keeps a single argument list across the two variants.
-            wxButton* b = m_nativeWinButtons ? new HitPass<wxButton> : new wxButton;
-            b->Create(m_titleBar, wxID_ANY, "", wxDefaultPosition,
-                      wxSize(46, kTitleBarH), wxBU_EXACTFIT | wxBORDER_NONE);
-            b->SetFont(mdl2); b->SetLabel(wxString(wxUniChar(mdl2Glyph)));
-            b->SetForegroundColour(m_dark ? wxColour(240, 240, 240) : wxColour(20, 20, 20));
             (void)svgPath;
-            b->SetBackgroundColour(barBg);
-            if (m_nativeWinButtons)
-                m_capBtns[which] = { b, hot };
-            else
+            const wxColour fg = m_dark ? wxColour(240, 240, 240) : wxColour(20, 20, 20);
+            if (nativeWinButtons())
             {
-                b->Bind(wxEVT_BUTTON,       [this, which](wxCommandEvent&) { onWindowControl(which); });
-                b->Bind(wxEVT_ENTER_WINDOW, [b, hot](wxMouseEvent& e)   { b->SetBackgroundColour(hot);   b->Refresh(); e.Skip(); });
-                b->Bind(wxEVT_LEAVE_WINDOW, [b, barBg](wxMouseEvent& e) { b->SetBackgroundColour(barBg); b->Refresh(); e.Skip(); });
+                // Native mode: hit-test-transparent wxButton, pixel-identical to the OS caption buttons;
+                // clicks + hover then arrive as the frame's wxEVT_NC_* events (handlers below).
+                wxButton* b = new HitPass<wxButton>;
+                b->Create(m_titleBar, wxID_ANY, "", wxDefaultPosition, wxSize(46, kTitleBarH), wxBU_EXACTFIT | wxBORDER_NONE);
+                b->SetFont(mdl2); b->SetLabel(wxString(wxUniChar(mdl2Glyph)));
+                b->SetForegroundColour(fg); b->SetBackgroundColour(barBg);
+                m_capBtns[which] = { b, hot };
+                sz->Add(b, 0, wxEXPAND);
+                return b;
             }
+            // Non-native mode: wxNote-drawn button - rounded pill (Opera) or flat full-cell (Windows-style),
+            // per operaButtons(); close hovers red with a white glyph either way.
+            const wxColour hotFg = (which == 2) ? wxColour(255, 255, 255) : fg;
+            auto* b = new RoundCaptionBtn(m_titleBar, wxID_ANY, wxSize(46, kTitleBarH), mdl2Glyph, mdl2, barBg, hot, fg, hotFg, operaButtons());
+            b->Bind(wxEVT_BUTTON, [this, which](wxCommandEvent&) { onWindowControl(which); });
             sz->Add(b, 0, wxEXPAND);
             return b;
 #else
             (void)mdl2Glyph;
             // GTK non-native: our bundled SVG glyph in a flat TitleBarBtn. (GTK native-buttons mode never
             // reaches here - it's hbMode, where the desktop theme draws the real buttons in the header bar.)
-            auto* b = new TitleBarBtn(m_titleBar, wxID_ANY, wxSize(46, kTitleBarH), winGlyph(svgPath), barBg, hot);
+            auto* b = new TitleBarBtn(m_titleBar, wxID_ANY, wxSize(46, kTitleBarH), winGlyph(svgPath), barBg, hot, 12, operaButtons());
             b->Bind(wxEVT_BUTTON, [this, which](wxCommandEvent&) { onWindowControl(which); });
             sz->Add(b, 0, wxEXPAND);
             return b;
@@ -6571,7 +6780,7 @@ private:
             ctrl(0xE8BB, GLYPH_CLOSE, 2, wxColour(232, 17, 35));                                                // close (red hover)
         }
 #ifdef __WXMSW__
-        if (m_nativeWinButtons)
+        if (nativeWinButtons())
         {
             // Input for the hit-test-transparent caption buttons: wxbf swallows the OS default for
             // HTMINBUTTON/HTMAXBUTTON/HTCLOSE and re-posts the NC mouse traffic as wxEVT_NC_* events in
@@ -6642,7 +6851,9 @@ private:
     {
         if (!m_maxBtn) return;   // null in GTK header-bar mode (GTK draws the buttons) - nothing to sync
 #ifdef __WXMSW__
-        static_cast<wxButton*>(m_maxBtn)->SetLabel(wxString(wxUniChar(IsMaximized() ? 0xE923 : 0xE922)));   // ChromeRestore / ChromeMaximize
+        const wchar_t g = IsMaximized() ? 0xE923 : 0xE922;   // ChromeRestore / ChromeMaximize
+        if (nativeWinButtons()) static_cast<wxButton*>(m_maxBtn)->SetLabel(wxString(wxUniChar(g)));
+        else                    static_cast<RoundCaptionBtn*>(m_maxBtn)->SetGlyph(g);
 #else
         static_cast<TitleBarBtn*>(m_maxBtn)->SetGlyph(winGlyph(IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX));
 #endif
@@ -6687,6 +6898,20 @@ private:
         m_aui.Update();
     }
 #endif // WXN_HAS_BORDERLESS
+
+    // Shared tail of both nib.toolbar add_tool paths (pixels or host asset name): append the button with a
+    // matching faded disabled bitmap, realize, and remember the id so unloadNibPlugins can remove it before
+    // the owning plugin unmaps. Caller has already validated the id is free.
+    int addNibTool(int id, const wxBitmapBundle& bmp, const char* tip)
+    {
+        wxToolBar* tb = toolBar();
+        if (!tb || !bmp.IsOk()) return 0;
+        const wxString tipStr = wxString::FromUTF8(tip ? tip : "");
+        tb->AddTool(id, tipStr, bmp, iconDisabled(bmp, m_toolbarIconSize), wxITEM_NORMAL, tipStr);
+        tb->Realize();
+        m_nibToolIds.push_back(id);
+        return 1;
+    }
 
     void addToMRU(const wxString& path)
     {
@@ -7187,6 +7412,17 @@ private:
     {
         applyEditorTheme(m_dark);          // reset every style to the theme base (incl. line numbers)
         auto* page = activePage();
+        // Large-file mode: skip lexing/styling/folding entirely (both the Scintillua container path and
+        // Lexilla) so a huge or long-line buffer never triggers the synchronous whole-buffer re-lex.
+        // Picking a Language from the menu sets langForced, which overrides this and forces the lexer on.
+        if (page && page->largeFile && !page->langForced)
+        {
+            page->sciLang.clear();
+            sci(SCI_SETILEXER, 0, reinterpret_cast<sptr_t>(nullptr));   // no lexer at all (as the plain-text path does)
+            page->lang = _("Large file (highlighting off)");
+            setStatus(0, _("Large file: syntax highlighting is off for performance. Pick a Language to force it on."));
+            return;
+        }
         // Registered Scintillua language: auto-detect by extension (unless one is already chosen/forced),
         // then container-lex it via the embedded engine.
         if (page && page->sciLang.empty() && !page->langForced)
@@ -7523,13 +7759,23 @@ private:
         {
             int crlf = 0, lf = 0, cr = 0;
             const char* d = u.data(); const size_t n = u.length();
+            size_t curLine = 0, maxLineLen = 0;   // longest line: minified/one-line files also trigger large-file mode
             for (size_t i = 0; i < n; ++i)
             {
-                if (d[i] == '\r') { if (i + 1 < n && d[i + 1] == '\n') { ++crlf; ++i; } else ++cr; }
-                else if (d[i] == '\n') ++lf;
+                if (d[i] == '\r') { if (i + 1 < n && d[i + 1] == '\n') { ++crlf; ++i; } else ++cr; if (curLine > maxLineLen) maxLineLen = curLine; curLine = 0; }
+                else if (d[i] == '\n') { ++lf; if (curLine > maxLineLen) maxLineLen = curLine; curLine = 0; }
+                else ++curLine;
             }
+            if (curLine > maxLineLen) maxLineLen = curLine;
             if (crlf || lf || cr)   // leave the default mode for a file with no line breaks at all
                 sci(SCI_SETEOLMODE, (crlf >= lf && crlf >= cr) ? SC_EOL_CRLF : (lf >= cr ? SC_EOL_LF : SC_EOL_CR));
+            // Large-file guard: above ~16 MiB, or with a pathologically long line (minified JS/JSON/one-line
+            // dumps), skip the synchronous whole-buffer Scintillua re-lex + Lexilla styling + wrap that would
+            // otherwise stall the editor. Picking a Language from the menu (langForced) overrides this per file.
+            constexpr size_t kLargeFileBytes = 16u * 1024 * 1024;   // 16 MiB
+            constexpr size_t kLongLineChars  = 50000;
+            if (auto* p = activePage())
+                p->largeFile = (n > kLargeFileBytes || maxLineLen > kLongLineChars);
         }
         sci(SCI_EMPTYUNDOBUFFER); sci(SCI_GOTOPOS, 0); sci(SCI_SETSAVEPOINT);
         if (auto* p = activePage()) { p->path = path; stampDiskStat(p); }
@@ -8339,10 +8585,25 @@ private:
         // License first (it varies per language - some are GPL): show it and require the user to accept.
         const wxString license = httpGetText(baseUrl + "license");
         if (!license.empty()) {
-            wxString shown = license.Left(2000); if (license.length() > 2000) shown += "\n...";
-            if (wxMessageBox(_("This dictionary is provided under the following license:\n\n") + shown +
-                             _("\n\nDownload and install it?"), _("Download dictionary"),
-                             wxYES_NO | wxICON_INFORMATION, parent) != wxYES) return false;
+            // Themed, scrollable, height-capped consent dialog: a native wxMessageBox ignores the app
+            // theme (white body in dark mode) and grows unbounded with a long licence. The full licence
+            // text scrolls inside a fixed box instead.
+            wxDialog dlg(parent, wxID_ANY, _("Download dictionary"),
+                         wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+            auto* s = new wxBoxSizer(wxVERTICAL);
+            s->Add(new wxStaticText(&dlg, wxID_ANY, _("This dictionary is provided under the following license:")),
+                   0, wxLEFT | wxRIGHT | wxTOP, 12);
+            auto* lic = new wxTextCtrl(&dlg, wxID_ANY, license, wxDefaultPosition, wxSize(480, 280),
+                                       wxTE_MULTILINE | wxTE_READONLY);
+            if (m_dark) { lic->SetBackgroundColour(wxColour(30, 30, 30)); lic->SetForegroundColour(wxColour(220, 220, 220)); }
+            s->Add(lic, 1, wxEXPAND | wxALL, 12);
+            auto* row = new wxBoxSizer(wxHORIZONTAL); row->AddStretchSpacer();
+            auto* okB = new wxButton(&dlg, wxID_OK, _("Download and install")); okB->SetDefault();
+            row->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0, wxRIGHT, 6); row->Add(okB, 0);
+            s->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+            dlg.SetSizerAndFit(s); dlg.Centre();
+            themeDialog(&dlg);
+            if (dlg.ShowModal() != wxID_OK) return false;
         }
         const wxString dir = spellDictsDir();
         const bool ok = httpDownloadFile(baseUrl + "index.aff", dir + wxFILE_SEP_PATH + base + ".aff") &&
@@ -9685,6 +9946,50 @@ private:
                       .Bottom().Layer(1).BestSize(wxSize(-1, 200)).CloseButton(true).MaximizeButton(false));
         m_aui.Update();
     }
+    // Scan one file for matches using the SAME Scintilla search/regex engine as in-document Find (the hidden
+    // scratch buffer + searchFlags), so Find, the Find-dialog's Find-in-Files tab, and the Find-in-Files menu
+    // all match identically (Unicode- and whole-word-correct). Fills FifHit with 1-based line numbers.
+    // cap == 0 means uncapped; a non-zero cap stops this file early once `hits` reaches it. The CALLER must
+    // also stop its own file loop at the cap - returning here only ends the current file.
+    void fifScanFile(const wxString& file, const FindOpts& o, std::vector<FifHit>& hits, size_t cap = 0)
+    {
+        wxString content;
+        { wxFile fh(file); if (!fh.IsOpened() || !fh.ReadAll(&content)) return; }
+        m_fifScratch->SetReadOnly(false);
+        m_fifScratch->SetText(content);
+        m_fifScratch->SetSearchFlags(static_cast<int>(searchFlags(o)));
+        const int len = m_fifScratch->GetLength();
+        int pos = 0;
+        while (pos <= len)
+        {
+            m_fifScratch->SetTargetStart(pos); m_fifScratch->SetTargetEnd(len);
+            if (m_fifScratch->SearchInTarget(o.find) < 0) break;
+            const int s = m_fifScratch->GetTargetStart(), e = m_fifScratch->GetTargetEnd();
+            const int line = m_fifScratch->LineFromPosition(s);
+            wxString lt = m_fifScratch->GetTextRange(m_fifScratch->PositionFromLine(line), m_fifScratch->GetLineEndPosition(line));
+            hits.push_back({ file, line + 1, lt });
+            pos = (e > s) ? e : e + 1;                       // advance past the match; +1 guards zero-length
+            if (cap && hits.size() >= cap) return;
+        }
+    }
+    // The file set both Find-in-Files entry points scan: ';'-separated wildcard patterns under `dir`, deduped
+    // (a file matching two patterns is scanned once). Shared so the two paths cannot drift apart on filter
+    // handling - they already differ only in whether sub-folders are included, which is the explicit param.
+    wxArrayString fifCollectFiles(const wxString& dir, const wxString& filters, bool subdirs)
+    {
+        wxArrayString files;
+        std::set<wxString> seen;
+        const int flags = wxDIR_FILES | (subdirs ? wxDIR_DIRS : 0);
+        for (wxString pat : wxSplit(filters, ';'))
+        {
+            pat.Trim(true).Trim(false);
+            if (pat.empty()) continue;
+            wxArrayString f;
+            wxDir::GetAllFiles(dir, &f, pat, flags);
+            for (const auto& x : f) if (seen.insert(x).second) files.Add(x);
+        }
+        return files;
+    }
     void doFindInFiles(const FindOpts& o, wxString dir, wxString filters, bool replace)
     {
         if (o.find.empty()) { findResult(_("Find in Files: nothing to search for")); return; }
@@ -9692,9 +9997,7 @@ private:
         if (!wxDirExists(dir)) { findResult(wxString::Format(_("Find in Files: no such directory - %s"), dir)); return; }
         filters.Trim(true).Trim(false); if (filters.empty()) filters = "*.*";
 
-        wxArrayString files;
-        for (wxString pat : wxSplit(filters, ';')) { pat.Trim(true).Trim(false); if (!pat.empty()) wxDir::GetAllFiles(dir, &files, pat, wxDIR_FILES); }
-        { std::set<wxString> seen; wxArrayString uniq; for (auto& f : files) if (seen.insert(f).second) uniq.Add(f); files = uniq; }
+        wxArrayString files = fifCollectFiles(dir, filters, false);   // this tab does not recurse
 
         ensureFifScratch();
         ensureFindResultsPanel();
@@ -9705,14 +10008,13 @@ private:
         int hits = 0, hitFiles = 0, repl = 0, replFiles = 0;
         for (const wxString& file : files)
         {
-            wxString content;
-            { wxFile fh(file); if (!fh.IsOpened() || !fh.ReadAll(&content)) continue; }
-            m_fifScratch->SetReadOnly(false); m_fifScratch->SetText(content);
-            m_fifScratch->SetSearchFlags(static_cast<int>(searchFlags(o)));
-            const int len = m_fifScratch->GetLength();
             if (replace)
             {
-                int n = 0, end = len; m_fifScratch->SetTargetStart(0); m_fifScratch->SetTargetEnd(end);
+                wxString content;
+                { wxFile fh(file); if (!fh.IsOpened() || !fh.ReadAll(&content)) continue; }
+                m_fifScratch->SetReadOnly(false); m_fifScratch->SetText(content);
+                m_fifScratch->SetSearchFlags(static_cast<int>(searchFlags(o)));
+                int n = 0, end = m_fifScratch->GetLength(); m_fifScratch->SetTargetStart(0); m_fifScratch->SetTargetEnd(end);
                 while (m_fifScratch->SearchInTarget(o.find) >= 0)
                 {
                     const int s = m_fifScratch->GetTargetStart(), e = m_fifScratch->GetTargetEnd();
@@ -9722,21 +10024,18 @@ private:
                 }
                 if (n > 0) { wxFile w(file, wxFile::write); if (w.IsOpened()) w.Write(m_fifScratch->GetText()); ++replFiles; repl += n; out(wxString::Format(_("  %s  (%d replaced)"), file, n), file, 0); }
             }
-            else
+            else   // same scan engine as the Find-in-Files menu command; only the sink differs
             {
-                int pos = 0, n = 0;
-                while (pos <= len)
+                std::vector<FifHit> fh;
+                fifScanFile(file, o, fh);
+                if (fh.empty()) continue;
+                out(wxString::Format("  %s", file), file, 0);
+                for (const FifHit& h : fh)
                 {
-                    m_fifScratch->SetTargetStart(pos); m_fifScratch->SetTargetEnd(len);
-                    if (m_fifScratch->SearchInTarget(o.find) < 0) break;
-                    const int s = m_fifScratch->GetTargetStart(), e = m_fifScratch->GetTargetEnd();
-                    const int line = m_fifScratch->LineFromPosition(s);
-                    if (n == 0) out(wxString::Format("  %s", file), file, 0);
-                    wxString lt = m_fifScratch->GetTextRange(m_fifScratch->PositionFromLine(line), m_fifScratch->GetLineEndPosition(line));
-                    out(wxString::Format(_("    Line %d:  %s"), line + 1, lt.Trim(true).Trim(false)), file, line);
-                    ++n; ++hits; pos = (e > s) ? e : e + 1;
+                    wxString lt = h.text;
+                    out(wxString::Format(_("    Line %d:  %s"), h.line, lt.Trim(true).Trim(false)), file, h.line - 1);
                 }
-                if (n > 0) ++hitFiles;
+                hits += static_cast<int>(fh.size()); ++hitFiles;
             }
         }
         const wxString summary = replace
@@ -9875,11 +10174,23 @@ private:
         // always on - the native-buttons path (OS hit-testing: snap layouts, native drag, Fluent glyphs)
         // is strictly the better one and the alternative differs only in subtle glyph rendering, so there's
         // no meaningful toggle to offer. On macOS the integrated bar always uses the native traffic lights.
+#if defined(WXN_HAS_BORDERLESS)
+        // Top-bar window-button style (Preferences > General): 0 = system-native (Win snap-layouts / GTK
+        // header bar), 1 = wxNote's flat buttons, 2 = Opera-style rounded pills. Default: native on Windows,
+        // our own buttons on Linux. Migrates the old boolean "NativeWinButtons" if the new key is absent.
+        long btnStyle =
 #ifdef __WXMSW__
-        m_nativeWinButtons = true;
-#elif defined(__WXGTK__)
-        c->Read("NativeWinButtons", &m_nativeWinButtons, false);
+            0;
+#else
+            1;
+#endif
+        if (!c->HasEntry("TopBarButtonStyle") && c->HasEntry("NativeWinButtons"))
+        { bool oldNative = (btnStyle == 0); c->Read("NativeWinButtons", &oldNative, oldNative); btnStyle = oldNative ? 0 : 1; }
+        else c->Read("TopBarButtonStyle", &btnStyle, btnStyle);
+        m_topBarBtnStyle = (btnStyle < 0 || btnStyle > 2) ? 1 : (int)btnStyle;   // clamp a hand-edited/stale value onto a real style
+#ifdef __WXGTK__
         c->Read("IgnorePlatformDeco", &m_ignorePlatformDeco, false);
+#endif
 #endif
         m_themeMode = (int)readThemeMode();   // also resolved in OnInit (before the frame/config exist as members here)
         c->Read("AskBeforeClose", &m_askBeforeClose, false);
@@ -10061,13 +10372,15 @@ private:
         auto* cbIntBar = new wxCheckBox(gen, wxID_ANY, _("Show integrated top bar"));
         cbIntBar->SetValue(m_integratedBar); row(gs, cbIntBar);
 #endif
+#if defined(WXN_HAS_BORDERLESS)
+        // Window-button style for the integrated top bar (Windows + Linux): system-native (OS snap-layouts /
+        // GTK header bar), wxNote's own flat buttons, or Opera-style rounded pills. Added to the combo grid
+        // below; only takes effect while the integrated bar is on. Restart to apply.
+        auto* chBtns = new wxChoice(gen, wxID_ANY);
+        chBtns->Append(_("System-native")); chBtns->Append(_("Windows-style (flat)")); chBtns->Append(_("Opera-style (rounded)"));
+        chBtns->SetSelection(m_topBarBtnStyle);
+#endif
 #ifdef __WXGTK__
-        // Linux only: the native-vs-custom choice is a real one here (our own flat buttons vs. hosting
-        // the bar in GTK's real header bar). On Windows the native path is always on (no toggle) and on
-        // macOS the bar always keeps the native traffic lights - so the checkbox appears on GTK alone.
-        // Only takes effect while the integrated bar is on.
-        auto* cbNativeBtns = new wxCheckBox(gen, wxID_ANY, _("System-native window buttons"));
-        cbNativeBtns->SetValue(m_nativeWinButtons); row(gs, cbNativeBtns);
         // Companion to the native header bar: keep the window corners square instead of rounding them to
         // match the desktop theme. Only has an effect while the native header bar is on.
         auto* cbIgnoreDeco = new wxCheckBox(gen, wxID_ANY, _("Ignore platform decoration (sharp corners)"));
@@ -10112,7 +10425,18 @@ private:
         // a FlexGridSizer still gives both cells the same width, but a narrower control (e.g. "Polski")
         // just sits left-aligned inside its cell rather than filling it, so the two still looked
         // different widths even once their left edges lined up.
-        auto* locGrid = new wxFlexGridSizer(4, 2, 8, 8);
+        auto* locGrid = new wxFlexGridSizer(0, 2, 8, 8);
+#if defined(WXN_HAS_BORDERLESS)
+        auto* lblBtns = new wxStaticText(gen, wxID_ANY, _("Window buttons:"));
+        locGrid->Add(lblBtns, 0, wxALIGN_CENTRE_VERTICAL);
+        locGrid->Add(chBtns, 0, wxEXPAND | wxALIGN_CENTRE_VERTICAL);
+        // The window-button style only applies while the integrated top bar is on. Grey the label +
+        // choice out (and keep them in sync as the checkbox is toggled) so the control doesn't look like
+        // it does anything on its own when the bar is off.
+        auto syncBtnsEnabled = [chBtns, lblBtns](bool on) { chBtns->Enable(on); lblBtns->Enable(on); };
+        syncBtnsEnabled(cbIntBar->GetValue());
+        cbIntBar->Bind(wxEVT_CHECKBOX, [syncBtnsEnabled](wxCommandEvent& e) { syncBtnsEnabled(e.IsChecked()); e.Skip(); });
+#endif
         locGrid->Add(new wxStaticText(gen, wxID_ANY, _("Localization:")), 0, wxALIGN_CENTRE_VERTICAL);
         locGrid->Add(chUiLang, 0, wxEXPAND | wxALIGN_CENTRE_VERTICAL);
         locGrid->Add(new wxStaticText(gen, wxID_ANY, _("Toolbar icon style:")), 0, wxALIGN_CENTRE_VERTICAL);
@@ -10438,8 +10762,10 @@ private:
 #if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
         const bool newIntBar = cbIntBar->GetValue();
 #endif
+#if defined(WXN_HAS_BORDERLESS)
+        const int  newBtnStyle = chBtns->GetSelection();
+#endif
 #ifdef __WXGTK__
-        const bool newNativeBtns = cbNativeBtns->GetValue();
         const bool newIgnoreDeco = cbIgnoreDeco->GetValue();
 #endif
         const int newIconStyle = chIconStyle->GetSelection();
@@ -10451,17 +10777,19 @@ private:
 #if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
         needRestart = needRestart || (newIntBar != m_integratedBar);
 #endif
-#ifdef __WXGTK__
-        if (newNativeBtns != m_nativeWinButtons)
+#if defined(WXN_HAS_BORDERLESS)
+        if (newBtnStyle != m_topBarBtnStyle)
         {
             // Only meaningful with the integrated bar (before or after this OK): a restart then applies
             // it. With the bar off on both sides the relaunched app would be pixel-identical, so persist
             // the choice directly instead of dragging the user through a pointless restart cycle - the
             // commit lambda below is otherwise this setting's ONLY write path, and a restart the user
-            // backs out of (Cancel on a save prompt) would silently discard the checkbox change.
+            // backs out of (Cancel on a save prompt) would silently discard the choice.
             if (newIntBar || m_integratedBar) needRestart = true;
-            else { wxConfigBase::Get()->Write("NativeWinButtons", newNativeBtns); m_nativeWinButtons = newNativeBtns; }
+            else { wxConfigBase::Get()->Write("TopBarButtonStyle", (long)newBtnStyle); m_topBarBtnStyle = newBtnStyle; }
         }
+#endif
+#ifdef __WXGTK__
         if (newIgnoreDeco != m_ignorePlatformDeco)
         {
             // Same reasoning as native buttons: only matters with the integrated bar (it re-styles the
@@ -10479,8 +10807,10 @@ private:
 #if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
                 if (newIntBar != m_integratedBar) cfg->Write("IntegratedBar", newIntBar);
 #endif
+#if defined(WXN_HAS_BORDERLESS)
+                if (newBtnStyle != m_topBarBtnStyle) cfg->Write("TopBarButtonStyle", (long)newBtnStyle);
+#endif
 #ifdef __WXGTK__
-                if (newNativeBtns != m_nativeWinButtons) cfg->Write("NativeWinButtons", newNativeBtns);
                 if (newIgnoreDeco != m_ignorePlatformDeco) cfg->Write("IgnorePlatformDeco", newIgnoreDeco);
 #endif
                 if (newIconStyle != m_iconStyle) cfg->Write("ToolbarIconStyle", (long)newIconStyle);
@@ -10525,6 +10855,7 @@ private:
         const int sel = nb ? nb->GetSelection() : wxNOT_FOUND;
         auto* p = (sel == wxNOT_FOUND) ? nullptr : static_cast<EditorPage*>(nb->GetPage(sel));
         if (!p) { e.Skip(); return; }
+        if (p->largeFile) { e.Skip(); return; }   // large-file mode: never run the whole-buffer Lua lex
         if (!p->sciLang.empty()) { scintilluaStyle(stc, p->sciLang); return; }   // Scintillua-lexed buffer
         e.Skip();
     }
@@ -10569,18 +10900,97 @@ private:
     void appendMacroMenuItems()   // (re)list the saved macros at the bottom of the Macro menu
     {
         wxMenu* menu = m_menuRegistry.find("menu.macro"); if (!menu) return;
-        for (int id = myID_MACRO_ITEM; id < myID_MACRO_ITEM + 200; ++id) if (auto* it = menu->FindItem(id)) menu->Destroy(it);
+        for (int id = myID_MACRO_ITEM; id < myID_MACRO_ITEM + kMaxMacroItems; ++id) if (auto* it = menu->FindItem(id)) menu->Destroy(it);
         if (!m_savedMacros.empty() && !m_macroSepAdded) { menu->AppendSeparator(); m_macroSepAdded = true; }
-        for (size_t i = 0; i < m_savedMacros.size(); ++i) menu->Append(myID_MACRO_ITEM + (int)i, m_savedMacros[i].first);
+        for (size_t i = 0; i < m_savedMacros.size() && i < (size_t)kMaxMacroItems; ++i) menu->Append(myID_MACRO_ITEM + (int)i, m_savedMacros[i].name);
     }
     void saveMacro()
     {
         if (m_macro.empty()) return;
         const wxString name = wxGetTextFromUser(_("Macro name:"), _("Save Current Recorded Macro"), "", this);
         if (name.empty()) return;
-        for (auto& kv : m_savedMacros) if (kv.first == name) { kv.second = m_macro; setStatus(0, wxString::Format(_("Macro updated: %s"), name)); m_hint = true; return; }
-        m_savedMacros.emplace_back(name, m_macro); appendMacroMenuItems();
+        for (auto& sm : m_savedMacros) if (sm.name == name) { sm.steps = m_macro; saveSavedMacros();
+            setStatus(0, wxString::Format(_("Macro updated: %s"), name)); m_hint = true; return; }
+        const long uid = m_macroNextUid++;
+        m_savedMacros.push_back({ uid, name, m_macro });
+        appendMacroMenuItems();
+        // Register the new macro as a bindable command (shows up in the Shortcut Mapper). Delegated rather
+        // than re-derived here: seedMacroKeymapDefaults owns the "index -> myID_MACRO_ITEM + i" mapping and
+        // the kMaxMacroItems cap, and addDefault dedupes by symbolicName, so re-seeding is cheap and keeps
+        // menu ids and keymap rows from drifting apart.
+        seedMacroKeymapDefaults(); m_keymap.resolveAll();
+        saveSavedMacros();
         setStatus(0, wxString::Format(_("Macro saved: %s"), name)); m_hint = true;
+    }
+    // ---- saved-macro persistence (macros.dat under userDataDir) + keymap registration ----
+    // Each macro carries a monotonic uid; symbolicName "macro.<uid>" is the stable shortcut-binding key in
+    // shortcuts.json (survives rename/reorder), while the menu/cmd id is positional per session. macros.dat
+    // is a simple line format (base64 for the name + any text step, so arbitrary bytes round-trip losslessly):
+    //   wxn-macros 1 / next <uid> / M <uid> <b64name> / S <msg> <w> <l> / T <msg> <w> <l> <b64text>
+    static wxString macroSym(long uid) { return wxString::Format("macro.%ld", uid); }
+    wxString macrosFilePath() { return userDataDir() + wxFILE_SEP_PATH + "macros.dat"; }
+    void seedMacroKeymapDefaults()   // Tier-0 rows so a stored "macro.<uid>" binding resolves at m_keymap.load()
+    {
+        for (size_t i = 0; i < m_savedMacros.size() && i < (size_t)kMaxMacroItems; ++i)
+            m_keymap.addDefault(macroSym(m_savedMacros[i].uid), myID_MACRO_ITEM + (int)i, wxString());
+    }
+    void loadSavedMacros()
+    {
+        m_savedMacros.clear(); m_macroNextUid = 1; m_macrosReadOnly = false;
+        wxLogNull noLog;
+        const wxString path = macrosFilePath();
+        if (!wxFileExists(path)) return;
+        wxFile f(path); wxString raw;
+        if (!f.IsOpened() || !f.ReadAll(&raw, wxConvUTF8)) return;
+        wxStringTokenizer lines(raw, "\n", wxTOKEN_STRTOK);
+        while (lines.HasMoreTokens())
+        {
+            wxString line = lines.GetNextToken(); line.Trim(true);   // drop any trailing \r
+            wxStringTokenizer tk(line, " ", wxTOKEN_STRTOK);
+            if (!tk.HasMoreTokens()) continue;
+            const wxString tag = tk.GetNextToken();
+            if (tag == "wxn-macros") { long v = 0; tk.GetNextToken().ToLong(&v); if (v > 1) { m_macrosReadOnly = true; m_savedMacros.clear(); return; } }
+            else if (tag == "next") { long n = 1; if (tk.GetNextToken().ToLong(&n)) m_macroNextUid = n; }
+            else if (tag == "M")
+            {
+                long uid = 0; tk.GetNextToken().ToLong(&uid);
+                wxMemoryBuffer nb = wxBase64Decode(tk.GetNextToken());
+                m_savedMacros.push_back({ uid, wxString::FromUTF8((const char*)nb.GetData(), nb.GetDataLen()), {} });
+                if (uid >= m_macroNextUid) m_macroNextUid = uid + 1;   // keep nextUid ahead of any uid on disk
+            }
+            else if ((tag == "S" || tag == "T") && !m_savedMacros.empty())
+            {
+                MacroStep st{}; long msg = 0; unsigned long long w = 0; long long l = 0;
+                tk.GetNextToken().ToLong(&msg); tk.GetNextToken().ToULongLong(&w); tk.GetNextToken().ToLongLong(&l);
+                st.msg = (int)msg; st.wparam = (uptr_t)w; st.lparam = (sptr_t)l;
+                if (tag == "T") { wxMemoryBuffer tb = wxBase64Decode(tk.GetNextToken());
+                                  st.hasText = true; st.text.assign((const char*)tb.GetData(), tb.GetDataLen()); }
+                m_savedMacros.back().steps.push_back(st);
+            }
+        }
+    }
+    void saveSavedMacros()
+    {
+        if (m_macrosReadOnly) return;
+        wxLogNull noLog;
+        const wxString dir = userDataDir();
+        if (!wxDirExists(dir)) wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        wxString out; out << "wxn-macros 1\n" << "next " << m_macroNextUid << "\n";
+        for (const SavedMacro& sm : m_savedMacros)
+        {
+            const wxScopedCharBuffer nu = sm.name.utf8_str();
+            out += wxString::Format("M %ld %s\n", sm.uid, wxBase64Encode(nu.data(), nu.length()));
+            for (const MacroStep& st : sm.steps)
+            {
+                if (st.hasText) out += wxString::Format("T %d %llu %lld %s\n", st.msg,
+                        (unsigned long long)st.wparam, (long long)st.lparam, wxBase64Encode(st.text.data(), st.text.size()));
+                else            out += wxString::Format("S %d %llu %lld\n", st.msg,
+                        (unsigned long long)st.wparam, (long long)st.lparam);
+            }
+        }
+        const wxString path = macrosFilePath(), tmp = path + ".tmp";
+        { wxFile f(tmp, wxFile::write); if (!f.IsOpened()) return; const wxScopedCharBuffer u = out.utf8_str(); f.Write(u.data(), u.length()); }
+        wxRenameFile(tmp, path, true);   // atomic replace
     }
 
     // ----- dark / light theme -------------------------------------------
@@ -11488,7 +11898,7 @@ private:
         // matching WM_NCLBUTTONUP (which wxbf does route) then fires the action - so rapid clicks act on
         // every click, like a native caption button.
         if constexpr (kBorderless)
-            if (message == WM_NCLBUTTONDBLCLK && m_nativeWinButtons &&
+            if (message == WM_NCLBUTTONDBLCLK && nativeWinButtons() &&
                 (wParam == HTMINBUTTON || wParam == HTMAXBUTTON || wParam == HTCLOSE))
             {
                 m_capPressed = capBtnAtScreen(wxPoint((short)LOWORD(lParam), (short)HIWORD(lParam)));
@@ -11591,8 +12001,8 @@ private:
         if (const WxnLang* L = wxnLangFind(cmd)) { setForcedLang(L->lexer, L->name); return; }   // Language menu: force that lexer on the active buffer
         if (cmd >= kSciLangMenuBase && cmd < kSciLangMenuBase + (int)m_sciLangs.size())   // Language menu: a registered Scintillua language
         { applyScintilluaToActiveBuffer(m_sciLangs[cmd - kSciLangMenuBase].name); return; }
-        if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + 200)        // a saved macro from the Macro menu
-        { const size_t n = (size_t)(cmd - myID_MACRO_ITEM); if (n < m_savedMacros.size()) playMacro(m_savedMacros[n].second); return; }
+        if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + kMaxMacroItems)   // a saved macro from the Macro menu
+        { const size_t n = (size_t)(cmd - myID_MACRO_ITEM); if (n < m_savedMacros.size()) playMacro(m_savedMacros[n].steps); return; }
         if (cmd >= myID_OPENFOLDER_TOOL_BASE && cmd < myID_OPENFOLDER_TOOL_BASE + (int)m_openFolderTools.size())
         { openHereToolAt(cmd - myID_OPENFOLDER_TOOL_BASE); return; }   // a dynamically-detected File > Open Containing Folder entry
         if (cmd >= myID_SPELL_SUGGEST_BASE && cmd < myID_SPELL_SUGGEST_BASE + 9)   // spell right-click: apply a suggestion
@@ -12254,7 +12664,15 @@ private:
     int          m_macToolbarRowH = 0;            // integrated bar: toolbar row height = the re-centred traffic lights' band height
 #endif
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
-    bool        m_nativeWinButtons = false;      // native window buttons in the integrated bar: a Linux-only user toggle (restart-to-apply); forced true on Windows; macOS always uses native traffic lights
+    // Integrated-bar window-button style (TopBarButtonStyle in Preferences, restart-to-apply): 0 = system-
+    // native (Win snap-layouts / GTK header bar), 1 = wxNote's flat buttons, 2 = Opera-style rounded pills.
+    // Stored as the one value that is read and written; the two modes callers actually branch on are derived
+    // below rather than mirrored into members, so "native" and "opera" cannot go out of sync. Defaults to 1,
+    // which is what macOS and any non-WXN_HAS_BORDERLESS build want - neither is ever assigned there, and
+    // macOS always uses its native traffic lights regardless.
+    int         m_topBarBtnStyle = 1;
+    bool nativeWinButtons() const { return m_topBarBtnStyle == 0; }
+    bool operaButtons()     const { return m_topBarBtnStyle == 2; }
     bool        m_ignorePlatformDeco = false;    // Linux/GTK native header bar: keep the window corners SHARP (skip the platform-matching rounding); restart-to-apply
     int         m_iconStyle = 1;                 // toolbar icon style: 0 = line icons, 1 = Solar (default), 2 = IconPark, 3 = Streamline (restart-to-apply)
     int         m_toolbarIconSize = 16;          // toolbar icon size in px (16/20/24/32, default 16; restart-to-apply)
@@ -12301,7 +12719,9 @@ private:
     wxString    m_printHeader, m_printFooter;                     // Preferences > Print: optional header/footer text (macros resolved at print time)
     std::vector<MacroStep> m_macro;                               // the current recorded macro
     bool        m_recording = false;
-    std::vector<std::pair<wxString, std::vector<MacroStep>>> m_savedMacros;   // named macros (Macro menu, this session)
+    std::vector<SavedMacro> m_savedMacros;    // named macros; persisted to macros.dat under userDataDir()
+    long                    m_macroNextUid = 1;      // monotonic; never reused, so a shortcut binding never leaks to another macro
+    bool                    m_macrosReadOnly = false; // true if macros.dat is a newer format version -> never overwrite it
     bool        m_macroSepAdded = false;
     bool        m_hint = false;   // a "needs full app" message is showing in status field 0
     // cached toolbar/menu enable states (start enabled, matching the freshly-built toolbar)

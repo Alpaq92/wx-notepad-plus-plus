@@ -106,6 +106,7 @@ compatibility notes below).
 | **SETCURRENTLANGTYPE** (via the host's frozen `IDM_LANG_*` Language-menu commands), **SETMENUITEMCHECK** (via `nib.ui`) | |
 | **ISDARKMODEENABLED / GETDARKMODECOLORS** (host palette laid into the `NppDarkMode::Colors` ABI), **GETEDITORDEFAULTFOREGROUNDCOLOR / -BACKGROUNDCOLOR** | |
 | **ADDTOOLBARICON_DEPRECATED / ADDTOOLBARICON_FORDARKMODE** (Windows: HBITMAP/HICON → RGBA → `nib.toolbar`; POSIX: documented no-op TRUE) | |
+| **ADDTOOLBARICONBYNAME** (every OS: names a host icon asset → `nib.toolbar/2` `add_tool_named`; the button then follows the user's icon pack + theme) | |
 | **ALLOCATESUPPORTED_DEPRECATED / ALLOCATECMDID / ALLOCATEMARKER / ALLOCATEINDICATOR** (via `nib.alloc`; the pre-rename numeric values shipped binaries send are the same numbers) | |
 | **MSGTOPLUGIN** (delivered to the dest plugin's `messageProc`, matched by module filename or stem) | |
 | `beNotified` for text-changed / selection / save (**id-carrying NPPN_FILESAVED** + NPPN_FILEBEFORESAVE) / **buffer-activated** (NPPN_BUFFERACTIVATED) / **file-opened / file-closed** (NPPN_FILEBEFOREOPEN / NPPN_FILEOPENED / NPPN_FILEBEFORECLOSE / NPPN_FILECLOSED) / **event fidelity** (NPPN_GLOBALMODIFIED masked, NPPN_LANGCHANGED, NPPN_WORDSTYLESUPDATED, NPPN_SHORTCUTREMAPPED) / **long-tail file lifecycle** (NPPN_FILEBEFORELOAD, NPPN_READONLYCHANGED, NPPN_DOCORDERCHANGED, NPPN_SNAPSHOTDIRTYFILELOADED, NPPN_FILEBEFORERENAME / NPPN_FILERENAMED / NPPN_FILERENAMECANCEL, NPPN_FILEBEFOREDELETE / NPPN_FILEDELETED / NPPN_FILEDELETEFAILED, NPPN_CMDLINEPLUGINMSG) / **app lifecycle** (NPPN_READY, NPPN_TBMODIFICATION, NPPN_BEFORESHUTDOWN / NPPN_CANCELSHUTDOWN, NPPN_SHUTDOWN) | |
@@ -163,6 +164,16 @@ Code to the documented behaviour.
   unchanged. On Windows the same messages add a real button (native image → RGBA → `nib.toolbar`).
   The portable way to a real button on every OS is the host's own `nib.toolbar/1` interface, which
   speaks RGBA pixels instead of GDI handles.
+* **`NPPM_ADDTOOLBARICONBYNAME` — a real button on every OS, themed by the host.** `wParam` is the
+  command id, `lParam` a NUL-terminated ASCII asset name (e.g. `"wrap-selection"`); returns `TRUE` if
+  the host added the button. No GDI is involved, so unlike `NPPM_ADDTOOLBARICON*` this works on Linux
+  and macOS too. Prefer it whenever the wanted glyph exists in the host's own icon sets: pixels handed
+  over by a plugin are frozen at whatever icon pack and light/dark theme were active when they were
+  rasterised, whereas a named asset is drawn through the host's own icon path and therefore follows the
+  user's **Toolbar icon style** and theme — per-pack colour retints included. Names are validated
+  (rejected if empty, over-long, or containing a path separator or `..`), and an unknown name answers
+  `FALSE` so the plugin can fall back to shipping its own bitmap. Maps to `nib.toolbar/2`
+  `add_tool_named`; on a host that only offers `nib.toolbar/1` it answers `FALSE`.
 * **`NPPN_FILESAVED` reports real disk writes** with the *written* buffer's id: no false fire on
   undo-to-savepoint, and during Save All each background write reports its own buffer id (on hosts
   without `nib.events` v2 the bridge falls back to the old savepoint-derived, active-id emission).

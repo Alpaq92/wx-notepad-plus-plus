@@ -3074,3 +3074,42 @@ msgstr "下载失败。请检查您的网络连接后重试。"
 
 msgid "Downloading dictionaries is not available in this build. Use \"Add from file...\" instead."
 msgstr "此版本不支持下载词典。请改用“从文件添加...”。"
+
+msgid "Large file (highlighting off)"
+msgstr "大文件（高亮已关闭）"
+
+msgid "Large file: syntax highlighting is off for performance. Pick a Language to force it on."
+msgstr "大文件：为提高性能已关闭语法高亮。选择一种语言以强制启用。"
+
+msgid "This dictionary is provided under the following license:"
+msgstr "此词典依据以下许可证提供："
+
+msgid "Download and install"
+msgstr "下载并安装"
+
+msgid "Show:"
+msgstr "显示："
+
+msgid "All"
+msgstr "全部"
+
+msgid "Menu commands"
+msgstr "菜单命令"
+
+msgid "Editor commands"
+msgstr "编辑器命令"
+
+msgid "Macros"
+msgstr "宏"
+
+msgid "Window buttons:"
+msgstr "窗口按钮："
+
+msgid "System-native"
+msgstr "系统原生"
+
+msgid "Windows-style (flat)"
+msgstr "Windows 样式（扁平）"
+
+msgid "Opera-style (rounded)"
+msgstr "Opera 样式（圆角）"

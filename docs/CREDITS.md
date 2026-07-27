@@ -174,6 +174,13 @@ No code was taken from any of these; each contributed ideas, structure, or
   [streamline-vectors](https://github.com/webalys-hq/streamline-vectors) repo
   at a pinned commit.
 
+Not every file in those directories comes from the set it is named after:
+`wrap-selection.svg` is **original wxNote artwork** (Apache-2.0), drawn once per
+pack in each pack's own conventions, because none of the four upstream sets has a
+glyph for "wrap the selection in delimiters". It is called out under an *Original
+glyphs* heading in each pack's own `CREDITS.md` so the upstream attributions above
+stay accurate.
+
 Full modification records: `resources/icons*/CREDITS.md`.
 
 ## Fonts

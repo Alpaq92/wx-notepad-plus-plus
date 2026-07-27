@@ -51,15 +51,15 @@ listed code paths are Windows-gated. The integrated borderless title bar being W
 
 | Feature | Status | Evidence | Gap |
 | --- | --- | --- | --- |
-| **Macros** | partial | `m_savedMacros` never serialized — [main.cpp:11373](../src/main.cpp); excluded from Shortcut Mapper — [shortcut_mapper_dialog.h:170](../src/shortcut_mapper_dialog.h) | record/play/run work in-session, but saved macros don't persist across restart and can't be bound to a shortcut |
-| **Shortcut Mapper** | partial | static menu + curated `editor.*` only — [shortcut_mapper_dialog.h:170](../src/shortcut_mapper_dialog.h) | no Macros / Run / Plugin-command tabs |
-| **Function List** | partial | `flLangKey()` hardcodes ~8 langs — [main.cpp:3699](../src/main.cpp) | cpp/py/js/java/cs/go/rust/lua only; not data-driven/user-extensible (N++'s `functionList.xml`) |
+| **Macros** | ✅ **persist + bindable** | serialized to `macros.dat` (base64 name/text steps, atomic write) and seeded into the keymap as `macro.<uid>` — [main.cpp](../src/main.cpp) `loadSavedMacros`/`saveSavedMacros`/`seedMacroKeymapDefaults` | saved macros survive restart and can be bound to a shortcut in the Shortcut Mapper. A manage/delete/reorder dialog is a follow-up |
+| **Shortcut Mapper** | partial (Macros added) | saved macros now appear (seeded) + a **Show: All/Menu/Editor/Macros** category selector — [shortcut_mapper_dialog.h](../src/shortcut_mapper_dialog.h) | Macros are bindable now; Run / Plugin-command categories still deferred (no dynamic command list to bind yet) |
+| **Function List** | partial (extensible) | +5 built-in languages (php/ruby/sql/sh/powershell) and a user overlay `functionList.conf` (add/override languages with regex rules) merged over the built-ins — [main.cpp](../src/main.cpp) `flRules`/`loadFunctionListRules`/`flLangKey` | 13 built-in languages + user-extensible; still `std::regex` (not N++'s GPL `functionList.xml`) |
 | **Project Panels 1/2/3** | partial | three ids → one `toggleProjectPanel()` — [main.cpp:10833](../src/main.cpp) | three menu entries share one backing panel |
 | **Style Configurator** | partial | only fg/bg + Bold/Italic — [main.cpp:9784](../src/main.cpp) | no font name/size/underline, no keyword-set editor, no global overrides |
-| **Autocomplete** | partial | `keywordsForExt()` C-family/JS/Java/C# only — [main.cpp:4695](../src/main.cpp) | other languages get document-word completion only |
-| **Calltips** | partial | harvested from open doc — [main.cpp:4742](../src/main.cpp) | no API/signature (`.xml`) database |
-| **Regex** | partial | Find uses `SCFIND_CXX11REGEX` ([main.cpp:8522](../src/main.cpp)); Find-in-Files uses a separate `std::regex` (main.cpp:953,965) | two engines can diverge; not Boost/PCRE — some constructs unavailable |
-| **Large-file handling** | partial | whole-buffer re-lex every edit; no size guard — [main.cpp:8462](../src/main.cpp) | perf cliff on big files; N++ has an explicit large-file/lexer-off guard |
+| **Autocomplete** | partial (broadened) | `keywordsForExt()` is now a ~25-language table reusing the highlighter's keyword sets + curated PHP/Kotlin/Swift/R/YAML/HTML (Scintillua MIT / SciTE HPND) — [main.cpp](../src/main.cpp) `keywordsForExt` | keyword + document-word completion for C-family, JS/TS, Python, Go, Rust, Lua, SQL, CSS, Bash, Perl, Ruby, PowerShell, JSON, PHP, Kotlin, Swift, R, YAML, HTML; still keyword-list-based, not semantic |
+| **Calltips** | partial | harvested from open doc — [main.cpp](../src/main.cpp) `calltip*` | no API/signature (`.xml`) database |
+| **Regex** | partial (unified) | Find, the Find-dialog's Find-in-Files tab, and the Find-in-Files menu now share ONE engine — Scintilla's `SCFIND_CXX11REGEX` via a scratch buffer (`fifScanFile`); the old byte-level `std::regex` menu scanner was deleted — [main.cpp](../src/main.cpp) | the two engines no longer diverge (Unicode- and whole-word-correct everywhere); still ECMAScript/`std::regex`, not Boost/PCRE — lookbehind etc. unavailable (PCRE2 is a roadmap option) |
+| **Large-file handling** | ✅ **guarded** | per-page `largeFile` flag set at load (> 16 MiB, or a line > 50 000 chars) skips Scintillua/Lexilla styling + the whole-buffer re-lex — [main.cpp](../src/main.cpp) `loadFile` / `setLexerForFile` / `onStcStyleNeeded` | no more re-lex-per-keystroke cliff; picking a Language from the menu forces styling back on. A Preferences UI for the threshold is a follow-up |
 
 ## 4. Plugin API (npp-bridge / Nib) completeness
 
@@ -73,6 +73,7 @@ listed code paths are Windows-gated. The integrated borderless title bar being W
 | **Dark-mode theming of plugin dialogs** | stubbed | `NPPM_DARKMODESUBCLASSANDTHEME` → 0 — `npp_bridge.cpp:1431` | plugin dialogs stay light |
 | **`nib.events` has no unsubscribe** | partial | subscribe-only — [nib.h:256-267](../include/nib/nib.h) | plugins can't detach; host must clear before unload |
 | **`SWITCHTOFILE`/`RELOAD*` duplicate tabs; lang-type = extension-only** | partial | `npp_bridge.cpp:1036,1106` | correctness gap, not just a stub |
+| **Plugin toolbar buttons couldn't follow the host's icon pack / theme** | ✅ **resolved** | `nib.toolbar/2` `add_tool_named` + `NPPM_ADDTOOLBARICONBYNAME` — the plugin names a host icon asset instead of shipping pixels — [nib.h](../include/nib/nib.h), `npp_bridge.cpp` | plugin-supplied RGBA is frozen at whatever pack/theme was active when it was rasterised; a named icon is drawn through the host's own `icon()` path, so it tracks the user's icon-set choice **and** light/dark, including the per-pack retints. Also works on Linux/macOS, where `NPPM_ADDTOOLBARICON*` cannot (no `HBITMAP`) |
 | **~44–77 of 118 `NPPM_*` served** | partial | additive; [site/docs/plugins.md](../site/docs/plugins.md) undercounts vs bridge README | doc is also stale (quick fix) |
 | **Raw-Win32 / DockingFeature plugins** | planned-deferred | out of scope ([docs/ARCHITECTURE.md](ARCHITECTURE.md)) | native-UI plugins need a separate port |
 
