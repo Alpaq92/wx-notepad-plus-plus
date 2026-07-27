@@ -77,5 +77,15 @@ from the pack's own primitives, keeping the set's baked green-8/green-3 fill dis
   with a green-8 eighth-note (head + stem + flag) drawn on top as fills, so the four
   file-shaped `filetype-*` icons share one silhouette.
 
-No other modifications were made beyond selecting icons, the colour substitutions, and the
-two composites above.
+No other modifications were made beyond selecting icons, the colour substitutions, the
+two composites above, and the original glyph noted below.
+
+## Original glyphs (NOT from Solar)
+
+One file in this directory is original wxNote artwork rather than a recolored Solar glyph,
+and is therefore **not** covered by the Solar / 480 Design attribution above. It is licensed
+under the project's own licence (Apache-2.0, see the root `LICENSE`):
+
+| File                 | Why it exists                                                        |
+| -------------------- | -------------------------------------------------------------------- |
+| `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". The free Solar set has no glyph for this concept. Drawn with this set's baked two-tone discipline (green-8 `#2f9e44` braces, green-3 `#8ce99a` text lines) so `iconColored()`'s light-mode retint finds the same hexes it does in every other file here. Unlike the rest of the set it is stroked rather than filled - a filled brace collapses into a blob at 16 px. |

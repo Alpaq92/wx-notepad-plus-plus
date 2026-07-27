@@ -16,5 +16,15 @@ No modifications beyond selecting which icons to include; colours follow the the
 (light/dark) at runtime rather than being baked into the SVGs, unlike the two colored
 sibling sets.
 
+## Original glyphs (NOT from Tabler)
+
+One file in this directory is original wxNote artwork rather than a selected Tabler glyph,
+and is therefore **not** covered by the Tabler attribution above. It is licensed under the
+project's own licence (Apache-2.0, see the root `LICENSE`):
+
+| File                 | Why it exists                                                        |
+| -------------------- | -------------------------------------------------------------------- |
+| `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". Tabler has no glyph for this concept, and every near-miss (`braces`, `code`) is already spoken for by another wxNote command. Drawn to this set's conventions: 24x24 viewBox, `fill="none"`, `stroke="currentColor"`, `stroke-width="2.25"`, round caps/joins, so it retints with the theme exactly like the selected Tabler icons. |
+
 See the root `LICENSING.md` and `NOTICE` for the project-wide licensing summary this
 entry is consistent with.

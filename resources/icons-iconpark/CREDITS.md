@@ -67,3 +67,13 @@ styles:
 `filetype-code`, `filetype-document` and `filetype-audio` share IconPark's one file-body
 silhouette, so those three read as a consistent family (as they do in the default set).
 The existing 38 toolbar files were left byte-for-byte unchanged when these were added.
+
+## Original glyphs (NOT from IconPark)
+
+One file in this directory is original wxNote artwork rather than a recolored IconPark
+glyph, and is therefore **not** covered by the IconPark attribution above. It is licensed
+under the project's own licence (Apache-2.0, see the root `LICENSE`):
+
+| File                 | Why it exists                                                        |
+| -------------------- | -------------------------------------------------------------------- |
+| `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". IconPark has no glyph for this concept. Drawn to this set's conventions: 48x48 viewBox, stroke-only in teal-7 `#0ca678` with `stroke-width="2.5"` and round caps/joins, matching the pack's other stroke-only glyphs (and picked up by the dark-mode teal-3 restroke in `iconColored()`). |

@@ -40,8 +40,9 @@ per-platform shell picker, and a redirected-pipe fallback on Windows older than 
 folders + files, saved as `.xml`) and folder-as-workspace, pinned tabs, **Restore Recent Closed File**
 (Ctrl+Shift+T) + MRU Ctrl+Tab switching, an **interactive status bar** (double-click to go-to-line,
 convert EOL or encoding, or toggle INS/OVR), EOL detection, session restore, print + print preview,
-macro recording/playback, **Monitoring** (tail -f: reload on external change), three selectable
-**toolbar icon sets** (Tabler, Solar, IconPark — see Credits), full UI **localization** into 8
+macro recording/playback (saved macros persist and are bindable in the Shortcut Mapper),
+**Monitoring** (tail -f: reload on external change), four selectable **toolbar icon sets** (Tabler,
+Solar, IconPark, Streamline — see Credits), full UI **localization** into 8
 languages (pl, de, fr, es, ru, ja, zh, ko), and a **plugin host** — see [Plugins](#plugins).
 
 ## Plugins
@@ -200,5 +201,5 @@ design references — is in [`docs/CREDITS.md`](docs/CREDITS.md). The headliners
   - [Solar Icons](https://icon-sets.iconify.design/solar/) (Bold Duotone) — © 480 Design (CC BY 4.0, attribution required; `resources/icons-solar/CREDITS.md`).
   - [IconPark](https://github.com/bytedance/IconPark) — © ByteDance (Apache-2.0; `resources/icons-iconpark/CREDITS.md`).
   - [Streamline](https://streamlinehq.com) Core free icons — free icons from Streamline (CC BY 4.0, attribution required; `resources/icons-streamline/CREDITS.md`).
-- Bundled editor fonts, both SIL OFL 1.1 and both unmodified, shipped in place of the proprietary Consolas (`resources/fonts/CREDITS.md`): [Cascadia Mono](https://github.com/microsoft/cascadia-code) — © Microsoft, the **default** and fallback face, and carrying the Reserved Font Name `Cascadia Code` (see [`LICENSING.md`](LICENSING.md)) — and [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) — © the JetBrains Mono Project Authors, no Reserved Font Name.
+- Bundled editor fonts — five monospace families, all unmodified, shipped in place of the proprietary Consolas (`resources/fonts/CREDITS.md`): [Cascadia Mono](https://github.com/microsoft/cascadia-code) — © Microsoft, the **default** and fallback face — [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) — © the JetBrains Mono Project Authors — [IBM Plex Mono](https://github.com/IBM/plex) — © IBM Corp. — [Iosevka Fixed](https://github.com/be5invis/Iosevka) — © Renzhi Li — all four SIL OFL 1.1 — and [Hack](https://github.com/source-foundry/Hack) — © Source Foundry Authors (MIT + Bitstream Vera). Cascadia, IBM Plex and Iosevka carry Reserved Font Names (see [`LICENSING.md`](LICENSING.md)).
 - Color themes: kept third-party themes are MIT (© Fabio Zendhi Nagao; Bespin © Oren Farhi) or CC BY 3.0 (© Paul Neubauer); regenerated themes + the default styler use permissive palettes (GitHub Primer, Atom One, Nord, Dracula, VS Code — all MIT; canonical Zenburn/Obsidian colors). [Markdown Preview Enhanced](https://github.com/shd101wyy/vscode-markdown-preview-enhanced) (NCSA) was reviewed as a permissive palette source.
