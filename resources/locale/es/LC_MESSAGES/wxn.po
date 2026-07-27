@@ -3113,3 +3113,61 @@ msgstr "Estilo Windows (plano)"
 
 msgid "Opera-style (rounded)"
 msgstr "Estilo Opera (redondeado)"
+
+msgid "&Manage Saved Macros..."
+msgstr "&Administrar macros guardadas..."
+
+msgid "Manage Saved Macros"
+msgstr "Administrar macros guardadas"
+
+msgid "Move &Up"
+msgstr "&Subir"
+
+msgid "Move &Down"
+msgstr "&Bajar"
+
+msgid "Re&name..."
+msgstr "Re&nombrar..."
+
+msgid "Rename Macro"
+msgstr "Renombrar macro"
+
+msgid "Delete Macro"
+msgstr "Eliminar macro"
+
+msgid "Another macro already uses that name."
+msgstr "Otra macro ya usa ese nombre."
+
+msgid "Saved macros updated"
+msgstr "Macros guardadas actualizadas"
+
+msgid "No saved macros yet. Record one, then use Save Current Recorded Macro."
+msgstr "Aún no hay macros guardadas. Grabe una y luego use \"Guardar macro grabada actual\"."
+
+msgid "Saved macros are read-only: macros.dat was written by a newer version of wxNote."
+msgstr "Las macros guardadas son de solo lectura: macros.dat fue escrito por una versión más reciente de wxNote."
+
+msgid "Order here is the order in the Macro menu. Shortcuts follow a macro when it moves."
+msgstr "El orden aquí es el del menú Macro. Los atajos siguen a la macro cuando se mueve."
+
+msgid "(large file - symbol scan off)"
+msgstr "(archivo grande: análisis de símbolos desactivado)"
+
+msgid "Large-file mode above (MiB, 0 = never):"
+msgstr "Modo de archivo grande por encima de (MiB, 0 = nunca):"
+
+msgid "or any line longer than (chars):"
+msgstr "o cualquier línea más larga que (caracteres):"
+
+msgid "%s  (%d steps)"
+msgstr "%s  (%d pasos)"
+
+msgid "Delete the macro \"%s\"?
+
+Its keyboard shortcut is removed too."
+msgstr "¿Eliminar la macro \"%s\"?
+
+Su atajo de teclado también se elimina."
+
+msgid "or any line longer than (chars, 0 = never):"
+msgstr "o cualquier línea más larga que (caracteres, 0 = nunca):"

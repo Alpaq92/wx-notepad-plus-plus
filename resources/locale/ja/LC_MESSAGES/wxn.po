@@ -3113,3 +3113,61 @@ msgstr "Windows スタイル（フラット）"
 
 msgid "Opera-style (rounded)"
 msgstr "Opera スタイル（角丸）"
+
+msgid "&Manage Saved Macros..."
+msgstr "保存したマクロの管理(&M)..."
+
+msgid "Manage Saved Macros"
+msgstr "保存したマクロの管理"
+
+msgid "Move &Up"
+msgstr "上へ(&U)"
+
+msgid "Move &Down"
+msgstr "下へ(&D)"
+
+msgid "Re&name..."
+msgstr "名前の変更(&N)..."
+
+msgid "Rename Macro"
+msgstr "マクロの名前を変更"
+
+msgid "Delete Macro"
+msgstr "マクロを削除"
+
+msgid "Another macro already uses that name."
+msgstr "その名前は別のマクロが使用しています。"
+
+msgid "Saved macros updated"
+msgstr "保存したマクロを更新しました"
+
+msgid "No saved macros yet. Record one, then use Save Current Recorded Macro."
+msgstr "保存されたマクロがありません。マクロを記録してから「現在の記録済みマクロを保存」を使用してください。"
+
+msgid "Saved macros are read-only: macros.dat was written by a newer version of wxNote."
+msgstr "保存されたマクロは読み取り専用です: macros.dat はより新しいバージョンの wxNote で書き込まれました。"
+
+msgid "Order here is the order in the Macro menu. Shortcuts follow a macro when it moves."
+msgstr "ここでの並び順はマクロメニューの順序です。移動してもショートカットはマクロに追従します。"
+
+msgid "(large file - symbol scan off)"
+msgstr "(大きなファイル - シンボル走査オフ)"
+
+msgid "Large-file mode above (MiB, 0 = never):"
+msgstr "大きなファイルモードのしきい値 (MiB、0 = 無効):"
+
+msgid "or any line longer than (chars):"
+msgstr "または次の文字数を超える行:"
+
+msgid "%s  (%d steps)"
+msgstr "%s  (%d ステップ)"
+
+msgid "Delete the macro \"%s\"?
+
+Its keyboard shortcut is removed too."
+msgstr "マクロ \"%s\" を削除しますか?
+
+キーボードショートカットも削除されます。"
+
+msgid "or any line longer than (chars, 0 = never):"
+msgstr "または次の文字数を超える行 (0 = 無効):"
