@@ -3113,3 +3113,61 @@ msgstr "Windows 스타일(평면)"
 
 msgid "Opera-style (rounded)"
 msgstr "Opera 스타일(둥근)"
+
+msgid "&Manage Saved Macros..."
+msgstr "저장된 매크로 관리(&M)..."
+
+msgid "Manage Saved Macros"
+msgstr "저장된 매크로 관리"
+
+msgid "Move &Up"
+msgstr "위로(&U)"
+
+msgid "Move &Down"
+msgstr "아래로(&D)"
+
+msgid "Re&name..."
+msgstr "이름 바꾸기(&N)..."
+
+msgid "Rename Macro"
+msgstr "매크로 이름 바꾸기"
+
+msgid "Delete Macro"
+msgstr "매크로 삭제"
+
+msgid "Another macro already uses that name."
+msgstr "다른 매크로가 이미 그 이름을 사용합니다."
+
+msgid "Saved macros updated"
+msgstr "저장된 매크로가 업데이트되었습니다"
+
+msgid "No saved macros yet. Record one, then use Save Current Recorded Macro."
+msgstr "저장된 매크로가 없습니다. 매크로를 기록한 다음 '현재 기록된 매크로 저장'을 사용하세요."
+
+msgid "Saved macros are read-only: macros.dat was written by a newer version of wxNote."
+msgstr "저장된 매크로는 읽기 전용입니다: macros.dat이 더 새로운 버전의 wxNote로 작성되었습니다."
+
+msgid "Order here is the order in the Macro menu. Shortcuts follow a macro when it moves."
+msgstr "여기의 순서가 매크로 메뉴의 순서입니다. 이동해도 단축키는 매크로를 따라갑니다."
+
+msgid "(large file - symbol scan off)"
+msgstr "(큰 파일 - 기호 검색 꺼짐)"
+
+msgid "Large-file mode above (MiB, 0 = never):"
+msgstr "큰 파일 모드 기준 (MiB, 0 = 사용 안 함):"
+
+msgid "or any line longer than (chars):"
+msgstr "또는 다음 길이를 넘는 행 (문자):"
+
+msgid "%s  (%d steps)"
+msgstr "%s  (%d단계)"
+
+msgid "Delete the macro \"%s\"?
+
+Its keyboard shortcut is removed too."
+msgstr "매크로 \"%s\"을(를) 삭제할까요?
+
+키보드 단축키도 함께 제거됩니다."
+
+msgid "or any line longer than (chars, 0 = never):"
+msgstr "또는 다음 길이를 넘는 행 (문자, 0 = 사용 안 함):"

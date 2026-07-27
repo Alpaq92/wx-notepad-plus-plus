@@ -169,7 +169,10 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 // File Compare command ids (wxNote-only; private range like myID_VIEW_TERMINAL). Defined BEFORE menu_builder.h
 // so the View menu table (menu_data_view.h) can reference them.
 enum { myID_CMP_FILE = 60220, myID_CMP_CLIP, myID_CMP_CLEAR, myID_CMP_NEXT, myID_CMP_PREV, myID_SPELLCHECK,
-       myID_SPELL_COMMENTSONLY, myID_SPELL_MANAGE };   // 60226/60227 - View ▸ Spell Check submenu items (in menu_data_view.h)
+       myID_SPELL_COMMENTSONLY, myID_SPELL_MANAGE,     // 60226/60227 - Spell Check submenu items
+       myID_MACRO_MANAGE };                         // 60228 - Macro ▸ Manage Saved Macros... (wxNote-only:
+                                                       // N++ has no equivalent, so it takes a private id rather
+                                                       // than one of the frozen IDM_* values in command_ids.h)
 #include "menu_builder.h"      // data-driven menu bar builder (menu_model.h/menu_data_*.h) - replaces the old inline menu construction
 #include "keymap_schemes.h"    // bundled read-only keymap presets ("wxNote" + "Notepad++") - Tier 1 of the shortcut model
 #include "shortcut_mapper_dialog.h"  // the Shortcut Mapper dialog + conflict engine (implements kCmdSettingShortcutMapper 48009)
@@ -3910,6 +3913,25 @@ private:
         if (!m_funcList) return;
         wxAuiPaneInfo& pi = m_aui.GetPane(m_funcList);
         if (!pi.IsOk() || !pi.IsShown()) return;
+        // Large-file mode covers this pass too. flCollect pulls the WHOLE buffer and runs std::regex over
+        // it, and that matcher is documented (see flCollect) to throw error_stack/error_complexity on a
+        // block comment of only a few hundred KB - far below the file-size threshold - so on a large file
+        // this is both the slowest and the least reliable whole-buffer pass we run. It is timer-driven and
+        // re-runs on every buffer activation, so leaving it unguarded means paying it repeatedly. Show the
+        // reason rather than an empty tree, which would read as "this language has no symbols".
+        //
+        // NOTE: unlike the STYLING guard this deliberately does NOT honour langForced. Forcing a language
+        // re-enables highlighting because the lexer is chosen by the forced language, but the symbol scan
+        // picks its rules from flLangKey(), which reads the file EXTENSION only - so on a forced .log or
+        // .dat it would run the full whole-buffer regex pass and still produce an empty tree, and on a
+        // forced minified .js it would re-enable exactly the pathological scan this guard exists to stop.
+        if (auto* p = activePage(); p && p->largeFile)
+        {
+            m_funcList->DeleteAllItems();
+            const wxTreeItemId r = m_funcList->AddRoot("");
+            m_funcList->AppendItem(r, _("(large file - symbol scan off)"));
+            return;
+        }
         m_funcList->Freeze();
         m_funcList->DeleteAllItems();
         const wxTreeItemId root = m_funcList->AddRoot("");
@@ -7772,10 +7794,17 @@ private:
             // Large-file guard: above ~16 MiB, or with a pathologically long line (minified JS/JSON/one-line
             // dumps), skip the synchronous whole-buffer Scintillua re-lex + Lexilla styling + wrap that would
             // otherwise stall the editor. Picking a Language from the menu (langForced) overrides this per file.
-            constexpr size_t kLargeFileBytes = 16u * 1024 * 1024;   // 16 MiB
-            constexpr size_t kLongLineChars  = 50000;
+            // Two INDEPENDENT thresholds (Preferences ▸ Editing), each with 0 = that check off, so turning
+            // the size cap off does not also disable the long-line trip - a 3 MB minified one-liner is small
+            // on disk but just as expensive to lex, which is the case the line check exists for.
+            // The size compare is done in uint64: m_largeFileMiB * 1024 * 1024 at the spinner's own maximum
+            // (4096) is 2^32, which wraps to 0 in a 32-bit size_t and would mark EVERY file large.
             if (auto* p = activePage())
-                p->largeFile = (n > kLargeFileBytes || maxLineLen > kLongLineChars);
+            {
+                const bool bySize = m_largeFileMiB  > 0 && (uint64_t)n > ((uint64_t)m_largeFileMiB << 20);
+                const bool byLine = m_longLineChars > 0 && maxLineLen > (size_t)m_longLineChars;
+                p->largeFile = bySize || byLine;
+            }
         }
         sci(SCI_EMPTYUNDOBUFFER); sci(SCI_GOTOPOS, 0); sci(SCI_SETSAVEPOINT);
         if (auto* p = activePage()) { p->path = path; stampDiskStat(p); }
@@ -10212,6 +10241,8 @@ private:
         c->Read("Editing/UseTabs", &m_useTabs, true);
         c->Read("Editing/LineNumbers", &m_lineNumbers, true);
         c->Read("Editing/Wrap", &m_wrap, false);
+        { long v = 16;    c->Read("Editing/LargeFileMiB",  &v, 16L);    m_largeFileMiB  = (v < 0 || v > 4096) ? 16 : (int)v; }
+        { long v = 50000; c->Read("Editing/LongLineChars", &v, 50000L); m_longLineChars = (v < 0 || v > 1000000) ? 50000 : (int)v; }
         c->Read("Editing/Whitespace", &m_ws, false);
         c->Read("Editing/IndentGuides", &m_guides, true);
         c->Read("Editing/WrapSymbol", &m_wrapSymbol, false);
@@ -10250,6 +10281,7 @@ private:
         auto* c = wxConfigBase::Get();
         c->Write("Editing/TabWidth", (long)m_tabWidth);   c->Write("Editing/UseTabs", m_useTabs);
         c->Write("Editing/LineNumbers", m_lineNumbers);   c->Write("Editing/Wrap", m_wrap);
+        c->Write("Editing/LargeFileMiB", (long)m_largeFileMiB);  c->Write("Editing/LongLineChars", (long)m_longLineChars);
         c->Write("Editing/Whitespace", m_ws);             c->Write("Editing/IndentGuides", m_guides);
         c->Write("Editing/WrapSymbol", m_wrapSymbol);     c->Write("View/Toolbar", m_showToolbar);
         c->Write("View/StatusBar", m_showStatusbar);      c->Write("Editing/AutoComplete", m_autocomplete);
@@ -10491,6 +10523,19 @@ private:
         auto* spBlink = new SpinField(ed, 0, 2000, m_caretBlink, m_dark, 80);
         brow->Add(spBlink, 0);
         es->Add(brow, 0, wxLEFT | wxRIGHT | wxTOP, 10);
+        // Large-file guard thresholds. Above either one a file opens with syntax highlighting and the
+        // Function List symbol scan switched off, which is what keeps a huge or minified file from
+        // re-lexing the whole buffer on every keystroke. Size 0 turns the guard off entirely (both
+        // thresholds), for anyone who would rather have highlighting whatever it costs. Applies to files
+        // opened after the change - already-open tabs keep the mode they were loaded with.
+        auto* bigrow = new wxBoxSizer(wxHORIZONTAL);
+        bigrow->Add(new wxStaticText(ed, wxID_ANY, _("Large-file mode above (MiB, 0 = never):")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* spLargeMiB = new SpinField(ed, 0, 4096, m_largeFileMiB, m_dark, 70);
+        bigrow->Add(spLargeMiB, 0, wxRIGHT, 24);
+        bigrow->Add(new wxStaticText(ed, wxID_ANY, _("or any line longer than (chars, 0 = never):")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
+        auto* spLongLine = new SpinField(ed, 0, 1000000, m_longLineChars, m_dark, 90);
+        bigrow->Add(spLongLine, 0);
+        es->Add(bigrow, 0, wxLEFT | wxRIGHT | wxTOP, 10);
         // Optional distinct colour for the line-number/bookmark/fold "gutter" strip on the left edge
         // of the editor - off by default (follows the active theme, as before).
         auto* grow = new wxBoxSizer(wxHORIZONTAL);
@@ -10714,6 +10759,11 @@ private:
         m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
         m_caretLine = cbCaretLn->GetValue(); m_autoindent = cbIndent->GetValue(); m_caretWidth = spCaret->GetValue(); m_edgeColumn = spEdge->GetValue();
         m_scrollBeyond = cbScroll->GetValue(); m_multiEdit = cbMulti->GetValue(); m_caretBlink = spBlink->GetValue();
+        // Both spinners use 0 as the "check off" sentinel, and SpinField::GetValue() returns m_min for an
+        // unparseable box - so a field the user merely cleared would silently disable that guard. Treat an
+        // empty box as "leave it alone" instead; every other spinner here has min > 0 and degrades harmlessly.
+        { const wxString t = spLargeMiB->Text()->GetValue(); if (!t.Strip(wxString::both).empty()) m_largeFileMiB  = spLargeMiB->GetValue(); }
+        { const wxString t = spLongLine->Text()->GetValue(); if (!t.Strip(wxString::both).empty()) m_longLineChars = spLongLine->GetValue(); }
         m_autoCompFrom = spFrom->GetValue(); m_autoInsertPairs = cbPairs->GetValue();
         m_defaultEol = (rbEol->GetSelection() == 1) ? SC_EOL_LF : (rbEol->GetSelection() == 2) ? SC_EOL_CR : SC_EOL_CRLF;
         m_defaultEncoding = rbEnc->GetSelection();   // index maps directly to the Enc enum (UTF8=0 .. ANSI=4)
@@ -10901,6 +10951,16 @@ private:
     {
         wxMenu* menu = m_menuRegistry.find("menu.macro"); if (!menu) return;
         for (int id = myID_MACRO_ITEM; id < myID_MACRO_ITEM + kMaxMacroItems; ++id) if (auto* it = menu->FindItem(id)) menu->Destroy(it);
+        // The separator only earns its place while something follows it. Deleting the last macro used to
+        // leave the Macro menu ending in a bare horizontal rule, because m_macroSepAdded latched true and
+        // nothing ever removed it - unreachable while the list was append-only, reachable now that the
+        // manager can delete. Drop it whenever the list is empty and re-add it when macros come back.
+        if (m_savedMacros.empty() && m_macroSepAdded)
+        {
+            const auto& items = menu->GetMenuItems();
+            if (!items.IsEmpty() && items.GetLast()->GetData()->IsSeparator()) menu->Destroy(items.GetLast()->GetData());
+            m_macroSepAdded = false;
+        }
         if (!m_savedMacros.empty() && !m_macroSepAdded) { menu->AppendSeparator(); m_macroSepAdded = true; }
         for (size_t i = 0; i < m_savedMacros.size() && i < (size_t)kMaxMacroItems; ++i) menu->Append(myID_MACRO_ITEM + (int)i, m_savedMacros[i].name);
     }
@@ -10922,6 +10982,99 @@ private:
         saveSavedMacros();
         setStatus(0, wxString::Format(_("Macro saved: %s"), name)); m_hint = true;
     }
+    // Macro ▸ Manage Saved Macros...: rename / delete / reorder the persisted list. Edits are applied to a
+    // WORKING COPY and only committed on OK, so Cancel is a true no-op - the keymap and macros.dat are
+    // untouched until then. Reordering is what the Shortcut Mapper cares about: it renumbers the positional
+    // command ids, which refreshMacroRegistrations re-points the uid-keyed bindings at.
+    void manageMacros()
+    {
+        if (m_macrosReadOnly)
+        { themedInfo(_("Saved macros are read-only: macros.dat was written by a newer version of wxNote."),
+                     _("Manage Saved Macros")); return; }
+        if (m_savedMacros.empty())
+        { themedInfo(_("No saved macros yet. Record one, then use Save Current Recorded Macro."),
+                     _("Manage Saved Macros")); return; }
+
+        std::vector<SavedMacro> work = m_savedMacros;   // committed only on OK
+        wxDialog dlg(this, wxID_ANY, _("Manage Saved Macros"), wxDefaultPosition, wxDefaultSize,
+                     wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+        auto* list = new wxListBox(&dlg, wxID_ANY, wxDefaultPosition, wxSize(320, 240));
+        auto* btnUp     = new wxButton(&dlg, wxID_ANY, _("Move &Up"));
+        auto* btnDown   = new wxButton(&dlg, wxID_ANY, _("Move &Down"));
+        auto* btnRename = new wxButton(&dlg, wxID_ANY, _("Re&name..."));
+        auto* btnDelete = new wxButton(&dlg, wxID_ANY, _("&Delete"));
+
+        // Button state only - no list rebuild. Selection changes run through THIS, not refill(): rebuilding
+        // the whole control just to recompute four Enable() flags resets the scroll position, so with a
+        // long list every click made the view jump back to the top.
+        auto updateButtons = [&] {
+            const int s = list->GetSelection();
+            btnUp->Enable(s > 0);
+            btnDown->Enable(s >= 0 && s < (int)work.size() - 1);
+            btnRename->Enable(s >= 0);
+            btnDelete->Enable(s >= 0);
+        };
+        auto refill = [&](int sel) {                     // only when the LIST ITSELF changed
+            list->Clear();
+            for (const SavedMacro& sm : work)
+                list->Append(wxString::Format(_("%s  (%d steps)"), sm.name, (int)sm.steps.size()));
+            if (!work.empty()) list->SetSelection(std::min(std::max(sel, 0), (int)work.size() - 1));
+            updateButtons();
+        };
+        auto swapAt = [&](int a, int b) { std::swap(work[a], work[b]); refill(b); };
+
+        list->Bind(wxEVT_LISTBOX, [&](wxCommandEvent&) { updateButtons(); });
+        btnUp->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) { const int s = list->GetSelection(); if (s > 0) swapAt(s, s - 1); });
+        btnDown->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) { const int s = list->GetSelection(); if (s >= 0 && s + 1 < (int)work.size()) swapAt(s, s + 1); });
+        btnRename->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) {
+            const int s = list->GetSelection(); if (s < 0) return;
+            const wxString name = wxGetTextFromUser(_("Macro name:"), _("Rename Macro"), work[s].name, &dlg);
+            if (name.empty() || name == work[s].name) return;
+            for (int i = 0; i < (int)work.size(); ++i)
+                if (i != s && work[i].name == name)
+                {   // parent to THIS dialog, not the frame: themedInfo() builds its wxDialog on the frame,
+                    // which ShowModal has disabled, and a modal whose parent is disabled can end up behind
+                    // the manager - looking like a freeze. Matches the delete confirmation just below.
+                    wxMessageBox(_("Another macro already uses that name."), _("Rename Macro"),
+                                 wxOK | wxICON_INFORMATION, &dlg);
+                    return;
+                }
+            work[s].name = name; refill(s);
+        });
+        btnDelete->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) {
+            const int s = list->GetSelection(); if (s < 0) return;
+            if (wxMessageBox(wxString::Format(_("Delete the macro \"%s\"?\n\nIts keyboard shortcut is removed too."), work[s].name),
+                             _("Delete Macro"), wxYES_NO | wxICON_QUESTION, &dlg) != wxYES) return;
+            work.erase(work.begin() + s); refill(s);
+        });
+
+        auto* cols = new wxBoxSizer(wxVERTICAL);
+        for (wxButton* b : { btnUp, btnDown, btnRename, btnDelete }) cols->Add(b, 0, wxEXPAND | wxBOTTOM, 6);
+        auto* mid = new wxBoxSizer(wxHORIZONTAL);
+        mid->Add(list, 1, wxEXPAND | wxRIGHT, 10);
+        mid->Add(cols, 0, wxALIGN_TOP);
+        auto* top = new wxBoxSizer(wxVERTICAL);
+        top->Add(new wxStaticText(&dlg, wxID_ANY, _("Order here is the order in the Macro menu. Shortcuts follow a macro when it moves.")),
+                 0, wxALL, 12);
+        top->Add(mid, 1, wxEXPAND | wxLEFT | wxRIGHT, 12);
+        top->Add(dlg.CreateSeparatedButtonSizer(wxOK | wxCANCEL), 0, wxEXPAND | wxALL, 12);
+        dlg.SetSizerAndFit(top);
+        refill(0);
+        themeDialog(&dlg);
+        if (dlg.ShowModal() != wxID_OK) return;
+
+        std::vector<long> gone;   // uids present before but not after - their bindings must go too
+        for (const SavedMacro& before : m_savedMacros)
+        {
+            bool kept = false;
+            for (const SavedMacro& after : work) if (after.uid == before.uid) { kept = true; break; }
+            if (!kept) gone.push_back(before.uid);
+        }
+        m_savedMacros = work;
+        refreshMacroRegistrations(gone);
+        setStatus(0, _("Saved macros updated")); m_hint = true;
+    }
+
     // ---- saved-macro persistence (macros.dat under userDataDir) + keymap registration ----
     // Each macro carries a monotonic uid; symbolicName "macro.<uid>" is the stable shortcut-binding key in
     // shortcuts.json (survives rename/reorder), while the menu/cmd id is positional per session. macros.dat
@@ -10933,6 +11086,30 @@ private:
     {
         for (size_t i = 0; i < m_savedMacros.size() && i < (size_t)kMaxMacroItems; ++i)
             m_keymap.addDefault(macroSym(m_savedMacros[i].uid), myID_MACRO_ITEM + (int)i, wxString());
+    }
+    // Re-publish the macro list after it CHANGES (rename / delete / reorder), as opposed to the
+    // append-only saveMacro path. Menu ids are positional (myID_MACRO_ITEM + index) while bindings are
+    // keyed by uid, so any edit that moves a macro must move its command id with it - and addDefault
+    // cannot do that (it keeps the first row for a symbolicName and returns), which is why the store
+    // grows remapCmdId/removeDefault. `goneUids` are macros that no longer exist: their Tier-0 row and
+    // any user binding go with them, since a "macro.<uid>" can never come back (uids are monotonic).
+    void refreshMacroRegistrations(const std::vector<long>& goneUids = {})
+    {
+        for (long uid : goneUids) m_keymap.removeDefault(macroSym(uid));
+        for (size_t i = 0; i < m_savedMacros.size() && i < (size_t)kMaxMacroItems; ++i)
+            m_keymap.remapCmdId(macroSym(m_savedMacros[i].uid), myID_MACRO_ITEM + (int)i);
+        seedMacroKeymapDefaults();   // covers any macro not yet seeded (remapCmdId ignores unknown syms)
+        m_keymap.resolveAll();
+        appendMacroMenuItems();      // must precede refreshAccelerators: it re-Appends the items whose
+                                     // labels the native menubar derives its accelerators from
+        // Same pairing every other keymap-mutation site uses (the nib commit above, the mapper's apply
+        // callback): resolveAll() only updates the model. Without refreshAccelerators the frame accel
+        // table still maps the OLD positional ids, so after a reorder a bound key runs whichever macro
+        // slid into that id - a different, document-mutating macro. And without save() a deleted macro's
+        // binding is dropped in memory only, so shortcuts.json keeps resurrecting the orphan row.
+        refreshAccelerators(m_accelScope);
+        m_keymap.save();
+        saveSavedMacros();
     }
     void loadSavedMacros()
     {
@@ -12185,6 +12362,7 @@ private:
             case kCmdMacroStopRecordingMacro: stopMacroRecord(); break;
             case kCmdMacroPlaybackRecordedMacro: playMacro(m_macro); break;
             case kCmdMacroRunMultiMacroDlg: runMultiple(); break;
+            case myID_MACRO_MANAGE: manageMacros(); break;
             case kCmdMacroSaveCurrentMacro: saveMacro(); break;
 
             // ---- File: shell integration + file ops ----
@@ -12678,6 +12856,10 @@ private:
     int         m_toolbarIconSize = 16;          // toolbar icon size in px (16/20/24/32, default 16; restart-to-apply)
     wxTimer     m_timer;
     wxString    m_path, m_lastFind, m_lastReplace;
+    // Large-file guard thresholds (Preferences ▸ Editing). Size 0 = guard off entirely. Read at load time
+    // into EditorPage::largeFile, so a change applies to files opened after it, not to open tabs.
+    int         m_largeFileMiB   = 16;
+    int         m_longLineChars  = 50000;
     bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON
     // Window/X,Y,W,H,Maximized: the last known NON-maximized frame geometry (kept live by the
     // wxEVT_SIZE/MOVE binds in the constructor - GetSize()/GetPosition() while actually maximized report

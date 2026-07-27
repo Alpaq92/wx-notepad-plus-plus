@@ -110,6 +110,20 @@ private:
     // contract inside the refill hot loop.
     struct Row { int cmdId = 0; wxString sym; bool editor = false; int sciCmd = 0; wxString name; bool macro = false; };
 
+    // A SAVED macro's row, i.e. main.cpp's macroSym() format "macro.<uid>" - as opposed to the static
+    // Macro-MENU commands, whose symbolicNames also begin "macro." ("macro.startRecording",
+    // "macro.playback", "macro.manageSaved", ...). A bare StartsWith("macro.") test lumps the two
+    // together, which put the six built-in menu commands under Show: Macros and hid them from Show: Menu
+    // commands. The uid suffix is all-digits and the menu commands are all camelCase, so requiring digits
+    // separates them without changing the on-disk binding key (existing shortcuts.json rows keep working).
+    static bool isSavedMacroSym(const wxString& sym)
+    {
+        if (!sym.StartsWith("macro.")) return false;
+        const wxString tail = sym.Mid(6);
+        if (tail.empty()) return false;
+        for (const wxUniChar c : tail) if (!wxIsdigit(c)) return false;
+        return true;
+    }
     // Menu name for a command id via the live menubar (follows the UI language). Falls back to the
     // symbolicName if the item isn't on the bar (shouldn't happen for seeded commands).
     wxString cmdName(int cmdId, const wxString& sym) const
@@ -176,7 +190,7 @@ private:
             // before the mapper opens, so this FindItem test passes and they DO appear, under Category=Macros.
             if (m_mb && !m_mb->FindItem(b->cmdId)) continue;
             m_rows.push_back({ b->cmdId, b->symbolicName, false, 0, cmdName(b->cmdId, b->symbolicName),
-                               b->symbolicName.StartsWith("macro.") });
+                               isSavedMacroSym(b->symbolicName) });
         }
         // The curated Scintilla editor commands - Scope = Editor, remapped via CmdKeyAssign
         // rather than the accel table. Appended after the menu rows; the Scope column separates them.

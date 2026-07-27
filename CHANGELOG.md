@@ -3,6 +3,25 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Manage Saved Macros** (**Automation ▸ Macro ▸ Manage Saved Macros…**) — rename, delete and reorder the
+  macros you have saved, instead of hand-editing `macros.dat`. The order here is the order they appear in
+  the Macro menu, and a keyboard shortcut follows its macro when the macro moves or is renamed; deleting a
+  macro removes its binding too. Edits apply on **OK** only, so Cancel changes nothing.
+- **Large-file thresholds are configurable** (**Preferences ▸ Editing**): the size above which a file opens
+  in large-file mode (default 16 MiB, **0 turns the guard off**) and the long-line trigger (default 50 000
+  characters). Applies to files opened after the change; already-open tabs keep the mode they loaded with.
+
+### Changed
+- **The Function List respects large-file mode.** Its symbol scan pulls the whole buffer and runs `std::regex`
+  over it, and that matcher can fail on a block comment of only a few hundred KB — far below the file-size
+  threshold — so on a large file it was both the slowest and least reliable pass the editor ran, re-running
+  on every buffer activation. It now shows *(large file - symbol scan off)* rather than an empty tree, which
+  would have read as "this language has no symbols". Picking a **Language** from the menu re-enables it, as
+  it already does for syntax highlighting.
+
 ## [0.11.0] - 2026-07-27
 
 ### Added

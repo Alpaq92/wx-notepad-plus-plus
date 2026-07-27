@@ -3113,3 +3113,61 @@ msgstr "В стиле Windows (плоские)"
 
 msgid "Opera-style (rounded)"
 msgstr "В стиле Opera (скруглённые)"
+
+msgid "&Manage Saved Macros..."
+msgstr "&Управление сохранёнными макросами..."
+
+msgid "Manage Saved Macros"
+msgstr "Управление сохранёнными макросами"
+
+msgid "Move &Up"
+msgstr "&Вверх"
+
+msgid "Move &Down"
+msgstr "В&низ"
+
+msgid "Re&name..."
+msgstr "Пере&именовать..."
+
+msgid "Rename Macro"
+msgstr "Переименовать макрос"
+
+msgid "Delete Macro"
+msgstr "Удалить макрос"
+
+msgid "Another macro already uses that name."
+msgstr "Другой макрос уже использует это имя."
+
+msgid "Saved macros updated"
+msgstr "Сохранённые макросы обновлены"
+
+msgid "No saved macros yet. Record one, then use Save Current Recorded Macro."
+msgstr "Сохранённых макросов пока нет. Запишите макрос, затем выберите \"Сохранить текущий записанный макрос\"."
+
+msgid "Saved macros are read-only: macros.dat was written by a newer version of wxNote."
+msgstr "Сохранённые макросы доступны только для чтения: файл macros.dat записан более новой версией wxNote."
+
+msgid "Order here is the order in the Macro menu. Shortcuts follow a macro when it moves."
+msgstr "Порядок здесь — это порядок в меню «Макрос». Сочетания клавиш следуют за макросом при перемещении."
+
+msgid "(large file - symbol scan off)"
+msgstr "(большой файл — поиск символов отключён)"
+
+msgid "Large-file mode above (MiB, 0 = never):"
+msgstr "Режим большого файла свыше (МиБ, 0 = никогда):"
+
+msgid "or any line longer than (chars):"
+msgstr "или любая строка длиннее (символов):"
+
+msgid "%s  (%d steps)"
+msgstr "%s  (шагов: %d)"
+
+msgid "Delete the macro \"%s\"?
+
+Its keyboard shortcut is removed too."
+msgstr "Удалить макрос \"%s\"?
+
+Его сочетание клавиш также будет удалено."
+
+msgid "or any line longer than (chars, 0 = never):"
+msgstr "или любая строка длиннее (символов, 0 = никогда):"

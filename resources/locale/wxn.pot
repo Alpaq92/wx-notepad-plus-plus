@@ -3115,3 +3115,59 @@ msgstr ""
 
 msgid "Opera-style (rounded)"
 msgstr ""
+
+msgid "&Manage Saved Macros..."
+msgstr ""
+
+msgid "Manage Saved Macros"
+msgstr ""
+
+msgid "Move &Up"
+msgstr ""
+
+msgid "Move &Down"
+msgstr ""
+
+msgid "Re&name..."
+msgstr ""
+
+msgid "Rename Macro"
+msgstr ""
+
+msgid "Delete Macro"
+msgstr ""
+
+msgid "Another macro already uses that name."
+msgstr ""
+
+msgid "Saved macros updated"
+msgstr ""
+
+msgid "No saved macros yet. Record one, then use Save Current Recorded Macro."
+msgstr ""
+
+msgid "Saved macros are read-only: macros.dat was written by a newer version of wxNote."
+msgstr ""
+
+msgid "Order here is the order in the Macro menu. Shortcuts follow a macro when it moves."
+msgstr ""
+
+msgid "(large file - symbol scan off)"
+msgstr ""
+
+msgid "Large-file mode above (MiB, 0 = never):"
+msgstr ""
+
+msgid "or any line longer than (chars):"
+msgstr ""
+
+msgid "%s  (%d steps)"
+msgstr ""
+
+msgid "Delete the macro \"%s\"?
+
+Its keyboard shortcut is removed too."
+msgstr ""
+
+msgid "or any line longer than (chars, 0 = never):"
+msgstr ""

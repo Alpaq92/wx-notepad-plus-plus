@@ -209,7 +209,11 @@ so code isn't a sea of red.
 ## Automation
 
 - **Macro ▸** — Start Recording · Stop Recording · Playback · Save Current Recorded Macro… · Run a Macro
-  Multiple Times… Saved macros are appended to this menu.
+  Multiple Times… · **Manage Saved Macros…** Saved macros are appended to this menu, and persist across
+  restarts. **Manage Saved Macros…** renames, deletes and reorders them: the order in that dialog is the
+  order they appear here, and a shortcut assigned in the [Shortcut Mapper](custom-shortcuts.md) follows its
+  macro when the macro is renamed or moved (deleting a macro removes its shortcut too). Changes apply on
+  **OK** only.
 - **Run ▸** — **Run…** (<kbd>F5</kbd>) and **Validate shortcuts.xml**, which forwards to the optional
   Notepad++ shortcut importer (see
   [Customizing Shortcuts](custom-shortcuts.md#importing-notepad-shortcuts)). The Run dialog takes a command line

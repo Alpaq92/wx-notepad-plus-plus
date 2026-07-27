@@ -3113,3 +3113,61 @@ msgstr "Windows 样式（扁平）"
 
 msgid "Opera-style (rounded)"
 msgstr "Opera 样式（圆角）"
+
+msgid "&Manage Saved Macros..."
+msgstr "管理已保存的宏(&M)..."
+
+msgid "Manage Saved Macros"
+msgstr "管理已保存的宏"
+
+msgid "Move &Up"
+msgstr "上移(&U)"
+
+msgid "Move &Down"
+msgstr "下移(&D)"
+
+msgid "Re&name..."
+msgstr "重命名(&N)..."
+
+msgid "Rename Macro"
+msgstr "重命名宏"
+
+msgid "Delete Macro"
+msgstr "删除宏"
+
+msgid "Another macro already uses that name."
+msgstr "另一个宏已使用该名称。"
+
+msgid "Saved macros updated"
+msgstr "已更新保存的宏"
+
+msgid "No saved macros yet. Record one, then use Save Current Recorded Macro."
+msgstr "尚无保存的宏。请先录制，然后使用“保存当前录制的宏”。"
+
+msgid "Saved macros are read-only: macros.dat was written by a newer version of wxNote."
+msgstr "保存的宏为只读：macros.dat 由更新版本的 wxNote 写入。"
+
+msgid "Order here is the order in the Macro menu. Shortcuts follow a macro when it moves."
+msgstr "此处的顺序即宏菜单中的顺序。移动时快捷键会跟随宏。"
+
+msgid "(large file - symbol scan off)"
+msgstr "(大文件 - 已关闭符号扫描)"
+
+msgid "Large-file mode above (MiB, 0 = never):"
+msgstr "大文件模式阈值 (MiB，0 = 从不):"
+
+msgid "or any line longer than (chars):"
+msgstr "或任意行长度超过 (字符):"
+
+msgid "%s  (%d steps)"
+msgstr "%s  (%d 步)"
+
+msgid "Delete the macro \"%s\"?
+
+Its keyboard shortcut is removed too."
+msgstr "删除宏 \"%s\"？
+
+其键盘快捷键也会被删除。"
+
+msgid "or any line longer than (chars, 0 = never):"
+msgstr "或任意行长度超过 (字符，0 = 从不):"

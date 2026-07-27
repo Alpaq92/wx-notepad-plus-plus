@@ -87,6 +87,8 @@ reachable percentages to move with it.
 | Caret width | 1–3 |
 | Vertical edge at column | 0–300; **0 = off** |
 | Caret blink rate (ms) | 0–2000; **0 = steady** |
+| Large-file mode above (MiB) | **16** by default; **0 = never**. Above this size a file opens with syntax highlighting *and* the Function List's symbol scan switched off, which is what stops a huge file re-lexing the whole buffer on every keystroke. Choose a **Language** from the menu to force highlighting back on for that file |
+| or any line longer than (chars) | **50 000** by default. Trips large-file mode for minified JS/JSON and one-line dumps, which are small on disk but just as expensive to lex. Both thresholds apply to files opened *after* the change — tabs already open keep the mode they loaded with |
 | Use a custom line-number margin colour | off by default — the gutter follows the theme. When on, the colour picker beside it becomes active and takes effect immediately, no restart |
 | Spell-check engine | **Windows / macOS only** (Linux always uses the bundled dictionary). Chooses what backs **View ▸ Spell Check**: *System (OS spell checker)*, *System, then bundled dictionary* (default — uses the OS checker, falling back to the bundled English dictionary when it lacks the language), or *Bundled dictionary (Hunspell)*. Applies immediately, no restart |
 
