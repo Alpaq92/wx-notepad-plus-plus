@@ -3,7 +3,7 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.11.0] - 2026-07-27
 
 ### Added
 - **Autocomplete now covers ~25 languages** (was 4). The keyword source is a per-extension table that
