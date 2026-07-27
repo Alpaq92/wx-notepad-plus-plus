@@ -183,6 +183,37 @@ public:
         m_root.push_back({ sym, cmdId, defaultAccelRaw });
     }
 
+    // Re-point an already-seeded symbolicName at a DIFFERENT command id, keeping its accel and any user
+    // override. addDefault deliberately cannot do this (it keeps the first entry and returns), which is
+    // right for menu commands - their ids are compile-time constants, so a second addDefault for the same
+    // sym is a bug to ignore rather than honour. Saved macros are the one case where the mapping genuinely
+    // moves at runtime: the binding key is the macro's uid ("macro.<uid>", stable across rename/reorder)
+    // but the command id is the macro's POSITION in the Macro menu (myID_MACRO_ITEM + index), so deleting
+    // or reordering a macro shifts ids under bindings that must not move. Callers re-point every affected
+    // row and then resolveAll(). Unknown sym: ignored, so callers need not pre-check.
+    void remapCmdId(const wxString& sym, int cmdId)
+    {
+        auto it = m_rootIndex.find(sym);
+        if (it == m_rootIndex.end()) return;
+        m_root[it->second].cmdId = cmdId;
+    }
+
+    // Drop a Tier-0 row entirely, plus any user override keyed to it - for a macro the user deleted, whose
+    // "macro.<uid>" can never be seeded again (uids are monotonic and never reused). Without this the row
+    // would linger in shortcuts.json and in the Shortcut Mapper as a binding for a macro that is gone.
+    void removeDefault(const wxString& sym)
+    {
+        auto it = m_rootIndex.find(sym);
+        if (it == m_rootIndex.end()) return;
+        const size_t at = it->second;
+        m_root.erase(m_root.begin() + static_cast<ptrdiff_t>(at));
+        m_rootIndex.erase(it);
+        for (auto& kv : m_rootIndex) if (kv.second > at) --kv.second;   // indices after the hole shift down
+        m_userLayer.erase(std::remove_if(m_userLayer.begin(), m_userLayer.end(),
+                                         [&](const KeymapDelta& d) { return d.symbolicName == sym; }),
+                          m_userLayer.end());
+    }
+
     // An ADDITIONAL Tier-0 default accel for an already-seeded command (the "bind both" consensus rows:
     // redo = Ctrl+Y AND Ctrl+Shift+Z, close tab = Ctrl+W AND Ctrl+F4 - see menu_builder.h's
     // kSecondaryDefaults). Mirrors the user layer's bare-bind ADD semantics: the accel rides along

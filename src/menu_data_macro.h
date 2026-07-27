@@ -13,6 +13,7 @@ static const MenuItemDef kMacroMenuItems[] = {
     { MenuItemKind::Normal, kCmdMacroPlaybackRecordedMacro, &Label::MacroPlayback,       "macro.playback" },
     { MenuItemKind::Normal, kCmdMacroSaveCurrentMacro,      &Label::MacroSaveCurrent,    "macro.saveCurrent" },
     { MenuItemKind::Normal, kCmdMacroRunMultiMacroDlg,      &Label::MacroRunMultiTimes,  "macro.runMultiTimes" },
+    { MenuItemKind::Normal, myID_MACRO_MANAGE,              &Label::MacroManage,         "macro.manageSaved" },
 };
 
 static const MenuDef kMacroMenu = { "menu.macro", &Label::MenuMacro, kMacroMenuItems, WXSIZEOF(kMacroMenuItems) };

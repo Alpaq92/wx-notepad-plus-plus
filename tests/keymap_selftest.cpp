@@ -21,6 +21,11 @@
 // rather than a hand-mirrored copy. menu_data_view.h expects its includer to define myID_VIEW_TERMINAL
 // (main.cpp gets it from terminal_panel.h, whose vterm dependency is too heavy for this headless test).
 static const int myID_VIEW_TERMINAL = 60200;   // keep in sync with terminal_panel.h:38
+// menu_data_document.h likewise expects its includer to supply the wxNote-private ids for the Compare and
+// Spell Check submenus (and now Macro ▸ Manage Saved Macros). main.cpp declares them in one enum next to
+// the #include of menu_builder.h; mirror the SAME order and base here, since the values are positional.
+enum { myID_CMP_FILE = 60220, myID_CMP_CLIP, myID_CMP_CLEAR, myID_CMP_NEXT, myID_CMP_PREV, myID_SPELLCHECK,
+       myID_SPELL_COMMENTSONLY, myID_SPELL_MANAGE, myID_MACRO_MANAGE };   // keep in sync with main.cpp:171
 #include "menu_builder.h"
 
 #include <wx/app.h>
@@ -1011,6 +1016,51 @@ public:
             bare.rebuild(ls, [](int){ return wxString(); });
             check(bare.forProposed(kCmdFilePrint, ctrlS, KeyScope::Global).otherName == SYM_SAVE,
                   "an empty resolver falls back to the owning command's symbolic name");
+        }
+
+        // ---- remapCmdId / removeDefault: the saved-macro mutators ------------------------------------
+        // Saved macros are the one Tier-0 rows whose command id MOVES at runtime: the binding key is the
+        // macro's uid ("macro.<uid>") but the id is its POSITION in the Macro menu, so a reorder or delete
+        // shifts ids under bindings that must not move. removeDefault hand-patches m_rootIndex after
+        // erasing from m_root; if that loop is ever dropped or its comparison flipped, every symbolicName
+        // after the hole silently resolves to the WRONG entry - wrong cmdId and wrong accel for hundreds
+        // of commands, with nothing failing. These lock both down.
+        {
+            KeymapStore ms;
+            ms.addDefault("macro.1", 62100, "");
+            ms.addDefault("macro.2", 62101, "");
+            ms.addDefault("macro.3", 62102, "");
+            ms.rebind("macro.1", "Ctrl+Alt+M");            // a user binding on the FIRST macro
+            ms.resolveAll();
+
+            // Reorder: macro.1 moves to slot 1, macro.2 to slot 0 (what manageMacros does on Move Up).
+            ms.remapCmdId("macro.1", 62101);
+            ms.remapCmdId("macro.2", 62100);
+            ms.resolveAll();
+            const EffectiveBinding* b1 = nullptr;
+            for (const EffectiveBinding* b : ms.all()) if (b && b->symbolicName == "macro.1") b1 = b;
+            check(b1 && b1->cmdId == 62101,
+                  "remapCmdId re-points a symbolicName at its new positional command id");
+            check(b1 && keySpell::canonical(b1->primaryRaw()) == keySpell::canonical("Ctrl+Alt+M"),
+                  "remapCmdId keeps the user binding attached to the macro, not to the old id");
+
+            // Delete the middle macro: its row AND its user delta go, and the survivors stay addressable.
+            ms.rebind("macro.2", "Ctrl+Alt+N");
+            ms.resolveAll();
+            ms.removeDefault("macro.2");
+            ms.resolveAll();
+            bool sawGone = false; const EffectiveBinding* b3 = nullptr;
+            for (const EffectiveBinding* b : ms.all())
+            {
+                if (!b) continue;
+                if (b->symbolicName == "macro.2") sawGone = true;
+                if (b->symbolicName == "macro.3") b3 = b;
+            }
+            check(!sawGone, "removeDefault drops the Tier-0 row for a deleted macro");
+            check(b3 && b3->cmdId == 62102,
+                  "removeDefault leaves later rows addressable (m_rootIndex re-patched after the erase)");
+            ms.removeDefault("macro.does.not.exist");   // must be a no-op, not a crash
+            check(true, "removeDefault ignores an unknown symbolicName");
         }
 
         std::printf(g_fail ? "\nFAILED  (%d passed, %d failed)\n" : "\nPASSED  (%d passed, %d failed)\n",
