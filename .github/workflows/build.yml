@@ -202,6 +202,28 @@ jobs:
       - name: Build wxnote
         run: cmake --build build --config Release --target wxnote --parallel 2
 
+      # Build EVERY selftest, on every leg including the cross-compiled ones. This is the half that was
+      # missing: until now CI built `wxnote` only, so a suite could sit broken-to-COMPILE indefinitely -
+      # keymap_selftest did exactly that for a release, because nothing built it. A cross leg cannot run
+      # what it produces, but it can still prove the code compiles for that target.
+      - name: Build selftests
+        run: cmake --build build --config Release --target selftests --parallel 2
+
+      # Run them where the binaries are native. Skipped on the cross legs (linux-riscv64 builds riscv64
+      # binaries on an x86_64 host; macos-x86_64 cross-builds on the Apple Silicon runner), which is why
+      # this is gated on the same `cross`/`osx_arch` flags the packaging steps use.
+      #
+      # Linux needs a display even for the frameless wx suites: constructing a wxApp initialises GTK,
+      # which fails outright without one. xvfb-run gives ctest a throwaway X server; -a picks a free
+      # display number so parallel jobs cannot collide.
+      - name: Run selftests (Linux)
+        if: startsWith(matrix.name, 'linux') && !matrix.cross
+        run: xvfb-run -a ctest --test-dir build --output-on-failure --timeout 900
+
+      - name: Run selftests (macOS / Windows)
+        if: (startsWith(matrix.name, 'macos') && matrix.osx_arch == 'arm64') || startsWith(matrix.name, 'windows')
+        run: ctest --test-dir build --output-on-failure --timeout 900
+
       - name: Package AppImage (Linux)
         if: startsWith(matrix.name, 'linux') && !matrix.cross
         run: bash installer/linux/build-appimage.sh
