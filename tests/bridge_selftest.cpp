@@ -297,6 +297,21 @@ static bool writeWholeFile(const wxString& path, const char* content)
     wxFile f(path, wxFile::write);
     return f.IsOpened() && f.Write(content, std::strlen(content)) == std::strlen(content);
 }
+
+// The host's toolbar, wherever it is parented. Must recurse: on macOS the bar hangs off m_toolBarHost
+// (a wxPanel) rather than the frame, deliberately, so wxToolBar::Create leaves m_macToolbar null and wx
+// lays it out itself instead of promoting it to a native NSToolbar - see the __WXMAC__ branch of the
+// toolbar builder in src/main.cpp. A one-level child scan therefore finds nothing on macOS.
+static wxToolBar* findToolBarIn(wxWindow* w)
+{
+    if (!w) return nullptr;
+    for (wxWindow* c : w->GetChildren())
+    {
+        if (auto* t = wxDynamicCast(c, wxToolBar)) return t;
+        if (auto* deeper = findToolBarIn(c)) return deeper;
+    }
+    return nullptr;
+}
 static wxString readWholeFile(const wxString& path)
 {
     wxLogNull noLog;
@@ -383,13 +398,14 @@ private:
         // bundle) and this suite would still have been all-green. Rasterize what the toolbar actually
         // holds and demand the glyph's pixels survived.
         {
+            // findToolBarIn recurses; the old inline scan looked only at the frame's direct children, which
+            // is why this check and the three image checks below failed on macos-arm64 alone (there the bar
+            // is a grandchild, parented to a wxPanel on purpose - see findToolBarIn's comment).
             wxToolBar* tb = nullptr;
             if (auto* frame = wxDynamicCast(wxTheApp->GetTopWindow(), wxFrame))
             {
                 tb = frame->GetToolBar();                      // classic mode: the frame's own toolbar
-                if (!tb)                                       // integrated mode: an aui-docked child
-                    for (wxWindow* w : frame->GetChildren())
-                        if ((tb = wxDynamicCast(w, wxToolBar)) != nullptr) break;
+                if (!tb) tb = findToolBarIn(frame);            // integrated/macOS: an aui-docked descendant
             }
             check(tb != nullptr, "host toolbar located for the probe-button image check");
             wxToolBarToolBase* tool = tb ? tb->FindById(tbCmd & 0xFFFF) : nullptr;
@@ -736,9 +752,21 @@ private:
             // mounted selection, so its document is mounted on no view - a true doc-pointer-swap peek.
             g_nibDocActivateAt(1, 0); pump();   // ensure the sub view (p3c) is the active view
             const int mainSel = g_nibDocIndexOfActive(0);
-            const int bgIndex = (mainSel == 0 && mainN > 1) ? 1 : 0;   // a main page that is not main's selection
-            const intptr_t bgId = g_nibDocIdAt(0, bgIndex);
-            check(bgId != 0 && bgIndex != mainSel, "picked an unmounted background buffer in the main view");
+            // Pick the background buffer BY PATH, not by index. It used to take main-view index 0 (or 1),
+            // which lands on the boot-time untitled document - a buffer with no line breaks at all, whose
+            // EOL mode is therefore whatever Scintilla's Document ctor defaults to. That default is
+            // platform-split (Document.cxx: SC_EOL_CRLF under _WIN32, SC_EOL_LF elsewhere), and the host
+            // deliberately leaves it alone for a file with no line breaks (main.cpp: "leave the default
+            // mode for a file with no line breaks at all"). So the CRLF assertion below passed on Windows
+            // by coincidence and failed on Linux/macOS. p3a/p3b are the known-CRLF fixtures this phase
+            // created; whichever of them is not the main view's current selection is a genuine unmounted
+            // background buffer AND is genuinely CRLF, which is what the assertion claims to test.
+            const intptr_t mainSelId = g_nibDocIdAt(0, mainSel);
+            const intptr_t idP3a = idForPath(p3a), idP3b = idForPath(p3b);
+            const intptr_t bgId = (idP3a && idP3a != mainSelId) ? idP3a : idP3b;
+            int bgView = -9, bgIndex = -9;
+            check(bgId != 0 && bgId != mainSelId && g_nibDocPosOf(bgId, 0, &bgView, &bgIndex) && bgView == 0,
+                  "picked an unmounted CRLF background buffer in the main view");
             nibSciCall(nullptr, -1, SCI_GOTOPOS, 4, 0);                 // known caret on the ACTIVE (sub) view
             coreSciCall(0, SCI_GOTOPOS, 2, 0);                          // known caret on the (inactive) MAIN view
             const long long subCaret  = coreSciCall(-1, SCI_GETCURRENTPOS, 0, 0);
@@ -1290,7 +1318,31 @@ int main(int argc, char** argv)
     fs::path probeSrc = exeDir / "nib" / "example" / soName;
     fs::path probeDir = root / "userdata" / "plugins" / "example_plugin";
     fs::create_directories(probeDir, ec);
+    // Report staging failures LOUDLY. These calls used to swallow their error_code, so when the build
+    // stopped producing example_plugin.so (a generator expression baked verbatim into the target's
+    // SUFFIX - see packages/npp-bridge/example/CMakeLists.txt) the copy silently did nothing and the
+    // suite failed 117 assertions deep with no hint of the cause. Every POSIX run now prints the exact
+    // paths, so the next staging break is one line of log instead of a bisect.
+    ec.clear();
     fs::copy_file(probeSrc, probeDir / soName, fs::copy_options::overwrite_existing, ec);
+    if (ec)
+    {
+        std::fprintf(stderr,
+                     "bridge_selftest: FATAL - could not stage the probe plugin.\n"
+                     "  from: %s\n  to:   %s\n  why:  %s\n"
+                     "  (the probe is what every notification assertion reads; without it the suite is meaningless)\n",
+                     probeSrc.string().c_str(), (probeDir / soName).string().c_str(), ec.message().c_str());
+        std::error_code lec;
+        if (!fs::exists(probeSrc, lec))
+        {
+            std::fprintf(stderr, "  the source does not exist. Contents of %s:\n", probeSrc.parent_path().string().c_str());
+            lec.clear();
+            for (fs::directory_iterator di(probeSrc.parent_path(), lec), de; !lec && di != de; di.increment(lec))
+                std::fprintf(stderr, "    %s\n", di->path().filename().string().c_str());
+        }
+        return 2;   // fail fast: a cascade of 117 downstream failures hides this one real cause
+    }
+    std::fprintf(stderr, "bridge_selftest: staged probe -> %s\n", (probeDir / soName).string().c_str());
 #endif
 
     const int rc = wxEntry(argc, argv);

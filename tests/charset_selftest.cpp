@@ -3,9 +3,9 @@
 // charset_selftest - round-trip test for the portable code-page path (the wxCSConv name-based conversion
 // that interpretCharset/encodeForPage use off Windows). Links wx::base. It validates that THIS platform's
 // converter (iconv on Linux/macOS, the win32 mapping on Windows) round-trips a representative set of the
-// ~50 code pages, and that an unavailable charset fails the empty-on-nonempty guard rather than emitting
-// garbage. Vectors were generated with Python's codecs. Run on Linux/macOS/Windows in CI so all three
-// backends are exercised.
+// ~50 code pages, and that an unavailable charset is DETECTED (wxCSConv::IsOk) rather than silently
+// decoded as garbage. Vectors were generated with Python's codecs. Run on Linux/macOS/Windows in CI so
+// all three backends are exercised.
 //
 //   cmake --build build --target charset_selftest && build/bin/charset_selftest
 //
@@ -48,6 +48,9 @@ int main()
         wxCSConv conv(wxString::FromAscii(c.name));
         char lbl[96];
 
+        std::snprintf(lbl, sizeof lbl, "%s: converter resolved (IsOk)", c.name);
+        check(conv.IsOk(), lbl);
+
         wxString s(bytes.data(), conv, bytes.size());        // decode: bytes -> Unicode
         const std::string gotUtf8(s.utf8_str());
         std::snprintf(lbl, sizeof lbl, "%s: decode -> expected Unicode", c.name);
@@ -58,21 +61,26 @@ int main()
         check(std::string(b.data(), b.length()) == bytes, lbl);
     }
 
-    // Negative: an unknown charset must fail the empty-on-nonempty guard (the exact idiom production uses on
-    // POSIX), so an unavailable code page reports "unavailable" rather than writing garbage into the buffer.
-    // Only meaningful on non-Windows: that guard IS the production path there (iconv returns empty on an
-    // unknown charset). On Windows production uses direct Win32, and wxCSConv falls back to the locale
-    // converter for an unknown name rather than returning empty, so this assertion doesn't apply.
-#ifndef __WXMSW__
+    // Negative: an unavailable charset must be DETECTABLE, so the portable path can report
+    // "not available on this platform" instead of writing mojibake into the buffer.
+    //
+    // This suite originally asserted the weaker idiom "unavailable -> empty output". CI disproved it on
+    // Linux/macOS, and the wx sources say why: wxCSConv::DoCreate() tries iconv, the font mapper, the
+    // Win32/CoreFoundation converters and wxEncodingConverter, and when they ALL fail it returns null -
+    // whereupon wxCSConv::ToWChar() falls back to a **Latin-1 direct decode** (strconv.cpp, "latin-1
+    // (direct)"), which is non-empty garbage. So an empty-output test can never fire, and production
+    // relying on it would have silently reinterpreted the file. IsOk() is the real availability query
+    // (m_convReal is built eagerly in the ctor, so it is valid immediately after construction), and it
+    // is what the interpret-as-charset path in main.cpp now checks - hence the IsOk assertions above.
     {
         wxCSConv bad(wxString::FromAscii("NO_SUCH_CHARSET_ZZZ"));
+        check(!bad.IsOk(), "unavailable charset -> IsOk() is false (the guard production checks)");
+
         const std::string bytes = fromHex("cff0e8");
         wxString s(bytes.data(), bad, bytes.size());
-        check(s.empty(), "unknown charset -> empty output (guard fires, no garbage)");
+        std::printf("  ..    (for the record, the old empty-output idiom would %s here: %d chars)\n",
+                    s.empty() ? "have fired" : "NOT have fired", static_cast<int>(s.length()));
     }
-#else
-    std::printf("  skip  unknown-charset guard test (Windows uses direct Win32, not this path)\n");
-#endif
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;

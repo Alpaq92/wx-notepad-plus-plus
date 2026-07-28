@@ -7,10 +7,22 @@
 if(NOT WIN32)
     add_library(npp_example_plugin MODULE example_plugin.cpp)
 
+    # The extension must match the bridge loader's kPluginExt (npp_bridge.cpp: ".dylib" on Apple, ".so"
+    # elsewhere) - CMake's own MODULE default is ".so" even on macOS, so it has to be set explicitly.
+    # It MUST be a plain if(), not a generator expression: SUFFIX does not support genexes, and CMake
+    # bakes the unexpanded "$<IF:...>" text into the filename instead of erroring. That is exactly what
+    # shipped here - the file was literally named `example_plugin$<IF:$<PLATFORM_ID:Darwin>,.dylib,.so>`,
+    # so bridge_selftest's staging copy silently found nothing and the probe never loaded on POSIX.
+    if(APPLE)
+        set(WXN_PLUGIN_MODULE_SUFFIX ".dylib")
+    else()
+        set(WXN_PLUGIN_MODULE_SUFFIX ".so")
+    endif()
+
     set_target_properties(npp_example_plugin PROPERTIES
         OUTPUT_NAME "example_plugin"
         PREFIX ""                                   # example_plugin.so (no "lib" prefix, like a real plugin)
-        SUFFIX "$<IF:$<PLATFORM_ID:Darwin>,.dylib,.so>"
+        SUFFIX "${WXN_PLUGIN_MODULE_SUFFIX}"
         CXX_STANDARD 17
         CXX_STANDARD_REQUIRED ON
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/nib/example")

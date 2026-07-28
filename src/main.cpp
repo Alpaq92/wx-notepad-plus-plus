@@ -7702,7 +7702,15 @@ private:
         if (!p.empty())
         {
             const std::string raw = readRawBytes(p);
-            wxString s(raw.data(), wxCSConv(csName), raw.size());
+            // ASK the converter whether it resolved, rather than inferring it from an empty result.
+            // wxCSConv does NOT return empty for a charset the platform cannot provide - it falls back to
+            // the locale converter and happily produces mojibake, so the empty-output test below can fail
+            // to fire and we would silently reinterpret the file as garbage instead of reporting it.
+            // IsOk() is the documented availability query. The empty-output check is kept as a second
+            // net for a charset that resolves but cannot decode these particular bytes.
+            wxCSConv conv(csName);
+            if (!conv.IsOk()) { setStatus(0, wxString::Format(_("Character set not available on this platform: %s"), name)); return; }
+            wxString s(raw.data(), conv, raw.size());
             if (!raw.empty() && s.empty()) { setStatus(0, wxString::Format(_("Character set not available on this platform: %s"), name)); return; }
             decoded = std::string(s.utf8_str());
         }
@@ -7726,8 +7734,12 @@ private:
             if (!csName.empty())
             {
                 wxString s = wxString::FromUTF8(u.data(), u.size());
-                wxScopedCharBuffer b = s.mb_str(wxCSConv(csName));
-                if (u.empty() || b.length() > 0) return std::string(b.data(), b.length());
+                wxCSConv conv(csName);   // same availability check as the decode path - see interpretCharset
+                if (conv.IsOk())
+                {
+                    wxScopedCharBuffer b = s.mb_str(conv);
+                    if (u.empty() || b.length() > 0) return std::string(b.data(), b.length());
+                }
             }
             return u;   // no mapping / conversion failed: keep UTF-8 (a charset page exists only if decode succeeded)
 #endif

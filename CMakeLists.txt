@@ -520,3 +520,39 @@ add_dependencies(wxnote npp_bridge)
 if(NOT WIN32)
     add_dependencies(wxnote npp_example_plugin)
 endif()
+
+# ---- test registration (CTest) --------------------------------------------------------------------
+# Until now no test target was built by CI at all (build.yml ran `--build --target wxnote` only), so a
+# selftest could sit broken-to-COMPILE indefinitely: keymap_selftest did exactly that for a release,
+# after Compare/Spell moved to the Document menu and the private ids it mirrors were never updated.
+# Nothing failed, because nothing built it.
+#
+# Two separate guarantees, and the first is the one that was missing:
+#   * `selftests` builds every suite, so a compile break fails the job on EVERY leg - including the
+#     cross-compiled ones (linux-riscv64, macos-x86_64) that cannot execute what they produce.
+#   * ctest RUNS them, on the legs whose binaries are native.
+#
+# terminal_selftest is deliberately excluded from add_test(): it spawns a real shell and drives a real
+# frame, so it stays a developer tool. It is still built by `selftests` - a compile break there should
+# fail CI like any other.
+enable_testing()
+
+add_custom_target(selftests DEPENDS
+    keymap_selftest diff_myers_test hash_test charset_selftest hunspell_selftest
+    bridge_selftest terminal_selftest)
+
+# "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed.
+foreach(t diff_myers_test hash_test hunspell_selftest)
+    add_test(NAME ${t} COMMAND ${t})
+    set_tests_properties(${t} PROPERTIES LABELS pure)
+endforeach()
+
+# "gui" = constructs a wxApp (keymap/charset) or a real frame (bridge). On GTK even a frameless wxApp
+# needs a display, hence the xvfb wrapper on the Linux CI legs - see .github/workflows/build.yml.
+foreach(t keymap_selftest charset_selftest bridge_selftest)
+    add_test(NAME ${t} COMMAND ${t})
+    set_tests_properties(${t} PROPERTIES LABELS gui)
+endforeach()
+
+# bridge_selftest boots the whole app and loads plugins from disk; give it room beyond ctest's default.
+set_tests_properties(bridge_selftest PROPERTIES TIMEOUT 900)
