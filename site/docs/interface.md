@@ -53,11 +53,11 @@ All panels are dockable wxAUI panes — drag them to another edge, or float them
 
 | Panel | Where | What it does |
 | --- | --- | --- |
-| Function List | View&nbsp;&rsaquo; Function List | parsed symbol list for the active document |
+| Function List | View&nbsp;&rsaquo; Function List | parsed symbol list for the active document — 24 built-in languages, extensible via `functionList.conf` |
 | Document Map | View&nbsp;&rsaquo; Document Map | zoomed-out overview of the whole file |
 | Document List | View&nbsp;&rsaquo; Document List | flat list of every open document |
 | Folder as Workspace | View&nbsp;&rsaquo; Folder as Workspace | a project tree — see [Folder as Workspace](workspace.md) |
-| Project Panels 1–3 | View&nbsp;&rsaquo; Project Panels | three independent project panes |
+| Project Panels 1–3 | View&nbsp;&rsaquo; Project Panels | three independent project panes, each with its own tree and dock position |
 | Terminal | View&nbsp;&rsaquo; Show Terminal | shell tabs — see [Integrated Terminal](terminal.md) |
 | Character Panel | Selection&nbsp;&rsaquo; Character Panel | character/codepoint inserter |
 | Clipboard History | Selection&nbsp;&rsaquo; Clipboard History | recent clipboard entries |

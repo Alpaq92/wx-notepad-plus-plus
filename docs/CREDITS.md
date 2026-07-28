@@ -131,9 +131,19 @@ No code was taken from any of these; each contributed ideas, structure, or
 - **[NotepadNext](https://github.com/dail8859/NotepadNext)** (Qt) — which
   session fields to persist (caret, first-visible line, bookmarks), the
   word-completion approach, and coalescing keystrokes during macro recording.
-- **[Pulsar Edit](https://pulsar-edit.dev/)** (Atom's successor) — menu
-  research, and plugin-API research (inter-plugin provided/consumed services
-  with semver informed the Nib API's design).
+- **[Pulsar Edit](https://pulsar-edit.dev/)** (Atom's successor, MIT) — menu
+  research; plugin-API research (inter-plugin provided/consumed services
+  with semver informed the Nib API's design); and, with aerial.nvim below,
+  the Function List **coverage taxonomy** — which constructs are worth listing
+  per language, and where the container/leaf split falls. Only those decisions
+  carried over: Pulsar expresses its rules as `ctags --regex-` options, which
+  do not transfer to `std::regex`, so every pattern in `flRules` is wxNote's
+  own.
+- **[aerial.nvim](https://github.com/stevearc/aerial.nvim)** (stevearc, MIT) —
+  the same taxonomy question answered from a tree-sitter angle: its per-language
+  outline queries were read as a cross-check on which node kinds belong in a
+  symbol outline. Its rules are tree-sitter node patterns, which likewise do not
+  transfer to a regex scanner.
 - **[Notepad4](https://github.com/zufuliu/notepad4)** / Notepad2 (Zufu Liu) —
   the command-line `-g`/`-e` semantics (apply to the file just opened), and
   the upstream source of four Lexilla lexers wxNote ships (Dart/Nix/TOML/Zig).

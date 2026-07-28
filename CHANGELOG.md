@@ -3,6 +3,28 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **The Function List covers 24 languages** (was 13). New: Markdown, YAML, INI (also TOML, `.cfg`,
+  `.conf`, `.properties`), CSS (also SCSS, LESS, Sass), Makefile, Dockerfile, Batch, Perl, Kotlin, Swift
+  and R. `Makefile`, `GNUmakefile` and `Dockerfile*` are recognised by **file name**, since they carry no
+  extension. As before, the built-ins are only a baseline — `functionList.conf` still adds or overrides
+  languages with your own regex rules.
+- **Project Panels 1, 2 and 3 are now three genuinely independent panels**, each with its own tree,
+  its own workspace and its own dock position, as the menu has always implied. Previously all three
+  entries toggled a single shared panel, so opening Panel 2 just re-showed Panel 1's contents.
+
+### Changed
+- **Autocomplete no longer suggests words from comments and strings.** Suggestions are drawn from the
+  document's own words, and prose inside comments or string literals used to be offered alongside real
+  identifiers. Words whose position is styled as a comment or a string are now skipped, for both the
+  Lexilla lexers and the Scintillua ones. Large files, where styling is deliberately off, keep the old
+  unfiltered behaviour rather than paying for a whole-buffer lex.
+- **Autocomplete's keyword list now follows the highlighter.** It reads the keyword set actually handed
+  to the active lexer instead of re-deriving one from the file extension, so picking a **Language** by
+  hand now changes the completions too, instead of leaving them keyed to the file's name.
+
 ## [0.12.0] - 2026-07-27
 
 ### Added
