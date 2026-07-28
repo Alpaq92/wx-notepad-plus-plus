@@ -1290,7 +1290,31 @@ int main(int argc, char** argv)
     fs::path probeSrc = exeDir / "nib" / "example" / soName;
     fs::path probeDir = root / "userdata" / "plugins" / "example_plugin";
     fs::create_directories(probeDir, ec);
+    // Report staging failures LOUDLY. These calls used to swallow their error_code, so when the build
+    // stopped producing example_plugin.so (a generator expression baked verbatim into the target's
+    // SUFFIX - see packages/npp-bridge/example/CMakeLists.txt) the copy silently did nothing and the
+    // suite failed 117 assertions deep with no hint of the cause. Every POSIX run now prints the exact
+    // paths, so the next staging break is one line of log instead of a bisect.
+    ec.clear();
     fs::copy_file(probeSrc, probeDir / soName, fs::copy_options::overwrite_existing, ec);
+    if (ec)
+    {
+        std::fprintf(stderr,
+                     "bridge_selftest: FATAL - could not stage the probe plugin.\n"
+                     "  from: %s\n  to:   %s\n  why:  %s\n"
+                     "  (the probe is what every notification assertion reads; without it the suite is meaningless)\n",
+                     probeSrc.string().c_str(), (probeDir / soName).string().c_str(), ec.message().c_str());
+        std::error_code lec;
+        if (!fs::exists(probeSrc, lec))
+        {
+            std::fprintf(stderr, "  the source does not exist. Contents of %s:\n", probeSrc.parent_path().string().c_str());
+            lec.clear();
+            for (fs::directory_iterator di(probeSrc.parent_path(), lec), de; !lec && di != de; di.increment(lec))
+                std::fprintf(stderr, "    %s\n", di->path().filename().string().c_str());
+        }
+        return 2;   // fail fast: a cascade of 117 downstream failures hides this one real cause
+    }
+    std::fprintf(stderr, "bridge_selftest: staged probe -> %s\n", (probeDir / soName).string().c_str());
 #endif
 
     const int rc = wxEntry(argc, argv);
