@@ -297,6 +297,21 @@ static bool writeWholeFile(const wxString& path, const char* content)
     wxFile f(path, wxFile::write);
     return f.IsOpened() && f.Write(content, std::strlen(content)) == std::strlen(content);
 }
+
+// The host's toolbar, wherever it is parented. Must recurse: on macOS the bar hangs off m_toolBarHost
+// (a wxPanel) rather than the frame, deliberately, so wxToolBar::Create leaves m_macToolbar null and wx
+// lays it out itself instead of promoting it to a native NSToolbar - see the __WXMAC__ branch of the
+// toolbar builder in src/main.cpp. A one-level child scan therefore finds nothing on macOS.
+static wxToolBar* findToolBarIn(wxWindow* w)
+{
+    if (!w) return nullptr;
+    for (wxWindow* c : w->GetChildren())
+    {
+        if (auto* t = wxDynamicCast(c, wxToolBar)) return t;
+        if (auto* deeper = findToolBarIn(c)) return deeper;
+    }
+    return nullptr;
+}
 static wxString readWholeFile(const wxString& path)
 {
     wxLogNull noLog;
@@ -383,13 +398,14 @@ private:
         // bundle) and this suite would still have been all-green. Rasterize what the toolbar actually
         // holds and demand the glyph's pixels survived.
         {
+            // findToolBarIn recurses; the old inline scan looked only at the frame's direct children, which
+            // is why this check and the three image checks below failed on macos-arm64 alone (there the bar
+            // is a grandchild, parented to a wxPanel on purpose - see findToolBarIn's comment).
             wxToolBar* tb = nullptr;
             if (auto* frame = wxDynamicCast(wxTheApp->GetTopWindow(), wxFrame))
             {
                 tb = frame->GetToolBar();                      // classic mode: the frame's own toolbar
-                if (!tb)                                       // integrated mode: an aui-docked child
-                    for (wxWindow* w : frame->GetChildren())
-                        if ((tb = wxDynamicCast(w, wxToolBar)) != nullptr) break;
+                if (!tb) tb = findToolBarIn(frame);            // integrated/macOS: an aui-docked descendant
             }
             check(tb != nullptr, "host toolbar located for the probe-button image check");
             wxToolBarToolBase* tool = tb ? tb->FindById(tbCmd & 0xFFFF) : nullptr;
@@ -736,9 +752,21 @@ private:
             // mounted selection, so its document is mounted on no view - a true doc-pointer-swap peek.
             g_nibDocActivateAt(1, 0); pump();   // ensure the sub view (p3c) is the active view
             const int mainSel = g_nibDocIndexOfActive(0);
-            const int bgIndex = (mainSel == 0 && mainN > 1) ? 1 : 0;   // a main page that is not main's selection
-            const intptr_t bgId = g_nibDocIdAt(0, bgIndex);
-            check(bgId != 0 && bgIndex != mainSel, "picked an unmounted background buffer in the main view");
+            // Pick the background buffer BY PATH, not by index. It used to take main-view index 0 (or 1),
+            // which lands on the boot-time untitled document - a buffer with no line breaks at all, whose
+            // EOL mode is therefore whatever Scintilla's Document ctor defaults to. That default is
+            // platform-split (Document.cxx: SC_EOL_CRLF under _WIN32, SC_EOL_LF elsewhere), and the host
+            // deliberately leaves it alone for a file with no line breaks (main.cpp: "leave the default
+            // mode for a file with no line breaks at all"). So the CRLF assertion below passed on Windows
+            // by coincidence and failed on Linux/macOS. p3a/p3b are the known-CRLF fixtures this phase
+            // created; whichever of them is not the main view's current selection is a genuine unmounted
+            // background buffer AND is genuinely CRLF, which is what the assertion claims to test.
+            const intptr_t mainSelId = g_nibDocIdAt(0, mainSel);
+            const intptr_t idP3a = idForPath(p3a), idP3b = idForPath(p3b);
+            const intptr_t bgId = (idP3a && idP3a != mainSelId) ? idP3a : idP3b;
+            int bgView = -9, bgIndex = -9;
+            check(bgId != 0 && bgId != mainSelId && g_nibDocPosOf(bgId, 0, &bgView, &bgIndex) && bgView == 0,
+                  "picked an unmounted CRLF background buffer in the main view");
             nibSciCall(nullptr, -1, SCI_GOTOPOS, 4, 0);                 // known caret on the ACTIVE (sub) view
             coreSciCall(0, SCI_GOTOPOS, 2, 0);                          // known caret on the (inactive) MAIN view
             const long long subCaret  = coreSciCall(-1, SCI_GETCURRENTPOS, 0, 0);
