@@ -138,6 +138,8 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 #include <regex>               // std::regex - Function List symbol parsing (per-language rules)
 #include <set>
 #include <algorithm>
+#include <bitset>              // std::bitset<256> - the autocomplete style filter (a Scintilla style is a byte)
+#include <string_view>         // borrowed keyword/word spans on the per-keystroke completion path
 #include <cstdlib>
 #include <memory>             // std::unique_ptr - host-owned pending nib.keymap scheme builders
 #include <random>              // std::shuffle - "Randomize Line Order"
@@ -279,7 +281,7 @@ public:
     wxString forcedLexer;                  // that pick's Lexilla lexer name ("" = forced Normal Text)
     wxString forcedName;                   // that pick's display label for the status bar, e.g. "C++"
     wxString sciLang;                      // name of a registered Scintillua language when active ("" = none); container-lexed via m_scintillua
-    std::string lexKeywords;               // the keyword set actually handed to this page's lexer (autocomplete reads THIS, not a second table keyed on extension)
+    const char* lexKeywords = nullptr;      // the keyword set actually handed to this page's lexer (autocomplete reads THIS, not a second table keyed on extension). Borrowed: every value is a file-scope *_KEYWORDS literal
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
@@ -980,15 +982,18 @@ static const std::regex* flCommentRe(const std::string& lang)
             // default for the data formats here (markdown/yaml/ini have no string-literal syntax that
             // could swallow a heading or key).
             const char* hashLine = R"(#[^\n]*)";
+            // hash comments + the two quoted-string forms - shared by r/perl/ruby. Named because the
+            // double-quoted alternative is the fiddly one (it decides whether a `{` inside a literal
+            // corrupts the container brace scan), and it should be fixed in one place, not per language.
+            const char* hashStr  = R"(#[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')";
             tbl["yaml"] = std::regex(hashLine); tbl["ini"] = std::regex(R"(;[^\n]*|#[^\n]*)");
             tbl["makefile"] = std::regex(hashLine); tbl["dockerfile"] = std::regex(hashLine);
-            tbl["r"] = std::regex(R"(#[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
-            tbl["perl"] = std::regex(R"(#[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
+            tbl["r"] = std::regex(hashStr); tbl["perl"] = std::regex(hashStr);
             tbl["batch"] = std::regex(R"((?:^|\n)[ \t]*(?:rem|REM)[^\n]*|::[^\n]*)");
-            // `//` line comments are masked too: the "css" key also serves SCSS and LESS (see flLangKey),
-            // both of which support them, and an unmasked `{` inside one corrupts every container range
-            // that follows it.
-            tbl["css"] = std::regex(R"(/\*[\s\S]*?\*/|//[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
+            // CSS is exactly the C-family mask: the "css" key also serves SCSS and LESS (see flLangKey),
+            // which support `//` line comments, and an unmasked `{` inside one corrupts every container
+            // range that follows it - cfam already covers that alternative.
+            tbl["css"] = std::regex(cfam);
             // Kotlin/Swift are C-family comments PLUS triple-quoted raw strings, which the plain cfam mask
             // does not cover - and a `{` inside one (very common in a Kotlin """...""" template) would
             // otherwise be counted by the container brace scan and corrupt the nesting. Ordered before the
@@ -1008,7 +1013,7 @@ static const std::regex* flCommentRe(const std::string& lang)
             // PHP: /* */, //, # line comments + strings.
             tbl["php"]  = std::regex(R"(/\*[\s\S]*?\*/|//[^\n]*|#[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
             // Ruby: # line comments + strings.
-            tbl["ruby"] = std::regex(R"(#[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
+            tbl["ruby"] = std::regex(hashStr);
             // sh/bash: # line comments + strings ('...' has no escapes).
             tbl["sh"]   = std::regex(R"(#[^\n]*|"(?:\\.|[^"\\\n])*"|'[^']*')");
             // SQL: -- and /* */ comments + '...' strings ('' escapes a quote inside).
@@ -1067,6 +1072,23 @@ static void loadFunctionListRules(const wxString& path)
     }
 }
 
+// How a language delimits a container's body, and what ends a declaration that has none. This is a
+// property of the LANGUAGE, so it lives here beside flRules/flCommentRe/flLangKey rather than as a
+// chain of `lang == "..."` tests inside flCollect's generic scanner - adding language 25 with indent
+// blocks or EOL-terminated declarations is then a line in this table, not an edit to the scanner.
+// (Deliberately NOT a field on FLRule: two rules for one language could then disagree about how to
+// scan the same file.)
+struct FLBodyStyle {
+    bool indentBlocks;   // block extent = lines indented deeper than the opening line, not { }
+    bool eolEndsDecl;    // no statement terminator: end-of-line closes a body-less declaration
+};
+static FLBodyStyle flBodyStyle(const std::string& lang)
+{
+    if (lang == "python" || lang == "yaml") return { true,  false };
+    if (lang == "kotlin")                   return { false, true  };
+    return { false, false };
+}
+
 // One extracted symbol: byte positions in the scanned UTF-8 text. For containers (kind 1), rangeEnd
 // is one past the body's closing brace (or dedent, for Python) so later symbols inside [pos, rangeEnd)
 // nest under it in the tree.
@@ -1093,7 +1115,17 @@ static std::vector<FLSym> flCollect(const std::string& text, const std::string& 
         try { for (std::sregex_iterator it(text.begin(), text.end(), *cre), e; it != e; ++it)
             zones.push_back({ (size_t)it->position(0), (size_t)(it->position(0) + it->length(0)) }); } catch (const std::regex_error&) {}
     }
-    auto inZone = [&](size_t p) { for (auto& z : zones) if (p >= z.first && p < z.second) return true; return false; };
+    // Binary search, not a linear walk: `zones` comes from a single sregex_iterator, so it is already
+    // ascending and non-overlapping. That matters because the container body scans below call this ONCE
+    // PER CHARACTER over a container's whole extent - on a large C-family file the mask yields thousands
+    // of zones, and the linear form made that quadratic (measured in the millions of comparisons for a
+    // single big class body, on every Function List refresh). Only the last zone starting at or before p
+    // can contain p.
+    auto inZone = [&](size_t p) {
+        const auto it = std::upper_bound(zones.begin(), zones.end(), p,
+            [](size_t v, const std::pair<size_t, size_t>& z) { return v < z.first; });
+        return it != zones.begin() && p < std::prev(it)->second;
+    };
     for (const auto& r : *rules)
     {
         try {
@@ -1107,13 +1139,14 @@ static std::vector<FLSym> flCollect(const std::string& text, const std::string& 
             }
         } catch (const std::regex_error&) {}
     }
+    const FLBodyStyle body = flBodyStyle(lang);            // per-language scan policy, resolved once
     for (auto& s : syms)                                   // compute each container's body range (for nesting)
     {
         if (s.kind != 1) { s.rangeEnd = s.end; continue; }
         // Indent-delimited languages: the block is the run of lines indented deeper than the opening one.
         // YAML shares Python's shape exactly, and it is the ONLY correct reading for a mapping key - the
         // brace scan in the else-branch would otherwise latch onto a `{` from a flow mapping or a value.
-        if (lang == "python" || lang == "yaml")            // block extent = lines indented deeper than the class line
+        if (body.indentBlocks)                             // block extent = lines indented deeper than the class line
         {
             size_t ls = text.rfind('\n', s.pos); ls = (ls == std::string::npos) ? 0 : ls + 1;
             size_t ind = 0; while (ls + ind < text.size() && (text[ls + ind] == ' ' || text[ls + ind] == '\t')) ind++;
@@ -1137,7 +1170,6 @@ static std::vector<FLSym> flCollect(const std::string& text, const std::string& 
             // file under it. There the declaration ends at end-of-line, once outside the constructor's
             // parens/generics - so treat that as the terminator, while still allowing brace-on-next-line
             // style (a newline whose next non-blank character IS the brace keeps scanning).
-            const bool eolEndsDecl = (lang == "kotlin");
             size_t open = 0; bool haveOpen = false;
             if (s.end > 0 && text[s.end - 1] == '{') { open = s.end; haveOpen = true; }
             else
@@ -1149,15 +1181,13 @@ static std::vector<FLSym> flCollect(const std::string& text, const std::string& 
                     const char c = text[i];
                     if (c == '{') { open = i + 1; haveOpen = true; break; }
                     if (c == ';') break;
-                    if (!eolEndsDecl) continue;
-                    if (c == '(' || c == '<') ++nest;
-                    else if ((c == ')' || c == '>') && nest > 0) --nest;
-                    else if (c == '\n' && nest == 0)
-                    {
-                        size_t j = i + 1;
-                        while (j < text.size() && (text[j] == ' ' || text[j] == '\t' || text[j] == '\r' || text[j] == '\n')) ++j;
-                        if (j >= text.size() || text[j] != '{') break;   // no body -> leaf, not a container
-                    }
+                    if (!body.eolEndsDecl) continue;
+                    if (c == '(' || c == '<') { ++nest; continue; }
+                    if ((c == ')' || c == '>') && nest > 0) { --nest; continue; }
+                    if (c != '\n' || nest != 0) continue;
+                    const size_t j = text.find_first_not_of(" \t\r\n", i + 1);
+                    if (j == std::string::npos || text[j] != '{') break;   // no body -> leaf, not a container
+                    i = j - 1;   // resume ON the brace, so the '{' arm above takes it (no re-walk of the gap)
                 }
             }
             if (!haveOpen) { s.rangeEnd = s.end; continue; }
@@ -4031,11 +4061,8 @@ private:
         // Files whose NAME, not extension, carries the language. Checked AFTER the extension table so an
         // explicit extension always wins. `Dockerfile.dev` is matched by prefix rather than by empty
         // extension, since wxFileName reports its extension as "dev".
-        if (!base.empty())
-        {
-            if (ext.empty() && (base == "makefile" || base == "gnumakefile")) return "makefile";
-            if (base == "dockerfile" || base.StartsWith("dockerfile.")) return "dockerfile";
-        }
+        if (ext.empty() && (base == "makefile" || base == "gnumakefile")) return "makefile";
+        if (base == "dockerfile" || base.StartsWith("dockerfile.")) return "dockerfile";
         return "";
     }
     void parseFuncList()
@@ -4254,8 +4281,7 @@ private:
         togglePane(m_charPanel);
     }
 
-    // ---- Project Panel (workspace tree: named folders + file refs, saved as .xml) ------
-    // ---- Project Panels 1/2/3 -----------------------------------------------------------------
+    // ---- Project Panels 1/2/3 (workspace tree: named folders + file refs, saved as .xml) -------
     // Three INDEPENDENT workspaces, matching the three menu entries. They previously shared one
     // backing tree, so "Project Panel 2" toggled the same pane as 1 and 3, and opening a workspace in
     // one silently replaced whatever the others showed - which defeats the only reason to have three:
@@ -4279,7 +4305,11 @@ private:
         // Distinct pane names: wxAuiManager keys panes by name, so one shared name would collide and a
         // saved perspective could not tell the three apart.
         m_aui.AddPane(t, wxAuiPaneInfo().Name(wxString::Format("project%d", i + 1))
-                          .Caption(wxString::Format(_("Project %d"), i + 1))
+                          // "%s %d" over the EXISTING _("Project") msgid rather than a new "Project %d"
+                          // one: the catalogs already carry "Project" in all 8 languages, so the caption
+                          // stays translated instead of silently reverting to English until the next
+                          // catalog regeneration.
+                          .Caption(wxString::Format("%s %d", _("Project"), i + 1))
                           .Left().BestSize(220, 400).MinSize(120, 80).CloseButton(true).Hide());
         m_aui.Update();
     }
@@ -5118,18 +5148,21 @@ private:
     // Cached across keystrokes: autoComplete runs on EVERY word character typed, and the Lexilla branch
     // walks GetNamedStyles() calling TagsOfStyle() on each - far too much to redo per character. The set
     // depends only on which lexer is active, so it is recomputed when that changes and not otherwise.
+    // A bitset, not a set<int>: a Scintilla style is a BYTE, so the whole domain is 256 flags (32 bytes,
+    // trivially copyable, O(1) test). The set<int> form cost a heap node per style plus a tree descent
+    // per candidate word - both on the per-keystroke path.
     int              m_acProseLexer = -2;   // -2 = never computed (-1/0.. are real lexer ids)
     wxString         m_acProseLang;
-    std::set<int>    m_acProseStyles;
-    const std::set<int>& proseStylesForFilter()
+    std::bitset<256> m_acProseStyles;
+    const std::bitset<256>& proseStylesForFilter()
     {
-        static const std::set<int> kNone;
+        static const std::bitset<256> kNone;
         if (!m_stc) return kNone;
         const int lexer = m_stc->GetLexer();
         auto* p = activePage();
         const wxString lang = p ? p->sciLang : wxString();
         if (lexer == m_acProseLexer && lang == m_acProseLang) return m_acProseStyles;   // cache hit
-        m_acProseLexer = lexer; m_acProseLang = lang; m_acProseStyles.clear();
+        m_acProseLexer = lexer; m_acProseLang = lang; m_acProseStyles.reset();
         // A document with NO lexer set reports SCLEX_CONTAINER (0), not SCLEX_NULL (1) - SCI_GETLEXER
         // returns whatever was last set and 0 is the unset value - so testing for wxSTC_LEX_NULL alone
         // never fired, and plain text fell into the Scintillua branch below, where it had this build's
@@ -5137,53 +5170,62 @@ private:
         // Gate on the page actually having a Scintillua language instead.
         if (lexer == wxSTC_LEX_NULL || (lexer == wxSTC_LEX_CONTAINER && lang.empty()))
             return m_acProseStyles;                     // plain text: nothing to exclude
+        auto mark = [this](int s) { if (s >= 0 && s < 256) m_acProseStyles.set((size_t)s); };
         if (lexer == wxSTC_LEX_CONTAINER) {             // Scintillua: our own style numbers
-            m_acProseStyles.insert(sciTagToStyle("comment"));
-            m_acProseStyles.insert(sciTagToStyle("string"));
+            mark(sciTagToStyle("comment"));
+            mark(sciTagToStyle("string"));
         } else {                                        // Lexilla: query per-style semantic tags
             const int n = (int)m_stc->GetNamedStyles();
             for (int i = 0; i < n; ++i) {
                 const wxString tags = m_stc->TagsOfStyle(i);
-                if (tags.Contains("comment") || tags.Contains("string")) m_acProseStyles.insert(i);
+                if (tags.Contains("comment") || tags.Contains("string")) mark(i);
             }
         }
         return m_acProseStyles;
     }
     // `doc` is the whole buffer as UTF-8, so a byte index into it IS a Scintilla position - which is what
     // lets a candidate be rejected by the style at its own start. skip empty = harvest everything.
-    void collectWords(const std::string& doc, const std::string& prefix, std::set<std::string>& out,
-                      const std::set<int>& skipStyles)
+    void collectWords(const std::string& doc, const std::string& prefix, std::set<std::string, std::less<>>& out,
+                      const std::bitset<256>& skipStyles)
     {
         auto isW = [](unsigned char c){ return std::isalnum(c) || c == '_'; }; const size_t pl = prefix.size();
+        const bool filtering = skipStyles.any();
         for (size_t i = 0; i < doc.size(); )
         {
             if (!isW((unsigned char)doc[i])) { ++i; continue; }
             size_t j = i; while (j < doc.size() && isW((unsigned char)doc[j])) ++j;
             if (j - i > pl && doc.compare(i, pl, prefix) == 0)
             {
-                // Drop words living in comments/strings: prose, licence headers and URLs are the bulk of
-                // what made the old list noisy, and none of it is a symbol worth completing.
-                const bool skip = !skipStyles.empty() &&
-                                  skipStyles.count((int)m_stc->GetStyleAt((int)i)) != 0;
-                if (!skip) out.insert(doc.substr(i, j - i));
+                // Dedupe BEFORE probing: identifiers repeat heavily, and a word we already have needs
+                // neither the Scintilla round-trip for its style nor a substr allocation to discard.
+                // (std::less<> makes the string_view lookup allocation-free.)
+                const std::string_view w(doc.data() + i, j - i);
+                if (out.find(w) == out.end())
+                {
+                    // Drop words living in comments/strings: prose, licence headers and URLs are the bulk
+                    // of what made the old list noisy, and none of it is a symbol worth completing.
+                    if (!filtering || !skipStyles.test((unsigned char)m_stc->GetStyleAt((int)i)))
+                        out.emplace(w);
+                }
             }
             i = j;
         }
     }
-    void collectKeywords(const std::string& prefix, std::set<std::string>& out)
+    void collectKeywords(const std::string& prefix, std::set<std::string, std::less<>>& out)
     {
         // The set the LEXER got (recorded in setLexerForFile), falling back to the extension table only
         // for a page that has not been through it. Reading the extension table directly is what made
-        // Ctrl+Space silently keyword-less after a manual Language pick and for Scintillua languages.
+        // Ctrl+Space silently keyword-less after a manual Language pick.
         auto* p = activePage();
-        std::string s = (p && !p->lexKeywords.empty()) ? p->lexKeywords : std::string();
-        if (s.empty()) { const char* kw = keywordsForActiveLang(); if (!kw) return; s = kw; }
+        const char* kw = (p && p->lexKeywords) ? p->lexKeywords : keywordsForActiveLang();
+        if (!kw) return;
+        const std::string_view s(kw);
         const size_t pl = prefix.size();
         for (size_t i = 0; i < s.size(); )
         {
             if (s[i] == ' ' || s[i] == '\n' || s[i] == '\t') { ++i; continue; }
             size_t j = i; while (j < s.size() && s[j] != ' ' && s[j] != '\n' && s[j] != '\t') ++j;
-            if (j - i > pl && s.compare(i, pl, prefix) == 0) out.insert(s.substr(i, j - i));
+            if (j - i > pl && s.compare(i, pl, prefix) == 0) out.emplace(s.substr(i, j - i));
             i = j;
         }
     }
@@ -5193,28 +5235,39 @@ private:
         const int caret = (int)sci(SCI_GETCURRENTPOS), start = (int)sci(SCI_WORDSTARTPOSITION, caret, 1), plen = caret - start;
         if (plen <= 0) { sci(SCI_AUTOCCANCEL); return; }
         const std::string prefix = rangeText(start, caret);
-        // Scintilla styles LAZILY on paint, so force-lex before reading styles or GetStyleAt returns
-        // stale/default values and the filter silently does nothing (the same trap documented for
-        // spell-check). Skipped in large-file mode, where styling is off by design.
-        // Style filtering needs the WHOLE document styled, because the candidate scan covers the whole
-        // document - but this runs on every word character typed, and Scintilla otherwise styles only
-        // what is painted. Cap it: past this size the filter is skipped and harvesting falls back to the
-        // old unfiltered behaviour, which is a quality trade, not a correctness one. (largeFile pages
-        // have no styling at all, so they are excluded outright.)
+        // Scintilla styles LAZILY on paint, so styles must be up to date before GetStyleAt is read or the
+        // filter silently does nothing. The candidate scan covers the WHOLE document, so the whole
+        // document has to be styled - but this runs on every word character typed, so it is capped: past
+        // this size the filter is skipped and harvesting falls back to the old unfiltered behaviour, a
+        // quality trade rather than a correctness one. (largeFile pages have no styling at all.)
         static const int kStyleFilterMaxBytes = 1 << 20;   // 1 MiB
         const int docLen = (int)sci(SCI_GETLENGTH);
-        std::set<int> skipStyles;
+        static const std::bitset<256> kNoSkip;
+        const std::bitset<256>* skipStyles = &kNoSkip;
         if (auto* p = activePage(); (!p || !p->largeFile) && docLen <= kStyleFilterMaxBytes)
         {
-            // Colourise from GetEndStyled(), NOT from 0. Every inserted character invalidates styling back
-            // to the caret, so this guard fires on essentially every keystroke; starting at 0 re-lexed the
-            // WHOLE document each time instead of just the unstyled tail, which is the difference between
-            // an incremental step and an O(document) one per character typed.
             const int styled = m_stc->GetEndStyled();
-            if (styled < docLen) m_stc->Colourise(styled, docLen);
-            skipStyles = proseStylesForFilter();
+            if (m_stc->GetLexer() == wxSTC_LEX_CONTAINER)
+            {
+                // Scintillua (container lexing): do NOT force it. SCI_COLOURISE throws the start position
+                // away for a container lexer - it just calls ModifiedAt + NotifyStyleToNeeded (see
+                // ScintillaBase.cxx) - and our SCN_STYLENEEDED handler re-lexes the buffer from byte 0
+                // through Lua/LPeg and then Redraws the whole window. Doing that per keystroke is far
+                // worse than the filter is worth, and pointless besides: the next paint styles the buffer
+                // anyway. Use the filter only when the buffer already happens to be fully styled.
+                if (styled >= docLen) skipStyles = &proseStylesForFilter();
+            }
+            else
+            {
+                // Lexilla honours the range, so this really is incremental. It must start at GetEndStyled()
+                // and not at 0: every inserted character invalidates styling back to the caret, so the
+                // guard fires on essentially every keystroke, and starting at 0 would re-lex the whole
+                // document each time rather than just the unstyled tail.
+                if (styled < docLen) m_stc->Colourise(styled, docLen);
+                skipStyles = &proseStylesForFilter();
+            }
         }
-        std::set<std::string> cand; collectWords(getDocUtf8(), prefix, cand, skipStyles);
+        std::set<std::string, std::less<>> cand; collectWords(getDocUtf8(), prefix, cand, *skipStyles);
         if (withKeywords) collectKeywords(prefix, cand);
         cand.erase(prefix);
         if (cand.empty()) { sci(SCI_AUTOCCANCEL); return; }
@@ -7675,7 +7728,7 @@ private:
         // Save-As'ing to notes.txt kept the C++ keyword list on a now-plain-text page, and because
         // collectKeywords PREFERS this field over the extension table, Ctrl+Space offered the whole of
         // C++ in a text file. Cleared, such pages fall through to the extension-table default as before.
-        if (page) page->lexKeywords.clear();
+        if (page) page->lexKeywords = nullptr;
         // Large-file mode: skip lexing/styling/folding entirely (both the Scintillua container path and
         // Lexilla) so a huge or long-line buffer never triggers the synchronous whole-buffer re-lex.
         // Picking a Language from the menu sets langForced, which overrides this and forces the lexer on.
@@ -13067,7 +13120,7 @@ private:
     wxTreeCtrl* m_funcList = nullptr;       // Function List: per-file symbol tree (regex-parsed)
     // Project Panels 1/2/3: three independent workspaces (tree + its own .xml path), built lazily.
     struct ProjectPanelState { wxTreeCtrl* tree = nullptr; wxString workspace; };
-    ProjectPanelState m_proj[3];
+    ProjectPanelState m_proj[kProjectPanels];
     wxTreeCtrl* m_fifPanel = nullptr;       // Find result: docked Find-in-Files results tree
     wxTimer*    m_flTimer  = nullptr;        // debounce re-parse of the Function List after edits
     wxTimer*    m_backupTimer = nullptr;     // periodic (30s) recovery-backup of buffers with unsaved edits
