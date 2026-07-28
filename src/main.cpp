@@ -138,6 +138,8 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 #include <regex>               // std::regex - Function List symbol parsing (per-language rules)
 #include <set>
 #include <algorithm>
+#include <bitset>              // std::bitset<256> - the autocomplete style filter (a Scintilla style is a byte)
+#include <string_view>         // borrowed keyword/word spans on the per-keystroke completion path
 #include <cstdlib>
 #include <memory>             // std::unique_ptr - host-owned pending nib.keymap scheme builders
 #include <random>              // std::shuffle - "Randomize Line Order"
@@ -279,6 +281,7 @@ public:
     wxString forcedLexer;                  // that pick's Lexilla lexer name ("" = forced Normal Text)
     wxString forcedName;                   // that pick's display label for the status bar, e.g. "C++"
     wxString sciLang;                      // name of a registered Scintillua language when active ("" = none); container-lexed via m_scintillua
+    const char* lexKeywords = nullptr;      // the keyword set actually handed to this page's lexer (autocomplete reads THIS, not a second table keyed on extension). Borrowed: every value is a file-scope *_KEYWORDS literal
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
@@ -892,6 +895,68 @@ static const std::vector<FLRule>* flRules(const std::string& lang)
         add("sh", 0, R"((?:^|\n)[ \t]*function[ \t]+([A-Za-z_]\w*))", 1);
         // ---- PowerShell ----  function/filter (keyword is case-insensitive)
         add("powershell", 0, R"((?:^|\n)[ \t]*(?:function|filter)[ \t]+([A-Za-z_][\w-]*))", 1, /*icase*/true);
+
+        // ---- Second wave: 11 more languages (13 -> 24 rule sets) ----------------------------------
+        // Concept coverage (which constructs count as symbols, and the container/leaf split) follows the
+        // taxonomies published by two MIT-licensed projects - Pulsar's symbol-provider-ctags rule file and
+        // aerial.nvim's per-language outline queries. The REGEXES below are wxNote's own: those sources
+        // express their rules as ctags --regex- options and tree-sitter node patterns respectively, neither
+        // of which transfers, so only the coverage decisions carry over. See docs/CREDITS.md.
+        // Same house rules as the first wave: match DEFINITIONS, require whatever token closes the
+        // construct, and prefer a container (kind 1) whenever the language nests.
+
+        // Markdown: ATX headings only. Setext (=== / ---) needs lookbehind, which std::regex lacks.
+        // LEAF, not container: heading nesting is by LEVEL (#/##/###), which the brace-based body scan
+        // in flCollect cannot express - and worse, a markdown file containing any stray `{` (a fenced
+        // code block is the common case) would make the scan latch onto it and nest every later heading
+        // under the first, all the way to the matching brace or EOF.
+        // `[^\r\n]`, not `[^\n]`: on a CRLF file a `[^\n]+` capture swallows the CR and the tree label
+        // ends in a stray control character. Same reason on every other line-bounded capture below.
+        add("markdown", 0, R"((?:^|\n)(#{1,6})[ \t]+([^\r\n]+))", 2);
+        // YAML: top-level and one nested level of mapping keys. Anchored to column 0 / a single indent so
+        // list items and deep config noise stay out of the tree.
+        add("yaml", 1, R"((?:^|\n)([A-Za-z_][\w.-]*)[ \t]*:(?=[ \t\r\n]|$))", 1);
+        // {2,4}, not {2}: 4-space YAML is at least as common as 2-space, and pinning the nested level to
+        // exactly two characters of indent yielded no nested keys at all for those files.
+        add("yaml", 0, R"((?:^|\n)[ \t]{2,4}([A-Za-z_][\w.-]*)[ \t]*:(?=[ \t\r\n]|$))", 1);
+        // INI / TOML: [section] and [[array-of-table]].
+        // LEAF for the same reason, and it is also the right shape: INI/TOML sections do not nest, and a
+        // value can contain braces that the container scan would misread as a body.
+        // The {1,256} bound is deliberate: a lazy capture sandwiched between two `[ \t]*` runs backtracks
+        // superlinearly on an unterminated `[` line, and std::regex answers that with a thrown
+        // error_complexity rather than merely running slowly. No real section name is that long.
+        add("ini", 0, R"((?:^|\n)[ \t]*\[{1,2}[ \t]*([^\]\r\n]{1,256}?)[ \t]*\]{1,2})", 1);
+        // CSS family: at-rules (@media/@supports/@keyframes) as containers, then rule-set selectors.
+        add("css", 1, R"((?:^|\n)[ \t]*(@(?:media|supports|keyframes|font-face)[^{\n]*)\{)", 1);
+        add("css", 0, R"((?:^|\n)[ \t]*([.#]?[A-Za-z_][\w\-]*(?:[^{;\r\n]{0,256}?)?)[ \t\r\n]*\{)", 1);   // bounded: see the ini note
+        // Makefile: targets (not variable assignments, hence the `:` not followed by `=`).
+        // The leading class allows `%`, `.` and `$` so pattern rules (`build/%.o:`), suffix rules
+        // (`.c.o:`) and variable-expanded targets (`$(BIN):`) are listed - they were excluded by an
+        // identifier-only first character, which is most of the non-trivial targets in a real makefile.
+        add("makefile", 0, R"((?:^|\n)([A-Za-z_.%$][\w./%$()-]*)[ \t]*:(?![=:]))", 1);
+        // Dockerfile: build stages, and the instructions that structure an image.
+        // `[^\r\n]`: with `[^\n]` the CR of a CRLF file was absorbed into the capture, which ALSO defeated
+        // the optional `AS <stage>` strip this pattern exists to do (the CR sat between them).
+        add("dockerfile", 0, R"((?:^|\n)[ \t]*FROM[ \t]+([^\r\n]+?)(?:[ \t]+AS[ \t]+[\w.-]+)?[ \t]*(?=\r?\n|$))", 1, /*icase*/true);   // stages are a flat list
+        // Batch: :labels (the only routine construct cmd.exe has).
+        add("batch", 0, R"((?:^|\n)[ \t]*:([A-Za-z_][\w.-]*))", 1);
+        // Perl: package markers, then subs - both LEAVES, deliberately flat. In the ordinary statement
+        // form (`package My::Mod;`) the container body scan hits the terminating `;` immediately, so a
+        // container would render as a permanently empty node with every sub as its sibling anyway. A flat
+        // list says the same thing honestly. (The block form `package Foo { ... }` is the rarer spelling.)
+        add("perl", 0, R"((?:^|\n)[ \t]*package[ \t]+([\w:]+))", 1);
+        add("perl", 0, R"((?:^|\n)[ \t]*sub[ \t]+(\w+))", 1);
+        // Kotlin: classes/objects/interfaces contain funs. `fun` may carry a receiver type.
+        add("kotlin", 1, R"((?:^|\n)[ \t]*(?:(?:public|private|internal|protected|open|sealed|abstract|data|inner|enum|annotation)[ \t]+)*(?:class|object|interface)[ \t]+(\w+))", 1);
+        add("kotlin", 0, R"((?:^|\n)[ \t]*(?:(?:public|private|internal|protected|open|override|suspend|inline|operator|tailrec)[ \t]+)*fun[ \t]+(?:<[^>]*>[ \t]*)?(?:[\w.]+\.)?(\w+)[ \t]*\()", 1);
+        // Swift: type declarations contain funcs.
+        // The negative lookahead stops `class func foo()` - a type METHOD, where `class` is a modifier,
+        // not a type declaration - from being read as a type named "func". The leaf rule below already
+        // accepts `class` as one of its modifiers, so such lines still list correctly as functions.
+        add("swift", 1, R"((?:^|\n)[ \t]*(?:(?:public|private|internal|fileprivate|open|final)[ \t]+)*(?:class|struct|enum|protocol|extension|actor)[ \t]+(?!func\b|var\b|let\b|subscript\b|init\b|deinit\b)(\w+))", 1);
+        add("swift", 0, R"((?:^|\n)[ \t]*(?:(?:public|private|internal|fileprivate|open|static|class|final|override|mutating)[ \t]+)*func[ \t]+(\w+)[ \t]*[<(])", 1);
+        // R: functions are assignments of a `function`/lambda expression.
+        add("r", 0, R"((?:^|\n)[ \t]*([\w.]+)[ \t]*(?:<-|=)[ \t]*(?:function[ \t]*\(|\\\())", 1);
     }
     auto it = tbl.find(lang);
     return it == tbl.end() ? nullptr : &it->second;
@@ -913,6 +978,29 @@ static const std::regex* flCommentRe(const std::string& lang)
             // would otherwise corrupt the container range scan).
             tbl["js"] = std::regex(R"(/\*[\s\S]*?\*/|//[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)");
             tbl["python"] = std::regex(R"(#[^\n]*|'''[\s\S]*?'''|"""[\s\S]*?"""|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
+            // Second-wave masks. A language with no entry is simply scanned unmasked, which is the right
+            // default for the data formats here (markdown/yaml/ini have no string-literal syntax that
+            // could swallow a heading or key).
+            const char* hashLine = R"(#[^\n]*)";
+            // hash comments + the two quoted-string forms - shared by r/perl/ruby. Named because the
+            // double-quoted alternative is the fiddly one (it decides whether a `{` inside a literal
+            // corrupts the container brace scan), and it should be fixed in one place, not per language.
+            const char* hashStr  = R"(#[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')";
+            tbl["yaml"] = std::regex(hashLine); tbl["ini"] = std::regex(R"(;[^\n]*|#[^\n]*)");
+            tbl["makefile"] = std::regex(hashLine); tbl["dockerfile"] = std::regex(hashLine);
+            tbl["r"] = std::regex(hashStr); tbl["perl"] = std::regex(hashStr);
+            tbl["batch"] = std::regex(R"((?:^|\n)[ \t]*(?:rem|REM)[^\n]*|::[^\n]*)");
+            // CSS is exactly the C-family mask: the "css" key also serves SCSS and LESS (see flLangKey),
+            // which support `//` line comments, and an unmasked `{` inside one corrupts every container
+            // range that follows it - cfam already covers that alternative.
+            tbl["css"] = std::regex(cfam);
+            // Kotlin/Swift are C-family comments PLUS triple-quoted raw strings, which the plain cfam mask
+            // does not cover - and a `{` inside one (very common in a Kotlin """...""" template) would
+            // otherwise be counted by the container brace scan and corrupt the nesting. Ordered before the
+            // single-quote alternative so the longer literal wins. Swift additionally NESTS /* */, which
+            // this still does not model - that can under-mask, costing a spurious entry, never a crash.
+            const char* cfamRaw = R"(/\*[\s\S]*?\*/|//[^\n]*|"""[\s\S]*?"""|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')";
+            tbl["kotlin"] = std::regex(cfamRaw); tbl["swift"] = std::regex(cfamRaw);
             // Go adds back-quoted raw string literals.
             tbl["go"] = std::regex(R"(/\*[\s\S]*?\*/|//[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`[^`]*`)");
             // Rust: single quotes are lifetimes ('a) far more often than char literals, so only the
@@ -925,7 +1013,7 @@ static const std::regex* flCommentRe(const std::string& lang)
             // PHP: /* */, //, # line comments + strings.
             tbl["php"]  = std::regex(R"(/\*[\s\S]*?\*/|//[^\n]*|#[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
             // Ruby: # line comments + strings.
-            tbl["ruby"] = std::regex(R"(#[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')");
+            tbl["ruby"] = std::regex(hashStr);
             // sh/bash: # line comments + strings ('...' has no escapes).
             tbl["sh"]   = std::regex(R"(#[^\n]*|"(?:\\.|[^"\\\n])*"|'[^']*')");
             // SQL: -- and /* */ comments + '...' strings ('' escapes a quote inside).
@@ -984,6 +1072,23 @@ static void loadFunctionListRules(const wxString& path)
     }
 }
 
+// How a language delimits a container's body, and what ends a declaration that has none. This is a
+// property of the LANGUAGE, so it lives here beside flRules/flCommentRe/flLangKey rather than as a
+// chain of `lang == "..."` tests inside flCollect's generic scanner - adding language 25 with indent
+// blocks or EOL-terminated declarations is then a line in this table, not an edit to the scanner.
+// (Deliberately NOT a field on FLRule: two rules for one language could then disagree about how to
+// scan the same file.)
+struct FLBodyStyle {
+    bool indentBlocks;   // block extent = lines indented deeper than the opening line, not { }
+    bool eolEndsDecl;    // no statement terminator: end-of-line closes a body-less declaration
+};
+static FLBodyStyle flBodyStyle(const std::string& lang)
+{
+    if (lang == "python" || lang == "yaml") return { true,  false };
+    if (lang == "kotlin")                   return { false, true  };
+    return { false, false };
+}
+
 // One extracted symbol: byte positions in the scanned UTF-8 text. For containers (kind 1), rangeEnd
 // is one past the body's closing brace (or dedent, for Python) so later symbols inside [pos, rangeEnd)
 // nest under it in the tree.
@@ -1010,7 +1115,17 @@ static std::vector<FLSym> flCollect(const std::string& text, const std::string& 
         try { for (std::sregex_iterator it(text.begin(), text.end(), *cre), e; it != e; ++it)
             zones.push_back({ (size_t)it->position(0), (size_t)(it->position(0) + it->length(0)) }); } catch (const std::regex_error&) {}
     }
-    auto inZone = [&](size_t p) { for (auto& z : zones) if (p >= z.first && p < z.second) return true; return false; };
+    // Binary search, not a linear walk: `zones` comes from a single sregex_iterator, so it is already
+    // ascending and non-overlapping. That matters because the container body scans below call this ONCE
+    // PER CHARACTER over a container's whole extent - on a large C-family file the mask yields thousands
+    // of zones, and the linear form made that quadratic (measured in the millions of comparisons for a
+    // single big class body, on every Function List refresh). Only the last zone starting at or before p
+    // can contain p.
+    auto inZone = [&](size_t p) {
+        const auto it = std::upper_bound(zones.begin(), zones.end(), p,
+            [](size_t v, const std::pair<size_t, size_t>& z) { return v < z.first; });
+        return it != zones.begin() && p < std::prev(it)->second;
+    };
     for (const auto& r : *rules)
     {
         try {
@@ -1024,10 +1139,14 @@ static std::vector<FLSym> flCollect(const std::string& text, const std::string& 
             }
         } catch (const std::regex_error&) {}
     }
+    const FLBodyStyle body = flBodyStyle(lang);            // per-language scan policy, resolved once
     for (auto& s : syms)                                   // compute each container's body range (for nesting)
     {
         if (s.kind != 1) { s.rangeEnd = s.end; continue; }
-        if (lang == "python")                              // block extent = lines indented deeper than the class line
+        // Indent-delimited languages: the block is the run of lines indented deeper than the opening one.
+        // YAML shares Python's shape exactly, and it is the ONLY correct reading for a mapping key - the
+        // brace scan in the else-branch would otherwise latch onto a `{` from a flow mapping or a value.
+        if (body.indentBlocks)                             // block extent = lines indented deeper than the class line
         {
             size_t ls = text.rfind('\n', s.pos); ls = (ls == std::string::npos) ? 0 : ls + 1;
             size_t ind = 0; while (ls + ind < text.size() && (text[ls + ind] == ' ' || text[ls + ind] == '\t')) ind++;
@@ -1045,15 +1164,32 @@ static std::vector<FLSym> flCollect(const std::string& text, const std::string& 
             // name so they can share one pattern with brace-on-next-line styles) - so first find the
             // opening brace, starting the depth count THERE. A `;` before any `{` means the match was
             // a declaration-only item (`struct Foo;` in Rust): keep it as a leaf with an empty range.
+            // Kotlin has no statement terminator, so the `;` guard cannot protect it: a body-less
+            // declaration (`data class User(val n: String)`, `class Marker`, `sealed interface Shape`)
+            // would scan on and latch onto the NEXT declaration's brace, nesting the whole rest of the
+            // file under it. There the declaration ends at end-of-line, once outside the constructor's
+            // parens/generics - so treat that as the terminator, while still allowing brace-on-next-line
+            // style (a newline whose next non-blank character IS the brace keeps scanning).
             size_t open = 0; bool haveOpen = false;
             if (s.end > 0 && text[s.end - 1] == '{') { open = s.end; haveOpen = true; }
             else
+            {
+                int nest = 0;   // (), <> depth: a constructor list or type-parameter list may span lines
                 for (size_t i = s.end; i < text.size(); ++i)
                 {
                     if (inZone(i)) continue;
-                    if (text[i] == '{') { open = i + 1; haveOpen = true; break; }
-                    if (text[i] == ';') break;
+                    const char c = text[i];
+                    if (c == '{') { open = i + 1; haveOpen = true; break; }
+                    if (c == ';') break;
+                    if (!body.eolEndsDecl) continue;
+                    if (c == '(' || c == '<') { ++nest; continue; }
+                    if ((c == ')' || c == '>') && nest > 0) { --nest; continue; }
+                    if (c != '\n' || nest != 0) continue;
+                    const size_t j = text.find_first_not_of(" \t\r\n", i + 1);
+                    if (j == std::string::npos || text[j] != '{') break;   // no body -> leaf, not a container
+                    i = j - 1;   // resume ON the brace, so the '{' arm above takes it (no re-walk of the gap)
                 }
+            }
             if (!haveOpen) { s.rangeEnd = s.end; continue; }
             int depth = 1; s.rangeEnd = text.size();
             for (size_t i = open; i < text.size(); ++i)
@@ -3891,7 +4027,11 @@ private:
     }
     std::string flLangKey()
     {
-        wxString ext; if (auto* p = activePage()) ext = p->path.AfterLast('.').Lower();
+        // wxFileName, NOT path.AfterLast('.'): AfterLast returns the WHOLE string when the character is
+        // absent, so for an extension-less path like /proj/Makefile it handed back the entire path as the
+        // "extension" - never empty, so the name-based branch at the bottom was unreachable dead code.
+        wxString ext, base;
+        if (auto* p = activePage()) { const wxFileName fn(p->path); ext = fn.GetExt().Lower(); base = fn.GetFullName().Lower(); }
         if (auto u = g_flUserExtToLang.find(std::string(ext.utf8_str())); u != g_flUserExtToLang.end()) return u->second;   // user-mapped extension
         if (ext=="cpp"||ext=="cc"||ext=="cxx"||ext=="c"||ext=="h"||ext=="hpp"||ext=="hxx"||ext=="ino") return "cpp";
         if (ext=="py"||ext=="pyw") return "python";
@@ -3906,6 +4046,23 @@ private:
         if (ext=="sql"||ext=="ddl") return "sql";
         if (ext=="sh"||ext=="bash"||ext=="zsh") return "sh";
         if (ext=="ps1"||ext=="psm1"||ext=="psd1") return "powershell";
+        // ---- second wave ----
+        if (ext=="md"||ext=="markdown"||ext=="mdown"||ext=="mkd") return "markdown";
+        if (ext=="yml"||ext=="yaml") return "yaml";
+        if (ext=="ini"||ext=="toml"||ext=="cfg"||ext=="conf"||ext=="properties") return "ini";
+        if (ext=="css"||ext=="scss"||ext=="less"||ext=="sass") return "css";
+        if (ext=="mk"||ext=="mak"||ext=="makefile") return "makefile";
+        if (ext=="dockerfile") return "dockerfile";
+        if (ext=="bat"||ext=="cmd") return "batch";
+        if (ext=="pl"||ext=="pm"||ext=="pod") return "perl";
+        if (ext=="kt"||ext=="kts") return "kotlin";
+        if (ext=="swift") return "swift";
+        if (ext=="r") return "r";
+        // Files whose NAME, not extension, carries the language. Checked AFTER the extension table so an
+        // explicit extension always wins. `Dockerfile.dev` is matched by prefix rather than by empty
+        // extension, since wxFileName reports its extension as "dev".
+        if (ext.empty() && (base == "makefile" || base == "gnumakefile")) return "makefile";
+        if (base == "dockerfile" || base.StartsWith("dockerfile.")) return "dockerfile";
         return "";
     }
     void parseFuncList()
@@ -4124,35 +4281,60 @@ private:
         togglePane(m_charPanel);
     }
 
-    // ---- Project Panel (workspace tree: named folders + file refs, saved as .xml) ------
-    void buildProjectPanel()
+    // ---- Project Panels 1/2/3 (workspace tree: named folders + file refs, saved as .xml) -------
+    // Three INDEPENDENT workspaces, matching the three menu entries. They previously shared one
+    // backing tree, so "Project Panel 2" toggled the same pane as 1 and 3, and opening a workspace in
+    // one silently replaced whatever the others showed - which defeats the only reason to have three:
+    // keeping separate file sets side by side. Each now owns its tree, its AUI pane and its loaded
+    // workspace path. Panels are built lazily, so the other two cost nothing until used.
+    static const int kProjectPanels = 3;
+    int projIndexOf(const wxObject* tree) const   // which panel did this tree event come from?
     {
-        m_projPanel = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                                     wxTR_HAS_BUTTONS | wxTR_FULL_ROW_HIGHLIGHT | wxTR_EDIT_LABELS | wxBORDER_NONE);
-        themeToEditor(m_projPanel);
-        m_projPanel->Bind(wxEVT_TREE_ITEM_ACTIVATED, &WxnShellFrameT::onProjActivate, this);
-        m_projPanel->Bind(wxEVT_TREE_ITEM_MENU,      &WxnShellFrameT::onProjContext,  this);
-        m_projPanel->AddRoot("Workspace", -1, -1, new ProjItemData(false));
-        m_aui.AddPane(m_projPanel, wxAuiPaneInfo().Name("project").Caption(_("Project"))
+        for (int i = 0; i < kProjectPanels; ++i) if (m_proj[i].tree == tree) return i;
+        return -1;
+    }
+    void buildProjectPanel(int i)
+    {
+        wxTreeCtrl*& t = m_proj[i].tree;
+        t = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                           wxTR_HAS_BUTTONS | wxTR_FULL_ROW_HIGHLIGHT | wxTR_EDIT_LABELS | wxBORDER_NONE);
+        themeToEditor(t);
+        t->Bind(wxEVT_TREE_ITEM_ACTIVATED, &WxnShellFrameT::onProjActivate, this);
+        t->Bind(wxEVT_TREE_ITEM_MENU,      &WxnShellFrameT::onProjContext,  this);
+        t->AddRoot("Workspace", -1, -1, new ProjItemData(false));
+        // Distinct pane names: wxAuiManager keys panes by name, so one shared name would collide and a
+        // saved perspective could not tell the three apart.
+        m_aui.AddPane(t, wxAuiPaneInfo().Name(wxString::Format("project%d", i + 1))
+                          // "%s %d" over the EXISTING _("Project") msgid rather than a new "Project %d"
+                          // one: the catalogs already carry "Project" in all 8 languages, so the caption
+                          // stays translated instead of silently reverting to English until the next
+                          // catalog regeneration.
+                          .Caption(wxString::Format("%s %d", _("Project"), i + 1))
                           .Left().BestSize(220, 400).MinSize(120, 80).CloseButton(true).Hide());
         m_aui.Update();
     }
-    void toggleProjectPanel()
+    void toggleProjectPanel(int i)
     {
-        if (!m_projPanel) buildProjectPanel();
-        togglePane(m_projPanel);
+        if (i < 0 || i >= kProjectPanels) return;
+        if (!m_proj[i].tree) buildProjectPanel(i);
+        togglePane(m_proj[i].tree);
     }
     void onProjActivate(wxTreeEvent& e)   // double-click a file node -> open it (folders fall through to expand/collapse)
     {
-        auto* d = dynamic_cast<ProjItemData*>(m_projPanel->GetItemData(e.GetItem()));
+        const int i = projIndexOf(e.GetEventObject());
+        if (i < 0) { e.Skip(); return; }
+        auto* d = dynamic_cast<ProjItemData*>(m_proj[i].tree->GetItemData(e.GetItem()));
         if (d && d->isFile && wxFileExists(d->path)) openPath(d->path); else e.Skip();
     }
     void onProjContext(wxTreeEvent& e)
     {
+        const int i = projIndexOf(e.GetEventObject());
+        if (i < 0) { e.Skip(); return; }
+        wxTreeCtrl* t = m_proj[i].tree;
         const wxTreeItemId item = e.GetItem();
-        if (item.IsOk()) m_projPanel->SelectItem(item);
-        auto* d = item.IsOk() ? dynamic_cast<ProjItemData*>(m_projPanel->GetItemData(item)) : nullptr;
-        const bool isRoot   = item.IsOk() && item == m_projPanel->GetRootItem();
+        if (item.IsOk()) t->SelectItem(item);
+        auto* d = item.IsOk() ? dynamic_cast<ProjItemData*>(t->GetItemData(item)) : nullptr;
+        const bool isRoot   = item.IsOk() && item == t->GetRootItem();
         const bool isFolder = isRoot || (d && !d->isFile);
         wxMenu m;
         if (isFolder) { m.Append(7200, _("Add Files...")); m.Append(7201, _("Add Folder")); }
@@ -4160,101 +4342,110 @@ private:
         if (d && !isRoot) m.Append(7203, _("Remove"));
         m.AppendSeparator();
         m.Append(7210, _("New Workspace")); m.Append(7211, _("Open Workspace...")); m.Append(7212, _("Save Workspace As..."));
-        switch (m_projPanel->GetPopupMenuSelectionFromUser(m))
+        switch (t->GetPopupMenuSelectionFromUser(m))
         {
-            case 7200: projAddFiles(item);           break;
-            case 7201: projAddFolder(item);          break;
-            case 7202: m_projPanel->EditLabel(item); break;
-            case 7203: m_projPanel->Delete(item);    break;
-            case 7210: projNew();  break;
-            case 7211: projOpen(); break;
-            case 7212: projSave(); break;
+            case 7200: projAddFiles(i, item);  break;
+            case 7201: projAddFolder(i, item); break;
+            case 7202: t->EditLabel(item);     break;
+            case 7203: t->Delete(item);        break;
+            case 7210: projNew(i);  break;
+            case 7211: projOpen(i); break;
+            case 7212: projSave(i); break;
         }
     }
-    void projAddFiles(const wxTreeItemId& parent)
+    void projAddFiles(int i, const wxTreeItemId& parent)
     {
         if (!parent.IsOk()) return;
+        wxTreeCtrl* t = m_proj[i].tree;
         wxFileDialog dlg(this, _("Add Files"), "", "", _("All files (*.*)|*.*"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
         if (dlg.ShowModal() != wxID_OK) return;
         wxArrayString paths; dlg.GetPaths(paths);
-        for (const auto& p : paths) m_projPanel->AppendItem(parent, wxFileNameFromPath(p), -1, -1, new ProjItemData(true, p));
-        m_projPanel->Expand(parent);
+        for (const auto& p : paths) t->AppendItem(parent, wxFileNameFromPath(p), -1, -1, new ProjItemData(true, p));
+        t->Expand(parent);
     }
-    void projAddFolder(const wxTreeItemId& parent)
+    void projAddFolder(int i, const wxTreeItemId& parent)
     {
         if (!parent.IsOk()) return;
-        const wxTreeItemId f = m_projPanel->AppendItem(parent, _("New Folder"), -1, -1, new ProjItemData(false));
-        m_projPanel->Expand(parent);
-        m_projPanel->EditLabel(f);                 // let the user name it right away
+        wxTreeCtrl* t = m_proj[i].tree;
+        const wxTreeItemId f = t->AppendItem(parent, _("New Folder"), -1, -1, new ProjItemData(false));
+        t->Expand(parent);
+        t->EditLabel(f);                           // let the user name it right away
     }
-    void projNew()
+    void projNew(int i)
     {
-        if (!m_projPanel) return;
-        m_projPanel->DeleteAllItems();
-        m_projPanel->AddRoot("Workspace", -1, -1, new ProjItemData(false));
-        m_projWorkspace.clear();
+        wxTreeCtrl* t = m_proj[i].tree;
+        if (!t) return;
+        t->DeleteAllItems();
+        t->AddRoot("Workspace", -1, -1, new ProjItemData(false));
+        m_proj[i].workspace.clear();
     }
-    void projOpen()
+    void projOpen(int i)
     {
         wxFileDialog dlg(this, _("Open Workspace"), "", "", _("Workspace (*.xml)|*.xml"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
-        if (dlg.ShowModal() == wxID_OK) loadProjectXml(dlg.GetPath());
+        if (dlg.ShowModal() == wxID_OK) loadProjectXml(i, dlg.GetPath());
     }
-    void projSave()
+    void projSave(int i)
     {
-        wxString path = m_projWorkspace;
+        wxString path = m_proj[i].workspace;
         if (path.empty())
         {
             wxFileDialog dlg(this, _("Save Workspace As"), "", "workspace.xml", _("Workspace (*.xml)|*.xml"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
             if (dlg.ShowModal() != wxID_OK) return;
             path = dlg.GetPath();
         }
-        saveProjectXml(path);
-        m_projWorkspace = path;
+        saveProjectXml(i, path);
+        m_proj[i].workspace = path;
         setStatus(0, _("Workspace saved")); m_hint = true;
     }
-    void loadProjectXml(const wxString& path)
+    void loadProjectXml(int i, const wxString& path)
     {
+        if (!m_proj[i].tree) buildProjectPanel(i);   // loadable before the pane has ever been shown
+        wxTreeCtrl* t = m_proj[i].tree;
         wxXmlDocument doc;
         if (!doc.Load(path) || !doc.GetRoot()) return;
         wxXmlNode* proj = nullptr;
         for (wxXmlNode* n = doc.GetRoot()->GetChildren(); n; n = n->GetNext()) if (n->GetName() == "Project") { proj = n; break; }
-        m_projPanel->DeleteAllItems();
-        const wxTreeItemId root = m_projPanel->AddRoot(proj ? proj->GetAttribute("name", "Workspace") : "Workspace", -1, -1, new ProjItemData(false));
-        if (proj) projLoadChildren(proj, root);
-        m_projPanel->ExpandAll();
-        m_projWorkspace = path;
+        t->DeleteAllItems();
+        const wxTreeItemId root = t->AddRoot(proj ? proj->GetAttribute("name", "Workspace") : "Workspace", -1, -1, new ProjItemData(false));
+        if (proj) projLoadChildren(i, proj, root);
+        t->ExpandAll();
+        m_proj[i].workspace = path;
     }
-    void projLoadChildren(wxXmlNode* xparent, const wxTreeItemId& tparent)
+    void projLoadChildren(int i, wxXmlNode* xparent, const wxTreeItemId& tparent)
     {
+        wxTreeCtrl* t = m_proj[i].tree;
         for (wxXmlNode* n = xparent->GetChildren(); n; n = n->GetNext())
         {
             if (n->GetName() == "Folder")
-            { const wxTreeItemId f = m_projPanel->AppendItem(tparent, n->GetAttribute("name", "Folder"), -1, -1, new ProjItemData(false)); projLoadChildren(n, f); }
+            { const wxTreeItemId f = t->AppendItem(tparent, n->GetAttribute("name", "Folder"), -1, -1, new ProjItemData(false)); projLoadChildren(i, n, f); }
             else if (n->GetName() == "File")
-            { const wxString p = n->GetAttribute("name"); m_projPanel->AppendItem(tparent, wxFileNameFromPath(p), -1, -1, new ProjItemData(true, p)); }
+            { const wxString p = n->GetAttribute("name"); t->AppendItem(tparent, wxFileNameFromPath(p), -1, -1, new ProjItemData(true, p)); }
         }
     }
-    void saveProjectXml(const wxString& path)
+    void saveProjectXml(int i, const wxString& path)
     {
+        wxTreeCtrl* t = m_proj[i].tree;
+        if (!t) return;
         wxXmlDocument doc;
         auto* npp = new wxXmlNode(wxXML_ELEMENT_NODE, "wxNote");   // loadProjectXml never checks the root's own name, so old <NotepadPlus>-rooted workspace files still load
         doc.SetRoot(npp);
         auto* proj = new wxXmlNode(wxXML_ELEMENT_NODE, "Project");
-        proj->AddAttribute("name", m_projPanel->GetItemText(m_projPanel->GetRootItem()));
+        proj->AddAttribute("name", t->GetItemText(t->GetRootItem()));
         npp->AddChild(proj);
-        projSaveChildren(m_projPanel->GetRootItem(), proj);
+        projSaveChildren(i, t->GetRootItem(), proj);
         doc.Save(path);
     }
-    void projSaveChildren(const wxTreeItemId& tparent, wxXmlNode* xparent)
+    void projSaveChildren(int i, const wxTreeItemId& tparent, wxXmlNode* xparent)
     {
+        wxTreeCtrl* t = m_proj[i].tree;
         wxTreeItemIdValue cookie;
-        for (wxTreeItemId c = m_projPanel->GetFirstChild(tparent, cookie); c.IsOk(); c = m_projPanel->GetNextChild(tparent, cookie))
+        for (wxTreeItemId c = t->GetFirstChild(tparent, cookie); c.IsOk(); c = t->GetNextChild(tparent, cookie))
         {
-            auto* d = dynamic_cast<ProjItemData*>(m_projPanel->GetItemData(c));
+            auto* d = dynamic_cast<ProjItemData*>(t->GetItemData(c));
             if (d && d->isFile)
             { auto* f = new wxXmlNode(wxXML_ELEMENT_NODE, "File"); f->AddAttribute("name", d->path); xparent->AddChild(f); }
             else
-            { auto* fo = new wxXmlNode(wxXML_ELEMENT_NODE, "Folder"); fo->AddAttribute("name", m_projPanel->GetItemText(c)); xparent->AddChild(fo); projSaveChildren(c, fo); }
+            { auto* fo = new wxXmlNode(wxXML_ELEMENT_NODE, "Folder"); fo->AddAttribute("name", t->GetItemText(c)); xparent->AddChild(fo); projSaveChildren(i, c, fo); }
         }
     }
 
@@ -4950,26 +5141,91 @@ private:
         return nullptr;   // no keyword list -> document-word completion only
     }
     const char* keywordsForActiveLang() { auto* p = activePage(); return p ? keywordsForExt(p->path.AfterLast('.').Lower()) : nullptr; }
-    static void collectWords(const std::string& doc, const std::string& prefix, std::set<std::string>& out)
+    // Styles whose text must NOT feed completion: comments and string literals. This is the exact
+    // inverse of the spell-check gate (checkVisibleSpelling), which keeps ONLY those styles - same two
+    // lexer worlds, same fallback rule. Empty result = the lexer publishes no such metadata, in which
+    // case the caller harvests everything, exactly as before.
+    // Cached across keystrokes: autoComplete runs on EVERY word character typed, and the Lexilla branch
+    // walks GetNamedStyles() calling TagsOfStyle() on each - far too much to redo per character. The set
+    // depends only on which lexer is active, so it is recomputed when that changes and not otherwise.
+    // A bitset, not a set<int>: a Scintilla style is a BYTE, so the whole domain is 256 flags (32 bytes,
+    // trivially copyable, O(1) test). The set<int> form cost a heap node per style plus a tree descent
+    // per candidate word - both on the per-keystroke path.
+    int              m_acProseLexer = -2;   // -2 = never computed (-1/0.. are real lexer ids)
+    wxString         m_acProseLang;
+    std::bitset<256> m_acProseStyles;
+    const std::bitset<256>& proseStylesForFilter()
+    {
+        static const std::bitset<256> kNone;
+        if (!m_stc) return kNone;
+        const int lexer = m_stc->GetLexer();
+        auto* p = activePage();
+        const wxString lang = p ? p->sciLang : wxString();
+        if (lexer == m_acProseLexer && lang == m_acProseLang) return m_acProseStyles;   // cache hit
+        m_acProseLexer = lexer; m_acProseLang = lang; m_acProseStyles.reset();
+        // A document with NO lexer set reports SCLEX_CONTAINER (0), not SCLEX_NULL (1) - SCI_GETLEXER
+        // returns whatever was last set and 0 is the unset value - so testing for wxSTC_LEX_NULL alone
+        // never fired, and plain text fell into the Scintillua branch below, where it had this build's
+        // comment/string style numbers subtracted from whatever stale style bytes the buffer carried.
+        // Gate on the page actually having a Scintillua language instead.
+        if (lexer == wxSTC_LEX_NULL || (lexer == wxSTC_LEX_CONTAINER && lang.empty()))
+            return m_acProseStyles;                     // plain text: nothing to exclude
+        auto mark = [this](int s) { if (s >= 0 && s < 256) m_acProseStyles.set((size_t)s); };
+        if (lexer == wxSTC_LEX_CONTAINER) {             // Scintillua: our own style numbers
+            mark(sciTagToStyle("comment"));
+            mark(sciTagToStyle("string"));
+        } else {                                        // Lexilla: query per-style semantic tags
+            const int n = (int)m_stc->GetNamedStyles();
+            for (int i = 0; i < n; ++i) {
+                const wxString tags = m_stc->TagsOfStyle(i);
+                if (tags.Contains("comment") || tags.Contains("string")) mark(i);
+            }
+        }
+        return m_acProseStyles;
+    }
+    // `doc` is the whole buffer as UTF-8, so a byte index into it IS a Scintilla position - which is what
+    // lets a candidate be rejected by the style at its own start. skip empty = harvest everything.
+    void collectWords(const std::string& doc, const std::string& prefix, std::set<std::string, std::less<>>& out,
+                      const std::bitset<256>& skipStyles)
     {
         auto isW = [](unsigned char c){ return std::isalnum(c) || c == '_'; }; const size_t pl = prefix.size();
+        const bool filtering = skipStyles.any();
         for (size_t i = 0; i < doc.size(); )
         {
             if (!isW((unsigned char)doc[i])) { ++i; continue; }
             size_t j = i; while (j < doc.size() && isW((unsigned char)doc[j])) ++j;
-            if (j - i > pl && doc.compare(i, pl, prefix) == 0) out.insert(doc.substr(i, j - i));
+            if (j - i > pl && doc.compare(i, pl, prefix) == 0)
+            {
+                // Dedupe BEFORE probing: identifiers repeat heavily, and a word we already have needs
+                // neither the Scintilla round-trip for its style nor a substr allocation to discard.
+                // (std::less<> makes the string_view lookup allocation-free.)
+                const std::string_view w(doc.data() + i, j - i);
+                if (out.find(w) == out.end())
+                {
+                    // Drop words living in comments/strings: prose, licence headers and URLs are the bulk
+                    // of what made the old list noisy, and none of it is a symbol worth completing.
+                    if (!filtering || !skipStyles.test((unsigned char)m_stc->GetStyleAt((int)i)))
+                        out.emplace(w);
+                }
+            }
             i = j;
         }
     }
-    void collectKeywords(const std::string& prefix, std::set<std::string>& out)
+    void collectKeywords(const std::string& prefix, std::set<std::string, std::less<>>& out)
     {
-        const char* kw = keywordsForActiveLang(); if (!kw) return;
-        const std::string s(kw); const size_t pl = prefix.size();
+        // The set the LEXER got (recorded in setLexerForFile), falling back to the extension table only
+        // for a page that has not been through it. Reading the extension table directly is what made
+        // Ctrl+Space silently keyword-less after a manual Language pick.
+        auto* p = activePage();
+        const char* kw = (p && p->lexKeywords) ? p->lexKeywords : keywordsForActiveLang();
+        if (!kw) return;
+        const std::string_view s(kw);
+        const size_t pl = prefix.size();
         for (size_t i = 0; i < s.size(); )
         {
             if (s[i] == ' ' || s[i] == '\n' || s[i] == '\t') { ++i; continue; }
             size_t j = i; while (j < s.size() && s[j] != ' ' && s[j] != '\n' && s[j] != '\t') ++j;
-            if (j - i > pl && s.compare(i, pl, prefix) == 0) out.insert(s.substr(i, j - i));
+            if (j - i > pl && s.compare(i, pl, prefix) == 0) out.emplace(s.substr(i, j - i));
             i = j;
         }
     }
@@ -4979,7 +5235,39 @@ private:
         const int caret = (int)sci(SCI_GETCURRENTPOS), start = (int)sci(SCI_WORDSTARTPOSITION, caret, 1), plen = caret - start;
         if (plen <= 0) { sci(SCI_AUTOCCANCEL); return; }
         const std::string prefix = rangeText(start, caret);
-        std::set<std::string> cand; collectWords(getDocUtf8(), prefix, cand);
+        // Scintilla styles LAZILY on paint, so styles must be up to date before GetStyleAt is read or the
+        // filter silently does nothing. The candidate scan covers the WHOLE document, so the whole
+        // document has to be styled - but this runs on every word character typed, so it is capped: past
+        // this size the filter is skipped and harvesting falls back to the old unfiltered behaviour, a
+        // quality trade rather than a correctness one. (largeFile pages have no styling at all.)
+        static const int kStyleFilterMaxBytes = 1 << 20;   // 1 MiB
+        const int docLen = (int)sci(SCI_GETLENGTH);
+        static const std::bitset<256> kNoSkip;
+        const std::bitset<256>* skipStyles = &kNoSkip;
+        if (auto* p = activePage(); (!p || !p->largeFile) && docLen <= kStyleFilterMaxBytes)
+        {
+            const int styled = m_stc->GetEndStyled();
+            if (m_stc->GetLexer() == wxSTC_LEX_CONTAINER)
+            {
+                // Scintillua (container lexing): do NOT force it. SCI_COLOURISE throws the start position
+                // away for a container lexer - it just calls ModifiedAt + NotifyStyleToNeeded (see
+                // ScintillaBase.cxx) - and our SCN_STYLENEEDED handler re-lexes the buffer from byte 0
+                // through Lua/LPeg and then Redraws the whole window. Doing that per keystroke is far
+                // worse than the filter is worth, and pointless besides: the next paint styles the buffer
+                // anyway. Use the filter only when the buffer already happens to be fully styled.
+                if (styled >= docLen) skipStyles = &proseStylesForFilter();
+            }
+            else
+            {
+                // Lexilla honours the range, so this really is incremental. It must start at GetEndStyled()
+                // and not at 0: every inserted character invalidates styling back to the caret, so the
+                // guard fires on essentially every keystroke, and starting at 0 would re-lex the whole
+                // document each time rather than just the unstyled tail.
+                if (styled < docLen) m_stc->Colourise(styled, docLen);
+                skipStyles = &proseStylesForFilter();
+            }
+        }
+        std::set<std::string, std::less<>> cand; collectWords(getDocUtf8(), prefix, cand, *skipStyles);
         if (withKeywords) collectKeywords(prefix, cand);
         cand.erase(prefix);
         if (cand.empty()) { sci(SCI_AUTOCCANCEL); return; }
@@ -7434,6 +7722,13 @@ private:
     {
         applyEditorTheme(m_dark);          // reset every style to the theme base (incl. line numbers)
         auto* page = activePage();
+        // Clear BEFORE any of the early exits below (large-file, Scintillua, no-lexer), so the field is
+        // re-established on every re-lex and only the kw() lambda repopulates it. Writing it solely from
+        // kw() left it stale whenever the new lexer has no keyword branch: opening a.cpp and then
+        // Save-As'ing to notes.txt kept the C++ keyword list on a now-plain-text page, and because
+        // collectKeywords PREFERS this field over the extension table, Ctrl+Space offered the whole of
+        // C++ in a text file. Cleared, such pages fall through to the extension-table default as before.
+        if (page) page->lexKeywords = nullptr;
         // Large-file mode: skip lexing/styling/folding entirely (both the Scintillua container path and
         // Lexilla) so a huge or long-line buffer never triggers the synchronous whole-buffer re-lex.
         // Picking a Language from the menu sets langForced, which overrides this and forces the lexer on.
@@ -7501,7 +7796,16 @@ private:
                 }
             }
             if (!themed) { if (lx == "python") stylePythonFallback(); else styleCppFallback(); }
-            auto kw = [&](const char* words) { sci(SCI_SETKEYWORDS, 0, reinterpret_cast<sptr_t>(words)); };
+            // Record what the lexer was ACTUALLY given, so completion offers the same keyword set the
+            // highlighter is using. collectKeywords used to re-derive its own list from the file
+            // extension, which silently diverged whenever the user picks a Language by hand - the
+            // extension no longer decides, but the old lookup still went by it. (Scintillua languages are
+            // NOT covered here: that branch returns well above this point, so those pages keep an empty
+            // lexKeywords and fall through to collectKeywords' extension-table default.)
+            auto kw = [&](const char* words) {
+                sci(SCI_SETKEYWORDS, 0, reinterpret_cast<sptr_t>(words));
+                if (page) page->lexKeywords = words;
+            };
             if (lx == "cpp") {   // shared C-family lexer: pick keywords by extension (auto) or picked name (forced)
                 const wxString v = (page && page->langForced) ? page->forcedName : ext;
                 if      (v=="js"||v=="jsx"||v=="ts"||v=="tsx"||v=="JavaScript"||v=="TypeScript") kw(JS_KEYWORDS);
@@ -12357,9 +12661,9 @@ private:
             case kCmdViewDocMap: toggleDocMap(); break;
             case kCmdViewFuncList: toggleFuncList(); break;
             case kCmdViewDoclist: toggleDocList(); break;
-            case kCmdViewProjectPanel1:
-            case kCmdViewProjectPanel2:
-            case kCmdViewProjectPanel3: toggleProjectPanel(); break;
+            case kCmdViewProjectPanel1: toggleProjectPanel(0); break;
+            case kCmdViewProjectPanel2: toggleProjectPanel(1); break;
+            case kCmdViewProjectPanel3: toggleProjectPanel(2); break;
             case kCmdEditClipboardHistoryPanel: toggleClipHistory(); break;
             case kCmdEditCharPanel: toggleCharPanel(); break;
             case kCmdViewFilebrowser: toggleFileBrowser(); break;
@@ -12814,8 +13118,9 @@ private:
     wxStyledTextCtrl* m_stc = nullptr;   // the cross-platform editor view; its native HWND on Windows == m_sci
     wxStyledTextCtrl* m_docMap = nullptr;   // Document Map (minimap): a second view sharing the active document
     wxTreeCtrl* m_funcList = nullptr;       // Function List: per-file symbol tree (regex-parsed)
-    wxTreeCtrl* m_projPanel = nullptr;      // Project Panel: workspace tree (named folders + file refs)
-    wxString    m_projWorkspace;            // the loaded/saved workspace .xml path ("" = unsaved)
+    // Project Panels 1/2/3: three independent workspaces (tree + its own .xml path), built lazily.
+    struct ProjectPanelState { wxTreeCtrl* tree = nullptr; wxString workspace; };
+    ProjectPanelState m_proj[kProjectPanels];
     wxTreeCtrl* m_fifPanel = nullptr;       // Find result: docked Find-in-Files results tree
     wxTimer*    m_flTimer  = nullptr;        // debounce re-parse of the Function List after edits
     wxTimer*    m_backupTimer = nullptr;     // periodic (30s) recovery-backup of buffers with unsaved edits
