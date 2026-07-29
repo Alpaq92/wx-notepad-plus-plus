@@ -199,7 +199,7 @@ static const int  SPELL_INDIC      = 13;   // red squiggle under misspelled word
 static const int  myID_SPELL_ADD          = 60240;
 static const int  myID_SPELL_IGNORE       = 60241;
 static const int  myID_SPELL_SUGGEST_BASE = 60250;   // + 0..8 (up to 9 suggestions)
-static const int  myID_SPELL_DICT_BASE    = 60130;   // + 0..31: dynamic Dictionary radio list (View ▸ Spell Check; runtime-built, not menu-data)
+static const int  myID_SPELL_DICT_BASE    = 60130;   // + 0..31: dynamic Dictionary radio list (Document ▸ Spell Check; runtime-built, not menu-data)
 enum { myID_TIMER = 60000, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER, myID_MONTIMER, myID_BACKUPTIMER };   // fixed ids, above the kCmd* range
 // UI language selection - shared by the top-level Localization menu and Preferences > General.
 // Endonyms are ALWAYS shown in their own language (never translated); index 0 is "System default".
@@ -1087,6 +1087,49 @@ static FLBodyStyle flBodyStyle(const std::string& lang)
     if (lang == "python" || lang == "yaml") return { true,  false };
     if (lang == "kotlin")                   return { false, true  };
     return { false, false };
+}
+
+// A path's extension, lower-cased, or empty when it has none. Always use this rather than
+// path.AfterLast('.'): AfterLast returns the WHOLE STRING when the character is absent, so an
+// extension-less path like /proj/Makefile yields "/proj/makefile" as its "extension" - which is never
+// empty, silently defeats every `ext.empty()` test, and cannot match any extension table.
+static wxString wxnExtOf(const wxString& path) { return wxFileName(path).GetExt().Lower(); }
+
+// Harvest completion candidates from a whole document: every word longer than `prefix` that starts with
+// it. `doc` is the buffer as UTF-8, so a byte index into it IS a Scintilla position - which is what lets
+// a candidate be rejected by the style at its own start. skipStyles empty = harvest everything.
+//
+// A free function, and templated on the style lookup rather than taking std::function, so it is testable
+// against plain strings with a fake styler (same reason flCollect below is free) at no cost on the real
+// path - autoComplete calls this on every word character typed, and the lambda inlines.
+template <class StyleAt>
+static void wxnCollectWords(const std::string& doc, const std::string& prefix,
+                            std::set<std::string, std::less<>>& out,
+                            const std::bitset<256>& skipStyles, StyleAt styleAt)
+{
+    auto isW = [](unsigned char c){ return std::isalnum(c) || c == '_'; };
+    const size_t pl = prefix.size();
+    const bool filtering = skipStyles.any();
+    for (size_t i = 0; i < doc.size(); )
+    {
+        if (!isW((unsigned char)doc[i])) { ++i; continue; }
+        size_t j = i; while (j < doc.size() && isW((unsigned char)doc[j])) ++j;
+        if (j - i > pl && doc.compare(i, pl, prefix) == 0)
+        {
+            // Dedupe BEFORE probing: identifiers repeat heavily, and a word already collected needs
+            // neither the Scintilla round-trip for its style nor a substr allocation to discard.
+            // (std::less<> makes the string_view lookup allocation-free.)
+            const std::string_view w(doc.data() + i, j - i);
+            if (out.find(w) == out.end())
+            {
+                // Drop words living in comments/strings: prose, licence headers and URLs are the bulk
+                // of what made the old list noisy, and none of it is a symbol worth completing.
+                const int st = filtering ? styleAt(i) : 0;
+                if (!filtering || st < 0 || st > 255 || !skipStyles.test((size_t)st)) out.emplace(w);
+            }
+        }
+        i = j;
+    }
 }
 
 // One extracted symbol: byte positions in the scanned UTF-8 text. For containers (kind 1), rangeEnd
@@ -2822,7 +2865,7 @@ public:
         buildEditor();
         buildMenuBar();
         rebuildUserLangMenu();   // populate the Language menu's per-UDL section from what loadAllUdls() found
-        refreshSpellMenu();      // populate View ▸ Spell Check's dynamic Dictionary list + sync the toggle states
+        refreshSpellMenu();      // populate Document ▸ Spell Check's dynamic Dictionary list + sync the toggle states
 #ifdef __WXMAC__
         // Host panel for the docked (non-native) macOS toolbar (see buildToolBar). A direct frame child so
         // it can be a wxAui pane; the toolbar is parented to THIS (not the frame) so wxToolBar::Create leaves
@@ -4031,7 +4074,7 @@ private:
         // absent, so for an extension-less path like /proj/Makefile it handed back the entire path as the
         // "extension" - never empty, so the name-based branch at the bottom was unreachable dead code.
         wxString ext, base;
-        if (auto* p = activePage()) { const wxFileName fn(p->path); ext = fn.GetExt().Lower(); base = fn.GetFullName().Lower(); }
+        if (auto* p = activePage()) { ext = wxnExtOf(p->path); base = wxFileName(p->path).GetFullName().Lower(); }
         if (auto u = g_flUserExtToLang.find(std::string(ext.utf8_str())); u != g_flUserExtToLang.end()) return u->second;   // user-mapped extension
         if (ext=="cpp"||ext=="cc"||ext=="cxx"||ext=="c"||ext=="h"||ext=="hpp"||ext=="hxx"||ext=="ino") return "cpp";
         if (ext=="py"||ext=="pyw") return "python";
@@ -5140,37 +5183,43 @@ private:
         for (const auto& m : TABLE) if (ext == m.ext) return m.words;
         return nullptr;   // no keyword list -> document-word completion only
     }
-    const char* keywordsForActiveLang() { auto* p = activePage(); return p ? keywordsForExt(p->path.AfterLast('.').Lower()) : nullptr; }
-    // Styles whose text must NOT feed completion: comments and string literals. This is the exact
-    // inverse of the spell-check gate (checkVisibleSpelling), which keeps ONLY those styles - same two
-    // lexer worlds, same fallback rule. Empty result = the lexer publishes no such metadata, in which
-    // case the caller harvests everything, exactly as before.
-    // Cached across keystrokes: autoComplete runs on EVERY word character typed, and the Lexilla branch
-    // walks GetNamedStyles() calling TagsOfStyle() on each - far too much to redo per character. The set
-    // depends only on which lexer is active, so it is recomputed when that changes and not otherwise.
-    // A bitset, not a set<int>: a Scintilla style is a BYTE, so the whole domain is 256 flags (32 bytes,
-    // trivially copyable, O(1) test). The set<int> form cost a heap node per style plus a tree descent
-    // per candidate word - both on the per-keystroke path.
-    int              m_acProseLexer = -2;   // -2 = never computed (-1/0.. are real lexer ids)
-    wxString         m_acProseLang;
-    std::bitset<256> m_acProseStyles;
-    const std::bitset<256>& proseStylesForFilter()
+    const char* keywordsForActiveLang() { auto* p = activePage(); return p ? keywordsForExt(wxnExtOf(p->path)) : nullptr; }
+    // Which styles carry PROSE - comments and string literals - for the active document. Two consumers
+    // want exactly this set from opposite directions: completion drops these words, spell-check checks
+    // ONLY these words. It used to be written out twice, ~3500 lines apart, and the copies had already
+    // drifted (see the SCLEX_CONTAINER note below, which only the completion copy ever got).
+    //
+    // Empty result means "this document exposes no comment/string metadata" - plain text, or a lexer
+    // with no tags. Both callers already treat empty as "no gating", which is the right default for
+    // each: harvest every word / check every word.
+    //
+    // Cached, because autoComplete runs on EVERY word character typed and the Lexilla branch walks
+    // GetNamedStyles() calling TagsOfStyle() on each. The set depends only on the active lexer and
+    // Scintillua language, so it is recomputed when those change and not otherwise.
+    //
+    // A bitset, not a set<int>: a Scintilla style is a BYTE, so the domain is 256 flags (32 bytes,
+    // trivially copyable, O(1) test) instead of a heap node per style and a tree descent per lookup.
+    int              m_proseLexer = -2;   // -2 = never computed (-1/0.. are real lexer ids)
+    wxString         m_proseLang;
+    std::bitset<256> m_proseStyles;
+    static const std::bitset<256>& proseStylesEmpty() { static const std::bitset<256> kNone; return kNone; }
+    const std::bitset<256>& proseStyles()
     {
-        static const std::bitset<256> kNone;
+        const std::bitset<256>& kNone = proseStylesEmpty();
         if (!m_stc) return kNone;
         const int lexer = m_stc->GetLexer();
         auto* p = activePage();
         const wxString lang = p ? p->sciLang : wxString();
-        if (lexer == m_acProseLexer && lang == m_acProseLang) return m_acProseStyles;   // cache hit
-        m_acProseLexer = lexer; m_acProseLang = lang; m_acProseStyles.reset();
+        if (lexer == m_proseLexer && lang == m_proseLang) return m_proseStyles;   // cache hit
+        m_proseLexer = lexer; m_proseLang = lang; m_proseStyles.reset();
         // A document with NO lexer set reports SCLEX_CONTAINER (0), not SCLEX_NULL (1) - SCI_GETLEXER
         // returns whatever was last set and 0 is the unset value - so testing for wxSTC_LEX_NULL alone
-        // never fired, and plain text fell into the Scintillua branch below, where it had this build's
-        // comment/string style numbers subtracted from whatever stale style bytes the buffer carried.
-        // Gate on the page actually having a Scintillua language instead.
+        // never fires, and plain text falls into the Scintillua branch below, where it would have this
+        // build's comment/string style numbers matched against whatever stale style bytes the buffer
+        // carried. Gate on the page actually having a Scintillua language instead.
         if (lexer == wxSTC_LEX_NULL || (lexer == wxSTC_LEX_CONTAINER && lang.empty()))
-            return m_acProseStyles;                     // plain text: nothing to exclude
-        auto mark = [this](int s) { if (s >= 0 && s < 256) m_acProseStyles.set((size_t)s); };
+            return m_proseStyles;                       // plain text: no prose/code distinction to make
+        auto mark = [this](int s) { if (s >= 0 && s < 256) m_proseStyles.set((size_t)s); };
         if (lexer == wxSTC_LEX_CONTAINER) {             // Scintillua: our own style numbers
             mark(sciTagToStyle("comment"));
             mark(sciTagToStyle("string"));
@@ -5181,36 +5230,30 @@ private:
                 if (tags.Contains("comment") || tags.Contains("string")) mark(i);
             }
         }
-        return m_acProseStyles;
+        return m_proseStyles;
     }
+    // Bring styling up to date over [0, want) so GetStyleAt is meaningful there, and report whether that
+    // succeeded cheaply enough to rely on. Scintilla styles LAZILY on paint, so without this a style
+    // read returns stale or default bytes and any style-based gate silently does nothing.
+    //
+    // Returns false for a container-lexed (Scintillua) buffer that is not already styled: SCI_COLOURISE
+    // discards the start position there - it calls ModifiedAt + NotifyStyleToNeeded (ScintillaBase.cxx) -
+    // and our SCN_STYLENEEDED handler re-lexes from byte 0 through Lua/LPeg and Redraws the whole window.
+    // Forcing that from an interactive path costs far more than any style gate is worth, and the next
+    // paint does it anyway. Lexilla honours the range, so there it really is an incremental step.
+    bool ensureStyledTo(int want)
+    {
+        if (!m_stc) return false;
+        const int styled = m_stc->GetEndStyled();
+        if (styled >= want) return true;                       // already styled far enough
+        if (m_stc->GetLexer() == wxSTC_LEX_CONTAINER) return false;
+        m_stc->Colourise(styled, want);                        // from GetEndStyled(), NOT 0: an edit
+        return true;                                           // invalidates back to the caret, so
+    }                                                          // starting at 0 re-lexes the whole doc
     // `doc` is the whole buffer as UTF-8, so a byte index into it IS a Scintilla position - which is what
     // lets a candidate be rejected by the style at its own start. skip empty = harvest everything.
-    void collectWords(const std::string& doc, const std::string& prefix, std::set<std::string, std::less<>>& out,
-                      const std::bitset<256>& skipStyles)
-    {
-        auto isW = [](unsigned char c){ return std::isalnum(c) || c == '_'; }; const size_t pl = prefix.size();
-        const bool filtering = skipStyles.any();
-        for (size_t i = 0; i < doc.size(); )
-        {
-            if (!isW((unsigned char)doc[i])) { ++i; continue; }
-            size_t j = i; while (j < doc.size() && isW((unsigned char)doc[j])) ++j;
-            if (j - i > pl && doc.compare(i, pl, prefix) == 0)
-            {
-                // Dedupe BEFORE probing: identifiers repeat heavily, and a word we already have needs
-                // neither the Scintilla round-trip for its style nor a substr allocation to discard.
-                // (std::less<> makes the string_view lookup allocation-free.)
-                const std::string_view w(doc.data() + i, j - i);
-                if (out.find(w) == out.end())
-                {
-                    // Drop words living in comments/strings: prose, licence headers and URLs are the bulk
-                    // of what made the old list noisy, and none of it is a symbol worth completing.
-                    if (!filtering || !skipStyles.test((unsigned char)m_stc->GetStyleAt((int)i)))
-                        out.emplace(w);
-                }
-            }
-            i = j;
-        }
-    }
+    // (see wxnCollectWords, above the frame class - kept a free function so it is testable without a
+    // live editor, the same reason flCollect is one)
     void collectKeywords(const std::string& prefix, std::set<std::string, std::less<>>& out)
     {
         // The set the LEXER got (recorded in setLexerForFile), falling back to the extension table only
@@ -5235,9 +5278,8 @@ private:
         const int caret = (int)sci(SCI_GETCURRENTPOS), start = (int)sci(SCI_WORDSTARTPOSITION, caret, 1), plen = caret - start;
         if (plen <= 0) { sci(SCI_AUTOCCANCEL); return; }
         const std::string prefix = rangeText(start, caret);
-        // Scintilla styles LAZILY on paint, so styles must be up to date before GetStyleAt is read or the
-        // filter silently does nothing. The candidate scan covers the WHOLE document, so the whole
-        // document has to be styled - but this runs on every word character typed, so it is capped: past
+        // The candidate scan covers the WHOLE document, so the whole document has to be styled for the
+        // filter to mean anything - but this runs on every word character typed, so it is capped: past
         // this size the filter is skipped and harvesting falls back to the old unfiltered behaviour, a
         // quality trade rather than a correctness one. (largeFile pages have no styling at all.)
         static const int kStyleFilterMaxBytes = 1 << 20;   // 1 MiB
@@ -5245,29 +5287,10 @@ private:
         static const std::bitset<256> kNoSkip;
         const std::bitset<256>* skipStyles = &kNoSkip;
         if (auto* p = activePage(); (!p || !p->largeFile) && docLen <= kStyleFilterMaxBytes)
-        {
-            const int styled = m_stc->GetEndStyled();
-            if (m_stc->GetLexer() == wxSTC_LEX_CONTAINER)
-            {
-                // Scintillua (container lexing): do NOT force it. SCI_COLOURISE throws the start position
-                // away for a container lexer - it just calls ModifiedAt + NotifyStyleToNeeded (see
-                // ScintillaBase.cxx) - and our SCN_STYLENEEDED handler re-lexes the buffer from byte 0
-                // through Lua/LPeg and then Redraws the whole window. Doing that per keystroke is far
-                // worse than the filter is worth, and pointless besides: the next paint styles the buffer
-                // anyway. Use the filter only when the buffer already happens to be fully styled.
-                if (styled >= docLen) skipStyles = &proseStylesForFilter();
-            }
-            else
-            {
-                // Lexilla honours the range, so this really is incremental. It must start at GetEndStyled()
-                // and not at 0: every inserted character invalidates styling back to the caret, so the
-                // guard fires on essentially every keystroke, and starting at 0 would re-lex the whole
-                // document each time rather than just the unstyled tail.
-                if (styled < docLen) m_stc->Colourise(styled, docLen);
-                skipStyles = &proseStylesForFilter();
-            }
-        }
-        std::set<std::string, std::less<>> cand; collectWords(getDocUtf8(), prefix, cand, *skipStyles);
+            if (ensureStyledTo(docLen)) skipStyles = &proseStyles();
+        std::set<std::string, std::less<>> cand;
+        wxnCollectWords(getDocUtf8(), prefix, cand, *skipStyles,
+                        [this](size_t pos) { return (int)m_stc->GetStyleAt((int)pos); });
         if (withKeywords) collectKeywords(prefix, cand);
         cand.erase(prefix);
         if (cand.empty()) { sci(SCI_AUTOCCANCEL); return; }
@@ -7744,7 +7767,7 @@ private:
         // then container-lex it via the embedded engine.
         if (page && page->sciLang.empty() && !page->langForced)
         {
-            const wxString ext = path.AfterLast('.').Lower();
+            const wxString ext = wxnExtOf(path);
             for (const auto& l : m_sciLangs)
             {
                 bool matched = false;
@@ -7763,7 +7786,7 @@ private:
         // A manual Language pick forces its lexer directly; otherwise auto-detect from the file extension.
         wxString lexer, themeKey, disp, ext;
         if (page && page->langForced) { lexer = page->forcedLexer; themeKey = page->forcedLexer; disp = page->forcedName; }
-        else { ext = path.AfterLast('.').Lower(); LexMap lm = lexerForExt(ext);
+        else { ext = wxnExtOf(path); LexMap lm = lexerForExt(ext);
                if (!lm.lexer && m_stc && m_stc->GetLength() > 0)
                {   // the extension told us nothing - sniff the buffer head (shebang / prolog / JSON shape)
                    const wxString sniffed = extFromContent(m_stc->GetTextRange(0, wxMin((int)m_stc->GetLength(), 512)));
@@ -8703,8 +8726,8 @@ private:
     bool m_spellOn = false, m_spellBound = false;
     int  m_spellLastFirst = -1, m_spellLastLen = -1;
     int  m_spellBackend = 1;   // Preferences > Editing "Spell-check engine" (Win/mac): 0=Native 1=Native+Hunspell (default) 2=Hunspell; wxn::spell::Backend
-    std::string m_spellDict = "en_US";   // active dictionary basename (View > Spell Check > Dictionary); dash-form is passed to makeEngine
-    bool m_spellCommentsOnly = true;     // in syntax-highlighted files, check only comments & strings (View > Spell Check toggle)
+    std::string m_spellDict = "en_US";   // active dictionary basename (Document > Spell Check > Dictionary); dash-form is passed to makeEngine
+    bool m_spellCommentsOnly = true;     // in syntax-highlighted files, check only comments & strings (Document > Spell Check toggle)
     // "en_US" -> "en-US": OS engines want a BCP-47 tag; makeHunspellEngine converts it back to the on-disk basename.
     std::string spellLangArg() const { std::string s = m_spellDict; for (char& c : s) if (c == '_') c = '-'; return s; }
 
@@ -8745,33 +8768,24 @@ private:
         m_spellLastLen   = (int)m_stc->GetTextLength();
         m_stc->SetIndicatorCurrent(SPELL_INDIC);
         m_stc->IndicatorClearRange(startPos, endPos - startPos);
-        // "Check comments & strings only" (View ▸ Spell Check): in a syntax-highlighted document, skip code
+        // "Check comments & strings only" (Document ▸ Spell Check): in a syntax-highlighted document, skip code
         // identifiers/keywords and check only COMMENTS and STRINGS. Plain-text docs (no lexer) are checked
-        // in full. Works across BOTH lexer kinds: the Scintillua CONTAINER lexer (styles set manually, so we
-        // match sciTagToStyle's comment/string numbers) and Lexilla lexers (which report each style's
-        // semantic tags via TagsOfStyle - e.g. "comment", "literal string"). Scintilla styles LAZILY on
-        // paint, so force-lex the range first or GetStyleAt could read stale/default styles.
-        const int lexer = m_stc->GetLexer();
-        bool gate = m_spellCommentsOnly && (lexer != wxSTC_LEX_NULL);
-        std::set<int> proseStyles;
+        // in full. Shares proseStyles()/ensureStyledTo() with completion, which wants the same set from the
+        // other direction (it DROPS these words) - this used to be a hand-copied second implementation, and
+        // the copies had drifted: this one tested `lexer != wxSTC_LEX_NULL`, which never fires because an
+        // unlexed document reports SCLEX_CONTAINER (0), and it re-lexed from 0 rather than GetEndStyled().
+        // An empty set means the document exposes no comment/string metadata, so check everything.
+        const std::bitset<256>* prose = &proseStylesEmpty();
+        bool gate = m_spellCommentsOnly;
         if (gate) {
-            if (m_stc->GetEndStyled() < endPos) m_stc->Colourise(0, endPos);
-            if (lexer == wxSTC_LEX_CONTAINER) {                          // Scintillua: our own style numbers
-                proseStyles.insert(sciTagToStyle("comment"));            // 3
-                proseStyles.insert(sciTagToStyle("string"));            // 2 (also character / regex)
-            } else {                                                     // Lexilla: query per-style tags
-                const int n = (int)m_stc->GetNamedStyles();
-                for (int i = 0; i < n; ++i) {
-                    const wxString tags = m_stc->TagsOfStyle(i);
-                    if (tags.Contains("comment") || tags.Contains("string")) proseStyles.insert(i);
-                }
-            }
-            if (proseStyles.empty()) gate = false;   // lexer exposes no comment/string metadata -> check all
+            if (!ensureStyledTo(endPos)) gate = false;   // styles not trustworthy here - check everything
+            else { prose = &proseStyles(); gate = prose->any(); }
         }
         const std::string text = std::string(m_stc->GetTextRange(startPos, endPos).utf8_str());
         for (const wxn::spell::WordSpan& w : wxn::spell::tokenizeForSpell(text)) {
             const int wpos = startPos + w.start;
-            if (gate && proseStyles.find((int)m_stc->GetStyleAt(wpos)) == proseStyles.end()) continue;   // skip code
+            if (gate) { const int st = (int)m_stc->GetStyleAt(wpos);
+                        if (st < 0 || st > 255 || !prose->test((size_t)st)) continue; }   // skip code
             const std::string word = text.substr(w.start, w.len);
             if (std::find(m_spellIgnore.begin(), m_spellIgnore.end(), word) != m_spellIgnore.end()) continue;
             if (!m_spell->check(word)) m_stc->IndicatorFillRange(wpos, w.len);
@@ -8800,7 +8814,7 @@ private:
         }
     }
 
-    // ---- View ▸ Spell Check submenu: dynamic Dictionary list + the two toggle states -------------------
+    // ---- Document ▸ Spell Check submenu: dynamic Dictionary list + the two toggle states -------------------
     std::vector<std::string> m_spellDicts;   // installed dictionary basenames, index-aligned with the radio ids
 
     wxString spellDictLabel(const std::string& base) const {
@@ -10977,7 +10991,7 @@ private:
 #endif
         sps->Add(dbrow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
         auto* spHint = new wxStaticText(sp, wxID_ANY,
-            _("Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nView > Spell Check > Dictionary."));
+            _("Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nDocument > Spell Check > Dictionary."));
         spHint->SetForegroundColour(m_dark ? wxColour(150, 150, 150) : wxColour(110, 110, 110));
         sps->Add(spHint, 0, wxALL, 10);
         addDictBtn->Bind(wxEVT_BUTTON, [this, &dlg, fillDicts](wxCommandEvent&){ if (importSpellDictionary(&dlg))   { fillDicts(); refreshSpellMenu(); } });
@@ -12500,7 +12514,7 @@ private:
         { openHereToolAt(cmd - myID_OPENFOLDER_TOOL_BASE); return; }   // a dynamically-detected File > Open Containing Folder entry
         if (cmd >= myID_SPELL_SUGGEST_BASE && cmd < myID_SPELL_SUGGEST_BASE + 9)   // spell right-click: apply a suggestion
         { applySpellSuggestion(cmd - myID_SPELL_SUGGEST_BASE); return; }
-        if (cmd >= myID_SPELL_DICT_BASE && cmd < myID_SPELL_DICT_BASE + 32)         // View ▸ Spell Check ▸ Dictionary radio
+        if (cmd >= myID_SPELL_DICT_BASE && cmd < myID_SPELL_DICT_BASE + 32)         // Document ▸ Spell Check ▸ Dictionary radio
         { selectSpellDict(cmd - myID_SPELL_DICT_BASE); return; }
         // Win32 WM_COMMAND carries only a 16-bit id and wx sign-extends it, so command ids
         // above 32767 (all of the kCmd* range) arrive negative. Read it as unsigned 16-bit
@@ -12633,9 +12647,9 @@ private:
             case myID_CMP_CLEAR: clearCompare(); break;            // View > Compare > Clear
             case myID_CMP_NEXT:  compareGotoDiff(true); break;     // View > Compare > Next Difference
             case myID_CMP_PREV:  compareGotoDiff(false); break;    // View > Compare > Previous Difference
-            case myID_SPELLCHECK: toggleSpellCheck(); break;       // View > Spell Check > Enable (toggle)
-            case myID_SPELL_COMMENTSONLY: toggleSpellCommentsOnly(); break;   // View > Spell Check > check only comments/strings
-            case myID_SPELL_MANAGE: onPreferences(true); break;    // View > Spell Check > Manage dictionaries... (opens the Spell Check prefs page)
+            case myID_SPELLCHECK: toggleSpellCheck(); break;       // Document > Spell Check > Enable (toggle)
+            case myID_SPELL_COMMENTSONLY: toggleSpellCommentsOnly(); break;   // Document > Spell Check > check only comments/strings
+            case myID_SPELL_MANAGE: onPreferences(true); break;    // Document > Spell Check > Manage dictionaries... (opens the Spell Check prefs page)
             case myID_SPELL_ADD:    spellAddWord(); break;         // spell right-click: add to dictionary
             case myID_SPELL_IGNORE: spellIgnoreWord(); break;      // spell right-click: ignore this session
             case myID_CAP_NEW: doNew(); break;                      // "+" caption button
