@@ -458,6 +458,50 @@ else()
     add_dependencies(bridge_selftest npp_example_plugin)
 endif()
 
+# ---- funclist_selftest: the Function List scanner + the completion word harvester ------------------
+# Compiles the same sources as wxnote (it textually includes src/main.cpp with the app-entry macro
+# neutralized) but never creates a frame or calls wxEntry - it drives the FREE functions (flCollect,
+# flRules/flCommentRe, wxnCollectWords) against plain strings. That is why those are free functions, and
+# why this registers as a "pure" ctest: no display needed, runs anywhere a binary runs.
+#   cmake --build build --target funclist_selftest && build/bin/funclist_selftest
+add_executable(funclist_selftest tests/funclist_selftest.cpp src/scintillua_engine.cpp src/term_backend.cpp src/term_view.cpp)
+set_target_properties(funclist_selftest PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_compile_definitions(funclist_selftest PRIVATE WXN_VERSION="${PROJECT_VERSION}")
+if(APPLE)
+    target_sources(funclist_selftest PRIVATE src/macos_native.mm)
+    target_link_libraries(funclist_selftest PRIVATE "-framework AppKit")
+endif()
+if(UNIX AND NOT APPLE)
+    target_sources(funclist_selftest PRIVATE src/gtk_native.cpp)
+    target_include_directories(funclist_selftest PRIVATE ${GTK3_INCLUDE_DIRS})
+    target_link_directories(funclist_selftest PRIVATE ${GTK3_LIBRARY_DIRS})
+    target_link_libraries(funclist_selftest PRIVATE ${GTK3_LIBRARIES})
+    target_link_libraries(funclist_selftest PRIVATE util)
+endif()
+target_include_directories(funclist_selftest PRIVATE
+    "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"
+    "${CMAKE_SOURCE_DIR}/third_party/lexilla/include"
+    "${CMAKE_SOURCE_DIR}/include/nib"
+    "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(funclist_selftest PRIVATE
+    wx::core wx::aui wx::base wx::xml wx::stc wx::net
+    lexilla lua_lpeg
+    vterm
+    hunspell)
+if(WIN32 OR (UNIX AND NOT APPLE))
+    target_link_libraries(funclist_selftest PRIVATE wxbf)
+    target_compile_definitions(funclist_selftest PRIVATE WXN_HAS_BORDERLESS=1)
+endif()
+if(WIN32)
+    target_link_libraries(funclist_selftest PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme winhttp)
+endif()
+if(MSVC)
+    target_compile_options(funclist_selftest PRIVATE /utf-8 /bigobj)
+endif()
+
 # ---- deploy runtime resources (toolbar icons, themes, default styler) next to the exe --------------
 add_custom_command(TARGET wxnote POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -539,10 +583,10 @@ enable_testing()
 
 add_custom_target(selftests DEPENDS
     keymap_selftest diff_myers_test hash_test charset_selftest hunspell_selftest
-    bridge_selftest terminal_selftest)
+    funclist_selftest bridge_selftest terminal_selftest)
 
 # "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed.
-foreach(t diff_myers_test hash_test hunspell_selftest)
+foreach(t diff_myers_test hash_test hunspell_selftest funclist_selftest)
     add_test(NAME ${t} COMMAND ${t})
     set_tests_properties(${t} PROPERTIES LABELS pure)
 endforeach()

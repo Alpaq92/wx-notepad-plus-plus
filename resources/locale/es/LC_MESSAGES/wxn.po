@@ -3039,7 +3039,7 @@ msgstr "Añadir desde archivo..."
 msgid "Download..."
 msgstr "Descargar..."
 
-msgid "Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nView > Spell Check > Dictionary."
+msgid "Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nDocument > Spell Check > Dictionary."
 msgstr "Los diccionarios se guardan en su carpeta de datos. Las descargas provienen del proyecto\nwooorm/dictionaries y conservan sus propias licencias (mostradas antes de descargar). Elija el activo en\nVer > Corrección ortográfica > Diccionario."
 
 msgid "Select a dictionary affix file"

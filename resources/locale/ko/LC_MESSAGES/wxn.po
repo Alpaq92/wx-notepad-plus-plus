@@ -3039,7 +3039,7 @@ msgstr "파일에서 추가..."
 msgid "Download..."
 msgstr "다운로드..."
 
-msgid "Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nView > Spell Check > Dictionary."
+msgid "Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nDocument > Spell Check > Dictionary."
 msgstr "사전은 사용자 데이터 폴더에 저장됩니다. 다운로드는 wooorm/dictionaries\n프로젝트에서 가져오며 자체 라이선스를 유지합니다(다운로드 전에 표시). 활성 사전은\n보기 > 맞춤법 검사 > 사전 에서 선택합니다."
 
 msgid "Select a dictionary affix file"

@@ -3041,7 +3041,7 @@ msgstr ""
 msgid "Download..."
 msgstr ""
 
-msgid "Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nView > Spell Check > Dictionary."
+msgid "Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nDocument > Spell Check > Dictionary."
 msgstr ""
 
 msgid "Select a dictionary affix file"
