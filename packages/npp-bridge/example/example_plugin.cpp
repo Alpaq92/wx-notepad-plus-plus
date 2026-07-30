@@ -595,6 +595,11 @@ NPP_EXPORT void beNotified(SCNotification* scn)
         // Phase 4: NPPN_GLOBALMODIFIED carries the real Scintilla modificationType - log it so the
         // selftest can assert the opted-in flags (SC_PERFORMED_UNDO / SC_MOD_BEFOREDELETE) came through.
         case NPPN_GLOBALMODIFIED: probeLogLine("{\"k\":\"gm\",\"mt\":%u}", static_cast<unsigned>(scn->modificationType)); break;
+        // Phase 7: the raw-input notifications are SCN_*, and each reads a DIFFERENT payload member of
+        // the same struct - so the generic {"k":"n"} line above (code + idFrom only) cannot tell a
+        // correctly-filled one from a zeroed one. Log the two members the selftest pins.
+        case SCN_CHARADDED:   probeLogLine("{\"k\":\"ca\",\"ch\":%d}", scn->ch); break;
+        case SCN_MARGINCLICK: probeLogLine("{\"k\":\"mc\",\"m\":%d,\"mod\":%d}", scn->margin, scn->modifiers); break;
         default:                  break;
     }
 }

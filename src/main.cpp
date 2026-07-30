@@ -2274,6 +2274,15 @@ static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibS
 static const NibEventsApi   g_nibEventsApiV2 = { 2, sizeof(NibEventsApi),   nibSubscribeV2, nullptr };            // v2: id-carrying SAVING/SAVED/BEFORE_OPEN
 static const NibEventsApi   g_nibEventsApiV3 = { 3, sizeof(NibEventsApi),   nibSubscribeV2, nibSetModifiedMask }; // v3: + modified-mask, language/style/shortcut/shutdown kinds
 static const NibEventsApi   g_nibEventsApiV4 = { 4, sizeof(NibEventsApi),   nibSubscribeV2, nibSetModifiedMask }; // v4: + long-tail file lifecycle (rename/delete/order/readonly/before-load) + cmdline plugin message
+static const NibEventsApi   g_nibEventsApiV5 = { 5, sizeof(NibEventsApi),   nibSubscribeV2, nibSetModifiedMask }; // v5: + raw editor input (char-added / margin-click / dwell / hotspot)
+// Adding an event KIND is free; adding a union member is not, if it grows NibEvent. A plugin built
+// against an older nib.h sized its own copies from the header it saw, so a bigger struct is how an
+// "additive" change turns into an overrun. Every v5 member (key/margin/mouse/hotspot) is smaller than
+// the v3 `modified` payload, which is still the largest - this pins that, and fires on the day it stops
+// being true rather than at a plugin's memcpy.
+namespace { struct NibEventWidestPayload { int64_t a, b, c; uint32_t d; }; }   // == the v3 `modified` member
+static_assert(sizeof(NibEvent) == sizeof(NibEventKind) + sizeof(uint32_t) + sizeof(NibEventWidestPayload),
+              "NibEvent grew: a new union member is wider than the v3 `modified` payload - that is an ABI break, not an additive change");
 static const NibPanelsApi   g_nibPanelsApi   = { 1, sizeof(NibPanelsApi),   nibPanelRegister, nibPanelSetText, nibPanelAppend, nibPanelShow };
 static const NibDocumentsApi g_nibDocumentsApi = { 5, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen, nibDocSave, nibDocActiveId, nibDocPathFromId, nibDocActiveView, nibDocPathAt,
     nibDocViewCount, nibDocIdAt, nibDocPosOf, nibDocIndexOfActive, nibDocActivateAt, nibDocSetLangById,
@@ -2293,6 +2302,7 @@ static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
         if (minv == 2) return &g_nibEventsApiV2;
         if (minv == 3) return &g_nibEventsApiV3;   // + set_modified_mask + v3 event kinds
         if (minv == 4) return &g_nibEventsApiV4;   // + v4 long-tail file-lifecycle + cmdline plugin message kinds
+        if (minv == 5) return &g_nibEventsApiV5;   // + v5 raw editor input (char-added / margin-click / dwell / hotspot)
         return nullptr;
     }
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PANELS)   == 0) return &g_nibPanelsApi;
@@ -3825,6 +3835,13 @@ private:
         v.stc->Bind(wxEVT_STC_MODIFIED,         &WxnShellFrameT::onStcModified,    this);
         v.stc->Bind(wxEVT_STC_MACRORECORD,      &WxnShellFrameT::onMacroRecord,    this);   // capture commands while recording a macro
         v.stc->Bind(wxEVT_STC_STYLENEEDED,      &WxnShellFrameT::onStcStyleNeeded, this);   // container-lexed Scintillua-language buffers only
+        // v5 nib.events raw input: the host has no behaviour of its own on dwell or hotspot, so these
+        // exist purely to relay them to plugins (see onStcDwell / onStcHotspot).
+        v.stc->Bind(wxEVT_STC_DWELLSTART,   [this](wxStyledTextEvent& e){ onStcDwell  (e, NIB_EV_DWELL_START); });
+        v.stc->Bind(wxEVT_STC_DWELLEND,     [this](wxStyledTextEvent& e){ onStcDwell  (e, NIB_EV_DWELL_END); });
+        v.stc->Bind(wxEVT_STC_HOTSPOT_CLICK,        [this](wxStyledTextEvent& e){ onStcHotspot(e, NIB_EV_HOTSPOT_CLICK); });
+        v.stc->Bind(wxEVT_STC_HOTSPOT_DCLICK,       [this](wxStyledTextEvent& e){ onStcHotspot(e, NIB_EV_HOTSPOT_DOUBLE_CLICK); });
+        v.stc->Bind(wxEVT_STC_HOTSPOT_RELEASE_CLICK,[this](wxStyledTextEvent& e){ onStcHotspot(e, NIB_EV_HOTSPOT_RELEASE_CLICK); });
         // v1 nib.events semantics only: savepoint == "saved" (which also fires on undo/redo landing back
         // on the saved state, and during Save All reports no id at all). v2 subscribers instead get the
         // real, id-carrying NIB_EV_DOCUMENT_SAVED from writeFile/writePageToDisk - one per disk write.
@@ -3866,6 +3883,11 @@ private:
                 if (caret - (int)sci(SCI_WORDSTARTPOSITION, caret, 1) >= m_autoCompFrom) autoComplete(true);
             }
         }
+        // v5 NIB_EV_CHAR_ADDED, fired LAST - after our own auto-indent / auto-pair / autocompletion have
+        // run, so a plugin (a tag closer, a bracket helper) sees the buffer in its settled state rather
+        // than racing our insertion. Notepad++ notifies its plugins at the same point, at the end of its
+        // own notify(), so plugins ported through npp-bridge get the ordering they were written against.
+        { NibEvent ev{}; ev.kind = NIB_EV_CHAR_ADDED; ev.struct_size = sizeof(NibEvent); ev.as.key.ch = ch; nibFireEvent(ev); }
         e.Skip();
     }
     void onStcUpdateUI(wxStyledTextEvent& e)
@@ -3903,6 +3925,36 @@ private:
             if (sci(SCI_MARKERGET, line) & (1 << MARK_BOOKMARK)) sci(SCI_MARKERDELETE, line, MARK_BOOKMARK);
             else                                                 sci(SCI_MARKERADD, line, MARK_BOOKMARK);
         }
+        // v5 NIB_EV_MARGIN_CLICK, fired after our own bookmark toggle - see the CHAR_ADDED note on ordering.
+        // Every margin is reported, ours included: a plugin owning its own margin needs the raw signal, and
+        // Scintilla gives no way to tell it "this margin is mine".
+        {
+            NibEvent ev{}; ev.kind = NIB_EV_MARGIN_CLICK; ev.struct_size = sizeof(NibEvent);
+            ev.as.margin.position  = e.GetPosition();
+            ev.as.margin.number    = e.GetMargin();
+            ev.as.margin.modifiers = e.GetModifiers();
+            nibFireEvent(ev);
+        }
+        e.Skip();
+    }
+    // v5 raw editor input: dwell + hotspot. Both are inert until something turns them on - dwell needs a
+    // SCI_SETMOUSEDWELLTIME (the host never sets one; a plugin does it on the editor handle), hotspot needs
+    // a style with hotspot set - so binding them costs nothing until a plugin asks for the behaviour.
+    void onStcDwell(wxStyledTextEvent& e, NibEventKind kind)
+    {
+        NibEvent ev{}; ev.kind = kind; ev.struct_size = sizeof(NibEvent);
+        ev.as.mouse.position = e.GetPosition();
+        ev.as.mouse.x        = e.GetX();
+        ev.as.mouse.y        = e.GetY();
+        nibFireEvent(ev);
+        e.Skip();
+    }
+    void onStcHotspot(wxStyledTextEvent& e, NibEventKind kind)
+    {
+        NibEvent ev{}; ev.kind = kind; ev.struct_size = sizeof(NibEvent);
+        ev.as.hotspot.position  = e.GetPosition();
+        ev.as.hotspot.modifiers = e.GetModifiers();
+        nibFireEvent(ev);
         e.Skip();
     }
     void onStcZoom(wxStyledTextEvent& e)      { if (g_onZoom) g_onZoom(static_cast<int>(sci(SCI_GETZOOM))); e.Skip(); }

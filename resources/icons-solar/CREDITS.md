@@ -78,14 +78,19 @@ from the pack's own primitives, keeping the set's baked green-8/green-3 fill dis
   file-shaped `filetype-*` icons share one silhouette.
 
 No other modifications were made beyond selecting icons, the colour substitutions, the
-two composites above, and the original glyph noted below.
+two composites above, and the original glyphs noted below.
 
 ## Original glyphs (NOT from Solar)
 
-One file in this directory is original wxNote artwork rather than a recolored Solar glyph,
-and is therefore **not** covered by the Solar / 480 Design attribution above. It is licensed
-under the project's own licence (Apache-2.0, see the root `LICENSE`):
+Four files in this directory are original wxNote artwork rather than recolored Solar glyphs,
+and are therefore **not** covered by the Solar / 480 Design attribution above. They are licensed
+under the project's own licence (Apache-2.0, see the root `LICENSE`). All four keep this set's
+baked two-tone discipline (green-8 `#2f9e44` primary, green-3 `#8ce99a` secondary) so
+`iconColored()`'s light-mode retint finds the same hexes it does in every other file here:
 
 | File                 | Why it exists                                                        |
 | -------------------- | -------------------------------------------------------------------- |
-| `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". The free Solar set has no glyph for this concept. Drawn with this set's baked two-tone discipline (green-8 `#2f9e44` braces, green-3 `#8ce99a` text lines) so `iconColored()`'s light-mode retint finds the same hexes it does in every other file here. Unlike the rest of the set it is stroked rather than filled - a filled brace collapses into a blob at 16 px. |
+| `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". The free Solar set has no glyph for this concept. Unlike the rest of the set it is stroked rather than filled - a filled brace collapses into a blob at 16 px. |
+| `print-preview.svg`  | A page of text with an eye over it - "look at it before printing". Solar's print glyphs are all the printer device itself, which cannot distinguish preview from print. |
+| `func-leaf.svg`      | The Function List tree's LEAF node: a solid rounded square in the secondary tone with the run triangle punched through it in the primary. Solar's nearest match for the concept was a botanical leaf, which read "func-leaf" as foliage rather than as a leaf of the symbol tree. |
+| `func-node.svg`      | The Function List tree's GROUP node (class/namespace/section): a folder. Drawn squarer than this pack's own `folder.svg`, and with a solid dark front panel where that one carries a hairline, so the two stay apart with the workspace tree open beside the Function List. Solar's container glyphs are flow/hierarchy diagrams whose thin connectors vanish at 16 px. |

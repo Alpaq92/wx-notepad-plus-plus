@@ -1206,6 +1206,56 @@ private:
             check(g_nibDocCount && g_nibDocCount() == 1, "Phase-6 buffers closed - back to a single document");
         }
 
+        // ---- Phase 7: raw editor input (nib.events v5) ---------------------------------------------
+        // SCN_CHARADDED / SCN_MARGINCLICK / SCN_DWELLSTART / SCN_HOTSPOTCLICK: the signals an
+        // autocompletion, tag-closing, bracket-helper or hover-tooltip plugin is built on. Nothing in the
+        // event set reported a keystroke or a margin hit before v5, which is why that whole class of
+        // plugin was inert under the bridge.
+        //
+        // These are the only forwarded events with no direct host seam to drive: they originate inside
+        // Scintilla's own key/mouse handling, which needs the real OS input this harness deliberately does
+        // not do (see the file header). So each is driven by sending the wxEVT_STC_* event the control
+        // itself would send, straight at the editor. Everything downstream of that is the real path -
+        // onStcCharAdded / onStcMarginClick, nibFireEvent, the bridge's SCN_* translation, the probe's
+        // beNotified. Only Scintilla's generation of the event is stood in for, and that is Scintilla's
+        // behaviour, not ours. The payload assertions are the point: a wrong union member or a missed
+        // field copy still produces a correctly-coded notification with a zeroed body.
+        {
+            // ';' is deliberately inert in onStcCharAdded: not a bracket (no auto-pair), not '(' (no call
+            // tip), not '}' (no dedent) and not a word character (no autocompletion popup left open over
+            // the tail assertions). What remains is the v5 fire.
+            mark = readLogLines().size();
+            { wxStyledTextEvent e(wxEVT_STC_CHARADDED); e.SetEventObject(g_view); e.SetKey(';'); g_view->ProcessWindowEvent(e); }
+            pump();
+            L = readLogLines();
+            check(findFrom(L, mark, notifNeedlePrefix(SCN_CHARADDED)) >= 0,
+                  "SCN_CHARADDED reached the probe (NIB_EV_CHAR_ADDED -> bridge -> beNotified)");
+            check(findFrom(L, mark, "{\"k\":\"ca\",\"ch\":59}") >= 0,
+                  "...carrying the character in scn.ch (';' == 59), not a zeroed payload");
+
+            // Margin 3, NOT the bookmark margin 1: this pins that the host relays a margin it has no
+            // behaviour of its own on, which is exactly the case a plugin owning its own margin needs.
+            mark = readLogLines().size();
+            { wxStyledTextEvent e(wxEVT_STC_MARGINCLICK); e.SetEventObject(g_view); e.SetPosition(0); e.SetMargin(3); e.SetModifiers(SCMOD_CTRL); g_view->ProcessWindowEvent(e); }
+            pump();
+            L = readLogLines();
+            check(findFrom(L, mark, notifNeedlePrefix(SCN_MARGINCLICK)) >= 0, "SCN_MARGINCLICK reached the probe");
+            check(findFrom(L, mark, "{\"k\":\"mc\",\"m\":3,\"mod\":2}") >= 0,
+                  "...carrying the margin number and the SCMOD_CTRL modifier bits");
+
+            // Dwell and hotspot share one bridge case each; assert the code arrives for one of each pair
+            // (the payload copy is the same three lines the two asserted above already cover).
+            mark = readLogLines().size();
+            { wxStyledTextEvent e(wxEVT_STC_DWELLSTART);    e.SetEventObject(g_view); e.SetPosition(1); e.SetX(11); e.SetY(22); g_view->ProcessWindowEvent(e); }
+            { wxStyledTextEvent e(wxEVT_STC_DWELLEND);      e.SetEventObject(g_view); e.SetPosition(1); e.SetX(11); e.SetY(22); g_view->ProcessWindowEvent(e); }
+            { wxStyledTextEvent e(wxEVT_STC_HOTSPOT_CLICK); e.SetEventObject(g_view); e.SetPosition(1); e.SetModifiers(0); g_view->ProcessWindowEvent(e); }
+            pump();
+            L = readLogLines();
+            check(findFrom(L, mark, notifNeedlePrefix(SCN_DWELLSTART))  >= 0, "SCN_DWELLSTART reached the probe");
+            check(findFrom(L, mark, notifNeedlePrefix(SCN_DWELLEND))    >= 0, "SCN_DWELLEND reached the probe");
+            check(findFrom(L, mark, notifNeedlePrefix(SCN_HOTSPOTCLICK))>= 0, "SCN_HOTSPOTCLICK reached the probe");
+        }
+
         // ---- (d) allocated command ids round-trip through the wx dispatcher ------------------------
         check(cFirst > 32767,
               "(d) allocated ids sit above 32767 (WM_COMMAND sign-wraps them; wrapped dispatch driven below)");

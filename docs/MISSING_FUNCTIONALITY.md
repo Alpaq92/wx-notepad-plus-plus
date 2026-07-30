@@ -65,7 +65,7 @@ listed code paths are Windows-gated. The integrated borderless title bar being W
 
 | Gap | Status | Evidence | Impact |
 | --- | --- | --- | --- |
-| **`SCN_CHARADDED` / `SCN_MARGINCLICK` / dwell / hotspot** not delivered | partial | `forward_nib_event` only synthesizes MODIFIED/UPDATEUI/SAVEPOINT; no such `NibEventKind` — [nib.h:180-241](../include/nib/nib.h) | **biggest compat gap** — breaks autocomplete/XML-Tools/bracket-helper plugins; needs new core event kinds |
+| ~~**`SCN_CHARADDED` / `SCN_MARGINCLICK` / dwell / hotspot** not delivered~~ | ✅ **done** — `nib.events` **v5** | seven new `NibEventKind`s (CHAR_ADDED / MARGIN_CLICK / DWELL_START / DWELL_END / the three HOTSPOT_*) — [nib.h](../include/nib/nib.h); fired from `onStcCharAdded` / `onStcMarginClick` / the dwell+hotspot binds in [main.cpp](../src/main.cpp), translated to the matching `SCN_*` by `on_nib_event_v5` in `npp_bridge.cpp`; 7 assertions in `tests/bridge_selftest.cpp` pin both the code and the payload | was the **biggest compat gap** — autocomplete/XML-Tools/bracket-helper plugins were inert. Each fires AFTER the host's own handling (matching where N++ notifies), and the payload rides its own union member so `sizeof(NibEvent)` is unchanged (static_assert in main.cpp). Dwell/hotspot stay dormant until a plugin sets a dwell time / hotspot style, as under N++ |
 | **Plugin docking (DMM\*) on Linux/macOS** | partial | DMM* cases gated on `g_win32` — `npp_bridge.cpp:1090` | recompiled POSIX plugins can't surface docked UI (silent `TRUE` no-op) |
 | **Portable panels are text-only** | partial | `NibPanelsApi` = register/set/append text — [nib.h:363-374](../include/nib/nib.h) | no rich widgets / tree views / Scintilla views |
 | **`NPPM_CREATESCINTILLAHANDLE`** | stubbed | `out = 0` — `npp_bridge.cpp:1428` | plugins needing a hidden editor fail |
@@ -113,8 +113,14 @@ listed code paths are Windows-gated. The integrated borderless title bar being W
      (`onBackupTimer` in src/main.cpp.)
 2. **Remaining easy cross-platform wins** (clipboard is now done): **Always on Top** (`wxSTAY_ON_TOP`),
    then portable **hashes** and **code-page encodings**.
-3. **Plugin `SCN_CHARADDED` / `SCN_MARGINCLICK`** — unblocks a whole plugin class (needs new core event kinds).
-4. **Larger builds**: Spell check, File Compare, macro persistence, Function List/Style Configurator depth.
+3. ~~**Plugin `SCN_CHARADDED` / `SCN_MARGINCLICK`**~~ — ✅ **DONE**: `nib.events` v5 delivers char-added,
+   margin-click, dwell and the three hotspot clicks; the bridge translates each to its `SCN_*`. The
+   plugin class that keys off `SCN_CHARADDED` (autocomplete, XML-Tools, bracket helpers) is unblocked.
+   Still open in this section: plugin docking on Linux/macOS, rich portable panels,
+   `NPPM_CREATESCINTILLAHANDLE`, modeless-dialog keyboard nav, plugin-dialog dark mode, and
+   `nib.events` still having no unsubscribe.
+4. **Larger builds**: Style Configurator depth (fg/bg + bold/italic only), a Calltips API/signature
+   database, and Plugins Admin (designed in `PLUGINS_ADMIN_DESIGN.md`, unbuilt).
 5. **Track, don't act**: Change History and Windows ligatures (upstream-blocked); signing (secrets).
 
 *Regenerate this audit by re-running the `missing-functionality-audit` workflow.*

@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-#define NIB_ABI_VERSION 0x00010005u   // (major << 16) | minor  ->  1.5 (additive: nib.events v4 long-tail file lifecycle + command-line plugin message)
+#define NIB_ABI_VERSION 0x00010006u   // (major << 16) | minor  ->  1.6 (additive: nib.events v5 raw editor input - char-added / margin-click / dwell / hotspot)
 
 #if defined(_WIN32)
   #define NIB_API __declspec(dllexport)
@@ -176,6 +176,14 @@ typedef struct NibCommandsApi {
 //     recovery-restore / before-load) and NIB_EV_CMDLINE_PLUGIN_MSG. A plugin that wants any of those
 //     subscribes through this table; an older host returns NULL for min_version 4, so a consumer can
 //     tell whether the host emits them.
+//   * query(..., NIB_IFACE_EVENTS, 5) -> the v5 table (identical layout to v3/v4; only version differs).
+//     It adds the RAW EDITOR INPUT kinds: char-added, margin-click, dwell start/end and the three
+//     hotspot clicks. These are the signals an autocompletion, tag-closing, bracket-helper or
+//     margin-driven plugin is built on - the class of plugin that could not function at all before v5,
+//     because nothing in the event set reported a keystroke or a margin hit. Unlike NIB_EV_TEXT_MODIFIED
+//     they need no mask: each is either low-volume (margin/hotspot), off unless the plugin turns it on
+//     (dwell), or exactly one per typed character (char-added), so the cost with no subscriber is the
+//     same single list walk every other kind pays.
 #define NIB_IFACE_EVENTS "nib.events/1"
 typedef enum {
     NIB_EV_TEXT_CHANGED = 1,    // as.text:      pos, added, removed (bytes)
@@ -235,9 +243,33 @@ typedef enum {
     NIB_EV_FILE_DELETE_FAILED = 23, // as.document: id - a delete failed (pairs with BEFORE_DELETE).
     NIB_EV_FILE_DELETED = 24,   // as.document: id - this buffer's on-disk file was deleted (fired before the
                                 //   buffer's tab is torn down, so the id/path stay resolvable in the callback).
-    NIB_EV_CMDLINE_PLUGIN_MSG = 25 // as.cmdline: msg_utf8 - the host was launched with a -pluginMessage
+    NIB_EV_CMDLINE_PLUGIN_MSG = 25, // as.cmdline: msg_utf8 - the host was launched with a -pluginMessage
                                 //   command-line argument; msg_utf8 is that message (UTF-8), valid ONLY for
                                 //   the duration of the callback. Fired once, after plugins are loaded.
+    // ---- v5 additions (subscribe through the v5 table; new kinds, purely additive) ---------------
+    // Raw editor input. Every one of these mirrors a Scintilla notification one-for-one, and each fires
+    // AFTER the host's own handling of the same signal - so a subscriber always sees the settled buffer
+    // (this is also where Notepad++ notifies its plugins, at the end of its own notify()).
+    NIB_EV_CHAR_ADDED = 26,     // as.key: ch - a character was just added to the document (SCN_CHARADDED).
+                                //   It is ALREADY in the buffer. `ch` is a raw Scintilla character code,
+                                //   NOT a code point: for a multi-byte UTF-8 character this is the last
+                                //   byte added, and the subscriber sees one event per byte. Fires after
+                                //   the host's auto-indent / auto-pair / autocompletion pass.
+    NIB_EV_MARGIN_CLICK = 27,   // as.margin: position, number, modifiers - a click in an editor margin
+                                //   (SCN_MARGINCLICK). `position` is the document position of the clicked
+                                //   line's start, `number` the 0-based margin, `modifiers` the SCMOD_*
+                                //   bitset. Fires after the host's own bookmark toggle on margin 1.
+    NIB_EV_DWELL_START = 28,    // as.mouse: position, x, y - the pointer rested over the editor long
+                                //   enough to dwell (SCN_DWELLSTART); `position` is -1 when it is not over
+                                //   text. NOTE: Scintilla emits nothing here until a dwell time is set
+                                //   (SCI_SETMOUSEDWELLTIME; the default SC_TIME_FOREVER means never). The
+                                //   host never sets one, so a plugin that wants dwell - a hover-tooltip
+                                //   plugin, typically - sets it itself on the editor handle first.
+    NIB_EV_DWELL_END = 29,      // as.mouse: position, x, y - the dwell ended (SCN_DWELLEND).
+    NIB_EV_HOTSPOT_CLICK = 30,  // as.hotspot: position, modifiers - a click on a hotspot-styled range
+                                //   (SCN_HOTSPOTCLICK). Only reachable once some style sets hotspot.
+    NIB_EV_HOTSPOT_DOUBLE_CLICK = 31,  // as.hotspot - SCN_HOTSPOTDOUBLECLICK.
+    NIB_EV_HOTSPOT_RELEASE_CLICK = 32  // as.hotspot - SCN_HOTSPOTRELEASECLICK.
 } NibEventKind;
 typedef struct NibEvent {
     NibEventKind kind;
@@ -250,6 +282,11 @@ typedef struct NibEvent {
         struct { int64_t pos, length, lines_added; uint32_t modification_type; } modified;
         // v4 NIB_EV_CMDLINE_PLUGIN_MSG: msg_utf8 is host-owned and valid only during the callback.
         struct { const char* msg_utf8; }        cmdline;
+        // v5 raw editor input. Field-for-field the Scintilla notification members each kind documents.
+        struct { int32_t ch; }                                  key;      // CHAR_ADDED
+        struct { int64_t position; int32_t number, modifiers; } margin;   // MARGIN_CLICK
+        struct { int64_t position; int32_t x, y; }              mouse;    // DWELL_START / DWELL_END
+        struct { int64_t position; int32_t modifiers; }         hotspot;  // HOTSPOT_*
     } as;
 } NibEvent;
 typedef void (*NibEventFn)(NibHost* host, const NibEvent* ev, void* user);

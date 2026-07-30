@@ -1,5 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" color="#343a40" role="img" aria-label="Function Group / Class">
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" color="#343a40" role="img" aria-label="Function Group / Class">
   <title>Function Group / Class</title>
-  <path d="M7 4a2 2 0 0 0 -2 2v3a2 3 0 0 1 -2 3a2 3 0 0 1 2 3v3a2 2 0 0 0 2 2" />
-  <path d="M17 4a2 2 0 0 1 2 2v3a2 3 0 0 0 2 3a2 3 0 0 0 -2 3v3a2 2 0 0 1 -2 2" />
+  <!-- Tabler idiom: open stroke work. A stack of layers - a container is a thing with members under
+       it, and the three tiers stay readable at 16px, where the curly braces this replaces thin out
+       into punctuation rather than reading as a container. -->
+  <path d="M12 3l9 5-9 5-9-5z" />
+  <path d="M3.4 12.6L12 17.4l8.6-4.8" />
+  <path d="M3.4 16.9L12 21.7l8.6-4.8" />
 </svg>

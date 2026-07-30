@@ -18,13 +18,17 @@ sibling sets.
 
 ## Original glyphs (NOT from Tabler)
 
-One file in this directory is original wxNote artwork rather than a selected Tabler glyph,
-and is therefore **not** covered by the Tabler attribution above. It is licensed under the
-project's own licence (Apache-2.0, see the root `LICENSE`):
+Three files in this directory were drawn for wxNote rather than selected from Tabler, and are
+therefore **not** covered by the Tabler attribution above. They are licensed under the
+project's own licence (Apache-2.0, see the root `LICENSE`). All three follow this set's
+conventions — 24x24 viewBox, `fill="none"`, `stroke="currentColor"`, round caps/joins — so
+they retint with the theme exactly like the selected Tabler icons:
 
 | File                 | Why it exists                                                        |
 | -------------------- | -------------------------------------------------------------------- |
-| `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". Tabler has no glyph for this concept, and every near-miss (`braces`, `code`) is already spoken for by another wxNote command. Drawn to this set's conventions: 24x24 viewBox, `fill="none"`, `stroke="currentColor"`, `stroke-width="2.25"`, round caps/joins, so it retints with the theme exactly like the selected Tabler icons. |
+| `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". Tabler has no glyph for this concept, and every near-miss (`braces`, `code`) is already spoken for by another wxNote command. |
+| `print-preview.svg`  | Page text with a magnifier over it. Tabler's print glyphs are the printer device itself, which cannot distinguish preview from print. |
+| `func-node.svg`      | The Function List tree's GROUP node (class/namespace/section): a stack of layers, drawn in the idiom of Tabler's own `stack-2` but on this set's own coordinates. The tree's LEAF node next to it is Tabler's stock `math-function` (the italic *fx*), which is a selected glyph and *is* covered by the attribution above. |
 
 See the root `LICENSING.md` and `NOTICE` for the project-wide licensing summary this
 entry is consistent with.

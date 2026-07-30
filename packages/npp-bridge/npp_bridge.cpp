@@ -378,6 +378,52 @@ static void on_nib_event_v4(NibHost*, const NibEvent* ev, void*)
     }
 }
 
+// The Phase-7 (raw editor input) pipeline: the nib.events v5 kinds. These are the only forwarded events
+// that are Scintilla notifications rather than N++ application ones, so - as the ABI requires - they come
+// from the EDITOR handle, not the frame: a plugin's beNotified switches on nmhdr.code and reads the
+// payload members Scintilla documents for that code, and several check hwndFrom to tell which view fired.
+//   * CHAR_ADDED   -> SCN_CHARADDED (ch). The signal autocompletion, tag-closing and bracket-helper
+//     plugins are built on; without it that whole class of plugin was inert under the bridge.
+//   * MARGIN_CLICK -> SCN_MARGINCLICK (position, margin, modifiers) - margin-driven plugins.
+//   * DWELL_*      -> SCN_DWELLSTART / SCN_DWELLEND (position, x, y) - hover tooltips. Dormant until the
+//     plugin sets SCI_SETMOUSEDWELLTIME itself; Scintilla's default is "never dwell".
+//   * HOTSPOT_*    -> SCN_HOTSPOTCLICK / DOUBLECLICK / RELEASECLICK (position, modifiers).
+static void on_nib_event_v5(NibHost*, const NibEvent* ev, void*)
+{
+    SCNotification scn = {};
+    scn.nmhdr.hwndFrom = g_npp._scintillaMainHandle;
+    switch (ev->kind) {
+        case NIB_EV_CHAR_ADDED:
+            scn.nmhdr.code = SCN_CHARADDED;
+            scn.ch         = ev->as.key.ch;
+            break;
+        case NIB_EV_MARGIN_CLICK:
+            scn.nmhdr.code = SCN_MARGINCLICK;
+            scn.position   = static_cast<Sci_Position>(ev->as.margin.position);
+            scn.margin     = ev->as.margin.number;
+            scn.modifiers  = ev->as.margin.modifiers;
+            break;
+        case NIB_EV_DWELL_START:
+        case NIB_EV_DWELL_END:
+            scn.nmhdr.code = (ev->kind == NIB_EV_DWELL_START) ? SCN_DWELLSTART : SCN_DWELLEND;
+            scn.position   = static_cast<Sci_Position>(ev->as.mouse.position);
+            scn.x          = ev->as.mouse.x;
+            scn.y          = ev->as.mouse.y;
+            break;
+        case NIB_EV_HOTSPOT_CLICK:
+        case NIB_EV_HOTSPOT_DOUBLE_CLICK:
+        case NIB_EV_HOTSPOT_RELEASE_CLICK:
+            scn.nmhdr.code = (ev->kind == NIB_EV_HOTSPOT_CLICK)        ? SCN_HOTSPOTCLICK
+                           : (ev->kind == NIB_EV_HOTSPOT_DOUBLE_CLICK) ? SCN_HOTSPOTDOUBLECLICK
+                                                                       : SCN_HOTSPOTRELEASECLICK;
+            scn.position   = static_cast<Sci_Position>(ev->as.hotspot.position);
+            scn.modifiers  = ev->as.hotspot.modifiers;
+            break;
+        default: return;
+    }
+    for (const auto& p : g_plugins) if (p.beNotified) p.beNotified(&scn);
+}
+
 // Map a host accelerator key code (a wx key code: uppercase ASCII for letters/digits/punctuation, or a
 // wx WXK_* constant for named keys) to a Notepad++ ShortcutKey virtual-key code (VK_*). Letters/digits
 // are identity (VK_A..VK_Z == 'A'..'Z', VK_0..VK_9 == '0'..'9'); a compact table covers the common named
@@ -1753,6 +1799,7 @@ static void activate(NibHost* host, NibQueryFn query)
     const NibEventsApi* eventsV2 = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 2));
     const NibEventsApi* eventsV3 = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 3));
     const NibEventsApi* eventsV4 = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 4));
+    const NibEventsApi* eventsV5 = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 5));
     g_eventsV2 = eventsV2 != nullptr;
     g_eventsV3 = eventsV3;   // stashed for NPPM_ADDSCNMODIFIEDFLAGS -> set_modified_mask
     g_eventsV4 = eventsV4;
@@ -1793,6 +1840,18 @@ static void activate(NibHost* host, NibQueryFn query)
         eventsV4->subscribe(host, NIB_EV_FILE_DELETE_FAILED,    on_nib_event_v4, nullptr);  // -> NPPN_FILEDELETEFAILED
         eventsV4->subscribe(host, NIB_EV_FILE_DELETED,          on_nib_event_v4, nullptr);  // -> NPPN_FILEDELETED
         eventsV4->subscribe(host, NIB_EV_CMDLINE_PLUGIN_MSG,    on_nib_event_v4, nullptr);  // -> NPPN_CMDLINEPLUGINMSG
+    }
+    if (eventsV5) {
+        // Phase 7 (raw editor input). These are SCN_*, not NPPN_* - see on_nib_event_v5. CHAR_ADDED is the
+        // only one that fires during ordinary typing; dwell and hotspot stay silent until a plugin enables
+        // them on the editor (a dwell time / a hotspot style), and margin clicks are user-paced.
+        eventsV5->subscribe(host, NIB_EV_CHAR_ADDED,            on_nib_event_v5, nullptr);  // -> SCN_CHARADDED
+        eventsV5->subscribe(host, NIB_EV_MARGIN_CLICK,          on_nib_event_v5, nullptr);  // -> SCN_MARGINCLICK
+        eventsV5->subscribe(host, NIB_EV_DWELL_START,           on_nib_event_v5, nullptr);  // -> SCN_DWELLSTART
+        eventsV5->subscribe(host, NIB_EV_DWELL_END,             on_nib_event_v5, nullptr);  // -> SCN_DWELLEND
+        eventsV5->subscribe(host, NIB_EV_HOTSPOT_CLICK,         on_nib_event_v5, nullptr);  // -> SCN_HOTSPOTCLICK
+        eventsV5->subscribe(host, NIB_EV_HOTSPOT_DOUBLE_CLICK,  on_nib_event_v5, nullptr);  // -> SCN_HOTSPOTDOUBLECLICK
+        eventsV5->subscribe(host, NIB_EV_HOTSPOT_RELEASE_CLICK, on_nib_event_v5, nullptr);  // -> SCN_HOTSPOTRELEASECLICK
     }
 
     // Real Notepad++ sends NPPN_READY once its UI is up; the bridge sends it after finishing loading +

@@ -1,9 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Function">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" role="img" aria-label="Function">
   <title>Function</title>
-  <!-- Solar idiom: chunky duotone. Dark tone carries the letterform, light tone the crossbar
-       and the argument dots. (Was a botanical leaf - "func-leaf" means LEAF NODE of the tree.) -->
-  <path stroke="#2f9e44" stroke-width="2.6" d="M6.6 20.5c0-6.3.7-10.4 1.8-12.9C9.3 5.3 10.6 4.4 12.1 4.4c.9 0 1.6.2 2.1.7"/>
-  <path stroke="#8ce99a" stroke-width="2.6" d="M5.2 11.8h7.7"/>
-  <circle cx="17.5" cy="17" r="1.6" fill="#8ce99a"/>
-  <circle cx="21.1" cy="17" r="1.6" fill="#8ce99a"/>
+  <!-- Solar idiom: chunky duotone, no outline. A solid rounded square in the light tone with the run
+       triangle punched through it in the dark - both flat fills, which is what this pack does. Sits a
+       little tighter than the group glyph's frame so the two are not the same silhouette at 16px. -->
+  <rect x="3.2" y="3.2" width="17.6" height="17.6" rx="5" fill="#8ce99a"/>
+  <path fill="#2f9e44" d="M9.1 7.6l7 4.4-7 4.4z"/>
 </svg>
