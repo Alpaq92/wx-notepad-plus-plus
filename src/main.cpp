@@ -155,6 +155,8 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 #include "SciLexer.h"           // SCE_* lexer style numbers
 #include <wx/dynlib.h>         // wxDynamicLibrary - portable .dll/.so/.dylib loader (Nib plugin host)
 #include <cstring>             // strcmp / memcpy (Nib host)
+#include <climits>             // INT_MAX - the autocomplete harvest's int-position overflow guard
+#include <chrono>              // std::chrono::steady_clock - the crash-backup cadence's monotonic time
 #include "command_ids.h"
 #include "app_icon_svg.h"
 #include "hash_algos.h"          // portable MD5/SHA-1/SHA-256/SHA-512 for the Tools > digest generators
@@ -290,6 +292,9 @@ public:
     wxLongLong monMtime = 0; wxULongLong monSize = 0;   // last-seen on-disk stats; background tabs catch up by re-comparing on activation
     wxLongLong diskMtime = 0; wxULongLong diskSize = 0; // on-disk stats last loaded/saved; drives the "changed on disk?" watch (0/0 = not yet stamped)
     wxString recoveryId;                   // set once this page's unsaved edits have been backed up (see backupUnsavedChanges); empty = nothing pending
+    uint64_t editSerial   = 0;             // bumped on every insert/delete (onStcModified; plus the one quiet background mutation, g_nibDocEolSet's CONVERTEOLS)
+    uint64_t backupSerial = ~0ull;         // editSerial at the last successful .bak write; ~0 = no snapshot this session (a restored recovery buffer is dirty with 0 edits - it re-persists once, then rests)
+    long long lastBackupMs = 0;            // wall-clock ms of that write; drives the big-buffer cadence stretch (wxnBackupThrottleMs)
 };
 
 // One editor "view" = a tab strip + ONE persistent wxStyledTextCtrl that hops across its pages (the
@@ -529,6 +534,11 @@ static std::function<void(const wxString&)> g_openDropped;
 
 // Set by the frame: a zoom change (Ctrl+wheel etc.) in one editor syncs all tabs + persists.
 static std::function<void(int)> g_onZoom;
+
+// Set by the frame: one pass of the 30 s crash-safety backup timer (backupTick). A seam like the
+// rename/delete cores: bridge_selftest drives the snapshot machinery through it directly instead of
+// waiting 30 s of wall clock for wxTimer.
+static std::function<void()> g_backupTick;
 
 // What one wxnote launch asks a window to open: the command line's positional arguments, already split
 // into files (tabs) and folders (workspace-browser roots), plus the goto/encoding switches. Grouped into
@@ -1093,7 +1103,16 @@ static FLBodyStyle flBodyStyle(const std::string& lang)
 // path.AfterLast('.'): AfterLast returns the WHOLE STRING when the character is absent, so an
 // extension-less path like /proj/Makefile yields "/proj/makefile" as its "extension" - which is never
 // empty, silently defeats every `ext.empty()` test, and cannot match any extension table.
-static wxString wxnExtOf(const wxString& path) { return wxFileName(path).GetExt().Lower(); }
+// The rule stated directly - "everything after the last dot of the bare filename, else empty" - rather
+// than wxFileName::GetExt() plus a patch for its one divergence (GetExt treats a dotfile's leading dot
+// as part of the name, so ".gitignore" reports NO extension; the extension tables have always matched
+// "gitignore"/"bashrc", and must keep doing so). ".tar.gz" -> "gz", "Makefile" -> "", "name." -> "".
+static wxString wxnExtOfName(const wxString& fullName)
+{
+    const size_t d = fullName.rfind('.');
+    return (d == wxString::npos || d + 1 == fullName.length()) ? wxString() : fullName.Mid(d + 1).Lower();
+}
+static wxString wxnExtOf(const wxString& path) { return wxnExtOfName(wxFileName(path).GetFullName()); }
 
 // Harvest completion candidates from a whole document: every word longer than `prefix` that starts with
 // it. `doc` is the buffer as UTF-8, so a byte index into it IS a Scintilla position - which is what lets
@@ -1105,7 +1124,8 @@ static wxString wxnExtOf(const wxString& path) { return wxFileName(path).GetExt(
 template <class StyleAt>
 static void wxnCollectWords(const std::string& doc, const std::string& prefix,
                             std::set<std::string, std::less<>>& out,
-                            const std::bitset<256>& skipStyles, StyleAt styleAt)
+                            const std::bitset<256>& skipStyles, StyleAt styleAt,
+                            bool clipHead = false, bool clipTail = false)
 {
     auto isW = [](unsigned char c){ return std::isalnum(c) || c == '_'; };
     const size_t pl = prefix.size();
@@ -1114,7 +1134,14 @@ static void wxnCollectWords(const std::string& doc, const std::string& prefix,
     {
         if (!isW((unsigned char)doc[i])) { ++i; continue; }
         size_t j = i; while (j < doc.size() && isW((unsigned char)doc[j])) ++j;
-        if (j - i > pl && doc.compare(i, pl, prefix) == 0)
+        // When `doc` is a WINDOW into a larger buffer (autoComplete on a file past the harvest cap), a
+        // word run touching a cut edge may be a fragment of a longer word - the tail of "mybuffer" reads
+        // as a perfectly plausible "buffer" that exists nowhere in the document. The caller sets
+        // clipHead/clipTail for the edges it actually cut (never for real document boundaries), and any
+        // run TOUCHING a cut edge is dropped rather than offered. A run starting mid-window is intact by
+        // construction, so this costs at most the two edge words.
+        const bool cut = (clipHead && i == 0) || (clipTail && j == doc.size());
+        if (!cut && j - i > pl && doc.compare(i, pl, prefix) == 0)
         {
             // Dedupe BEFORE probing: identifiers repeat heavily, and a word already collected needs
             // neither the Scintilla round-trip for its style nor a substr allocation to discard.
@@ -1130,6 +1157,59 @@ static void wxnCollectWords(const std::string& doc, const std::string& prefix,
         }
         i = j;
     }
+}
+
+// The harvest window for wxnCollectWords when the document is larger than the per-keystroke budget:
+// `cap` bytes centered on the caret, clamped to [0, docLen] with the remainder redistributed, so the
+// harvest is a full `cap` bytes even with the caret near an edge. Free function for the same reason as
+// wxnCollectWords: the clamping arithmetic is exactly the kind of thing that deserves plain-string tests.
+static std::pair<long long, long long> wxnHarvestWindow(long long docLen, long long caret, long long cap)
+{
+    if (docLen <= cap) return { 0, docLen };
+    long long s = caret - cap / 2, e = s + cap;
+    if (s < 0)      { e -= s; s = 0; }             // caret near the top: give the surplus to the tail
+    if (e > docLen) { s -= e - docLen; e = docLen; if (s < 0) s = 0; }   // near the bottom: to the head
+    return { s, e };
+}
+// The shared per-keystroke read budget: what autoComplete harvests and what callTipSigs scans for
+// signatures, per event, regardless of document size. 1 MiB is the whole-document ceiling the
+// autocomplete style filter had always been allowed to spend per keystroke, now applied uniformly.
+static constexpr long long kWxnHarvestMaxBytes = 1 << 20;
+
+// How much longer than the 30 s timer a buffer of `docBytes` waits between crash-safety snapshots.
+// A snapshot is one full copy + disk write, so a giant buffer under ACTIVE editing should not pay
+// that every tick: <= 32 MiB keeps every tick (0 = no throttle beyond the timer itself); above, the
+// interval grows 30 s per 32 MiB, capped at 5 minutes. Only the TIMER consults this - the exit-path
+// backup is the last chance and never waits. Free function for the same reason as wxnHarvestWindow.
+static long long wxnBackupThrottleMs(long long docBytes)
+{
+    constexpr long long kUnit = 32ll << 20, kTickMs = 30000, kCapMs = 300000;
+    if (docBytes <= kUnit) return 0;
+    return std::min(kCapMs, kTickMs * (docBytes / kUnit));
+}
+// Write-to-temp + rename: the ONE atomic-replace idiom (crash backups, macros.dat). Truncate-in-place
+// meant a crash mid-write destroyed the previous good copy at exactly the moment it mattered; here a
+// short write (disk full) or failed rename cleans up the temp and leaves the old file intact.
+static bool wxnWriteFileAtomic(const wxString& path, const void* data, size_t len)
+{
+    const wxString tmp = path + ".tmp";
+    {
+        wxFile f(tmp, wxFile::write);
+        if (!f.IsOpened()) return false;
+        if (f.Write(data, len) != len) { f.Close(); wxRemoveFile(tmp); return false; }
+    }
+    if (!wxRenameFile(tmp, path, true)) { wxRemoveFile(tmp); return false; }
+    return true;
+}
+
+// Monotonic milliseconds for the cadence deltas above. Wall clock (wxGetUTCTimeMillis) is wrong here:
+// an NTP correction or manual clock-set moving time BACKWARD makes `now - last` negative, which reads
+// as "inside the throttle window" and silently suspends big-buffer snapshots until wall time re-passes
+// the stamp - potentially the full size of the jump. steady_clock cannot go backward.
+static long long wxnMonoMs()
+{
+    using namespace std::chrono;
+    return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
 }
 
 // One extracted symbol: byte positions in the scanned UTF-8 text. For containers (kind 1), rangeEnd
@@ -2274,6 +2354,14 @@ static const NibEventsApi   g_nibEventsApi   = { 1, sizeof(NibEventsApi),   nibS
 static const NibEventsApi   g_nibEventsApiV2 = { 2, sizeof(NibEventsApi),   nibSubscribeV2, nullptr };            // v2: id-carrying SAVING/SAVED/BEFORE_OPEN
 static const NibEventsApi   g_nibEventsApiV3 = { 3, sizeof(NibEventsApi),   nibSubscribeV2, nibSetModifiedMask }; // v3: + modified-mask, language/style/shortcut/shutdown kinds
 static const NibEventsApi   g_nibEventsApiV4 = { 4, sizeof(NibEventsApi),   nibSubscribeV2, nibSetModifiedMask }; // v4: + long-tail file lifecycle (rename/delete/order/readonly/before-load) + cmdline plugin message
+static const NibEventsApi   g_nibEventsApiV5 = { 5, sizeof(NibEventsApi),   nibSubscribeV2, nibSetModifiedMask }; // v5: + raw editor input (char-added / margin-click / dwell / hotspot)
+// Adding an event KIND is free; adding a union member is not, if it grows NibEvent. A plugin built
+// against an older nib.h sized its own copies from the header it saw, so a bigger struct is how an
+// "additive" change turns into an overrun. Every v5 member (key/margin/mouse/hotspot) is smaller than
+// the v3 `modified` payload, which is still the largest - this pins that, and fires on the day it stops
+// being true rather than at a plugin's memcpy.
+static_assert(sizeof(NibEvent) == sizeof(NibEventKind) + sizeof(uint32_t) + sizeof(((NibEvent*)nullptr)->as.modified),
+              "NibEvent grew: a new union member is wider than the v3 `modified` payload - that is an ABI break, not an additive change");
 static const NibPanelsApi   g_nibPanelsApi   = { 1, sizeof(NibPanelsApi),   nibPanelRegister, nibPanelSetText, nibPanelAppend, nibPanelShow };
 static const NibDocumentsApi g_nibDocumentsApi = { 5, sizeof(NibDocumentsApi), nibDocCount, nibDocActivePath, nibDocOpen, nibDocSave, nibDocActiveId, nibDocPathFromId, nibDocActiveView, nibDocPathAt,
     nibDocViewCount, nibDocIdAt, nibDocPosOf, nibDocIndexOfActive, nibDocActivateAt, nibDocSetLangById,
@@ -2293,6 +2381,7 @@ static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
         if (minv == 2) return &g_nibEventsApiV2;
         if (minv == 3) return &g_nibEventsApiV3;   // + set_modified_mask + v3 event kinds
         if (minv == 4) return &g_nibEventsApiV4;   // + v4 long-tail file-lifecycle + cmdline plugin message kinds
+        if (minv == 5) return &g_nibEventsApiV5;   // + v5 raw editor input (char-added / margin-click / dwell / hotspot)
         return nullptr;
     }
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PANELS)   == 0) return &g_nibPanelsApi;
@@ -3065,7 +3154,7 @@ public:
             }
             return 0;
         };
-        g_nibDocActiveView = [this]() -> int { return m_active == &m_sub ? 1 : 0; };   // 0 = main, 1 = sub
+        g_nibDocActiveView = [this]() -> int { return paneIndex(m_active); };   // 0 = main, 1 = sub
         g_nibDocPathAt = [this](int index, char* b, int c) -> int {   // v4: path of the open doc at a flat index (main view's tabs, then sub view's - matching g_nibDocCount)
             int i = 0;
             for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs }) {
@@ -3146,9 +3235,15 @@ public:
         g_nibDocEolSet = [this](intptr_t id, int mode) -> int {
             EditorPage* p = pageFromId(id);
             if (!p || mode < 0 || mode > 2) return 0;
-            peekDoc(p, [&]{ sci(SCI_SETEOLMODE, mode); sci(SCI_CONVERTEOLS, mode); });   // convert existing line endings
+            bool reallyDirty = false;
+            peekDoc(p, [&]{ sci(SCI_SETEOLMODE, mode); sci(SCI_CONVERTEOLS, mode); reallyDirty = sci(SCI_GETMODIFY) != 0; });   // convert existing line endings
             if (p == activePage()) { refreshTab(p); updateUiState(); }   // active: its own modified event already fired
-            else { p->dirty = true; refreshTabLabel(p); }               // background: the swap was quiet, mark it here
+            // Background: the swap was quiet (masked events), so mark dirty + bump the backup serial by
+            // hand - but only when the document really IS modified. A no-op convert (the buffer already
+            // used the requested mode) on a CLEAN page must not fabricate a dirty flag: the serial bump
+            // then wrote a .bak + manifest for content identical to disk, and a clean exit's early-out
+            // (GETMODIFY==0, no clearRecovery) left it to resurrect as a phantom "unsaved" tab.
+            else if (reallyDirty) { p->dirty = true; ++p->editSerial; refreshTabLabel(p); }
             return 1;
         };
         g_nibDocSaveActiveAs = [this](const char* path, int asCopy) -> int {
@@ -3179,6 +3274,7 @@ public:
             const wxString nm = wxString::FromUTF8(name);
             if (nm.find('/') != wxString::npos || nm.find('\\') != wxString::npos) return 0;   // a tab label, not a path
             p->title = nm;
+            if (!p->recoveryId.empty()) ++p->editSerial;   // Title lives in the recovery manifest: force the next tick to rewrite it (see renameActiveTo)
             if (p == activePage()) refreshTab(p);   // refreshTab updates the tab label AND the title bar
             else refreshTabLabel(p);
             return 1;
@@ -3437,6 +3533,7 @@ public:
         g_editorContextMenu = [this](int sx, int sy) { showEditorContext(sx, sy); };   // editor right-click menu
         g_openDropped = [this](const wxString& s) { openDroppedPaths(s); };            // files dropped on the editor
         g_onZoom = [this](int z) { onZoomChanged(z); };                                // sync + persist zoom
+        g_backupTick = [this] { backupTick(); };                                       // test seam: one backup-timer pass on demand
         g_ipcOpenRequest = [this](const WxnOpenRequest& r) {
             for (const auto& d : r.folders) showFileBrowserRooted(d);   // `wxnote .` handed to us; last root wins
             // Shared with the new-window path: files as tabs (or into the split for -o/-O/--split), each
@@ -3635,6 +3732,19 @@ public:
     void restoreRecoveryBackups(const std::map<wxString, EditorPage*>& alreadyOpen)
     {
         wxLogNull noLog;   // recovery restore is best-effort - a missing/unreadable backup is skipped, never surfaced as an error
+        // Sweep orphaned .tmp files: a crash BETWEEN writing <id>.bak.tmp and the rename leaves the temp
+        // behind, and nothing else ever deletes it (clearRecovery removes only the .bak) - each such
+        // crash would otherwise leak a full document copy in the user's data dir forever. Age-gated
+        // rather than assuming "no write is in flight at startup": a SECOND wxnote process shares this
+        // dir (ReuseInstance defaults off), and its snapshot mid-write must not be swept. Anything older
+        // than the longest backup cadence is an orphan under any process topology.
+        {
+            wxArrayString tmps;
+            wxDir::GetAllFiles(recoveryDir(), &tmps, "*.tmp", wxDIR_FILES);
+            const time_t now = wxDateTime::GetTimeNow();
+            for (const wxString& t : tmps)
+                if (const time_t mt = wxFileModificationTime(t); mt > 0 && now - mt > 600) wxRemoveFile(t);
+        }
         auto* cfg = wxConfigBase::Get();
         const wxString prevPath = cfg->GetPath();
         cfg->SetPath("/Recovery");
@@ -3734,6 +3844,15 @@ private:
         g_mainStc = m_main.stc; g_subStc = m_sub.stc;
         g_coreSciCall = [this](int view, unsigned msg, uintptr_t w, intptr_t l) -> intptr_t {
             wxStyledTextCtrl* stc = (view == 0) ? m_main.stc : (view == 1) ? m_sub.stc : m_stc;
+            // A plugin narrowing the modify-event mask (a common N++ plugin action - it is why N++ grew
+            // NPPM_ADDSCNMODIFIEDFLAGS as a union) must not starve the HOST: onStcModified feeds the
+            // crash-backup's editSerial from SCN_MODIFIED insert/delete events, so a mask without those
+            // bits would freeze the serial while content keeps changing and skip-if-unchanged would then
+            // hold a stale .bak through every tick AND the exit backup. OR the host's bits in; the plugin
+            // still receives at least everything it asked for. (Known residual: a plugin that fetches
+            // SCI_GETDIRECTFUNCTION and sets the mask through the direct pointer bypasses this funnel -
+            // peekDoc preserves whatever mask it finds, but the serial starves until the mask is widened.)
+            if (msg == SCI_SETMODEVENTMASK) w |= (uintptr_t)(SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT);
             return stc ? static_cast<intptr_t>(stc->SendMsg(static_cast<int>(msg), static_cast<wxUIntPtr>(w), static_cast<wxIntPtr>(l))) : 0;
         };
         // Let plugins invoke a built-in command by id (nib.commands v2 -> the N++ bridge's NPPM_MENUCOMMAND),
@@ -3815,20 +3934,37 @@ private:
     // beNotified() forwarding per view, plus a focus-in that makes that view the active one.
     void bindViewEvents(ViewPane& v)
     {
-        v.stc->Bind(wxEVT_STC_CHARADDED,        &WxnShellFrameT::onStcCharAdded,   this);
+        v.stc->Bind(wxEVT_STC_CHARADDED, [this, vp = &v](wxStyledTextEvent& e) { onStcCharAdded(e, vp); });   // pane-aware: v5 events carry which view fired
         v.stc->Bind(wxEVT_STC_CALLTIP_CLICK,    &WxnShellFrameT::onCallTipClick,   this);
         v.stc->Bind(wxEVT_STC_INDICATOR_CLICK,  &WxnShellFrameT::onUrlClick,       this);
         v.stc->Bind(wxEVT_STC_UPDATEUI,         &WxnShellFrameT::onStcUpdateUI,    this);
         v.stc->Bind(wxEVT_STC_DOUBLECLICK,      &WxnShellFrameT::onStcDoubleClick, this);
-        v.stc->Bind(wxEVT_STC_MARGINCLICK,      &WxnShellFrameT::onStcMarginClick, this);
+        v.stc->Bind(wxEVT_STC_MARGINCLICK, [this, vp = &v](wxStyledTextEvent& e) { onStcMarginClick(e, vp); });
         v.stc->Bind(wxEVT_STC_ZOOM,             &WxnShellFrameT::onStcZoom,        this);
-        v.stc->Bind(wxEVT_STC_MODIFIED,         &WxnShellFrameT::onStcModified,    this);
+        v.stc->Bind(wxEVT_STC_MODIFIED, [this, vp = &v](wxStyledTextEvent& e) { onStcModified(e, vp); });   // pane-aware: the backup serial must credit the FIRING view's page
         v.stc->Bind(wxEVT_STC_MACRORECORD,      &WxnShellFrameT::onMacroRecord,    this);   // capture commands while recording a macro
         v.stc->Bind(wxEVT_STC_STYLENEEDED,      &WxnShellFrameT::onStcStyleNeeded, this);   // container-lexed Scintillua-language buffers only
+        // v5 nib.events raw input: the host has no behaviour of its own on dwell or hotspot, so these
+        // exist purely to relay them to plugins (see onStcDwell / onStcHotspot).
+        v.stc->Bind(wxEVT_STC_DWELLSTART,   [this, vp = &v](wxStyledTextEvent& e){ onStcDwell  (e, NIB_EV_DWELL_START, vp); });
+        v.stc->Bind(wxEVT_STC_DWELLEND,     [this, vp = &v](wxStyledTextEvent& e){ onStcDwell  (e, NIB_EV_DWELL_END, vp); });
+        v.stc->Bind(wxEVT_STC_HOTSPOT_CLICK,        [this, vp = &v](wxStyledTextEvent& e){ onStcHotspot(e, NIB_EV_HOTSPOT_CLICK, vp); });
+        v.stc->Bind(wxEVT_STC_HOTSPOT_DCLICK,       [this, vp = &v](wxStyledTextEvent& e){ onStcHotspot(e, NIB_EV_HOTSPOT_DOUBLE_CLICK, vp); });
+        v.stc->Bind(wxEVT_STC_HOTSPOT_RELEASE_CLICK,[this, vp = &v](wxStyledTextEvent& e){ onStcHotspot(e, NIB_EV_HOTSPOT_RELEASE_CLICK, vp); });
         // v1 nib.events semantics only: savepoint == "saved" (which also fires on undo/redo landing back
         // on the saved state, and during Save All reports no id at all). v2 subscribers instead get the
         // real, id-carrying NIB_EV_DOCUMENT_SAVED from writeFile/writePageToDisk - one per disk write.
-        v.stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this](wxStyledTextEvent& e) { NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev, NIB_FIRE_V1_ONLY); e.Skip(); });
+        // Reaching the savepoint ALSO retires the page's crash snapshot: the document is back at its
+        // saved state, whether via a real save (writeFile clears recovery itself - idempotent) or via
+        // undo / reload / reinterpret DISCARDING the edits. Leaving the .bak behind on the discard
+        // paths meant a later clean exit resurrected the discarded junk at next launch
+        // (restoreRecoveryBackups overlays any surviving manifest entry), and a reflexive Ctrl+S after
+        // that restore overwrote good on-disk content with edits the user had deliberately undone.
+        v.stc->Bind(wxEVT_STC_SAVEPOINTREACHED, [this, vp = &v](wxStyledTextEvent& e) {
+            // refreshTabLabel: without it a document cloned into both panes kept the OTHER pane's "*"
+            // marker after a save - dirty said clean while the chrome claimed unsaved changes.
+            if (EditorPage* p = pageShownIn(vp)) { p->dirty = false; clearRecovery(p); refreshTabLabel(p); }
+            NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev, NIB_FIRE_V1_ONLY); e.Skip(); });
         v.stc->Bind(wxEVT_CONTEXT_MENU,         &WxnShellFrameT::onStcContextMenu, this);
         v.stc->Bind(wxEVT_SET_FOCUS, [this, vp = &v](wxFocusEvent& e) { onViewFocus(vp); e.Skip(); });   // focus -> this view becomes active
     }
@@ -3851,7 +3987,7 @@ private:
             }
         return false;
     }
-    void onStcCharAdded(wxStyledTextEvent& e)
+    void onStcCharAdded(wxStyledTextEvent& e, ViewPane* vp)
     {
         const int ch = e.GetKey();
         if ((ch == '\n' || ch == '\r') && m_autoindent) autoIndentOnNewline(m_stc);
@@ -3866,6 +4002,11 @@ private:
                 if (caret - (int)sci(SCI_WORDSTARTPOSITION, caret, 1) >= m_autoCompFrom) autoComplete(true);
             }
         }
+        // v5 NIB_EV_CHAR_ADDED, fired LAST - after our own auto-indent / auto-pair / autocompletion have
+        // run, so a plugin (a tag closer, a bracket helper) sees the buffer in its settled state rather
+        // than racing our insertion. Notepad++ notifies its plugins at the same point, at the end of its
+        // own notify(), so plugins ported through npp-bridge get the ordering they were written against.
+        { NibEvent ev{}; ev.kind = NIB_EV_CHAR_ADDED; ev.struct_size = sizeof(NibEvent); ev.as.key.ch = ch; ev.as.key.view = paneIndex(vp); nibFireEvent(ev); }
         e.Skip();
     }
     void onStcUpdateUI(wxStyledTextEvent& e)
@@ -3895,7 +4036,7 @@ private:
         e.Skip();
     }
     void onStcDoubleClick(wxStyledTextEvent& e) { smartHighlight(m_stc); e.Skip(); }
-    void onStcMarginClick(wxStyledTextEvent& e)
+    void onStcMarginClick(wxStyledTextEvent& e, ViewPane* vp)
     {
         if (e.GetMargin() == 1)   // the bookmark margin
         {
@@ -3903,14 +4044,72 @@ private:
             if (sci(SCI_MARKERGET, line) & (1 << MARK_BOOKMARK)) sci(SCI_MARKERDELETE, line, MARK_BOOKMARK);
             else                                                 sci(SCI_MARKERADD, line, MARK_BOOKMARK);
         }
+        // v5 NIB_EV_MARGIN_CLICK, fired after our own bookmark toggle - see the CHAR_ADDED note on ordering.
+        // Every margin is reported, ours included: a plugin owning its own margin needs the raw signal, and
+        // Scintilla gives no way to tell it "this margin is mine".
+        {
+            NibEvent ev{}; ev.kind = NIB_EV_MARGIN_CLICK; ev.struct_size = sizeof(NibEvent);
+            ev.as.margin.position  = e.GetPosition();
+            ev.as.margin.number    = e.GetMargin();
+            ev.as.margin.modifiers = e.GetModifiers();
+            ev.as.margin.view      = paneIndex(vp);
+            nibFireEvent(ev);
+        }
+        e.Skip();
+    }
+    // v5 raw editor input: dwell + hotspot. Both are inert until something turns them on - dwell needs a
+    // SCI_SETMOUSEDWELLTIME (the host never sets one; a plugin does it on the editor handle), hotspot needs
+    // a style with hotspot set - so binding them costs nothing until a plugin asks for the behaviour.
+    void onStcDwell(wxStyledTextEvent& e, NibEventKind kind, ViewPane* vp)
+    {
+        NibEvent ev{}; ev.kind = kind; ev.struct_size = sizeof(NibEvent);
+        ev.as.mouse.position = e.GetPosition();
+        ev.as.mouse.x        = e.GetX();
+        ev.as.mouse.y        = e.GetY();
+        ev.as.mouse.view     = paneIndex(vp);
+        nibFireEvent(ev);
+        e.Skip();
+    }
+    void onStcHotspot(wxStyledTextEvent& e, NibEventKind kind, ViewPane* vp)
+    {
+        NibEvent ev{}; ev.kind = kind; ev.struct_size = sizeof(NibEvent);
+        ev.as.hotspot.position  = e.GetPosition();
+        ev.as.hotspot.modifiers = e.GetModifiers();
+        ev.as.hotspot.view      = paneIndex(vp);
+        nibFireEvent(ev);
         e.Skip();
     }
     void onStcZoom(wxStyledTextEvent& e)      { if (g_onZoom) g_onZoom(static_cast<int>(sci(SCI_GETZOOM))); e.Skip(); }
-    void onStcModified(wxStyledTextEvent& e)
+    void onStcModified(wxStyledTextEvent& e, ViewPane* vp)
     {
         const int mt = e.GetModificationType();
         if (mt & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT))   // raise a Nib text-changed event
         {
+            // Content-change serial for the crash-safety backup's skip-if-unchanged, credited to the
+            // FIRING pane's mounted page - NOT activePage(). Keyboard input always comes from the
+            // focused (= active) view, but plugins write through explicit view handles (nib.editor's
+            // g_view is always MAIN, nib.sci takes a view index, the bridge's _scintillaMainHandle is
+            // always MAIN), so with the split open an edit can land in the view WITHOUT focus.
+            // Crediting the active page left the mutated page's serial behind, and the skip then froze
+            // its .bak at pre-plugin content - through the exit backup too (review: HIGH). A cloned
+            // document fires both panes' handlers and advances both pages: each keeps its own snapshot.
+            // The background page's cached dirty flag is refreshed here too - it gates backupTick, and
+            // nothing else updates it until that page is next activated. The one event-MASKED mutation
+            // path (peekDoc) still bumps its page by hand (g_nibDocEolSet).
+            if (EditorPage* p = pageShownIn(vp))
+            {
+                ++p->editSerial;
+                // Cache the dirty flag AT THE EDIT, for the active page too. pageDirty() reads this
+                // cache for every non-active page, and it gates the crash-backup tick - but the only
+                // other writer, updateUiState(), runs opportunistically on UI passes, so a buffer
+                // dirtied and then backgrounded before one happened stayed cached-CLEAN and was never
+                // snapshotted at all (an intermittent lost-backup, caught by the EOL fixture below).
+                // Label refresh only on a transition, and only for a background page - refreshTabLabel
+                // pays three linear tab scans, the active page's chrome has its own path, and a plugin
+                // rewriting a document line-by-line fires this per modification.
+                const bool d = vp->stc->GetModify();   // pageShownIn already guaranteed vp->stc
+                if (d != p->dirty) { p->dirty = d; if (p != activePage()) refreshTabLabel(p); }
+            }
             NibEvent ev{};
             ev.kind = NIB_EV_TEXT_CHANGED; ev.struct_size = sizeof(NibEvent);
             ev.as.text.pos     = e.GetPosition();
@@ -4070,11 +4269,8 @@ private:
     }
     std::string flLangKey()
     {
-        // wxFileName, NOT path.AfterLast('.'): AfterLast returns the WHOLE string when the character is
-        // absent, so for an extension-less path like /proj/Makefile it handed back the entire path as the
-        // "extension" - never empty, so the name-based branch at the bottom was unreachable dead code.
         wxString ext, base;
-        if (auto* p = activePage()) { ext = wxnExtOf(p->path); base = wxFileName(p->path).GetFullName().Lower(); }
+        if (auto* p = activePage()) { base = wxFileName(p->path).GetFullName().Lower(); ext = wxnExtOfName(base); }
         if (auto u = g_flUserExtToLang.find(std::string(ext.utf8_str())); u != g_flUserExtToLang.end()) return u->second;   // user-mapped extension
         if (ext=="cpp"||ext=="cc"||ext=="cxx"||ext=="c"||ext=="h"||ext=="hpp"||ext=="hxx"||ext=="ino") return "cpp";
         if (ext=="py"||ext=="pyw") return "python";
@@ -5014,7 +5210,7 @@ private:
         wxXmlDocument doc;
         auto* root = new wxXmlNode(wxXML_ELEMENT_NODE, "NotepadPlus");
         auto* sess = new wxXmlNode(wxXML_ELEMENT_NODE, "Session");
-        sess->AddAttribute("activeView", m_active == &m_sub ? "1" : "0");
+        sess->AddAttribute("activeView", paneIndex(m_active) ? "1" : "0");
         root->AddChild(sess); doc.SetRoot(root);
         EditorPage* activeP = activePage();
         struct ViewSpec { wxAuiNotebook* tabs; const char* tag; };
@@ -5278,19 +5474,47 @@ private:
         const int caret = (int)sci(SCI_GETCURRENTPOS), start = (int)sci(SCI_WORDSTARTPOSITION, caret, 1), plen = caret - start;
         if (plen <= 0) { sci(SCI_AUTOCCANCEL); return; }
         const std::string prefix = rangeText(start, caret);
-        // The candidate scan covers the WHOLE document, so the whole document has to be styled for the
-        // filter to mean anything - but this runs on every word character typed, so it is capped: past
-        // this size the filter is skipped and harvesting falls back to the old unfiltered behaviour, a
-        // quality trade rather than a correctness one. (largeFile pages have no styling at all.)
-        static const int kStyleFilterMaxBytes = 1 << 20;   // 1 MiB
-        const int docLen = (int)sci(SCI_GETLENGTH);
-        static const std::bitset<256> kNoSkip;
-        const std::bitset<256>* skipStyles = &kNoSkip;
-        if (auto* p = activePage(); (!p || !p->largeFile) && docLen <= kStyleFilterMaxBytes)
-            if (ensureStyledTo(docLen)) skipStyles = &proseStyles();
+        // This runs on every word character typed, so its cost must be bounded by a constant, not by the
+        // file: the harvest reads at most kWxnHarvestMaxBytes around the caret. One budget, two roles:
+        //   * docs at or under it - harvest the whole document, styled-filtered: the pre-window behaviour,
+        //     byte for byte, for the overwhelmingly common case.
+        //   * docs over it - harvest a caret-centered window (wxnHarvestWindow), the words you are
+        //     completing against being overwhelmingly the nearby ones. Before the window this band paid a
+        //     whole-document copy + scan per keystroke - measured at 300 ms for 16 MiB, 1.19 s for 64 MiB
+        //     (funclist_selftest --bench) - and got no prose filter for it; now it pays the same capped
+        //     cost as a 1 MiB file, on ANY size of file.
+        // There is deliberately NO largeFile gate: the window already bounds the harvest on a large-file
+        // page just as hard (review killed a first draft that gated - a forced-language 20 MiB file and a
+        // 100 KB byLine-tripped one-liner both lost completion for zero cost saving), and the style pass
+        // below is self-guarding on unstyled pages. Keyword completion is likewise unconditional.
+        // The style filter styles up to the CARET on a cut window, not to the window's end: an edit
+        // clamps endStyled back to the caret's line, so any styling bought past the caret would be
+        // re-lexed AND re-folded on the very next keystroke, in perpetuity. Tail candidates simply go
+        // unfiltered - which is all that band ever had before windowing. A whole-document harvest keeps
+        // the full-range filter it always had, and ensureStyledTo stays incremental for Lexilla while
+        // refusing outright for container-lexed (Scintillua) buffers and lexer-less large-file pages
+        // (both report SCLEX_CONTAINER) rather than forcing a whole-buffer re-lex.
+        const long long docLen = (long long)sci(SCI_GETLENGTH);
+        long long hStart = 0, hEnd = 0;   // plain locals (not a structured binding) so the >2 GiB guard can leave them zeroed
+        if (docLen <= INT_MAX - 1)   // rangeText/GetStyleAt take int positions: a >2 GiB doc must not wrap
+        { const auto w = wxnHarvestWindow(docLen, caret, kWxnHarvestMaxBytes); hStart = w.first; hEnd = w.second; }
+        const std::bitset<256>* skipStyles = &proseStylesEmpty();
+        const long long styleTo = (hStart == 0 && hEnd == docLen) ? hEnd : caret;
+        if (hEnd > hStart && ensureStyledTo((int)styleTo)) skipStyles = &proseStyles();
         std::set<std::string, std::less<>> cand;
-        wxnCollectWords(getDocUtf8(), prefix, cand, *skipStyles,
-                        [this](size_t pos) { return (int)m_stc->GetStyleAt((int)pos); });
+        const size_t base = (size_t)hStart;
+        // The filter stops at styleTo: on a cut window, style bytes past the caret were never validated
+        // for the CURRENT content (an off-screen edit leaves them stale - e.g. deleting a `/*` opener
+        // leaves 200 KB still carrying comment styles), so probing them silently dropped words that are
+        // now real code. Candidates past the limit are simply unfiltered, as the comment above promises.
+        const size_t styleLimit = (size_t)styleTo;
+        if (hEnd > hStart)
+            wxnCollectWords(rangeText((int)hStart, (int)hEnd), prefix, cand, *skipStyles,
+                            [this, base, styleLimit](size_t pos) {
+                                const size_t abs = pos + base;
+                                return abs < styleLimit ? (int)m_stc->GetStyleAt((int)abs) : -1;   // -1 = unstyled -> kept
+                            },
+                            /*clipHead=*/hStart > 0, /*clipTail=*/hEnd < docLen);
         if (withKeywords) collectKeywords(prefix, cand);
         cand.erase(prefix);
         if (cand.empty()) { sci(SCI_AUTOCCANCEL); return; }
@@ -5306,11 +5530,26 @@ private:
     {
         std::vector<std::string> out; std::set<std::string> seen;
         if (name.empty()) return out;
-        const std::string doc = getDocUtf8();
+        // Same per-keystroke budget as the completion harvest: this fires on every '(' typed, and it
+        // used to copy + find over the WHOLE document - the one O(docLen) cost left on the typing path
+        // after the harvest was windowed (review, Phase-8). Signatures are even more locality-biased
+        // than completion words, so the same caret-centered window applies; a signature defined outside
+        // it is simply not offered, exactly like a completion candidate. Positions in `doc` below are
+        // window-relative and purely local (string extraction only), so the shift is invisible here.
+        const long long docLen = (long long)sci(SCI_GETLENGTH);
+        if (docLen > INT_MAX - 1) return out;   // rangeText takes int positions: a >2 GiB doc must not wrap
+        const auto w = wxnHarvestWindow(docLen, (long long)sci(SCI_GETCURRENTPOS), kWxnHarvestMaxBytes);
+        const std::string doc = rangeText((int)w.first, (int)w.second);
+        const bool headCut = w.first > 0;   // window starts mid-document: byte 0 may be mid-identifier
         const std::string needle = name + "(";
         for (size_t pos = 0; (pos = doc.find(needle, pos)) != std::string::npos; )
         {
-            if (pos && (std::isalnum((unsigned char)doc[pos - 1]) || doc[pos - 1] == '_')) { pos += 1; continue; }   // not a word boundary
+            // pos == 0 was a safe word boundary when doc[0] was the real document start; on a cut
+            // window it can sit inside a longer identifier ("...longothername(" cut right before
+            // "name("), whose signature would then be offered under the wrong name - the same edge
+            // wxnCollectWords handles with clipHead. Skip a head-touching match on a cut window.
+            if ((pos == 0 && headCut) ||
+                (pos && (std::isalnum((unsigned char)doc[pos - 1]) || doc[pos - 1] == '_'))) { pos += 1; continue; }   // not a word boundary
             const size_t op = pos + name.size();   // the '('
             int depth = 0; size_t i = op;
             for (; i < doc.size() && i < op + 500; ++i) { const char c = doc[i]; if (c == '(') ++depth; else if (c == ')' && --depth == 0) { ++i; break; } }
@@ -5531,10 +5770,33 @@ private:
         m_capBar->Raise();
     }
 
-    EditorPage* activePage() const
+    // The page mounted in a SPECIFIC view - as opposed to activePage(), which follows focus. Editor
+    // events must be attributed with this: each view's stc always mounts its own notebook's selected
+    // page, and with the split open that is NOT necessarily the focused view's page.
+    EditorPage* selectedPageOf(const ViewPane* vp) const
     {
-        const int s = m_tabs ? m_tabs->GetSelection() : wxNOT_FOUND;
-        return s == wxNOT_FOUND ? nullptr : static_cast<EditorPage*>(m_tabs->GetPage(s));
+        const int s = (vp && vp->tabs) ? vp->tabs->GetSelection() : wxNOT_FOUND;
+        return s == wxNOT_FOUND ? nullptr : static_cast<EditorPage*>(vp->tabs->GetPage(s));
+    }
+    EditorPage* activePage() const { return selectedPageOf(m_active); }   // the focused view's page - one selection->page mapping, not two
+    // The page whose DOCUMENT a pane's stc is showing right now - the only attribution that is correct
+    // while a tab switch or a load is mid-flight. The notebook's selection is a lagging proxy: during
+    // addDocument/loadFile the stc already mounts the NEW page's document while GetSelection() can
+    // still report the previous tab, so keying the backup serial or the savepoint-clear off the
+    // selection credited (or worse, CLEANED) the wrong page. Falls back from the selected page (the
+    // overwhelmingly common case, checked first) to a scan of the pane's tabs; a document mounted by
+    // peekDoc from the OTHER pane resolves to null here, which every caller treats as "skip".
+    // 0 = main view, 1 = the split's second view: the value the v5 nib events carry so a consumer (the
+    // GPL bridge's hwndFrom mapping) can tell which editor fired.
+    int paneIndex(const ViewPane* vp) const { return vp == &m_sub ? 1 : 0; }
+    EditorPage* pageShownIn(const ViewPane* vp) const
+    {
+        if (!vp || !vp->tabs || !vp->stc) return nullptr;
+        const sptr_t d = reinterpret_cast<sptr_t>(vp->stc->GetDocPointer());
+        if (EditorPage* s = selectedPageOf(vp); s && s->doc == d) return s;
+        for (size_t i = 0; i < vp->tabs->GetPageCount(); ++i)
+            if (auto* p = static_cast<EditorPage*>(vp->tabs->GetPage(i)); p && p->doc == d) return p;
+        return nullptr;
     }
     wxString nextNewName() { return wxString::Format(_("new %d"), ++m_newCount); }   // untitled-buffer name, localized ("nowy N" / "neu N" / ...)
 
@@ -5826,13 +6088,14 @@ private:
         const int    savedAnchor = static_cast<int>(sci(SCI_GETANCHOR));
         const int    savedCaret  = static_cast<int>(sci(SCI_GETCURRENTPOS));
         const int    savedTop    = static_cast<int>(sci(SCI_GETFIRSTVISIBLELINE));
+        const sptr_t savedMask = sci(SCI_GETMODEVENTMASK);   // restore what was SET, not a hard ALL: a plugin-narrowed mask must survive a peek
         sci(SCI_SETMODEVENTMASK, 0);                 // quiet: the active view must not react to the peeked doc
         sci(SCI_SETDOCPOINTER, 0, p->doc);
         fn();
         sci(SCI_SETDOCPOINTER, 0, savedDoc);         // remount the active view's own document...
         sci(SCI_SETSEL, savedAnchor, savedCaret);    // ...and restore its caret/selection (lost by the swap)
         sci(SCI_SETFIRSTVISIBLELINE, savedTop);
-        sci(SCI_SETMODEVENTMASK, SC_MODEVENTMASKALL);
+        sci(SCI_SETMODEVENTMASK, savedMask);
     }
     // Save the active document to `path`. asCopy: write a copy WITHOUT rebinding the active buffer to it
     // (its path/title/dirty/lexer are untouched, and no save events fire - it is a copy, not "the save");
@@ -6095,15 +6358,33 @@ private:
         if (!p) return;
         // An empty untitled buffer holds no work to recover: backing it up would resurrect an empty "new 1"
         // ghost tab on the next launch (and leak an empty .bak + a stale Recovery/ config group every quit).
-        // confirmClose has already activated p, so getAllText() reflects it. Clear any stale backup and bail.
-        if (p->path.empty() && getAllText().empty()) { clearRecovery(p); return; }
+        // confirmClose has already activated p, so the active length reflects it. Clear any stale backup and bail.
+        if (p->path.empty() && sci(SCI_GETLENGTH) == 0) { clearRecovery(p); return; }
+        // Skip when nothing changed since the last snapshot: dirty stays true until a SAVE, so without
+        // this the timer re-copied and re-wrote every dirty buffer every 30 s in perpetuity - to produce
+        // a .bak byte-identical to the one on disk. The serial advances on every insert/delete; the
+        // ~0 backupSerial start means a session's first pass (including a restored recovery buffer,
+        // which is dirty with zero edits) always writes once, then rests. (backupSerial == editSerial
+        // implies a snapshot exists: the serial is only ever stamped alongside a successful write, and
+        // clearRecovery resets it with the epoch.)
+        if (p->backupSerial == p->editSerial) return;
         if (p->recoveryId.empty()) p->recoveryId = generateRecoveryId();
         const wxString dir = recoveryDir();
         wxLogNull noLog;   // best-effort safety net: a failed backup must never surface a wxLog error dialog
         if (!wxDirExists(dir)) wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-        wxFile f(dir + wxFILE_SEP_PATH + p->recoveryId + ".bak", wxFile::write);
-        if (!f.IsOpened()) return;   // couldn't write the backup - don't record a manifest entry pointing at a file that isn't there
-        const wxScopedCharBuffer u = getAllText().ToUTF8(); f.Write(u.data(), u.length());
+        // The document already IS UTF-8, and Scintilla hands out a stable pointer to its own bytes
+        // (SCI_GETCHARACTERPOINTER; nothing below modifies the document before the write finishes) - so
+        // the snapshot is ZERO-copy. The old getAllText().ToUTF8() spelling transcoded the whole buffer
+        // UTF-8 -> wxString (UTF-16 on Windows, twice the size) -> UTF-8: three full-document copies.
+        // The manifest entry and the success stamps are recorded only after the atomic write lands, so
+        // any failure leaves the old snapshot intact and retries next tick.
+        const long long docLen = (long long)sci(SCI_GETLENGTH);
+        if (docLen > INT_MAX - 1) return;   // int positions only; >2 GiB cannot snapshot safely
+        const char* docBytes = reinterpret_cast<const char*>(sci(SCI_GETCHARACTERPOINTER));
+        if (!docBytes) return;
+        if (!wxnWriteFileAtomic(dir + wxFILE_SEP_PATH + p->recoveryId + ".bak", docBytes, (size_t)docLen)) return;
+        p->backupSerial = p->editSerial;
+        p->lastBackupMs = wxnMonoMs();
         auto* cfg = wxConfigBase::Get();
         cfg->Write("Recovery/" + p->recoveryId + "/Path", p->path);
         cfg->Write("Recovery/" + p->recoveryId + "/Title", p->title);
@@ -6115,6 +6396,12 @@ private:
         wxConfigBase::Get()->DeleteGroup("Recovery/" + p->recoveryId);
         { wxLogNull noLog; wxRemoveFile(recoveryDir() + wxFILE_SEP_PATH + p->recoveryId + ".bak"); }   // best-effort: the .bak may already be gone
         p->recoveryId.clear();
+        // The cadence/serial stamps live and die with the recovery epoch: keeping them meant the FIRST
+        // snapshot after a save was rationed by the PREVIOUS epoch's timestamp - fresh edits on a big
+        // buffer sat unprotected for up to the full throttle window with no .bak at all, exactly the
+        // exposure "a first snapshot never waits" exists to prevent.
+        p->backupSerial = ~0ull;
+        p->lastBackupMs = 0;
     }
     // Ask to save a modified document before closing it (Save / Don't Save / Cancel), themed like the
     // rest of the app. Returns true if the caller may close the page, false if the user cancelled.
@@ -8263,11 +8550,26 @@ private:
     // crash or power loss between saves is recoverable next launch (the on-exit backup only fires on a clean
     // quit). backupUnsavedChanges reads getAllText(), so a background page is peeked in via its own document
     // (peekDoc leaves the active view's tab/caret/lexer untouched). Saving a buffer clears its .bak.
-    void onBackupTimer(wxTimerEvent&)
+    void onBackupTimer(wxTimerEvent&) { backupTick(); }
+    void backupTick()
     {
+        const long long now = wxnMonoMs();
         for (EditorPage* p : allPages())
-            if (pageDirty(p))
-                peekDoc(p, [this, p]{ backupUnsavedChanges(p); });
+        {
+            if (!pageDirty(p)) continue;
+            // The serial skip runs BEFORE peekDoc: the common tick visits N idle-dirty buffers, and
+            // paying a doc-pointer swap + caret/scroll restore per buffer just to hit the same check
+            // inside backupUnsavedChanges made the no-op tick O(swaps). Serials are plain page fields.
+            if (p->backupSerial == p->editSerial) continue;
+            peekDoc(p, [this, p, now]{
+                // Cadence stretch for big buffers (wxnBackupThrottleMs): a first-ever snapshot never
+                // waits, and the exit-path backup (confirmClose) bypasses this entirely - it calls
+                // backupUnsavedChanges directly, because the last chance must not be rationed.
+                const long long throttle = wxnBackupThrottleMs((long long)sci(SCI_GETLENGTH));
+                if (throttle && p->lastBackupMs && now - p->lastBackupMs < throttle) return;
+                backupUnsavedChanges(p);
+            });
+        }
     }
     void onMonTimer(wxTimerEvent&)
     {
@@ -8294,7 +8596,12 @@ private:
 
         const wxString tempPath = wxFileName::CreateTempFileName("wxnote_elev_");
         if (tempPath.empty()) return false;
-        { wxFile tf(tempPath, wxFile::write); if (!tf.IsOpened()) return false; tf.Write(data.data(), data.size()); }
+        {   // short write here (disk full) must fail LOUDLY: the elevated child would faithfully copy the
+            // truncated temp over the target, and the caller would then savepoint + drop the crash .bak
+            wxFile tf(tempPath, wxFile::write);
+            if (!tf.IsOpened()) return false;
+            if (tf.Write(data.data(), data.size()) != data.size()) { tf.Close(); wxRemoveFile(tempPath); return false; }
+        }
 
         const wxString exePath = wxStandardPaths::Get().GetExecutablePath();
         const wxString params = wxString::Format("--elevated-write \"%s\" \"%s\"", tempPath, path);
@@ -8309,7 +8616,11 @@ private:
         ::WaitForSingleObject(sei.hProcess, 15000);   // give the elevated copy a moment; don't hang the UI forever
         ::CloseHandle(sei.hProcess);
         wxRemoveFile(tempPath);
-        return wxFileExists(path);
+        // wxFileExists proved nothing: in the EACCES scenario the target already exists (that is WHY the
+        // unprivileged open failed), so it answered true even when the copy was truncated - or never ran
+        // at all (a UAC prompt answered slower than the wait above). Require the size to have landed.
+        const wxULongLong sz = wxFileName::GetSize(path);
+        return sz != wxInvalidSize && sz == (wxULongLong)data.size();
     }
 #endif
     // Encode the CURRENTLY-MOUNTED document for buffer p's encoding and write it to `path`. Returns false
@@ -8330,8 +8641,10 @@ private:
             return false;
 #endif
         }
-        else
-            f.Write(out.data(), out.size());
+        else if (f.Write(out.data(), out.size()) != out.size())
+            return false;   // short write (disk full): the on-disk file is truncated, but reporting failure
+                            // stops writeFile/writePageToDisk from SETSAVEPOINT + clearRecovery - the memory
+                            // copy stays flagged dirty and the crash .bak survives as the only complete copy
         return true;
     }
     bool writeFile(const wxString& path)
@@ -8769,23 +9082,27 @@ private:
         m_stc->SetIndicatorCurrent(SPELL_INDIC);
         m_stc->IndicatorClearRange(startPos, endPos - startPos);
         // "Check comments & strings only" (Document ▸ Spell Check): in a syntax-highlighted document, skip code
-        // identifiers/keywords and check only COMMENTS and STRINGS. Plain-text docs (no lexer) are checked
-        // in full. Shares proseStyles()/ensureStyledTo() with completion, which wants the same set from the
-        // other direction (it DROPS these words) - this used to be a hand-copied second implementation, and
-        // the copies had drifted: this one tested `lexer != wxSTC_LEX_NULL`, which never fires because an
-        // unlexed document reports SCLEX_CONTAINER (0), and it re-lexed from 0 rather than GetEndStyled().
-        // An empty set means the document exposes no comment/string metadata, so check everything.
-        const std::bitset<256>* prose = &proseStylesEmpty();
-        bool gate = m_spellCommentsOnly;
-        if (gate) {
-            if (!ensureStyledTo(endPos)) gate = false;   // styles not trustworthy here - check everything
-            else { prose = &proseStyles(); gate = prose->any(); }
+        // identifiers/keywords and check only COMMENTS and STRINGS. `prose` null = no filter (the setting
+        // is off, or the document exposes no comment/string metadata - plain text is checked in full).
+        // Shares proseStyles()/ensureStyledTo() with completion, which wants the same set from the other
+        // direction (it DROPS these words). Order matters: proseStyles() is pure lexer metadata and is
+        // consulted FIRST - a plain-text page has an empty set and needs no styling at all, so demanding
+        // ensureStyledTo up front (which a lexer-less page can never satisfy) wrongly muted plain text.
+        const std::bitset<256>* prose = nullptr;
+        if (m_spellCommentsOnly) {
+            // Large-file pages (styling off by design, unless a Language was forced): comments-and-strings
+            // cannot be told apart, so check NOTHING rather than squiggle every identifier in a 20 MiB
+            // minified file - 0.13.0's behaviour on these pages was zero squiggles too.
+            if (auto* p = activePage(); p && p->largeFile && !p->langForced) return;
+            if (const std::bitset<256>& ps = proseStyles(); ps.any()) {
+                if (!ensureStyledTo(endPos)) return;   // styles exist but lag (container lexer mid-restyle): skip this pass, the next one catches up
+                prose = &ps;
+            }
         }
         const std::string text = std::string(m_stc->GetTextRange(startPos, endPos).utf8_str());
         for (const wxn::spell::WordSpan& w : wxn::spell::tokenizeForSpell(text)) {
             const int wpos = startPos + w.start;
-            if (gate) { const int st = (int)m_stc->GetStyleAt(wpos);
-                        if (st < 0 || st > 255 || !prose->test((size_t)st)) continue; }   // skip code
+            if (prose && !prose->test((unsigned char)m_stc->GetStyleAt(wpos))) continue;   // skip code
             const std::string word = text.substr(w.start, w.len);
             if (std::find(m_spellIgnore.begin(), m_spellIgnore.end(), word) != m_spellIgnore.end()) continue;
             if (!m_spell->check(word)) m_stc->IndicatorFillRange(wpos, w.len);
@@ -9488,6 +9805,11 @@ private:
         if (!ep || old.empty() || newPath.empty()) return false;
         if (!wxRenameFile(old, newPath)) { nibFireDocEvent(NIB_EV_FILE_RENAME_CANCEL, ep); return false; }   // -> NPPN_FILERENAMECANCEL
         ep->path = newPath; ep->title = wxFileNameFromPath(newPath); setLexerForFile(newPath); refreshTab(ep); setWindowTitle(ep->title);
+        // The recovery manifest stores Path/Title, and skip-if-unchanged skips the manifest rewrite along
+        // with the .bak: without a bump, a dirty-and-snapshotted buffer renamed here kept the OLD path in
+        // recovery through every later tick AND the exit backup - a crash then restored its edits into a
+        // detached "Recovered" tab while the renamed file reopened without them.
+        if (!ep->recoveryId.empty()) ++ep->editSerial;
         nibFireDocEvent(NIB_EV_FILE_RENAMED, ep);   // -> NPPN_FILERENAMED (this buffer's id)
         return true;
     }
@@ -11495,9 +11817,8 @@ private:
                         (unsigned long long)st.wparam, (long long)st.lparam);
             }
         }
-        const wxString path = macrosFilePath(), tmp = path + ".tmp";
-        { wxFile f(tmp, wxFile::write); if (!f.IsOpened()) return; const wxScopedCharBuffer u = out.utf8_str(); f.Write(u.data(), u.length()); }
-        wxRenameFile(tmp, path, true);   // atomic replace
+        const wxScopedCharBuffer u = out.utf8_str();
+        wxnWriteFileAtomic(macrosFilePath(), u.data(), u.length());   // atomic replace; short write keeps the old file
     }
 
     // ----- dark / light theme -------------------------------------------

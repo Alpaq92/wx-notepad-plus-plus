@@ -38,10 +38,21 @@ Editor (`SCI_*`) messages a plugin sends to the editor HWND are bridged to wxSty
 
 ## NPPM_* coverage
 
-**77 of Notepad++'s 118 `NPPM_*` messages are genuinely served, plus 27 `NPPN_*` notifications — and
-from Phase 2 on every one of the 118 `NPPM_*` returns a documented value (zero silent drops).** Plugins
-branch on return values, so the remaining 41 are *answered* with the honest constant this host can give
-today (a documented no-op or interim value) rather than falling through — see the stub table below.
+**77 of Notepad++'s 118 `NPPM_*` messages are genuinely served, plus 27 `NPPN_*` notifications and 7
+`SCN_*` editor notifications — and from Phase 2 on every one of the 118 `NPPM_*` returns a documented
+value (zero silent drops).** Plugins branch on return values, so the remaining 41 are *answered* with the
+honest constant this host can give today (a documented no-op or interim value) rather than falling
+through — see the stub table below.
+
+The **Phase-7** round added **raw editor input** over the new `nib.events` **v5** host hooks. Unlike every
+notification above these are Scintilla's own, not Notepad++'s, so they arrive from the *editor* handle:
+`SCN_CHARADDED` (carrying `scn.ch`), `SCN_MARGINCLICK` (`position` / `margin` / `modifiers`),
+`SCN_DWELLSTART` / `SCN_DWELLEND` (`position` / `x` / `y`) and `SCN_HOTSPOTCLICK` /
+`SCN_HOTSPOTDOUBLECLICK` / `SCN_HOTSPOTRELEASECLICK` (`position` / `modifiers`). This is what unblocks
+autocompletion, tag-closing and bracket-helper plugins, which key off `SCN_CHARADDED` and were inert
+before. Two are dormant by design: Scintilla emits no dwell until something sets `SCI_SETMOUSEDWELLTIME`
+(its default is never) and no hotspot click until a style sets hotspot — the host does neither, so a
+plugin that wants them enables them itself on the editor handle, exactly as under Notepad++.
 
 The **Phase-6** round added the **long-tail file-lifecycle notifications** over the new `nib.events`
 **v4** host hooks, plus the **`-pluginMessage`** command-line flag. Eleven notifications land, all
@@ -94,7 +105,7 @@ compatibility notes below).
 
 | Served | Stubbed / not yet |
 |---|---|
-| GETCURRENTSCINTILLA, GETNPPVERSION, GETCURRENTLANGTYPE, **GETCURRENTVIEW**, **GETBUFFERLANGTYPE** | richer `beNotified` (char-added, margin-click) |
+| GETCURRENTSCINTILLA, GETNPPVERSION, GETCURRENTLANGTYPE, **GETCURRENTVIEW**, **GETBUFFERLANGTYPE** | |
 | GETMENUHANDLE, MENUCOMMAND, **SWITCHTOFILE**, **SETSTATUSBAR**, **GETPLUGINHOMEPATH**, **GETCURRENTBUFFERID**, **GETFULLPATHFROMBUFFERID** | |
 | GETNPPDIRECTORY, GETNPPFULLFILEPATH-ish, GETPLUGINSCONFIGDIR | |
 | **GETFULLCURRENTPATH / GETCURRENTDIRECTORY / GETFILENAME / GETNAMEPART / GETEXTPART**, GETNBOPENFILES (ALL/PRIMARY/SECOND filter), **GETOPENFILENAMES{,PRIMARY,SECOND}** | |

@@ -20,10 +20,15 @@ What this script does (the modifications recorded in resources/icons-streamline/
      (#fff, used only by the save-macro badge ring added here, stays white.)
   4. Validates every output: well-formed XML, only approved paints, no mask/filter/
      clipPath/style/text elements, and the file list exactly matches the default
-     resources/icons/ (Tabler) manifest - the FULL 50-concept set including the
-     workspace-tree device/filetype icons (the sibling iconpark/solar colored sets
-     still cover only the 38 toolbar concepts and fall back to the Tabler line
-     icons for the rest - see iconColored() in src/main.cpp).
+     resources/icons/ (Tabler) manifest MINUS the HANDMADE glyphs below - i.e. the
+     full concept set including the workspace-tree device/filetype icons (the sibling
+     iconpark/solar colored sets still cover only the 38 toolbar concepts and fall
+     back to the Tabler line icons for the rest - see iconColored() in src/main.cpp).
+  5. Leaves hand-drawn files untouched: a few concepts are original wxNote artwork
+     with no Streamline source at all. Each carries a "wxnote-original" marker
+     comment INSIDE the SVG, and the exclusion set is derived from those markers -
+     deleting one drops its marker too, so the manifest check reports it missing
+     rather than the running app showing a blank icon.
 
 The baked colours are tuned for LIGHT chrome (green-4 matches the relative luminance of
 the stock #8fbffa, so the set keeps its designed weight); dark mode lightens both at
@@ -75,8 +80,6 @@ DIRECT = {
     "floppy":              "core/flat/computer-devices/floppy-disk.svg",
     "folder":              "core/flat/interface-essential/new-folder.svg",
     "folder-as-workspace": "core/flat/computer-devices/local-storage-folder.svg",
-    "func-leaf":           "core/flat/nature-ecology/leaf.svg",
-    "func-node":           "core/flat/interface-essential/hierarchy-2.svg",
     "function-list":       "core/flat/programming/curly-brackets.svg",
     "monitoring":          "core/flat/interface-essential/visible.svg",
     "new":                 "core/flat/interface-essential/file-add-alternate.svg",
@@ -91,6 +94,22 @@ DIRECT = {
     "undo":                "core/flat/computer-devices/return-2.svg",
     "word-wrap":           "core/flat/interface-essential/text-flow-rows.svg",
 }
+
+# Original wxNote artwork lives in the output directory alongside the generated files (concepts with
+# no usable Streamline source glyph - see CREDITS.md's "Original glyphs" table). Each such SVG carries
+# a machine-readable "wxnote-original" marker comment, and the exclusion set is DERIVED from those
+# markers - the files themselves are the single source of truth, so adding or retiring a hand-drawn
+# glyph is a one-file change here.
+HANDMADE_MARKER = "wxnote-original"
+
+def handmade() -> set:
+    out = set()
+    for f in os.listdir(OUT) if os.path.isdir(OUT) else []:
+        if f.endswith(".svg"):
+            with open(os.path.join(OUT, f), encoding="utf-8") as fh:
+                if HANDMADE_MARKER in fh.read():
+                    out.add(f[:-4])
+    return out
 
 # Extra glyphs fetched only as composite ingredients.
 INGREDIENTS = {
@@ -371,10 +390,13 @@ def main() -> None:
     files.update(composites())
 
     manifest = sorted(f[:-4] for f in os.listdir(TABLER) if f.endswith(".svg"))
-    if sorted(files) != manifest:
+    generated = sorted(c for c in manifest if c not in handmade())
+    # A deleted hand-drawn glyph loses its marker with it, lands back in `generated`, and surfaces
+    # below as "missing" - so this one check covers both drift directions.
+    if sorted(files) != generated:
         raise SystemExit(
             "manifest mismatch:\n  missing: %s\n  extra: %s"
-            % (sorted(set(manifest) - set(files)), sorted(set(files) - set(manifest)))
+            % (sorted(set(generated) - set(files)), sorted(set(files) - set(generated)))
         )
 
     os.makedirs(OUT, exist_ok=True)

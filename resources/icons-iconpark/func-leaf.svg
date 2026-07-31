@@ -1,9 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" role="img" aria-label="Function">
   <title>Function</title>
-  <!-- IconPark idiom: 48px grid, teal fill under a black outline with white knockout detail.
-       (Was a plant/sapling - "func-leaf" means LEAF NODE of the tree, not foliage.) -->
-  <rect x="6" y="6" width="36" height="36" rx="8" fill="#0ca678" stroke="#000" stroke-width="2.5"/>
-  <path stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
-        d="M19.5 35.5c0-9.3.5-15.3 1.7-18.9C22 13.7 23.4 12.7 25.2 12.7c1 0 1.9.3 2.4.8"/>
-  <path stroke="#fff" stroke-width="3" stroke-linecap="round" d="M16.2 24.2h11.6"/>
+  <!-- IconPark idiom: 48px grid, teal fill under a black outline. The function as a machine: a solid box
+       with something wired into each side. The connectors are teal STROKES butted against the box, not
+       white detail inside it - the box is the pack's filled shape, so a knockout mark would compete with
+       it. Same construction as this pack's group glyph (filled boxes joined by teal strokes), so both the
+       outline and the connectors lighten together under the dark-mode restroke. Box drawn last so it
+       covers the stub ends. -->
+  <path stroke="#0ca678" stroke-width="3.5" stroke-linecap="round" d="M6.5 24H12"/>
+  <path stroke="#0ca678" stroke-width="3.5" stroke-linecap="round" d="M36 24h5.5"/>
+  <rect x="12" y="12" width="24" height="24" rx="7" fill="#0ca678" stroke="#000" stroke-width="2.5"/>
 </svg>

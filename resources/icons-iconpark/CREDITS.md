@@ -70,10 +70,16 @@ The existing 38 toolbar files were left byte-for-byte unchanged when these were 
 
 ## Original glyphs (NOT from IconPark)
 
-One file in this directory is original wxNote artwork rather than a recolored IconPark
-glyph, and is therefore **not** covered by the IconPark attribution above. It is licensed
-under the project's own licence (Apache-2.0, see the root `LICENSE`):
+Four files in this directory are original wxNote artwork rather than recolored IconPark
+glyphs, and are therefore **not** covered by the IconPark attribution above. They are licensed
+under the project's own licence (Apache-2.0, see the root `LICENSE`). All four are drawn to
+this set's conventions - 48x48 viewBox, teal-7 `#0ca678` accent with `stroke-width="2.5"`
+black structural outlines and round caps/joins - so the dark-mode restroke in `iconColored()`
+finds the same hexes it does in every other file here:
 
 | File                 | Why it exists                                                        |
 | -------------------- | -------------------------------------------------------------------- |
-| `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". IconPark has no glyph for this concept. Drawn to this set's conventions: 48x48 viewBox, stroke-only in teal-7 `#0ca678` with `stroke-width="2.5"` and round caps/joins, matching the pack's other stroke-only glyphs (and picked up by the dark-mode teal-3 restroke in `iconColored()`). |
+| `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". IconPark has no glyph for this concept. Stroke-only in teal-7, matching the pack's other stroke-only glyphs. |
+| `print-preview.svg`  | A window frame with a title bar and page text inside - "see the page as it will print". IconPark's print glyphs are all the printer device itself, which cannot distinguish preview from print. |
+| `func-leaf.svg`      | The Function List tree's LEAF node, as the function-as-a-machine: a solid box with a connector wired into each side. Built like this pack's group glyph — teal-filled shape under a black outline, teal strokes around it — so both lighten together under the dark-mode restroke. IconPark's nearest match for the concept was a sapling, which read "func-leaf" as foliage rather than as a leaf of the symbol tree. |
+| `func-node.svg`      | The Function List tree's GROUP node (class/namespace/section): a parent box over two children. The pack's heavy black outline is what makes this concept survive at 16 px, where the lighter packs have to fall back to a solid mass. |

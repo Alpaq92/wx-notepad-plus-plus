@@ -59,18 +59,26 @@ byte-for-byte.
   and `filetype-audio` (the same file body with `music-note-1` scaled inside as the
   dark detail).
 - No other modifications were made beyond selecting icons, the changes above, and the
-  original glyph noted below.
+  original glyphs noted below.
 
 ## Original glyphs (NOT from Streamline)
 
-One file in this directory is original wxNote artwork rather than a re-baked Streamline
-glyph, and is therefore **not** covered by the Streamline attribution above. It is licensed
-under the project's own licence (Apache-2.0, see the root `LICENSE`). It is also NOT
-produced by `tools/generate_streamline_icons.py`, so re-running that script leaves it alone:
+Four files in this directory are original wxNote artwork rather than re-baked Streamline
+glyphs, and are therefore **not** covered by the Streamline attribution above. They are licensed
+under the project's own licence (Apache-2.0, see the root `LICENSE`). They are also NOT
+produced by `tools/generate_streamline_icons.py` — each carries a machine-readable
+`wxnote-original` marker comment inside the SVG, and the script derives its exclusion set from
+those markers, so re-running it leaves them alone (a deleted one turns up as "missing" in its
+manifest check). All four are drawn on this set's 14x14 viewBox
+with its two-paint pair (green-4 `#69db7c`, teal-8 `#099268`) so the dark-mode re-tint in
+`iconColored()` finds the same hexes as the re-baked files:
 
 | File                 | Why it exists                                                        |
 | -------------------- | -------------------------------------------------------------------- |
-| `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". The free Streamline Core set has no glyph for this concept. Drawn on this set's 14x14 viewBox with its two-paint pair (green-4 `#69db7c` braces, teal-8 `#099268` text lines) so the dark-mode re-tint in `iconColored()` finds the same hexes as the re-baked files. |
+| `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". The free Streamline Core set has no glyph for this concept. |
+| `print-preview.svg`  | A page with an eye over it - "look at it before printing". The free Core set's only print glyph is the printer device itself (used here for `print`), which cannot distinguish preview from print. |
+| `func-leaf.svg`      | The Function List tree's LEAF node: a filled bolt inside a filled badge, both flat fills as the rest of this pack is. Was the stock `nature-ecology/leaf.svg` - "func-leaf" names a leaf of the symbol tree, and the original asset read as foliage. |
+| `func-node.svg`      | The Function List tree's GROUP node (class/namespace/section): a package cube holding its members. Was the stock `interface-essential/hierarchy-2.svg`, whose org-chart boxes turn to mush at 16px. |
 
 The full concept-to-source-glyph mapping and the re-bake/compositing pipeline live in
 `tools/generate_streamline_icons.py`, which regenerates this directory.

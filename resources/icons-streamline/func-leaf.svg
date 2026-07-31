@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" fill="none" role="img" aria-label="Function">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" fill="none" role="img" aria-label="Function"><!-- wxnote-original: wxNote artwork (Apache-2.0), not a Streamline glyph; generate_streamline_icons.py derives its exclusion set from this marker -->
   <title>Function</title>
-  <!-- Streamline idiom: solid two-tone on a 14px grid - a filled badge with the letterform
-       drawn through it in the darker tone. (Was the stock "Leaf" icon: "func-leaf" names the
-       LEAF NODE of the symbol tree, which the original asset read as foliage.) -->
+  <!-- Streamline idiom: solid two-tone on a 14px grid - a filled badge with the mark drawn through it in
+       the darker tone. A bolt rather than a letterform: filled, not stroked, which is what this pack does
+       everywhere else, and a silhouette that still reads at 16px where thin joins close up. -->
   <rect x="0.6" y="0.6" width="12.8" height="12.8" rx="3.4" fill="#69db7c"/>
-  <path stroke="#099268" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
-        d="M5.15 10.7c0-3.2.2-5.2.7-6.4.3-.8.9-1.25 1.6-1.25.42 0 .78.12 1.02.33"/>
-  <path stroke="#099268" stroke-width="1.5" stroke-linecap="round" d="M3.85 6.75h4.3"/>
+  <g transform="translate(1.63,1.4) scale(0.467)" fill="#099268">
+    <path d="M13 3l-9 11h7l-1 7 9-11h-7l1-7z"/>
+  </g>
 </svg>

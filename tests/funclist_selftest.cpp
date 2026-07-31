@@ -23,6 +23,7 @@
 #define wxIMPLEMENT_APP(appname) /* neutralized: funclist_selftest provides its own main() */
 #include "main.cpp"
 
+#include <chrono>   // --bench mode
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -35,6 +36,10 @@ static void check(bool ok, const std::string& what)
 }
 
 // --- Function List helpers -------------------------------------------------------------------------
+
+// Membership probe for names() results - the one-line form of the bool-saw scans it replaces.
+static bool contains(const std::vector<std::string>& v, const std::string& s)
+{ return std::find(v.begin(), v.end(), s) != v.end(); }
 
 // The symbol names flCollect extracts, in document order.
 static std::vector<std::string> names(const std::string& text, const std::string& lang)
@@ -70,8 +75,36 @@ static bool nestedIn(const std::string& text, const std::string& lang,
     return false;
 }
 
-int main()
+// `funclist_selftest --bench`: measure the per-keystroke autocomplete harvest, old shape vs new.
+// Not a ctest (timings assert nothing); it exists so the windowed-harvest change is justified by a
+// number anyone can reproduce, not by an adjective. Copy + scan per rep, mirroring the real path
+// (rangeText copies the range, wxnCollectWords walks it).
+static void bench()
 {
+    std::string doc; doc.reserve(64u << 20);
+    for (unsigned k = 0; doc.size() < (64u << 20); ++k)   // dense, repeating identifiers; "wor" matches all
+        { doc += "word"; doc += std::to_string(k % 10000); doc += ' '; }
+    auto run = [&](const char* label, size_t bytes, int reps) {
+        const auto t0 = std::chrono::steady_clock::now();
+        size_t found = 0;
+        for (int r = 0; r < reps; ++r) {
+            std::set<std::string, std::less<>> out;
+            const std::string win = doc.substr(0, bytes);              // the copy rangeText would make
+            wxnCollectWords(win, "wor", out, std::bitset<256>(), [](size_t){ return 0; });
+            found = out.size();
+        }
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() / reps;
+        std::printf("  %-34s %8.2f ms/keystroke   (%zu candidates)\n", label, ms, found);
+    };
+    std::printf("autocomplete harvest, copy+scan per keystroke:\n");
+    run("whole doc, 64 MiB (old, unbounded)", 64u << 20, 5);
+    run("whole doc, 16 MiB (old, mid band)",  16u << 20, 10);
+    run("window,     1 MiB (new)",             1u << 20, 50);
+}
+
+int main(int argc, char** argv)
+{
+    if (argc > 1 && std::string(argv[1]) == "--bench") { bench(); return 0; }
     std::printf("funclist_selftest\n");
 
     // ---- CRLF: line-bounded captures must not swallow the carriage return ---------------------------
@@ -124,10 +157,8 @@ int main()
             "    class func origin() -> Point { return Point() }\n"
             "}\n";
         const std::vector<std::string> got = names(sw, "swift");
-        bool sawFunc = false; for (const auto& n : got) if (n == "func") sawFunc = true;
-        check(!sawFunc, "swift: `class func` is not read as a type named \"func\"");
-        bool sawOrigin = false; for (const auto& n : got) if (n == "origin") sawOrigin = true;
-        check(sawOrigin, "swift: `class func origin()` is listed as the function `origin`");
+        check(!contains(got, "func"), "swift: `class func` is not read as a type named \"func\"");
+        check(contains(got, "origin"), "swift: `class func origin()` is listed as the function `origin`");
     }
 
     // ---- Makefile: pattern / suffix / variable targets, and no variable assignments -----------------
@@ -196,6 +227,76 @@ int main()
         out.clear();
         wxnCollectWords(doc, "alph", out, skip, [](size_t){ return 9999; });
         check(out.size() == 2, "collectWords: an out-of-range style is treated as not-prose, not a crash");
+    }
+
+    // ---- wxnCollectWords edge clipping: a window cut mid-word must not offer the fragment ------------
+    // On documents past the harvest cap, autoComplete scans a window around the caret. A cut edge can
+    // land inside a word - the tail of "mybuffer" reads as a perfectly plausible "buffer" that exists
+    // nowhere in the document - so runs touching a clipped edge are dropped, and ONLY those.
+    {
+        std::set<std::string, std::less<>> out;
+        std::bitset<256> noSkip;
+        auto st0 = [](size_t){ return 0; };
+
+        // Head edge cut mid-word: window text begins inside "...mybuffer". Fragment dropped; rest kept.
+        wxnCollectWords("buffer buffet bufalo\n", "buf", out, noSkip, st0, /*clipHead=*/true, /*clipTail=*/false);
+        check(out.size() == 2 && out.count("buffet") && out.count("bufalo") && !out.count("buffer"),
+              "collectWords: a head-cut word fragment is dropped, interior words kept");
+
+        // Tail edge cut mid-word: the final run touches the window end. Dropped; earlier words kept.
+        out.clear();
+        wxnCollectWords("buffet bufalo buffe", "buf", out, noSkip, st0, /*clipHead=*/false, /*clipTail=*/true);
+        check(out.size() == 2 && out.count("buffet") && out.count("bufalo") && !out.count("buffe"),
+              "collectWords: a tail-cut word fragment is dropped, earlier words kept");
+
+        // Clip flags set, but the edges land on non-word bytes: nothing is truncated, nothing dropped.
+        out.clear();
+        wxnCollectWords(" buffet bufalo \n", "buf", out, noSkip, st0, /*clipHead=*/true, /*clipTail=*/true);
+        check(out.size() == 2 && out.count("buffet") && out.count("bufalo"),
+              "collectWords: clip flags drop nothing when the cut edges land on whitespace");
+
+        // Both edges cut in a two-word window: everything is a fragment, nothing offered.
+        out.clear();
+        wxnCollectWords("buffer buffe", "buf", out, noSkip, st0, /*clipHead=*/true, /*clipTail=*/true);
+        check(out.empty(), "collectWords: a window whose every run touches a cut edge offers nothing");
+
+        // Default arguments preserve the pre-window behaviour (the four tests above this block).
+        out.clear();
+        wxnCollectWords("buffer buffe", "buf", out, noSkip, st0);
+        check(out.size() == 2, "collectWords: without clip flags, edge runs are ordinary candidates");
+    }
+
+    // ---- wxnHarvestWindow: the caret-centered window is exactly cap bytes, clamped, redistributed ----
+    {
+        auto win = [](long long docLen, long long caret, long long cap) {
+            return wxnHarvestWindow(docLen, caret, cap);
+        };
+        check(win(500, 250, 1000) == std::make_pair(0LL, 500LL),
+              "harvestWindow: a document within the cap is harvested whole");
+        check(win(1000, 250, 1000) == std::make_pair(0LL, 1000LL),
+              "harvestWindow: a document exactly at the cap is harvested whole");
+        check(win(10000, 5000, 1000) == std::make_pair(4500LL, 5500LL),
+              "harvestWindow: mid-document, the window is centered on the caret");
+        check(win(10000, 100, 1000) == std::make_pair(0LL, 1000LL),
+              "harvestWindow: near the top, the head surplus is redistributed to the tail");
+        check(win(10000, 9900, 1000) == std::make_pair(9000LL, 10000LL),
+              "harvestWindow: near the bottom, the tail surplus is redistributed to the head");
+        check(win(10000, 0, 1000) == std::make_pair(0LL, 1000LL), "harvestWindow: caret at byte 0");
+        check(win(10000, 10000, 1000) == std::make_pair(9000LL, 10000LL), "harvestWindow: caret at EOF");
+        const auto [ws, we] = win(10000, 5000, 1000);
+        check(we - ws == 1000, "harvestWindow: the window spans exactly the cap");
+    }
+
+    // ---- wxnBackupThrottleMs: the crash-backup cadence stretch for big buffers -----------------------
+    {
+        const long long MiB = 1ll << 20;
+        check(wxnBackupThrottleMs(0)        == 0, "backupThrottle: an empty buffer is never throttled");
+        check(wxnBackupThrottleMs(16 * MiB) == 0, "backupThrottle: 16 MiB keeps every 30 s tick");
+        check(wxnBackupThrottleMs(32 * MiB) == 0, "backupThrottle: 32 MiB is the last unthrottled size");
+        check(wxnBackupThrottleMs(33 * MiB) == 30000, "backupThrottle: just past the knee waits one extra tick");
+        check(wxnBackupThrottleMs(64 * MiB) == 60000, "backupThrottle: 64 MiB backs up every other tick");
+        check(wxnBackupThrottleMs(320 * MiB) == 300000, "backupThrottle: the stretch caps at 5 minutes");
+        check(wxnBackupThrottleMs(4096 * MiB) == 300000, "backupThrottle: 4 GiB still caps at 5 minutes");
     }
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

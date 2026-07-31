@@ -184,12 +184,21 @@ No code was taken from any of these; each contributed ideas, structure, or
   [streamline-vectors](https://github.com/webalys-hq/streamline-vectors) repo
   at a pinned commit.
 
-Not every file in those directories comes from the set it is named after:
-`wrap-selection.svg` is **original wxNote artwork** (Apache-2.0), drawn once per
-pack in each pack's own conventions, because none of the four upstream sets has a
-glyph for "wrap the selection in delimiters". It is called out under an *Original
-glyphs* heading in each pack's own `CREDITS.md` so the upstream attributions above
-stay accurate.
+Not every file in those directories comes from the set it is named after. A handful are
+**original wxNote artwork** (Apache-2.0), drawn once per pack in each pack's own
+conventions because no upstream set has a usable glyph for the concept:
+
+- `wrap-selection.svg` and `print-preview.svg` — in all four packs. None of the sets
+  has a "wrap the selection in delimiters" glyph, and their print glyphs are all the
+  printer device itself, which cannot distinguish preview from print.
+- `func-leaf.svg` and `func-node.svg` — the Function List tree's leaf and group nodes.
+  `func-node.svg` is original in all four packs; `func-leaf.svg` in the three colored
+  ones only, since the default line set has Tabler's own `math-function` glyph. The
+  colored sets' nearest matches were foliage and org charts: the first misreads
+  "func-leaf" as a plant, the second turns to mush at 16 px.
+
+Each is called out under an *Original glyphs* heading in that pack's own `CREDITS.md`
+so the upstream attributions above stay accurate.
 
 Full modification records: `resources/icons*/CREDITS.md`.
 

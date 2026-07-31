@@ -3040,7 +3040,7 @@ msgid "Download..."
 msgstr "下载..."
 
 msgid "Dictionaries are stored in your user data folder. Downloads come from the wooorm/dictionaries\nproject and keep their own licenses (shown before you download). Choose the active one in\nDocument > Spell Check > Dictionary."
-msgstr "词典存储在您的用户数据文件夹中。下载来自 wooorm/dictionaries\n项目，并保留各自的许可证（下载前显示）。在\n视图 > 拼写检查 > 词典 中选择当前使用的词典。"
+msgstr "词典存储在您的用户数据文件夹中。下载来自 wooorm/dictionaries\n项目，并保留各自的许可证（下载前显示）。在\n文档 > 拼写检查 > 词典 中选择当前使用的词典。"
 
 msgid "Select a dictionary affix file"
 msgstr "选择词典的词缀文件"
