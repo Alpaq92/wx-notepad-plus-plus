@@ -37,9 +37,14 @@ sha256sum -c SHA256SUMS 2>/dev/null | grep -E 'wxNote|wxnote'   # each line shou
 GPG signature (when `SHA256SUMS.asc` is present):
 
 ```sh
-gpg --recv-keys <KEY_ID>            # the project's public key (published on the Releases page)
+# wxnote-signing-key.asc is attached to the same release as SHA256SUMS/SHA256SUMS.asc
+gpg --import wxnote-signing-key.asc
 gpg --verify SHA256SUMS.asc SHA256SUMS
 ```
+
+(Importing a key that ships next to the thing it signs proves only that one signed the other. It is
+worth exactly as much as your trust that the release page itself is genuine — which is why the
+fingerprint is also printed in the release workflow's log, where it can be compared across releases.)
 
 On **Windows**, a signed installer shows a real publisher in the UAC prompt instead of "Unknown
 publisher". On **macOS**, a notarized `.dmg` opens without the right-click → Open dance.
@@ -64,18 +69,40 @@ gpg --armor --export <KEY_ID> > wxnote-public.asc  # attach to a release / publi
 | `GPG_PRIVATE_KEY` | ASCII-armored **private** key block |
 | `GPG_PASSPHRASE`  | the key's passphrase (omit if the key has none) |
 
-### Windows Authenticode — needs a paid certificate
+### Windows Authenticode — needs a certificate, and the `.pfx` route no longer exists
 
-Requires an OV/EV code-signing certificate (~$100–400/yr from a CA). Export it as a password-protected
-`.pfx`/`.p12`, then base64-encode it:
+> **The `WINDOWS_PFX_BASE64` recipe below cannot be followed with a newly issued certificate.**
+> Since the CA/Browser Forum baseline change of **June 2023**, publicly-trusted code-signing private
+> keys must be generated on and never leave FIPS 140-2 Level 2+ hardware (an HSM, a USB token, or a
+> cloud signing service). No CA will issue the exportable `.pfx` this workflow was written around.
+> The step still works if you already hold a pre-2023 exportable certificate; for anything new, use
+> one of the routes below instead. This section documented an impossible task for some time — that is
+> why every release to date has shipped unsigned.
 
-```sh
-base64 -w0 wxnote.pfx    # -> paste into WINDOWS_PFX_BASE64
-```
+**Routes that work today**, cheapest first:
+
+| Route | Cost | Notes |
+|---|---|---|
+| [SignPath Foundation](https://signpath.org/) | free for OSS | Built for exactly this case: public repo, OSI licence, builds in public CI. wxNote (Apache-2.0, public, GitHub Actions) fits the criteria. Signing happens on their infrastructure, so no key ever reaches the runner. |
+| [Azure Trusted Signing](https://learn.microsoft.com/azure/trusted-signing/) | ~$10/month | Microsoft-operated; treated like EV for SmartScreen, so reputation is immediate rather than accrued. Verify individual-developer eligibility first. |
+| Certum Open Source | ~€100 / 2 years | Hardware card posted to you; signing is done locally, not in CI. |
+| SSL.com eSigner / DigiCert KeyLocker | commercial | Cloud HSM; `osslsigncode` can drive these via `-pkcs11engine`/`-pkcs11module`, so the existing Linux publish job keeps working with a flag change. |
+
+Whichever route: the certificate subject must be a **real legal or individual identity**. "wxNote
+Project" is not an entity that can hold an OV certificate, so whatever name goes on the certificate
+should also replace `CompanyName` in `resources/app.rc.in` and `installer/windows/wxnote.nsi`.
+
+**Sign inside-out.** The current step signs `dist/*.exe` — i.e. only the outer installer, after
+`makensis` has already packed an unsigned `wxnote.exe` and `nib/npp_bridge.dll` inside it. Defender
+scans the extracted payload at install time and on every launch, so a signed wrapper around unsigned
+contents accrues no reputation for the installed application. Sign the payload on the Windows build
+leg *before* packaging, then the installer.
+
+The legacy `.pfx` secrets, for a pre-2023 exportable certificate only:
 
 | Secret | Value |
 |---|---|
-| `WINDOWS_PFX_BASE64`   | base64 of the `.pfx` |
+| `WINDOWS_PFX_BASE64`   | base64 of the `.pfx` (`base64 -w0 wxnote.pfx`) |
 | `WINDOWS_PFX_PASSWORD` | the `.pfx` password |
 
 Signing runs from the Linux publish job via `osslsigncode` (no Windows runner needed) and timestamps

@@ -348,6 +348,32 @@ jobs:
           if not exist build\installer mkdir build\installer
           makensis ${{ matrix.nsis_flags }} installer\windows\wxnote.nsi
 
+      # A second Windows asset that is not an installer at all: the same files the installer lays down,
+      # in a zip. Users who cannot run the installer (a locked-down machine, a scanner blocking it, or
+      # simply a preference for no-install software) still get a working copy, and a zip's contents are
+      # directly inspectable rather than sitting behind a self-extracting stub. NOT labelled "portable":
+      # settings still live in the registry and the user-data dir (see site/docs/faq.md).
+      - name: Package zip (Windows)
+        if: startsWith(matrix.name, 'windows')
+        shell: pwsh
+        run: |
+          $ver  = (Select-String -Path CMakeLists.txt -Pattern 'project\(wxNote VERSION ([0-9.]+)').Matches[0].Groups[1].Value
+          $arch = if ("${{ matrix.name }}" -eq "windows-arm64") { "-arm64" } else { "" }
+          $stage = "build/zipstage/wxNote-$ver$arch"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          # Mirrors installer/windows/wxnote.nsi's SecCore file list - if that list changes, change this
+          # too (a zip missing a resource directory is a broken download, not a smaller one).
+          Copy-Item build/bin/wxnote.exe, build/bin/stylers.model.xml -Destination $stage
+          foreach ($d in 'icons','icons-solar','icons-iconpark','icons-streamline','themes','dictionaries','locale') {
+            Copy-Item -Recurse "build/bin/$d" -Destination $stage
+          }
+          Get-ChildItem "$stage/locale" -Recurse -Include '*.po','wxn.pot' | Remove-Item -Force
+          New-Item -ItemType Directory -Force -Path "$stage/nib" | Out-Null
+          Copy-Item build/bin/nib/npp_bridge.dll -Destination "$stage/nib"
+          if (-not (Test-Path build/installer)) { New-Item -ItemType Directory -Path build/installer | Out-Null }
+          Compress-Archive -Path $stage -DestinationPath "build/installer/wxNote-$ver$arch-windows.zip" -Force
+          Get-Item "build/installer/wxNote-$ver$arch-windows.zip" | Select-Object Name, Length
+
       - name: Upload Windows installer
         if: startsWith(matrix.name, 'windows')
         uses: actions/upload-artifact@v7

@@ -195,8 +195,7 @@ in [`LICENSING.md`](../LICENSING.md).
 
 ## Application core
 
-`WxnApp : wxApp` owns startup: a hidden `--elevated-write` UAC helper mode
-(Windows), the one-time settings migration from the legacy config key into
+`WxnApp : wxApp` owns startup: the one-time settings migration from the legacy config key into
 `"wxNote"`, command-line parsing (`-g/--goto`, `-e/--encoding`,
 `-n/--new-instance`, `-r/--reuse-instance`, files), the single-instance
 handoff, font/locale setup, and frame construction.

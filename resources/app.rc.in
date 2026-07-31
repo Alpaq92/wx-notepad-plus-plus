@@ -9,6 +9,12 @@
 // the running wxTopLevelWindow). Absolute path because the generated .rc lives in the build dir.
 IDI_APPICON ICON "@CMAKE_SOURCE_DIR@/resources/wxnote.ico"
 
+// The application manifest (resources/wxnote.manifest): supportedOS through Windows 11, longPathAware,
+// UTF-8 active code page, explicit asInvoker, and the comctl32 v6 dependency wx needs. CMake passes
+// /MANIFEST:NO for this target so the linker does not also generate one and collide with this resource.
+// Resource id 1 = CREATEPROCESS_MANIFEST_RESOURCE_ID, which is what Windows looks for in an .exe.
+1 24 "@CMAKE_SOURCE_DIR@/resources/wxnote.manifest"
+
 1 VERSIONINFO
 FILEVERSION     @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
 PRODUCTVERSION  @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
@@ -29,7 +35,8 @@ BEGIN
             VALUE "OriginalFilename", "wxnote.exe"
             VALUE "ProductName",      "wxNote"
             VALUE "ProductVersion",   "@PROJECT_VERSION@.0"
-            VALUE "LegalCopyright",   "Apache-2.0 - see LICENSE"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 The wxNote Authors. Licensed under Apache-2.0."
+            VALUE "Comments",         "Open-source text editor. Source: https://github.com/Alpaq92/wx-notepad-plus-plus"
         END
     END
     BLOCK "VarFileInfo"

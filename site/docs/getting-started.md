@@ -8,9 +8,32 @@ buttons on the [wxNote home page](../), which read the latest release live from 
 
 | Platform | Package |
 | --- | --- |
-| Windows | NSIS installer (`.exe`) — x64 and ARM64 |
+| Windows | NSIS installer (`.exe`) — x64 and ARM64, plus a plain `.zip` of the same files |
 | macOS | Disk image (`.dmg`) — Apple Silicon (`arm64`) and Intel (`x86_64`) |
 | Linux | `.AppImage`, `.deb`, `.rpm` and `.flatpak` — x64 and ARM64, plus a RISC-V `.deb` |
+
+### Verifying your download
+
+Every release ships a `SHA256SUMS` file listing the checksum of each artifact. On Windows:
+
+```powershell
+Get-FileHash .\wxNote-<version>-Setup.exe -Algorithm SHA256
+```
+
+and compare that against the matching line in `SHA256SUMS`. On macOS and Linux, `shasum -a 256 -c
+SHA256SUMS` checks everything at once.
+
+### "Windows protected your PC", or an antivirus warning
+
+The Windows builds are **not code-signed yet**, so SmartScreen shows an "unknown publisher" warning,
+and an antivirus may report a generic machine-learning detection such as `Wacatac.B!ml` on a
+freshly-published release. This is a false positive caused by the missing signature and by the file
+being brand new — not by anything the program does.
+
+[docs/ANTIVIRUS.md](https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/docs/ANTIVIRUS.md)
+documents every privileged and network-touching thing wxNote does, and what it deliberately does not,
+so the claim can be checked rather than taken on faith. If you would rather avoid the installer
+entirely, the Windows `.zip` contains the same files and can be inspected before you run anything.
 
 The executable is named `wxnote` on every platform. Resources (themes, icons, fonts, translations,
 bundled plugins) live next to the executable rather than being split across system directories.
