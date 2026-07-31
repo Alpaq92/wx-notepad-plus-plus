@@ -367,12 +367,28 @@ jobs:
           foreach ($d in 'icons','icons-solar','icons-iconpark','icons-streamline','themes','dictionaries','locale') {
             Copy-Item -Recurse "build/bin/$d" -Destination $stage
           }
-          Get-ChildItem "$stage/locale" -Recurse -Include '*.po','wxn.pot' | Remove-Item -Force
+          Get-ChildItem "$stage/locale" -Recurse -File | Where-Object { $_.Extension -in '.po','.pot' } | Remove-Item -Force
           New-Item -ItemType Directory -Force -Path "$stage/nib" | Out-Null
           Copy-Item build/bin/nib/npp_bridge.dll -Destination "$stage/nib"
           if (-not (Test-Path build/installer)) { New-Item -ItemType Directory -Path build/installer | Out-Null }
-          Compress-Archive -Path $stage -DestinationPath "build/installer/wxNote-$ver$arch-windows.zip" -Force
-          Get-Item "build/installer/wxNote-$ver$arch-windows.zip" | Select-Object Name, Length
+          # Written entry-by-entry with explicit FORWARD-SLASH names rather than via Compress-Archive.
+          # The ZIP format requires '/' as the path separator (APPNOTE 4.4.17.1), but Compress-Archive
+          # emits backslashes on Windows PowerShell 5.1 - verified locally: every entry came out as
+          # "wxNote-0.14.1\wxnote.exe", which non-Windows extractors treat as one file with a backslash
+          # in its name rather than a directory. pwsh 7 (what this step runs under) happens to get it
+          # right, but a shipped artifact should not depend on which shell the step was invoked with.
+          $zipPath = (Resolve-Path build/installer).Path + "\wxNote-$ver$arch-windows.zip"
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $root = (Resolve-Path "build/zipstage").Path.TrimEnd('\') + '\'
+          $zip = [System.IO.Compression.ZipFile]::Open($zipPath, 'Create')
+          try {
+            foreach ($f in Get-ChildItem "build/zipstage" -Recurse -File) {
+              $rel = $f.FullName.Substring($root.Length).Replace('\', '/')
+              [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $f.FullName, $rel, 'Optimal')
+            }
+          } finally { $zip.Dispose() }
+          Get-Item $zipPath | Select-Object Name, Length
 
       - name: Upload Windows installer
         if: startsWith(matrix.name, 'windows')
