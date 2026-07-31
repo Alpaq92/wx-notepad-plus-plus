@@ -3,6 +3,39 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.1] - 2026-07-31
+
+### Security
+- **Saving to a protected folder no longer relaunches the editor with administrator rights.** wxNote
+  used to restart itself elevated, behind a hidden switch, to copy the file into place — and that
+  switch would copy *any* file to *any* location it was pointed at, so anything already running as you
+  could have used wxNote to write into places it had no business writing. Windows now performs that
+  single copy itself, through the same mechanism File Explorer uses, and shows its own permission
+  prompt naming the file being written. wxNote never asks for administrator rights at all any more.
+
+### Added
+- **A plain `.zip` for Windows**, alongside the installer: the same files, no installer, and you can
+  look inside before running anything. Useful on machines where installers are restricted. (It is not
+  a "portable" build — settings still live in the registry and your user-data folder.)
+- **[docs/ANTIVIRUS.md](docs/ANTIVIRUS.md)** — every privileged or network-touching thing wxNote does,
+  and the list of things it deliberately never does, so an antivirus false positive can be checked
+  rather than taken on faith. The download page and FAQ now also show how to verify a download
+  against the published `SHA256SUMS`.
+
+### Fixed
+- **"Open in browser" no longer goes through the command shell.** A file whose name contained `%`
+  (say `%USERNAME%.txt`) opened the wrong address, because the shell expanded it.
+- **Long paths and modern Windows behaviour.** The program now declares which Windows versions it
+  supports and that it understands long file paths — previously Windows treated it as a pre-Windows-8
+  application and capped paths at 260 characters.
+- The signature published alongside `SHA256SUMS` was impossible to verify: the public key it needed
+  was never released. It now ships with every release.
+- File details (publisher, copyright, description) were incomplete or misleading on both the program
+  and the installer.
+
+### Changed
+- The program is now built with Control Flow Guard, a standard Windows exploit mitigation.
+
 ## [0.14.0] - 2026-07-31
 
 ### Added
