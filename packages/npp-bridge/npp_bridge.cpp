@@ -390,14 +390,24 @@ static void on_nib_event_v4(NibHost*, const NibEvent* ev, void*)
 //   * HOTSPOT_*    -> SCN_HOTSPOTCLICK / DOUBLECLICK / RELEASECLICK (position, modifiers).
 static void on_nib_event_v5(NibHost*, const NibEvent* ev, void*)
 {
+    // Each v5 payload carries `view` (0 = main, 1 = second): with the split open, input arrives from
+    // whichever editor has it, and plugins that act on nmhdr.hwndFrom (tag closers inserting into the
+    // notifying editor, the common N++ pattern) must get the REAL source - real Notepad++ stamps the
+    // firing view here, and stamping main unconditionally sent such a plugin's edits into the wrong
+    // buffer whenever the user typed in the second view.
+    auto viewHandle = [](int view) {
+        return (view == 1 && g_npp._scintillaSecondHandle) ? g_npp._scintillaSecondHandle
+                                                           : g_npp._scintillaMainHandle;
+    };
     SCNotification scn = {};
-    scn.nmhdr.hwndFrom = g_npp._scintillaMainHandle;
     switch (ev->kind) {
         case NIB_EV_CHAR_ADDED:
+            scn.nmhdr.hwndFrom = viewHandle(ev->as.key.view);
             scn.nmhdr.code = SCN_CHARADDED;
             scn.ch         = ev->as.key.ch;
             break;
         case NIB_EV_MARGIN_CLICK:
+            scn.nmhdr.hwndFrom = viewHandle(ev->as.margin.view);
             scn.nmhdr.code = SCN_MARGINCLICK;
             scn.position   = static_cast<Sci_Position>(ev->as.margin.position);
             scn.margin     = ev->as.margin.number;
@@ -405,6 +415,7 @@ static void on_nib_event_v5(NibHost*, const NibEvent* ev, void*)
             break;
         case NIB_EV_DWELL_START:
         case NIB_EV_DWELL_END:
+            scn.nmhdr.hwndFrom = viewHandle(ev->as.mouse.view);
             scn.nmhdr.code = (ev->kind == NIB_EV_DWELL_START) ? SCN_DWELLSTART : SCN_DWELLEND;
             scn.position   = static_cast<Sci_Position>(ev->as.mouse.position);
             scn.x          = ev->as.mouse.x;
@@ -413,6 +424,7 @@ static void on_nib_event_v5(NibHost*, const NibEvent* ev, void*)
         case NIB_EV_HOTSPOT_CLICK:
         case NIB_EV_HOTSPOT_DOUBLE_CLICK:
         case NIB_EV_HOTSPOT_RELEASE_CLICK:
+            scn.nmhdr.hwndFrom = viewHandle(ev->as.hotspot.view);
             scn.nmhdr.code = (ev->kind == NIB_EV_HOTSPOT_CLICK)        ? SCN_HOTSPOTCLICK
                            : (ev->kind == NIB_EV_HOTSPOT_DOUBLE_CLICK) ? SCN_HOTSPOTDOUBLECLICK
                                                                        : SCN_HOTSPOTRELEASECLICK;

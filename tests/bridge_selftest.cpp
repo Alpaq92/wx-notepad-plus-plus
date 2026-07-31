@@ -52,6 +52,7 @@
 
 #include <wx/filename.h>
 #include <wx/file.h>
+#include <wx/dir.h>     // the backup tests enumerate RecoveryBackups/*.bak
 #include <wx/utils.h>
 #include <filesystem>
 #include <string>
@@ -296,6 +297,25 @@ static bool writeWholeFile(const wxString& path, const char* content)
     wxLogNull noLog;
     wxFile f(path, wxFile::write);
     return f.IsOpened() && f.Write(content, std::strlen(content)) == std::strlen(content);
+}
+
+// Delete a file an assertion depends on having found. Empty path = the lookup that produced it found
+// nothing, which is a test failure to REPORT, never an OS call to attempt (wxRemoveFile("") logs a
+// system error, and before logging was disabled that meant a modal dialog and a wedged run).
+static bool removeFound(const wxString& path) { return !path.empty() && wxRemoveFile(path); }
+
+// Fixture helpers shared by the autocomplete and crash-backup blocks (each grew its own copies first;
+// the hand-counted APPENDTEXT byte lengths were exactly the constants that drift when a fixture changes).
+static void openDoc(const wxString& p) { g_nibDocOpen(std::string(p.utf8_str()).c_str()); pump(); }
+static void appendText(const char* t)
+{ nibSciCall(nullptr, -1, SCI_APPENDTEXT, (int)std::strlen(t), reinterpret_cast<intptr_t>(t)); pump(); }
+// 63 x's + \n filler: pure ASCII (byte counts survive load untouched - no EOL rewriting), no 'wor'
+// anywhere, and no line long enough to trip the byLine large-file threshold.
+static std::string filler(size_t n)
+{
+    std::string s; s.reserve(n + 64);
+    while (s.size() < n) { s.append(63, 'x'); s += '\n'; }
+    s.resize(n); return s;
 }
 
 // The host's toolbar, wherever it is parented. Must recurse: on macOS the bar hangs off m_toolBarHost
@@ -1256,6 +1276,288 @@ private:
             check(findFrom(L, mark, notifNeedlePrefix(SCN_HOTSPOTCLICK))>= 0, "SCN_HOTSPOTCLICK reached the probe");
         }
 
+        // ---- autocomplete windowed harvest: bounded per-keystroke cost, end-to-end ------------------
+        // autoComplete used to copy + scan the WHOLE buffer on every word character typed, on every file
+        // (300 ms/keystroke at 16 MiB - funclist_selftest --bench). Now it harvests at most a 1 MiB
+        // caret-centered window on any size of file. Driven through the real typing path: the same
+        // synthesized wxEVT_STC_CHARADDED the Phase-7 tests use -> onStcCharAdded -> autoComplete ->
+        // (maybe) wxAutoCompShow, asserted via SCI_AUTOCACTIVE. The positive control comes FIRST: it
+        // proves the popup machinery works in this harness at all, so every "no popup" assertion below
+        // pins its specific mechanism rather than a popup that could never show.
+        {
+            auto typeTailWor = [&](const char* tail) {   // append <tail>, caret to end, type the final 'r'
+                appendText(tail);
+                nibSciCall(nullptr, -1, SCI_GOTOPOS, coreSciCall(-1, SCI_GETLENGTH, 0, 0), 0);
+                wxStyledTextEvent e(wxEVT_STC_CHARADDED); e.SetEventObject(g_view); e.SetKey('r');
+                g_view->ProcessWindowEvent(e);
+                pump();
+            };
+            auto autocActive = [&]{ return coreSciCall(-1, SCI_AUTOCACTIVE, 0, 0); };
+
+            // Positive control: a small document. "worry"/"worker" match the typed prefix "wor" and are
+            // strictly longer, so the popup must show. (.txt: keyword-less, so these are document words.)
+            const wxString acSmall = work + wxFILE_SEP_PATH + "ac_small.txt";
+            check(writeWholeFile(acSmall, "worry worker\n"), "autocomplete fixtures created");
+            openDoc(acSmall);
+            typeTailWor("wor");
+            check(autocActive() == 1,
+                  "small file: typing 'wor' pops document-word completions (the harness CAN show the popup)");
+            nibSciCall(nullptr, -1, SCI_AUTOCCANCEL, 0, 0);
+
+            // Large-file page (one 60,000-char line trips the byLine threshold at load): the harvest is
+            // NOT gated off - the 60 KB document fits the window whole, so "word" completes exactly as it
+            // did in 0.13.0. Pins the review finding that a first draft's blanket largeFile gate killed
+            // completion on small byLine-tripped files for zero cost saving.
+            const wxString acLine = work + wxFILE_SEP_PATH + "ac_longline.txt";
+            { std::string one; one.reserve(60006); for (int k = 0; k < 12000; ++k) one += "word "; one += "\n";
+              check(writeWholeFile(acLine, one.c_str()), "long-line (byLine large-file) fixture created"); }
+            openDoc(acLine);
+            typeTailWor("\nwor");
+            check(autocActive() == 1,
+                  "byLine large-file page under the window cap: document words still complete (no blanket gate)");
+            nibSciCall(nullptr, -1, SCI_AUTOCCANCEL, 0, 0);
+
+            // The windowed band, end-to-end (docLen > 1 MiB): a word 2 MiB behind the caret is OUTSIDE
+            // the harvest window and must not complete - the old whole-document scan would have found it.
+            // Then words appended NEAR the caret do complete: the window harvests, the far word merely
+            // fell outside it. hStart > 0 here, so this also executes the subrange-rangeText path.
+            const wxString acWin = work + wxFILE_SEP_PATH + "ac_window.txt";
+            { std::string doc = "worldpeace\n" + filler(3u << 20);
+              check(writeWholeFile(acWin, doc.c_str()), "3 MiB windowed-band fixture created"); }
+            openDoc(acWin);
+            typeTailWor("\nwor");
+            check(autocActive() == 0,
+                  "windowed band: a matching word 2 MiB from the caret is outside the window - no popup");
+            typeTailWor(" worry worked\nwor");
+            check(autocActive() == 1,
+                  "windowed band: matching words near the caret ARE harvested - the window works, it is just bounded");
+            nibSciCall(nullptr, -1, SCI_AUTOCCANCEL, 0, 0);
+
+            // Clip wiring at the call site: the window's head cut lands exactly on the 'w' of
+            // "AAworcabcq", so the window-relative text STARTS with the plausible fragment "worcabcq...".
+            // clipHead must drop that run; if the flags are dropped or swapped at the call site (they
+            // default to false, so that compiles), the fragment completes and this fires. Placement math:
+            // caret at EOF makes the window [docLen-1MiB, docLen]; with tail b = 1 MiB - 12 bytes and the
+            // 4-byte "\nwor" append, docLen-1MiB lands on head+2 - the 'w' - independent of head size.
+            const wxString acClip = work + wxFILE_SEP_PATH + "ac_clip.txt";
+            { std::string doc = filler(4096) + "AAworcabcq" + "\n" + filler((1u << 20) - 12 - 1);
+              check(writeWholeFile(acClip, doc.c_str()), "clip-trap fixture created"); }
+            openDoc(acClip);
+            typeTailWor("\nwor");
+            check(autocActive() == 0,
+                  "clip wiring: a word fragment created by the window's head cut is not offered as a completion");
+
+            // The style-offset base: on a styled >1 MiB document the only matching words live in a
+            // comment right before the caret, so the prose filter must drop them - but only if GetStyleAt
+            // probes DOCUMENT positions (pos + hStart). Delete the '+ base' offset and the probes land
+            // ~1 MiB early, on plain code bytes, and the comment words complete. (.cpp so Lexilla styles
+            // and the filter is armed; no C++ keyword starts with "wor", so keywords cannot mask it.)
+            const wxString acBase = work + wxFILE_SEP_PATH + "ac_base.cpp";
+            { std::string doc; doc.reserve((1200u << 10) + 32);
+              while (doc.size() < (1200u << 10)) doc += "int a=1;\n";
+              doc += "// worqqq worqqzz\n";
+              check(writeWholeFile(acBase, doc.c_str()), "style-offset fixture created"); }
+            openDoc(acBase);
+            typeTailWor("\nwor");
+            check(autocActive() == 0,
+                  "style-offset base: comment-only matches near the caret are filtered at their DOCUMENT positions");
+
+            // clean up back to a single document for the tail assertions
+            for (int guard = 0; g_nibDocCount && g_nibDocCount() > 1 && guard < 20; ++guard) { g_nibInvokeCommand(kCmdFileClose); pump(); }
+            check(g_nibDocCount && g_nibDocCount() == 1, "autocomplete fixtures closed - back to a single document");
+        }
+
+        // ---- crash-safety backup: skip-if-unchanged, direct UTF-8 bytes, atomic replace, cadence ----
+        // Driven through g_backupTick - the frame-installed seam that runs one pass of the 30 s timer
+        // body (allPages -> pageDirty -> peekDoc -> throttle -> backupUnsavedChanges) - because waiting
+        // 30 s of wall clock per assertion is not a test. Detection idiom: DELETE the .bak, tick, and
+        // see whether it comes back. A skipped snapshot leaves it deleted; a written one recreates it.
+        {
+            const wxString recDir = g_sandboxUserData + wxFILE_SEP_PATH + "RecoveryBackups";
+            // The .bak for OUR page is whichever file in the recovery dir contains `marker` - ids are
+            // session-serial and other tests' pages may have left snapshots, so find by content.
+            auto bakContaining = [&](const char* marker) -> wxString {
+                wxArrayString baks;
+                wxDir::GetAllFiles(recDir, &baks, "*.bak", wxDIR_FILES);
+                for (const wxString& b : baks) {
+                    wxFile f(b); wxString all;
+                    if (f.IsOpened() && f.ReadAll(&all, wxConvUTF8) && all.Contains(marker)) return b;
+                }
+                return {};
+            };
+            auto tmpCount = [&]{
+                wxArrayString tmps;
+                return (int)wxDir::GetAllFiles(recDir, &tmps, "*.tmp", wxDIR_FILES);
+            };
+
+            // Multi-byte UTF-8 in the fixture: the old path round-tripped the document through wxString
+            // (UTF-16) and back; the new one must write the document's own bytes, verbatim.
+            const wxString bkFix = work + wxFILE_SEP_PATH + "bk.txt";
+            check(writeWholeFile(bkFix, "z\xC3\xB3\xC5\x82w BKMARK1\n"), "backup fixture created (multi-byte UTF-8)");
+            openDoc(bkFix);
+            nibSciCall(nullptr, -1, SCI_APPENDTEXT, 6, reinterpret_cast<intptr_t>("edit1\n"));
+            check(g_backupTick != nullptr, "the frame installed the backup-tick seam");
+            g_backupTick(); pump();
+            const wxString bak1 = bakContaining("BKMARK1");
+            check(!bak1.empty(), "a dirty buffer's first tick writes its .bak");
+            {
+                wxFile f(bak1); wxString all;
+                check(f.IsOpened() && f.ReadAll(&all, wxConvUTF8) && all == wxString::FromUTF8("z\xC3\xB3\xC5\x82w BKMARK1\nedit1\n"),
+                      "the .bak holds the document's exact bytes - multi-byte UTF-8 survives the direct write");
+            }
+            check(tmpCount() == 0, "no .tmp left behind - the atomic-rename path cleaned up");
+
+            // Skip-if-unchanged: no edits since the snapshot, so the next tick must not rewrite. The
+            // serials say 'already snapshotted', so a hand-deleted .bak stays deleted until an edit.
+            check(removeFound(bak1), "(.bak removed to make a rewrite observable)");
+            g_backupTick(); pump();
+            check(bakContaining("BKMARK1").empty(),
+                  "an unchanged dirty buffer is NOT re-snapshotted every tick (skip-if-unchanged)");
+
+            // One more edit advances the serial: the next tick rewrites, and the content catches up.
+            nibSciCall(nullptr, -1, SCI_APPENDTEXT, 6, reinterpret_cast<intptr_t>("edit2\n"));
+            g_backupTick(); pump();
+            const wxString bak2 = bakContaining("edit2");
+            check(!bak2.empty(), "an edit re-arms the snapshot: the .bak is rewritten with the new content");
+
+            // Cadence: a > 32 MiB buffer skips ticks that fall inside its stretched interval. The first
+            // snapshot never waits (proved by its .bak appearing); the immediate second tick - even with
+            // a NEW edit, so skip-if-unchanged cannot explain it - is throttled.
+            const wxString bkBig = work + wxFILE_SEP_PATH + "bk_big.txt";
+            { std::string big; big.reserve((33u << 20) + 32);
+              while (big.size() < (33u << 20)) { big.append(63, 'q'); big += '\n'; }
+              big += "BKMARK2\n";
+              check(writeWholeFile(bkBig, big.c_str()), "33 MiB cadence fixture created"); }
+            openDoc(bkBig);
+            nibSciCall(nullptr, -1, SCI_APPENDTEXT, 6, reinterpret_cast<intptr_t>("edit3\n"));
+            g_backupTick(); pump();
+            const wxString bigBak = bakContaining("BKMARK2");
+            check(!bigBak.empty(), "big buffer: the first snapshot is never rationed");
+            nibSciCall(nullptr, -1, SCI_APPENDTEXT, 6, reinterpret_cast<intptr_t>("edit4\n"));
+            check(removeFound(bigBak), "(big .bak removed to make a rewrite observable)");
+            g_backupTick(); pump();
+            check(bakContaining("BKMARK2").empty(),
+                  "big buffer: a tick inside the stretched interval is skipped even with fresh edits (cadence)");
+
+            // clean up back to a single document for the tail assertions
+            for (int guard = 0; g_nibDocCount && g_nibDocCount() > 1 && guard < 20; ++guard) { g_nibInvokeCommand(kCmdFileClose); pump(); }
+            check(g_nibDocCount && g_nibDocCount() == 1, "backup fixtures closed - back to a single document");
+
+            // ---- hardening round (adversarial review of the block above) ---------------------------
+
+            // (a) Atomicity is real, not vacuous: a decoy planted at the .tmp path must be consumed by
+            // the write-temp-then-rename cycle. A truncate-in-place revert never touches the .tmp, so
+            // the decoy survives and tmpCount() catches it - the review showed the plain tmpCount()==0
+            // assertion above passes vacuously under exactly that revert.
+            const wxString bkK = work + wxFILE_SEP_PATH + "bk_atomic.txt";
+            check(writeWholeFile(bkK, "BKMARK7\n"), "atomicity fixture created");
+            openDoc(bkK);
+            appendText("d0\n");
+            g_backupTick(); pump();
+            const wxString bakK = bakContaining("BKMARK7");
+            check(!bakK.empty(), "atomicity fixture snapshotted");
+            check(writeWholeFile(bakK + ".tmp", "decoy"), "(decoy planted at the .tmp path)");
+            appendText("d1\n");
+            g_backupTick(); pump();
+            check(tmpCount() == 0, "the write really goes through .tmp: the planted decoy was consumed by the rename");
+            { wxFile f(bakK); wxString all; check(f.IsOpened() && f.ReadAll(&all, wxConvUTF8) && all.Contains("d1"),
+                  "...and the .bak carries the new content"); }
+
+            // (b) Failure must not stamp success: block the rename with a DIRECTORY squatting on the
+            // .bak path. The failed tick must leave no .tmp (the cleanup leg) and record nothing, so
+            // the next unblocked tick retries WITHOUT a new edit. Stamping before the rename lands
+            // would serial-skip that retry forever - and the exit backup would inherit the lie.
+            check(removeFound(bakK), "(.bak removed for the rename-blocker test)");
+            check(wxFileName::Mkdir(bakK), "(directory blocker squatting on the .bak path)");
+            appendText("d2\n");
+            g_backupTick(); pump();
+            check(tmpCount() == 0, "failed rename: the .tmp was cleaned up, not leaked");
+            check(wxRmdir(bakK), "(blocker removed)");
+            g_backupTick(); pump();   // NO new edit between the failed tick and this one
+            { wxFile f(bakK); wxString all; check(f.IsOpened() && f.ReadAll(&all, wxConvUTF8) && all.Contains("d2"),
+                  "a failed snapshot is retried on the next tick - failure recorded no false success stamp"); }
+            for (int guard = 0; g_nibDocCount && g_nibDocCount() > 1 && guard < 20; ++guard) { g_nibInvokeCommand(kCmdFileClose); pump(); }
+
+            // (c) The background EOL-convert hand-bump: the one event-masked mutation. Snapshot a CRLF
+            // buffer, background it, convert to LF through the nib seam, and the next tick must rewrite
+            // the .bak with LF content - deleting the hand-bump leaves the serials equal and the stale
+            // CRLF snapshot in place forever.
+            const wxString bkE = work + wxFILE_SEP_PATH + "bk_eol.txt";
+            check(writeWholeFile(bkE, "BKMARK8 a\r\nb\r\n"), "EOL fixture created (CRLF)");
+            openDoc(bkE);
+            appendText("e1\n");
+            const intptr_t idE = g_nibDocActiveId ? g_nibDocActiveId() : 0;
+            check(idE != 0, "EOL fixture id resolved");
+            const wxString bkF = work + wxFILE_SEP_PATH + "bk_eol_other.txt";
+            check(writeWholeFile(bkF, "other\n"), "(second doc to background the EOL fixture)");
+            openDoc(bkF);
+            g_backupTick(); pump();
+            const wxString bakE = bakContaining("BKMARK8");
+            check(!bakE.empty(), "background CRLF buffer snapshotted");
+            check(g_nibDocEolSet && g_nibDocEolSet(idE, SC_EOL_LF) == 1, "background EOL convert via the nib seam");
+            check(removeFound(bakE), "(.bak removed to make the re-arm observable)");
+            g_backupTick(); pump();
+            { const wxString again = bakContaining("BKMARK8"); wxFile f(again); wxString all;
+              check(!again.empty() && f.IsOpened() && f.ReadAll(&all, wxConvUTF8) && !all.Contains("\r"),
+                    "the masked background mutation re-armed the snapshot, and the .bak holds the converted LF bytes"); }
+            for (int guard = 0; g_nibDocCount && g_nibDocCount() > 1 && guard < 20; ++guard) { g_nibInvokeCommand(kCmdFileClose); pump(); }
+
+            // (d) Split view: an edit arriving through the NON-active view's handle (nib.sci view 0 -
+            // how npp-bridge plugins write) must credit the MAIN view's mounted page, not whichever
+            // page has focus. Crediting the active page froze the mutated page's .bak at pre-plugin
+            // content, through the exit backup too (review: HIGH).
+            const wxString bkG = work + wxFILE_SEP_PATH + "bk_split.txt";
+            const wxString bkH = work + wxFILE_SEP_PATH + "bk_split_other.txt";
+            check(writeWholeFile(bkG, "BKMARK9\n") && writeWholeFile(bkH, "other\n"), "split fixtures created");
+            openDoc(bkG);
+            appendText("s1\n");                                   // bkG dirty in the MAIN view
+            g_backupTick(); pump();
+            const wxString bakG = bakContaining("BKMARK9");
+            check(!bakG.empty(), "split fixture snapshotted before the split");
+            openDoc(bkH);
+            g_nibInvokeCommand(kCmdViewGotoAnotherView); pump(120);   // bkH -> SUB view; active = SUB; bkG mounted inactive in MAIN
+            coreSciCall(0, SCI_APPENDTEXT, 3, reinterpret_cast<intptr_t>("s2\n"));   // plugin-style write to the INACTIVE main view
+            pump();
+            check(removeFound(bakG), "(.bak removed to make the re-arm observable)");
+            g_backupTick(); pump();
+            { const wxString again = bakContaining("BKMARK9"); wxFile f(again); wxString all;
+              check(!again.empty() && f.IsOpened() && f.ReadAll(&all, wxConvUTF8) && all.Contains("s2"),
+                    "an edit through the inactive view's handle re-arms THAT page's snapshot (per-pane serial attribution)"); }
+            for (int guard = 0; g_nibDocCount && g_nibDocCount() > 1 && guard < 20; ++guard) { g_nibInvokeCommand(kCmdFileClose); pump(); }
+
+            // (e) Undo back to the savepoint retires the snapshot: the stale .bak used to survive a
+            // clean exit and RESURRECT the deliberately-discarded edits at the next launch.
+            const wxString bkI = work + wxFILE_SEP_PATH + "bk_undo.txt";
+            check(writeWholeFile(bkI, "BKMARKA base\n"), "undo fixture created");
+            openDoc(bkI);
+            appendText("junk\n");
+            g_backupTick(); pump();
+            check(!bakContaining("BKMARKA").empty(), "undo fixture snapshotted while dirty");
+            nibSciCall(nullptr, -1, SCI_UNDO, 0, 0); pump();
+            check(coreSciCall(-1, SCI_GETMODIFY, 0, 0) == 0, "undo really returned to the save point");
+            check(bakContaining("BKMARKA").empty(),
+                  "reaching the savepoint retired the .bak - discarded edits can no longer resurrect at next launch");
+            for (int guard = 0; g_nibDocCount && g_nibDocCount() > 1 && guard < 20; ++guard) { g_nibInvokeCommand(kCmdFileClose); pump(); }
+
+            // (f) Rename refreshes recovery: the manifest stores Path/Title, and skip-if-unchanged used
+            // to freeze the OLD path there forever (restore would then split the edits from their file).
+            const wxString bkJ  = work + wxFILE_SEP_PATH + "bk_ren.txt";
+            const wxString bkJ2 = work + wxFILE_SEP_PATH + "bk_ren2.txt";
+            check(writeWholeFile(bkJ, "BKMARKB\n"), "rename fixture created");
+            openDoc(bkJ);
+            appendText("r1\n");
+            g_backupTick(); pump();
+            const wxString bakJ = bakContaining("BKMARKB");
+            check(!bakJ.empty(), "rename fixture snapshotted");
+            check(g_nibRenameActive && g_nibRenameActive(std::string(bkJ2.utf8_str()).c_str()) == 1, "fixture renamed on disk");
+            check(removeFound(bakJ), "(.bak removed to make the manifest re-arm observable)");
+            g_backupTick(); pump();   // NO edit since the rename
+            check(!bakContaining("BKMARKB").empty(),
+                  "a rename re-arms the snapshot so the recovery manifest catches the new path without waiting for an edit");
+            for (int guard = 0; g_nibDocCount && g_nibDocCount() > 1 && guard < 20; ++guard) { g_nibInvokeCommand(kCmdFileClose); pump(); }
+            check(g_nibDocCount && g_nibDocCount() == 1, "hardening fixtures closed - back to a single document");
+        }
+
         // ---- (d) allocated command ids round-trip through the wx dispatcher ------------------------
         check(cFirst > 32767,
               "(d) allocated ids sit above 32767 (WM_COMMAND sign-wraps them; wrapped dispatch driven below)");
@@ -1339,6 +1641,12 @@ int main(int argc, char** argv)
     // not just the itemid one - must be prevented from popping wx's modal debug MessageBox (which,
     // with no one to click it, would hang CI) or abort()ing the process mid-run.
     wxDisableAsserts();
+    // ...and for the same reason, silence LOGGING for the whole run. wxLogError/wxLogSysError pop a
+    // modal wxMessageBox, which in a non-interactive harness nobody can dismiss: the suite then hangs
+    // forever instead of failing. That is not hypothetical - a single wxRemoveFile("") in a fixture
+    // (an assertion helper handed an empty path by a lookup that found nothing) turned a one-line FAIL
+    // into a wedged CI run. A failed assertion must stay a printed FAIL, never a dialog.
+    wxLog::EnableLogging(false);
 
     namespace fs = std::filesystem;
     std::error_code ec;

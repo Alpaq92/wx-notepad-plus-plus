@@ -411,44 +411,52 @@ set_target_properties(po2mo PROPERTIES
 # CI-with-display tool, not part of a headless test run. Mirrors the wxnote target's build setup
 # because it compiles the same sources.
 #   cmake --build build --target bridge_selftest && build/bin/bridge_selftest
-add_executable(bridge_selftest tests/bridge_selftest.cpp src/scintillua_engine.cpp src/term_backend.cpp src/term_view.cpp)
-set_target_properties(bridge_selftest PROPERTIES
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-target_compile_definitions(bridge_selftest PRIVATE WXN_VERSION="${PROJECT_VERSION}")
-if(APPLE)
-    target_sources(bridge_selftest PRIVATE src/macos_native.mm)
-    target_link_libraries(bridge_selftest PRIVATE "-framework AppKit")
-endif()
-if(UNIX AND NOT APPLE)
-    target_sources(bridge_selftest PRIVATE src/gtk_native.cpp)
-    target_include_directories(bridge_selftest PRIVATE ${GTK3_INCLUDE_DIRS})
-    target_link_directories(bridge_selftest PRIVATE ${GTK3_LIBRARY_DIRS})
-    target_link_libraries(bridge_selftest PRIVATE ${GTK3_LIBRARIES})
-    target_link_libraries(bridge_selftest PRIVATE util)
-endif()
+# One recipe for every selftest that textually includes src/main.cpp: same sources, defines, includes
+# and link set as the wxnote target (the two blocks this replaces had already been copied verbatim once,
+# which is exactly how they would have drifted).
+function(wxn_add_app_selftest name)
+    add_executable(${name} tests/${name}.cpp src/scintillua_engine.cpp src/term_backend.cpp src/term_view.cpp)
+    set_target_properties(${name} PROPERTIES
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+    target_compile_definitions(${name} PRIVATE WXN_VERSION="${PROJECT_VERSION}")
+    if(APPLE)
+        target_sources(${name} PRIVATE src/macos_native.mm)
+        target_link_libraries(${name} PRIVATE "-framework AppKit")
+    endif()
+    if(UNIX AND NOT APPLE)
+        target_sources(${name} PRIVATE src/gtk_native.cpp)
+        target_include_directories(${name} PRIVATE ${GTK3_INCLUDE_DIRS})
+        target_link_directories(${name} PRIVATE ${GTK3_LIBRARY_DIRS})
+        target_link_libraries(${name} PRIVATE ${GTK3_LIBRARIES})
+        target_link_libraries(${name} PRIVATE util)
+    endif()
+    target_include_directories(${name} PRIVATE
+        "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"
+        "${CMAKE_SOURCE_DIR}/third_party/lexilla/include"
+        "${CMAKE_SOURCE_DIR}/include/nib"
+        "${CMAKE_SOURCE_DIR}/src")              # main.cpp itself (textually included) + its headers
+    target_link_libraries(${name} PRIVATE
+        wx::core wx::aui wx::base wx::xml wx::stc wx::net
+        lexilla lua_lpeg
+        vterm
+        hunspell)   # main.cpp -> src/spell_engine.h -> <hunspell/hunspell.hxx>; wx::net -> wxWebRequest
+    if(WIN32 OR (UNIX AND NOT APPLE))
+        target_link_libraries(${name} PRIVATE wxbf)
+        target_compile_definitions(${name} PRIVATE WXN_HAS_BORDERLESS=1)
+    endif()
+    if(WIN32)
+        target_link_libraries(${name} PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme winhttp)
+    endif()
+    if(MSVC)
+        target_compile_options(${name} PRIVATE /utf-8 /bigobj)
+    endif()
+endfunction()
+
+wxn_add_app_selftest(bridge_selftest)
 target_include_directories(bridge_selftest PRIVATE
-    "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"
-    "${CMAKE_SOURCE_DIR}/third_party/lexilla/include"
-    "${CMAKE_SOURCE_DIR}/include/nib"
-    "${CMAKE_SOURCE_DIR}/include/npp-compat"    # Notepad_plus_msgs.h - the NPPN_*/NPPM_* codes the assertions speak
-    "${CMAKE_SOURCE_DIR}/src")                  # main.cpp itself (textually included) + its headers
-target_link_libraries(bridge_selftest PRIVATE
-    wx::core wx::aui wx::base wx::xml wx::stc wx::net
-    lexilla lua_lpeg
-    vterm
-    hunspell)   # it textually includes src/main.cpp -> src/spell_engine.h -> <hunspell/hunspell.hxx>; wx::net -> wxWebRequest
-if(WIN32 OR (UNIX AND NOT APPLE))
-    target_link_libraries(bridge_selftest PRIVATE wxbf)
-    target_compile_definitions(bridge_selftest PRIVATE WXN_HAS_BORDERLESS=1)
-endif()
-if(WIN32)
-    target_link_libraries(bridge_selftest PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme winhttp)
-endif()
-if(MSVC)
-    target_compile_options(bridge_selftest PRIVATE /utf-8 /bigobj)
-endif()
+    "${CMAKE_SOURCE_DIR}/include/npp-compat")   # Notepad_plus_msgs.h - the NPPN_*/NPPM_* codes the assertions speak
 # The runtime pieces the booted app + bridge load: bin resources (copied by wxnote's POST_BUILD), the
 # bridge in bin/nib, the Nib test plugin, and the probe (Windows DLL / POSIX staged .so).
 add_dependencies(bridge_selftest wxnote npp_bridge nib_test_plugin)
@@ -464,43 +472,7 @@ endif()
 # flRules/flCommentRe, wxnCollectWords) against plain strings. That is why those are free functions, and
 # why this registers as a "pure" ctest: no display needed, runs anywhere a binary runs.
 #   cmake --build build --target funclist_selftest && build/bin/funclist_selftest
-add_executable(funclist_selftest tests/funclist_selftest.cpp src/scintillua_engine.cpp src/term_backend.cpp src/term_view.cpp)
-set_target_properties(funclist_selftest PROPERTIES
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-target_compile_definitions(funclist_selftest PRIVATE WXN_VERSION="${PROJECT_VERSION}")
-if(APPLE)
-    target_sources(funclist_selftest PRIVATE src/macos_native.mm)
-    target_link_libraries(funclist_selftest PRIVATE "-framework AppKit")
-endif()
-if(UNIX AND NOT APPLE)
-    target_sources(funclist_selftest PRIVATE src/gtk_native.cpp)
-    target_include_directories(funclist_selftest PRIVATE ${GTK3_INCLUDE_DIRS})
-    target_link_directories(funclist_selftest PRIVATE ${GTK3_LIBRARY_DIRS})
-    target_link_libraries(funclist_selftest PRIVATE ${GTK3_LIBRARIES})
-    target_link_libraries(funclist_selftest PRIVATE util)
-endif()
-target_include_directories(funclist_selftest PRIVATE
-    "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"
-    "${CMAKE_SOURCE_DIR}/third_party/lexilla/include"
-    "${CMAKE_SOURCE_DIR}/include/nib"
-    "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(funclist_selftest PRIVATE
-    wx::core wx::aui wx::base wx::xml wx::stc wx::net
-    lexilla lua_lpeg
-    vterm
-    hunspell)
-if(WIN32 OR (UNIX AND NOT APPLE))
-    target_link_libraries(funclist_selftest PRIVATE wxbf)
-    target_compile_definitions(funclist_selftest PRIVATE WXN_HAS_BORDERLESS=1)
-endif()
-if(WIN32)
-    target_link_libraries(funclist_selftest PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme winhttp)
-endif()
-if(MSVC)
-    target_compile_options(funclist_selftest PRIVATE /utf-8 /bigobj)
-endif()
+wxn_add_app_selftest(funclist_selftest)
 
 # ---- deploy runtime resources (toolbar icons, themes, default styler) next to the exe --------------
 add_custom_command(TARGET wxnote POST_BUILD

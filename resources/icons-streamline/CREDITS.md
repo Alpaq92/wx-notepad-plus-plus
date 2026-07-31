@@ -66,9 +66,10 @@ byte-for-byte.
 Four files in this directory are original wxNote artwork rather than re-baked Streamline
 glyphs, and are therefore **not** covered by the Streamline attribution above. They are licensed
 under the project's own licence (Apache-2.0, see the root `LICENSE`). They are also NOT
-produced by `tools/generate_streamline_icons.py` — they are listed in its `HANDMADE` set, which
-the script excludes from its manifest check and never writes, so re-running it leaves them
-alone (it does verify they are still present). All four are drawn on this set's 14x14 viewBox
+produced by `tools/generate_streamline_icons.py` — each carries a machine-readable
+`wxnote-original` marker comment inside the SVG, and the script derives its exclusion set from
+those markers, so re-running it leaves them alone (a deleted one turns up as "missing" in its
+manifest check). All four are drawn on this set's 14x14 viewBox
 with its two-paint pair (green-4 `#69db7c`, teal-8 `#099268`) so the dark-mode re-tint in
 `iconColored()` finds the same hexes as the re-baked files:
 
