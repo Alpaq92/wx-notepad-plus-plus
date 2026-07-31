@@ -3,6 +3,49 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.0] - 2026-07-31
+
+### Added
+- **Plugins receive raw editor input** (`nib.events` v5, and through the Notepad++ bridge as the matching
+  `SCN_*` notifications): character-added, margin-click, mouse-dwell start/end and the three hotspot
+  clicks. This is what autocompletion, tag-closing and bracket-helper plugins are built on — that whole
+  class of plugin could not function before, because nothing in the event set reported a keystroke or a
+  margin hit. Events fire after the editor's own handling, so a plugin sees the settled buffer, and each
+  one reports which view it came from. Dwell and hotspot stay dormant until a plugin turns them on, as
+  they do under Notepad++.
+- **A real leaf and group icon for the Function List tree**, in all four icon styles: the tree used to
+  borrow a botanical leaf and an org chart for "a function" and "a class".
+
+### Changed
+- **Typing no longer slows down as the file grows.** Word completion re-scanned the *whole document* on
+  every word character typed, and the parameter-hint scan did the same on every `(` — about 300 ms per
+  keystroke on a 16 MiB file and over a second on a 64 MiB one. Both now read at most 1 MiB around the
+  caret: files under that size behave exactly as before, and larger files complete against nearby text
+  instead of freezing. Completion keeps working on large files rather than switching off.
+
+### Fixed
+- **The crash-recovery backup no longer rewrites unchanged files.** A buffer with unsaved edits was
+  re-copied and rewritten every 30 seconds for as long as it stayed unsaved — even when nothing had
+  changed since the last snapshot. It now writes only after a real edit, writes once instead of copying
+  the document three times, and paces itself on very large files.
+- **A crash during a backup can no longer destroy the previous good backup**: snapshots are written to a
+  temporary file and swapped into place, so an interrupted or failed write leaves the last one intact.
+  Orphaned temporary files are cleaned up at startup.
+- **A buffer edited and then switched away from could go unbacked-up entirely** — its unsaved-changes
+  flag was only refreshed opportunistically, so the timer skipped it.
+- **Saving with a full disk** truncated the file, marked it as saved, and deleted the recovery copy,
+  losing both. The save now fails and keeps the recovery copy.
+- **Undoing back to the last saved state** left a stale recovery copy behind, which could resurrect the
+  undone edits on the next launch.
+- **Spell check with "comments and strings only"** squiggled every identifier on files too large to
+  highlight, and checked nothing at all in plain-text files.
+- **Files whose name is all extension** (`.gitignore`, `.bashrc`) stopped matching custom language and
+  Function List rules registered for them.
+- **The dictionaries hint pointed at the wrong menu in all eight translations** — it still said *View*
+  after Spell Check moved to the *Document* menu.
+- Editor input arriving in the second view of a split is attributed to that view, so a plugin acting on
+  it no longer edits the wrong document.
+
 ## [0.13.0] - 2026-07-28
 
 ### Added

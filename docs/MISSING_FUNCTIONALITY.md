@@ -3,7 +3,7 @@
 A gap analysis of wxNote against Notepad++ and its own cross-platform promise, produced by a
 codebase-wide audit (6 parallel investigators, every finding grounded in a `file:line` or doc quote).
 
-- **Baseline:** wxNote 0.13.0 (released 2026-07-28), master @ 2026-07-28.
+- **Baseline:** wxNote 0.14.0 (released 2026-07-31), master @ 2026-07-31.
 - **Scope:** what a user or plugin author would find missing, non-functional, or thinner than
   Notepad++ — not code-quality nits.
 
