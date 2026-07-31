@@ -68,9 +68,14 @@ VIProductVersion "${APP_VERSION}.0"
 VIAddVersionKey /LANG=1033 "ProductName"     "${APP_NAME}"
 VIAddVersionKey /LANG=1033 "ProductVersion"  "${APP_VERSION}.0"
 VIAddVersionKey /LANG=1033 "FileVersion"     "${APP_VERSION}.0"
-VIAddVersionKey /LANG=1033 "FileDescription" "${APP_NAME} installer"
+VIAddVersionKey /LANG=1033 "FileDescription" "${APP_NAME} ${APP_VERSION} Setup"
 VIAddVersionKey /LANG=1033 "CompanyName"     "wxNote Project"
-VIAddVersionKey /LANG=1033 "LegalCopyright"  "Apache-2.0 - see LICENSE"
+VIAddVersionKey /LANG=1033 "LegalCopyright"  "Copyright (C) 2026 The wxNote Authors. Licensed under Apache-2.0."
+; A complete StringFileInfo block is what a legitimate installer carries; the three fields below were
+; simply absent, leaving Explorer's Details tab (and anything else reading the resource) with blanks.
+VIAddVersionKey /LANG=1033 "OriginalFilename" "wxNote-${APP_VERSION}${ARCH_SUFFIX}-Setup.exe"
+VIAddVersionKey /LANG=1033 "InternalName"     "wxNote-Setup"
+VIAddVersionKey /LANG=1033 "Comments"         "Open-source text editor. Source: ${APP_URL}"
 
 ; The payload exe is single-arch (see CMakeLists.txt) - NSIS itself has no "ArchitecturesAllowed"
 ; concept the way Inno Setup does, so the CPU check has to be enforced by hand or the 32-bit
@@ -121,6 +126,11 @@ Section "${APP_NAME} (required)" SecCore
   WriteRegStr   HKCU "${ARP_KEY}" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
   WriteRegDWORD HKCU "${ARP_KEY}" "NoModify" 1
   WriteRegDWORD HKCU "${ARP_KEY}" "NoRepair" 1
+  ; Fields a well-behaved installer is expected to write; their absence left the ARP entry sparser than
+  ; a normal application's. All are facts about this install; none change behaviour.
+  WriteRegStr   HKCU "${ARP_KEY}" "InstallLocation"      "$INSTDIR"
+  WriteRegStr   HKCU "${ARP_KEY}" "HelpLink"             "${APP_URL}"
+  WriteRegStr   HKCU "${ARP_KEY}" "URLUpdateInfo"        "${APP_URL}/releases"
   ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
   WriteRegDWORD HKCU "${ARP_KEY}" "EstimatedSize" $0
 

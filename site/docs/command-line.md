@@ -109,9 +109,14 @@ Windows as written — the caveat only bites when *you* type the command at a `c
 
 On Linux and macOS there is no such distinction; the shell waits for the foreground process either way.
 
-## Internal switch
+## Saving to a protected location (Windows)
 
-`--elevated-write` is an internal Windows helper used by the editor itself when a save needs
-administrator rights: the unprivileged process writes its buffer to a temporary file, then relaunches
-itself elevated with this switch to perform just the copy — no GUI, no locale or theme setup, nothing
-else running elevated. Do not invoke it by hand.
+wxNote has **no internal elevation switch and never relaunches itself with administrator rights.**
+When a save target needs rights the editor does not have, it stages the bytes in a temporary file and
+asks Windows to move them into place through the shell's own file-operation service — the same
+mechanism File Explorer uses. Windows shows its standard shielded consent dialog naming the
+destination, and the privileged step happens inside the shell, not inside wxNote.
+
+(Earlier versions did have a `--elevated-write` helper that re-launched the editor elevated. It was
+removed in 0.15.0: it performed an unvalidated file copy with administrator rights, which made
+`wxnote.exe` usable as an arbitrary elevated-write tool by anything already running as the user.)

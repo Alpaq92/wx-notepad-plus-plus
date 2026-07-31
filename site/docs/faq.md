@@ -125,6 +125,27 @@ Scintilla-family editing behaviour and a familiar command vocabulary, and it can
 Notepad++ assets (themes, plugins on Windows, UDL files) through clearly-labelled optional modules — but
 the core is original work under a permissive licence and does not link any Notepad++ Win32 code.
 
+## My antivirus says the installer is a trojan
+
+It's a false positive. The Windows builds are not code-signed yet, and an unsigned installer that
+nobody has downloaded before has no publisher identity and no reputation — so a scanner falls back on
+what the file *looks* like, and a compressed self-extracting installer looks like a lot of things.
+Detections with an `!ml` suffix (such as `Wacatac.B!ml`) come from a machine-learning guess, not from
+matching known malware.
+
+You do not have to take our word for it:
+
+- Check the download against the `SHA256SUMS` file shipped with every release
+- The build is public — every artifact is produced by GitHub Actions from a tagged commit, logs and all
+- [docs/ANTIVIRUS.md](https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/docs/ANTIVIRUS.md)
+  lists every privileged and network-touching thing the editor does, plus what it deliberately never does
+- The Windows `.zip` holds the same files with no installer stub, so you can look inside first
+
+Code signing is the real fix and it's on the roadmap; see
+[docs/SIGNING.md](https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/docs/SIGNING.md). Please
+don't add an antivirus exclusion on our account — reporting the false positive to your vendor helps
+everyone, and helps us.
+
 ## Something's wrong and I want to report it
 
 **Help&nbsp;&rsaquo; Debug Info…** shows the wxWidgets version, the OS description and the executable's

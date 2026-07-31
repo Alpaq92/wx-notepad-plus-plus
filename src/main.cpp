@@ -81,6 +81,7 @@
 #include <uxtheme.h>
 #include <wx/msw/darkmode.h>   // wxDarkModeSettings - recolour wx's native dark menu bar (see WxnDarkModeSettings)
 #include <shellapi.h>          // ShellExecuteW / SHFileOperationW - File menu shell commands (Explorer, cmd, Recycle Bin)
+#include <shobjidl.h>          // IFileOperation / SHCreateItemFromParsingName - shell-brokered elevated save (tryElevatedWrite)
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
@@ -605,7 +606,12 @@ static wxString      g_pluginMessage;
 // the IPC handoff (the receiver's Mid(5) walked past the digits, leaving forceEnc at -1). "\x01GOTO="
 // escaped it only because 'G' is not a hex digit, which is why that one key always worked.
 // Keep the concatenation, and count every Mid() offset from the SPLIT form (5 for \x01XXX=, 7 for FGOTO=).
-static const wxChar* const kIpcServiceName = wxT("31415");   // arbitrary but fixed "port" (Unix) / DDE service (Windows)
+// Fixed "port" (Unix socket path component) / DDE service name (Windows). Self-identifying on purpose:
+// the previous bare "31415" read, to anything inspecting strings in the binary, like a hardcoded port or
+// an opaque identifier rather than an application resource. Changing it means a running instance from an
+// older build will not be found by a newer one - the newcomer just opens its own window, which is the
+// same already-correct behaviour as when no instance is running.
+static const wxChar* const kIpcServiceName = wxT("wxNote-IPC");
 static const wxChar* const kIpcTopic = wxT("wxnote-open");
 
 class WxnIpcConnection : public wxConnection
@@ -8584,43 +8590,72 @@ private:
         monReloadTail(p, oldSize);
     }
 #ifdef __WXMSW__
-    // The unprivileged process can't write path (access denied) - ask, then relaunch itself elevated
-    // (via ShellExecuteExW "runas") with a hidden --elevated-write switch to copy just this one file in.
-    // The elevated child runs NO GUI code at all (see WxnApp::OnInit) - it exists only to do that copy.
+    // The unprivileged process can't write path (access denied) - stage the bytes in a temp file and ask
+    // the SHELL to move them into place, via COM IFileOperation. That is the documented mechanism
+    // Explorer itself uses for this exact case: when the destination needs rights we do not have, the
+    // shell's copy engine brokers the elevation and shows the standard system consent dialog naming the
+    // destination, and the privileged work happens inside the shell - not inside a second copy of us.
+    //
+    // This replaced a self-relaunch: ShellExecuteExW(lpVerb="runas") on our OWN exe, SW_HIDE, with a
+    // private `--elevated-write <src> <dst>` switch whose handler ran wxCopyFile on unvalidated argv.
+    // That was a real local privilege-escalation gadget - any process running as the user could invoke
+    // wxnote.exe to overwrite any admin-only path, behind one UAC prompt that named wxnote.exe and said
+    // nothing about what was being written where. It also happened to be a textbook dropper shape
+    // (stage in %TEMP% -> relaunch self elevated -> hidden window -> write protected path -> erase temp).
+    // Both problems are gone with the switch; do not reintroduce an argv-driven elevated copy.
     bool tryElevatedWrite(const wxString& path, const std::string& data)
     {
         if (wxMessageBox(
-                wxString::Format(_("\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnote elevated to save this file?"), path),
+                wxString::Format(_("\"%s\" cannot be written with your current permissions.\n\nAsk Windows for permission to save this file?"), path),
                 _("Access Denied"), wxYES_NO | wxICON_QUESTION, this) != wxYES)
             return false;
 
         const wxString tempPath = wxFileName::CreateTempFileName("wxnote_elev_");
         if (tempPath.empty()) return false;
-        {   // short write here (disk full) must fail LOUDLY: the elevated child would faithfully copy the
-            // truncated temp over the target, and the caller would then savepoint + drop the crash .bak
+        {   // short write here (disk full) must fail LOUDLY: the shell would faithfully copy the truncated
+            // temp over the target, and the caller would then savepoint + drop the crash .bak
             wxFile tf(tempPath, wxFile::write);
             if (!tf.IsOpened()) return false;
             if (tf.Write(data.data(), data.size()) != data.size()) { tf.Close(); wxRemoveFile(tempPath); return false; }
         }
 
-        const wxString exePath = wxStandardPaths::Get().GetExecutablePath();
-        const wxString params = wxString::Format("--elevated-write \"%s\" \"%s\"", tempPath, path);
-        SHELLEXECUTEINFOW sei = {};
-        sei.cbSize = sizeof(sei);
-        sei.fMask = SEE_MASK_NOCLOSEPROCESS;
-        sei.lpVerb = L"runas";
-        sei.lpFile = exePath.wc_str();
-        sei.lpParameters = params.wc_str();
-        sei.nShow = SW_HIDE;
-        if (!::ShellExecuteExW(&sei) || !sei.hProcess) { wxRemoveFile(tempPath); return false; }   // user declined the UAC prompt, or launch failed
-        ::WaitForSingleObject(sei.hProcess, 15000);   // give the elevated copy a moment; don't hang the UI forever
-        ::CloseHandle(sei.hProcess);
+        // S_FALSE = an apartment already exists (wx initialises OLE on the main thread) and we must still
+        // balance it; RPC_E_CHANGED_MODE = one exists in the other mode, which we neither own nor unwind.
+        const HRESULT hrInit = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        const bool ownInit = (hrInit == S_OK || hrInit == S_FALSE);
+        bool performed = false;
+        {
+            IFileOperation* op = nullptr;
+            if (SUCCEEDED(::CoCreateInstance(CLSID_FileOperation, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&op))) && op)
+            {
+                // FOFX_SHOWELEVATIONPROMPT: raise the shell's shielded consent dialog rather than failing
+                // with access-denied. FOF_NOCONFIRMATION answers the "replace existing file?" prompt - the
+                // user already chose Save; it does NOT suppress the elevation consent.
+                op->SetOperationFlags(FOF_NOCONFIRMATION | FOF_NOERRORUI | FOFX_SHOWELEVATIONPROMPT);
+                op->SetOwnerWindow(static_cast<HWND>(this->GetHandle()));
+                const wxFileName fn(path);
+                IShellItem* src = nullptr;
+                IShellItem* dstDir = nullptr;
+                if (SUCCEEDED(::SHCreateItemFromParsingName(tempPath.wc_str(), nullptr, IID_PPV_ARGS(&src))) &&
+                    SUCCEEDED(::SHCreateItemFromParsingName(fn.GetPath().wc_str(), nullptr, IID_PPV_ARGS(&dstDir))) &&
+                    SUCCEEDED(op->CopyItem(src, dstDir, fn.GetFullName().wc_str(), nullptr)) &&
+                    SUCCEEDED(op->PerformOperations()))
+                {
+                    BOOL aborted = FALSE;   // PerformOperations reports S_OK even when the user cancelled
+                    performed = SUCCEEDED(op->GetAnyOperationsAborted(&aborted)) && !aborted;
+                }
+                if (src)    src->Release();
+                if (dstDir) dstDir->Release();
+                op->Release();
+            }
+        }
+        if (ownInit) ::CoUninitialize();
         wxRemoveFile(tempPath);
-        // wxFileExists proved nothing: in the EACCES scenario the target already exists (that is WHY the
-        // unprivileged open failed), so it answered true even when the copy was truncated - or never ran
-        // at all (a UAC prompt answered slower than the wait above). Require the size to have landed.
+        // Keep the size check the self-relaunch path needed: a truncated or never-performed copy must not
+        // be reported as a save, or writeFile would savepoint and drop the recovery backup over a partial
+        // file. wxFileExists proves nothing here - in the access-denied case the target already exists.
         const wxULongLong sz = wxFileName::GetSize(path);
-        return sz != wxInvalidSize && sz == (wxULongLong)data.size();
+        return performed && sz != wxInvalidSize && sz == (wxULongLong)data.size();
     }
 #endif
     // Encode the CURRENTLY-MOUNTED document for buffer p's encoding and write it to `path`. Returns false
@@ -9773,8 +9808,18 @@ private:
         const wxString p = curPath();
         const wxString url = p.empty() ? wxString("about:blank") : wxFileName(p).GetFullPath();
 #ifdef __WXMSW__
-        const wxString cmd = exe.empty() ? ("cmd /c start microsoft-edge:\"" + url + "\"") : (exe + " \"" + url + "\"");
-        if (wxExecute(cmd, wxEXEC_ASYNC) <= 0 && !exe.empty()) wxLaunchDefaultBrowser(url);
+        if (exe.empty())
+        {
+            // ShellExecuteW directly, NOT `cmd /c start microsoft-edge:"<url>"`. `start` does exactly this
+            // and nothing more, so the shell child bought nothing - while cmd expands %VAR% even inside
+            // quotes, so a file literally named %USERNAME%.txt opened the wrong target. (A GUI app
+            // spawning cmd.exe is also among the most heavily weighted parent/child pairs in behavioural
+            // AV heuristics; losing it is a free side benefit, not the reason.)
+            const wxString target = "microsoft-edge:" + url;
+            if (reinterpret_cast<INT_PTR>(::ShellExecuteW(nullptr, L"open", target.wc_str(), nullptr, nullptr, SW_SHOWNORMAL)) <= 32)
+                wxLaunchDefaultBrowser(url);
+        }
+        else if (wxExecute(exe + " \"" + url + "\"", wxEXEC_ASYNC) <= 0) wxLaunchDefaultBrowser(url);
 #else
         (void)exe; wxLaunchDefaultBrowser(url);
 #endif
@@ -13697,20 +13742,15 @@ public:
     bool OnInit() override
     {
 #ifdef __WXMSW__
-        // Hidden UAC-elevation helper mode (see writeFile()): a normal, unprivileged wxnote process that hit
-        // access-denied writes its buffer to a temp file, then relaunches itself elevated with this switch
-        // to do just the copy - no GUI, no locale/theme setup, nothing else ever runs elevated.
-        if (argc >= 4 && wxString(argv[1]) == "--elevated-write")
-        {
-            wxCopyFile(argv[2], argv[3], true);
-            return false;   // wx skips the main loop and exits immediately
-        }
+        // (The `--elevated-write` helper mode that used to live here is GONE. It ran wxCopyFile on
+        // unvalidated argv with administrator rights, which made wxnote.exe an arbitrary elevated-write
+        // gadget for anything running as the user. tryElevatedWrite now asks the shell to do the
+        // privileged copy through COM IFileOperation instead - see the comment there. Do not re-add an
+        // argv-driven elevated file operation.)
 #endif
         SetAppName("wxNote");             // the identity wxConfig + GetUserDataDir() key everything under
 
         // ---- --locale pre-scan: raw argv, before the parser exists -------------------------------------
-        // Deliberately runs AFTER the --elevated-write block above: that helper must never have its argv
-        // reinterpreted by anything.
         //
         // Why a hand-rolled scan instead of just reading parser.Found("locale") below: every help string
         // handed to wxCmdLineParser is _()-wrapped, and Parse() renders the usage text from them. The

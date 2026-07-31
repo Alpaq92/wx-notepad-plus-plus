@@ -205,6 +205,11 @@ if(WIN32)
     # The .rc also embeds wxnote.ico as the exe's shell icon.
     configure_file("${CMAKE_SOURCE_DIR}/resources/app.rc.in" "${CMAKE_BINARY_DIR}/app.rc" @ONLY)
     add_executable(wxnote WIN32 src/main.cpp src/scintillua_engine.cpp src/term_backend.cpp src/term_view.cpp "${CMAKE_BINARY_DIR}/app.rc")
+    # The .rc embeds resources/wxnote.manifest itself, so stop the linker generating a second one -
+    # two RT_MANIFEST resources with id 1 is a hard link error (LNK1327 / RC1015 territory).
+    if(MSVC)
+        target_link_options(wxnote PRIVATE /MANIFEST:NO)
+    endif()
 else()
     add_executable(wxnote src/main.cpp src/scintillua_engine.cpp src/term_backend.cpp src/term_view.cpp)
 endif()
@@ -273,13 +278,18 @@ endif()
 
 # Windows-only chrome + plugin host (all behind #ifdef __WXMSW__ in src/main.cpp).
 if(WIN32)
-    target_link_libraries(wxnote PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme winhttp)   # winhttp: wxWebRequest backend
+    target_link_libraries(wxnote PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 shell32 dwmapi uxtheme winhttp)   # winhttp: wxWebRequest backend; shell32: IFileOperation/SHCreateItemFromParsingName (shell-brokered elevated save)
 endif()
 if(MSVC)
     # /bigobj: main.cpp emits more COFF sections than the default object format allows - the arm64
     # target crossed the limit first (fatal C1128 on the 0.9.5 CI while x64 still fit) because section
     # counts differ per target architecture.
-    target_compile_options(wxnote PRIVATE /utf-8 /bigobj)
+    # /guard:cf - Control Flow Guard. Real exploit mitigation (indirect-call targets are validated
+    # against a compiler-built map), it must be passed to BOTH the compiler and the linker to take
+    # effect, and it is what every mainstream MSVC-built application ships with. Verify after a build
+    # with `dumpbin /headers build/bin/wxnote.exe` - DllCharacteristics should gain 0x4000 (Guard).
+    target_compile_options(wxnote PRIVATE /utf-8 /bigobj /guard:cf)
+    target_link_options(wxnote PRIVATE /GUARD:CF)
 endif()
 
 # ---- terminal_selftest: behavioural self-test for the Terminal panel ------------------------------
@@ -447,7 +457,7 @@ function(wxn_add_app_selftest name)
         target_compile_definitions(${name} PRIVATE WXN_HAS_BORDERLESS=1)
     endif()
     if(WIN32)
-        target_link_libraries(${name} PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 dwmapi uxtheme winhttp)
+        target_link_libraries(${name} PRIVATE comctl32 imm32 msimg32 ole32 oleaut32 shell32 dwmapi uxtheme winhttp)
     endif()
     if(MSVC)
         target_compile_options(${name} PRIVATE /utf-8 /bigobj)
