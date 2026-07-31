@@ -207,6 +207,11 @@ const ASSET_MATCHERS = {
   // type, a bare endsWith() would grab whichever the API listed first.
   windows: (name) => name.endsWith('.exe') && !name.includes('arm64'),
   'windows-arm64': (name) => name.endsWith('.exe') && name.includes('arm64'),
+  // The .zip is the same payload the installer lays down, with no installer stub - for locked-down
+  // machines, or anyone who would rather look inside before running it. GitHub's auto-generated
+  // "Source code (zip)" is NOT an asset (it lives in zipball_url), so these cannot collide with it.
+  'windows-zip': (name) => name.endsWith('.zip') && !name.includes('arm64'),
+  'windows-zip-arm64': (name) => name.endsWith('.zip') && name.includes('arm64'),
   'macos-arm64': (name) => name.endsWith('.dmg') && name.includes('arm64'),
   'macos-x86_64': (name) => name.endsWith('.dmg') && name.includes('x86_64'),
   appimage: (name) => name.endsWith('.AppImage') && !name.includes('aarch64'),
