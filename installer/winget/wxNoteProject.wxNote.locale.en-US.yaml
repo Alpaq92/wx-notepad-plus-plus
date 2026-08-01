@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+PackageIdentifier: wxNoteProject.wxNote
+PackageVersion: 0.14.1
+PackageLocale: en-US
+Publisher: wxNote Project
+PublisherUrl: https://github.com/Alpaq92/wx-notepad-plus-plus
+PublisherSupportUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/issues
+PackageName: wxNote
+PackageUrl: https://github.com/Alpaq92/wx-notepad-plus-plus
+License: Apache-2.0
+LicenseUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/LICENSE
+Copyright: Copyright (C) 2026 The wxNote Authors
+ShortDescription: A fast, cross-platform text editor built on wxWidgets and Scintilla.
+Description: |-
+  wxNote is a ground-up, cross-platform text editor built on wxWidgets and wxStyledTextCtrl
+  (Scintilla/Lexilla). It runs natively on Windows, Linux and macOS, on x64 and ARM alike, from a
+  single codebase.
+
+  It has syntax highlighting for a wide range of languages via Scintillua, a document map, split
+  views, multi-caret and column editing, a function list, an integrated terminal, side-by-side file
+  comparison, spell checking, theming, and a fully localized UI. It also provides its own permissive
+  "Nib" plugin API, plus an optional bridge that loads compiled Notepad++ plugin DLLs on Windows.
+Moniker: wxnote
+Tags:
+- code-editor
+- development
+- editor
+- notepad
+- programming
+- scintilla
+- text
+- text-editor
+- wxwidgets
+ReleaseNotesUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/tag/v0.14.1
+Documentations:
+- DocumentLabel: Documentation
+  DocumentUrl: https://alpaq92.github.io/wx-notepad-plus-plus/
+ManifestType: defaultLocale
+ManifestVersion: 1.12.0

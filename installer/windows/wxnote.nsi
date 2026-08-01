@@ -6,10 +6,17 @@
 ; Output: build\installer\wxNote-<version>-Setup.exe
 ;
 ; Relative paths below are resolved against this script's directory (makensis cd's here by default).
-; Only ships what the app actually reads at runtime (see the POST_BUILD copy_directory calls in the
-; top-level CMakeLists.txt) plus the real npp-compat plugin bridge; the nib_test_plugin.dll /
-; plugins\TestPlugin\ dev-only build artifacts are deliberately excluded, as are the locale catalog's
-; source-side files (.po/.pot/tooling - the app only reads the compiled .mo files).
+; Ships what the app actually reads at runtime (see the POST_BUILD copy commands in the top-level
+; CMakeLists.txt) plus the shipped nib bridge plugins; the nib_test_plugin.dll / plugins\TestPlugin\
+; dev-only build artifacts are deliberately excluded, as are the locale catalog's source-side files
+; (.po/.pot/tooling - the app only reads the compiled .mo files).
+;
+; THIS LIST IS HAND-MAINTAINED AND HAS DRIFTED BEFORE. Everything CMake stages into build/bin must be
+; either shipped here or consciously excluded above: fonts/, lexers/, contextMenu.xml and two of the
+; three nib plugins were silently absent from every release up to and including 0.14.1, which meant
+; installed builds had no Scintillua highlighting (lexer.lua is a hard requirement), no bundled default
+; font, and no UDL support. The same list is duplicated in .github/workflows/build.yml's zip step and
+; in installer/linux/io.github.Alpaq92.WxNote.yml - change all three together.
 
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
@@ -102,15 +109,28 @@ Section "${APP_NAME} (required)" SecCore
   SetOutPath "$INSTDIR"
   File "..\..\build\bin\${APP_EXE}"
   File "..\..\build\bin\stylers.model.xml"
+  File "..\..\build\bin\contextMenu.xml"
   File /r "..\..\build\bin\icons"
   File /r "..\..\build\bin\icons-solar"
   File /r "..\..\build\bin\icons-iconpark"
   File /r "..\..\build\bin\icons-streamline"
   File /r "..\..\build\bin\themes"
   File /r "..\..\build\bin\dictionaries"
+  ; The bundled code fonts (JetBrains Mono is the DEFAULT editor font) are loaded from <exeDir>/fonts
+  ; via wxFont::AddPrivateFont - without them the default font silently falls back to a system face.
+  File /r "..\..\build\bin\fonts"
+  ; Scintillua's lexer.lua. src/scintillua_engine.cpp hard-fails `require('lexer')` if it is absent and
+  ; leaves the engine not-ready, which disables ALL Scintillua syntax highlighting - so this is not
+  ; optional, despite being one small file.
+  File /r "..\..\build\bin\lexers"
   File /r /x "wxn.pot" /x "*.po" "..\..\build\bin\locale"
   SetOutPath "$INSTDIR\nib"
   File "..\..\build\bin\nib\npp_bridge.dll"
+  ; The other two shipped bridge plugins: udl_compat provides User-Defined Language support (it is
+  ; where UDL moved when it left the core) and npp_shortcuts_compat maps Notepad++ keyboard shortcuts.
+  ; nib_test_plugin.dll is deliberately NOT shipped - it is a dev-only loader test.
+  File "..\..\build\bin\nib\udl_compat.dll"
+  File "..\..\build\bin\nib\npp_shortcuts_compat.dll"
   SetOutPath "$INSTDIR"
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -149,14 +169,19 @@ Section "Uninstall"
   ; and $INSTDIR itself is only removed if that leaves it empty).
   Delete "$INSTDIR\${APP_EXE}"
   Delete "$INSTDIR\stylers.model.xml"
+  Delete "$INSTDIR\contextMenu.xml"
   RMDir /r "$INSTDIR\icons"
   RMDir /r "$INSTDIR\icons-solar"
   RMDir /r "$INSTDIR\icons-iconpark"
   RMDir /r "$INSTDIR\icons-streamline"
   RMDir /r "$INSTDIR\themes"
   RMDir /r "$INSTDIR\dictionaries"
+  RMDir /r "$INSTDIR\fonts"
+  RMDir /r "$INSTDIR\lexers"
   RMDir /r "$INSTDIR\locale"
   Delete "$INSTDIR\nib\npp_bridge.dll"
+  Delete "$INSTDIR\nib\udl_compat.dll"
+  Delete "$INSTDIR\nib\npp_shortcuts_compat.dll"
   RMDir "$INSTDIR\nib"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"

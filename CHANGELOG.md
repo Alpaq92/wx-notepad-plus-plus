@@ -3,6 +3,39 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.2] - 2026-08-01
+
+### Fixed
+- **Syntax highlighting for custom languages now works on installed builds.** Scintillua's `lexer.lua`
+  was built but never packaged, and the highlighting engine treats its absence as fatal — so on every
+  release up to 0.14.1, Scintillua highlighting silently did nothing unless you ran wxNote from a build
+  tree. It is now shipped.
+- **The bundled code fonts are shipped.** All five families offered in Preferences (Cascadia Mono —
+  the default — plus JetBrains Mono, IBM Plex Mono, Hack and Iosevka Fixed) were missing from
+  installed builds, so the editor font silently fell back to whatever the system chose.
+- **User-Defined Language support is shipped again.** `udl_compat.dll`, where UDL support moved when it
+  left the core, was never packaged. Neither was `npp_shortcuts_compat.dll` (Notepad++ keybindings), nor
+  `contextMenu.xml` (the shipped right-click menu, which silently fell back to a built-in default).
+- The Flatpak build was missing the same files, plus every plugin in `nib/`.
+
+These were all the same defect: three packaging manifests enumerate their payload by hand, and had
+drifted from what the build actually produces. The Windows zip step now fails the build if a required
+file is absent, rather than shipping a quietly incomplete archive.
+
+### Changed
+- **The Windows installer and zip are larger** (the installer roughly doubles, to ~8 MB) — that is the
+  20 MB of bundled fonts above finally being included.
+
+### Documentation
+- [docs/ANTIVIRUS.md](docs/ANTIVIRUS.md) rewritten around measured evidence: which artifacts are
+  actually flagged, why the payload never is, and why a candidate fix cannot be validated before
+  release. Includes the measurement trap that an on-demand scan reads local signatures only and will
+  report a blocked installer as clean.
+- New [docs/DEFENDER_SUBMISSION.md](docs/DEFENDER_SUBMISSION.md) — the false-positive dispute runbook.
+- New [docs/PACKAGING_WINGET.md](docs/PACKAGING_WINGET.md) and `installer/winget/` manifests.
+- The download page now says, on the Windows card, that an antivirus block is a false positive and the
+  zip is unaffected.
+
 ## [0.14.1] - 2026-07-31
 
 ### Security

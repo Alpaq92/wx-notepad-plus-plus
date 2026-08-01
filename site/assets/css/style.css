@@ -1163,6 +1163,17 @@ main {
   margin-bottom: 16px;
 }
 
+/* Sits under a platform's download dropdown, for a caveat that would be dishonest to bury in a doc
+   the user has to already know exists (currently: Defender false-positives the Windows installer). */
+.platform-card .platform-note {
+  color: var(--light-gray-70);
+  font-size: var(--fs-8);
+  line-height: 1.5;
+  margin: 14px 0 0;
+}
+
+.platform-card .platform-note a { color: var(--accent); text-decoration: underline; }
+
 .platform-download-btn {
   display: flex;
   align-items: center;
