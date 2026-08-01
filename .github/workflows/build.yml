@@ -363,13 +363,19 @@ jobs:
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
           # Mirrors installer/windows/wxnote.nsi's SecCore file list - if that list changes, change this
           # too (a zip missing a resource directory is a broken download, not a smaller one).
-          Copy-Item build/bin/wxnote.exe, build/bin/stylers.model.xml -Destination $stage
-          foreach ($d in 'icons','icons-solar','icons-iconpark','icons-streamline','themes','dictionaries','locale') {
+          Copy-Item build/bin/wxnote.exe, build/bin/stylers.model.xml, build/bin/contextMenu.xml -Destination $stage
+          foreach ($d in 'icons','icons-solar','icons-iconpark','icons-streamline','themes','dictionaries','fonts','lexers','locale') {
             Copy-Item -Recurse "build/bin/$d" -Destination $stage
           }
           Get-ChildItem "$stage/locale" -Recurse -File | Where-Object { $_.Extension -in '.po','.pot' } | Remove-Item -Force
           New-Item -ItemType Directory -Force -Path "$stage/nib" | Out-Null
-          Copy-Item build/bin/nib/npp_bridge.dll -Destination "$stage/nib"
+          # Every shipped bridge plugin, but NOT nib_test_plugin.dll (dev-only loader test).
+          Copy-Item build/bin/nib/npp_bridge.dll, build/bin/nib/udl_compat.dll, build/bin/nib/npp_shortcuts_compat.dll -Destination "$stage/nib"
+          # Fail loudly rather than shipping a silently incomplete archive: lexers/lexer.lua in
+          # particular disables ALL Scintillua highlighting by its absence, which no smoke test catches.
+          foreach ($must in 'wxnote.exe','stylers.model.xml','contextMenu.xml','fonts','lexers/lexer.lua','nib/npp_bridge.dll','nib/udl_compat.dll','nib/npp_shortcuts_compat.dll') {
+            if (-not (Test-Path "$stage/$must")) { throw "zip payload is missing $must" }
+          }
           if (-not (Test-Path build/installer)) { New-Item -ItemType Directory -Path build/installer | Out-Null }
           # Written entry-by-entry with explicit FORWARD-SLASH names rather than via Compress-Archive.
           # The ZIP format requires '/' as the path separator (APPNOTE 4.4.17.1), but Compress-Archive

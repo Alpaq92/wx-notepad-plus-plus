@@ -30,10 +30,15 @@ and an antivirus may report a generic machine-learning detection such as `Wacata
 freshly-published release. This is a false positive caused by the missing signature and by the file
 being brand new — not by anything the program does.
 
+It only ever affects the **installer stub**, never the editor: `wxnote.exe` and the `.zip` that
+contains it have been measured clean in the same download where the installer was quarantined. **If
+you hit this, download the `.zip` instead** — identical files, no installer stub, and you can look
+inside before running anything. The trade-off is no Start Menu shortcut and no Add/Remove Programs
+entry; extract it wherever you like and run `wxnote.exe`.
+
 [docs/ANTIVIRUS.md](https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/docs/ANTIVIRUS.md)
 documents every privileged and network-touching thing wxNote does, and what it deliberately does not,
-so the claim can be checked rather than taken on faith. If you would rather avoid the installer
-entirely, the Windows `.zip` contains the same files and can be inspected before you run anything.
+so the claim can be checked rather than taken on faith.
 
 The executable is named `wxnote` on every platform. Resources (themes, icons, fonts, translations,
 bundled plugins) live next to the executable rather than being split across system directories.

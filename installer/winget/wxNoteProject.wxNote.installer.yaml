@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+#
+# ZIP ONLY, DELIBERATELY. The NSIS installer is currently subject to a Defender false positive
+# (Trojan:Win32/Wacatac.B!ml - see docs/ANTIVIRUS.md), and winget's validation pipeline downloads and
+# executes the installer under Defender in a sandbox. Submitting the .exe today would fail with
+# `Validation-Defender-Error` and block the listing entirely. The .zip has never had a detection
+# record, passes validation, and gives users a working `winget install` path now.
+#
+# The `nullsoft` entries to add once the false positive is cleared are in docs/PACKAGING_WINGET.md.
+#
+# ArchiveBinariesDependOnPath is REQUIRED here, not cosmetic: every resource path in the app is
+# derived from the executable's own directory (icons/, themes/, dictionaries/, locale/, nib/,
+# stylers.model.xml). If winget exposed the binary through a bare symlink instead of putting the
+# install directory on PATH, exe-dir resolution would land somewhere with none of those.
+PackageIdentifier: wxNoteProject.wxNote
+PackageVersion: 0.14.1
+InstallerType: zip
+NestedInstallerType: portable
+ArchiveBinariesDependOnPath: true
+UpgradeBehavior: install
+ReleaseDate: 2026-07-31
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/download/v0.14.1/wxNote-0.14.1-windows.zip
+  InstallerSha256: 1ACC2AD716B3C1313EF2ECE8F10A9694761075D3A3FD4BD0C7CE2D4B6E2C9F93
+  NestedInstallerFiles:
+  - RelativeFilePath: wxNote-0.14.1\wxnote.exe
+    PortableCommandAlias: wxnote
+- Architecture: arm64
+  InstallerUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/download/v0.14.1/wxNote-0.14.1-arm64-windows.zip
+  InstallerSha256: B835074DA104B2DF324F07066C32225B1B7E298443B4AA8BD76B9AC3E841DB5A
+  NestedInstallerFiles:
+  - RelativeFilePath: wxNote-0.14.1-arm64\wxnote.exe
+    PortableCommandAlias: wxnote
+ManifestType: installer
+ManifestVersion: 1.12.0

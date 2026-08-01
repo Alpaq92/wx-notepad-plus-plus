@@ -133,18 +133,28 @@ what the file *looks* like, and a compressed self-extracting installer looks lik
 Detections with an `!ml` suffix (such as `Wacatac.B!ml`) come from a machine-learning guess, not from
 matching known malware.
 
-You do not have to take our word for it:
+**Only the installer stub is ever flagged — never the program.** We measured this through the same
+path a browser uses to save a download: the installer was blocked, while `wxnote.exe` itself, the
+plugin bridge DLL, and the `.zip` containing exactly the same files all came through clean. Defender's
+own detection record names the installer as a single object, with no file inside it named, so nothing
+the installer carries is implicated.
+
+So the quickest way past it is simply **the `.zip`** — same files, no installer stub, nothing for the
+detection to fire on. You just don't get a Start Menu entry.
+
+You do not have to take our word for any of this:
 
 - Check the download against the `SHA256SUMS` file shipped with every release
 - The build is public — every artifact is produced by GitHub Actions from a tagged commit, logs and all
 - [docs/ANTIVIRUS.md](https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/docs/ANTIVIRUS.md)
   lists every privileged and network-touching thing the editor does, plus what it deliberately never does
-- The Windows `.zip` holds the same files with no installer stub, so you can look inside first
 
-Code signing is the real fix and it's on the roadmap; see
-[docs/SIGNING.md](https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/docs/SIGNING.md). Please
-don't add an antivirus exclusion on our account — reporting the false positive to your vendor helps
-everyone, and helps us.
+Would signing fix it? It would eventually quiet the separate "unknown publisher" SmartScreen warning —
+though not immediately, since a brand-new certificate starts with no reputation of its own — and it is
+on the roadmap ([docs/SIGNING.md](https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/docs/SIGNING.md)).
+But it is not a guaranteed cure for this particular kind of detection — GitHub's own CLI installer is
+signed, hugely popular, and has been hit by the same detection family. Please don't add an antivirus
+exclusion on our account — reporting the false positive to your vendor helps everyone, and helps us.
 
 ## Something's wrong and I want to report it
 
