@@ -105,15 +105,18 @@ Function .onInit
   ; impossible while every build had a CPU guard that partitioned the machines; the x86 build has none
   ; (deliberately - it runs everywhere), so an x64 machine can now reach this. Warn rather than block:
   ; swapping architectures on purpose is legitimate, being surprised by it is not.
+  ; /SD is not optional on any MessageBox reachable from .onInit: under /S the dialog is never shown,
+  ; and without a silent default the installer blocks forever on an invisible modal. winget drives
+  ; this installer with /S, so that is a permanently stuck package install, not just a slow one.
   ReadRegStr $0 HKCU "Software\wxNote-Installer" "Arch"
   ${If} $0 != ""
   ${AndIf} $0 != "${ARCH_NAME}"
-    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "The $0 build of ${APP_NAME} is already installed here.$\r$\n$\r$\nThis installer will replace it with the ${ARCH_NAME} build.$\r$\n$\r$\nContinue?" IDOK +2
+    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "The $0 build of ${APP_NAME} is already installed here.$\r$\n$\r$\nThis installer will replace it with the ${ARCH_NAME} build.$\r$\n$\r$\nContinue?" /SD IDOK IDOK +2
     Quit
   ${EndIf}
 !ifdef TARGET_ARM64
   ${IfNot} ${IsNativeARM64}
-    MessageBox MB_OK|MB_ICONSTOP "This ${APP_NAME} installer is for ARM64 Windows. Please download the x64 installer instead."
+    MessageBox MB_OK|MB_ICONSTOP "This ${APP_NAME} installer is for ARM64 Windows. Please download the x64 installer instead." /SD IDOK
     Quit
   ${EndIf}
 !else ifdef TARGET_X86
@@ -124,7 +127,7 @@ Function .onInit
   ; would turn away every one of its intended users.
 !else
   ${IfNot} ${RunningX64}
-    MessageBox MB_OK|MB_ICONSTOP "${APP_NAME} requires 64-bit Windows. On 32-bit Windows, download the x86 installer instead."
+    MessageBox MB_OK|MB_ICONSTOP "${APP_NAME} requires 64-bit Windows. On 32-bit Windows, download the x86 installer instead." /SD IDOK
     Quit
   ${EndIf}
 !endif
@@ -214,12 +217,16 @@ Section "Add to PATH" SecPath
   nsExec::ExecToStack 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\wxnote-path.ps1" -Action Add -Directory "$INSTDIR"'
   Pop $0   ; exit code
   Pop $1   ; output
+  ; ONLY exit code 0 means "this installer added the entry". 2 means it was already on PATH, which
+  ; happens whenever the user installs into a directory they already had there - claiming ownership of
+  ; that would make uninstall delete it and break whatever else lives in it.
   ${If} $0 == 0
-    ; Remember that WE added it, so uninstall only removes an entry this installer created.
     WriteRegDWORD HKCU "Software\wxNote-Installer" "AddedToPath" 1
     ; Tell already-running shells and Explorer to re-read the environment. Without this the new PATH
     ; only reaches processes started after the next sign-in.
     SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
+  ${ElseIf} $0 == 2
+    DetailPrint "wxNote is already on PATH ($1) - leaving it, and leaving it alone on uninstall."
   ${Else}
     DetailPrint "Could not add wxNote to PATH: $1"
   ${EndIf}

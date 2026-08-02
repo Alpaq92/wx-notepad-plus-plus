@@ -592,6 +592,30 @@ static bool          g_cleanMode = false;
 // wxConfigBase::Get() happens earlier than that - readUiLang() during locale setup - and the swap has
 // to be in place before it. Plugins still load: this isolates state, not code (combine with --safe).
 static bool          g_sandboxMode = false;
+// --sandbox's throwaway user-data directory. Created lazily, removed in OnExit.
+// The name must NOT be derivable (an earlier version used the pid): this lives in a world-writable
+// shared directory on POSIX, and unsaved buffer text is written into it as recovery backups. A
+// predictable name lets any local user read those, or pre-create the directory and plant files the
+// same process then reads back - scintillua_engine.cpp puts <userDataDir>/scintillua-lexers first on
+// package.path, so a planted .lua there would be EXECUTED. CreateTempFileName picks an unguessable
+// name and creates it atomically; we swap the file for a directory of the same name, owner-only.
+static wxString      g_sandboxDataDir;
+
+static const wxString& sandboxDataDir()
+{
+    if (g_sandboxDataDir.empty())
+    {
+        wxString d = wxFileName::CreateTempFileName("wxnote-sandbox-");
+        if (d.empty())   // last resort; still isolated, just less unguessable
+            d = wxFileName::GetTempDir() + wxFILE_SEP_PATH +
+                wxString::Format("wxnote-sandbox-%lu", (unsigned long)wxGetProcessId());
+        else
+            wxRemoveFile(d);
+        wxFileName::Mkdir(d, wxS_IRUSR | wxS_IWUSR | wxS_IXUSR, wxPATH_MKDIR_FULL);
+        g_sandboxDataDir = d;
+    }
+    return g_sandboxDataDir;
+}
 // ---- --locale <lang>: UI language for THIS RUN only -----------------------------------------------
 // Deliberately NOT written back to the "UILanguage" config key: Preferences > Localization and the
 // Localization radio menu must keep reflecting the user's persisted choice, so that a one-shot
@@ -3624,7 +3648,13 @@ public:
     // the same compareWith() the menu commands use - no second read of A, and no duplicate tab.
     void compareLaunchFiles(const wxString& pathA, const wxString& pathB)
     {
-        if (EditorPage* a = pageForPath(pathA)) activatePage(a);
+        // A is validated as strictly as B. openPath() is existence-gated and returns silently, so a
+        // mistyped or moved first argument would otherwise leave whatever happened to be active as the
+        // left-hand side - and the diff would run against it and report "0 changed", i.e. a compare
+        // tool stating authoritatively that two files are identical when one of them does not exist.
+        EditorPage* a = pageForPath(pathA);
+        if (!a) { setStatus(0, _("Compare: file not found")); return; }
+        activatePage(a);
         compareWithPath(pathB);
     }
 
@@ -6395,14 +6425,7 @@ private:
     // in-memory config, so nothing would ever clean it up.
     wxString userDataDir()
     {
-        if (!g_sandboxMode) return wxStandardPaths::Get().GetUserDataDir();
-        static const wxString sandboxDir = [] {
-            const wxString d = wxFileName::GetTempDir() + wxFILE_SEP_PATH +
-                               wxString::Format("wxNote-sandbox-%lu", (unsigned long)wxGetProcessId());
-            wxFileName::Mkdir(d, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-            return d;
-        }();
-        return sandboxDir;
+        return g_sandboxMode ? sandboxDataDir() : wxStandardPaths::Get().GetUserDataDir();
     }
 
     // ----- unsaved-changes recovery (Preferences > General "Ask before closing unsaved changes", off
@@ -12380,7 +12403,21 @@ private:
         saveSession(cfg);                     // remember open files so the relaunch restores them
         cfg->Flush();
         this->Hide();   // hide the current window before relaunching so the two processes' windows don't briefly overlap on screen
-        wxExecute("\"" + wxStandardPaths::Get().GetExecutablePath() + "\"", wxEXEC_ASYNC);
+        // Carry the run-scoped modes across the relaunch. Without this a restart-to-apply preference
+        // change silently DROPS OUT of --sandbox: the replacement process reads and writes the real
+        // config, restores the real session, uses the real user-data dir and loses the [Sandbox] marker
+        // - and "try a theme without committing to it" is exactly what the flag is advertised for, so
+        // the one action most likely to be taken inside a sandbox was the one that escaped it.
+        // --safe/--clean/--locale are forwarded for the same reason: the user asked for this run to be
+        // that way, and a theme switch is not a request to change it.
+        wxString cmd = "\"" + wxStandardPaths::Get().GetExecutablePath() + "\"";
+        if (g_sandboxMode) cmd += " --sandbox";
+        if (g_cleanMode)   cmd += " --clean";
+        else if (g_safeMode) cmd += " --safe";   // --clean already implies --safe; don't pass both
+        if (g_localeOverride >= 0)
+            if (const wxLanguageInfo* li = wxLocale::GetLanguageInfo(g_localeOverride))
+                cmd += " --locale " + li->CanonicalName;
+        wxExecute(cmd, wxEXEC_ASYNC);
         Close(true);
     }
     void saveSession(wxConfigBase* cfg)
@@ -14072,7 +14109,10 @@ public:
         // payload below: handing the two files to a running window would open them as plain tabs and
         // silently skip the diff. Forcing our own window keeps -d meaning what it says.
         const bool forceNew = parser.Found("n") || wait || req.hasStdin || g_safeMode || g_sandboxMode || parser.Found("d");
-        const bool forceReuse = parser.Found("r") && !wait && !req.hasStdin && !g_safeMode && !g_sandboxMode;
+        // -d has to be excluded here as well as included in forceNew above: forceReuse is tested FIRST
+        // in the branch below, so an explicit `-r -d a b` would take the IPC handoff before forceNew was
+        // ever consulted, opening two tabs in the running window and silently never diffing them.
+        const bool forceReuse = parser.Found("r") && !wait && !req.hasStdin && !g_safeMode && !g_sandboxMode && !parser.Found("d");
 
         // ---- single-instance "reuse window" handoff (Preferences > General; off by default) -----------
         bool reuseSetting = false;
@@ -14225,6 +14265,15 @@ public:
     }
     int OnExit() override
     {
+        // --sandbox promises nothing survives the process, and recovery backups of unsaved buffers are
+        // written into this directory (the backup path is deliberately NOT gated on sandbox mode - it
+        // is redirected instead), so leaving it behind would strand document text in %TEMP% forever.
+        // Its manifest went to the discarded in-memory config, so no later run could ever reclaim it.
+        if (g_sandboxMode && !g_sandboxDataDir.empty())
+        {
+            wxLogNull noPopup;   // best-effort: a file still open must not raise a dialog during teardown
+            wxFileName::Rmdir(g_sandboxDataDir, wxPATH_RMDIR_RECURSIVE);
+        }
         // No font teardown here: the bundled fonts go through wxFont::AddPrivateFont (see OnInit), which
         // has no removal counterpart - the registrations are process-private and die with the process on
         // every platform. The old ::RemoveFontResourceExW pair this replaced was Windows-only anyway.

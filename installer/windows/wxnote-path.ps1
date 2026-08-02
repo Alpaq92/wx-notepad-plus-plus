@@ -16,8 +16,18 @@
     will not append a duplicate that differs only cosmetically. Removing takes out exactly this
     directory and leaves every other entry untouched.
 
-    Exit codes: 0 = done (including "nothing to do"), 1 = failed. The installer treats 1 as a warning,
-    never as a failed install - a PATH entry is a convenience, not part of a working wxNote.
+    Exit codes:
+      0 = this script changed PATH (added or removed the entry)
+      2 = nothing to do (the entry was already there, or was already gone)
+      1 = failed
+
+    0 and 2 are deliberately distinct, and the installer must not conflate them. It records
+    "AddedToPath=1" only on 0, so that uninstall removes the entry ONLY if this installer is the thing
+    that created it. Treating "already present" as success would claim ownership of an entry someone
+    else put there - and since install directories are user-chosen, that can easily be a directory the
+    user already had on PATH for their own tools. Uninstalling wxNote would then delete it and break
+    everything else living there. A failure (1) is only ever a warning: a PATH entry is a convenience,
+    not part of a working wxNote.
 #>
 [CmdletBinding()]
 param(
@@ -43,13 +53,13 @@ try {
         $parts  = @($current -split ';' | Where-Object { $_ -ne '' })
 
         if ($Action -eq 'Add') {
-            if ($parts | Where-Object { (Normalize $_) -ieq $target }) { Write-Output 'already present'; exit 0 }
+            if ($parts | Where-Object { (Normalize $_) -ieq $target }) { Write-Output 'already present'; exit 2 }
             $key.SetValue('Path', (($parts + $Directory) -join ';'), $kind)
             Write-Output 'added'
         }
         else {
             $kept = @($parts | Where-Object { (Normalize $_) -ine $target })
-            if ($kept.Count -eq $parts.Count) { Write-Output 'not present'; exit 0 }
+            if ($kept.Count -eq $parts.Count) { Write-Output 'not present'; exit 2 }
             $key.SetValue('Path', ($kept -join ';'), $kind)
             Write-Output 'removed'
         }
