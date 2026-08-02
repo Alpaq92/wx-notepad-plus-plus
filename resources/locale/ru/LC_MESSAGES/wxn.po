@@ -3177,3 +3177,45 @@ msgstr "независимый экземпляр без сохранённых 
 
 msgid " [Sandbox]"
 msgstr " [Песочница]"
+msgid "Command &Palette..."
+msgstr "&Палитра команд..."
+
+msgid "&Quick Open..."
+msgstr "&Быстрое открытие..."
+
+msgid "Command Palette"
+msgstr "Палитра команд"
+
+msgid "Quick Open"
+msgstr "Быстрое открытие"
+
+msgid "Type a command name"
+msgstr "Введите название команды"
+
+msgid "Type a file name, or @ for symbols in this file"
+msgstr "Введите имя файла или @ для символов в этом файле"
+
+msgid "%zu of %zu"
+msgstr "%zu из %zu"
+
+msgid "open"
+msgstr "открыт"
+
+msgid "recent"
+msgstr "недавние"
+
+msgid "line %d"
+msgstr "строка %d"
+
+msgid " (indexing…)"
+msgstr " (индексация…)"
+
+msgid "No commands available"
+msgstr "Нет доступных команд"
+
+msgid "Cannot open: %s"
+msgstr "Не удалось открыть: %s"
+
+msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
+msgstr "Быстрому открытию пока нечего показать.\n\nОткройте папку как рабочую область (Файл ▸ Открыть папку как рабочую область), чтобы проиндексировать её."
+

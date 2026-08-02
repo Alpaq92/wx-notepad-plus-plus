@@ -125,6 +125,21 @@ Scintilla-family editing behaviour and a familiar command vocabulary, and it can
 Notepad++ assets (themes, plugins on Windows, UDL files) through clearly-labelled optional modules — but
 the core is original work under a permissive licence and does not link any Notepad++ Win32 code.
 
+## How do I jump to a file without hunting through the tree?
+
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> (Quick Open) — type a few letters of the name and press
+Enter. It searches your open tabs, your recent files and the whole workspace, and the letters only
+have to appear *in order*, so `fmh` finds `fuzzy_match.h`. Type `@` first to jump to a symbol inside
+the current file instead.
+
+There is a matching <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> (Command Palette) for commands, which
+also shows each command's current shortcut — a quick way to find a keybinding you have forgotten.
+
+Full details in [Quick Open &amp; Command Palette](quick-open.md).
+
+Note <kbd>Ctrl</kbd>+<kbd>P</kbd> is still **Print**, as in Notepad++. Both pickers can be rebound in
+[Customizing Shortcuts](custom-shortcuts.md) if you prefer the VS Code arrangement.
+
 ## Can I diff two files?
 
 Yes — **Document ▸ Compare ▸ with File…** diffs the current document against another file, and

@@ -11,7 +11,7 @@
 
 cmake_minimum_required(VERSION 3.20)
 # C is enabled for the vendored Lua + LPeg (Scintillua's runtime) - both are C.
-project(wxNote VERSION 0.14.3 LANGUAGES CXX C)
+project(wxNote VERSION 0.15.0 LANGUAGES CXX C)
 
 include(FetchContent)
 
@@ -366,6 +366,36 @@ if(MSVC)
     target_compile_options(hash_test PRIVATE /utf-8)
 endif()
 
+# ---- fuzzy_test: headless self-test for the fuzzy matcher (src/fuzzy_match.h) -----------------------
+# No GUI, no wx: pure STL, like hash_test. Pins RANKING rather than exact scores - the constants are
+# tunable, but a tuning change that reverses one of the documented orderings is a regression. Also
+# covers the UTF-8 path, where matching over bytes rather than code points would let a needle byte
+# match half a character. /utf-8 matters here: the test embeds multi-byte literals.
+add_executable(fuzzy_test tests/fuzzy_test.cpp)
+set_target_properties(fuzzy_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(fuzzy_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+if(MSVC)
+    target_compile_options(fuzzy_test PRIVATE /utf-8)
+endif()
+
+# ---- file_index_test: self-test for the Quick Open workspace crawler (src/file_index.h) -----------
+# Links wx::base for wxDir/wxFileName and builds a real tree under the temp dir, because what breaks
+# here is wxDir's flag semantics (wxDIR_DIRS vs wxDIR_FILES, wxDIR_HIDDEN and dotted names), which a
+# mocked filesystem would assume rather than verify.
+add_executable(file_index_test tests/file_index_test.cpp)
+set_target_properties(file_index_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(file_index_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(file_index_test PRIVATE wx::base)
+if(MSVC)
+    target_compile_options(file_index_test PRIVATE /utf-8)
+endif()
+
 # ---- charset_selftest: round-trip test for the portable code-page path (wxCSConv name conversion) --
 # Links wx::base (wxCSConv). Exercises the iconv (Linux/macOS) / win32 (Windows) backends on the same
 # vectors so the ~50 Encoding > Character Set pages are validated per platform.
@@ -564,11 +594,12 @@ endif()
 enable_testing()
 
 add_custom_target(selftests DEPENDS
-    keymap_selftest diff_myers_test hash_test charset_selftest hunspell_selftest
-    funclist_selftest bridge_selftest terminal_selftest)
+    keymap_selftest diff_myers_test hash_test fuzzy_test file_index_test charset_selftest
+    hunspell_selftest funclist_selftest bridge_selftest terminal_selftest)
 
-# "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed.
-foreach(t diff_myers_test hash_test hunspell_selftest funclist_selftest)
+# "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed. file_index_test
+# does call wxInitializer, but it links wx::base only, so it gets console traits and never opens a display.
+foreach(t diff_myers_test hash_test fuzzy_test file_index_test hunspell_selftest funclist_selftest)
     add_test(NAME ${t} COMMAND ${t})
     set_tests_properties(${t} PROPERTIES LABELS pure)
 endforeach()

@@ -104,6 +104,10 @@ static const MenuItemDef kSearchMenuItems[] = {
     { MenuItemKind::Normal,  kCmdSearchGotoPrevFound,         &Label::SearchGotoPrevFound,        "search.gotoPrevFound", nullptr, 0, false, "Shift+F4" },
     { MenuItemKind::Separator },
     // Go to
+    { MenuItemKind::Normal,  myID_COMMAND_PALETTE,            &Label::SearchCommandPalette,       "search.commandPalette", nullptr, 0, false, "Ctrl+Shift+P" },
+    // NOT Ctrl+P: that is File ▸ Print, a binding Notepad++ users have frozen in muscle memory. Quick
+    // Open is the newcomer here, so it takes the free chord rather than displacing an existing one.
+    { MenuItemKind::Normal,  myID_QUICK_OPEN,                 &Label::SearchQuickOpen,            "search.quickOpen", nullptr, 0, false, "Ctrl+Shift+O" },
     { MenuItemKind::Normal,  kCmdSearchGotoline,              &Label::SearchGotoLine,             "search.gotoLine", nullptr, 0, false, "Ctrl+G" },
     { MenuItemKind::Normal,  kCmdSearchGotoMatchingBrace,     &Label::SearchGotoMatchingBrace,    "search.gotoMatchingBrace", nullptr, 0, false, "Ctrl+B" },
     { MenuItemKind::Normal,  kCmdSearchSelectMatchingBraces,  &Label::SearchSelectMatchingBraces, "search.selectMatchingBraces" },

@@ -175,16 +175,14 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 #include "terminal_panel.h"    // View > Show Terminal - bottom multi-tab shell panel (defines myID_VIEW_TERMINAL, used by menu_data_view.h below)
 // File Compare command ids (wxNote-only; private range like myID_VIEW_TERMINAL). Defined BEFORE menu_builder.h
 // so the View menu table (menu_data_view.h) can reference them.
-enum { myID_CMP_FILE = 60220, myID_CMP_CLIP, myID_CMP_CLEAR, myID_CMP_NEXT, myID_CMP_PREV, myID_SPELLCHECK,
-       myID_SPELL_COMMENTSONLY, myID_SPELL_MANAGE,     // 60226/60227 - Spell Check submenu items
-       myID_MACRO_MANAGE };                         // 60228 - Macro ▸ Manage Saved Macros... (wxNote-only:
-                                                       // N++ has no equivalent, so it takes a private id rather
-                                                       // than one of the frozen IDM_* values in command_ids.h)
+#include "private_ids.h"       // wxNote-only command ids (Compare, Spell Check, palette, quick open)
 #include "menu_builder.h"      // data-driven menu bar builder (menu_model.h/menu_data_*.h) - replaces the old inline menu construction
 #include "keymap_schemes.h"    // bundled read-only keymap presets ("wxNote" + "Notepad++") - Tier 1 of the shortcut model
 #include "shortcut_mapper_dialog.h"  // the Shortcut Mapper dialog + conflict engine (implements kCmdSettingShortcutMapper 48009)
 #include "shortcut_labels.h"   // curated Scintilla "Editor commands" tier: seedEditorKeymapDefaults + wx<->SCK translation
 #include "scintillua_engine.h" // embedded Lua+LPeg+Scintillua engine (the native language-definition engine)
+#include "command_palette.h"   // Ctrl+Shift+P: harvests the live menu bar into the shared filter list
+#include "file_index.h"        // Ctrl+Shift+O: the time-sliced workspace crawler behind Quick Open
 
 static const int  MARK_BOOKMARK = 2;      // a free Scintilla marker number for bookmarks
 static const int  MARK_INDIC    = 9;      // indicator number for "Mark All" highlights (Find dialog)
@@ -205,7 +203,8 @@ static const int  myID_SPELL_ADD          = 60240;
 static const int  myID_SPELL_IGNORE       = 60241;
 static const int  myID_SPELL_SUGGEST_BASE = 60250;   // + 0..8 (up to 9 suggestions)
 static const int  myID_SPELL_DICT_BASE    = 60130;   // + 0..31: dynamic Dictionary radio list (Document ▸ Spell Check; runtime-built, not menu-data)
-enum { myID_TIMER = 60000, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER, myID_MONTIMER, myID_BACKUPTIMER };   // fixed ids, above the kCmd* range
+enum { myID_TIMER = 60000, myID_DOCLIST, myID_CAP_NEW, myID_CAP_CLOSE, myID_FLTIMER, myID_MONTIMER, myID_BACKUPTIMER,
+       myID_IDXTIMER };   // fixed ids, above the kCmd* range
 // UI language selection - shared by the top-level Localization menu and Preferences > General.
 // Endonyms are ALWAYS shown in their own language (never translated); index 0 is "System default".
 static const int myID_UILANG_FIRST = 60100;   // 10 radio items (myID_UILANG_FIRST + 0..9), clear of the 61xxx/62xxx/63xxx bases
@@ -2347,7 +2346,8 @@ static const NibToolbarApi g_nibToolbarApi = { 2, sizeof(NibToolbarApi), nibTool
 // nib.alloc/1 - host-owned dynamic ranges of the shared number spaces. Reserved-number audit (what the
 // grants below are provably disjoint from):
 //   * command ids - frozen kCmd*/IDM_* menu ids 1001..50011 (src/command_ids.h), wx stock ids (< 6000,
-//     incl. wxID_FILE1..9 MRU), myID_TIMER block 60000..60005, UI-language radios 60100..60109,
+//     incl. wxID_FILE1..9 MRU), myID_TIMER block 60000..60007, wxNote-private commands 60220..60230
+//     (src/private_ids.h), UI-language radios 60100..60109,
 //     Open-Containing-Folder tools 60300+, doc-list dropdown 61000..61999, saved macros 62100+,
 //     Nib plugin commands NIB_CMD_BASE 63000..63499, Scintillua language menu 63500..63999.
 //     Pool: 64000..64999 - and < 65536 on purpose, so a granted id survives the 16-bit WM_COMMAND
@@ -3603,6 +3603,13 @@ public:
         Bind(wxEVT_CLOSE_WINDOW, &WxnShellFrameT::onCloseWindow, this);                 // prompt to save on exit
         Bind(wxEVT_ACTIVATE, [this](wxActivateEvent& e){ if (e.GetActive()) CallAfter([this]{ checkExternalChange(activePage()); }); e.Skip(); });   // "changed on disk?" watch on refocus
         m_timer.Start(150);
+        // Quick Open's crawler. Bound but NOT started: it only runs while a workspace is being indexed,
+        // and startWorkspaceIndex() stops it again the moment the walk drains.
+        //
+        // Explicit id, like every other timer here. SetOwner(this) alone would also work - wxTimerImpl
+        // turns a wxID_ANY into a fresh wxNewId() - but that lands in the deprecated auto-id pool and
+        // gives the timer an id nothing else in this file can name.
+        Bind(wxEVT_TIMER, &WxnShellFrameT::onIndexTick, this, myID_IDXTIMER);
         applyTheme(m_dark);     // style for the mode this process was launched in
         applySettings();        // apply persisted preferences (tab size, wrap, line numbers, toolbar/status visibility)
         macroToolStates();      // sync the Macro menu/toolbar enable states (nothing recorded yet)
@@ -4384,6 +4391,27 @@ private:
         if (ext=="bat"||ext=="cmd") return "batch";
         if (ext=="pl"||ext=="pm"||ext=="pod") return "perl";
         if (ext=="kt"||ext=="kts") return "kotlin";
+        // Languages whose Lexilla lexer was already vendored but had no detection. Extensions
+        // that another shipped language also claims are deliberately left alone: ".m" stays
+        // unmapped because MATLAB and Objective-C both use it, and ".sql" keeps the generic
+        // SQL lexer rather than MySQL's dialect. Both remain selectable from the menu.
+        if (ext=="dart") return "dart";
+        if (ext=="jl") return "julia";
+        if (ext=="zig") return "zig";
+        if (ext=="nix") return "nix";
+        if (ext=="fs"||ext=="fsi"||ext=="fsx") return "fsharp";
+        if (ext=="adoc"||ext=="asciidoc") return "asciidoc";
+        if (ext=="po"||ext=="pot") return "po";
+        if (ext=="bib") return "bib";
+        if (ext=="e") return "eiffel";
+        if (ext=="mod") return "modula";
+        if (ext=="do"||ext=="ado") return "stata";
+        if (ext=="mac") return "maxima";
+        if (ext=="mp") return "metapost";
+        if (ext=="pov") return "pov";
+        if (ext=="clw") return "clarion";
+        if (ext=="vbs") return "vbscript";
+        if (ext=="il") return "cil";
         if (ext=="swift") return "swift";
         if (ext=="r") return "r";
         // Files whose NAME, not extension, carries the language. Checked AFTER the extension table so an
@@ -4444,13 +4472,7 @@ private:
     {
         if (!m_funcList) return;
         if (auto* d = dynamic_cast<FLItemData*>(m_funcList->GetItemData(e.GetItem())))
-        {
-            sci(SCI_ENSUREVISIBLE, d->line);
-            sci(SCI_GOTOLINE, d->line);
-            const int half = (int)sci(SCI_LINESONSCREEN) / 2;
-            sci(SCI_SETFIRSTVISIBLELINE, d->line > half ? d->line - half : 0);
-            m_stc->SetFocus();
-        }
+            gotoLineCentred(d->line);   // shared with Quick Open's '@' mode
         e.Skip();
     }
     // Toggle a docked pane's visibility; returns true when the pane ends up shown (so callers can refresh it).
@@ -4950,6 +4972,18 @@ private:
     }
     void createFileBrowser(const wxString& root)
     {
+        // The root is recorded HERE, not in showFileBrowserRooted(), because this is the ONE function
+        // every rooting path goes through - the menu commands, a directory on the command line, and
+        // toggleFileBrowser()'s first-use default, which does not go through showFileBrowserRooted at
+        // all. Recording it a level up would leave Quick Open with no root after View ▸ Folder as
+        // Workspace. It also used to live only inside wxGenericDirCtrl's private m_defaultPath.
+        //
+        // Recording the root is all that happens here. The CRAWL is NOT started: toggleFileBrowser()
+        // roots at the active file's own folder (or the working directory), so merely opening the pane
+        // on a file sitting in Desktop or the home directory would silently start walking that entire
+        // tree. The scan begins on an explicit workspace choice, or lazily on the first Quick Open -
+        // see startWorkspaceIndex's callers.
+        m_workspaceRoot = root;
         patchFileBrowserIcons();
         wxAuiPaneInfo paneInfo;
         bool hadPane = false;
@@ -4993,7 +5027,169 @@ private:
         createFileBrowser(root);
         wxAuiPaneInfo& pi = m_aui.GetPane(m_fileBrowser);
         if (pi.IsOk()) { pi.Show(); m_aui.Update(); }
+        // createFileBrowser() recorded the root; starting the crawl is this function's job, because
+        // reaching HERE means the user explicitly named a workspace rather than just opening the pane.
+        startWorkspaceIndex(root);
         setStatus(0, wxString::Format(_("Workspace: %s"), root)); m_hint = true;
+    }
+
+    // ---- Quick Open (Ctrl+Shift+O) ---------------------------------------------------------------
+    // The crawl is time-sliced off a timer rather than run when the dialog opens: a cold walk of a big
+    // tree takes long enough to be felt, and paying it on the keystroke would make the picker feel
+    // slower than the file browser it replaces.
+    void startWorkspaceIndex(const wxString& root)
+    {
+        if (root == m_fileIndex.root() && (m_fileIndex.done() || m_indexTimer.IsRunning()))
+            return;                                  // already indexed, or already indexing, this root
+        m_fileIndex.start(root);
+        if (!root.empty()) m_indexTimer.Start(60, wxTIMER_CONTINUOUS);
+        else               m_indexTimer.Stop();
+    }
+    void onIndexTick(wxTimerEvent&)
+    {
+        // 12 ms per 60 ms tick: a fifth of the time budget, so the crawl never costs a dropped frame.
+        if (!m_fileIndex.step(12)) m_indexTimer.Stop();
+    }
+
+    void quickOpen()
+    {
+        // Lazy start: the pane may have been opened via View ▸ Folder as Workspace, which records a root
+        // without crawling it. Asking for Quick Open is the point at which the scan is worth paying for.
+        // It is a no-op if this root is already indexed or being indexed.
+        if (!m_workspaceRoot.empty()) startWorkspaceIndex(m_workspaceRoot);
+
+        std::vector<wxString> payload;       // FilterRow::userId indexes this
+        std::vector<FilterRow> rows;
+        std::unordered_set<std::wstring> seen;
+
+        auto add = [&](const wxString& path, const wxString& hint)
+        {
+            // The three sources spell paths differently: the MRU stores whatever string was opened
+            // (`wxnote c:/proj/a.txt` keeps the forward slashes), while the crawler always builds with
+            // wxFILE_SEP_PATH. Without normalising separators the same file appears twice.
+            //
+            // Case is folded ONLY where the filesystem is case-insensitive. On Linux, Makefile and
+            // makefile are two different files, and folding would make one of them unfindable.
+            wxString key = path;
+            key.Replace("/", "\\");
+#if defined(__WXMSW__) || defined(__WXOSX__)
+            key = key.Lower();
+#endif
+            if (!seen.insert(key.ToStdWstring()).second) return;
+            const wxFileName fn(path);                       // one parse for both fields
+            FilterRow r;
+            r.primary   = fn.GetFullName();
+            r.secondary = fn.GetPath();
+            r.trailing  = hint;
+            r.userId    = static_cast<int>(payload.size());
+            prepareFilterRow(r, /*pathMode=*/true);
+            rows.push_back(std::move(r));
+            payload.push_back(path);
+        };
+
+        // Order is the tie-break the ranking falls back on, so it encodes "most likely wanted first":
+        // what is already open, then what was open recently, then the rest of the workspace.
+        const std::vector<EditorPage*> pages = allPages();
+        const size_t budget = pages.size() + m_fileHistory.GetCount() + m_fileIndex.size();
+        rows.reserve(budget);
+        payload.reserve(budget);
+        seen.reserve(budget);
+
+        for (EditorPage* p : pages) if (!p->path.empty()) add(p->path, _("open"));
+        for (size_t i = 0; i < m_fileHistory.GetCount(); ++i) add(m_fileHistory.GetHistoryFile(i), _("recent"));
+        for (const wxString& f : m_fileIndex.files()) add(f, wxEmptyString);
+
+        if (rows.empty())
+        {
+            themedInfo(_("Quick Open has nothing to list yet.\n\nOpen a folder as a workspace "
+                         "(File ▸ Open Folder as Workspace) to index it."), _("Quick Open"));
+            return;
+        }
+
+        wxString title = _("Quick Open");
+        if (!m_workspaceRoot.empty())
+        {
+            // GetFullName() is empty for a path with a trailing separator - which is exactly what the
+            // Windows shell returns for a drive root ("D:\"), so picking a drive as the workspace would
+            // render "Quick Open — ". Fall back to the raw root in that case.
+            wxString label = wxFileName(m_workspaceRoot).GetFullName();
+            if (label.empty()) label = m_workspaceRoot;
+            // The 50k cap is otherwise invisible: step() sets done() as well, so the title would look
+            // finished while an arbitrary tail of the tree is simply absent from the list.
+            const wxString state = !m_fileIndex.done()   ? wxString(_(" (indexing…)"))
+                                 : m_fileIndex.truncated() ? wxString(_(" (partial index)"))
+                                                           : wxString();
+            title += wxString::Format(" — %s%s", label, state);
+        }
+
+        FilterListDialog dlg(this, title, _("Type a file name, or @ for symbols in this file"),
+                             std::move(rows), m_dark);
+        dlg.setAltRows('@', [this] { return quickOpenSymbolRows(); });   // only runs if '@' is typed
+        // Seed from the selection when it plausibly names something: select a path or an identifier in
+        // the text, hit the shortcut, and the list is already narrowed. Guarded so a stray multi-line or
+        // paragraph-sized selection does not open the picker showing nothing.
+        //
+        // A selection starting with '@' must NOT be seeded: setQuery goes through the same requery() as
+        // typing, so "@Override" / "@media" / "@param" would silently drop the picker into symbol mode
+        // with the file list unreachable - and would pay for the whole-buffer symbol scan that making
+        // the provider lazy exists to avoid.
+        const wxString sel = m_stc ? m_stc->GetSelectedText().Strip(wxString::both) : wxString();
+        if (!sel.empty() && sel.length() <= 64 && sel.Find('\n') == wxNOT_FOUND
+            && sel.Find('\r') == wxNOT_FOUND && sel[0] != '@')
+            dlg.setQuery(sel);
+        themeDialog(&dlg);
+        if (dlg.ShowModal() != wxID_OK) return;
+        const FilterRow* pick = dlg.chosenRow();
+        if (!pick) return;
+
+        if (dlg.chosenIsAlt())
+        {
+            gotoLineCentred(pick->userId);           // '@' mode: userId is a line number
+            return;
+        }
+        if (static_cast<size_t>(pick->userId) >= payload.size()) return;
+        const wxString path = payload[static_cast<size_t>(pick->userId)];
+        // pageForPath, not a bare string compare: it is the one place that normalises separators and
+        // case the way the platform does, so "already open" means the same thing here as everywhere else.
+        if (EditorPage* p = pageForPath(path)) { activatePage(p); return; }
+        if (!openPath(path)) setStatus(0, wxString::Format(_("Cannot open: %s"), path));
+    }
+
+    // The '@' set: symbols in the ACTIVE file, from the same free function the Function List pane uses.
+    std::vector<FilterRow> quickOpenSymbolRows()
+    {
+        std::vector<FilterRow> out;
+        EditorPage* p = activePage();
+        if (!p || p->largeFile) return out;          // same guard as parseFuncList - see its comment
+        const std::string lang = flLangKey();
+        if (lang.empty()) return out;
+        const wxCharBuffer cb = m_stc->GetTextRaw();
+        const std::string text(cb.data(), cb.length());
+        for (const FLSym& s : flCollect(text, lang))
+        {
+            FilterRow r;
+            r.primary  = s.name;
+            r.userId   = static_cast<int>(sci(SCI_LINEFROMPOSITION, (uptr_t)s.pos));
+            r.trailing = wxString::Format(_("line %d"), r.userId + 1);
+            prepareFilterRow(r, /*pathMode=*/false);
+            out.push_back(std::move(r));
+        }
+        return out;
+    }
+
+    // Centre the view on a DOCUMENT line, unfolding it first. Shared by the Function List, Quick Open's
+    // '@' mode and the Find-in-Files result list.
+    void gotoLineCentred(int line)
+    {
+        sci(SCI_ENSUREVISIBLE, line);                 // a hit inside a folded block must open the fold
+        sci(SCI_GOTOLINE, line);
+        // SCI_SETFIRSTVISIBLELINE takes a DISPLAY line, but `line` is a DOCUMENT line, and the two
+        // diverge as soon as word wrap or folding is on - a wrapped file would scroll to roughly a
+        // third of the intended position, leaving the caret off screen. Convert before centring.
+        const int disp = (int)sci(SCI_VISIBLEFROMDOCLINE, line);
+        const int half = (int)sci(SCI_LINESONSCREEN) / 2;
+        sci(SCI_SETFIRSTVISIBLELINE, disp > half ? disp - half : 0);
+        if (m_stc) m_stc->SetFocus();
     }
     void openFolderAsWorkspace()   // kCmdFileOpenFolderAsWorkspace - pick any folder
     {
@@ -6698,6 +6894,10 @@ private:
         // stop + free the owned timers so no WM_TIMER can Notify() into the frame while teardown pumps messages
         for (wxTimer** t : { &m_monTimer, &m_flTimer, &m_backupTimer }) if (*t) { (*t)->Stop(); delete *t; *t = nullptr; }
         m_timer.Stop();
+        // Quick Open's crawler belongs in this list too: a workspace scan can still be running, and its
+        // tick does filesystem I/O straight into m_fileIndex - exactly the "no Notify() into the frame
+        // during teardown" hazard the line above exists to prevent.
+        m_indexTimer.Stop();
         m_aui.UnInit();
         // Defer the actual unload past this call stack (CallAfter -> next idle event), not a synchronous
         // call here: onCloseWindow runs NESTED inside the native WM_CLOSE dispatch, and for a Nib plugin
@@ -10884,10 +11084,10 @@ private:
         bool open = false;
         for (EditorPage* p : allPages()) if (!p->path.empty() && wxFileName(p->path).SameAs(target)) { activatePage(p); open = true; break; }
         if (!open) openPath(path);
-        sci(SCI_GOTOLINE, line0);
-        const int half = static_cast<int>(sci(SCI_LINESONSCREEN)) / 2;
-        sci(SCI_SETFIRSTVISIBLELINE, line0 > half ? line0 - half : 0);
-        if (m_stc) m_stc->SetFocus();
+        // Shared with the Function List and Quick Open's '@' mode. This used to be its own copy of the
+        // same arithmetic, which had drifted: it never called SCI_ENSUREVISIBLE, so jumping to a hit
+        // inside a folded block centred the view on a line that stayed hidden.
+        gotoLineCentred(line0);
     }
     // F4 / Shift+F4 step the visible search-results panel (Next/Previous Search Result).
     // Two panels can hold results - the Ctrl+Shift+F tree (m_fifPanel, 1-based) and the Find-dialog STC
@@ -12979,9 +13179,9 @@ private:
         if (!m_stc) { e.Skip(); return; }
         m_hint = false;   // a fresh command clears any lingering "needs full app" hint
         const int cmd = e.GetId() & 0xFFFF;
-        if (e.GetId() >= wxID_FILE1 && e.GetId() <= wxID_FILE9)           // Recent Files (MRU) entry
+        if (isRecentFileId(e.GetId()))                                    // Recent Files (MRU) entry
         {
-            const int i = e.GetId() - wxID_FILE1;
+            const int i = e.GetId() - m_fileHistory.GetBaseId();
             const wxString f = m_fileHistory.GetHistoryFile(i);
             if (wxFileExists(f)) openPath(f);
             else { m_fileHistory.RemoveFileFromHistory(i); auto* c = wxConfigBase::Get(); c->SetPath("/RecentFiles"); m_fileHistory.Save(*c); c->SetPath("/"); }
@@ -13387,6 +13587,32 @@ private:
             case kCmdOnlineDocument: wxLaunchDefaultBrowser("https://alpaq92.github.io/wx-notepad-plus-plus/docs/"); break;   // the user manual on the project site (repo docs/ holds developer notes, not a manual)
             case kCmdForum: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/issues"); break;
             case kCmdDebuginfo: showDebugInfo(); break;
+            // Ctrl+Shift+P. Harvested from the LIVE menu bar, so translated labels, current
+            // enabled/checked state, user remappings and the runtime-generated entries (languages,
+            // macros, plugin commands) are all included without a second registry to keep in sync.
+            case myID_COMMAND_PALETTE:
+            {
+                // Refresh the cached enable/disable state first: it is timer-driven at 150ms, so a
+                // palette opened right after a selection change would otherwise grey the wrong rows.
+                updateUiState();
+                std::vector<FilterRow> rows = wxnHarvestCommands(
+                    menuBar(), &m_keymap, m_fileHistory.GetBaseId(),
+                    static_cast<int>(m_fileHistory.GetMaxFiles()));
+                if (rows.empty()) { setStatus(0, _("No commands available")); break; }
+                FilterListDialog dlg(this, _("Command Palette"),
+                                     _("Type a command name"), std::move(rows), m_dark);
+                themeDialog(&dlg);
+                if (dlg.ShowModal() != wxID_OK) break;
+                const FilterRow* pick = dlg.chosenRow();
+                if (!pick) break;
+                // Dispatch AFTER the modal has closed. Running a command while the dialog still owns
+                // the modal loop would execute it against a disabled frame - and File > Exit would
+                // tear the frame down underneath ShowModal().
+                const int cmd = pick->userId;
+                CallAfter([this, cmd] { wxCommandEvent ce(wxEVT_MENU, cmd); onCommand(ce); });
+                break;
+            }
+            case myID_QUICK_OPEN: quickOpen(); break;
             case kCmdCmdLineArguments:
                 // Preamble only - the file-argument forms the parser cannot describe. Everything after
                 // it is generated from the parser, so it stays correct and stays translatable per line.
@@ -13646,6 +13872,14 @@ private:
     wxStyledTextCtrl*  m_fifScratch  = nullptr;   // hidden scratch buffer for searching file contents
     std::vector<std::pair<wxString, int>> m_fifJump;   // results panel line -> (file, 0-based editor line)
     wxFileHistory      m_fileHistory{ recentMaxFromConfig() };   // Recent Files (MRU); max read from config at construction (restart-to-apply)
+    // wxFileHistory hands out GetBaseId() + i for i in [0, GetMaxFiles()). The stock wxID_FILE1..wxID_FILE9
+    // constants cover only NINE of those, but the max defaults to 10 and the user can raise it to 50 -
+    // so testing against wxID_FILE9 silently misses every entry past the ninth.
+    bool isRecentFileId(int id) const
+    {
+        const int base = m_fileHistory.GetBaseId();
+        return id >= base && id < base + static_cast<int>(m_fileHistory.GetMaxFiles());
+    }
     MenuRegistry       m_menuRegistry;   // symbolicName -> wxMenu*/bar position/DynamicSlot, built once in buildMenuBar() (see menu_builder.h)
     wxStyledTextCtrl* m_stc = nullptr;   // the cross-platform editor view; its native HWND on Windows == m_sci
     wxStyledTextCtrl* m_docMap = nullptr;   // Document Map (minimap): a second view sharing the active document
@@ -13704,6 +13938,14 @@ private:
     int         m_iconStyle = 1;                 // toolbar icon style: 0 = line icons, 1 = Solar (default), 2 = IconPark, 3 = Streamline (restart-to-apply)
     int         m_toolbarIconSize = 16;          // toolbar icon size in px (16/20/24/32, default 16; restart-to-apply)
     wxTimer     m_timer;
+    // Quick Open's workspace index. m_workspaceRoot is the ONLY record of the browser's root - see
+    // showFileBrowserRooted().
+    wxString    m_workspaceRoot;
+    // wxnMonoMs, NOT wall clock: step() computes `deadline = now() + budget` and stops when now()
+    // reaches it, so a backward NTP correction mid-tick would make the deadline unreachable and let one
+    // step walk the entire remaining tree uncapped - the exact UI freeze the slicing exists to prevent.
+    WxnFileIndex m_fileIndex{ [] { return wxnMonoMs(); } };
+    wxTimer     m_indexTimer{ this, myID_IDXTIMER };
     wxString    m_path, m_lastFind, m_lastReplace;
     // Large-file guard thresholds (Preferences ▸ Editing). Size 0 = guard off entirely. Read at load time
     // into EditorPage::largeFile, so a change applies to files opened after it, not to open tabs.

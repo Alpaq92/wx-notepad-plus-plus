@@ -3177,3 +3177,45 @@ msgstr "不使用任何已保存设置的独立实例；更改将被丢弃"
 
 msgid " [Sandbox]"
 msgstr " [沙盒]"
+msgid "Command &Palette..."
+msgstr "命令面板(&P)..."
+
+msgid "&Quick Open..."
+msgstr "快速打开(&Q)..."
+
+msgid "Command Palette"
+msgstr "命令面板"
+
+msgid "Quick Open"
+msgstr "快速打开"
+
+msgid "Type a command name"
+msgstr "输入命令名称"
+
+msgid "Type a file name, or @ for symbols in this file"
+msgstr "输入文件名，或输入 @ 查找此文件中的符号"
+
+msgid "%zu of %zu"
+msgstr "%zu / %zu"
+
+msgid "open"
+msgstr "已打开"
+
+msgid "recent"
+msgstr "最近"
+
+msgid "line %d"
+msgstr "第 %d 行"
+
+msgid " (indexing…)"
+msgstr "（正在建立索引…）"
+
+msgid "No commands available"
+msgstr "没有可用的命令"
+
+msgid "Cannot open: %s"
+msgstr "无法打开: %s"
+
+msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
+msgstr "快速打开暂时没有可显示的内容。\n\n请将文件夹作为工作区打开（文件 ▸ 将文件夹作为工作区打开）以建立索引。"
+

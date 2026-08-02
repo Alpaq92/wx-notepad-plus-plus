@@ -71,6 +71,8 @@ the Shortcut Mapper.
 | Search Results Window | <kbd>F7</kbd> |
 | Next Search Result | <kbd>F4</kbd> |
 | Previous Search Result | <kbd>Shift</kbd>+<kbd>F4</kbd> |
+| Command Palette… | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> |
+| Quick Open… | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> |
 | Go to… | <kbd>Ctrl</kbd>+<kbd>G</kbd> |
 | Go to Matching Brace | <kbd>Ctrl</kbd>+<kbd>B</kbd> |
 | Toggle Bookmark | <kbd>Ctrl</kbd>+<kbd>F2</kbd> |

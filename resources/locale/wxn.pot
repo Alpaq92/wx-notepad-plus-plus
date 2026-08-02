@@ -3171,3 +3171,45 @@ msgstr ""
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr ""
+msgid "Command &Palette..."
+msgstr ""
+
+msgid "&Quick Open..."
+msgstr ""
+
+msgid "Command Palette"
+msgstr ""
+
+msgid "Quick Open"
+msgstr ""
+
+msgid "Type a command name"
+msgstr ""
+
+msgid "Type a file name, or @ for symbols in this file"
+msgstr ""
+
+msgid "%zu of %zu"
+msgstr ""
+
+msgid "open"
+msgstr ""
+
+msgid "recent"
+msgstr ""
+
+msgid "line %d"
+msgstr ""
+
+msgid " (indexing…)"
+msgstr ""
+
+msgid "No commands available"
+msgstr ""
+
+msgid "Cannot open: %s"
+msgstr ""
+
+msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
+msgstr ""
+

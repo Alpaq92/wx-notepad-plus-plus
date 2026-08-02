@@ -21,11 +21,10 @@
 // rather than a hand-mirrored copy. menu_data_view.h expects its includer to define myID_VIEW_TERMINAL
 // (main.cpp gets it from terminal_panel.h, whose vterm dependency is too heavy for this headless test).
 static const int myID_VIEW_TERMINAL = 60200;   // keep in sync with terminal_panel.h:38
-// menu_data_document.h likewise expects its includer to supply the wxNote-private ids for the Compare and
-// Spell Check submenus (and now Macro ▸ Manage Saved Macros). main.cpp declares them in one enum next to
-// the #include of menu_builder.h; mirror the SAME order and base here, since the values are positional.
-enum { myID_CMP_FILE = 60220, myID_CMP_CLIP, myID_CMP_CLEAR, myID_CMP_NEXT, myID_CMP_PREV, myID_SPELLCHECK,
-       myID_SPELL_COMMENTSONLY, myID_SPELL_MANAGE, myID_MACRO_MANAGE };   // keep in sync with main.cpp:171
+// menu_data_document.h likewise expects its includer to supply the wxNote-private ids for the Compare
+// and Spell Check submenus. Those are shared with main.cpp through this header - it used to be an enum
+// mirrored by hand here, which is exactly the kind of positional duplicate that drifts silently.
+#include "private_ids.h"
 #include "menu_builder.h"
 
 #include <wx/app.h>

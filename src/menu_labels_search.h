@@ -18,6 +18,8 @@ namespace Label
     inline const wxString SearchFocusOnFoundResults() { return _("Search Results &Window"); }
     inline const wxString SearchGotoNextFound() { return _("Next Search Resul&t"); }
     inline const wxString SearchGotoPrevFound() { return _("Previous Search Resul&t"); }
+    inline const wxString SearchCommandPalette() { return _("Command &Palette..."); }
+    inline const wxString SearchQuickOpen()      { return _("&Quick Open..."); }
     inline const wxString SearchGotoLine() { return _("&Go to..."); }
     inline const wxString SearchGotoMatchingBrace() { return _("Go to &Matching Brace"); }
     inline const wxString SearchSelectMatchingBraces() { return _("Select All In-betw&een {} [] or ()"); }
