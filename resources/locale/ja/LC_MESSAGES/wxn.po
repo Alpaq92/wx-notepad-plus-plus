@@ -3196,7 +3196,7 @@ msgid "%zu of %zu"
 msgstr "%zu / %zu"
 
 msgid "open"
-msgstr "開いています"
+msgstr "オープン中"
 
 msgid "recent"
 msgstr "最近"

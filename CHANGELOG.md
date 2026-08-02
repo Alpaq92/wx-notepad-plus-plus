@@ -48,6 +48,15 @@ All notable changes to wxNote are documented here. Format loosely follows
   opening a large project does not stall the editor.
 
 ### Fixed
+- **Recent Files entries past the ninth did nothing when clicked.** The list holds ten by default and
+  can be set as high as fifty, but only the first nine were ever wired up, so the tenth and beyond were
+  dead menu items.
+- **Jumping to a search result inside a collapsed fold left you looking at a hidden line.** Double-
+  clicking a Find in Files result, or stepping through them with <kbd>F4</kbd>, scrolled to the right
+  place without opening the fold that contained it. It now unfolds first, like the Function List does.
+- **Centring on a line was wrong when word wrap was on.** Jumping to a symbol or a search result in a
+  wrapped document scrolled to roughly a third of the intended position, often leaving the target off
+  screen entirely. Affected the Function List, Find in Files results, and Quick Open's `@` mode.
 - **Twelve strings that ignored your language and stayed English.** The `--sandbox` title marker, the
   `--end` / `--diff` / `--sandbox` / `--pluginMessage` lines in `--help`, the file-argument section of
   **Help ▸ Command Line Arguments**, the "Compare: file not found" status, the Quick Open "(partial

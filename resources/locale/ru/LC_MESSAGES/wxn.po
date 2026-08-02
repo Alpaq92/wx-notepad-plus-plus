@@ -3199,7 +3199,7 @@ msgid "open"
 msgstr "открыт"
 
 msgid "recent"
-msgstr "недавние"
+msgstr "недавний"
 
 msgid "line %d"
 msgstr "строка %d"
