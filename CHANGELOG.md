@@ -3,7 +3,7 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.15.1] - 2026-08-03
 
 ### Fixed
 - **Comment/Uncomment no longer breaks non-C files.** `Ctrl+/`, Comment/Uncomment and Stream Comment

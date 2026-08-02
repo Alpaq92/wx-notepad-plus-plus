@@ -67,7 +67,7 @@ A few notes before the list:
 | Submenu | Contents |
 | --- | --- |
 | **Convert Case to ▸** | UPPERCASE · lowercase · Proper Case · Proper Case (blend) · Sentence case · Sentence case (blend) · iNVERT cASE · ranDOm CasE |
-| **Comment/Uncomment ▸** | Toggle Single Line Comment · Single Line Comment · Single Line Uncomment · Block Comment · Block Uncomment |
+| **Comment/Uncomment ▸** | Toggle Single Line Comment · Single Line Comment · Single Line Uncomment · Block Comment · Block Uncomment — all five use **the active language's** comment characters, see [Languages ▸ Comments](languages.md#comments) |
 | **Indent ▸** | Increase Line Indent · Decrease Line Indent |
 | **Line Operations ▸** | Duplicate / Move Up / Move Down / Split / Join · Remove Duplicate Lines · Remove Consecutive Duplicate Lines · Remove Empty Lines (with or without blank characters) · Insert Blank Line Above / Below · Reverse Line Order · Randomize Line Order · and fourteen sort variants — lexicographic, lexicographic ignoring case, locale order, integer, decimal (comma), decimal (dot) and length, each ascending and descending |
 | **Blank Operations ▸** | Trim Trailing / Leading / Both · EOL to Space · Trim both and EOL to Space · TAB to Space · Space to TAB (All) · Space to TAB (Leading) |
