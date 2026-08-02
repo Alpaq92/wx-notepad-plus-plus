@@ -204,9 +204,13 @@ SectionEnd
 ; would destroy every entry past the cut; the helper also preserves the REG_EXPAND_SZ value kind).
 ; A failure here is reported and ignored: a PATH entry is a convenience, not part of a working wxNote.
 Section "Add to PATH" SecPath
-  SetOutPath "$PLUGINSDIR"
-  File "wxnote-path.ps1"
-  SetOutPath "$INSTDIR"
+  ; InitPluginsDir is REQUIRED before any File into $PLUGINSDIR. NSIS only creates that directory on
+  ; demand - on an explicit InitPluginsDir, or implicitly before the first plugin call - and until then
+  ; $PLUGINSDIR expands to the EMPTY STRING. Without this the extraction target becomes "\wxnote-path.ps1"
+  ; at the drive root and NSIS shows "Error opening file for writing". nsExec below is a plugin, but it
+  ; runs AFTER the File, which is too late to help.
+  InitPluginsDir
+  File "/oname=$PLUGINSDIR\wxnote-path.ps1" "wxnote-path.ps1"
   nsExec::ExecToStack 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\wxnote-path.ps1" -Action Add -Directory "$INSTDIR"'
   Pop $0   ; exit code
   Pop $1   ; output
@@ -253,8 +257,8 @@ Section "Uninstall"
   ; Remove the PATH entry only if this installer added it, and only ours - never rewrite the rest.
   ReadRegDWORD $0 HKCU "Software\wxNote-Installer" "AddedToPath"
   ${If} $0 == 1
-    SetOutPath "$PLUGINSDIR"
-    File "wxnote-path.ps1"
+    InitPluginsDir                 ; see SecPath - $PLUGINSDIR is empty until this runs
+    File "/oname=$PLUGINSDIR\wxnote-path.ps1" "wxnote-path.ps1"
     nsExec::ExecToStack 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\wxnote-path.ps1" -Action Remove -Directory "$INSTDIR"'
     Pop $0
     Pop $1
