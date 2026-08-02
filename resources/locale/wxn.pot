@@ -2405,7 +2405,7 @@ msgstr ""
 msgid "Re&gular expression"
 msgstr ""
 
-msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnote elevated to save this file?"
+msgid "\"%s\" cannot be written with your current permissions.\n\nAsk Windows for permission to save this file?"
 msgstr ""
 
 msgid "Access Denied"
@@ -2414,7 +2414,7 @@ msgstr ""
 msgid "Reuse an existing window"
 msgstr ""
 
-msgid "Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"
+msgid "Files:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\n"
 msgstr ""
 
 msgid "open at line[,col]"
@@ -3164,13 +3164,12 @@ msgstr ""
 msgid "%s  (%d steps)"
 msgstr ""
 
-msgid "Delete the macro \"%s\"?
-
-Its keyboard shortcut is removed too."
+msgid "Delete the macro \"%s\"?\n\nIts keyboard shortcut is removed too."
 msgstr ""
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr ""
+
 msgid "Command &Palette..."
 msgstr ""
 
@@ -3213,3 +3212,24 @@ msgstr ""
 msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
 msgstr ""
 
+
+msgid "independent instance using no saved settings; changes are discarded"
+msgstr ""
+
+msgid " [Sandbox]"
+msgstr ""
+
+msgid "Compare: file not found"
+msgstr ""
+
+msgid "put the caret at the end of the last file opened"
+msgstr ""
+
+msgid "compare the two given files side by side"
+msgstr ""
+
+msgid " (partial index)"
+msgstr ""
+
+msgid "message delivered to plugins at startup"
+msgstr ""

@@ -429,6 +429,25 @@ if(MSVC)
     target_compile_options(hunspell_selftest PRIVATE /utf-8)
 endif()
 
+# ---- catalog_selftest: keeps every user-visible string translatable --------------------------------
+# No GUI, no wx: pure STL. Reads src/*.{h,cpp} and resources/locale/* as DATA (paths injected via
+# -DSRC_DIR/-DLOCALE_DIR) and asserts the four invariants that 0.14.x broke unnoticed - every
+# _()/wxTRANSLATE() literal is a msgid in wxn.pot, every catalog line is well formed (a value's newlines
+# spelled \n, not typed), every wxn.po covers exactly the template, and every committed wxn.mo is the
+# current compile of its .po (twins included). It links nothing, so it runs on every CI arch.
+#   cmake --build build --target catalog_selftest && build/bin/catalog_selftest
+add_executable(catalog_selftest tests/catalog_selftest.cpp)
+set_target_properties(catalog_selftest PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_compile_definitions(catalog_selftest PRIVATE
+    SRC_DIR="${CMAKE_SOURCE_DIR}/src"
+    LOCALE_DIR="${CMAKE_SOURCE_DIR}/resources/locale")
+if(MSVC)
+    target_compile_options(catalog_selftest PRIVATE /utf-8)
+endif()
+
 # ---- po2mo: dev-only .po -> .mo compiler (tools/po2mo.c), the C port of the former po2mo.py ---------
 # EXCLUDE_FROM_ALL: not built by default (nor in CI) - it is a maintainer tool run when a .po changes to
 # regenerate the committed .mo. Output is byte-identical to the old Python version.
@@ -595,11 +614,12 @@ enable_testing()
 
 add_custom_target(selftests DEPENDS
     keymap_selftest diff_myers_test hash_test fuzzy_test file_index_test charset_selftest
-    hunspell_selftest funclist_selftest bridge_selftest terminal_selftest)
+    hunspell_selftest funclist_selftest catalog_selftest bridge_selftest terminal_selftest)
 
 # "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed. file_index_test
 # does call wxInitializer, but it links wx::base only, so it gets console traits and never opens a display.
-foreach(t diff_myers_test hash_test fuzzy_test file_index_test hunspell_selftest funclist_selftest)
+foreach(t diff_myers_test hash_test fuzzy_test file_index_test hunspell_selftest funclist_selftest
+          catalog_selftest)
     add_test(NAME ${t} COMMAND ${t})
     set_tests_properties(${t} PROPERTIES LABELS pure)
 endforeach()

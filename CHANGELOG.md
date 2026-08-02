@@ -25,6 +25,18 @@ All notable changes to wxNote are documented here. Format loosely follows
   trees nobody searches — `.git`, `node_modules`, `build`, `target`, `__pycache__` and the like — so
   opening a large project does not stall the editor.
 
+### Fixed
+- **Twelve strings that ignored your language and stayed English.** The `--sandbox` title marker, the
+  `--end` / `--diff` / `--sandbox` / `--pluginMessage` lines in `--help`, the file-argument section of
+  **Help ▸ Command Line Arguments**, the "Compare: file not found" status, the Quick Open "(partial
+  index)" title suffix, the save-permissions prompt, and the macro-delete confirmation are now
+  translated in all eight languages. Two of them were *stale* rather than missing — the wording had
+  changed in the app but not in the catalogs — and two were written in a form the catalog compiler
+  silently drops.
+- **The Command Palette menu item was untranslated in all eight languages.** Its translations existed
+  but sat in the source catalogs without the blank line that separates entries, so the compiler kept
+  the entry before it and discarded this one on the way to the shipped binary catalogs.
+
 ## [0.14.3] - 2026-08-02
 
 ### Added

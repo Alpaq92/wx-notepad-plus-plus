@@ -2403,8 +2403,8 @@ msgstr "&Erweitert (\\n, \\r, \\t, \\0, \\x...)"
 msgid "Re&gular expression"
 msgstr "Re&gulärer Ausdruck"
 
-msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnote elevated to save this file?"
-msgstr "\"%s\" kann mit Ihren aktuellen Berechtigungen nicht geschrieben werden.\n\nwxnote erhöht neu starten, um diese Datei zu speichern?"
+msgid "\"%s\" cannot be written with your current permissions.\n\nAsk Windows for permission to save this file?"
+msgstr "\"%s\" kann mit Ihren aktuellen Berechtigungen nicht geschrieben werden.\n\nWindows um die Berechtigung zum Speichern dieser Datei bitten?"
 
 msgid "Access Denied"
 msgstr "Zugriff verweigert"
@@ -2412,8 +2412,8 @@ msgstr "Zugriff verweigert"
 msgid "Reuse an existing window"
 msgstr "Vorhandenes Fenster wiederverwenden"
 
-msgid "Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"
-msgstr "Verwendung: wxnote [Optionen] [Dateien...]\n\nDateien:\n  file                     in einem Tab öffnen\n  folder                   als Arbeitsbereich öffnen\n  file:line[:col]          an einer Position öffnen\n  +N, +N,col               die letzte Datei in Zeile N (und Spalte) öffnen\n  +/text                   Cursor auf die erste Fundstelle von 'text' setzen\n  -                        Pipe-Eingabe in einen neuen unbenannten Puffer lesen\n\nOptionen:\n  -g, --goto <line[,col]>  zu dieser Zeile (und Spalte) in der zuletzt geöffneten Datei springen\n  -e, --encoding <name>    Kodierung erzwingen: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      die angegebene(n) Datei(en) schreibgeschützt öffnen\n  -o, -O, --split          die angegebene(n) Datei(en) in geteilter Ansicht öffnen\n  -n, --new-instance       immer ein neues Fenster öffnen\n  -r, --reuse-instance     ein bereits laufendes Fenster wiederverwenden\n  -w, --wait               vor der Rückkehr auf das Schließen der Datei warten\n  --safe                   ohne das Laden von Plugins starten\n  --clean                  wie --safe, zusätzlich Sitzungs- und Wiederherstellung überspringen\n  --locale <lang>          UI-Sprache für diesen Start (z. B. pl, de, ja)\n  -v, --version            Version anzeigen und beenden\n  -h, --help               diese Hilfe anzeigen"
+msgid "Files:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\n"
+msgstr "Dateien:\n  file                     in einem Tab öffnen\n  folder                   als Arbeitsbereich öffnen\n  file:line[:col]          an einer Position öffnen\n  +N, +N,col               die letzte Datei in Zeile N (und Spalte) öffnen\n  +/text                   Cursor auf die erste Fundstelle von 'text' setzen\n  -                        Pipe-Eingabe in einen neuen unbenannten Puffer lesen\n\n"
 
 msgid "open at line[,col]"
 msgstr "zur Zeile[,Spalte] springen"
@@ -3162,12 +3162,8 @@ msgstr "oder Zeile länger als (Zeichen):"
 msgid "%s  (%d steps)"
 msgstr "%s  (%d Schritte)"
 
-msgid "Delete the macro \"%s\"?
-
-Its keyboard shortcut is removed too."
-msgstr "Makro \"%s\" löschen?
-
-Sein Tastenkürzel wird ebenfalls entfernt."
+msgid "Delete the macro \"%s\"?\n\nIts keyboard shortcut is removed too."
+msgstr "Makro \"%s\" löschen?\n\nSein Tastenkürzel wird ebenfalls entfernt."
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr "oder Zeile länger als (Zeichen, 0 = nie):"
@@ -3177,6 +3173,7 @@ msgstr "unabhängige Instanz ohne gespeicherte Einstellungen; Änderungen werden
 
 msgid " [Sandbox]"
 msgstr " [Sandbox]"
+
 msgid "Command &Palette..."
 msgstr "Befehls&palette..."
 
@@ -3219,3 +3216,18 @@ msgstr "Kann nicht geöffnet werden: %s"
 msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
 msgstr "Schnell öffnen hat noch nichts anzuzeigen.\n\nÖffnen Sie einen Ordner als Arbeitsbereich (Datei ▸ Ordner als Arbeitsbereich öffnen), um ihn zu indizieren."
 
+
+msgid "Compare: file not found"
+msgstr "Vergleich: Datei nicht gefunden"
+
+msgid "put the caret at the end of the last file opened"
+msgstr "den Cursor an das Ende der zuletzt geöffneten Datei setzen"
+
+msgid "compare the two given files side by side"
+msgstr "die beiden angegebenen Dateien nebeneinander vergleichen"
+
+msgid " (partial index)"
+msgstr " (Index unvollständig)"
+
+msgid "message delivered to plugins at startup"
+msgstr "Nachricht, die beim Start an die Plugins übergeben wird"

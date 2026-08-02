@@ -2403,8 +2403,8 @@ msgstr "&Extendido (\\n, \\r, \\t, \\0, \\x...)"
 msgid "Re&gular expression"
 msgstr "Expresión re&gular"
 
-msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnote elevated to save this file?"
-msgstr "No se puede escribir en \"%s\" con sus permisos actuales.\n\n¿Reiniciar wxnote con privilegios elevados para guardar este archivo?"
+msgid "\"%s\" cannot be written with your current permissions.\n\nAsk Windows for permission to save this file?"
+msgstr "No se puede escribir en \"%s\" con sus permisos actuales.\n\n¿Pedir permiso a Windows para guardar este archivo?"
 
 msgid "Access Denied"
 msgstr "Acceso denegado"
@@ -2412,8 +2412,8 @@ msgstr "Acceso denegado"
 msgid "Reuse an existing window"
 msgstr "Reutilizar una ventana existente"
 
-msgid "Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"
-msgstr "Uso: wxnote [opciones] [archivos...]\n\nArchivos:\n  file                     abrir en una pestaña\n  folder                   abrir como espacio de trabajo\n  file:line[:col]          abrir en una posición\n  +N, +N,col               abrir el último archivo en la línea N (y columna)\n  +/text                   situar el cursor en la primera coincidencia de 'text'\n  -                        leer la entrada de la tubería en un búfer nuevo sin título\n\nOpciones:\n  -g, --goto <line[,col]>  ir a esta línea (y columna) en el último archivo abierto\n  -e, --encoding <name>    forzar la codificación: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      abrir los archivos indicados en solo lectura\n  -o, -O, --split          abrir los archivos indicados en vista dividida\n  -n, --new-instance       abrir siempre una ventana nueva\n  -r, --reuse-instance     reutilizar una ventana ya en ejecución\n  -w, --wait               esperar a que se cierre el archivo antes de volver\n  --safe                   iniciar sin cargar complementos\n  --clean                  como --safe, además omite la restauración de sesión y recuperación\n  --locale <lang>          idioma de la interfaz para esta ejecución (p. ej. pl, de, ja)\n  -v, --version            mostrar la versión y salir\n  -h, --help               mostrar esta ayuda"
+msgid "Files:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\n"
+msgstr "Archivos:\n  file                     abrir en una pestaña\n  folder                   abrir como espacio de trabajo\n  file:line[:col]          abrir en una posición\n  +N, +N,col               abrir el último archivo en la línea N (y columna)\n  +/text                   situar el cursor en la primera coincidencia de 'text'\n  -                        leer la entrada de la tubería en un búfer nuevo sin título\n\n"
 
 msgid "open at line[,col]"
 msgstr "ir a la línea[,columna]"
@@ -3162,12 +3162,8 @@ msgstr "o cualquier línea más larga que (caracteres):"
 msgid "%s  (%d steps)"
 msgstr "%s  (%d pasos)"
 
-msgid "Delete the macro \"%s\"?
-
-Its keyboard shortcut is removed too."
-msgstr "¿Eliminar la macro \"%s\"?
-
-Su atajo de teclado también se elimina."
+msgid "Delete the macro \"%s\"?\n\nIts keyboard shortcut is removed too."
+msgstr "¿Eliminar la macro \"%s\"?\n\nSu atajo de teclado también se elimina."
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr "o cualquier línea más larga que (caracteres, 0 = nunca):"
@@ -3177,6 +3173,7 @@ msgstr "ventana independiente sin usar la configuración guardada; los cambios s
 
 msgid " [Sandbox]"
 msgstr " [Espacio aislado]"
+
 msgid "Command &Palette..."
 msgstr "&Paleta de comandos..."
 
@@ -3219,3 +3216,18 @@ msgstr "No se puede abrir: %s"
 msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
 msgstr "La apertura rápida todavía no tiene nada que mostrar.\n\nAbra una carpeta como espacio de trabajo (Archivo ▸ Abrir carpeta como espacio de trabajo) para indexarla."
 
+
+msgid "Compare: file not found"
+msgstr "Comparación: archivo no encontrado"
+
+msgid "put the caret at the end of the last file opened"
+msgstr "situar el cursor al final del último archivo abierto"
+
+msgid "compare the two given files side by side"
+msgstr "comparar los dos archivos indicados en paralelo"
+
+msgid " (partial index)"
+msgstr " (índice parcial)"
+
+msgid "message delivered to plugins at startup"
+msgstr "mensaje entregado a los complementos al iniciar"

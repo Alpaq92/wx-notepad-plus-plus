@@ -2403,8 +2403,8 @@ msgstr "扩展(&E) (\\n, \\r, \\t, \\0, \\x...)"
 msgid "Re&gular expression"
 msgstr "正则表达式(&G)"
 
-msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnote elevated to save this file?"
-msgstr "当前权限无法写入 \"%s\"。\n\n是否以提升的权限重新启动 wxnote 以保存此文件?"
+msgid "\"%s\" cannot be written with your current permissions.\n\nAsk Windows for permission to save this file?"
+msgstr "当前权限无法写入 \"%s\"。\n\n是否向 Windows 请求保存此文件的权限?"
 
 msgid "Access Denied"
 msgstr "拒绝访问"
@@ -2412,8 +2412,8 @@ msgstr "拒绝访问"
 msgid "Reuse an existing window"
 msgstr "重用现有窗口"
 
-msgid "Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"
-msgstr "用法：wxnote [选项] [文件...]\n\n文件：\n  file                     在标签页中打开\n  folder                   作为工作区打开\n  file:line[:col]          在指定位置打开\n  +N, +N,col               在第 N 行（和列）打开最后一个文件\n  +/text                   将光标置于 'text' 的首个匹配处\n  -                        将管道输入读入新的无标题缓冲区\n\n选项：\n  -g, --goto <line[,col]>  转到最后打开文件中的该行（和列）\n  -e, --encoding <name>    强制编码：ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      以只读方式打开指定文件\n  -o, -O, --split          在拆分视图中打开指定文件\n  -n, --new-instance       总是打开新窗口\n  -r, --reuse-instance     重用已在运行的窗口\n  -w, --wait               等待文件关闭后再返回\n  --safe                   启动时不加载任何插件\n  --clean                  与 --safe 相同，并跳过会话和恢复还原\n  --locale <lang>          本次运行的界面语言（例如 pl、de、ja）\n  -v, --version            打印版本并退出\n  -h, --help               显示此帮助信息"
+msgid "Files:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\n"
+msgstr "文件：\n  file                     在标签页中打开\n  folder                   作为工作区打开\n  file:line[:col]          在指定位置打开\n  +N, +N,col               在第 N 行（和列）打开最后一个文件\n  +/text                   将光标置于 'text' 的首个匹配处\n  -                        将管道输入读入新的无标题缓冲区\n\n"
 
 msgid "open at line[,col]"
 msgstr "跳转到行[,列]"
@@ -3162,12 +3162,8 @@ msgstr "或任意行长度超过 (字符):"
 msgid "%s  (%d steps)"
 msgstr "%s  (%d 步)"
 
-msgid "Delete the macro \"%s\"?
-
-Its keyboard shortcut is removed too."
-msgstr "删除宏 \"%s\"？
-
-其键盘快捷键也会被删除。"
+msgid "Delete the macro \"%s\"?\n\nIts keyboard shortcut is removed too."
+msgstr "删除宏 \"%s\"？\n\n其键盘快捷键也会被删除。"
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr "或任意行长度超过 (字符，0 = 从不):"
@@ -3177,6 +3173,7 @@ msgstr "不使用任何已保存设置的独立实例；更改将被丢弃"
 
 msgid " [Sandbox]"
 msgstr " [沙盒]"
+
 msgid "Command &Palette..."
 msgstr "命令面板(&P)..."
 
@@ -3219,3 +3216,18 @@ msgstr "无法打开: %s"
 msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
 msgstr "快速打开暂时没有可显示的内容。\n\n请将文件夹作为工作区打开（文件 ▸ 将文件夹作为工作区打开）以建立索引。"
 
+
+msgid "Compare: file not found"
+msgstr "比较：未找到文件"
+
+msgid "put the caret at the end of the last file opened"
+msgstr "将光标置于最后打开文件的末尾"
+
+msgid "compare the two given files side by side"
+msgstr "并排比较给定的两个文件"
+
+msgid " (partial index)"
+msgstr "（索引不完整）"
+
+msgid "message delivered to plugins at startup"
+msgstr "启动时传递给插件的消息"

@@ -2403,8 +2403,8 @@ msgstr "拡張(&E) (\\n, \\r, \\t, \\0, \\x...)"
 msgid "Re&gular expression"
 msgstr "正規表現(&G)"
 
-msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnote elevated to save this file?"
-msgstr "現在の権限では \"%s\" に書き込めません。\n\nこのファイルを保存するために、wxnote を管理者権限で再起動しますか?"
+msgid "\"%s\" cannot be written with your current permissions.\n\nAsk Windows for permission to save this file?"
+msgstr "現在の権限では \"%s\" に書き込めません。\n\nこのファイルを保存する許可を Windows に求めますか?"
 
 msgid "Access Denied"
 msgstr "アクセスが拒否されました"
@@ -2412,8 +2412,8 @@ msgstr "アクセスが拒否されました"
 msgid "Reuse an existing window"
 msgstr "既存のウィンドウを再利用する"
 
-msgid "Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"
-msgstr "使い方: wxnote [オプション] [ファイル...]\n\nファイル:\n  file                     タブで開く\n  folder                   ワークスペースとして開く\n  file:line[:col]          指定位置で開く\n  +N, +N,col               最後のファイルを行N（と桁）で開く\n  +/text                   'text' の最初の一致にカーソルを置く\n  -                        パイプ入力を新規の無題バッファーに読み込む\n\nオプション:\n  -g, --goto <line[,col]>  最後に開いたファイルのこの行（と桁）へ移動\n  -e, --encoding <name>    エンコーディングを強制: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      指定したファイルを読み取り専用で開く\n  -o, -O, --split          指定したファイルを分割ビューで開く\n  -n, --new-instance       常に新しいウィンドウを開く\n  -r, --reuse-instance     既に実行中のウィンドウを再利用する\n  -w, --wait               ファイルが閉じられるまで待ってから戻る\n  --safe                   プラグインを読み込まずに起動する\n  --clean                  --safe に加え、セッションと復元の復旧を省略する\n  --locale <lang>          この実行の UI 言語（例: pl, de, ja）\n  -v, --version            バージョンを表示して終了する\n  -h, --help               このヘルプを表示する"
+msgid "Files:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\n"
+msgstr "ファイル:\n  file                     タブで開く\n  folder                   ワークスペースとして開く\n  file:line[:col]          指定位置で開く\n  +N, +N,col               最後のファイルを行N（と桁）で開く\n  +/text                   'text' の最初の一致にカーソルを置く\n  -                        パイプ入力を新規の無題バッファーに読み込む\n\n"
 
 msgid "open at line[,col]"
 msgstr "行[,列]に移動"
@@ -3162,12 +3162,8 @@ msgstr "または次の文字数を超える行:"
 msgid "%s  (%d steps)"
 msgstr "%s  (%d ステップ)"
 
-msgid "Delete the macro \"%s\"?
-
-Its keyboard shortcut is removed too."
-msgstr "マクロ \"%s\" を削除しますか?
-
-キーボードショートカットも削除されます。"
+msgid "Delete the macro \"%s\"?\n\nIts keyboard shortcut is removed too."
+msgstr "マクロ \"%s\" を削除しますか?\n\nキーボードショートカットも削除されます。"
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr "または次の文字数を超える行 (0 = 無効):"
@@ -3177,6 +3173,7 @@ msgstr "保存された設定を使わない独立したインスタンス（変
 
 msgid " [Sandbox]"
 msgstr " [サンドボックス]"
+
 msgid "Command &Palette..."
 msgstr "コマンド パレット(&P)..."
 
@@ -3219,3 +3216,18 @@ msgstr "開けません: %s"
 msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
 msgstr "クイック オープンに表示できるものがまだありません。\n\nフォルダーをワークスペースとして開くと（ファイル ▸ フォルダーをワークスペースとして開く）、インデックスが作成されます。"
 
+
+msgid "Compare: file not found"
+msgstr "比較: ファイルが見つかりません"
+
+msgid "put the caret at the end of the last file opened"
+msgstr "最後に開いたファイルの末尾にカーソルを置く"
+
+msgid "compare the two given files side by side"
+msgstr "指定した 2 つのファイルを並べて比較する"
+
+msgid " (partial index)"
+msgstr "（インデックス不完全）"
+
+msgid "message delivered to plugins at startup"
+msgstr "起動時にプラグインへ渡されるメッセージ"
