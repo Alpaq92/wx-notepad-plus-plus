@@ -558,7 +558,7 @@ struct WxnOpenRequest
     bool readOnly = false;                            // -R/-M/--read-only: open THIS launch's files read-only
     bool split    = false;                            // -o/-O/--split: route THIS launch's files into the split view
     wxString findPattern;                             // +/{pattern}: put the caret on the first match in the last-opened file
-    bool compare  = false;                            // -d/--compare: diff the two given files side by side instead of just opening them
+    bool compare  = false;                            // -d/--diff: diff the two given files side by side instead of just opening them
     bool hasStdin = false;                            // '-': a piped-stdin buffer was captured (never travels over IPC - forces a new instance)
     wxString stdinText;                               // the captured stdin bytes (decoded UTF-8)
     wxString pluginMessage;                           // -pluginMessage=<text>, forwarded over the reuse-window IPC handoff too
@@ -592,6 +592,13 @@ static bool          g_cleanMode = false;
 // wxConfigBase::Get() happens earlier than that - readUiLang() during locale setup - and the swap has
 // to be in place before it. Plugins still load: this isolates state, not code (combine with --safe).
 static bool          g_sandboxMode = false;
+// Help > Command Line Arguments' option list, captured from the parser itself in OnInit.
+// It used to be a second, hand-written copy of every option description inside one ~1.5 KB _() string.
+// That duplicate was the problem: adding an option changed the whole msgid, so all eight catalogs went
+// stale at once and the entire dialog fell back to English - which is exactly what had happened (their
+// msgid still predated --end). Deriving it from the parser means each description is its own small,
+// individually translatable string, and a new option can never invalidate the others again.
+static wxString      g_cmdLineUsage;
 // --sandbox's throwaway user-data directory. Created lazily, removed in OnExit.
 // The name must NOT be derivable (an earlier version used the pid): this lives in a world-writable
 // shared directory on POSIX, and unsaved buffer text is written into it as recovery backups. A
@@ -3642,7 +3649,7 @@ public:
     // (or a +N token folded into gotoLine), -R/-M/--read-only and +/{pattern}. Returns the paths that
     // actually opened (feeds -w wait mode). Folders and piped stdin stay with the CALLER: they differ
     // between the new-window path (WxnApp::OnInit) and the reuse-window path (the g_ipcOpenRequest lambda).
-    // -d/--compare <a> <b>: run the side-by-side diff straight from the command line, skipping the
+    // -d/--diff <a> <b>: run the side-by-side diff straight from the command line, skipping the
     // "Compare current document with file..." dialog. The launch has already opened both files as tabs
     // (openRequestFiles), so this only has to make A the active document and feed B's decoded text to
     // the same compareWith() the menu commands use - no second read of A, and no duplicate tab.
@@ -3658,7 +3665,7 @@ public:
         compareWithPath(pathB);
     }
 
-    // Shared by the -d/--compare launch above and View > Compare > with File... below, so the two agree
+    // Shared by the -d/--diff launch above and View > Compare > with File... below, so the two agree
     // on the decode seed, the label and the missing-file behaviour rather than drifting apart.
     void compareWithPath(const wxString& path)
     {
@@ -13380,7 +13387,19 @@ private:
             case kCmdOnlineDocument: wxLaunchDefaultBrowser("https://alpaq92.github.io/wx-notepad-plus-plus/docs/"); break;   // the user manual on the project site (repo docs/ holds developer notes, not a manual)
             case kCmdForum: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/issues"); break;
             case kCmdDebuginfo: showDebugInfo(); break;
-            case kCmdCmdLineArguments: themedInfo(_("Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  --end                    put the caret at the end of the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  -d, --compare            compare the two given files side by side\n  --sandbox                independent instance using no saved settings; changes are discarded\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"), _("Command Line Arguments")); break;
+            case kCmdCmdLineArguments:
+                // Preamble only - the file-argument forms the parser cannot describe. Everything after
+                // it is generated from the parser, so it stays correct and stays translatable per line.
+                themedInfo(_("Files:\n"
+                             "  file                     open in a tab\n"
+                             "  folder                   open as a workspace\n"
+                             "  file:line[:col]          open at a position\n"
+                             "  +N, +N,col               open the last file at line N (and column)\n"
+                             "  +/text                   put the caret on the first match of 'text'\n"
+                             "  -                        read piped input into a new untitled buffer\n\n")
+                           + g_cmdLineUsage,
+                           _("Command Line Arguments"));
+                break;
 
             case kCmdExecuteBase: onRun(); break;   // Run... (F5)
 
@@ -13999,7 +14018,7 @@ public:
         // single-orientation ceiling that makes -o and -O identical).
         parser.AddSwitch("o", "split", _("open the given file(s) in a split view"));
         parser.AddSwitch("O", wxString(), _("open the given file(s) in a split view"));   // alias for -o (one orientation, so identical)
-        parser.AddSwitch("d", "compare", _("compare the two given files side by side"));
+        parser.AddSwitch("d", "diff", _("compare the two given files side by side"));
         parser.AddSwitch("n", "new-instance", _("always open a new window"));
         parser.AddSwitch("r", "reuse-instance", _("reuse an already-running window"));
         parser.AddSwitch("w", "wait", _("wait for the file to be closed before returning"));
@@ -14022,6 +14041,7 @@ public:
         // `parser.Parse() != 0` line below already treats as "done, don't open a window".
         parser.AddSwitch("h", "help", _("show this help message"), wxCMD_LINE_OPTION_HELP);
         parser.AddParam(_("file-or-folder"), wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_MULTIPLE | wxCMD_LINE_PARAM_OPTIONAL);
+        g_cmdLineUsage = parser.GetUsageString();                // for Help > Command Line Arguments
         if (parser.Parse() != 0) return false;                   // --help/bad args: wx already showed usage
 
         if (parser.Found("v"))
@@ -14084,7 +14104,7 @@ public:
         if (parser.Found("e", &encArg)) req.forceEnc = encodingFromName(encArg);
         req.readOnly    = parser.Found("R") || parser.Found("M");   // -R / -M
         req.split       = parser.Found("o") || parser.Found("O");   // -o / -O / --split
-        req.compare     = parser.Found("d");                         // -d / --compare (needs exactly two files)
+        req.compare     = parser.Found("d");                         // -d / --diff (needs exactly two files)
         req.findPattern = plusFindPattern;                          // +/{pattern}
         // '-': read piped stdin now (a NO-OP off a console - see readPipedStdin). Only when it actually
         // captured a stream do we flag it; an empty pipe still opens an empty "(stdin)" buffer, matching
@@ -14105,7 +14125,7 @@ public:
         // --sandbox joins forceNew for the same reason --safe does, and additionally must never become
         // the reuse TARGET (see startIpcServer below): handing a normal launch into a sandbox window
         // would silently give it a session with none of the user's settings and no persistence.
-        // parser.Found("d") is in here because --compare is NOT serialized over the reuse-window IPC
+        // parser.Found("d") is in here because --diff is NOT serialized over the reuse-window IPC
         // payload below: handing the two files to a running window would open them as plain tabs and
         // silently skip the diff. Forcing our own window keeps -d meaning what it says.
         const bool forceNew = parser.Found("n") || wait || req.hasStdin || g_safeMode || g_sandboxMode || parser.Found("d");
@@ -14227,7 +14247,7 @@ public:
             // -R/-M read-only and +/{pattern} - all shared with the reuse-window path (openRequestFiles).
             const wxArrayString opened = frame->openRequestFiles(req);
             if (req.hasStdin) frame->openStdinBuffer(req.stdinText);       // '-': piped input into a new "(stdin)" buffer
-            // -d/--compare: both files are open as tabs by now; diff the first against the second.
+            // -d/--diff: both files are open as tabs by now; diff the first against the second.
             // Silently ignored with fewer than two paths - the usage line documents that it needs two.
             if (req.compare && req.paths.GetCount() >= 2)
                 frame->compareLaunchFiles(req.paths[0], req.paths[1]);

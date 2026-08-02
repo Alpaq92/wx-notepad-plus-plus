@@ -128,11 +128,11 @@ the core is original work under a permissive licence and does not link any Notep
 ## Can I diff two files?
 
 Yes — **Document ▸ Compare ▸ with File…** diffs the current document against another file, and
-**with Clipboard** against whatever you last copied. From the shell, `wxnote --compare A B` opens both
+**with Clipboard** against whatever you last copied. From the shell, `wxnote --diff A B` opens both
 and drops straight into the diff, which also makes it usable as a git difftool:
 
 ```bash
-git config --global difftool.wxnote.cmd 'wxnote --compare "$LOCAL" "$REMOTE"'
+git config --global difftool.wxnote.cmd 'wxnote --diff "$LOCAL" "$REMOTE"'
 ```
 
 ## Can I run it without touching my settings?
@@ -158,13 +158,15 @@ matching known malware.
 **The program itself is never flagged — only whichever download happens to have been scored.** We
 measured every Windows asset of one release through the same path a browser uses to save a download,
 and the block landed on the ARM64 installer and the x64 `.zip`, while the x64 installer and the ARM64
-`.zip` came through clean. Two archives with identical contents, one blocked. Defender's record names
+`.zip` came through clean - the same file list built for two architectures, one blocked, one not. Defender's record names
 the file as a single object, with nothing inside it named, and `wxnote.exe` and the plugin bridge DLL
 pass on their own.
 
 So the practical answer is **try the other download**: every release ships both an installer and a
 `.zip` of the same files, and the block rarely hits both. Which one is affected varies by release, so
-we cannot tell you in advance which to pick. The `.zip` costs you the Start Menu entry, nothing else.
+we cannot tell you in advance which to pick. What the `.zip` costs you is everything the installer does
+around the files: the Start Menu shortcut, the Add/Remove Programs entry and its uninstaller, and the
+optional "Add to PATH" step. The program itself is identical.
 
 You do not have to take our word for any of this:
 

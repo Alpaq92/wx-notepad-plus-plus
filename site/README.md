@@ -30,7 +30,10 @@ at deploy time - `script.js` calls the GitHub REST API directly from the visitor
 (`GET /repos/Alpaq92/wx-notepad-plus-plus/releases/latest` and `.../releases?per_page=6`) on every
 page load, so they're always current even between deploys. Download buttons are matched to release
 assets by filename suffix plus, on every platform that now ships more than one architecture, an arch
-substring (`arm64`/`aarch64`/`x86_64`/`riscv64`). `ASSET_MATCHERS` has 17 entries: Windows x64/ARM64/x86 installers and matching zips
+substring (`arm64`/`aarch64`/`x86_64`/`riscv64`). `ASSET_MATCHERS` has 17 entries: Windows x64/ARM64/x86 installers and matching zips. The Windows x86
+token is `-x86-`, with BOTH hyphens - a bare `x86` would also match the macOS `x86_64` assets - and the
+x64 entries are defined by the ABSENCE of every other arch token (`WIN_ARCH_TOKENS`), so renaming an x86
+asset without that token silently makes the x64 buttons hand it out
 (`.exe` +/- `arm64`), macOS Apple Silicon/Intel (`arm64...dmg`, `x86_64...dmg`), and Linux
 `.AppImage`/`.deb`/`.rpm`/`.flatpak` each in x64 and ARM64 (`aarch64`/`arm64`), plus a RISC-V `.deb`
 (`riscv64`) - if a packaging script's output naming ever changes (see `installer/*/build-*.sh` and

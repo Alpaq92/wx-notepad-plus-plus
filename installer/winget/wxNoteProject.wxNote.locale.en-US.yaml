@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 PackageIdentifier: wxNoteProject.wxNote
-PackageVersion: 0.14.2
+PackageVersion: 0.14.3
 PackageLocale: en-US
 Publisher: wxNote Project
 PublisherUrl: https://github.com/Alpaq92/wx-notepad-plus-plus
@@ -31,7 +31,7 @@ Tags:
 - text
 - text-editor
 - wxwidgets
-ReleaseNotesUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/tag/v0.14.2
+ReleaseNotesUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/tag/v0.14.3
 Documentations:
 - DocumentLabel: Documentation
   DocumentUrl: https://alpaq92.github.io/wx-notepad-plus-plus/

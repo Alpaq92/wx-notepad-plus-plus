@@ -39,8 +39,12 @@ being brand new — not by anything the program does.
 
 It never affects the editor itself — only whichever download happened to be scored. **If you hit
 this, take the other download**: every release ships both an installer and a `.zip` of exactly the same
-files, and the block rarely lands on both. The `.zip` costs you the Start Menu shortcut and the
-Add/Remove Programs entry; extract it wherever you like and run `wxnote.exe`.
+files, and the block rarely lands on both.
+
+The `.zip` is the same program, just the files on their own. What you give up is everything the
+installer does *around* them: the Start Menu shortcut, the Add/Remove Programs entry with a real
+uninstaller, and the optional "Add to PATH" step that lets you run `wxnote` from any shell. Extract it
+wherever you like and run `wxnote.exe`.
 
 The executable is named `wxnote` on every platform. Resources (themes, icons, fonts, translations,
 bundled plugins) live next to the executable rather than being split across system directories.

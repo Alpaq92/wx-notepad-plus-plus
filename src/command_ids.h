@@ -347,6 +347,9 @@ inline constexpr int kCmdLangJson         = 46057;
 inline constexpr int kCmdLangJson5        = 46085;
 inline constexpr int kCmdLangJsp          = 46055;
 inline constexpr int kCmdLangKix          = 46041;
+// 46095: the next free id in the built-in language block, which tops out at 46094 (46165+ is the
+// External range and 46180+ the user-defined one). These ids are frozen - append, never renumber.
+inline constexpr int kCmdLangKotlin       = 46095;
 inline constexpr int kCmdLangLatex        = 46073;
 inline constexpr int kCmdLangLisp         = 46031;
 inline constexpr int kCmdLangLua          = 46024;

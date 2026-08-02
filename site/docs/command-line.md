@@ -19,7 +19,7 @@ never mistaken for options.
 | `-n` | `--new-instance` | — | always open a new window |
 | `-r` | `--reuse-instance` | — | hand the files to an already-running window |
 | `-w` | `--wait` | — | do not return until the file is closed |
-| `-d` | `--compare` | — | open the two given files side by side and diff them |
+| `-d` | `--diff` | — | open the two given files side by side and diff them |
 | | `--safe` | — | start without loading any plugins |
 | | `--clean` | — | like `--safe`, and additionally skip session and recovery restore |
 | | `--sandbox` | — | an independent window that uses **none** of your saved settings, and discards every change it makes |
@@ -27,16 +27,16 @@ never mistaken for options.
 | `-v` | `--version` | — | print the version and exit |
 | `-h` | `--help` | — | show the usage message |
 
-### `--compare`
+### `--diff`
 
-`wxnote --compare A B` opens both files and puts A into the side-by-side diff against B — the same view
+`wxnote --diff A B` opens both files and puts A into the side-by-side diff against B — the same view
 as **Document ▸ Compare ▸ with File…**, without the dialog. It needs exactly two files; given fewer it
 just opens them normally.
 
 Handy as a git difftool:
 
 ```bash
-git config --global difftool.wxnote.cmd 'wxnote --compare "$LOCAL" "$REMOTE"'
+git config --global difftool.wxnote.cmd 'wxnote --diff "$LOCAL" "$REMOTE"'
 git difftool -t wxnote
 ```
 
@@ -90,7 +90,7 @@ wxnote --safe
 wxnote --sandbox
 
 # diff two files straight from the shell
-wxnote --compare old.conf new.conf
+wxnote --diff old.conf new.conf
 
 # force a separate window even when "Reuse an existing window" is on
 wxnote -n scratch.txt
