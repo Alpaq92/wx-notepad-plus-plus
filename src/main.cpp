@@ -164,6 +164,7 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 #include "app_icon_svg.h"
 #include "hash_algos.h"          // portable MD5/SHA-1/SHA-256/SHA-512 for the Tools > digest generators
 #include "diff_myers.h"          // Myers O(ND) diff engine + side-by-side plan for File Compare
+#include "comment_tokens.h"      // per-language comment tokens - what Ctrl+/ and Stream Comment insert
 #include "spell_engine.h"        // pluggable spell-check backend (OS-native: ISpellChecker / NSSpellChecker)
 
 // Set from the project() version by CMake (see CMakeLists.txt); fall back so a stray standalone
@@ -730,9 +731,15 @@ static sptr_t sciSend(wxStyledTextCtrl* s, UINT m, uptr_t w = 0, sptr_t l = 0)
 static bool g_smartActive = false;
 static wxStyledTextCtrl* g_smartSci = nullptr;
 
-// Auto-indent: on Enter, give the new line the previous line's indentation, plus one level after
-// an opening brace/paren/colon.
-static void autoIndentOnNewline(wxStyledTextCtrl* sci)
+// Auto-indent: on Enter, give the new line the previous line's indentation, plus one level after an
+// opening brace or paren - and after a colon ONLY in languages where a trailing ':' opens a block.
+//
+// That last flag is the whole point of the parameter. A colon used to add a level everywhere, which
+// is right for Python and YAML and wrong for most of what people actually type: every C++ `public:`
+// / `private:` label and every `case x:` pushed the following line a level out and it stayed there,
+// a ternary split across lines did the same, and in a plain-text file so did any line ending in
+// "Note:". The caller passes the active buffer's WxnCommentStyle::colonOpensBlock (comment_tokens.h).
+static void autoIndentOnNewline(wxStyledTextCtrl* sci, bool colonOpensBlock)
 {
     const int line = static_cast<int>(sciSend(sci, SCI_LINEFROMPOSITION, sciSend(sci, SCI_GETCURRENTPOS)));
     if (line <= 0) return;
@@ -741,7 +748,8 @@ static void autoIndentOnNewline(wxStyledTextCtrl* sci)
     int p = static_cast<int>(sciSend(sci, SCI_GETLINEENDPOSITION, prev));
     while (p > 0) { const char c = static_cast<char>(sciSend(sci, SCI_GETCHARAT, p - 1)); if (c == ' ' || c == '\t') { --p; continue; } break; }
     const char last = p > 0 ? static_cast<char>(sciSend(sci, SCI_GETCHARAT, p - 1)) : 0;
-    if (last == '{' || last == '(' || last == ':') { const int w = static_cast<int>(sciSend(sci, SCI_GETTABWIDTH)); indent += (w > 0 ? w : 4); }
+    const bool opens = (last == '{' || last == '(' || (last == ':' && colonOpensBlock));
+    if (opens) { const int w = static_cast<int>(sciSend(sci, SCI_GETTABWIDTH)); indent += (w > 0 ? w : 4); }
     sciSend(sci, SCI_SETLINEINDENTATION, line, indent);
     sciSend(sci, SCI_GOTOPOS, sciSend(sci, SCI_GETLINEINDENTPOSITION, line));
 }
@@ -4086,7 +4094,7 @@ private:
     void onStcCharAdded(wxStyledTextEvent& e, ViewPane* vp)
     {
         const int ch = e.GetKey();
-        if ((ch == '\n' || ch == '\r') && m_autoindent) autoIndentOnNewline(m_stc);
+        if ((ch == '\n' || ch == '\r') && m_autoindent) autoIndentOnNewline(m_stc, activeCommentStyle().colonOpensBlock);
         else
         {
             const bool paired = autoInsertPair(ch);            // insert matching )]}"' or skip over an existing one
@@ -9113,26 +9121,9 @@ private:
         const int tw = static_cast<int>(sci(SCI_GETTABWIDTH)); wxString sp(' ', tw <= 0 ? 4 : tw);
         wxString t = getAllText(); t.Replace("\t", sp); setAllText(t);
     }
-    void toggleLineComment()   // simple "//" toggle over the selected lines (C-like)
-    {
-        const int l1 = static_cast<int>(sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONSTART)));
-        const int l2 = static_cast<int>(sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONEND)));
-        sci(SCI_BEGINUNDOACTION);
-        for (int l = l1; l <= l2; ++l)
-        {
-            const int p  = static_cast<int>(sci(SCI_POSITIONFROMLINE, l));
-            const int ll = static_cast<int>(sci(SCI_LINELENGTH, l));
-            std::string b(static_cast<size_t>(ll) + 1, '\0');
-            sci(SCI_GETLINE, l, reinterpret_cast<sptr_t>(&b[0])); b.resize(ll);
-            const size_t nb = b.find_first_not_of(" \t\r\n");
-            if (nb == std::string::npos) continue;                       // blank line: skip
-            if (b.compare(nb, 2, "//") == 0)                             // already commented -> uncomment
-            { sci(SCI_SETTARGETSTART, p + static_cast<int>(nb)); sci(SCI_SETTARGETEND, p + static_cast<int>(nb) + 2); sci(SCI_REPLACETARGET, 0, reinterpret_cast<sptr_t>("")); }
-            else                                                         // comment (preserve indentation)
-            { sci(SCI_INSERTTEXT, p + static_cast<int>(nb), reinterpret_cast<sptr_t>("//")); }
-        }
-        sci(SCI_ENDUNDOACTION);
-    }
+    // Ctrl+/ - toggle the selected lines' comment state. The token comes from the buffer's LANGUAGE
+    // (see applyLineComments, with the other comment commands); it used to be a hardcoded "//".
+    void toggleLineComment() { applyLineComments(WxnCommentToggle); }
     void setEol(int mode) { sci(SCI_SETEOLMODE, mode); sci(SCI_CONVERTEOLS, mode); }
 
     // ----- line / blank / sort operations (Edit menu) ----------
@@ -10276,9 +10267,70 @@ private:
         else { sci(SCI_SETSELECTIONMODE, SC_SEL_STREAM); setStatus(0, _("Select finished")); }   // leave no lingering rectangle mode behind
     }
 
-    // ---- comments (C-like): single-line add/remove + stream /* */ ----
-    void setLineComment(bool add)
+    // ---- comments: the tokens come from the buffer's LANGUAGE, never hardcoded ------------------
+    // Every comment command used to write "//" (and "/* */" for the stream pair) into whatever
+    // buffer was in front. In a .py/.lua/.sql/.yaml/.ps1 file that is not a comment in any sense:
+    // the file was silently broken and nothing warned. src/comment_tokens.h holds the per-language
+    // table; these four functions are the only things that touch the buffer.
+
+    // Which language's comment tokens apply to the active buffer? The resolution order mirrors how
+    // the buffer got its lexer in the first place (setLexerForFile), so what you see highlighted is
+    // what you get commented:
+    //   1. a registered Scintillua language on this page (a nib.langdef pick or auto-detection).
+    //   2. an explicit Language-menu pick (langForced). A pick is the ANSWER, not a hint: forcing
+    //      Normal Text means "no comments here", so this branch never falls through to the
+    //      extension guess it was deliberately chosen to override.
+    //   3. the user's own functionList.conf `ext` mapping (the keys are the same vocabulary).
+    //   4. the built-in extension/filename table.
+    // nullptr = we don't know this buffer's language, which callers treat exactly like a language
+    // with no comment form: touch nothing, say so. That is the point - a wrong guess is what broke
+    // files before, and "I don't know" is a strictly better answer than "//".
+    const WxnCommentLang* activeCommentLang()
     {
+        auto* p = activePage();
+        if (!p) return nullptr;
+        // A Language-menu pick hands back wxnLangTable's display name ("Python"); a nib.langdef
+        // language hands back whatever the PLUGIN called itself, so try that spelling as a key too -
+        // one registering "python" or "Lua" then lands on the right row for free. A UDL with a name
+        // matching nothing here resolves to nullptr; see the header on why nib.langdef/1 cannot yet
+        // hand its own tokens over.
+        auto byLabel = [](const wxString& s) -> const WxnCommentLang* {
+            if (s.empty()) return nullptr;
+            if (const WxnCommentLang* l = wxnCommentLangForKey(wxnCommentLangKeyForName(std::string(s.utf8_str())))) return l;
+            return wxnCommentLangForKey(std::string(s.Lower().utf8_str()));
+        };
+        if (const WxnCommentLang* l = byLabel(p->sciLang)) return l;
+        if (p->langForced) return p->sciLang.empty() ? byLabel(p->forcedName) : nullptr;
+        const wxString full = wxFileName(p->path).GetFullName().Lower();
+        const std::string ext(wxnExtOfName(full).utf8_str());
+        if (auto u = g_flUserExtToLang.find(ext); u != g_flUserExtToLang.end())
+            if (const WxnCommentLang* l = wxnCommentLangForKey(u->second)) return l;
+        return wxnCommentLangForKey(wxnCommentLangKeyForFileName(std::string(full.utf8_str())));
+    }
+    WxnCommentStyle activeCommentStyle()
+    { const WxnCommentLang* l = activeCommentLang(); return l ? l->style : WxnCommentStyle{}; }
+    // What to call this buffer's language in a status message. The table's name for a known
+    // language, otherwise the label the status bar is already showing for the document.
+    wxString commentLangLabel(const WxnCommentLang* l)
+    {
+        if (l) return wxString::FromUTF8(l->name);
+        auto* p = activePage();
+        return (p && !p->lang.empty()) ? p->lang : _("Normal text file");
+    }
+
+    // Comment/uncomment whole lines. Every decision - where the token goes, whether the line is
+    // already commented, whether to skip it - is wxnPlanLineComment's (comment_tokens.h), so that it
+    // is testable without an editor; this loop only turns each plan into Scintilla calls.
+    void applyLineComments(WxnCommentMode mode)
+    {
+        const WxnCommentLang* lang = activeCommentLang();
+        const WxnCommentStyle cs   = lang ? lang->style : WxnCommentStyle{};
+        if (cs.empty())
+        {
+            setStatus(0, wxString::Format(_("%s has no comment syntax - nothing was changed"),
+                                          commentLangLabel(lang)));
+            return;
+        }
         const int l1 = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONSTART));
         const int l2 = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONEND));
         sci(SCI_BEGINUNDOACTION);
@@ -10286,23 +10338,61 @@ private:
         {
             const int p = (int)sci(SCI_POSITIONFROMLINE, l), ll = (int)sci(SCI_LINELENGTH, l);
             std::string b(static_cast<size_t>(ll) + 1, '\0'); sci(SCI_GETLINE, l, reinterpret_cast<sptr_t>(&b[0])); b.resize(ll);
-            const size_t nb = b.find_first_not_of(" \t\r\n"); if (nb == std::string::npos) continue;
-            const bool commented = b.compare(nb, 2, "//") == 0;
-            if (add && !commented) sci(SCI_INSERTTEXT, p + (int)nb, reinterpret_cast<sptr_t>("//"));
-            else if (!add && commented) { sci(SCI_SETTARGETSTART, p + (int)nb); sci(SCI_SETTARGETEND, p + (int)nb + 2); sci(SCI_REPLACETARGET, 0, reinterpret_cast<sptr_t>("")); }
+            while (!b.empty() && (b.back() == '\n' || b.back() == '\r')) b.pop_back();   // a closing token goes BEFORE the line break
+            const WxnLineCommentEdit e = wxnPlanLineComment(b, cs, mode);
+            if (!e.applies) continue;
+            if (e.commented)   // strip the tail first, so the head's offsets are still valid
+            {
+                if (e.tailLen)
+                { sci(SCI_SETTARGETSTART, p + (int)(e.end - e.tailLen)); sci(SCI_SETTARGETEND, p + (int)e.end); sci(SCI_REPLACETARGET, 0, reinterpret_cast<sptr_t>("")); }
+                sci(SCI_SETTARGETSTART, p + (int)e.at); sci(SCI_SETTARGETEND, p + (int)(e.at + e.headLen)); sci(SCI_REPLACETARGET, 0, reinterpret_cast<sptr_t>(""));
+            }
+            else               // insert AFTER the leading whitespace, so the indentation survives
+            {
+                if (!e.close.empty()) sci(SCI_INSERTTEXT, p + (int)e.end, reinterpret_cast<sptr_t>(e.close.c_str()));
+                sci(SCI_INSERTTEXT, p + (int)e.at, reinterpret_cast<sptr_t>(e.open.c_str()));
+            }
         }
         sci(SCI_ENDUNDOACTION);
     }
+    void setLineComment(bool add) { applyLineComments(add ? WxnCommentAdd : WxnCommentRemove); }
+
+    // Stream (block) comment around the selection. A language with no block form - Python, YAML,
+    // shell, Ruby - falls back to commenting each selected line, which is what the user asked for
+    // in the only spelling that language has; the status bar says which form was used so the
+    // substitution is never silent.
     void streamComment(bool add)
     {
+        const WxnCommentLang* lang = activeCommentLang();
+        const WxnCommentStyle cs   = lang ? lang->style : WxnCommentStyle{};
+        if (!cs.hasBlock())
+        {
+            if (!cs.hasLine())
+            {
+                setStatus(0, wxString::Format(_("%s has no comment syntax - nothing was changed"),
+                                              commentLangLabel(lang)));
+                return;
+            }
+            applyLineComments(add ? WxnCommentAdd : WxnCommentRemove);
+            setStatus(0, wxString::Format(_("%s has no block comment - used its line comment instead"),
+                                          commentLangLabel(lang)));
+            return;
+        }
+        const std::string open(cs.blockOpen), close(cs.blockClose);
         const int a = (int)sci(SCI_GETSELECTIONSTART), b = (int)sci(SCI_GETSELECTIONEND);
         sci(SCI_BEGINUNDOACTION);
-        if (add) { sci(SCI_INSERTTEXT, b, reinterpret_cast<sptr_t>("*/")); sci(SCI_INSERTTEXT, a, reinterpret_cast<sptr_t>("/*")); sci(SCI_SETSEL, a, b + 4); }
+        if (add)
+        {
+            sci(SCI_INSERTTEXT, b, reinterpret_cast<sptr_t>(close.c_str()));
+            sci(SCI_INSERTTEXT, a, reinterpret_cast<sptr_t>(open.c_str()));
+            sci(SCI_SETSEL, a, b + (int)(open.size() + close.size()));
+        }
         else
         {
             std::string s = getSelUtf8(); const size_t i = s.find_first_not_of(" \t\r\n"), j = s.find_last_not_of(" \t\r\n");
-            if (i != std::string::npos && j != std::string::npos && j > i + 1 && s.compare(i, 2, "/*") == 0 && s.compare(j - 1, 2, "*/") == 0)
-            { s.erase(j - 1, 2); s.erase(i, 2); sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(s.c_str())); }
+            if (i != std::string::npos && j != std::string::npos && j + 1 >= i + open.size() + close.size() &&
+                s.compare(i, open.size(), open) == 0 && s.compare(j + 1 - close.size(), close.size(), close) == 0)
+            { s.erase(j + 1 - close.size(), close.size()); s.erase(i, open.size()); sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(s.c_str())); }
         }
         sci(SCI_ENDUNDOACTION);
     }

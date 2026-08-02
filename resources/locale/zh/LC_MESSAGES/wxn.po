@@ -3231,3 +3231,9 @@ msgstr "（索引不完整）"
 
 msgid "message delivered to plugins at startup"
 msgstr "启动时传递给插件的消息"
+
+msgid "%s has no comment syntax - nothing was changed"
+msgstr "%s 没有注释语法 - 未做更改"
+
+msgid "%s has no block comment - used its line comment instead"
+msgstr "%s 没有块注释 - 已改用行注释"

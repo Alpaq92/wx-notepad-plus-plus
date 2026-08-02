@@ -3231,3 +3231,9 @@ msgstr " (частичный индекс)"
 
 msgid "message delivered to plugins at startup"
 msgstr "сообщение, передаваемое плагинам при запуске"
+
+msgid "%s has no comment syntax - nothing was changed"
+msgstr "%s не имеет синтаксиса комментариев - ничего не изменено"
+
+msgid "%s has no block comment - used its line comment instead"
+msgstr "%s не имеет блочного комментария - использован строчный комментарий"

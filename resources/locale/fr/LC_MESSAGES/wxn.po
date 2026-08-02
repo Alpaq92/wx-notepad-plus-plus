@@ -3231,3 +3231,9 @@ msgstr " (index partiel)"
 
 msgid "message delivered to plugins at startup"
 msgstr "message transmis aux modules d'extension au démarrage"
+
+msgid "%s has no comment syntax - nothing was changed"
+msgstr "%s n'a pas de syntaxe de commentaire - rien n'a été modifié"
+
+msgid "%s has no block comment - used its line comment instead"
+msgstr "%s n'a pas de commentaire de bloc - commentaire de ligne utilisé à la place"

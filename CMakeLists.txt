@@ -396,6 +396,24 @@ if(MSVC)
     target_compile_options(file_index_test PRIVATE /utf-8)
 endif()
 
+# ---- comment_tokens_test: the per-language comment table behind Ctrl+/ and Stream Comment ---------
+# Links NOTHING - src/comment_tokens.h is a standalone header over std::string, so the whole table
+# and both resolvers are testable without wx, Scintilla or an editor. It pins the comment token per
+# language by name, which is the regression that matters: the commands used to hardcode "//" and
+# corrupted every .py/.lua/.sql/.yaml/.ps1 buffer they touched.
+#   cmake --build build --target comment_tokens_test && build/bin/comment_tokens_test
+add_executable(comment_tokens_test tests/comment_tokens_test.cpp)
+set_target_properties(comment_tokens_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(comment_tokens_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_compile_definitions(comment_tokens_test PRIVATE
+    SRC_DIR="${CMAKE_SOURCE_DIR}/src")   # menu_data_language.h is read as DATA: every menu language must have tokens
+if(MSVC)
+    target_compile_options(comment_tokens_test PRIVATE /utf-8)
+endif()
+
 # ---- charset_selftest: round-trip test for the portable code-page path (wxCSConv name conversion) --
 # Links wx::base (wxCSConv). Exercises the iconv (Linux/macOS) / win32 (Windows) backends on the same
 # vectors so the ~50 Encoding > Character Set pages are validated per platform.
@@ -614,12 +632,13 @@ enable_testing()
 
 add_custom_target(selftests DEPENDS
     keymap_selftest diff_myers_test hash_test fuzzy_test file_index_test charset_selftest
-    hunspell_selftest funclist_selftest catalog_selftest bridge_selftest terminal_selftest)
+    hunspell_selftest funclist_selftest comment_tokens_test catalog_selftest bridge_selftest
+    terminal_selftest)
 
 # "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed. file_index_test
 # does call wxInitializer, but it links wx::base only, so it gets console traits and never opens a display.
 foreach(t diff_myers_test hash_test fuzzy_test file_index_test hunspell_selftest funclist_selftest
-          catalog_selftest)
+          comment_tokens_test catalog_selftest)
     add_test(NAME ${t} COMMAND ${t})
     set_tests_properties(${t} PROPERTIES LABELS pure)
 endforeach()

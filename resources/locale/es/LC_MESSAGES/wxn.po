@@ -3231,3 +3231,9 @@ msgstr " (índice parcial)"
 
 msgid "message delivered to plugins at startup"
 msgstr "mensaje entregado a los complementos al iniciar"
+
+msgid "%s has no comment syntax - nothing was changed"
+msgstr "%s no tiene sintaxis de comentario - no se cambió nada"
+
+msgid "%s has no block comment - used its line comment instead"
+msgstr "%s no tiene comentario de bloque - se usó su comentario de línea"

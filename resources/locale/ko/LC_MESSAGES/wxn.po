@@ -3231,3 +3231,9 @@ msgstr " (부분 인덱스)"
 
 msgid "message delivered to plugins at startup"
 msgstr "시작할 때 플러그인에 전달되는 메시지"
+
+msgid "%s has no comment syntax - nothing was changed"
+msgstr "%s에는 주석 구문이 없습니다 - 아무것도 변경되지 않았습니다"
+
+msgid "%s has no block comment - used its line comment instead"
+msgstr "%s에는 블록 주석이 없습니다 - 줄 주석을 사용했습니다"

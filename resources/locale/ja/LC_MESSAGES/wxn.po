@@ -3231,3 +3231,9 @@ msgstr "（インデックス不完全）"
 
 msgid "message delivered to plugins at startup"
 msgstr "起動時にプラグインへ渡されるメッセージ"
+
+msgid "%s has no comment syntax - nothing was changed"
+msgstr "%s にはコメント構文がありません - 変更しませんでした"
+
+msgid "%s has no block comment - used its line comment instead"
+msgstr "%s にはブロックコメントがありません - 行コメントを使用しました"
