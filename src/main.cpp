@@ -558,7 +558,7 @@ struct WxnOpenRequest
     bool readOnly = false;                            // -R/-M/--read-only: open THIS launch's files read-only
     bool split    = false;                            // -o/-O/--split: route THIS launch's files into the split view
     wxString findPattern;                             // +/{pattern}: put the caret on the first match in the last-opened file
-    bool compare  = false;                            // -d/--compare: diff the two given files side by side instead of just opening them
+    bool compare  = false;                            // -d/--diff: diff the two given files side by side instead of just opening them
     bool hasStdin = false;                            // '-': a piped-stdin buffer was captured (never travels over IPC - forces a new instance)
     wxString stdinText;                               // the captured stdin bytes (decoded UTF-8)
     wxString pluginMessage;                           // -pluginMessage=<text>, forwarded over the reuse-window IPC handoff too
@@ -3649,7 +3649,7 @@ public:
     // (or a +N token folded into gotoLine), -R/-M/--read-only and +/{pattern}. Returns the paths that
     // actually opened (feeds -w wait mode). Folders and piped stdin stay with the CALLER: they differ
     // between the new-window path (WxnApp::OnInit) and the reuse-window path (the g_ipcOpenRequest lambda).
-    // -d/--compare <a> <b>: run the side-by-side diff straight from the command line, skipping the
+    // -d/--diff <a> <b>: run the side-by-side diff straight from the command line, skipping the
     // "Compare current document with file..." dialog. The launch has already opened both files as tabs
     // (openRequestFiles), so this only has to make A the active document and feed B's decoded text to
     // the same compareWith() the menu commands use - no second read of A, and no duplicate tab.
@@ -3665,7 +3665,7 @@ public:
         compareWithPath(pathB);
     }
 
-    // Shared by the -d/--compare launch above and View > Compare > with File... below, so the two agree
+    // Shared by the -d/--diff launch above and View > Compare > with File... below, so the two agree
     // on the decode seed, the label and the missing-file behaviour rather than drifting apart.
     void compareWithPath(const wxString& path)
     {
@@ -14018,7 +14018,7 @@ public:
         // single-orientation ceiling that makes -o and -O identical).
         parser.AddSwitch("o", "split", _("open the given file(s) in a split view"));
         parser.AddSwitch("O", wxString(), _("open the given file(s) in a split view"));   // alias for -o (one orientation, so identical)
-        parser.AddSwitch("d", "compare", _("compare the two given files side by side"));
+        parser.AddSwitch("d", "diff", _("compare the two given files side by side"));
         parser.AddSwitch("n", "new-instance", _("always open a new window"));
         parser.AddSwitch("r", "reuse-instance", _("reuse an already-running window"));
         parser.AddSwitch("w", "wait", _("wait for the file to be closed before returning"));
@@ -14104,7 +14104,7 @@ public:
         if (parser.Found("e", &encArg)) req.forceEnc = encodingFromName(encArg);
         req.readOnly    = parser.Found("R") || parser.Found("M");   // -R / -M
         req.split       = parser.Found("o") || parser.Found("O");   // -o / -O / --split
-        req.compare     = parser.Found("d");                         // -d / --compare (needs exactly two files)
+        req.compare     = parser.Found("d");                         // -d / --diff (needs exactly two files)
         req.findPattern = plusFindPattern;                          // +/{pattern}
         // '-': read piped stdin now (a NO-OP off a console - see readPipedStdin). Only when it actually
         // captured a stream do we flag it; an empty pipe still opens an empty "(stdin)" buffer, matching
@@ -14125,7 +14125,7 @@ public:
         // --sandbox joins forceNew for the same reason --safe does, and additionally must never become
         // the reuse TARGET (see startIpcServer below): handing a normal launch into a sandbox window
         // would silently give it a session with none of the user's settings and no persistence.
-        // parser.Found("d") is in here because --compare is NOT serialized over the reuse-window IPC
+        // parser.Found("d") is in here because --diff is NOT serialized over the reuse-window IPC
         // payload below: handing the two files to a running window would open them as plain tabs and
         // silently skip the diff. Forcing our own window keeps -d meaning what it says.
         const bool forceNew = parser.Found("n") || wait || req.hasStdin || g_safeMode || g_sandboxMode || parser.Found("d");
@@ -14247,7 +14247,7 @@ public:
             // -R/-M read-only and +/{pattern} - all shared with the reuse-window path (openRequestFiles).
             const wxArrayString opened = frame->openRequestFiles(req);
             if (req.hasStdin) frame->openStdinBuffer(req.stdinText);       // '-': piped input into a new "(stdin)" buffer
-            // -d/--compare: both files are open as tabs by now; diff the first against the second.
+            // -d/--diff: both files are open as tabs by now; diff the first against the second.
             // Silently ignored with fewer than two paths - the usage line documents that it needs two.
             if (req.compare && req.paths.GetCount() >= 2)
                 frame->compareLaunchFiles(req.paths[0], req.paths[1]);

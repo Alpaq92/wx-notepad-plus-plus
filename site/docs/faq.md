@@ -128,11 +128,11 @@ the core is original work under a permissive licence and does not link any Notep
 ## Can I diff two files?
 
 Yes — **Document ▸ Compare ▸ with File…** diffs the current document against another file, and
-**with Clipboard** against whatever you last copied. From the shell, `wxnote --compare A B` opens both
+**with Clipboard** against whatever you last copied. From the shell, `wxnote --diff A B` opens both
 and drops straight into the diff, which also makes it usable as a git difftool:
 
 ```bash
-git config --global difftool.wxnote.cmd 'wxnote --compare "$LOCAL" "$REMOTE"'
+git config --global difftool.wxnote.cmd 'wxnote --diff "$LOCAL" "$REMOTE"'
 ```
 
 ## Can I run it without touching my settings?

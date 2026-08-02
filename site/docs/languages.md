@@ -8,7 +8,7 @@ wxNote highlights code through **two** engines that coexist:
 
 ## Built-in languages
 
-**Document&nbsp;&rsaquo; Language** lists **88 built-in languages**, bucketed into single-letter
+**Document&nbsp;&rsaquo; Language** lists **89 built-in languages**, bucketed into single-letter
 submenus (A, B, C, …) so the list stays navigable. Each entry maps to the Lexilla lexer that highlights
 it, and that lexer name doubles as the key used by the theme system for per-token colours.
 

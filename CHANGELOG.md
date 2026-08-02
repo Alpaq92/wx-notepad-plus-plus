@@ -15,7 +15,7 @@ All notable changes to wxNote are documented here. Format loosely follows
   built-in defaults, is always its own instance, and is marked **[Sandbox]** in the title bar. For
   reproducing a bug from a clean slate, trying a theme without committing to it, or demonstrating the
   editor on someone else's machine.
-- **`-d` / `--compare`** — `wxnote --compare A B` opens both files and drops straight into the
+- **`-d` / `--diff`** — `wxnote --diff A B` opens both files and drops straight into the
   side-by-side diff, which also makes wxNote usable as a git difftool.
 - **"Add to PATH"**, an optional installer component (on by default), so `wxnote` works from any shell.
   Removed again on uninstall, and only if the installer was the one that added it.

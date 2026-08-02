@@ -67,6 +67,11 @@ inline const WxnLang* wxnLangTable(size_t& n)
         { kCmdLangJson5,        "JSON5",                "json"         },
         { kCmdLangJsp,          "JSP",                  "hypertext"    },
         { kCmdLangKix,          "KIXtart",              "kix"          },
+        // Kotlin already had everything BUT this row: keywords, autocomplete, function-list rules,
+        // .kt/.kts detection and the raw-string-aware comment mask. Without the row it could only ever
+        // be reached by opening a file with the right extension - never chosen for a buffer that has
+        // the wrong one, and never shown as the active language. Lexer "cpp", same as Swift/TypeScript.
+        { kCmdLangKotlin,       "Kotlin",               "cpp"          },
         { kCmdLangLatex,        "LaTeX",                "latex"        },
         { kCmdLangLisp,         "LISP",                 "lisp"         },
         { kCmdLangLua,          "Lua",                  "lua"          },
