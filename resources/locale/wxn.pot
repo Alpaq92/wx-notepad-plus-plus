@@ -3233,3 +3233,9 @@ msgstr ""
 
 msgid "message delivered to plugins at startup"
 msgstr ""
+
+msgid "%s has no comment syntax - nothing was changed"
+msgstr ""
+
+msgid "%s has no block comment - used its line comment instead"
+msgstr ""

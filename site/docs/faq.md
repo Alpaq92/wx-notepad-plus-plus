@@ -95,6 +95,21 @@ Legacy `userDefineLang.xml` files are handled by the optional `udl-compat` plugi
 them into Scintillua lexers. If that plugin is not installed, those files do not load. See
 [Languages &amp; Syntax](languages.md).
 
+## Ctrl+/ says the language has no comment syntax
+
+The comment commands use the characters the buffer's language actually uses, so they will not insert
+anything into a language they cannot identify — inserting the wrong thing is what silently broke files
+before. Two cases produce that message:
+
+- **A format with no comment syntax at all** — JSON, patch files, Intel HEX, S-Record. There is nothing
+  correct to insert, so the buffer is left alone.
+- **A language the editor cannot place** — a file with an unknown extension, or a language registered at
+  runtime by a plugin (including a `userDefineLang.xml` translated by `udl-compat`). The `nib.langdef`
+  interface has no way to hand a plugin language's comment characters to the host yet.
+
+Picking the closest match from **Document&nbsp;&rsaquo; Language** fixes both: the pick decides what gets
+commented, not just what gets highlighted. See [Languages &amp; Syntax](languages.md#comments).
+
 ## Does it lose my work if it crashes?
 
 Unsaved edits are backed up to a recovery directory, and the recovery pass runs on **every** launch —

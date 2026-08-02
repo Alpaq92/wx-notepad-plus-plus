@@ -24,6 +24,46 @@ menu **forces** that lexer on the active buffer for the rest of the session.
 Set the language new documents start in with
 **Preferences&nbsp;&rsaquo; New Document&nbsp;&rsaquo; Default language**.
 
+## Comments
+
+**Edit&nbsp;&rsaquo; Comment/Uncomment** and <kbd>Ctrl</kbd>+<kbd>/</kbd> insert the comment characters
+**of the buffer's language**, not a fixed `//`:
+
+| Comment | Languages |
+| --- | --- |
+| `#` | Python · Ruby · Perl · Raku · YAML · TOML · shell · PowerShell · Makefile · CMake · Dockerfile · R · Nix · Julia · Tcl · Elixir · GDScript · Nim · CoffeeScript · MySQL · gettext PO · Properties |
+| `--` | SQL · MS SQL · Lua · Haskell · Ada · VHDL · Eiffel · ASN.1 |
+| `//` | C · C++ · C# · Java · JavaScript · TypeScript · Go · Rust · Swift · Kotlin · Dart · Zig · Objective-C · PHP · D · Verilog · Scala · Groovy · JSON5 · SCSS · LESS · AsciiDoc · Stata |
+| `'` | Visual Basic · VBScript · ASP · FreeBasic |
+| `;` | LISP · Scheme · Assembly · INI · Registry · NSIS · Inno Setup · AutoIt · PureBasic · BlitzBasic · Csound · Rebol |
+| `%` | TeX · LaTeX · MetaPost · Erlang · MATLAB · Octave · BibTeX · PostScript · MMIXAL · txt2tags · Visual Prolog |
+| `<!-- -->` | HTML · XML · Markdown |
+
+…and the rest of the 112 built-in languages, each with its own — COBOL's `*>`, Clarion's `!`, BaanC's
+`|`, Batch's `rem`, Forth's `\`.
+
+Which language applies follows the same rule the highlighting does: a **Document&nbsp;&rsaquo; Language**
+pick decides it, otherwise the file's extension or name does. So forcing a language from the menu also
+changes what gets commented.
+
+A few points worth knowing:
+
+- **Plain CSS has no line comment.** `//` is not valid CSS, so <kbd>Ctrl</kbd>+<kbd>/</kbd> wraps the
+  line in `/* */` instead. SCSS and LESS *do* have `//` and use it. HTML, XML and Markdown work the
+  same way, wrapping each line in `<!-- -->`.
+- **Formats with no comment syntax at all** — JSON, patch files, Intel HEX, S-Record — are left
+  untouched, and the status bar says so rather than inserting something that would break the file.
+  The same happens when the language is simply unknown.
+- **Block Comment** in a language that has no block form (Python, YAML, shell, Ruby) uses that
+  language's line comment across the selection and reports the substitution in the status bar.
+- **Uncommenting** removes the token and one following space, so `# x` and `#x` both round-trip
+  cleanly, and indentation is preserved either way — the token always goes after the leading
+  whitespace.
+
+Languages registered at runtime by a plugin (see below) are not in this table: the `nib.langdef`
+interface has no way to hand their comment characters to the host yet, so those buffers report that
+their comment syntax is unknown instead of guessing.
+
 ## Code folding
 
 Folding is available for languages whose lexer reports fold levels. The commands live under **View**:

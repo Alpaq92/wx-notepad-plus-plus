@@ -3231,3 +3231,9 @@ msgstr " (Index unvollständig)"
 
 msgid "message delivered to plugins at startup"
 msgstr "Nachricht, die beim Start an die Plugins übergeben wird"
+
+msgid "%s has no comment syntax - nothing was changed"
+msgstr "%s hat keine Kommentarsyntax - nichts wurde geändert"
+
+msgid "%s has no block comment - used its line comment instead"
+msgstr "%s hat keinen Blockkommentar - stattdessen Zeilenkommentar verwendet"

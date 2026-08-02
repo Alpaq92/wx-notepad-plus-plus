@@ -56,6 +56,9 @@ the Shortcut Mapper.
 | Function Completion | <kbd>Ctrl</kbd>+<kbd>Space</kbd> |
 | Column Editor… | <kbd>Alt</kbd>+<kbd>C</kbd> |
 
+Both comment keys insert **the active language's** comment characters — `#` in Python, `--` in SQL,
+`;` in an INI file, `<!-- -->` in HTML. See [Languages ▸ Comments](languages.md#comments).
+
 ## Search and navigation
 
 | Action | Shortcut |

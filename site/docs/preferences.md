@@ -98,7 +98,7 @@ reachable percentages to move with it.
 | --- | --- |
 | Tab size | 1–16 |
 | Replace by space | insert spaces instead of tab characters |
-| Auto-indent new lines | |
+| Auto-indent new lines | on by default. A new line inherits the previous line's indentation, plus one level after an opening `{` or `(` — and after a trailing `:` only in languages where a colon opens a block (Python, YAML, GDScript, Nim, CoffeeScript). In every other language a trailing colon is just punctuation, so a C++ `public:` label or a `case` label no longer pushes the next line out |
 
 ## Auto-Completion
 

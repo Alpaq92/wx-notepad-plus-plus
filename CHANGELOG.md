@@ -3,6 +3,28 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.1] - 2026-08-03
+
+### Fixed
+- **Comment/Uncomment no longer breaks non-C files.** `Ctrl+/`, Comment/Uncomment and Stream Comment
+  hardcoded `//` and `/* */` for every buffer, so commenting a line in a Python, Lua, SQL, YAML,
+  PowerShell or shell file inserted something that is not a comment in that language at all — the
+  file was quietly broken and nothing said so. The tokens now come from the buffer's language:
+  `#` for Python, Ruby, Perl, YAML, TOML, shell, Makefile, CMake, Dockerfile, R and Nix, `--` for
+  SQL, Lua, Haskell, Ada and VHDL, `//` for the C family, `'` for Visual Basic, `;` for Lisp,
+  assembly and INI, `%` for TeX and Erlang, `<!-- -->` for HTML, XML and Markdown, and so on for all
+  112 built-in languages. Which language applies follows the same rule the syntax highlighting does,
+  so a Language-menu pick decides it. The handful of formats with no comment syntax at all — JSON,
+  patch files, Intel HEX — now leave the buffer untouched and say so in the status bar instead of
+  inserting something wrong; the same goes for a file whose language is unknown. Stream Comment in a
+  language with no block form (Python, YAML, shell) uses that language's line comment and says so
+  rather than doing nothing.
+- **Auto-indent no longer treats every colon as the start of a block.** A line ending in `:` added an
+  indent level in every language, so in C++ each `public:` or `private:` label pushed the next line
+  out and left it there, a ternary split across lines did the same, and in plain text so did any line
+  ending in `Note:`. A trailing colon now only indents in languages where it opens a block — Python,
+  YAML, GDScript, Nim and CoffeeScript.
+
 ## [0.15.0] - 2026-08-02
 
 ### Added
