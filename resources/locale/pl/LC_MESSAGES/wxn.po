@@ -3177,3 +3177,45 @@ msgstr "niezależna instancja bez zapisanych ustawień; zmiany są odrzucane"
 
 msgid " [Sandbox]"
 msgstr " [Piaskownica]"
+msgid "Command &Palette..."
+msgstr "&Paleta poleceń..."
+
+msgid "&Quick Open..."
+msgstr "&Szybkie otwieranie..."
+
+msgid "Command Palette"
+msgstr "Paleta poleceń"
+
+msgid "Quick Open"
+msgstr "Szybkie otwieranie"
+
+msgid "Type a command name"
+msgstr "Wpisz nazwę polecenia"
+
+msgid "Type a file name, or @ for symbols in this file"
+msgstr "Wpisz nazwę pliku lub @, aby wyszukać symbole w tym pliku"
+
+msgid "%zu of %zu"
+msgstr "%zu z %zu"
+
+msgid "open"
+msgstr "otwarty"
+
+msgid "recent"
+msgstr "ostatni"
+
+msgid "line %d"
+msgstr "wiersz %d"
+
+msgid " (indexing…)"
+msgstr " (indeksowanie…)"
+
+msgid "No commands available"
+msgstr "Brak dostępnych poleceń"
+
+msgid "Cannot open: %s"
+msgstr "Nie można otworzyć: %s"
+
+msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
+msgstr "Szybkie otwieranie nie ma jeszcze czego pokazać.\n\nOtwórz folder jako obszar roboczy (Plik ▸ Otwórz folder jako obszar roboczy), aby go zindeksować."
+

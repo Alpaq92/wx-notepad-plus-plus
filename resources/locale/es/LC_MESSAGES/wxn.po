@@ -3177,3 +3177,45 @@ msgstr "ventana independiente sin usar la configuración guardada; los cambios s
 
 msgid " [Sandbox]"
 msgstr " [Espacio aislado]"
+msgid "Command &Palette..."
+msgstr "&Paleta de comandos..."
+
+msgid "&Quick Open..."
+msgstr "Apertura &rápida..."
+
+msgid "Command Palette"
+msgstr "Paleta de comandos"
+
+msgid "Quick Open"
+msgstr "Apertura rápida"
+
+msgid "Type a command name"
+msgstr "Escriba el nombre de un comando"
+
+msgid "Type a file name, or @ for symbols in this file"
+msgstr "Escriba un nombre de archivo, o @ para los símbolos de este archivo"
+
+msgid "%zu of %zu"
+msgstr "%zu de %zu"
+
+msgid "open"
+msgstr "abierto"
+
+msgid "recent"
+msgstr "reciente"
+
+msgid "line %d"
+msgstr "línea %d"
+
+msgid " (indexing…)"
+msgstr " (indexando…)"
+
+msgid "No commands available"
+msgstr "No hay comandos disponibles"
+
+msgid "Cannot open: %s"
+msgstr "No se puede abrir: %s"
+
+msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
+msgstr "La apertura rápida todavía no tiene nada que mostrar.\n\nAbra una carpeta como espacio de trabajo (Archivo ▸ Abrir carpeta como espacio de trabajo) para indexarla."
+

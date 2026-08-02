@@ -131,6 +131,8 @@ toggles and a live match count. <kbd>Enter</kbd> jumps to the next match, <kbd>E
 - **Find (Volatile) Next / Previous**
 - **Search Results Window** (<kbd>F7</kbd>) · **Next / Previous Search Result** (<kbd>F4</kbd> /
   <kbd>Shift</kbd>+<kbd>F4</kbd>)
+- **Command Palette…** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) · **Quick Open…**
+  (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>) — see [Quick Open &amp; Command Palette](quick-open.md)
 - **Go to…** (<kbd>Ctrl</kbd>+<kbd>G</kbd>) · **Go to Matching Brace** (<kbd>Ctrl</kbd>+<kbd>B</kbd>) ·
   **Select All In-between {} [] or ()** · **Find characters in range…**
 

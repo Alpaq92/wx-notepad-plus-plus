@@ -100,6 +100,8 @@ not check the root tag name.
 ## Next steps
 
 - [The Interface](interface.md) — panels, split view, status bar.
+- [Quick Open &amp; Command Palette](quick-open.md) — jump to any file or run any command from the
+  keyboard.
 - [Keyboard Shortcuts](shortcuts.md) — the full accelerator list.
 - [Customizing Shortcuts](custom-shortcuts.md) — remap keys, switch keymap schemes, import
   Notepad++ shortcuts.

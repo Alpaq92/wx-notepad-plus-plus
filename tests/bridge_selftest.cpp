@@ -418,6 +418,201 @@ private:
         // bundle) and this suite would still have been all-green. Rasterize what the toolbar actually
         // holds and demand the glyph's pixels survived.
         {
+            // ---- Command Palette: the HARVEST, against the real live menu bar ----------------------
+            // The dialog is ordinary wx; what needs proving is that walking the live bar yields clean,
+            // dispatchable rows - the part that degrades silently (duplicate ids, separators leaking
+            // in, the Language menu's A/B/C buckets becoming fake path segments).
+            if (auto* pf = wxDynamicCast(wxTheApp->GetTopWindow(), wxFrame))
+            {
+                wxMenuBar* mb = pf->GetMenuBar();
+                check(mb != nullptr, "palette: live menu bar located");
+                if (mb)
+                {
+                    const std::vector<FilterRow> rows = wxnHarvestCommands(mb, nullptr);
+                    check(rows.size() > 200, "palette: harvest yields the real command set (>200 rows)");
+
+                    bool blankPrimary = false, dupe = false, bucketPath = false, badId = false;
+                    std::unordered_set<int> ids;
+                    for (const FilterRow& r : rows)
+                    {
+                        if (r.primary.empty()) blankPrimary = true;
+                        if (r.userId <= 0)     badId = true;
+                        if (!ids.insert(r.userId).second) dupe = true;
+                        // A one-character path segment means a Language A/B/C bucket leaked through.
+                        //
+                        // 0x203A, NOT '›'. In single quotes that is a narrow-char literal holding three
+                        // UTF-8 bytes - a multicharacter literal, value implementation-defined (~0xE280BA)
+                        // - so it could never equal the real U+203A the harvester emits, and this whole
+                        // assertion passed vacuously whatever wxnHarvestMenu did.
+                        const wxUniChar kSep(0x203A);
+                        wxString seg;
+                        for (size_t k = 0; k <= r.secondary.length(); ++k)
+                        {
+                            const wxUniChar c = (k < r.secondary.length()) ? r.secondary[k] : kSep;
+                            if (c == kSep)
+                            { if (seg.Strip(wxString::both).length() == 1) bucketPath = true; seg.clear(); }
+                            else seg += c;
+                        }
+                    }
+                    check(!blankPrimary, "palette: no row has an empty label");
+                    check(!badId,        "palette: every row carries a positive command id");
+                    check(!dupe,         "palette: every row has a unique command id");
+                    check(!bucketPath,   "palette: single-letter Language buckets are flattened out of the path");
+
+                    bool sawSelf = false;
+                    for (const FilterRow& r : rows) if (r.userId == myID_COMMAND_PALETTE) sawSelf = true;
+                    check(sawSelf, "palette: its own menu entry is harvested (so it is discoverable)");
+
+                    // End-to-end: typing "palette" must rank the Command Palette command first.
+                    {
+                        const std::vector<char32_t> raw = fuzzy::decodeUtf8("palette");
+                        std::vector<char32_t> fold(raw.size());
+                        for (size_t i = 0; i < raw.size(); ++i) fold[i] = fuzzy::foldAscii(raw[i]);
+                        int bestScore = -1, bestId = 0;
+                        for (const FilterRow& r : rows)
+                        {
+                            const fuzzy::Result res = fuzzy::score(fold, raw, false, r.prep);
+                            if (res.ok && res.score > bestScore) { bestScore = res.score; bestId = r.userId; }
+                        }
+                        check(bestId == myID_COMMAND_PALETTE,
+                              "palette: filtering on 'palette' ranks the Command Palette first");
+                    }
+                }
+            }
+
+            // ---- Quick Open: the shared dialog's '@' alternate-set switch ---------------------------
+            // The switch is per-keystroke and mid-query, which is exactly the kind of state that breaks
+            // quietly: pick from the alternate set, and chosenRow() must still return an ALTERNATE row
+            // after the modal has closed, not the file at the same index.
+            {
+                std::vector<FilterRow> files, syms;
+                for (const char* n : { "alpha.cpp", "beta.cpp", "gamma.h" })
+                { FilterRow r; r.primary = n; r.userId = 100 + (int)files.size();
+                  prepareFilterRow(r, true); files.push_back(r); }
+                for (const char* n : { "parseThing", "renderThing" })
+                { FilterRow r; r.primary = n; r.userId = 7 + (int)syms.size();
+                  prepareFilterRow(r, false); syms.push_back(r); }
+
+                FilterListDialog qd(nullptr, "qo", "", files, /*dark=*/false);
+                // The provider must not run until '@' is typed - Quick Open's real one runs the
+                // whole-buffer symbol scan, so an eager call would tax every invocation.
+                int providerCalls = 0;
+                qd.setAltRows('@', [&] { ++providerCalls; return syms; });
+                check(providerCalls == 0, "quickopen: the '@' provider is NOT called up front");
+                check(qd.rows().size() == 3, "quickopen: the primary set is the file list");
+                check(qd.visibleCount() == 3, "quickopen: an empty query shows everything");
+                check(!qd.chosenIsAlt(), "quickopen: starts in the file set, not the symbol set");
+
+                qd.setQuery("beta");
+                check(qd.visibleCount() == 1 && qd.visibleId(0) == 101,
+                      "quickopen: typing narrows the list to the matching file");
+
+                qd.setQuery("zzz");
+                check(qd.visibleCount() == 0, "quickopen: a non-matching query yields nothing");
+
+                // The '@' switch: same control, different set, and the prefix itself is not part of the
+                // needle - "@render" must match the SYMBOL, and must not be searched among filenames.
+                qd.setQuery("@");
+                check(providerCalls == 1, "quickopen: typing '@' materializes the symbol set, once");
+                check(qd.visibleCount() == 2, "quickopen: '@' alone lists every symbol in the file");
+                check(qd.visibleId(0) == 7 || qd.visibleId(0) == 8, "quickopen: '@' lists symbol ids, not file ids");
+                qd.setQuery("@render");
+                check(qd.visibleCount() == 1 && qd.visibleId(0) == 8,
+                      "quickopen: '@' + a needle matches the symbol, with the prefix stripped");
+
+                qd.setQuery("beta");
+                check(qd.visibleCount() == 1 && qd.visibleId(0) == 101,
+                      "quickopen: deleting the '@' switches back to the file set");
+                qd.setQuery("@parse");
+                check(providerCalls == 1, "quickopen: re-entering '@' reuses the cached symbol set");
+                // NO Destroy() here: qd has automatic storage. wxTopLevelWindowBase::Destroy would queue
+                // it on wxPendingDelete, and the idle loop would then `delete` a stack address after the
+                // enclosing scope had already run its destructor. RAII is the whole lifetime here, and
+                // it is what the two production call sites rely on too.
+            }
+
+            // ---- ranking on the row shape prepareFilterRow ACTUALLY builds ---------------------------
+            // tests/fuzzy_test.cpp pins "the file name beats the directory" by feeding whole paths
+            // ("src/main.cpp") straight to matchOne. prepareFilterRow never produces that shape - it
+            // concatenates primary THEN secondary ("main.cpp src"), which moves the last path separator
+            // into the deepest directory name. The promise has to be re-checked on the real layout,
+            // because it was inverted here while every fuzzy_test assertion still passed.
+            {
+                auto row = [](const char* name, const char* dir) {
+                    FilterRow r; r.primary = name; r.secondary = dir;
+                    prepareFilterRow(r, /*pathMode=*/true); return r;
+                };
+                auto scoreOn = [](const FilterRow& r, const char* needle) {
+                    const std::vector<char32_t> raw = fuzzy::decodeUtf8(needle);
+                    std::vector<char32_t> fold(raw.size());
+                    for (size_t i = 0; i < raw.size(); ++i) fold[i] = fuzzy::foldAscii(raw[i]);
+                    const fuzzy::Result res = fuzzy::score(fold, raw, fuzzy::smartCaseWanted(raw), r.prep);
+                    return res.ok ? res.score : -1;
+                };
+
+                const FilterRow inName = row("util.cpp",   "C:\\ws\\src\\parser");
+                const FilterRow inDir  = row("parser.cpp", "C:\\ws\\src\\util");
+                check(scoreOn(inName, "util") > scoreOn(inDir, "util"),
+                      "ranking: a hit in the FILE NAME outranks the same word in a directory");
+
+                const FilterRow shallow = row("main.cpp", "src");
+                const FilterRow deep    = row("other.cpp", "main/a/b");
+                check(scoreOn(shallow, "main") > scoreOn(deep, "main"),
+                      "ranking: the file name still wins when the directory match is a whole segment");
+
+                // The command palette uses the same layout, primary = command, secondary = menu path.
+                FilterRow cmd; cmd.primary = "Save All"; cmd.secondary = "File";
+                prepareFilterRow(cmd, /*pathMode=*/false);
+                FilterRow path; path.primary = "Print"; path.secondary = "Save All Documents";
+                prepareFilterRow(path, /*pathMode=*/false);
+                check(scoreOn(cmd, "saveall") > scoreOn(path, "saveall"),
+                      "ranking: a command NAME outranks the same words in its menu path");
+            }
+
+            // ---- the highlight run-splitter that drawRow paints with ---------------------------------
+            // Batching characters into runs is what keeps a row to a couple of DrawText calls instead of
+            // one per character. It is pure index arithmetic over two sequences and nothing else would
+            // catch an off-by-one here, because a wrong run still paints - just the wrong letters bold.
+            {
+                auto shape = [](size_t n, const std::vector<int>& hit) {
+                    std::string s;
+                    for (const HlRun& r : wxnHighlightRuns(n, hit))
+                    {
+                        for (size_t i = r.begin; i < r.end; ++i) s += r.match ? '#' : '.';
+                        s += '|';
+                    }
+                    return s;
+                };
+                check(shape(5, {}) == ".....|",        "runs: no hits is ONE plain run");
+                check(shape(5, {0,1,2,3,4}) == "#####|", "runs: all hits is ONE match run");
+                check(shape(5, {0}) == "#|....|",      "runs: a hit at the start");
+                check(shape(5, {4}) == "....|#|",      "runs: a hit at the end");
+                check(shape(5, {2}) == "..|#|..|",     "runs: a hit in the middle splits three ways");
+                check(shape(6, {1,2,4}) == ".|##|.|#|.|", "runs: adjacent hits merge, separated ones do not");
+                check(shape(0, {}) == "",              "runs: empty text yields no runs");
+                // Hits past the end of the drawn text: the match positions index the whole
+                // "primary secondary" haystack, so anything at or beyond n belongs to the secondary.
+                check(shape(3, {0,5,7}) == "#|..|",    "runs: hits beyond the primary are ignored");
+                // Every run must be non-empty and they must exactly tile [0,n) in order.
+                {
+                    const std::vector<HlRun> rr = wxnHighlightRuns(7, {1,2,5});
+                    bool tiles = !rr.empty() && rr.front().begin == 0 && rr.back().end == 7;
+                    for (size_t i = 0; i < rr.size(); ++i)
+                    {
+                        if (rr[i].begin >= rr[i].end) tiles = false;
+                        if (i && rr[i].begin != rr[i-1].end) tiles = false;
+                    }
+                    check(tiles, "runs: the runs exactly tile the text, with no gaps or empty runs");
+                }
+            }
+
+            // The crawler's prune list must not exclude this very repository's source directory - a
+            // regression there would make Quick Open silently useless on the project it ships with.
+            check(!wxnPruneDir("src") && !wxnPruneDir("tests") && !wxnPruneDir("installer"),
+                  "quickopen: the prune list does not swallow this repo's own source directories");
+            check(wxnPruneDir("build") && wxnPruneDir(".git"),
+                  "quickopen: the prune list does cover the big generated trees");
+
             // findToolBarIn recurses; the old inline scan looked only at the frame's direct children, which
             // is why this check and the three image checks below failed on macos-arm64 alone (there the bar
             // is a grandchild, parented to a wxPanel on purpose - see findToolBarIn's comment).

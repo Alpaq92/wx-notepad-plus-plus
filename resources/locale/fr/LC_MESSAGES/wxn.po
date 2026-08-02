@@ -3177,3 +3177,45 @@ msgstr "fenêtre indépendante sans paramètres enregistrés ; les modifications
 
 msgid " [Sandbox]"
 msgstr " [Bac à sable]"
+msgid "Command &Palette..."
+msgstr "&Palette de commandes..."
+
+msgid "&Quick Open..."
+msgstr "Ouverture &rapide..."
+
+msgid "Command Palette"
+msgstr "Palette de commandes"
+
+msgid "Quick Open"
+msgstr "Ouverture rapide"
+
+msgid "Type a command name"
+msgstr "Saisissez un nom de commande"
+
+msgid "Type a file name, or @ for symbols in this file"
+msgstr "Saisissez un nom de fichier, ou @ pour les symboles de ce fichier"
+
+msgid "%zu of %zu"
+msgstr "%zu sur %zu"
+
+msgid "open"
+msgstr "ouvert"
+
+msgid "recent"
+msgstr "récent"
+
+msgid "line %d"
+msgstr "ligne %d"
+
+msgid " (indexing…)"
+msgstr " (indexation…)"
+
+msgid "No commands available"
+msgstr "Aucune commande disponible"
+
+msgid "Cannot open: %s"
+msgstr "Impossible d'ouvrir : %s"
+
+msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
+msgstr "L'ouverture rapide n'a encore rien à afficher.\n\nOuvrez un dossier comme espace de travail (Fichier ▸ Ouvrir un dossier comme espace de travail) pour l'indexer."
+

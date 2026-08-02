@@ -157,14 +157,9 @@ private:
     }
     // Localized DISPLAY of one stored raw accel ("Ctrl+Alt+S" tokens) - ToString() is locale-aware; a chord
     // or unparsable string shows verbatim; empty shows empty.
-    static wxString accelDisplayRaw(const wxString& raw)
-    {
-        if (raw.empty()) return wxString();
-        if (keySpell::isChord(raw)) return raw;
-        wxAcceleratorEntry e;
-        if (e.FromString(raw)) { const wxString s = e.ToString(); if (!s.empty()) return s; }
-        return raw;
-    }
+    // Hoisted into keySpell so the Command Palette shows the same spelling this dialog does; the name
+    // stays so accelDisplay() and refillGrid() are untouched.
+    static wxString accelDisplayRaw(const wxString& raw) { return keySpell::displayAccel(raw); }
     // Localized DISPLAY of a menu command's effective accels. Multiple accels join with ", ".
     static wxString accelDisplay(const EffectiveBinding& b)
     {

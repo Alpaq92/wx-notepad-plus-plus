@@ -2,6 +2,7 @@
 - [Getting Started](getting-started.md)
 - [The Interface](interface.md)
 - [Menu Reference](menus.md)
+- [Quick Open &amp; Command Palette](quick-open.md)
 - [Keyboard Shortcuts](shortcuts.md)
 - [Customizing Shortcuts](custom-shortcuts.md)
 - [Preferences](preferences.md)

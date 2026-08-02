@@ -3177,3 +3177,45 @@ msgstr "保存された設定を使わない独立したインスタンス（変
 
 msgid " [Sandbox]"
 msgstr " [サンドボックス]"
+msgid "Command &Palette..."
+msgstr "コマンド パレット(&P)..."
+
+msgid "&Quick Open..."
+msgstr "クイック オープン(&Q)..."
+
+msgid "Command Palette"
+msgstr "コマンド パレット"
+
+msgid "Quick Open"
+msgstr "クイック オープン"
+
+msgid "Type a command name"
+msgstr "コマンド名を入力"
+
+msgid "Type a file name, or @ for symbols in this file"
+msgstr "ファイル名を入力、または @ でこのファイル内のシンボルを検索"
+
+msgid "%zu of %zu"
+msgstr "%zu / %zu"
+
+msgid "open"
+msgstr "開いています"
+
+msgid "recent"
+msgstr "最近"
+
+msgid "line %d"
+msgstr "%d 行目"
+
+msgid " (indexing…)"
+msgstr "（インデックス作成中…）"
+
+msgid "No commands available"
+msgstr "利用できるコマンドがありません"
+
+msgid "Cannot open: %s"
+msgstr "開けません: %s"
+
+msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
+msgstr "クイック オープンに表示できるものがまだありません。\n\nフォルダーをワークスペースとして開くと（ファイル ▸ フォルダーをワークスペースとして開く）、インデックスが作成されます。"
+

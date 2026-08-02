@@ -350,6 +350,31 @@ inline constexpr int kCmdLangKix          = 46041;
 // 46095: the next free id in the built-in language block, which tops out at 46094 (46165+ is the
 // External range and 46180+ the user-defined one). These ids are frozen - append, never renumber.
 inline constexpr int kCmdLangKotlin       = 46095;
+// Tier 1/2 languages whose Lexilla lexer was already vendored but unreachable: 132 lexer
+// modules ship, the menu wired up 74. Ids continue the frozen built-in block (46096..46118).
+inline constexpr int kCmdLangAbl          = 46096;   // ABL (OpenEdge)
+inline constexpr int kCmdLangAsciidoc     = 46097;   // AsciiDoc
+inline constexpr int kCmdLangBibtex       = 46098;   // BibTeX
+inline constexpr int kCmdLangCil          = 46099;   // CIL
+inline constexpr int kCmdLangClarion      = 46100;   // Clarion
+inline constexpr int kCmdLangDart         = 46101;   // Dart
+inline constexpr int kCmdLangDataflex     = 46102;   // DataFlex
+inline constexpr int kCmdLangDockerfile   = 46103;   // Dockerfile
+inline constexpr int kCmdLangEiffel       = 46104;   // Eiffel
+inline constexpr int kCmdLangFsharp       = 46105;   // F#
+inline constexpr int kCmdLangGettextpo    = 46106;   // gettext PO
+inline constexpr int kCmdLangJulia        = 46107;   // Julia
+inline constexpr int kCmdLangMarkdown     = 46108;   // Markdown
+inline constexpr int kCmdLangMaxima       = 46109;   // Maxima
+inline constexpr int kCmdLangMetapost     = 46110;   // MetaPost
+inline constexpr int kCmdLangModula       = 46111;   // Modula-3
+inline constexpr int kCmdLangMysql        = 46112;   // MySQL
+inline constexpr int kCmdLangNix          = 46113;   // Nix
+inline constexpr int kCmdLangOctave       = 46114;   // Octave
+inline constexpr int kCmdLangPovray       = 46115;   // POV-Ray
+inline constexpr int kCmdLangStata        = 46116;   // Stata
+inline constexpr int kCmdLangVbscript     = 46117;   // VBScript
+inline constexpr int kCmdLangZig          = 46118;   // Zig
 inline constexpr int kCmdLangLatex        = 46073;
 inline constexpr int kCmdLangLisp         = 46031;
 inline constexpr int kCmdLangLua          = 46024;

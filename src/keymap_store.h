@@ -59,6 +59,19 @@ namespace keySpell
     // express these, so the store partitions them out for the CHAR_HOOK layer. None exist in
     // the Phase 1 defaults.
     inline bool isChord(const wxString& s) { return s.Find(' ') != wxNOT_FOUND; }
+
+    // Localized DISPLAY spelling of one raw accel - for the Shortcut Mapper and the Command Palette,
+    // which would otherwise each grow their own copy. ToString() is locale-aware and DISPLAY-ONLY; the
+    // persisted spelling stays ToRawString() (see canonical() above), or a UI-language switch would
+    // silently rewrite the user's keymap into a spelling the next locale cannot reparse.
+    inline wxString displayAccel(const wxString& raw)
+    {
+        if (raw.empty()) return wxString();
+        if (isChord(raw)) return raw;      // wxAcceleratorEntry cannot express a chord
+        wxAcceleratorEntry e;
+        if (e.FromString(raw)) { const wxString s = e.ToString(); if (!s.empty()) return s; }
+        return raw;
+    }
 }
 
 // ----- public model -----------------------------------------------------------------------

@@ -3,6 +3,28 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.0] - 2026-08-02
+
+### Added
+- **Quick Open (`Ctrl+Shift+O`)** — start typing a file name and press Enter. It searches everything
+  already open, everything recently opened, and every file in the current workspace, ranked by a fuzzy
+  match: `fmh` finds `fuzzy_match.h`, and a match on the file name outranks the same letters buried in
+  a directory. Typing **`@`** switches the same list to the symbols in the current file, so
+  `@parse` jumps straight to `parseFuncList`. If text is selected when you open it, that text is
+  already typed in.
+- **Command Palette (`Ctrl+Shift+P`)** — fuzzy-find any command in the app and run it, with its
+  keyboard shortcut shown alongside. It reads the live menu bar, so it covers everything: translated
+  labels, your own remapped shortcuts, the language list, saved macros and plugin commands. Commands
+  that are currently unavailable are listed greyed out rather than hidden, so you can see they exist.
+- **23 more languages** for syntax highlighting — ABL (OpenEdge), AsciiDoc, BibTeX, CIL, Clarion,
+  Dart, DataFlex, Dockerfile, Eiffel, F#, gettext PO, Julia, Markdown, Maxima, MetaPost, Modula-3,
+  MySQL, Nix, Octave, POV-Ray, Stata, VBScript and Zig. That brings the built-in list to 112.
+
+### Changed
+- The workspace file list used by Quick Open is built in the background in short slices, and skips the
+  trees nobody searches — `.git`, `node_modules`, `build`, `target`, `__pycache__` and the like — so
+  opening a large project does not stall the editor.
+
 ## [0.14.3] - 2026-08-02
 
 ### Added

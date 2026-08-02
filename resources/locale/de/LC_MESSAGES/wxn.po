@@ -3177,3 +3177,45 @@ msgstr "unabhängige Instanz ohne gespeicherte Einstellungen; Änderungen werden
 
 msgid " [Sandbox]"
 msgstr " [Sandbox]"
+msgid "Command &Palette..."
+msgstr "Befehls&palette..."
+
+msgid "&Quick Open..."
+msgstr "&Schnell öffnen..."
+
+msgid "Command Palette"
+msgstr "Befehlspalette"
+
+msgid "Quick Open"
+msgstr "Schnell öffnen"
+
+msgid "Type a command name"
+msgstr "Befehlsnamen eingeben"
+
+msgid "Type a file name, or @ for symbols in this file"
+msgstr "Dateinamen eingeben, oder @ für Symbole in dieser Datei"
+
+msgid "%zu of %zu"
+msgstr "%zu von %zu"
+
+msgid "open"
+msgstr "geöffnet"
+
+msgid "recent"
+msgstr "zuletzt"
+
+msgid "line %d"
+msgstr "Zeile %d"
+
+msgid " (indexing…)"
+msgstr " (wird indiziert…)"
+
+msgid "No commands available"
+msgstr "Keine Befehle verfügbar"
+
+msgid "Cannot open: %s"
+msgstr "Kann nicht geöffnet werden: %s"
+
+msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
+msgstr "Schnell öffnen hat noch nichts anzuzeigen.\n\nÖffnen Sie einen Ordner als Arbeitsbereich (Datei ▸ Ordner als Arbeitsbereich öffnen), um ihn zu indizieren."
+
