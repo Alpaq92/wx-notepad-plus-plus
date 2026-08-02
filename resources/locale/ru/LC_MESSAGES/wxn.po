@@ -2403,8 +2403,8 @@ msgstr "&Расширенный (\\n, \\r, \\t, \\0, \\x...)"
 msgid "Re&gular expression"
 msgstr "Регулярное &выражение"
 
-msgid "\"%s\" cannot be written with your current permissions.\n\nRelaunch wxnote elevated to save this file?"
-msgstr "Не удаётся записать файл \"%s\" с текущими правами доступа.\n\nПерезапустить wxnote с повышенными правами, чтобы сохранить этот файл?"
+msgid "\"%s\" cannot be written with your current permissions.\n\nAsk Windows for permission to save this file?"
+msgstr "Не удаётся записать файл \"%s\" с текущими правами доступа.\n\nЗапросить у Windows разрешение на сохранение этого файла?"
 
 msgid "Access Denied"
 msgstr "Доступ запрещён"
@@ -2412,8 +2412,8 @@ msgstr "Доступ запрещён"
 msgid "Reuse an existing window"
 msgstr "Использовать уже открытое окно"
 
-msgid "Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"
-msgstr "Использование: wxnote [параметры] [файлы...]\n\nФайлы:\n  file                     открыть во вкладке\n  folder                   открыть как рабочую область\n  file:line[:col]          открыть в позиции\n  +N, +N,col               открыть последний файл на строке N (и столбце)\n  +/text                   поставить курсор на первое совпадение 'text'\n  -                        прочитать ввод из канала в новый безымянный буфер\n\nПараметры:\n  -g, --goto <line[,col]>  перейти к этой строке (и столбцу) в последнем открытом файле\n  -e, --encoding <name>    принудительная кодировка: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      открыть указанные файлы только для чтения\n  -o, -O, --split          открыть указанные файлы в разделённом виде\n  -n, --new-instance       всегда открывать новое окно\n  -r, --reuse-instance     использовать уже запущенное окно\n  -w, --wait               дождаться закрытия файла перед возвратом\n  --safe                   запуск без загрузки плагинов\n  --clean                  как --safe, плюс пропустить восстановление сессии и копий\n  --locale <lang>          язык интерфейса для этого запуска (напр. pl, de, ja)\n  -v, --version            показать версию и выйти\n  -h, --help               показать эту справку"
+msgid "Files:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\n"
+msgstr "Файлы:\n  file                     открыть во вкладке\n  folder                   открыть как рабочую область\n  file:line[:col]          открыть в позиции\n  +N, +N,col               открыть последний файл на строке N (и столбце)\n  +/text                   поставить курсор на первое совпадение 'text'\n  -                        прочитать ввод из канала в новый безымянный буфер\n\n"
 
 msgid "open at line[,col]"
 msgstr "перейти к строке[,столбцу]"
@@ -3162,12 +3162,8 @@ msgstr "или любая строка длиннее (символов):"
 msgid "%s  (%d steps)"
 msgstr "%s  (шагов: %d)"
 
-msgid "Delete the macro \"%s\"?
-
-Its keyboard shortcut is removed too."
-msgstr "Удалить макрос \"%s\"?
-
-Его сочетание клавиш также будет удалено."
+msgid "Delete the macro \"%s\"?\n\nIts keyboard shortcut is removed too."
+msgstr "Удалить макрос \"%s\"?\n\nЕго сочетание клавиш также будет удалено."
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr "или любая строка длиннее (символов, 0 = никогда):"
@@ -3177,6 +3173,7 @@ msgstr "независимый экземпляр без сохранённых 
 
 msgid " [Sandbox]"
 msgstr " [Песочница]"
+
 msgid "Command &Palette..."
 msgstr "&Палитра команд..."
 
@@ -3219,3 +3216,18 @@ msgstr "Не удалось открыть: %s"
 msgid "Quick Open has nothing to list yet.\n\nOpen a folder as a workspace (File ▸ Open Folder as Workspace) to index it."
 msgstr "Быстрому открытию пока нечего показать.\n\nОткройте папку как рабочую область (Файл ▸ Открыть папку как рабочую область), чтобы проиндексировать её."
 
+
+msgid "Compare: file not found"
+msgstr "Сравнение: файл не найден"
+
+msgid "put the caret at the end of the last file opened"
+msgstr "поставить курсор в конец последнего открытого файла"
+
+msgid "compare the two given files side by side"
+msgstr "сравнить два указанных файла рядом"
+
+msgid " (partial index)"
+msgstr " (частичный индекс)"
+
+msgid "message delivered to plugins at startup"
+msgstr "сообщение, передаваемое плагинам при запуске"
