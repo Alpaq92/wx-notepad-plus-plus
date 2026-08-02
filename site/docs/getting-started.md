@@ -8,9 +8,16 @@ buttons on the [wxNote home page](../), which read the latest release live from 
 
 | Platform | Package |
 | --- | --- |
-| Windows | NSIS installer (`.exe`) — x64 and ARM64, plus a plain `.zip` of the same files |
+| Windows | NSIS installer (`.exe`) — x64, ARM64 and 32-bit x86, each with a matching `.zip` of the same files |
 | macOS | Disk image (`.dmg`) — Apple Silicon (`arm64`) and Intel (`x86_64`) |
 | Linux | `.AppImage`, `.deb`, `.rpm` and `.flatpak` — x64 and ARM64, plus a RISC-V `.deb` |
+
+On Windows, take **x64** unless you know otherwise — it is the right answer for essentially every
+machine sold in the last fifteen years, and it runs on ARM64 Windows too, under emulation. Take
+**ARM64** on a Windows-on-ARM laptop (Snapdragon X, older SQ-series Surface) for a native, faster,
+cooler-running build. Take **x86** only if you are on a genuinely 32-bit Windows, where nothing else
+will run; note that a 32-bit process is limited to a few GB of memory, which matters for very large
+files.
 
 ### Verifying your download
 
@@ -30,15 +37,10 @@ and an antivirus may report a generic machine-learning detection such as `Wacata
 freshly-published release. This is a false positive caused by the missing signature and by the file
 being brand new — not by anything the program does.
 
-It only ever affects the **installer stub**, never the editor: `wxnote.exe` and the `.zip` that
-contains it have been measured clean in the same download where the installer was quarantined. **If
-you hit this, download the `.zip` instead** — identical files, no installer stub, and you can look
-inside before running anything. The trade-off is no Start Menu shortcut and no Add/Remove Programs
-entry; extract it wherever you like and run `wxnote.exe`.
-
-[docs/ANTIVIRUS.md](https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/docs/ANTIVIRUS.md)
-documents every privileged and network-touching thing wxNote does, and what it deliberately does not,
-so the claim can be checked rather than taken on faith.
+It never affects the editor itself — only whichever download happened to be scored. **If you hit
+this, take the other download**: every release ships both an installer and a `.zip` of exactly the same
+files, and the block rarely lands on both. The `.zip` costs you the Start Menu shortcut and the
+Add/Remove Programs entry; extract it wherever you like and run `wxnote.exe`.
 
 The executable is named `wxnote` on every platform. Resources (themes, icons, fonts, translations,
 bundled plugins) live next to the executable rather than being split across system directories.

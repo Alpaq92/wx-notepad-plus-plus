@@ -113,7 +113,7 @@
             <div class="contact-info">
               <p class="contact-title">Platforms</p>
 
-              <address>Windows · Linux · macOS (x64 + ARM)</address>
+              <address>Windows · Linux · macOS (x64 + ARM + x86)</address>
             </div>
 
           </li>
@@ -368,8 +368,8 @@
 
             <li class="highlights-item">
               <div class="content-card highlight-card">
-                <p class="highlight-number">12</p>
-                <p class="highlight-label">Packages per release - every format, both CPU architectures</p>
+                <p class="highlight-number">17</p>
+                <p class="highlight-label">Packages per release - every format, every CPU architecture</p>
               </div>
             </li>
 
@@ -874,17 +874,22 @@
                   </button>
 
                   <ul class="platform-download-menu" data-dropdown-menu>
-                    <li><a data-download="windows" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Installer — x64</a></li>
-                    <li><a data-download="windows-arm64" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Installer — ARM64</a></li>
-                    <li><a data-download="windows-zip" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">ZIP (no installer) — x64</a></li>
-                    <li><a data-download="windows-zip-arm64" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">ZIP (no installer) — ARM64</a></li>
+                    <li><span class="menu-group-label">x64 · 64-bit</span></li>
+                    <li><a data-download="windows" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Installer</a></li>
+                    <li><a data-download="windows-zip" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">ZIP (portable)</a></li>
+                    <li><span class="menu-group-label">ARM · ARM64</span></li>
+                    <li><a data-download="windows-arm64" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Installer</a></li>
+                    <li><a data-download="windows-zip-arm64" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">ZIP (portable)</a></li>
+                    <li><span class="menu-group-label">x86 · 32-bit</span></li>
+                    <li><a data-download="windows-x86" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">Installer</a></li>
+                    <li><a data-download="windows-zip-x86" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">ZIP (portable)</a></li>
                   </ul>
 
                 </div>
 
                 <p class="platform-note">
-                  Antivirus blocking the installer? It's a false positive, and the ZIP is unaffected —
-                  <a href="https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/docs/ANTIVIRUS.md" target="_blank" rel="noopener">here's what's actually happening</a>.
+                  Antivirus blocking one of these? It's a false positive — try the other format, or
+                  <a href="./docs/" target="_blank" rel="noopener">see the FAQ</a>.
                 </p>
 
               </div>

@@ -80,12 +80,16 @@ wxWidgets was the natural toolkit for that rewrite:
 The whole point of the project is reaching the users Notepad++ (and its
 single-platform derivatives) couldn't — so wxNote puts deliberate, ongoing
 effort into being installable by as many people as possible, in whatever
-form their system expects. That's why one release carries **thirteen
+form their system expects. That's why one release carries **seventeen
 packages**:
 
-- **Windows** — an NSIS installer, built separately for **x64** and
-  **ARM64** (Windows-on-ARM laptops get a native binary, not x64
-  emulation).
+- **Windows** — an NSIS installer, built separately for **x64**, **ARM64**
+  and **32-bit x86**, each also available as a plain `.zip` of the same
+  files. Windows-on-ARM laptops get a native binary rather than x64
+  emulation; the 32-bit build exists for hardware that cannot run anything
+  else, since Windows 11 has no 32-bit edition and 32-bit Windows 10 is
+  end-of-life — precisely the machines whose users have the fewest
+  remaining options.
 - **Linux** — no single format reaches all of Linux, so every release ships
   **four**: an **AppImage** (runs anywhere, no install), a **.deb**
   (Debian/Ubuntu/Mint), an **.rpm** (Fedora/openSUSE), and a **.flatpak**

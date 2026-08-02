@@ -48,6 +48,8 @@
 #include <wx/combobox.h>
 #include <wx/radiobox.h>
 #include <wx/config.h>
+#include <wx/fileconf.h>       // wxFileConfig - --sandbox builds one over an empty stream (no backing file)
+#include <wx/sstream.h>        // wxStringInputStream - the empty stream that config is constructed from
 #include <wx/filehistory.h>     // wxFileHistory - Recent Files (MRU)
 #include <wx/xml/xml.h>         // wxXmlDocument - load theme XML
 #include <wx/datetime.h>        // wxDateTime - insert date/time
@@ -556,6 +558,7 @@ struct WxnOpenRequest
     bool readOnly = false;                            // -R/-M/--read-only: open THIS launch's files read-only
     bool split    = false;                            // -o/-O/--split: route THIS launch's files into the split view
     wxString findPattern;                             // +/{pattern}: put the caret on the first match in the last-opened file
+    bool compare  = false;                            // -d/--compare: diff the two given files side by side instead of just opening them
     bool hasStdin = false;                            // '-': a piped-stdin buffer was captured (never travels over IPC - forces a new instance)
     wxString stdinText;                               // the captured stdin bytes (decoded UTF-8)
     wxString pluginMessage;                           // -pluginMessage=<text>, forwarded over the reuse-window IPC handoff too
@@ -579,6 +582,16 @@ static bool          g_safeMode = false;
 // restore. Distinct from --safe (which only skips plugins); for bug-repro / catalog-screenshot QA that must
 // start from a blank slate. --clean implies --safe, so g_safeMode is also set when this is (see OnInit).
 static bool          g_cleanMode = false;
+// ---- --sandbox: a throwaway instance that neither reads nor writes ANY of the user's state ----------
+// Stronger than --clean, and orthogonal to --safe. --clean still runs against the real settings store,
+// so anything it changes (and every preference it writes back on exit) lands in the user's config;
+// --sandbox swaps the global wxConfig for an in-memory one, so reads return built-in defaults and
+// writes go nowhere. It also refuses to take part in window reuse in EITHER direction and writes no
+// crash-recovery backups, so nothing it does can reach a normal window or survive the process.
+// Set from a raw-argv pre-scan (see OnInit) rather than the parser, because the very first
+// wxConfigBase::Get() happens earlier than that - readUiLang() during locale setup - and the swap has
+// to be in place before it. Plugins still load: this isolates state, not code (combine with --safe).
+static bool          g_sandboxMode = false;
 // ---- --locale <lang>: UI language for THIS RUN only -----------------------------------------------
 // Deliberately NOT written back to the "UILanguage" config key: Preferences > Localization and the
 // Localization radio menu must keep reflecting the user's persisted choice, so that a one-shot
@@ -3526,6 +3539,9 @@ public:
         Bind(wxEVT_TIMER, &WxnShellFrameT::onBackupTimer, this, myID_BACKUPTIMER);   // periodic crash-safety snapshot
         m_backupTimer = new wxTimer(this, myID_BACKUPTIMER);
         m_backupTimer->Start(30000);                                  // every 30s: back up any buffer with unsaved edits
+        // No --sandbox gate here: userDataDir() already points at a throwaway temp dir in that mode, so
+        // backups stay isolated. Gating the timer would also have been incomplete - the exit-path backup
+        // in confirmClose() is a separate writer and would have leaked anyway.
 #ifdef WXN_HAS_BORDERLESS
         // Focus-scoped accelerators (see refreshAccelerators / onChildFocus). Only the borderless frame
         // owns a wxAcceleratorTable, so only it needs the gate: when focus moves into the terminal panel
@@ -3602,6 +3618,36 @@ public:
     // (or a +N token folded into gotoLine), -R/-M/--read-only and +/{pattern}. Returns the paths that
     // actually opened (feeds -w wait mode). Folders and piped stdin stay with the CALLER: they differ
     // between the new-window path (WxnApp::OnInit) and the reuse-window path (the g_ipcOpenRequest lambda).
+    // -d/--compare <a> <b>: run the side-by-side diff straight from the command line, skipping the
+    // "Compare current document with file..." dialog. The launch has already opened both files as tabs
+    // (openRequestFiles), so this only has to make A the active document and feed B's decoded text to
+    // the same compareWith() the menu commands use - no second read of A, and no duplicate tab.
+    void compareLaunchFiles(const wxString& pathA, const wxString& pathB)
+    {
+        if (EditorPage* a = pageForPath(pathA)) activatePage(a);
+        compareWithPath(pathB);
+    }
+
+    // Shared by the -d/--compare launch above and View > Compare > with File... below, so the two agree
+    // on the decode seed, the label and the missing-file behaviour rather than drifting apart.
+    void compareWithPath(const wxString& path)
+    {
+        if (!wxFileName::FileExists(path)) { setStatus(0, _("Compare: file not found")); return; }
+        int enc = ENC_UTF8;
+        const std::string b = decodeToUtf8(readRawBytes(path), enc);
+        compareWith(b, wxFileNameFromPath(path));
+    }
+
+    // The one place that answers "which open tab is this path?", so the normalising comparison
+    // (wxFileName::SameAs - case-insensitivity and separators on Windows) is defined once.
+    EditorPage* pageForPath(const wxString& path)
+    {
+        if (path.empty()) return nullptr;
+        for (EditorPage* p : allPages())
+            if (!p->path.empty() && wxFileName(p->path).SameAs(path)) return p;
+        return nullptr;
+    }
+
     wxArrayString openRequestFiles(const WxnOpenRequest& req)
     {
         wxArrayString opened;
@@ -6340,7 +6386,24 @@ private:
     // (/opt/wxnote on Linux, Program Files on Windows, inside the .app bundle on macOS). This is the
     // same identity wxConfig persists settings/theme under. Kept a pure path getter (it's called on
     // hot paths like every right-click); callers that WRITE create it first (Mkdir with FULL).
-    wxString userDataDir() { return wxStandardPaths::Get().GetUserDataDir(); }
+    // --sandbox redirects here rather than at each writer. Everything user-writable funnels through
+    // this one function - recovery backups, shortcuts.json, macros.dat, registered Scintillua lexers,
+    // contextMenu.xml, downloaded dictionaries - and so does g_nibUserDataDir, which hands the path to
+    // every plugin. Sealing the seam covers all of them, including plugin writes that no per-call-site
+    // guard could reach. Without this, quitting a sandbox with unsaved text left an orphaned .bak in
+    // the REAL recovery dir: the file was written, while its manifest entry went to the discarded
+    // in-memory config, so nothing would ever clean it up.
+    wxString userDataDir()
+    {
+        if (!g_sandboxMode) return wxStandardPaths::Get().GetUserDataDir();
+        static const wxString sandboxDir = [] {
+            const wxString d = wxFileName::GetTempDir() + wxFILE_SEP_PATH +
+                               wxString::Format("wxNote-sandbox-%lu", (unsigned long)wxGetProcessId());
+            wxFileName::Mkdir(d, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+            return d;
+        }();
+        return sandboxDir;
+    }
 
     // ----- unsaved-changes recovery (Preferences > General "Ask before closing unsaved changes", off
     // by default) - when a modified document is discarded WITHOUT prompting, its content is backed up
@@ -6586,7 +6649,16 @@ private:
         if (e.CanVeto())   // a forced close (e.g. the theme-restart) skips prompts and just exits
             for (EditorPage* p : allPages())   // prompt EVERY modified doc across BOTH views - none lost on exit
                 if (!confirmClose(p, /*exiting=*/true)) { nibFireDocEvent(NIB_EV_SHUTDOWN_CANCEL, nullptr); e.Veto(); return; }   // -> NPPN_CANCELSHUTDOWN
-        saveSettings();    // persist any in-session View-menu toggle changes
+        // Geometry ONLY - deliberately not saveSettings(). Every preference the user can actually change
+        // is written the moment it changes (the Preferences dialog's OK handler, the spell-dictionary and
+        // spell-scope commands, the search-engine picker and the theme editor all call saveSettings()
+        // themselves), so there is nothing left here to flush. Writing the full block from memory instead
+        // meant a window that had changed NOTHING still stamped its startup snapshot over the whole
+        // preference tree on exit - so with two windows open (which is the default: a second launch opens
+        // a new window unless "Reuse an existing window" is on), whichever closed last silently reverted
+        // everything the other had just configured. Reproduced by changing a key underneath a running
+        // instance and closing it: the value was reset to the one that instance had loaded at startup.
+        saveWindowGeometry();
         if (!g_waitMode)   // a --wait window is ephemeral (a commit message is not a session): without this every
                            // `git commit` would overwrite the user's saved tabs with .git/COMMIT_EDITMSG and the
                            // next normal launch would reopen it
@@ -6662,7 +6734,10 @@ private:
 #ifdef __WXMAC__
         (void)docPart; SetTitle(wxString());   // keep the native bar blank (titleVisibility is also hidden, see ctor)
 #else
-        const wxString t = docPart + " - wxNote";
+        // --sandbox is deliberately visible in the title bar. A window that silently ignores your settings
+        // and throws away every change is indistinguishable from a broken one otherwise - and "it opened in
+        // some weird mode that forgot my settings" is exactly the confusion this marker exists to prevent.
+        const wxString t = docPart + " - wxNote" + (g_sandboxMode ? _(" [Sandbox]") : wxString());
         if (GetTitle() != t) SetTitle(t);
 #endif
     }
@@ -9054,9 +9129,7 @@ private:
         wxFileDialog dlg(this, _("Compare current document with file"), wxEmptyString, wxEmptyString,
                           _("All files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
         if (dlg.ShowModal() != wxID_OK) return;
-        int enc = ENC_UTF8;
-        const std::string b = decodeToUtf8(readRawBytes(dlg.GetPath()), enc);
-        compareWith(b, wxFileNameFromPath(dlg.GetPath()));
+        compareWithPath(dlg.GetPath());
     }
 
     void compareWithClipboard()
@@ -10880,10 +10953,21 @@ private:
 
     // ----- view toggles --------------------------------------------------
     void setToggleUi(int id, bool on) { if (menuBar()) menuBar()->Check(id, on); if (toolBar()) toolBar()->ToggleTool(id, on); }   // keep menu + toolbar checks in step
-    void syncToggle(int id, bool& flag) { flag = !flag; setToggleUi(id, flag); }
-    void toggleWrap()  { syncToggle(kCmdViewWrap, m_wrap); sci(SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE); }
-    void toggleWs()    { syncToggle(kCmdViewAllCharacters, m_ws); if (menuBar()) menuBar()->Check(kCmdViewNpc, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
-    void toggleGuides(){ syncToggle(kCmdViewIndentGuide, m_guides); sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE); }
+    // Write-through, deliberately. These three View-menu toggles are the ONLY writers of their keys
+    // outside the Preferences dialog, and they used to be persisted by the blanket saveSettings() on
+    // window close. That call is gone (it reverted other windows' preferences - see the close handler),
+    // so each toggle persists its own single key here instead. One key, not forty: a second window
+    // closing can no longer undo it. This is what makes "every preference is written the moment it
+    // changes" actually true rather than merely asserted.
+    void syncToggle(int id, bool& flag, const char* key)
+    {
+        flag = !flag;
+        setToggleUi(id, flag);
+        auto* c = wxConfigBase::Get(); c->Write(key, flag); c->Flush();
+    }
+    void toggleWrap()  { syncToggle(kCmdViewWrap, m_wrap, "Editing/Wrap"); sci(SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE); }
+    void toggleWs()    { syncToggle(kCmdViewAllCharacters, m_ws, "Editing/Whitespace"); if (menuBar()) menuBar()->Check(kCmdViewNpc, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
+    void toggleGuides(){ syncToggle(kCmdViewIndentGuide, m_guides, "Editing/IndentGuides"); sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE); }
 
     // ----- persisted preferences (Settings > Preferences) ---------------
     static size_t recentMaxFromConfig()   // Recent Files max, read straight from config so the m_fileHistory member init can use it
@@ -11004,6 +11088,13 @@ private:
         c->Write("Editing/SpellBackend", (long)m_spellBackend);
         c->Write("Editing/SpellDict", wxString::FromUTF8(m_spellDict.c_str()));
         c->Write("Editing/SpellCommentsOnly", m_spellCommentsOnly);
+        saveWindowGeometry();   // also flushes
+    }
+    // Split out of saveSettings() so a closing window can persist ONLY its own geometry. The reason
+    // that matters is spelled out at the close handler, which is where the surprise lives.
+    void saveWindowGeometry()
+    {
+        auto* c = wxConfigBase::Get();
         // m_normalRect is kept live by the wxEVT_SIZE/MOVE binds in the constructor rather than read here
         // via GetSize()/GetPosition(): while the window IS currently maximized, those report the
         // maximized bounds, not what a later un-maximize should restore to.
@@ -12429,12 +12520,17 @@ private:
     {
         // Shared palette for the paper viewport + its chrome accents (Open Color greys; see the canvas
         // block below for why the backdrop is grey, not the blanket near-black theme colour).
-        const wxColour canvasBg = m_dark ? wxColour(0x49, 0x50, 0x57)    // gray-7
-                                         : wxColour(0xad, 0xb5, 0xbd);   // gray-5
-        const wxColour sepCol   = m_dark ? wxColour(0x34, 0x3a, 0x40)    // gray-8 on the gray-7 canvas
-                                         : wxColour(0x86, 0x8e, 0x96);   // gray-6 on the gray-5 canvas
-        const wxColour thumbCol = m_dark ? wxColour(0xad, 0xb5, 0xbd)    // gray-5 thumb on the gray-7 canvas
-                                         : wxColour(0x86, 0x8e, 0x96);   // gray-6 thumb on the gray-5 canvas
+        // Two points on Open Color's grey ramp, one per theme, rather than one backdrop that has to suit
+        // both. The pair is picked for where it sits IN ITS OWN THEME: gray-8 is dark enough to belong
+        // beside the near-black control bar (gray-7 read as a mid-grey slab against it), and gray-4 is
+        // light enough to belong in a light window while still separating the white page from the frame.
+        // Each remaining accent is then chosen against its own backdrop, not shared across the two.
+        const wxColour canvasBg = m_dark ? wxColour(0x34, 0x3a, 0x40)    // gray-8
+                                         : wxColour(0xce, 0xd4, 0xda);   // gray-4
+        const wxColour sepCol   = m_dark ? wxColour(0x21, 0x25, 0x29)    // gray-9 on the gray-8 canvas
+                                         : wxColour(0xad, 0xb5, 0xbd);   // gray-5 on the gray-4 canvas
+        const wxColour thumbCol = m_dark ? wxColour(0xad, 0xb5, 0xbd)    // gray-5 thumb on the gray-8 canvas
+                                         : wxColour(0x86, 0x8e, 0x96);   // gray-6 thumb on the gray-4 canvas
         // Control-bar buttons: give them wxNote's icons and make them FLAT (no raised button face, background
         // blended into the strip) so only the icon shows, like the main window's wxToolBar. print -> the active
         // pack's icon(); page-nav/zoom -> previewGlyph() (clean line glyphs; the pack's own filled zoom
@@ -13247,7 +13343,7 @@ private:
             case kCmdOnlineDocument: wxLaunchDefaultBrowser("https://alpaq92.github.io/wx-notepad-plus-plus/docs/"); break;   // the user manual on the project site (repo docs/ holds developer notes, not a manual)
             case kCmdForum: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/issues"); break;
             case kCmdDebuginfo: showDebugInfo(); break;
-            case kCmdCmdLineArguments: themedInfo(_("Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  --end                    put the caret at the end of the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"), _("Command Line Arguments")); break;
+            case kCmdCmdLineArguments: themedInfo(_("Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  --end                    put the caret at the end of the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  -d, --compare            compare the two given files side by side\n  --sandbox                independent instance using no saved settings; changes are discarded\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"), _("Command Line Arguments")); break;
 
             case kCmdExecuteBase: onRun(); break;   // Run... (F5)
 
@@ -13750,6 +13846,22 @@ public:
 #endif
         SetAppName("wxNote");             // the identity wxConfig + GetUserDataDir() key everything under
 
+        // ---- --sandbox pre-scan: raw argv, and it MUST come first ---------------------------------------
+        // Everything below this point may touch wxConfigBase::Get() - readUiLang() in the locale block
+        // immediately following is the very first such call in the process - and the first Get() is what
+        // creates and installs the real (registry on Windows, file elsewhere) config object. Once that
+        // exists the user's store is already in play, so the swap has to happen before it, which rules out
+        // asking the parser. Constructing wxFileConfig from an empty stream gives a config with no backing
+        // file at all: every Read() falls through to the caller's default and every Write()/Flush() is
+        // discarded when the process exits, which is exactly the semantics --sandbox promises.
+        for (int i = 1; i < argc; ++i)
+            if (wxString(argv[i]) == "--sandbox") { g_sandboxMode = true; break; }
+        if (g_sandboxMode)
+        {
+            wxStringInputStream emptyCfg((wxString()));          // wxFileConfig's ctor reads the stream
+            wxConfigBase::Set(new wxFileConfig(emptyCfg));           // fully, and keeps no reference to it
+        }
+
         // ---- --locale pre-scan: raw argv, before the parser exists -------------------------------------
         //
         // Why a hand-rolled scan instead of just reading parser.Found("locale") below: every help string
@@ -13850,6 +13962,7 @@ public:
         // single-orientation ceiling that makes -o and -O identical).
         parser.AddSwitch("o", "split", _("open the given file(s) in a split view"));
         parser.AddSwitch("O", wxString(), _("open the given file(s) in a split view"));   // alias for -o (one orientation, so identical)
+        parser.AddSwitch("d", "compare", _("compare the two given files side by side"));
         parser.AddSwitch("n", "new-instance", _("always open a new window"));
         parser.AddSwitch("r", "reuse-instance", _("reuse an already-running window"));
         parser.AddSwitch("w", "wait", _("wait for the file to be closed before returning"));
@@ -13857,6 +13970,9 @@ public:
         // --clean: --safe (no plugins) PLUS skip session and recovery-backup restore - a pristine launch for
         // bug-repro / catalog screenshots. Distinct from --safe; gates g_cleanMode alongside g_safeMode below.
         parser.AddLongSwitch("clean", _("like --safe, plus skip session and recovery restore"));
+        // Parsed here only so it appears in --help and is not rejected as unknown; the flag itself was
+        // already acted on by the raw-argv pre-scan at the top of OnInit (it has to precede the config).
+        parser.AddLongSwitch("sandbox", _("independent instance using no saved settings; changes are discarded"));
         // Registered so it shows up in --help and doesn't trip "unknown option"; the VALUE is read by the
         // raw-argv pre-scan far above, because the catalog has to be installed before this parser is built.
         parser.AddOption("", "locale", _("UI language for this run (e.g. pl, de, ja)"), wxCMD_LINE_VAL_STRING);
@@ -13931,6 +14047,7 @@ public:
         if (parser.Found("e", &encArg)) req.forceEnc = encodingFromName(encArg);
         req.readOnly    = parser.Found("R") || parser.Found("M");   // -R / -M
         req.split       = parser.Found("o") || parser.Found("O");   // -o / -O / --split
+        req.compare     = parser.Found("d");                         // -d / --compare (needs exactly two files)
         req.findPattern = plusFindPattern;                          // +/{pattern}
         // '-': read piped stdin now (a NO-OP off a console - see readPipedStdin). Only when it actually
         // captured a stream do we flag it; an empty pipe still opens an empty "(stdin)" buffer, matching
@@ -13948,8 +14065,14 @@ public:
         // into a process that already loaded plugins and restored session, i.e. the exact opposite of what
         // the flags ask, silently. So they force new, and an explicit -r can't drag them back into a reuse.
         const bool wait = parser.Found("w");
-        const bool forceNew = parser.Found("n") || wait || req.hasStdin || g_safeMode;
-        const bool forceReuse = parser.Found("r") && !wait && !req.hasStdin && !g_safeMode;
+        // --sandbox joins forceNew for the same reason --safe does, and additionally must never become
+        // the reuse TARGET (see startIpcServer below): handing a normal launch into a sandbox window
+        // would silently give it a session with none of the user's settings and no persistence.
+        // parser.Found("d") is in here because --compare is NOT serialized over the reuse-window IPC
+        // payload below: handing the two files to a running window would open them as plain tabs and
+        // silently skip the diff. Forcing our own window keeps -d meaning what it says.
+        const bool forceNew = parser.Found("n") || wait || req.hasStdin || g_safeMode || g_sandboxMode || parser.Found("d");
+        const bool forceReuse = parser.Found("r") && !wait && !req.hasStdin && !g_safeMode && !g_sandboxMode;
 
         // ---- single-instance "reuse window" handoff (Preferences > General; off by default) -----------
         bool reuseSetting = false;
@@ -14051,12 +14174,23 @@ public:
         // base to call through - and because the two construction blocks below are otherwise near-identical
         // twins, where anything added to only one silently does nothing whenever the other is in use
         // (Preferences > Integrated bar decides which, so a miss is invisible on the developer's own setup).
+        // One predicate, used by both frame-construction twins below. --clean and --sandbox each skip
+        // session AND recovery restore (restoreSession drives both); -w is a dedicated one-file window.
+        // Worth stating why --sandbox is here even though its config is empty and the session read
+        // would find nothing: restoreSession() also runs the orphaned-.tmp sweep, which DELETES files
+        // in the real recovery dir. That is the part a sandbox must not do.
+        const bool restoreOnStart = !wait && !g_cleanMode && !g_sandboxMode;
+
         auto applyRequest = [&](auto* frame) {
             for (const auto& d : req.folders) frame->openFolderPath(d);   // last folder wins: the browser is single-root
             // Files (as tabs or into the split), per-file :line[:col], the launch-wide -g/-e (or +N),
             // -R/-M read-only and +/{pattern} - all shared with the reuse-window path (openRequestFiles).
             const wxArrayString opened = frame->openRequestFiles(req);
             if (req.hasStdin) frame->openStdinBuffer(req.stdinText);       // '-': piped input into a new "(stdin)" buffer
+            // -d/--compare: both files are open as tabs by now; diff the first against the second.
+            // Silently ignored with fewer than two paths - the usage line documents that it needs two.
+            if (req.compare && req.paths.GetCount() >= 2)
+                frame->compareLaunchFiles(req.paths[0], req.paths[1]);
             if (wait) frame->enterWaitMode(opened);   // only wait on tabs that actually opened, or we'd never return
             // -pluginMessage=<text>: hand it to plugins now that they are loaded and the startup files are in
             // (the GPL npp-bridge forwards it as NPPN_CMDLINEPLUGINMSG). --safe (no plugins) makes this inert.
@@ -14072,7 +14206,7 @@ public:
             auto* frame = new WxnIntegratedFrame(dark);
             frame->Show(true);
             frame->applySavedWindowState();   // Maximize() before Show() is a no-op on some ports
-            if (!wait && !g_cleanMode) frame->restoreSession();   // --clean: no session AND no recovery restore (restoreSession does both)
+            if (restoreOnStart) frame->restoreSession();   // --clean: no session AND no recovery restore (restoreSession does both)
             if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(kIpcServiceName); }
             applyRequest(frame);
             return true;
@@ -14081,7 +14215,7 @@ public:
         auto* frame = new WxnShellFrame(dark);
         frame->Show(true);
         frame->applySavedWindowState();   // Maximize() before Show() is a no-op on some ports
-        if (!wait && !g_cleanMode) frame->restoreSession();   // reopen files from a theme-restart. -w: a dedicated
+        if (restoreOnStart) frame->restoreSession();   // reopen files from a theme-restart. -w: a dedicated
                                                 // one-file window; leave Session/Pending set so the next real launch
                                                 // still restores the user's tabs. --clean: skip session AND recovery
                                                 // restore entirely (restoreSession drives both) for a pristine launch

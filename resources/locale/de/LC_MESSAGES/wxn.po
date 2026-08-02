@@ -3171,3 +3171,9 @@ Sein Tastenkürzel wird ebenfalls entfernt."
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr "oder Zeile länger als (Zeichen, 0 = nie):"
+
+msgid "independent instance using no saved settings; changes are discarded"
+msgstr "unabhängige Instanz ohne gespeicherte Einstellungen; Änderungen werden verworfen"
+
+msgid " [Sandbox]"
+msgstr " [Sandbox]"

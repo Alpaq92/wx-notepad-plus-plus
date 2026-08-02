@@ -3171,3 +3171,9 @@ msgstr "Удалить макрос \"%s\"?
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr "или любая строка длиннее (символов, 0 = никогда):"
+
+msgid "independent instance using no saved settings; changes are discarded"
+msgstr "независимый экземпляр без сохранённых настроек; изменения не сохраняются"
+
+msgid " [Sandbox]"
+msgstr " [Песочница]"

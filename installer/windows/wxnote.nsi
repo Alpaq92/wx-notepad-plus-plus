@@ -21,6 +21,7 @@
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 !include "x64.nsh"
+!include "WinMessages.nsh"   ; WM_WININICHANGE / HWND_BROADCAST for the PATH change broadcast
 
 ; Read straight from the top-level CMakeLists.txt's project(... VERSION ...) so this can't drift
 ; out of sync with it again (every packaging script independently hardcoded its own version string
@@ -32,13 +33,21 @@
 !define APP_EXE     "wxnote.exe"
 !define ARP_KEY     "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 
-; TARGET_ARM64 (makensis /DTARGET_ARM64): the windows-arm64 CI leg builds an ARM64 wxnote.exe and
-; passes this define so the installer is named apart and guards for the right CPU at .onInit.
-; Default (undefined) = the x64 build, whose asset name stays exactly as before.
+; TARGET_ARM64 / TARGET_X86 (makensis /DTARGET_ARM64, /DTARGET_X86): the windows-arm64 and windows-x86
+; CI legs build an ARM64 / 32-bit x86 wxnote.exe and pass their define so the installer is named apart
+; and applies the right (or no) CPU guard at .onInit.
+; Default (neither defined) = the x64 build, whose asset name stays exactly as before.
+; These suffixes MUST stay in step with matrix.arch_suffix in .github/workflows/build.yml, which names
+; the matching .zip - the site's ASSET_MATCHERS read both, and a divergence silently mismatches them.
 !ifdef TARGET_ARM64
   !define ARCH_SUFFIX "-arm64"
+  !define ARCH_NAME   "ARM64"
+!else ifdef TARGET_X86
+  !define ARCH_SUFFIX "-x86"
+  !define ARCH_NAME   "32-bit x86"
 !else
   !define ARCH_SUFFIX ""
+  !define ARCH_NAME   "x64"
 !endif
 
 Name "${APP_NAME}"
@@ -91,14 +100,31 @@ VIAddVersionKey /LANG=1033 "Comments"         "Open-source text editor. Source: 
 ; broader RunningX64 check - it deliberately still installs on ARM64 Windows 11, where x64 apps
 ; run fine under the OS's built-in emulation.
 Function .onInit
+  ; All three Windows builds install to the same per-user directory and share one Add/Remove Programs
+  ; entry, so installing a different architecture over an existing one silently replaces it. That was
+  ; impossible while every build had a CPU guard that partitioned the machines; the x86 build has none
+  ; (deliberately - it runs everywhere), so an x64 machine can now reach this. Warn rather than block:
+  ; swapping architectures on purpose is legitimate, being surprised by it is not.
+  ReadRegStr $0 HKCU "Software\wxNote-Installer" "Arch"
+  ${If} $0 != ""
+  ${AndIf} $0 != "${ARCH_NAME}"
+    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "The $0 build of ${APP_NAME} is already installed here.$\r$\n$\r$\nThis installer will replace it with the ${ARCH_NAME} build.$\r$\n$\r$\nContinue?" IDOK +2
+    Quit
+  ${EndIf}
 !ifdef TARGET_ARM64
   ${IfNot} ${IsNativeARM64}
     MessageBox MB_OK|MB_ICONSTOP "This ${APP_NAME} installer is for ARM64 Windows. Please download the x64 installer instead."
     Quit
   ${EndIf}
+!else ifdef TARGET_X86
+  ; Deliberately empty, and it must stay that way. A 32-bit payload runs everywhere Windows runs:
+  ; natively on 32-bit Windows, on x64 through WOW64, and on ARM64 through the OS's x86 emulation.
+  ; There is no machine to exclude. In particular the ${RunningX64} check from the x64 branch below
+  ; must NOT be copied here - it is FALSE on exactly the 32-bit machines this build exists for, so it
+  ; would turn away every one of its intended users.
 !else
   ${IfNot} ${RunningX64}
-    MessageBox MB_OK|MB_ICONSTOP "${APP_NAME} requires 64-bit Windows."
+    MessageBox MB_OK|MB_ICONSTOP "${APP_NAME} requires 64-bit Windows. On 32-bit Windows, download the x86 installer instead."
     Quit
   ${EndIf}
 !endif
@@ -108,6 +134,11 @@ Section "${APP_NAME} (required)" SecCore
   SectionIn RO
   SetOutPath "$INSTDIR"
   File "..\..\build\bin\${APP_EXE}"
+  ; Apache-2.0 section 4(a) wants a copy of the licence to travel WITH the distribution. Displaying it
+  ; on a wizard page is not that, and a silent install (/S) skips that page entirely - so install the
+  ; files as well. NOTICE carries the third-party attributions (bundled fonts, the GPL bridge plugins).
+  File "..\..\LICENSE"
+  File "..\..\NOTICE"
   File "..\..\build\bin\stylers.model.xml"
   File "..\..\build\bin\contextMenu.xml"
   File /r "..\..\build\bin\icons"
@@ -135,6 +166,9 @@ Section "${APP_NAME} (required)" SecCore
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
   WriteRegStr HKCU "Software\wxNote-Installer" "InstallDir" "$INSTDIR"
+  ; Which build owns this directory. All three architectures install to the SAME $INSTDIR and share
+  ; one ARP key, so .onInit needs this to notice an architecture swap - see the guard there.
+  WriteRegStr HKCU "Software\wxNote-Installer" "Arch" "${ARCH_NAME}"
 
   ; Add/Remove Programs entry (per-user hive, matching the per-user install).
   WriteRegStr   HKCU "${ARP_KEY}" "DisplayName"          "${APP_NAME}"
@@ -164,10 +198,35 @@ Section /o "Desktop shortcut" SecDesktop
   CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
 SectionEnd
 
+; Optional, and ON by default: put $INSTDIR on the user's PATH so `wxnote` works from any shell.
+; Done in PowerShell, not here - see installer/windows/wxnote-path.ps1 for why (this NSIS build has
+; NSIS_MAX_STRLEN=1024, so ReadRegStr would TRUNCATE any PATH longer than that and writing it back
+; would destroy every entry past the cut; the helper also preserves the REG_EXPAND_SZ value kind).
+; A failure here is reported and ignored: a PATH entry is a convenience, not part of a working wxNote.
+Section "Add to PATH" SecPath
+  SetOutPath "$PLUGINSDIR"
+  File "wxnote-path.ps1"
+  SetOutPath "$INSTDIR"
+  nsExec::ExecToStack 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\wxnote-path.ps1" -Action Add -Directory "$INSTDIR"'
+  Pop $0   ; exit code
+  Pop $1   ; output
+  ${If} $0 == 0
+    ; Remember that WE added it, so uninstall only removes an entry this installer created.
+    WriteRegDWORD HKCU "Software\wxNote-Installer" "AddedToPath" 1
+    ; Tell already-running shells and Explorer to re-read the environment. Without this the new PATH
+    ; only reaches processes started after the next sign-in.
+    SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
+  ${Else}
+    DetailPrint "Could not add wxNote to PATH: $1"
+  ${EndIf}
+SectionEnd
+
 Section "Uninstall"
   ; Remove only what the installer put there (user-created files - e.g. userDefineLangs\ - survive,
   ; and $INSTDIR itself is only removed if that leaves it empty).
   Delete "$INSTDIR\${APP_EXE}"
+  Delete "$INSTDIR\LICENSE"
+  Delete "$INSTDIR\NOTICE"
   Delete "$INSTDIR\stylers.model.xml"
   Delete "$INSTDIR\contextMenu.xml"
   RMDir /r "$INSTDIR\icons"
@@ -190,6 +249,18 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
   Delete "$SMPROGRAMS\${APP_NAME}\Uninstall ${APP_NAME}.lnk"
   RMDir "$SMPROGRAMS\${APP_NAME}"
+
+  ; Remove the PATH entry only if this installer added it, and only ours - never rewrite the rest.
+  ReadRegDWORD $0 HKCU "Software\wxNote-Installer" "AddedToPath"
+  ${If} $0 == 1
+    SetOutPath "$PLUGINSDIR"
+    File "wxnote-path.ps1"
+    nsExec::ExecToStack 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\wxnote-path.ps1" -Action Remove -Directory "$INSTDIR"'
+    Pop $0
+    Pop $1
+    SetOutPath "$TEMP"   ; don't hold $INSTDIR open, or RMDir below fails
+    SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
+  ${EndIf}
 
   DeleteRegKey HKCU "${ARP_KEY}"
   DeleteRegKey HKCU "Software\wxNote-Installer"   ; installer state only - the user's settings under Software\wxNote survive uninstall

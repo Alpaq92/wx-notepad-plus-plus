@@ -399,11 +399,13 @@ vendored Lexilla and (Windows/Linux) wxBorderlessFrame as static libs, and
 produces the single `wxnote` executable plus the plugin modules. A POST_BUILD
 step copies all runtime resources (icons, themes, fonts, locale, styler,
 context menu) next to the executable — the layout every installer then ships
-as-is (no FHS split). CI builds and packages on all three OSes — with
-separate x64 and ARM64 legs for Windows and Linux (native arm64 runners; the
-packaging scripts detect the build host's architecture themselves), plus a
-cross-compiled `linux-riscv64` leg that packages a `.deb` — for every pull
-request and for source-affecting pushes to master; pushing a `v*` tag
-assembles a GitHub Release with the NSIS installers (x64 + ARM64), the four
-Linux package formats in both x86_64 and aarch64, an additional riscv64
-`.deb`, and both macOS `.dmg`s (13 assets).
+as-is (no FHS split). CI builds and packages on all three OSes — separate
+x64 and ARM64 legs for Windows and Linux (native arm64 runners; the packaging
+scripts detect the build host's architecture themselves), a 32-bit `windows-x86`
+leg cross-compiled on the x64 runner via MSVC's `amd64_x86` toolchain (and still
+verified rather than merely compiled, since an x86 binary runs there under
+WOW64), plus a cross-compiled `linux-riscv64` leg that packages a `.deb` — for
+every pull request and for source-affecting pushes to master. Pushing a `v*` tag
+assembles a GitHub Release with the NSIS installers and matching `.zip`s (x64 +
+ARM64 + x86), the four Linux package formats in both x86_64 and aarch64, an
+additional riscv64 `.deb`, and both macOS `.dmg`s (17 assets).

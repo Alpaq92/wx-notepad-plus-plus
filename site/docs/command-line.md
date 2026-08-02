@@ -19,9 +19,44 @@ never mistaken for options.
 | `-n` | `--new-instance` | — | always open a new window |
 | `-r` | `--reuse-instance` | — | hand the files to an already-running window |
 | `-w` | `--wait` | — | do not return until the file is closed |
+| `-d` | `--compare` | — | open the two given files side by side and diff them |
 | | `--safe` | — | start without loading any plugins |
+| | `--clean` | — | like `--safe`, and additionally skip session and recovery restore |
+| | `--sandbox` | — | an independent window that uses **none** of your saved settings, and discards every change it makes |
+| | `--locale` | `pl\|de\|ja\|…` | UI language for this run only (does not change your saved preference) |
 | `-v` | `--version` | — | print the version and exit |
 | `-h` | `--help` | — | show the usage message |
+
+### `--compare`
+
+`wxnote --compare A B` opens both files and puts A into the side-by-side diff against B — the same view
+as **Document ▸ Compare ▸ with File…**, without the dialog. It needs exactly two files; given fewer it
+just opens them normally.
+
+Handy as a git difftool:
+
+```bash
+git config --global difftool.wxnote.cmd 'wxnote --compare "$LOCAL" "$REMOTE"'
+git difftool -t wxnote
+```
+
+### `--sandbox`
+
+A throwaway window. It reads no preferences, so it starts from wxNote's built-in defaults, and it
+writes nothing back — no settings, no window position, no recent-files entry, no crash-recovery
+backup. Nothing it does can reach a normal window or survive the process. The title bar is marked
+**[Sandbox]** so it can't be mistaken for an ordinary window.
+
+It is always its own instance: it never hands files to a running window, and a later launch will never
+be handed into it, whatever `--reuse-instance` or the "Reuse an existing window" preference say.
+
+Use it to reproduce a bug from a clean slate, to try a theme or setting without committing to it, or to
+demo the editor on someone else's machine without disturbing their setup. Plugins still load — sandbox
+isolates *state*, not code, so combine it with `--safe` if you want neither.
+
+It differs from `--clean` in what it touches: `--clean` skips session restore but still runs against
+your real settings, so anything it changes is written back to them. `--sandbox` never touches them at
+all.
 
 Files listed after the options are opened in tabs. Relative paths are resolved against the invoking
 process's working directory before anything else happens, which matters when the launch is handed off
@@ -33,8 +68,8 @@ is no parent console at all (launched from Explorer or the Run box) does the tex
 box instead. `--version` prints a single `wxNote <version>` line and exits with status 0, so
 `wxnote --version && …` behaves in scripts.
 
-> **Help&nbsp;&rsaquo; Command Line Arguments…** inside the application shows an abridged summary — only
-> `-g`, `-e`, `-n` and `-r`. This page is the complete list.
+> **Help&nbsp;&rsaquo; Command Line Arguments…** inside the application lists the same options, in the
+> same order, as a quick reference. This page adds the explanations and examples.
 
 ## Examples
 
@@ -50,6 +85,12 @@ wxnote -e ansi legacy.log
 
 # diagnose a misbehaving plugin
 wxnote --safe
+
+# try something out without touching your settings — nothing here is saved
+wxnote --sandbox
+
+# diff two files straight from the shell
+wxnote --compare old.conf new.conf
 
 # force a separate window even when "Reuse an existing window" is on
 wxnote -n scratch.txt

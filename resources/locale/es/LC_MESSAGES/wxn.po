@@ -3171,3 +3171,9 @@ Su atajo de teclado también se elimina."
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr "o cualquier línea más larga que (caracteres, 0 = nunca):"
+
+msgid "independent instance using no saved settings; changes are discarded"
+msgstr "ventana independiente sin usar la configuración guardada; los cambios se descartan"
+
+msgid " [Sandbox]"
+msgstr " [Espacio aislado]"
