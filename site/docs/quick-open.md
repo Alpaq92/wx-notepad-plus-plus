@@ -59,7 +59,8 @@ Picking a file that is already open **activates its tab** rather than opening a 
 
 If you have text selected when you press the shortcut, that text is already typed into the query — so
 selecting a file name in the source and hitting <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> takes you
-straight there.
+straight there. A selection beginning with `@` is left out, so highlighting something like `@Override`
+or `@media` opens the ordinary file list rather than dropping you into symbol mode.
 
 ### The workspace list
 
@@ -82,7 +83,9 @@ These directories are skipped, because nothing in them is what you meant:
 Binary and generated files — executables, archives, images, media, fonts, compiled catalogs — are left
 out too. Files without an extension are kept.
 
-Very large trees stop at 50,000 files.
+Very large trees stop at 50,000 files. When that happens the dialog title says `(partial index)`, so a
+capped index never quietly passes for a complete one. Symbolic links and directory junctions are listed
+but not followed, so a link pointing back up its own tree cannot send the scan in circles.
 
 ### Jumping to a symbol: `@`
 
