@@ -3,57 +3,52 @@
 # TWO INDEPENDENT CONSTRAINTS DECIDE WHAT GOES IN HERE. Check BOTH every release.
 #
 # 1. PAYLOAD COMPLETENESS - non-negotiable, and invisible from the AV verdict.
-#    Every .zip published before v0.14.2 is missing five files that were built but never packaged:
-#    lexers/lexer.lua (its absence makes Scintillua hard-fail, disabling ALL custom-language syntax
-#    highlighting), fonts/ (including the default editor face), contextMenu.xml, nib/udl_compat.dll
-#    (UDL support) and nib/npp_shortcuts_compat.dll. Listing such a build would make winget's only
-#    wxNote install path a quietly broken one. build.yml now fails the build when any of them is
-#    missing, so v0.14.2 and later are safe - NEVER list anything older, whatever its AV verdict.
+#    Every .zip published before v0.14.2 is missing five files that were built but never packaged
+#    (lexers/lexer.lua, whose absence disables ALL custom-language highlighting; fonts/, including the
+#    default editor face; contextMenu.xml; nib/udl_compat.dll; nib/npp_shortcuts_compat.dll). build.yml
+#    now fails the build if any is missing, so v0.14.2 and later are safe - never list anything older.
 #
-# 2. THE DEFENDER FALSE POSITIVE - which asset is affected is NOT predictable from its format.
-#    winget's validation pipeline downloads the exact InstallerUrl and runs it in a sandbox under
-#    Defender, so a flagged asset fails validation and blocks the whole listing. Measured for v0.14.2
-#    through the browser download path (IAttachmentExecute::Save) on 2026-08-01:
-#        wxNote-0.14.2-Setup.exe          clean     <- x64 uses this
-#        wxNote-0.14.2-arm64-Setup.exe    FLAGGED
-#        wxNote-0.14.2-windows.zip        FLAGGED
-#        wxNote-0.14.2-arm64-windows.zip  clean     <- arm64 uses this
-#    Both formats landed on both sides of the line within one release, so there is no "safe format" to
-#    standardise on. The choice is per architecture, per release, and must be re-measured - which is
-#    why the two entries below deliberately use different installer types.
+# 2. THE DEFENDER FALSE POSITIVE - per artifact, per hash, and NOT predictable from the format.
+#    winget's pipeline downloads the exact InstallerUrl and runs it in a sandbox under Defender, so a
+#    flagged asset fails validation and blocks the whole listing. Measured for v0.14.3 through the
+#    browser download path (IAttachmentExecute::Save), SI 1.455.470.0, all six Windows assets in one
+#    sitting:
+#        wxNote-0.14.3-Setup.exe          clean   <- listed
+#        wxNote-0.14.3-arm64-Setup.exe    clean   <- listed
+#        wxNote-0.14.3-x86-Setup.exe      clean   <- listed
+#        wxNote-0.14.3-windows.zip        clean
+#        wxNote-0.14.3-arm64-windows.zip  clean
+#        wxNote-0.14.3-x86-windows.zip    FLAGGED
+#    Compare v0.14.2, where the ARM64 *installer* was flagged and its *zip* was clean - the exact
+#    inverse of what x86 shows here. Neither format is safe by nature, so re-measure every release
+#    rather than assuming this shape holds; the procedure is in docs/PACKAGING_WINGET.md.
 #
-# Consequence of that split: x64 gets the NSIS install (Start Menu shortcut, its own Add/Remove
-# Programs entry, its own uninstaller); arm64 gets a portable extraction, where winget owns the entry
-# and creates no shortcut. Move arm64 to nullsoft as soon as that installer measures clean.
-#
-# ArchiveBinariesDependOnPath is REQUIRED on the zip entry, not cosmetic: every resource path is
-# derived from the executable's own directory (icons/, themes/, dictionaries/, locale/, lexers/,
-# fonts/, nib/, stylers.model.xml). A bare symlink alias would resolve somewhere holding none of them.
+# All three architectures use nullsoft this time, which is the outcome to prefer: the NSIS path gives
+# users a Start Menu shortcut, wxNote's own Add/Remove Programs entry and its own uninstaller, none of
+# which the portable zip route provides. Fall back to a zip entry only for an architecture whose
+# installer measures flagged.
 PackageIdentifier: wxNoteProject.wxNote
-PackageVersion: 0.14.2
+PackageVersion: 0.14.3
+InstallerType: nullsoft
+Scope: user
+InstallerSwitches:
+  Silent: /S
+  SilentWithProgress: /S
 UpgradeBehavior: install
-ReleaseDate: 2026-08-01
+ReleaseDate: 2026-08-02
+AppsAndFeaturesEntries:
+- DisplayName: wxNote
+  Publisher: wxNote Project
+  ProductCode: wxNote
 Installers:
 - Architecture: x64
-  InstallerType: nullsoft
-  Scope: user
-  InstallerUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/download/v0.14.2/wxNote-0.14.2-Setup.exe
-  InstallerSha256: A49741E000CC9AD734A81817F8413E68DF84D4EADBC500771FBB42A5E469A4A4
-  InstallerSwitches:
-    Silent: /S
-    SilentWithProgress: /S
-  AppsAndFeaturesEntries:
-  - DisplayName: wxNote
-    Publisher: wxNote Project
-    ProductCode: wxNote
+  InstallerUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/download/v0.14.3/wxNote-0.14.3-Setup.exe
+  InstallerSha256: 79946296AF0610A187849750C3875830D453060DFF7BE19FEE4B2FF74D45376F
 - Architecture: arm64
-  InstallerType: zip
-  NestedInstallerType: portable
-  ArchiveBinariesDependOnPath: true
-  InstallerUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/download/v0.14.2/wxNote-0.14.2-arm64-windows.zip
-  InstallerSha256: 20291376C1CF5825975078FEBEBDE5B2B90612388009FB0397C9C85991339388
-  NestedInstallerFiles:
-  - RelativeFilePath: wxNote-0.14.2-arm64\wxnote.exe
-    PortableCommandAlias: wxnote
+  InstallerUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/download/v0.14.3/wxNote-0.14.3-arm64-Setup.exe
+  InstallerSha256: C55DDA8F076A2F53508A92C0BD25ED7E8F48B586EA9A2C39E2F8F593BC4664C3
+- Architecture: x86
+  InstallerUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/download/v0.14.3/wxNote-0.14.3-x86-Setup.exe
+  InstallerSha256: F3D7D1A06EADE225D53A86936BDBD9189C78B389A1FCE3C64B1494BB045BBD61
 ManifestType: installer
 ManifestVersion: 1.12.0

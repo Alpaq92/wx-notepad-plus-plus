@@ -592,6 +592,13 @@ static bool          g_cleanMode = false;
 // wxConfigBase::Get() happens earlier than that - readUiLang() during locale setup - and the swap has
 // to be in place before it. Plugins still load: this isolates state, not code (combine with --safe).
 static bool          g_sandboxMode = false;
+// Help > Command Line Arguments' option list, captured from the parser itself in OnInit.
+// It used to be a second, hand-written copy of every option description inside one ~1.5 KB _() string.
+// That duplicate was the problem: adding an option changed the whole msgid, so all eight catalogs went
+// stale at once and the entire dialog fell back to English - which is exactly what had happened (their
+// msgid still predated --end). Deriving it from the parser means each description is its own small,
+// individually translatable string, and a new option can never invalidate the others again.
+static wxString      g_cmdLineUsage;
 // --sandbox's throwaway user-data directory. Created lazily, removed in OnExit.
 // The name must NOT be derivable (an earlier version used the pid): this lives in a world-writable
 // shared directory on POSIX, and unsaved buffer text is written into it as recovery backups. A
@@ -13380,7 +13387,19 @@ private:
             case kCmdOnlineDocument: wxLaunchDefaultBrowser("https://alpaq92.github.io/wx-notepad-plus-plus/docs/"); break;   // the user manual on the project site (repo docs/ holds developer notes, not a manual)
             case kCmdForum: wxLaunchDefaultBrowser("https://github.com/Alpaq92/wx-notepad-plus-plus/issues"); break;
             case kCmdDebuginfo: showDebugInfo(); break;
-            case kCmdCmdLineArguments: themedInfo(_("Usage: wxnote [options] [files...]\n\nFiles:\n  file                     open in a tab\n  folder                   open as a workspace\n  file:line[:col]          open at a position\n  +N, +N,col               open the last file at line N (and column)\n  +/text                   put the caret on the first match of 'text'\n  -                        read piped input into a new untitled buffer\n\nOptions:\n  -g, --goto <line[,col]>  go to this line (and column) in the last file opened\n  --end                    put the caret at the end of the last file opened\n  -e, --encoding <name>    force encoding: ansi|utf8|utf8bom|utf16le|utf16be\n  -R, -M, --read-only      open the given file(s) read-only\n  -o, -O, --split          open the given file(s) in a split view\n  -n, --new-instance       always open a new window\n  -r, --reuse-instance     reuse an already-running window\n  -w, --wait               wait for the file to be closed before returning\n  --safe                   start without loading any plugins\n  --clean                  like --safe, plus skip session and recovery restore\n  -d, --compare            compare the two given files side by side\n  --sandbox                independent instance using no saved settings; changes are discarded\n  --locale <lang>          UI language for this run (e.g. pl, de, ja)\n  -v, --version            print the version and exit\n  -h, --help               show this help message"), _("Command Line Arguments")); break;
+            case kCmdCmdLineArguments:
+                // Preamble only - the file-argument forms the parser cannot describe. Everything after
+                // it is generated from the parser, so it stays correct and stays translatable per line.
+                themedInfo(_("Files:\n"
+                             "  file                     open in a tab\n"
+                             "  folder                   open as a workspace\n"
+                             "  file:line[:col]          open at a position\n"
+                             "  +N, +N,col               open the last file at line N (and column)\n"
+                             "  +/text                   put the caret on the first match of 'text'\n"
+                             "  -                        read piped input into a new untitled buffer\n\n")
+                           + g_cmdLineUsage,
+                           _("Command Line Arguments"));
+                break;
 
             case kCmdExecuteBase: onRun(); break;   // Run... (F5)
 
@@ -14022,6 +14041,7 @@ public:
         // `parser.Parse() != 0` line below already treats as "done, don't open a window".
         parser.AddSwitch("h", "help", _("show this help message"), wxCMD_LINE_OPTION_HELP);
         parser.AddParam(_("file-or-folder"), wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_MULTIPLE | wxCMD_LINE_PARAM_OPTIONAL);
+        g_cmdLineUsage = parser.GetUsageString();                // for Help > Command Line Arguments
         if (parser.Parse() != 0) return false;                   // --help/bad args: wx already showed usage
 
         if (parser.Found("v"))
