@@ -1,6 +1,7 @@
 name: build
 
-# Builds wxNote on all three target platforms (x64 + ARM64 for Windows/Linux, arm64 + x86_64
+# Builds wxNote on all three target platforms (x64 + ARM64 + 32-bit x86 for Windows, x64 + ARM64
+# for Linux, arm64 + x86_64
 # for macOS). wxWidgets is fetched + built from source
 # (FetchContent), so the only system dependency is GTK3 on Linux; macOS/Windows need just the
 # toolchain. Verifies the cross-platform claim - the parts the Windows dev machine can't check.
@@ -48,7 +49,14 @@ jobs:
           # Windows leg needs explicit knobs (native-ARM64 MSVC env + an installer name/guard
           # define, since NSIS can't detect the arch of the exe it's wrapping).
           - { os: ubuntu-24.04-arm, name: linux-arm64 }
-          - { os: windows-11-arm,   name: windows-arm64, msvc_arch: arm64, nsis_flags: /DTARGET_ARM64 }
+          - { os: windows-11-arm,   name: windows-arm64, msvc_arch: arm64, nsis_flags: /DTARGET_ARM64, arch_suffix: -arm64 }
+          # 32-bit x86. No 32-bit runner exists and none is needed: windows-latest is an x64 host
+          # CROSS-compiling to Win32 via MSVC's amd64_x86 toolchain, so the compiler keeps the 64-bit
+          # host's address space (amd64_x86, not plain x86, for exactly that reason - a 32-bit-hosted
+          # cl.exe is the thing that would run out of memory building wxWidgets and main.cpp at /O2).
+          # Unlike the linux-riscv64 cross leg this one is still VERIFIED, not merely compiled: an x86
+          # binary runs on the x64 runner under WOW64, so the ctest step executes the real selftests.
+          - { os: windows-latest,   name: windows-x86,   msvc_arch: amd64_x86, nsis_flags: /DTARGET_X86, arch_suffix: -x86 }
           # No native RISC-V runner exists, so linux-riscv64 CROSS-compiles on the x86_64 ubuntu host
           # (a from-source wxWidgets build under QEMU-native would blow the 6h job limit). `cross` gates
           # every step: the native-linux steps above are `&& !matrix.cross`, the riscv steps `== 'riscv64'`.
@@ -358,12 +366,16 @@ jobs:
         shell: pwsh
         run: |
           $ver  = (Select-String -Path CMakeLists.txt -Pattern 'project\(wxNote VERSION ([0-9.]+)').Matches[0].Groups[1].Value
-          $arch = if ("${{ matrix.name }}" -eq "windows-arm64") { "-arm64" } else { "" }
+          # From the matrix, NOT a name comparison: `-eq "windows-arm64"` silently gives every OTHER
+          # Windows leg an empty suffix, so a third leg would emit a second wxNote-<ver>-windows.zip
+          # and release.yml's collect step would drop one of the two without a word.
+          $arch = "${{ matrix.arch_suffix }}"
           $stage = "build/zipstage/wxNote-$ver$arch"
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
           # Mirrors installer/windows/wxnote.nsi's SecCore file list - if that list changes, change this
           # too (a zip missing a resource directory is a broken download, not a smaller one).
           Copy-Item build/bin/wxnote.exe, build/bin/stylers.model.xml, build/bin/contextMenu.xml -Destination $stage
+          Copy-Item LICENSE, NOTICE -Destination $stage   # Apache-2.0 4(a): the licence travels with the distribution
           foreach ($d in 'icons','icons-solar','icons-iconpark','icons-streamline','themes','dictionaries','fonts','lexers','locale') {
             Copy-Item -Recurse "build/bin/$d" -Destination $stage
           }
@@ -373,8 +385,17 @@ jobs:
           Copy-Item build/bin/nib/npp_bridge.dll, build/bin/nib/udl_compat.dll, build/bin/nib/npp_shortcuts_compat.dll -Destination "$stage/nib"
           # Fail loudly rather than shipping a silently incomplete archive: lexers/lexer.lua in
           # particular disables ALL Scintillua highlighting by its absence, which no smoke test catches.
-          foreach ($must in 'wxnote.exe','stylers.model.xml','contextMenu.xml','fonts','lexers/lexer.lua','nib/npp_bridge.dll','nib/udl_compat.dll','nib/npp_shortcuts_compat.dll') {
+          foreach ($must in 'wxnote.exe','stylers.model.xml','contextMenu.xml','LICENSE','NOTICE','fonts','lexers/lexer.lua','nib/npp_bridge.dll','nib/udl_compat.dll','nib/npp_shortcuts_compat.dll') {
             if (-not (Test-Path "$stage/$must")) { throw "zip payload is missing $must" }
+          }
+          # The architecture suffix is stated twice per leg - matrix.arch_suffix names the zip, and
+          # matrix.nsis_flags (/DTARGET_*) makes the .nsi pick the installer's. Nothing forces them to
+          # agree, and a divergence would ship a mismatched pair that the site's ASSET_MATCHERS then
+          # fail to pair up. Assert here rather than restructure, so the build fails loudly instead.
+          $wantSetup = "build/installer/wxNote-$ver$arch-Setup.exe"
+          if (-not (Test-Path $wantSetup)) {
+            $got = (Get-ChildItem build/installer -Filter '*-Setup.exe' | Select-Object -Expand Name) -join ', '
+            throw "installer/zip suffix mismatch: expected $wantSetup, found: $got"
           }
           if (-not (Test-Path build/installer)) { New-Item -ItemType Directory -Path build/installer | Out-Null }
           # Written entry-by-entry with explicit FORWARD-SLASH names rather than via Compress-Archive.

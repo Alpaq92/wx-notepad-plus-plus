@@ -3171,3 +3171,9 @@ Jego skrót klawiaturowy również zostanie usunięty."
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr "lub dowolny wiersz dłuższy niż (znaki, 0 = nigdy):"
+
+msgid "independent instance using no saved settings; changes are discarded"
+msgstr "niezależna instancja bez zapisanych ustawień; zmiany są odrzucane"
+
+msgid " [Sandbox]"
+msgstr " [Piaskownica]"

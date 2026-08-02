@@ -125,6 +125,28 @@ Scintilla-family editing behaviour and a familiar command vocabulary, and it can
 Notepad++ assets (themes, plugins on Windows, UDL files) through clearly-labelled optional modules — but
 the core is original work under a permissive licence and does not link any Notepad++ Win32 code.
 
+## Can I diff two files?
+
+Yes — **Document ▸ Compare ▸ with File…** diffs the current document against another file, and
+**with Clipboard** against whatever you last copied. From the shell, `wxnote --compare A B` opens both
+and drops straight into the diff, which also makes it usable as a git difftool:
+
+```bash
+git config --global difftool.wxnote.cmd 'wxnote --compare "$LOCAL" "$REMOTE"'
+```
+
+## Can I run it without touching my settings?
+
+`wxnote --sandbox` opens a window that reads none of your preferences and writes nothing back — no
+settings, no window position, no recent-files entry, no crash-recovery backup. It starts from the
+built-in defaults and everything it does is discarded when you close it. The title bar is marked
+**[Sandbox]** so you can't mistake it for an ordinary window.
+
+Useful for reproducing a bug from a clean slate, trying a theme without committing to it, or
+demonstrating the editor on someone else's machine. Plugins still load, so pair it with `--safe` if you
+want neither. It is stronger than `--clean`, which skips session restore but still runs against — and
+writes back to — your real settings.
+
 ## My antivirus says the installer is a trojan
 
 It's a false positive. The Windows builds are not code-signed yet, and an unsigned installer that
@@ -133,21 +155,22 @@ what the file *looks* like, and a compressed self-extracting installer looks lik
 Detections with an `!ml` suffix (such as `Wacatac.B!ml`) come from a machine-learning guess, not from
 matching known malware.
 
-**Only the installer stub is ever flagged — never the program.** We measured this through the same
-path a browser uses to save a download: the installer was blocked, while `wxnote.exe` itself, the
-plugin bridge DLL, and the `.zip` containing exactly the same files all came through clean. Defender's
-own detection record names the installer as a single object, with no file inside it named, so nothing
-the installer carries is implicated.
+**The program itself is never flagged — only whichever download happens to have been scored.** We
+measured every Windows asset of one release through the same path a browser uses to save a download,
+and the block landed on the ARM64 installer and the x64 `.zip`, while the x64 installer and the ARM64
+`.zip` came through clean. Two archives with identical contents, one blocked. Defender's record names
+the file as a single object, with nothing inside it named, and `wxnote.exe` and the plugin bridge DLL
+pass on their own.
 
-So the quickest way past it is simply **the `.zip`** — same files, no installer stub, nothing for the
-detection to fire on. You just don't get a Start Menu entry.
+So the practical answer is **try the other download**: every release ships both an installer and a
+`.zip` of the same files, and the block rarely hits both. Which one is affected varies by release, so
+we cannot tell you in advance which to pick. The `.zip` costs you the Start Menu entry, nothing else.
 
 You do not have to take our word for any of this:
 
 - Check the download against the `SHA256SUMS` file shipped with every release
 - The build is public — every artifact is produced by GitHub Actions from a tagged commit, logs and all
-- [docs/ANTIVIRUS.md](https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/docs/ANTIVIRUS.md)
-  lists every privileged and network-touching thing the editor does, plus what it deliberately never does
+- The source is Apache-2.0, and every artifact is rebuildable from the tagged commit in public CI
 
 Would signing fix it? It would eventually quiet the separate "unknown publisher" SmartScreen warning —
 though not immediately, since a brand-new certificate starts with no reputation of its own — and it is

@@ -3171,3 +3171,9 @@ msgstr "删除宏 \"%s\"？
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr "或任意行长度超过 (字符，0 = 从不):"
+
+msgid "independent instance using no saved settings; changes are discarded"
+msgstr "不使用任何已保存设置的独立实例；更改将被丢弃"
+
+msgid " [Sandbox]"
+msgstr " [沙盒]"

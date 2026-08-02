@@ -3171,3 +3171,9 @@ Son raccourci clavier est également supprimé."
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr "ou toute ligne plus longue que (caractères, 0 = jamais) :"
+
+msgid "independent instance using no saved settings; changes are discarded"
+msgstr "fenêtre indépendante sans paramètres enregistrés ; les modifications sont abandonnées"
+
+msgid " [Sandbox]"
+msgstr " [Bac à sable]"

@@ -3171,3 +3171,9 @@ msgstr "マクロ \"%s\" を削除しますか?
 
 msgid "or any line longer than (chars, 0 = never):"
 msgstr "または次の文字数を超える行 (0 = 無効):"
+
+msgid "independent instance using no saved settings; changes are discarded"
+msgstr "保存された設定を使わない独立したインスタンス（変更は破棄される）"
+
+msgid " [Sandbox]"
+msgstr " [サンドボックス]"

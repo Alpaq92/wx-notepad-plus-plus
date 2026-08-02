@@ -202,16 +202,27 @@ applyTheme(localStorage.getItem(THEME_KEY) || 'system');
 // a redeploy. (The GitHub Pages workflow *does* also redeploy on every published release, so the
 // static HTML/CSS/JS themselves stay in sync too - see .github/workflows/pages.yml.)
 
+// Every Windows arch that carries a token in its asset name. '-x86-' needs BOTH hyphens: the macOS
+// Intel asset is wxNote-<ver>-x86_64.dmg, which a bare 'x86' would also match.
+const WIN_ARCH_TOKENS = ['arm64', '-x86-'];
+const isWinX64 = (name) => !WIN_ARCH_TOKENS.some((t) => name.includes(t));
+
 const ASSET_MATCHERS = {
   // Each arch is matched explicitly: once a release carries both x64 and ARM assets of the same
   // type, a bare endsWith() would grab whichever the API listed first.
-  windows: (name) => name.endsWith('.exe') && !name.includes('arm64'),
+  // x64 is the arch with no token in its filename, so it can only be matched by the ABSENCE of every
+  // other one - list them in WIN_ARCH_TOKENS above and both x64 entries stay correct for free. Getting
+  // this wrong is silent and user-facing: the "Installer - x64" button would just serve the 32-bit
+  // build, since find() takes whichever asset the API happened to list first.
+  windows: (name) => name.endsWith('.exe') && isWinX64(name),
   'windows-arm64': (name) => name.endsWith('.exe') && name.includes('arm64'),
+  'windows-x86': (name) => name.endsWith('.exe') && name.includes('-x86-'),
   // The .zip is the same payload the installer lays down, with no installer stub - for locked-down
   // machines, or anyone who would rather look inside before running it. GitHub's auto-generated
   // "Source code (zip)" is NOT an asset (it lives in zipball_url), so these cannot collide with it.
-  'windows-zip': (name) => name.endsWith('.zip') && !name.includes('arm64'),
+  'windows-zip': (name) => name.endsWith('.zip') && isWinX64(name),
   'windows-zip-arm64': (name) => name.endsWith('.zip') && name.includes('arm64'),
+  'windows-zip-x86': (name) => name.endsWith('.zip') && name.includes('-x86-'),
   'macos-arm64': (name) => name.endsWith('.dmg') && name.includes('arm64'),
   'macos-x86_64': (name) => name.endsWith('.dmg') && name.includes('x86_64'),
   appimage: (name) => name.endsWith('.AppImage') && !name.includes('aarch64'),

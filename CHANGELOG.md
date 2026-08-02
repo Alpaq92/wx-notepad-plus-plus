@@ -3,6 +3,39 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.3] - 2026-08-02
+
+### Added
+- **A 32-bit Windows build.** Installer and `.zip`, alongside the existing x64 and ARM64 ones, for
+  hardware that cannot run anything else — Windows 11 has no 32-bit edition and 32-bit Windows 10 is
+  end-of-life, so those machines have the fewest remaining options. Note a 32-bit process is limited to
+  a few GB of memory, which matters for very large files; take x64 unless you know you need this.
+- **`--sandbox`** — a throwaway window that reads none of your settings and writes nothing back: no
+  preferences, no window position, no recent-files entry, no crash-recovery backup. It starts from the
+  built-in defaults, is always its own instance, and is marked **[Sandbox]** in the title bar. For
+  reproducing a bug from a clean slate, trying a theme without committing to it, or demonstrating the
+  editor on someone else's machine.
+- **`-d` / `--compare`** — `wxnote --compare A B` opens both files and drops straight into the
+  side-by-side diff, which also makes wxNote usable as a git difftool.
+- **"Add to PATH"**, an optional installer component (on by default), so `wxnote` works from any shell.
+  Removed again on uninstall, and only if the installer was the one that added it.
+
+### Fixed
+- **Two open windows no longer overwrite each other's preferences.** Closing a window used to write all
+  forty-odd settings from its own startup snapshot, so whichever window you closed last silently
+  reverted everything the other had just configured. A window now persists only its own geometry on
+  close; every preference is written the moment you change it, including the three View-menu toggles
+  (Word Wrap, Show All Characters, Show Indent Guide) that previously relied on the close-time write.
+- **The licence now ships with the Windows builds.** It was only ever *shown* on an installer page, and
+  a silent install skipped even that, so neither the installer nor the `.zip` actually carried it.
+- Installing a different architecture over an existing install now warns first. All three Windows
+  builds share one directory and one Add/Remove Programs entry, and the 32-bit build has no CPU guard
+  (by design — it runs everywhere), so it could otherwise replace an x64 install without a word.
+
+### Changed
+- The print-preview backdrop now uses a distinct Open Color grey per theme, each chosen for how it sits
+  in its own theme rather than one shade compromising between the two.
+
 ## [0.14.2] - 2026-08-01
 
 ### Fixed
@@ -27,14 +60,13 @@ file is absent, rather than shipping a quietly incomplete archive.
   20 MB of bundled fonts above finally being included.
 
 ### Documentation
-- [docs/ANTIVIRUS.md](docs/ANTIVIRUS.md) rewritten around measured evidence: which artifacts are
-  actually flagged, why the payload never is, and why a candidate fix cannot be validated before
-  release. Includes the measurement trap that an on-demand scan reads local signatures only and will
-  report a blocked installer as clean.
-- New [docs/DEFENDER_SUBMISSION.md](docs/DEFENDER_SUBMISSION.md) — the false-positive dispute runbook.
 - New [docs/PACKAGING_WINGET.md](docs/PACKAGING_WINGET.md) and `installer/winget/` manifests.
-- The download page now says, on the Windows card, that an antivirus block is a false positive and the
-  zip is unaffected.
+- **Corrected what we say about antivirus false positives.** Measuring every Windows asset of one
+  release showed the block is per-artifact, not per-format: in 0.14.2 the x64 `.zip` was flagged while
+  the x64 installer was clean, and the ARM64 installer was flagged while the ARM64 `.zip` was clean.
+  The download page, the FAQ and getting-started previously said the installer was the only thing ever
+  affected and the `.zip` was the safe choice; they now say to try the other format, since which one is
+  affected varies by release and cannot be predicted.
 
 ## [0.14.1] - 2026-07-31
 
@@ -50,10 +82,8 @@ file is absent, rather than shipping a quietly incomplete archive.
 - **A plain `.zip` for Windows**, alongside the installer: the same files, no installer, and you can
   look inside before running anything. Useful on machines where installers are restricted. (It is not
   a "portable" build — settings still live in the registry and your user-data folder.)
-- **[docs/ANTIVIRUS.md](docs/ANTIVIRUS.md)** — every privileged or network-touching thing wxNote does,
-  and the list of things it deliberately never does, so an antivirus false positive can be checked
-  rather than taken on faith. The download page and FAQ now also show how to verify a download
-  against the published `SHA256SUMS`.
+- **Guidance for antivirus false positives** in the FAQ and on the download page, including how to
+  verify a download against the published `SHA256SUMS`.
 
 ### Fixed
 - **"Open in browser" no longer goes through the command shell.** A file whose name contained `%`
@@ -61,8 +91,10 @@ file is absent, rather than shipping a quietly incomplete archive.
 - **Long paths and modern Windows behaviour.** The program now declares which Windows versions it
   supports and that it understands long file paths — previously Windows treated it as a pre-Windows-8
   application and capped paths at 260 characters.
-- The signature published alongside `SHA256SUMS` was impossible to verify: the public key it needed
-  was never released. It now ships with every release.
+- The release workflow will publish its GPG public key alongside the signature, so that a signed
+  `SHA256SUMS` would be verifiable. (Correction: no release has ever shipped a signature at all — the
+  signing step is skipped unless a signing key is configured, and none is. Releases ship `SHA256SUMS`
+  on its own.)
 - File details (publisher, copyright, description) were incomplete or misleading on both the program
   and the installer.
 
