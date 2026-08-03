@@ -11,7 +11,7 @@
 
 cmake_minimum_required(VERSION 3.20)
 # C is enabled for the vendored Lua + LPeg (Scintillua's runtime) - both are C.
-project(wxNote VERSION 0.15.1 LANGUAGES CXX C)
+project(wxNote VERSION 0.16.0 LANGUAGES CXX C)
 
 include(FetchContent)
 
@@ -124,6 +124,33 @@ FetchContent_Declare(libvterm
     URL_HASH SHA256=0babe3ab42c354925dadede90d352f054aa9c4ae6842ea803a20c9741e172e56
 )
 FetchContent_MakeAvailable(libvterm)
+
+# ---- PCRE2 (the regex backend for Find/Replace; BSD-3-Clause WITH PCRE2-exception) -----------------
+# Replaces the std::regex path, which physically cannot match across a line break: wx's vendored
+# Scintilla gates its whole-buffer regex behind REGEX_MULTILINE (Document.cxx:3063) and never defines
+# it, so the live path iterates LINE BY LINE over ranges that exclude the EOL bytes. No pattern could
+# contain \n, in Find, Replace, Mark, Count or Find in Files - and it failed silently.
+#
+# JIT is deliberately OFF. It would need sljit to support every architecture this project ships, and
+# linux-riscv64 is one of them; the interpreter is fast enough for interactive search and keeps all
+# eight CI legs building the same code.
+message(STATUS "[wxnote] Fetching PCRE2 10.47...")
+set(PCRE2_BUILD_PCRE2_8   ON  CACHE BOOL "" FORCE)
+set(PCRE2_BUILD_PCRE2_16  OFF CACHE BOOL "" FORCE)
+set(PCRE2_BUILD_PCRE2_32  OFF CACHE BOOL "" FORCE)
+set(PCRE2_BUILD_PCRE2GREP OFF CACHE BOOL "" FORCE)   # defaults ON upstream
+set(PCRE2_BUILD_TESTS     OFF CACHE BOOL "" FORCE)   # defaults ON upstream
+set(PCRE2_SUPPORT_JIT     OFF CACHE BOOL "" FORCE)
+set(PCRE2_STATIC_PIC      ON  CACHE BOOL "" FORCE)   # linked into a PIE on modern Linux, like lua_lpeg
+set(BUILD_STATIC_LIBS     ON  CACHE BOOL "" FORCE)
+FetchContent_Declare(pcre2
+    URL      https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.47/pcre2-10.47.tar.bz2
+    URL_HASH SHA256=47fe8c99461250d42f89e6e8fdaeba9da057855d06eb7fc08d9ca03fd08d7bc7
+)
+FetchContent_MakeAvailable(pcre2)
+# pcre2-8-static carries PCRE2_STATIC and its include directory as PUBLIC usage requirements, so
+# linking it is all a consumer needs - except PCRE2_CODE_UNIT_WIDTH, which is PRIVATE to the library
+# and must be defined by whoever includes pcre2.h (src/regex_engine.h does it).
 
 # encoding.c #includes two GENERATED tables (encoding/DECdrawing.inc, encoding/uk.inc) that the GitHub
 # tag archive does not ship - upstream's Makefile creates them from the .tbl sources with a perl
@@ -262,7 +289,8 @@ target_link_libraries(wxnote PRIVATE
     wx::core wx::aui wx::base wx::xml wx::stc wx::net
     lexilla lua_lpeg
     vterm   # terminal-emulation core behind src/term_view.cpp (its include dir propagates from the vterm target)
-    hunspell)   # spell-check engine behind src/spell_engine.h (its <hunspell/*> include dir propagates too)
+    hunspell   # spell-check engine behind src/spell_engine.h (its <hunspell/*> include dir propagates too)
+    pcre2-8-static)   # regex backend behind src/regex_engine.h (propagates PCRE2_STATIC + its include dir)
 
 # wx::net (linked above, all platforms) provides BOTH: (1) wxWebRequest - Preferences > Spell Check downloads
 # dictionaries from wooorm/dictionaries; and (2) the single-instance "reuse window" IPC on non-Windows
@@ -414,6 +442,35 @@ if(MSVC)
     target_compile_options(comment_tokens_test PRIVATE /utf-8)
 endif()
 
+# ---- snippets_test: self-test for the snippet grammar (src/snippets.h) -----------------------------
+# Pure STL like hash_test - no wx. The grammar is where a snippet body silently loses a placeholder or
+# a field offset drifts off the text it marks, and both are visible from the parse result alone.
+add_executable(snippets_test tests/snippets_test.cpp)
+set_target_properties(snippets_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(snippets_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+if(MSVC)
+    target_compile_options(snippets_test PRIVATE /utf-8)
+endif()
+
+# ---- regex_test: self-test for the PCRE2 search backend (src/regex_engine.h) -----------------------
+# No wx: it matches against plain std::string, which is exactly how the editor uses it (over
+# SCI_GETCHARACTERPOINTER). Weighted towards the three things the old std::regex path got wrong and
+# that would be silent if they returned - crossing a line break, lookbehind, and \U/\L/\E - plus the
+# zero-width and UTF-8 boundary cases that turn a Replace All into a hang or a mangled buffer.
+add_executable(regex_test tests/regex_test.cpp)
+set_target_properties(regex_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(regex_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(regex_test PRIVATE pcre2-8-static)
+if(MSVC)
+    target_compile_options(regex_test PRIVATE /utf-8)
+endif()
+
 # ---- charset_selftest: round-trip test for the portable code-page path (wxCSConv name conversion) --
 # Links wx::base (wxCSConv). Exercises the iconv (Linux/macOS) / win32 (Windows) backends on the same
 # vectors so the ~50 Encoding > Character Set pages are validated per platform.
@@ -518,7 +575,8 @@ function(wxn_add_app_selftest name)
         wx::core wx::aui wx::base wx::xml wx::stc wx::net
         lexilla lua_lpeg
         vterm
-        hunspell)   # main.cpp -> src/spell_engine.h -> <hunspell/hunspell.hxx>; wx::net -> wxWebRequest
+        hunspell   # main.cpp -> src/spell_engine.h -> <hunspell/hunspell.hxx>; wx::net -> wxWebRequest
+        pcre2-8-static)   # main.cpp -> src/regex_engine.h -> <pcre2.h>
     if(WIN32 OR (UNIX AND NOT APPLE))
         target_link_libraries(${name} PRIVATE wxbf)
         target_compile_definitions(${name} PRIVATE WXN_HAS_BORDERLESS=1)
@@ -631,14 +689,15 @@ endif()
 enable_testing()
 
 add_custom_target(selftests DEPENDS
-    keymap_selftest diff_myers_test hash_test fuzzy_test file_index_test charset_selftest
+    keymap_selftest diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test
+    charset_selftest
     hunspell_selftest funclist_selftest comment_tokens_test catalog_selftest bridge_selftest
     terminal_selftest)
 
 # "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed. file_index_test
 # does call wxInitializer, but it links wx::base only, so it gets console traits and never opens a display.
-foreach(t diff_myers_test hash_test fuzzy_test file_index_test hunspell_selftest funclist_selftest
-          comment_tokens_test catalog_selftest)
+foreach(t diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test hunspell_selftest
+          funclist_selftest comment_tokens_test catalog_selftest)
     add_test(NAME ${t} COMMAND ${t})
     set_tests_properties(${t} PROPERTIES LABELS pure)
 endforeach()

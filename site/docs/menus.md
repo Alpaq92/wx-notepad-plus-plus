@@ -67,7 +67,8 @@ A few notes before the list:
 | Submenu | Contents |
 | --- | --- |
 | **Convert Case to ▸** | UPPERCASE · lowercase · Proper Case · Proper Case (blend) · Sentence case · Sentence case (blend) · iNVERT cASE · ranDOm CasE |
-| **Comment/Uncomment ▸** | Toggle Single Line Comment · Single Line Comment · Single Line Uncomment · Block Comment · Block Uncomment — all five use **the active language's** comment characters, see [Languages ▸ Comments](languages.md#comments) |
+| **Comment/Uncomment ▸** | Toggle Single Line Comment · Single Line Comment · Single Line Uncomment · Block Comment · Block Uncomment — all five use **the active language's** comment characters, see [Languages ▸ Comments](languages.md#comments). Greyed out for formats with no comment syntax at all (JSON, patch files) |
+| **Insert Snippet…** | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd> — pick a snippet for this file's language; see [Snippets](snippets.md) |
 | **Indent ▸** | Increase Line Indent · Decrease Line Indent |
 | **Line Operations ▸** | Duplicate / Move Up / Move Down / Split / Join · Remove Duplicate Lines · Remove Consecutive Duplicate Lines · Remove Empty Lines (with or without blank characters) · Insert Blank Line Above / Below · Reverse Line Order · Randomize Line Order · and fourteen sort variants — lexicographic, lexicographic ignoring case, locale order, integer, decimal (comma), decimal (dot) and length, each ascending and descending |
 | **Blank Operations ▸** | Trim Trailing / Leading / Both · EOL to Space · Trim both and EOL to Space · TAB to Space · Space to TAB (All) · Space to TAB (Leading) |
@@ -117,7 +118,9 @@ A few notes before the list:
 The first three open one tabbed dialog with **Find**, **Replace**, **Find in Files** and **Mark**
 tabs. Shared options: Match whole word only, Match case, Wrap around, plus Backward direction (Find and
 Replace) and In selection (Replace and Mark). The Search Mode radio group offers **Normal**,
-**Extended** (`\n`, `\r`, `\t`, `\0`, `\x…`) and **Regular expression**. Find in Files adds *Filters*
+**Extended** (`\n`, `\r`, `\t`, `\0`, `\x…`) and **Regular expression** — PCRE2, so patterns may cross
+line breaks and use lookbehind, named groups and `\U`/`\L` in replacements, with a **`.` matches
+newline** checkbox alongside; see [Search &amp; Regular Expressions](search.md). Find in Files adds *Filters*
 and *Directory* fields and a **Replace in Files** button.
 
 The incremental search bar is a slim find-as-you-type strip with its own case, whole-word and regex

@@ -72,6 +72,341 @@ static void check(bool ok, const char* what)
     if (ok) ++g_pass; else ++g_failCount;
 }
 
+// ---- the search + snippet seams -------------------------------------------------------------------
+// These run against a REAL frame with a real editor, because everything they cover lives between the
+// pure engines (already covered by regex_test / snippets_test) and Scintilla: target-range handling,
+// backward search, replacement expansion, and the snippet session's absolute offsets as text is typed
+// into it. That layer is where both of the last two defects were.
+//
+// Defined here and declared in main.cpp as a friend of the frame, so the private seams stay private.
+template <class FB>
+void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
+{
+    auto text  = [f]() { return f->getDocUtf8(); };
+    auto load  = [f](const char* s) { f->setDocUtf8(s); f->sci(SCI_SETSEL, 0, 0); };
+    auto opts  = [](const char* find, bool regex, bool fwd = true) {
+        FindOpts o; o.find = wxString::FromUTF8(find); o.regex = regex; o.matchCase = true;
+        o.forward = fwd; o.wrap = false; return o;
+    };
+
+    // ---- (1) a regex that CROSSES A LINE BREAK, through the real Find path ------------------------
+    // The headline capability. Before PCRE2 this could not match at all, at any surface.
+    {
+        load("alpha\nbeta\ngamma");
+        FindOpts o = opts("alpha\\nbeta", true);
+        check(f->doFindNext(o), "wiring: a pattern containing \\n matches through doFindNext");
+        check(f->sci(SCI_GETSELECTIONSTART) == 0 && f->sci(SCI_GETSELECTIONEND) == 10,
+              "wiring: ...and selects exactly the two lines it spanned");
+    }
+
+    // ---- (2) Replace All across lines, with a group reference -------------------------------------
+    {
+        load("a\n  b\n  c");
+        FindOpts o = opts("\\n\\s+", true);
+        o.repl = " ";
+        const int n = f->doReplaceAll(o);
+        check(n == 2, "wiring: Replace All applies a multi-line pattern to every match");
+        check(text() == "a b c", "wiring: ...producing the joined text (the join-lines recipe)");
+    }
+    {
+        load("me@here");
+        FindOpts o = opts("(\\w+)@(\\w+)", true);
+        o.repl = "$2 at $1";
+        f->doReplaceAll(o);
+        check(text() == "here at me", "wiring: $1/$2 expand through the real replace path");
+    }
+
+    // ---- (3) \U reaches the document as CASE, not as literal text ---------------------------------
+    // Scintilla's own substituter has no case operators and emitted "\U" verbatim; this is the proof
+    // that replacement expansion is ours now.
+    {
+        load("hello world");
+        FindOpts o = opts("(\\w+)", true);
+        o.repl = "\\U$1";
+        f->doReplaceAll(o);
+        check(text() == "HELLO WORLD", "wiring: \\U upper-cases through Replace All");
+        check(text().find("\\U") == std::string::npos, "wiring: ...and no literal backslash-U is left behind");
+    }
+
+    // ---- (4) backward search finds the LAST match before the caret --------------------------------
+    {
+        load("x_x_x");
+        f->sci(SCI_SETSEL, 5, 5);
+        FindOpts o = opts("x", true, /*forward=*/false);
+        check(f->doFindNext(o), "wiring: a backward regex search finds a match");
+        check(f->sci(SCI_GETSELECTIONSTART) == 4, "wiring: ...the LAST one before the caret, not the first");
+    }
+
+    // ---- (5) zero-width patterns terminate, and every surface agrees on the count -----------------
+    // doCount, doMarkAll and the incremental bar each iterate matches separately. They disagreed:
+    // \b was counted by one and skipped by the others, so one document gave three different answers.
+    {
+        load("ab cd");
+        FindOpts o = opts("\\b", true);
+        const int counted = f->doCount(o);          // terminating at all is half the assertion
+        check(counted == 4, "wiring: Count reports every zero-width match (4 word boundaries)");
+        check(f->doMarkAll(o) == counted, "wiring: Mark All agrees with Count on a zero-width pattern");
+    }
+    {
+        load("abc");
+        FindOpts o = opts("x*", true);
+        o.repl = "-";
+        const int n = f->doReplaceAll(o);           // a hang here is the failure
+        check(n > 0 && text() == "-a-b-c-", "wiring: Replace All on an all-optional pattern terminates correctly");
+    }
+
+    // ---- (6) a zero-width step must not split a multi-byte character ------------------------------
+    {
+        load("a\xC5\xBA" "b");                       // "aźb"
+        FindOpts o = opts("(?=\\w)", true);
+        o.repl = "|";
+        f->doReplaceAll(o);
+        check(text() == "|a|\xC5\xBA" "|b", "wiring: zero-width iteration lands on character boundaries");
+    }
+
+    // ---- (7) an invalid pattern is reported, not silently treated as no-match ---------------------
+    {
+        load("anything");
+        check(!f->doFindNext(opts("(unclosed", true)), "wiring: an invalid pattern reports no match");
+        // ...and the SAME pattern as literal text still searches, i.e. the failure did not poison state.
+        load("a (unclosed b");
+        check(f->doFindNext(opts("(unclosed", false)), "wiring: the same text still matches literally");
+    }
+
+    // ---- (8) literal mode is untouched by any of this ---------------------------------------------
+    {
+        load("a.b axb");
+        FindOpts o = opts("a.b", false);
+        check(f->doFindNext(o) && f->sci(SCI_GETSELECTIONSTART) == 0,
+              "wiring: literal mode still treats '.' as a full stop, not a wildcard");
+        check(f->doCount(o) == 1, "wiring: ...and counts only the literal occurrence");
+    }
+
+    // ---- (9) the SNIPPET session: insert, fields, mirrors, navigation -----------------------------
+    {
+        load("");
+        check(f->snippetInsert("for (int ${1:i} = 0; $1 < ${2:n}; ++$1)"),
+              "snippet: inserting a body with stops starts a session");
+        check(text() == "for (int i = 0; i < n; ++i)", "snippet: the body expands with its placeholders");
+        check(f->m_snip.active, "snippet: the session is live");
+        // MIRRORS. What this code is responsible for is selecting EVERY occurrence of the current stop
+        // and turning additional-selection typing on; Scintilla then applies one keystroke to all of
+        // them. So that is what is asserted - the exact ranges, and the flag. Simulating the typing
+        // itself is not possible from here: SCI_REPLACESEL edits only the MAIN selection, so a test
+        // written that way measures the wrong message rather than the feature.
+        check(f->sci(SCI_GETSELECTIONS) == 3, "snippet: every mirror of the first stop is selected at once");
+        check(f->sci(SCI_GETADDITIONALSELECTIONTYPING) == 1,
+              "snippet: additional-selection typing is on, so one keystroke reaches every mirror");
+        {
+            // "for (int i = 0; i < n; ++i)" - the three 'i' of stop 1 sit at 9, 16 and 25.
+            bool ranges = true;
+            const int want[3][2] = { { 9, 10 }, { 16, 17 }, { 25, 26 } };
+            for (int k = 0; k < 3; ++k)
+            {
+                const int a = (int)f->sci(SCI_GETSELECTIONNSTART, k);
+                const int b = (int)f->sci(SCI_GETSELECTIONNEND, k);
+                if (a != want[k][0] || b != want[k][1]) ranges = false;
+            }
+            check(ranges, "snippet: ...and each selection covers exactly its own occurrence");
+        }
+
+        // Offset tracking: edit at the first occurrence, and the LATER stop must move with the text.
+        f->sci(SCI_SETSELECTION, 10, 9);            // collapse to just the first 'i'
+        f->sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>("index"));
+        f->snippetStep(+1);
+        check(f->sci(SCI_GETSELECTIONS) == 1, "snippet: Tab moves to the single-occurrence second stop");
+        check(f->sci(SCI_GETSELECTIONSTART) == 24 && f->sci(SCI_GETSELECTIONEND) == 25,
+              "snippet: the second stop tracked the 4 characters inserted before it");
+
+        f->snippetStep(+1);   // past the last stop -> session ends at the exit position
+        check(!f->m_snip.active, "snippet: stepping past the final stop ends the session");
+    }
+    {
+        // Shift+Tab goes back, and Esc abandons the session leaving the text in place.
+        load("");
+        f->snippetInsert("${1:one} ${2:two}");
+        f->snippetStep(+1);
+        f->snippetStep(-1);
+        check(f->sci(SCI_GETSELECTIONSTART) == 0 && f->sci(SCI_GETSELECTIONEND) == 3,
+              "snippet: Shift+Tab returns to the previous stop");
+        f->snippetCancel();
+        check(!f->m_snip.active && text() == "one two", "snippet: Esc leaves the session and keeps the text");
+    }
+    {
+        // A body with no stops still inserts; there is simply nothing to navigate.
+        load("");
+        check(!f->snippetInsert("plain text"), "snippet: a body with no stops starts no session");
+        check(text() == "plain text", "snippet: ...but the text is still inserted");
+    }
+    {
+        // $0 is where the caret ends up, and it must not be treated as an editable field.
+        load("");
+        f->snippetInsert("if ($1) { $0 }");
+        f->snippetStep(+1);
+        check(!f->m_snip.active, "snippet: $0 ends the session rather than becoming a stop");
+        check(f->sci(SCI_GETSELECTIONSTART) == f->sci(SCI_GETSELECTIONEND),
+              "snippet: ...leaving a caret, not a selection");
+    }
+    {
+        // Indentation of the starting line carries to continuation lines.
+        load("    ");
+        f->sci(SCI_SETSEL, 4, 4);
+        f->snippetInsert("if ($1)\n{\n\t$0\n}");
+        const std::string t = text();
+        check(t.find("\n    {") != std::string::npos,
+              "snippet: continuation lines inherit the starting line's indent");
+        f->snippetCancel();
+    }
+    {
+        // The session must not survive a buffer switch - its offsets belong to one document.
+        load("");
+        f->snippetInsert("${1:x} $1");
+        check(f->m_snip.active, "snippet: session live before switching buffers");
+        f->addDocument(wxString(), "untitled-snippet-test");
+        check(!f->m_snip.active, "snippet: switching to another buffer ends the session");
+        f->closeActive();                   // drop the scratch document again
+    }
+
+    // ---- (10) wrap-around, in-selection bounds, and Replace-and-find-next ------------------------
+    {
+        load("target a target b");
+        FindOpts o = opts("t.rget", true);
+        o.wrap = true;
+        // "target a target b" - matches start at 0 and 9. From 6 the next one forward is 9; from the
+        // end of that one there is nothing left, so the second call must wrap back to 0.
+        f->sci(SCI_SETSEL, 6, 6);
+        check(f->doFindNext(o) && f->sci(SCI_GETSELECTIONSTART) == 9,
+              "wiring: forward search finds the match after the caret");
+        check(f->doFindNext(o) && f->sci(SCI_GETSELECTIONSTART) == 0,
+              "wiring: ...then wraps to the top rather than reporting failure");
+    }
+    {
+        // "In selection" must bound a regex search exactly as it bounds a literal one.
+        load("aaa bbb aaa");
+        FindOpts o = opts("a+", true);
+        o.inSelection = true;
+        f->sci(SCI_SETSEL, 8, 11);                   // only the trailing "aaa"
+        check(f->doCount(o) == 1, "wiring: In selection bounds a regex Count to the selected range");
+        o.repl = "Z";
+        check(f->doReplaceAll(o) == 1 && text() == "aaa bbb Z",
+              "wiring: ...and bounds Replace All to it too");
+    }
+    {
+        // Replace (one) replaces the current match then advances to the next.
+        load("x1 x2 x3");
+        FindOpts o = opts("x(\\d)", true);
+        o.repl = "[$1]";
+        f->sci(SCI_SETSEL, 0, 0);
+        f->doFindNext(o);                            // select the first match
+        check(f->doReplaceOne(o), "wiring: Replace replaces the selection and finds the next");
+        check(text() == "[1] x2 x3", "wiring: ...expanding the group in the replacement");
+        check(f->sci(SCI_GETSELECTIONSTART) == 4, "wiring: ...and leaves the NEXT match selected");
+    }
+
+    // ---- (11) the pattern cache must notice an option change, not just a new pattern ---------------
+    // regexReady() caches on (pattern, matchCase, wholeWord). Keying on the pattern alone would make
+    // a case-sensitivity toggle silently reuse the wrong compiled pattern.
+    {
+        load("Alpha alpha");
+        FindOpts ci = opts("alpha", true); ci.matchCase = false;
+        FindOpts cs = opts("alpha", true); cs.matchCase = true;
+        check(f->doCount(ci) == 2, "cache: case-insensitive counts both");
+        check(f->doCount(cs) == 1, "cache: the SAME pattern re-compiles when matchCase changes");
+        check(f->doCount(ci) == 2, "cache: and back again");
+
+        FindOpts ww = opts("alpha", true); ww.wholeWord = true; ww.matchCase = true;
+        load("alpha alphabet");
+        check(f->doCount(ww) == 1, "cache: whole-word re-compiles rather than reusing the plain pattern");
+        FindOpts nw = opts("alpha", true); nw.matchCase = true;
+        check(f->doCount(nw) == 2, "cache: ...and clearing whole-word re-compiles again");
+
+        // ". matches newline" is part of the key for the same reason - it changes the compiled pattern.
+        load("a\nb");
+        FindOpts plain = opts("a.b", true);
+        FindOpts dotnl = opts("a.b", true); dotnl.dotAll = true;
+        check(f->doCount(plain) == 0, "dotall: '.' does not cross a line break by default");
+        check(f->doCount(dotnl) == 1, "dotall: ...and does when the option is on");
+        check(f->doCount(plain) == 0, "cache: toggling it back re-compiles rather than reusing");
+    }
+
+    // ---- (12) Find in Files, on real files, with a pattern that spans lines -----------------------
+    {
+        const wxString dir = wxFileName::GetTempDir() + wxFILE_SEP_PATH + "wxn_fif_selftest";
+        wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        const wxString fa = dir + wxFILE_SEP_PATH + "a.txt";
+        { wxFile w(fa, wxFile::write); w.Write("one\nBEGIN\nmiddle\nEND\ntwo\n"); }
+
+        std::vector<FifHit> hits;
+        FindOpts o = opts("BEGIN[\\s\\S]*?END", true);
+        f->fifScanFile(fa, o, hits);
+        check(hits.size() == 1, "fif: a multi-line pattern matches inside a real file");
+        check(!hits.empty() && hits[0].line == 2, "fif: ...reported at the line the match STARTS on");
+
+        hits.clear();
+        FindOpts lit = opts("middle", false);
+        f->fifScanFile(fa, lit, hits);
+        check(hits.size() == 1 && hits[0].line == 3, "fif: literal search still works alongside it");
+
+        // A zero-width pattern must terminate here too - this loop has its own advance.
+        hits.clear();
+        FindOpts zw = opts("^", true);
+        f->fifScanFile(fa, zw, hits, /*cap=*/100);
+        check(hits.size() == 5, "fif: a zero-width pattern terminates, one hit per line");
+
+        wxRemoveFile(fa);
+        wxFileName::Rmdir(dir);
+    }
+
+    // ---- (13) snippets: trigger expansion and the user-file override ------------------------------
+    {
+        load("");
+        f->sci(SCI_SETSEL, 0, 0);
+        f->sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>("todo"));
+        check(f->snippetExpandTrigger(), "snippet: a known trigger word expands on Tab");
+        check(text().find("TODO(") == 0, "snippet: ...replacing the trigger with the body");
+        f->snippetCancel();
+
+        load("");
+        f->sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>("notasnippet"));
+        check(!f->snippetExpandTrigger(), "snippet: an unknown word does not expand (Tab still indents)");
+        check(text() == "notasnippet", "snippet: ...and the word is left alone");
+    }
+    {
+        // The user file is re-read when it changes, and overrides a built-in of the same name.
+        const wxString sp = f->userDataDir() + wxFILE_SEP_PATH + "snippets.txt";
+        const bool had = wxFileExists(sp);
+        wxString saved;
+        if (had) { wxFile r(sp); r.ReadAll(&saved); }
+
+        { wxFile w(sp, wxFile::write); w.Write("[*:todo]\nUSERTODO $0\n"); }
+        load("");
+        f->sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>("todo"));
+        f->snippetExpandTrigger();
+        check(text().find("USERTODO") == 0, "snippet: a user snippet overrides the built-in of the same name");
+        f->snippetCancel();
+
+        if (had) { wxFile w(sp, wxFile::write); w.Write(saved); }
+        else     wxRemoveFile(sp);
+        // ...and the override disappears again once the file does, proving the stat-based reload works
+        // rather than the store having been cached once at startup.
+        load("");
+        f->sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>("todo"));
+        f->snippetExpandTrigger();
+        check(!had ? text().find("TODO(") == 0 : true,
+              "snippet: removing the user file restores the built-in on the very next expansion");
+        f->snippetCancel();
+    }
+
+    // Leave the editor exactly as it was found. Every test above wrote into the buffer, and a DIRTY
+    // buffer makes the next close - by a later phase of this suite, or by shutdown - raise a modal
+    // "save changes?" prompt with nobody to answer it. That is a hang, not a failure: the process sat
+    // at 4 seconds of CPU for ten minutes before this cleanup existed.
+    f->setDocUtf8("");
+    f->sci(SCI_EMPTYUNDOBUFFER);
+    f->sci(SCI_SETSAVEPOINT);
+    check(f->sci(SCI_GETMODIFY) == 0, "editor seams: the buffer is left clean for the phases that follow");
+}
+
 // ---- the sandbox (set in main() BEFORE wxEntry, read by the traits below) --------------------------
 static wxString g_sandboxRoot;       // <temp>/wxnote_bridge_selftest
 static wxString g_sandboxUserData;   // <root>/userdata - what the app believes its user-data dir is
@@ -463,19 +798,36 @@ private:
                     for (const FilterRow& r : rows) if (r.userId == myID_COMMAND_PALETTE) sawSelf = true;
                     check(sawSelf, "palette: its own menu entry is harvested (so it is discoverable)");
 
-                    // End-to-end: typing "palette" must rank the Command Palette command first.
+                    // End-to-end ranking, over the LIVE harvest.
+                    //
+                    // The query is the palette row's OWN harvested label, never a hardcoded English
+                    // word. This used to type "palette" literally, which passed only by accident: the
+                    // Command Palette menu entry was untranslated at the time, so it rendered in
+                    // English even in a Polish UI. The moment that catalog bug was fixed the label
+                    // became "Paleta poleceń" - which does not contain "palette" at all (no second
+                    // 't') - while the encoding entry "OEM 860 : portugalski ... Zachodnioeuropejski"
+                    // DOES contain p-a-l-e-t-t-e as a subsequence, and won. The product was fine; the
+                    // test was asserting English against labels that are translated at runtime, so it
+                    // could only ever hold on an English UI.
                     {
-                        const std::vector<char32_t> raw = fuzzy::decodeUtf8("palette");
-                        std::vector<char32_t> fold(raw.size());
-                        for (size_t i = 0; i < raw.size(); ++i) fold[i] = fuzzy::foldAscii(raw[i]);
-                        int bestScore = -1, bestId = 0;
-                        for (const FilterRow& r : rows)
+                        const FilterRow* self = nullptr;
+                        for (const FilterRow& r : rows) if (r.userId == myID_COMMAND_PALETTE) self = &r;
+                        check(self != nullptr, "palette: the palette row is available to query with");
+                        if (self)
                         {
-                            const fuzzy::Result res = fuzzy::score(fold, raw, false, r.prep);
-                            if (res.ok && res.score > bestScore) { bestScore = res.score; bestId = r.userId; }
+                            const std::vector<char32_t> raw = fuzzy::decodeUtf8(self->primary.utf8_string());
+                            std::vector<char32_t> fold(raw.size());
+                            for (size_t i = 0; i < raw.size(); ++i) fold[i] = fuzzy::foldAscii(raw[i]);
+                            const bool smart = fuzzy::smartCaseWanted(raw);
+                            int bestScore = -1, bestId = 0;
+                            for (const FilterRow& r : rows)
+                            {
+                                const fuzzy::Result res = fuzzy::score(fold, raw, smart, r.prep);
+                                if (res.ok && res.score > bestScore) { bestScore = res.score; bestId = r.userId; }
+                            }
+                            check(bestId == myID_COMMAND_PALETTE,
+                                  "palette: filtering on a command's own label ranks that command first");
                         }
-                        check(bestId == myID_COMMAND_PALETTE,
-                              "palette: filtering on 'palette' ranks the Command Palette first");
                     }
                 }
             }
@@ -623,6 +975,39 @@ private:
                 if (!tb) tb = findToolBarIn(frame);            // integrated/macOS: an aui-docked descendant
             }
             check(tb != nullptr, "host toolbar located for the probe-button image check");
+
+            // ---- the search + snippet WIRING, driven through the real frame ---------------------------
+            // dynamic_cast, not static_cast: the app builds WxnShellFrame or WxnIntegratedFrame depending
+            // on the IntegratedBar preference, and only the former is nameable here. A null result means
+            // this run used the borderless chrome, which is a skip rather than a failure.
+            if (auto* fr = dynamic_cast<WxnShellFrame*>(wxTheApp->GetTopWindow()))
+                wxnDriveEditorSelfTests(fr);
+            else
+                check(true, "editor seams: skipped (integrated-bar frame in use)");
+
+            // ---- Toggle Comment: the toolbar button and the rule that greys it out -------------------
+            // The button is only useful if its icon actually resolved from the active pack; a missing
+            // comment.svg would fall back to wxART_QUESTION and still "exist", so check the bitmap too.
+            {
+                wxToolBarToolBase* ct = tb ? tb->FindById(kCmdEditBlockComment & 0xFFFF) : nullptr;
+                check(ct != nullptr, "comment: Toggle Comment is on the toolbar");
+                if (ct)
+                {
+                    const wxBitmap bmp = ct->GetNormalBitmap();
+                    check(bmp.IsOk() && bmp.GetWidth() > 0, "comment: its icon resolved to a real bitmap");
+                }
+
+                // updateUiState greys the button on exactly this predicate, so pin the predicate. A
+                // language with NEITHER a line nor a block form cannot be commented at all.
+                auto commentable = [](const char* key) { return !wxnCommentStyleForKey(key).empty(); };
+                check(commentable("cpp"),    "comment: enabled for a language with a line form");
+                check(commentable("python"), "comment: enabled for a hash language");
+                check(commentable("css"),    "comment: enabled for a block-only language (CSS has no //)");
+                check(!commentable("json"),  "comment: DISABLED for JSON - no comment form at all");
+                check(!commentable("diff"),  "comment: DISABLED for a patch file");
+                check(!commentable(""),      "comment: DISABLED when the language is unknown");
+            }
+
             wxToolBarToolBase* tool = tb ? tb->FindById(tbCmd & 0xFFFF) : nullptr;
             check(tool != nullptr, "probe toolbar button exists on the host toolbar (FindById)");
             // The button now carries a HOST asset (NPPM_ADDTOOLBARICONBYNAME), so its hue follows whichever

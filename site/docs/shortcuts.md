@@ -53,11 +53,18 @@ the Shortcut Mapper.
 | Decrease Line Indent | <kbd>Ctrl</kbd>+<kbd>[</kbd> |
 | Toggle Single Line Comment | <kbd>Ctrl</kbd>+<kbd>/</kbd> |
 | Block Comment | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Q</kbd> |
+| Insert Snippet… | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd> |
+| Expand a snippet trigger | <kbd>Tab</kbd> *(after typing its name)* |
+| Next / previous snippet field | <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> |
 | Function Completion | <kbd>Ctrl</kbd>+<kbd>Space</kbd> |
 | Column Editor… | <kbd>Alt</kbd>+<kbd>C</kbd> |
 
 Both comment keys insert **the active language's** comment characters — `#` in Python, `--` in SQL,
-`;` in an INI file, `<!-- -->` in HTML. See [Languages ▸ Comments](languages.md#comments).
+`;` in an INI file, `<!-- -->` in HTML. See [Languages ▸ Comments](languages.md#comments). They are
+greyed out in formats with no comment syntax at all, such as JSON.
+
+<kbd>Tab</kbd> only expands a snippet when the word before the cursor actually names one; otherwise it
+indents as normal. See [Snippets](snippets.md).
 
 ## Search and navigation
 

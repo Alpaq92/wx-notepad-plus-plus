@@ -3237,3 +3237,36 @@ msgstr "%s не имеет синтаксиса комментариев - ни�
 
 msgid "%s has no block comment - used its line comment instead"
 msgstr "%s не имеет блочного комментария - использован строчный комментарий"
+
+msgid "Toggle Comment"
+msgstr "Переключить комментарий"
+
+msgid "Toggle Comment (%s)"
+msgstr "Переключить комментарий (%s)"
+
+msgid "%s has no comment syntax"
+msgstr "В %s нет синтаксиса комментариев"
+
+msgid "Invalid regular expression: %s"
+msgstr "Неверное регулярное выражение: %s"
+
+msgid "Insert &Snippet..."
+msgstr "Вставить &фрагмент..."
+
+msgid "Insert Snippet"
+msgstr "Вставить фрагмент"
+
+msgid "Type a snippet name"
+msgstr "Введите имя фрагмента"
+
+msgid "any language"
+msgstr "любой язык"
+
+msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.txt in the user data folder."
+msgstr "Нет фрагментов для языка этого файла.\n\nДобавьте свои в snippets.txt в папке данных пользователя."
+
+msgid "Regular expressions use PCRE2: a pattern can span line breaks, and lookbehind, named groups and case conversion in replacements all work."
+msgstr "Регулярные выражения используют PCRE2: шаблон может охватывать переносы строк; работают ретроспективная проверка, именованные группы и смена регистра в заменах."
+
+msgid "&. matches newline"
+msgstr "&. соответствует переносу строки"

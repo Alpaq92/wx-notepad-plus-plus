@@ -22,6 +22,7 @@
 !include "FileFunc.nsh"
 !include "x64.nsh"
 !include "WinMessages.nsh"   ; WM_WININICHANGE / HWND_BROADCAST for the PATH change broadcast
+!include "Sections.nsh"      ; SF_SELECTED - so an UNTICKED "Add to PATH" can undo a previous install's entry
 
 ; Read straight from the top-level CMakeLists.txt's project(... VERSION ...) so this can't drift
 ; out of sync with it again (every packaging script independently hardcoded its own version string
@@ -222,6 +223,10 @@ Section "Add to PATH" SecPath
   ; that would make uninstall delete it and break whatever else lives in it.
   ${If} $0 == 0
     WriteRegDWORD HKCU "Software\wxNote-Installer" "AddedToPath" 1
+    ; Record WHICH directory went on PATH, not just that one did. An upgrade can be installed somewhere
+    ; else, and then "$INSTDIR" no longer names the entry a previous install created - removing that
+    ; would miss the stale one and, worse, could strike a directory we never added.
+    WriteRegStr HKCU "Software\wxNote-Installer" "PathDir" "$INSTDIR"
     ; Tell already-running shells and Explorer to re-read the environment. Without this the new PATH
     ; only reaches processes started after the next sign-in.
     SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
@@ -229,6 +234,47 @@ Section "Add to PATH" SecPath
     DetailPrint "wxNote is already on PATH ($1) - leaving it, and leaving it alone on uninstall."
   ${Else}
     DetailPrint "Could not add wxNote to PATH: $1"
+  ${EndIf}
+SectionEnd
+
+; Unticking "Add to PATH" has to UNDO what an earlier install did. An unselected NSIS section simply
+; does not run - there is no "else" branch to a section - so without this hidden one the entry from a
+; previous install would survive every subsequent install that turned the option off, and only ever be
+; removable by uninstalling. The leading "-" keeps it off the components page and makes it always run.
+;
+; Gated on AddedToPath for the same reason SecPath refuses to claim an entry it found: if this
+; installer never created it, the directory is on PATH because the USER put it there, and silently
+; deleting it would break whatever else they keep in it. Removal targets the recorded PathDir, so an
+; upgrade installed into a different folder still cleans up the old entry rather than the new one.
+Section "-UndoPathIfUnticked"
+  SectionGetFlags ${SecPath} $0
+  IntOp $0 $0 & ${SF_SELECTED}
+  ${If} $0 == 0
+    ReadRegDWORD $1 HKCU "Software\wxNote-Installer" "AddedToPath"
+    ${If} $1 == 1
+      ReadRegStr $2 HKCU "Software\wxNote-Installer" "PathDir"
+      ${If} $2 == ""
+        StrCpy $2 "$INSTDIR"       ; installs predating PathDir recorded only the flag
+      ${EndIf}
+      InitPluginsDir               ; see SecPath - $PLUGINSDIR is empty until this runs
+      File "/oname=$PLUGINSDIR\wxnote-path.ps1" "wxnote-path.ps1"
+      nsExec::ExecToStack 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\wxnote-path.ps1" -Action Remove -Directory "$2"'
+      Pop $3
+      Pop $4
+      ; Drop the ownership marker whatever the helper reported. Exit 2 means the entry was already
+      ; gone, so we no longer own anything either way; leaving the flag set would make a later
+      ; uninstall try to remove an entry that is not ours.
+      DeleteRegValue HKCU "Software\wxNote-Installer" "AddedToPath"
+      DeleteRegValue HKCU "Software\wxNote-Installer" "PathDir"
+      ${If} $3 == 0
+        DetailPrint "Removed wxNote from PATH ($2), as Add to PATH was unticked."
+        SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
+      ${ElseIf} $3 == 2
+        DetailPrint "wxNote was not on PATH ($2) - nothing to remove."
+      ${Else}
+        DetailPrint "Could not remove wxNote from PATH: $4"
+      ${EndIf}
+    ${EndIf}
   ${EndIf}
 SectionEnd
 
@@ -262,11 +308,17 @@ Section "Uninstall"
   RMDir "$SMPROGRAMS\${APP_NAME}"
 
   ; Remove the PATH entry only if this installer added it, and only ours - never rewrite the rest.
+  ; PathDir is the directory that actually went on PATH, which is not necessarily $INSTDIR: an upgrade
+  ; may have moved the install while the old entry stayed behind.
   ReadRegDWORD $0 HKCU "Software\wxNote-Installer" "AddedToPath"
   ${If} $0 == 1
+    ReadRegStr $2 HKCU "Software\wxNote-Installer" "PathDir"
+    ${If} $2 == ""
+      StrCpy $2 "$INSTDIR"         ; installs predating PathDir recorded only the flag
+    ${EndIf}
     InitPluginsDir                 ; see SecPath - $PLUGINSDIR is empty until this runs
     File "/oname=$PLUGINSDIR\wxnote-path.ps1" "wxnote-path.ps1"
-    nsExec::ExecToStack 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\wxnote-path.ps1" -Action Remove -Directory "$INSTDIR"'
+    nsExec::ExecToStack 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\wxnote-path.ps1" -Action Remove -Directory "$2"'
     Pop $0
     Pop $1
     SetOutPath "$TEMP"   ; don't hold $INSTDIR open, or RMDir below fails

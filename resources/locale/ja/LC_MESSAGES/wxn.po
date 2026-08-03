@@ -3237,3 +3237,36 @@ msgstr "%s にはコメント構文がありません - 変更しませんでし
 
 msgid "%s has no block comment - used its line comment instead"
 msgstr "%s にはブロックコメントがありません - 行コメントを使用しました"
+
+msgid "Toggle Comment"
+msgstr "コメントの切り替え"
+
+msgid "Toggle Comment (%s)"
+msgstr "コメントの切り替え (%s)"
+
+msgid "%s has no comment syntax"
+msgstr "%s にはコメント構文がありません"
+
+msgid "Invalid regular expression: %s"
+msgstr "正規表現が無効です: %s"
+
+msgid "Insert &Snippet..."
+msgstr "スニペットの挿入(&S)..."
+
+msgid "Insert Snippet"
+msgstr "スニペットの挿入"
+
+msgid "Type a snippet name"
+msgstr "スニペット名を入力"
+
+msgid "any language"
+msgstr "すべての言語"
+
+msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.txt in the user data folder."
+msgstr "このファイルの言語に合うスニペットはありません。\n\nユーザーデータフォルダーの snippets.txt に追加してください。"
+
+msgid "Regular expressions use PCRE2: a pattern can span line breaks, and lookbehind, named groups and case conversion in replacements all work."
+msgstr "正規表現は PCRE2 を使用します。パターンは改行をまたぐことができ、後方探索、名前付きグループ、置換での大文字小文字変換が利用できます。"
+
+msgid "&. matches newline"
+msgstr "改行にも . を一致させる(&.)"

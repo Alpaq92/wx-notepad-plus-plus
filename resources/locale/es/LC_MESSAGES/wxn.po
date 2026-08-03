@@ -3237,3 +3237,36 @@ msgstr "%s no tiene sintaxis de comentario - no se cambió nada"
 
 msgid "%s has no block comment - used its line comment instead"
 msgstr "%s no tiene comentario de bloque - se usó su comentario de línea"
+
+msgid "Toggle Comment"
+msgstr "Alternar comentario"
+
+msgid "Toggle Comment (%s)"
+msgstr "Alternar comentario (%s)"
+
+msgid "%s has no comment syntax"
+msgstr "%s no tiene sintaxis de comentarios"
+
+msgid "Invalid regular expression: %s"
+msgstr "Expresión regular no válida: %s"
+
+msgid "Insert &Snippet..."
+msgstr "Insertar &fragmento..."
+
+msgid "Insert Snippet"
+msgstr "Insertar fragmento"
+
+msgid "Type a snippet name"
+msgstr "Escriba un nombre de fragmento"
+
+msgid "any language"
+msgstr "cualquier idioma"
+
+msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.txt in the user data folder."
+msgstr "Ningún fragmento corresponde al lenguaje de este archivo.\n\nAñada los suyos en snippets.txt de la carpeta de datos de usuario."
+
+msgid "Regular expressions use PCRE2: a pattern can span line breaks, and lookbehind, named groups and case conversion in replacements all work."
+msgstr "Las expresiones regulares usan PCRE2: un patrón puede abarcar saltos de línea, y funcionan lookbehind, grupos con nombre y conversión de mayúsculas en los reemplazos."
+
+msgid "&. matches newline"
+msgstr "&. coincide con nueva línea"

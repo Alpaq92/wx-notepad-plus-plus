@@ -3,6 +3,8 @@
 - [The Interface](interface.md)
 - [Menu Reference](menus.md)
 - [Quick Open &amp; Command Palette](quick-open.md)
+- [Search &amp; Regular Expressions](search.md)
+- [Snippets](snippets.md)
 - [Keyboard Shortcuts](shortcuts.md)
 - [Customizing Shortcuts](custom-shortcuts.md)
 - [Preferences](preferences.md)
