@@ -30,6 +30,7 @@
 
 #include <cstring>
 #include <string>
+#include <utility>   // std::pair - Match::g holds the ovector's own (start, end) shape
 #include <vector>
 
 namespace wxnre {
@@ -48,9 +49,12 @@ struct Match
     bool   ok    = false;
     size_t start = 0;
     size_t end   = 0;                 // half-open [start, end)
-    std::vector<size_t> gs, ge;       // group n is [gs[n], ge[n]); kNoPos when it did not participate
+    // Group n is [g[n].first, g[n].second); both kNoPos when it did not participate. One vector of
+    // pairs rather than two parallel ones: the same-size invariant was maintained by hand at four
+    // places, and this is the shape PCRE2's ovector already has.
+    std::vector<std::pair<size_t, size_t>> g;
 
-    size_t groups() const { return gs.empty() ? 0 : gs.size() - 1; }   // excluding group 0
+    size_t groups() const { return g.empty() ? 0 : g.size() - 1; }   // excluding group 0
     bool   empty() const { return end == start; }
 };
 
@@ -224,9 +228,10 @@ public:
             }
         };
         auto group = [&](size_t n) -> std::string {
-            if (n >= m.gs.size() || m.gs[n] == kNoPos || m.ge[n] == kNoPos) return std::string();
-            if (m.ge[n] > haySize || m.gs[n] > m.ge[n]) return std::string();
-            return std::string(hay + m.gs[n], m.ge[n] - m.gs[n]);
+            if (n >= m.g.size()) return std::string();
+            const size_t s = m.g[n].first, e = m.g[n].second;
+            if (s == kNoPos || e == kNoPos || e > haySize || s > e) return std::string();
+            return std::string(hay + s, e - s);
         };
 
         for (size_t i = 0; i < tmpl.size();)
@@ -283,9 +288,9 @@ private:
     bool searchImpl(const char* hay, size_t size, size_t from, size_t to, Match& out) const
     {
         // Clear in place rather than `out = Match{}`: searchBackward reuses one Match across every
-        // iteration, and assigning a fresh one throws away the group vectors' capacity each time.
+        // iteration, and assigning a fresh one throws away the group vector's capacity each time.
         out.ok = false; out.start = out.end = 0;
-        out.gs.clear(); out.ge.clear();
+        out.g.clear();
         if (!m_re || !m_md || !hay || from > size) return false;
         if (to > size) to = size;
         if (from > to) return false;
@@ -305,13 +310,10 @@ private:
             out.ok    = true;
             out.start = ov[0];
             out.end   = ov[1];
-            out.gs.resize(n);
-            out.ge.resize(n);
-            for (uint32_t g = 0; g < n; ++g)
-            {
-                out.gs[g] = (ov[2 * g] == PCRE2_UNSET) ? kNoPos : ov[2 * g];
-                out.ge[g] = (ov[2 * g + 1] == PCRE2_UNSET) ? kNoPos : ov[2 * g + 1];
-            }
+            out.g.resize(n);
+            for (uint32_t k = 0; k < n; ++k)
+                out.g[k] = { (ov[2 * k]     == PCRE2_UNSET) ? kNoPos : ov[2 * k],
+                             (ov[2 * k + 1] == PCRE2_UNSET) ? kNoPos : ov[2 * k + 1] };
             got = true;
         }
         return got;

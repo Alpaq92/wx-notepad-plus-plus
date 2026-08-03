@@ -113,6 +113,25 @@ int main()
         check(re.search("2026-08", 0, 7, m), "groups: it matches");
         check(m.groups() == 2, "groups: two capture groups reported");
         eq(Regex::expand("$2/$1", "2026-08", m), "08/2026", "groups: $1/$2 expand by number");
+
+        // The group ranges themselves, which nothing used to look at directly - so a change to how
+        // they are stored could have gone unnoticed until a replacement came out wrong.
+        check(m.g.size() == 3, "groups: g holds the whole match plus each capture");
+        check(m.g[0].first == 0 && m.g[0].second == 7, "groups: g[0] is the whole match");
+        check(m.g[1].first == 0 && m.g[1].second == 4, "groups: g[1] is the year");
+        check(m.g[2].first == 5 && m.g[2].second == 7, "groups: g[2] is the month");
+    }
+    {
+        // A group that did not participate must be kNoPos on BOTH ends, and expand to nothing rather
+        // than to garbage - the two halves being stored separately was what made that a real risk.
+        Regex re;
+        Options o; o.matchCase = true;
+        check(re.compile("(a)|(b)", o), "groups: alternation compiles");
+        Match m;
+        check(re.search("b", 0, 1, m), "groups: it matches the second branch");
+        check(m.g.size() == 3 && m.g[1].first == kNoPos && m.g[1].second == kNoPos,
+              "groups: the branch that did not participate is unset on both ends");
+        eq(Regex::expand("[$1][$2]", "b", m), "[][b]", "groups: an unset group expands empty");
     }
 
     // ---- (e) replacement templates - the \U/\L/\E that used to land as literal text ---------------
