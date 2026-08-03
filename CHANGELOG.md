@@ -3,6 +3,48 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.16.0] - 2026-08-03
+
+### Added
+- **Snippets.** Type `for` and press <kbd>Tab</kbd> and you get the loop, with the cursor already on
+  the variable name; <kbd>Tab</kbd> moves to the next spot to fill in, <kbd>Shift</kbd>+<kbd>Tab</kbd>
+  goes back, <kbd>Esc</kbd> leaves it. A field used more than once updates **everywhere as you type**,
+  so a loop variable is written once. **Edit ▸ Insert Snippet…**
+  (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd>) lists what applies to the current language. A small
+  built-in set ships for C/C++, Python, JavaScript, shell and HTML; add your own in `snippets.txt` in
+  the user data folder, where repeating a name replaces the built-in.
+- **A Toggle Comment button on the toolbar**, at the end of the Edit group. Its tooltip names the
+  characters it will actually insert for the current file — *Toggle Comment (#)* — and it is greyed
+  out, along with the whole Comment/Uncomment menu, for formats that have no comment syntax at all.
+
+### Changed
+- **Search now uses PCRE2, and patterns can finally cross line breaks.** `\n` in a pattern works, so
+  "join these wrapped lines" (`\n\s+` → a space) and "delete everything between two markers"
+  (`<!--[\s\S]*?-->`) are ordinary one-liners rather than impossible. This applies everywhere the same
+  way — Find, Replace, Mark, Count, Find in Files and the incremental bar share one engine. Lookbehind,
+  lookahead, named groups and atomic groups are available, `\w` and `\b` follow Unicode, and
+  replacements understand `\U`, `\L`, `\E`, `\u` and `\l` for case conversion as well as both `$1` and
+  `\1` for groups. A **`.` matches newline** checkbox sits beside the Search Mode options for when you
+  want `.` to cross line breaks too; it is greyed out unless *Regular expression* is selected.
+
+### Fixed
+- **A bad pattern now says so.** An unsupported or malformed regular expression produced the ordinary
+  "Can't find" message, so it was indistinguishable from a search that simply found nothing — and the
+  usual conclusion was that you had mistyped what you were looking for. It now reports *Invalid
+  regular expression* with the reason and the position.
+- **`\U` and `\L` used to land in the document as literal text.** The replacement expander had no case
+  operators, so `\U$1` inserted the characters `\U` followed by the group instead of upper-casing it.
+- **Replace All could split a character.** Every zero-width match advanced by one *byte*, which lands
+  mid-character in any non-ASCII text. It now steps a whole character. Regular expressions make
+  zero-width matches reachable (`x*`, `\b`, a bare lookahead) in a way plain text never did.
+- **Mark All highlighted the wrong character** on a zero-width match, underlining whatever sat next to
+  it rather than nothing.
+- **Unticking "Add to PATH" now removes an entry a previous install added.** An unselected installer
+  component simply does not run, so the old entry survived every subsequent install that turned the
+  option off, and could only be removed by uninstalling. The installer also records *which* directory
+  it added, so upgrading into a different folder cleans up the old entry rather than the new one. An
+  entry that was already on `PATH` before wxNote is still never touched.
+
 ## [0.15.1] - 2026-08-03
 
 ### Fixed

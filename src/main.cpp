@@ -165,6 +165,8 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 #include "hash_algos.h"          // portable MD5/SHA-1/SHA-256/SHA-512 for the Tools > digest generators
 #include "diff_myers.h"          // Myers O(ND) diff engine + side-by-side plan for File Compare
 #include "comment_tokens.h"      // per-language comment tokens - what Ctrl+/ and Stream Comment insert
+#include "snippets.h"            // snippet grammar + store: $1 / ${1:default} / $0 tab stops and mirrors
+#include "regex_engine.h"        // PCRE2 behind Find/Replace - std::regex could not cross a line break
 #include "spell_engine.h"        // pluggable spell-check backend (OS-native: ISpellChecker / NSSpellChecker)
 
 // Set from the project() version by CMake (see CMakeLists.txt); fall back so a stray standalone
@@ -1396,8 +1398,9 @@ static const size_t kFifHitCap = 50000;   // safety cap on pathological Find-in-
 class FifItemData : public wxTreeItemData { public: wxString file; int line; FifItemData(const wxString& f, int l) : file(f), line(l) {} };
 
 // (The Find-in-Files MENU command's old byte-level std::regex scanner lived here; it diverged from the
-// in-editor Find engine on Unicode and ignored whole-word in regex mode. It now shares the same Scintilla
-// scratch-buffer engine as Find and the Find-dialog's Find-in-Files tab - see fifScanFile / onFindInFiles.)
+// in-editor Find engine on Unicode and ignored whole-word in regex mode. It now shares the same engine as
+// Find and the Find-dialog's Find-in-Files tab - PCRE2 for regex, Scintilla for literal text - see
+// fifScanFile / onFindInFiles.)
 
 // NOTE: SCN_* notifications used to arrive here as Win32 WM_NOTIFY via a subclass on the page panel.
 // wxStyledTextCtrl (ScintillaWX) does NOT send WM_NOTIFY - it fires wxEVT_STC_* events instead - so the
@@ -1730,7 +1733,7 @@ private:
 };
 
 // Options gathered from the Find/Replace dialog and passed to the editor search engine.
-struct FindOpts { wxString find, repl; bool matchCase = false, wholeWord = false, regex = false, wrap = true, forward = true, inSelection = false; };
+struct FindOpts { wxString find, repl; bool matchCase = false, wholeWord = false, regex = false, wrap = true, forward = true, inSelection = false, dotAll = false; };
 
 // A modeless Find dialog: a tabbed control (Find / Replace / Find in Files /
 // Mark). It is UI-only: each button calls a std::function the frame
@@ -1787,6 +1790,7 @@ public:
         o.forward   = !(p->backward && p->backward->IsChecked());
         const int mode = p->mode ? p->mode->GetSelection() : 0;   // 0 Normal, 1 Extended, 2 Regex
         o.regex = (mode == 2);
+        o.dotAll = o.regex && p->dotNl && p->dotNl->IsChecked();
         o.inSelection = p->inSel && p->inSel->IsChecked();
         if (mode == 1) { unescapeExtended(o.find); unescapeExtended(o.repl); }   // search the literal bytes
         return o;
@@ -1817,6 +1821,7 @@ private:
         wxPanel*    panel = nullptr;
         wxComboBox *find = nullptr, *repl = nullptr, *filters = nullptr, *dir = nullptr;
         wxCheckBox *word = nullptr, *caseC = nullptr, *wrap = nullptr, *backward = nullptr, *inSel = nullptr;
+        wxCheckBox *dotNl = nullptr;   // ". matches newline" - only meaningful in regex mode
         wxRadioBox *mode = nullptr;   // Search Mode: Normal / Extended / Regular expression
     };
 
@@ -1903,8 +1908,21 @@ private:
             pc->inSel = new wxCheckBox(panel, wxID_ANY, _("In se&lection"));
             opt->Add(pc->inSel, 0, wxALL, 3);
         }
+        // ". matches newline": PCRE2's DOTALL. Off by default, as in every editor - otherwise ".*"
+        // swallows the rest of the file. Greyed unless Regular expression is the selected mode, since
+        // it means nothing to a literal or Extended search.
+        pc->dotNl = new wxCheckBox(panel, wxID_ANY, _("&. matches newline"));
+        opt->Add(pc->dotNl, 0, wxALL, 3);
+
         const wxString modes[3] = { _("&Normal"), _("E&xtended (\\n, \\r, \\t, \\0, \\x...)"), _("Re&gular expression") };
         pc->mode = new wxRadioBox(panel, wxID_ANY, _("Search Mode"), wxDefaultPosition, wxDefaultSize, 3, modes, 1, wxRA_SPECIFY_COLS);
+        pc->dotNl->Enable(false);
+        pc->mode->Bind(wxEVT_RADIOBOX, [pc](wxCommandEvent& e) { pc->dotNl->Enable(e.GetSelection() == 2); e.Skip(); });
+        // Say that patterns may span lines. It is the one capability people assume is missing - every
+        // editor built on the same foundations lacks it - so they never try, and the workaround they
+        // reach for instead is worse.
+        pc->mode->SetToolTip(_("Regular expressions use PCRE2: a pattern can span line breaks, and "
+                               "lookbehind, named groups and case conversion in replacements all work."));
         opt->Add(pc->mode, 0, wxALL | wxEXPAND, 3);
         mid->Add(opt, 1, wxEXPAND | wxRIGHT, 12);
 
@@ -2883,8 +2901,15 @@ static wxRect previewThumbRect(wxScrolledWindow* w, bool vertical)
 // native wxFrame or the borderless wxBorderlessFrame. The base is chosen at startup (restart-to-apply)
 // via the two aliases defined just after the class. (Two-phase lookup: MSVC is permissive, but GCC needs
 // the inherited wxFrame methods brought into scope - see the `using FB::` block below.)
+// Declared here, DEFINED only by tests/bridge_selftest.cpp. The search and snippet seams are private,
+// and the alternative to one named friend was making a dozen members public - widening the real API to
+// suit a test. In the application build this is a declaration nobody defines or calls, which is fine.
+template <class FB> class WxnShellFrameT;
+template <class FB> void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f);
+
 template <class FB> class WxnShellFrameT : public FB
 {
+    friend void wxnDriveEditorSelfTests<FB>(WxnShellFrameT<FB>*);
 public:
     // Bring inherited wxFrame/wxWindow/wxEvtHandler members into scope. MSVC's permissive lookup resolves
     // them through the dependent base FB on its own; GCC/Clang's strict two-phase lookup does not, so an
@@ -4039,6 +4064,10 @@ private:
     void bindViewEvents(ViewPane& v)
     {
         v.stc->Bind(wxEVT_STC_CHARADDED, [this, vp = &v](wxStyledTextEvent& e) { onStcCharAdded(e, vp); });   // pane-aware: v5 events carry which view fired
+        // Tab drives snippet stops when a session is live, and expands a trigger word otherwise. Bound
+        // on the editor rather than as an accelerator so it only ever competes with plain indentation,
+        // never with the menu.
+        v.stc->Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& k) { onStcKeyDown(k); });
         v.stc->Bind(wxEVT_STC_CALLTIP_CLICK,    &WxnShellFrameT::onCallTipClick,   this);
         v.stc->Bind(wxEVT_STC_INDICATOR_CLICK,  &WxnShellFrameT::onUrlClick,       this);
         v.stc->Bind(wxEVT_STC_UPDATEUI,         &WxnShellFrameT::onStcUpdateUI,    this);
@@ -4184,9 +4213,288 @@ private:
         e.Skip();
     }
     void onStcZoom(wxStyledTextEvent& e)      { if (g_onZoom) g_onZoom(static_cast<int>(sci(SCI_GETZOOM))); e.Skip(); }
+    // Tab / Shift+Tab / Esc while a snippet session is live; otherwise a bare Tab tries to expand the
+    // word before the caret as a trigger. Everything else falls through untouched, so a plain Tab in
+    // ordinary text still indents exactly as before.
+    void onStcKeyDown(wxKeyEvent& k)
+    {
+        const int code = k.GetKeyCode();
+        const bool plain = !k.ControlDown() && !k.AltDown() && !k.MetaDown();
+
+        if (m_snip.active)
+        {
+            if (code == WXK_TAB && plain) { snippetStep(k.ShiftDown() ? -1 : +1); return; }
+            if (code == WXK_ESCAPE)       { snippetCancel(); return; }
+        }
+        else if (code == WXK_TAB && plain && !k.ShiftDown() && sci(SCI_GETSELECTIONEMPTY) != 0)
+        {
+            if (snippetExpandTrigger()) return;
+        }
+        k.Skip();
+    }
+
+    // The word immediately before the caret, if it names a snippet for this buffer's language, is
+    // replaced by that snippet. Returns false when there is no match, leaving Tab to indent.
+    bool snippetExpandTrigger()
+    {
+        const int pos   = static_cast<int>(sci(SCI_GETCURRENTPOS));
+        const int start = static_cast<int>(sci(SCI_WORDSTARTPOSITION, pos, 1));
+        if (start >= pos) return false;
+        const std::string word = rangeText(start, pos);   // same idiom as autoComplete()'s prefix read
+
+        const std::vector<SnippetDef> avail = snippetsForActiveBuffer();
+        for (const SnippetDef& d : avail)
+            if (d.trigger == word)
+            {
+                sci(SCI_SETSELECTION, pos, start);   // the trigger word is what the body replaces
+                snippetInsert(d.body);
+                return true;
+            }
+        return false;
+    }
+
+    // Built-ins plus the user's own file, resolved for the active buffer's language.
+    //
+    // This runs on EVERY plain Tab keypress (snippetExpandTrigger), before the trigger word is even
+    // compared - so nothing here may touch the disk unconditionally. It used to re-parse the built-in
+    // store (a compile-time string literal) AND stat, open, read and parse snippets.txt every time,
+    // which on Windows put a CreateFile - and therefore the whole filesystem-filter stack, Defender
+    // included - on the path of the most common keystroke in code editing.
+    //
+    // The built-ins parse once. The user file is re-read only when its timestamp or size changes,
+    // which keeps the property the old comment was defending: save snippets.txt and the very next
+    // expansion uses it, no restart.
+    std::vector<SnippetDef> m_snipUser;                    // parsed user entries
+    wxDateTime             m_snipUserStamp;                // mtime it was parsed at
+    wxULongLong            m_snipUserSize = 0;             // and size, so a same-second edit is caught
+    bool                   m_snipUserSeen = false;
+
+    std::vector<SnippetDef> snippetsForActiveBuffer()
+    {
+        static const std::vector<SnippetDef> kBuiltin = wxnParseSnippetStore(wxnBuiltinSnippets());
+
+        wxLogNull noPopup;
+        const wxFileName f(userDataDir(), "snippets.txt");
+        if (f.FileExists())
+        {
+            const wxDateTime  stamp = f.GetModificationTime();
+            const wxULongLong size  = f.GetSize();
+            if (!m_snipUserSeen || size != m_snipUserSize || stamp != m_snipUserStamp)
+            {
+                m_snipUser.clear();
+                wxFile   fh(f.GetFullPath());
+                wxString text;
+                if (fh.IsOpened() && fh.ReadAll(&text))
+                    m_snipUser = wxnParseSnippetStore(std::string(text.utf8_str()));
+                m_snipUserStamp = stamp;
+                m_snipUserSize  = size;
+                m_snipUserSeen  = true;
+            }
+        }
+        else if (m_snipUserSeen)   // the file was deleted - drop what it contributed
+        {
+            m_snipUser.clear();
+            m_snipUserSeen = false;
+            m_snipUserSize = 0;
+        }
+
+        std::vector<SnippetDef> all = kBuiltin;
+        // User entries come last, so wxnSnippetsFor lets them win a trigger clash with a built-in.
+        all.insert(all.end(), m_snipUser.begin(), m_snipUser.end());
+        const WxnCommentLang* l = activeCommentLang();
+        return wxnSnippetsFor(all, l ? std::string(l->key) : std::string());
+    }
+
+    // Edit ▸ Insert Snippet... - the same shared filter dialog the Command Palette and Quick Open use,
+    // so a snippet is discoverable without knowing its trigger word.
+    void insertSnippetPicked()
+    {
+        const std::vector<SnippetDef> avail = snippetsForActiveBuffer();
+        if (avail.empty())
+        {
+            themedInfo(_("No snippets apply to this file's language.\n\nAdd your own in snippets.txt "
+                         "in the user data folder."), _("Insert Snippet"));
+            return;
+        }
+
+        std::vector<FilterRow> rows;
+        rows.reserve(avail.size());
+        for (size_t i = 0; i < avail.size(); ++i)
+        {
+            // The first line of the body is the useful preview; the rest would not fit the row.
+            const std::string& b = avail[i].body;
+            const size_t nl = b.find('\n');
+            FilterRow r;
+            r.primary   = wxString::FromUTF8(avail[i].trigger.c_str());
+            r.secondary = wxString::FromUTF8(b.substr(0, nl == std::string::npos ? b.size() : nl).c_str());
+            r.trailing  = (avail[i].lang == "*") ? _("any language")
+                                                 : wxString::FromUTF8(avail[i].lang.c_str());
+            r.userId    = static_cast<int>(i);
+            prepareFilterRow(r, /*pathMode=*/false);
+            rows.push_back(std::move(r));
+        }
+
+        FilterListDialog dlg(this, _("Insert Snippet"), _("Type a snippet name"),
+                             std::move(rows), m_dark);
+        themeDialog(&dlg);
+        if (dlg.ShowModal() != wxID_OK) return;
+        const FilterRow* pick = dlg.chosenRow();
+        if (!pick || pick->userId < 0 || static_cast<size_t>(pick->userId) >= avail.size()) return;
+        snippetInsert(avail[static_cast<size_t>(pick->userId)].body);
+    }
+
+    // ---- Snippets: insert a body, then walk its tab stops ----------------------------------------
+    // The grammar and the store live in src/snippets.h (unit-tested without an editor). This half is
+    // only the session: absolute positions, navigation, and keeping the positions correct while the
+    // user types into them.
+    //
+    // Mirrors are Scintilla's job, not ours. Landing on stop N selects EVERY occurrence of N - the
+    // primary plus each mirror - as a multiple selection with additional-selection typing on, so one
+    // keystroke edits them all at once and stays in sync by construction. Copying text between
+    // occurrences by hand would mean re-entering the document on every keystroke.
+    struct SnippetSession
+    {
+        bool                      active = false;
+        std::vector<SnippetField> fields;      // start is an ABSOLUTE document position here
+        std::vector<int>          order;       // stop numbers in visit order, 0 last
+        size_t                    at = 0;      // index into order
+        EditorPage*               page = nullptr;
+    };
+    SnippetSession m_snip;
+
+    void snippetCancel()
+    {
+        if (!m_snip.active) return;
+        m_snip = SnippetSession{};
+        // Restore the Preferences value rather than a snapshot taken at insert time: m_multiEdit IS
+        // that setting, and every other place that overrides multi-selection restores it the same way.
+        sci(SCI_SETMULTIPLESELECTION, m_multiEdit ? 1 : 0);
+    }
+
+    // Expands `body` over the current selection. Returns false when the body has no stops at all, in
+    // which case the text is still inserted - there is simply nothing to navigate.
+    bool snippetInsert(const std::string& body)
+    {
+        SnippetParse p = wxnParseSnippet(body);
+
+        // Continuation lines follow the indentation of the line the snippet starts on, and the
+        // document's own EOL - a snippet must not be the thing that mixes CRLF into an LF file.
+        const int line      = static_cast<int>(sci(SCI_LINEFROMPOSITION, sci(SCI_GETSELECTIONSTART)));
+        const int lineStart = static_cast<int>(sci(SCI_POSITIONFROMLINE, line));
+        const int indentEnd = static_cast<int>(sci(SCI_GETLINEINDENTPOSITION, line));
+        // rangeText fetches the whole span in one message. It does clobber the search target, which is
+        // fine here: nothing below reads it (the insert goes through SCI_REPLACESEL).
+        wxnReindentSnippet(p, rangeText(lineStart, indentEnd), eolStr());
+
+        // Whether the AUTHOR wrote any stops, decided before the synthetic $0 below is added - that
+        // one would otherwise make a plain body look navigable, so this returned true for text with
+        // nothing to navigate and briefly opened a session that immediately closed itself.
+        const bool hasStops = !p.fields.empty();
+
+        // With no explicit $0 the caret should end up after the snippet, not back at stop 1.
+        if (hasStops && !p.hasZero)
+        {
+            SnippetField f;
+            f.stop = 0; f.start = p.text.size(); f.len = 0; f.mirror = false;
+            p.fields.push_back(f);
+        }
+
+        const int base = static_cast<int>(sci(SCI_GETSELECTIONSTART));
+        sci(SCI_BEGINUNDOACTION);
+        sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(p.text.c_str()));
+        sci(SCI_ENDUNDOACTION);
+
+        snippetCancel();
+        if (!hasStops) return false;         // plain text: inserted, but there is nothing to walk
+        const std::vector<int> order = p.visitOrder();
+        if (order.empty()) return false;
+
+        m_snip.active       = true;
+        m_snip.page         = activePage();
+        m_snip.fields       = p.fields;
+        m_snip.order        = order;
+        m_snip.at           = 0;
+        for (SnippetField& f : m_snip.fields) f.start += static_cast<size_t>(base);
+        snippetGotoCurrent();
+        return true;
+    }
+
+    void snippetGotoCurrent()
+    {
+        if (!m_snip.active || m_snip.at >= m_snip.order.size()) { snippetCancel(); return; }
+        const int stop = m_snip.order[m_snip.at];
+
+        std::vector<const SnippetField*> occ;
+        for (const SnippetField& f : m_snip.fields) if (f.stop == stop) occ.push_back(&f);
+        if (occ.empty()) { snippetCancel(); return; }
+
+        if (stop == 0)   // the exit stop: drop the caret and end the session
+        {
+            const int p = static_cast<int>(occ[0]->start);
+            snippetCancel();
+            sci(SCI_SETSELECTION, p, p);
+            sci(SCI_SCROLLCARET);
+            return;
+        }
+
+        sci(SCI_SETMULTIPLESELECTION, 1);
+        sci(SCI_SETADDITIONALSELECTIONTYPING, 1);
+        sci(SCI_SETSELECTION, occ[0]->start + occ[0]->len, occ[0]->start);
+        for (size_t k = 1; k < occ.size(); ++k)
+            sci(SCI_ADDSELECTION, occ[k]->start + occ[k]->len, occ[k]->start);
+        sci(SCI_SCROLLCARET);
+    }
+
+    void snippetStep(int delta)
+    {
+        if (!m_snip.active) return;
+        const long long next = static_cast<long long>(m_snip.at) + delta;
+        if (next < 0) return;                                    // Shift+Tab at the first stop: stay put
+        m_snip.at = static_cast<size_t>(next);
+        if (m_snip.at >= m_snip.order.size()) { snippetCancel(); return; }
+        snippetGotoCurrent();
+    }
+
+    // Keeps every field pointing at its own text while the user types. Called for each modification,
+    // including the several that one keystroke produces when mirrors are selected together.
+    void snippetAdjust(int mt, int pos, int len)
+    {
+        if (!m_snip.active || len <= 0) return;
+        if (activePage() != m_snip.page) { snippetCancel(); return; }   // buffer switched out from under it
+
+        const size_t at = static_cast<size_t>(pos), n = static_cast<size_t>(len);
+        for (SnippetField& f : m_snip.fields)
+        {
+            const size_t s = f.start, e = f.start + f.len;
+            if (mt & SC_MOD_INSERTTEXT)
+            {
+                // "<= e" and not "< e": typing into an EMPTY field (s == e) must grow it, which is the
+                // usual case for a bare $1 with no placeholder.
+                if (at < s)       f.start += n;
+                else if (at <= e) f.len   += n;
+            }
+            else   // SC_MOD_DELETETEXT
+            {
+                const size_t dEnd = at + n;
+                if (dEnd <= s)      f.start -= n;
+                else if (at >= e)   { /* after the field - unaffected */ }
+                else
+                {
+                    const size_t lo = at > s ? at : s, hi = dEnd < e ? dEnd : e;
+                    f.len -= (hi - lo);
+                    if (at < s) f.start = at;
+                }
+            }
+        }
+    }
+
     void onStcModified(wxStyledTextEvent& e, ViewPane* vp)
     {
         const int mt = e.GetModificationType();
+        // Snippet fields track the text they mark. This runs before anything else that could change
+        // the active page, and only when the firing view is the one hosting the session.
+        if ((mt & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT)) && m_snip.active && vp == m_active)
+            snippetAdjust(mt, e.GetPosition(), static_cast<int>(e.GetLength()));
         if (mt & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT))   // raise a Nib text-changed event
         {
             // Content-change serial for the crash-safety backup's skip-if-unchanged, credited to the
@@ -5217,13 +5525,17 @@ private:
     wxToggleButton* m_incCaseBtn = nullptr; wxToggleButton* m_incWordBtn = nullptr; wxToggleButton* m_incRegexBtn = nullptr;
     wxStaticText*   m_incCount = nullptr;
     int         m_incAnchor = 0;
-    int incFlags() const   // SCFIND_* flags from the incremental bar's three toggle buttons
+    // The bar's three toggles as a FindOpts. There is deliberately no separate incFlags(): once the
+    // regex flag moved out of Scintilla's hands, it computed exactly what searchFlags() computes, and
+    // two copies of "which SCFIND_* this app sets" is the divergence the shared path exists to stop.
+    FindOpts incOpts(const wxString& needle) const
     {
-        int f = 0;
-        if (m_incCaseBtn  && m_incCaseBtn->GetValue())  f |= SCFIND_MATCHCASE;
-        if (m_incWordBtn  && m_incWordBtn->GetValue())  f |= SCFIND_WHOLEWORD;
-        if (m_incRegexBtn && m_incRegexBtn->GetValue()) f |= SCFIND_REGEXP | SCFIND_CXX11REGEX;
-        return f;
+        FindOpts o;
+        o.find      = needle;
+        o.matchCase = m_incCaseBtn  && m_incCaseBtn->GetValue();
+        o.wholeWord = m_incWordBtn  && m_incWordBtn->GetValue();
+        o.regex     = m_incRegexBtn && m_incRegexBtn->GetValue();
+        return o;
     }
     void buildIncBar()
     {
@@ -5271,16 +5583,23 @@ private:
         const wxString needle = m_incField->GetValue();
         const wxColour ok = m_dark ? wxColour(220, 220, 220) : *wxBLACK;
         if (needle.empty()) { sci(SCI_SETSEL, m_incAnchor, m_incAnchor); m_incField->SetForegroundColour(ok); m_incField->Refresh(); incUpdate(); return; }
-        const int flags = incFlags();
+        // Target-based, not SCI_SEARCHANCHOR/SEARCHNEXT: the anchor API is Scintilla's own matcher, and
+        // a regex typed into this bar has to behave exactly as it does in the Find dialog.
+        const FindOpts o = incOpts(needle);
+        const std::string u(needle.utf8_str());
+        const int len   = (int)sci(SCI_GETLENGTH);
         const int start = fromAnchor ? m_incAnchor : (int)sci(SCI_GETSELECTIONEND);
-        sci(SCI_SETSEL, start, start);
-        sci(SCI_SEARCHANCHOR);
-        const wxScopedCharBuffer u = needle.utf8_str();
-        sptr_t pos = sci(SCI_SEARCHNEXT, flags, reinterpret_cast<sptr_t>(u.data()));
-        if (pos < 0) { sci(SCI_SETSEL, 0, 0); sci(SCI_SEARCHANCHOR); pos = sci(SCI_SEARCHNEXT, flags, reinterpret_cast<sptr_t>(u.data())); }   // wrap to top
+        sci(SCI_SETSEARCHFLAGS, searchFlags(o));
+        sci(SCI_SETTARGETSTART, start); sci(SCI_SETTARGETEND, len);
+        sptr_t pos = searchInTarget(u, o);
+        if (pos < 0)   // wrap to the top
+        {
+            sci(SCI_SETTARGETSTART, 0); sci(SCI_SETTARGETEND, len);
+            pos = searchInTarget(u, o);
+        }
         m_incField->SetForegroundColour(pos >= 0 ? ok : *wxRED);   // red field = not found
         m_incField->Refresh();
-        if (pos >= 0) sci(SCI_SCROLLCARET);
+        if (pos >= 0) { sci(SCI_SETSEL, sci(SCI_GETTARGETSTART), sci(SCI_GETTARGETEND)); sci(SCI_SCROLLCARET); }
         incUpdate();   // highlight every match + refresh the "n of m" counter
     }
     void incUpdate()   // highlight all matches (MARK_INDIC) and show "n of m" in the bar's counter
@@ -5293,20 +5612,15 @@ private:
         const int len = (int)sci(SCI_GETLENGTH);
         const int selStart = (int)sci(SCI_GETSELECTIONSTART);
         const int CAP = 10000;   // bound per-keystroke work so a common letter in a huge file can't stall typing
-        sci(SCI_SETSEARCHFLAGS, incFlags());
+        const FindOpts io = incOpts(needle);
         sci(SCI_SETINDICATORCURRENT, MARK_INDIC);
         int total = 0, current = 0;
-        sci(SCI_SETTARGETSTART, 0); sci(SCI_SETTARGETEND, len);
-        while (total < CAP && sci(SCI_SEARCHINTARGET, u.length(), reinterpret_cast<sptr_t>(u.data())) >= 0)
-        {
-            const int s = (int)sci(SCI_GETTARGETSTART), e = (int)sci(SCI_GETTARGETEND);
-            sci(SCI_INDICATORFILLRANGE, s, (e > s) ? e - s : 1);
-            ++total;
+        forEachMatch(m_stc, io, 0, len, [&](int s, int e) {
+            if (e > s) sci(SCI_INDICATORFILLRANGE, s, e - s);   // nothing to paint for a zero-width hit
+            ++total;                                            // ...but it still counts, as in doCount
             if (s == selStart) current = total;
-            const int adv = (e > s) ? e : e + 1;   // step past zero-length (regex) matches
-            if (adv >= len) break;
-            sci(SCI_SETTARGETSTART, adv); sci(SCI_SETTARGETEND, len);
-        }
+            return total < CAP;                                 // bound per-keystroke work
+        });
         m_incCount->SetLabel(!total      ? wxString(_("No matches"))
                              : total >= CAP ? wxString::Format(_("%d+ matches"), CAP)
                              : current    ? wxString::Format(_("%d of %d"), current, total)
@@ -6583,6 +6897,11 @@ private:
     {
         if (!p) return;
         m_beginEndSelectActive = false;      // a sticky Begin/End Select anchor doesn't carry across documents
+        // Same reasoning, and the same seam: a snippet's tab stops are absolute offsets into the
+        // document it was inserted in. Ending the session here rather than only comparing activePage()
+        // against a stored EditorPage* also means a CLOSED page can never be compared against - that
+        // pointer is freed by DeletePage, and a recycled allocation would make the check silently pass.
+        snippetCancel();
         setActiveView(viewOf(p));            // mount on the view whose tab strip owns this page
         if (!m_stc) return;
         if (m_stc->GetParent() == p && sci(SCI_GETDOCPOINTER) == p->doc)
@@ -8080,6 +8399,10 @@ private:
         tb->AddSeparator();
         T(kCmdEditCut, "cut", _("Cut"));           T(kCmdEditCopy, "copy", _("Copy"));           T(kCmdEditPaste, "paste", _("Paste"));
         T(kCmdEditUndo, "undo", _("Undo"));        T(kCmdEditRedo, "redo", _("Redo"));   // one Edit cluster (clipboard + history), per Notepad++/VS convention
+        // Toggle Comment closes the Edit cluster. Its tooltip is rewritten per buffer in
+        // updateUiState() to name the language's actual token, and the tool is disabled outright for
+        // languages that have no comment form at all.
+        T(kCmdEditBlockComment, "comment", _("Toggle Comment"));
         tb->AddSeparator();
         T(kCmdSearchFind, "find", _("Find"));      T(kCmdSearchReplace, "replace", _("Replace"));
         tb->AddSeparator();
@@ -10309,6 +10632,14 @@ private:
     }
     WxnCommentStyle activeCommentStyle()
     { const WxnCommentLang* l = activeCommentLang(); return l ? l->style : WxnCommentStyle{}; }
+    // The token to show in the toolbar tooltip: the line form when there is one, otherwise the block
+    // pair, which is what Toggle Comment will actually insert for CSS/HTML/XML/Markdown.
+    static wxString commentTokenHint(const WxnCommentStyle& cs)
+    {
+        if (cs.hasLine())  return wxString::FromUTF8(cs.line);
+        if (cs.hasBlock()) return wxString::FromUTF8(cs.blockOpen) + " " + wxString::FromUTF8(cs.blockClose);
+        return wxString();
+    }
     // What to call this buffer's language in a status message. The table's name for a known
     // language, otherwise the label the status bar is already showing for the document.
     wxString commentLangLabel(const WxnCommentLang* l)
@@ -10741,9 +11072,124 @@ private:
         int f = 0;
         if (o.matchCase) f |= SCFIND_MATCHCASE;
         if (o.wholeWord) f |= SCFIND_WHOLEWORD;
-        if (o.regex)     f |= SCFIND_REGEXP | SCFIND_CXX11REGEX;
+        // NO SCFIND_REGEXP here any more. Regex searches never reach Scintilla's matcher - see
+        // searchInTarget() below - and leaving the flag on would make the literal fallback path
+        // (used when a pattern fails to compile) interpret the pattern as a regex anyway.
         return f;
     }
+
+    // ---- the regex backend (src/regex_engine.h, PCRE2) --------------------------------------------
+    // Compiled patterns are cached because Replace All calls straight back in for every match, and
+    // pcre2_compile on each one would dominate the loop.
+    wxnre::Regex m_re;
+    // The cache key is kept as its three components rather than one concatenated string: the compare
+    // runs once per MATCH inside Replace All, and building a key allocated and freed a temporary every
+    // time. m_re.ok() is the authority on whether the cached pattern compiled - a separate flag would
+    // just be a second copy of the same fact.
+    std::string  m_rePat;
+    bool         m_reCase = false, m_reWord = false, m_reDot = false, m_reHave = false;
+
+    // Compiles `pat` if it is not already the cached one. Reports a bad pattern ONCE, through the same
+    // channel as a failed search - this is the gap that made an unsupported construct look exactly
+    // like "no matches" (Scintilla raised SC_STATUS_WARN_REGEX and nothing ever read SCI_GETSTATUS).
+    bool regexReady(const std::string& pat, const FindOpts& o)
+    {
+        // dotAll is part of the key: it changes the compiled pattern, so leaving it out would make
+        // ticking ". matches newline" silently reuse the pattern compiled without it.
+        if (m_reHave && o.matchCase == m_reCase && o.wholeWord == m_reWord && o.dotAll == m_reDot
+            && pat == m_rePat)
+            return m_re.ok();
+        m_rePat = pat; m_reCase = o.matchCase; m_reWord = o.wholeWord; m_reDot = o.dotAll;
+        m_reHave = true;
+
+        wxnre::Options ro;
+        ro.matchCase = o.matchCase;
+        ro.wholeWord = o.wholeWord;
+        ro.dotAll    = o.dotAll;
+        std::string err;
+        const bool ok = m_re.compile(pat, ro, &err);
+        if (!ok)
+            findResult(wxString::Format(_("Invalid regular expression: %s"),
+                                        wxString::FromUTF8(err.c_str())));
+        return ok;
+    }
+
+    // A drop-in replacement for SCI_SEARCHINTARGET. Non-regex searches go to Scintilla unchanged;
+    // regex searches run over the document buffer through PCRE2 and set the target to the match, so
+    // every caller's surrounding logic - wrap-around, loops, target bookkeeping - keeps working.
+    //
+    // Backwards is expressed the way Scintilla expresses it: targetStart > targetEnd.
+    // Every search takes the control it operates on. Find in Files works in a hidden scratch editor,
+    // and when these were hard-wired to sci() (= the active editor) it had to grow its own parallel
+    // regex-vs-literal branches - which promptly drifted, losing backward search and open-coding the
+    // replacement expansion. One implementation, two buffers.
+    sptr_t searchInTarget(wxStyledTextCtrl* stc, const std::string& needle, const FindOpts& o)
+    {
+        if (!stc) return -1;
+        if (!o.regex)
+        {
+            // The flags are pushed HERE, not by each caller. This is the single entry point for a
+            // search, so owning the configuration too means a new call site cannot half-adopt it and
+            // silently get case-insensitive matching.
+            sciSend(stc, SCI_SETSEARCHFLAGS, searchFlags(o));
+            return sciSend(stc, SCI_SEARCHINTARGET, needle.size(), reinterpret_cast<sptr_t>(needle.data()));
+        }
+        if (needle.empty() || !regexReady(needle, o)) return -1;
+
+        const sptr_t ts = sciSend(stc, SCI_GETTARGETSTART), te = sciSend(stc, SCI_GETTARGETEND);
+        const bool   backward = ts > te;
+        const size_t lo = static_cast<size_t>(backward ? te : ts);
+        const size_t hi = static_cast<size_t>(backward ? ts : te);
+
+        // The WHOLE buffer is handed to PCRE2, bounded by `hi`, never a copy of the range: lookbehind
+        // and \b have to see the text before `lo` or they would report a boundary that is not there.
+        const char*  buf = reinterpret_cast<const char*>(sciSend(stc, SCI_GETCHARACTERPOINTER));
+        const size_t len = static_cast<size_t>(sciSend(stc, SCI_GETLENGTH));
+        if (!buf) return -1;
+
+        wxnre::Match m;
+        const bool got = backward ? m_re.searchBackward(buf, len, lo, hi, m)
+                                  : m_re.search(buf, len, lo, hi, m);
+        if (!got) return -1;
+
+        m_reLast = std::move(m);   // Replace uses this to expand $1 / \U without re-matching
+        sciSend(stc, SCI_SETTARGETSTART, static_cast<int>(m_reLast.start));
+        sciSend(stc, SCI_SETTARGETEND,   static_cast<int>(m_reLast.end));
+        return static_cast<sptr_t>(m_reLast.start);
+    }
+    sptr_t searchInTarget(const std::string& needle, const FindOpts& o) { return searchInTarget(m_stc, needle, o); }
+    wxnre::Match m_reLast;         // the match searchInTarget last returned
+
+    // A drop-in for SCI_REPLACETARGET / SCI_REPLACETARGETRE. In regex mode the replacement is expanded
+    // HERE - by wxnre::Regex::expand, which knows $1, \1, \U, \L, \E, \u and \l - rather than by
+    // Scintilla's substituter, whose escape table has none of the case operators and emits "\U"
+    // verbatim into the document.
+    void replaceTargetWith(wxStyledTextCtrl* stc, const std::string& repl, const FindOpts& o)
+    {
+        if (!stc) return;
+        if (!o.regex)
+        {
+            sciSend(stc, SCI_REPLACETARGET, repl.size(), reinterpret_cast<sptr_t>(repl.data()));
+            return;
+        }
+        const char*  buf = reinterpret_cast<const char*>(sciSend(stc, SCI_GETCHARACTERPOINTER));
+        const size_t len = static_cast<size_t>(sciSend(stc, SCI_GETLENGTH));
+        const std::string out = buf ? wxnre::Regex::expand(repl, buf, len, m_reLast) : repl;
+        sciSend(stc, SCI_REPLACETARGET, out.size(), reinterpret_cast<sptr_t>(out.data()));
+    }
+    void replaceTargetWith(const std::string& repl, const FindOpts& o) { replaceTargetWith(m_stc, repl, o); }
+
+    // Where an iteration should resume after a match, so a zero-width hit cannot spin forever.
+    static int advancePast(wxStyledTextCtrl* stc, int matchStart, int matchEnd)
+    {
+        if (matchEnd > matchStart) return matchEnd;
+        const char* b = reinterpret_cast<const char*>(sciSend(stc, SCI_GETCHARACTERPOINTER));
+        if (!b) return matchEnd + 1;
+        return static_cast<int>(wxnre::Regex::advanceOver(b, static_cast<size_t>(sciSend(stc, SCI_GETLENGTH)),
+                                                          static_cast<size_t>(matchStart),
+                                                          static_cast<size_t>(matchEnd)));
+    }
+    int advancePast(int matchStart, int matchEnd) { return advancePast(m_stc, matchStart, matchEnd); }
     bool doFindNext(const FindOpts& o)
     {
         if (o.find.empty()) return false;
@@ -10753,12 +11199,13 @@ private:
         const int cur = static_cast<int>(o.forward ? sci(SCI_GETCURRENTPOS) : sci(SCI_GETSELECTIONSTART));
         sci(SCI_SETTARGETSTART, cur);
         sci(SCI_SETTARGETEND, o.forward ? len : 0);
-        sptr_t f = sci(SCI_SEARCHINTARGET, n.length(), reinterpret_cast<sptr_t>(n.data()));
+        const std::string needle(n.data(), n.length());
+        sptr_t f = searchInTarget(needle, o);
         if (f < 0 && o.wrap)
         {
             sci(SCI_SETTARGETSTART, o.forward ? 0 : len);
             sci(SCI_SETTARGETEND, o.forward ? len : 0);
-            f = sci(SCI_SEARCHINTARGET, n.length(), reinterpret_cast<sptr_t>(n.data()));
+            f = searchInTarget(needle, o);
         }
         if (f >= 0)
         {
@@ -10895,13 +11342,8 @@ private:
         const wxScopedCharBuffer n = o.find.ToUTF8();
         int start, end; searchBounds(o, start, end);
         sci(SCI_SETSEARCHFLAGS, searchFlags(o));
-        int count = 0; sci(SCI_SETTARGETSTART, start); sci(SCI_SETTARGETEND, end);
-        while (sci(SCI_SEARCHINTARGET, n.length(), reinterpret_cast<sptr_t>(n.data())) >= 0)
-        {
-            int e = static_cast<int>(sci(SCI_GETTARGETEND));
-            if (e == static_cast<int>(sci(SCI_GETTARGETSTART))) ++e;   // zero-length match guard
-            sci(SCI_SETTARGETSTART, e); sci(SCI_SETTARGETEND, end); ++count;
-        }
+        int count = 0;
+        forEachMatch(m_stc, o, start, end, [&](int, int) { ++count; return true; });
         return count;
     }
     bool doReplaceOne(const FindOpts& o)
@@ -10911,34 +11353,78 @@ private:
         const int ss = static_cast<int>(sci(SCI_GETSELECTIONSTART)), se = static_cast<int>(sci(SCI_GETSELECTIONEND));
         sci(SCI_SETTARGETSTART, ss); sci(SCI_SETTARGETEND, se);
         const bool selMatches = !o.find.empty()
-            && sci(SCI_SEARCHINTARGET, n.length(), reinterpret_cast<sptr_t>(n.data())) == ss
+            && searchInTarget(std::string(n.data(), n.length()), o) == ss
             && static_cast<int>(sci(SCI_GETTARGETEND)) == se;
         if (selMatches)
         {
-            if (o.regex) sci(SCI_REPLACETARGETRE, r.length(), reinterpret_cast<sptr_t>(r.data()));
-            else         sci(SCI_REPLACETARGET,   r.length(), reinterpret_cast<sptr_t>(r.data()));
+            replaceTargetWith(std::string(r.data(), r.length()), o);
             sci(SCI_SETSEL, sci(SCI_GETTARGETEND), sci(SCI_GETTARGETEND));
         }
         return doFindNext(o);
     }
+    // Visits every match in [start, end) of `stc`, calling fn(matchStart, matchEnd). Return false from
+    // fn to stop early.
+    //
+    // Count, Mark All, the incremental bar's highlighter and the Find-in-Files scanner each used to
+    // carry their own copy of this loop, and they had already drifted apart on the question a
+    // zero-width pattern asks: Count counted `\b`, Mark All and the bar skipped it, Find in Files
+    // counted it again - so one document gave three different answers to "how many matches?". The
+    // policy now lives in one place: a zero-width match IS a match (it is what the pattern asked for),
+    // and advancing over it steps a whole character so the scan cannot spin or split a character.
+    template <class Fn>
+    void forEachMatch(wxStyledTextCtrl* stc, const FindOpts& o, int start, int end, Fn fn)
+    {
+        if (!stc || o.find.empty()) return;
+        const std::string needle(o.find.utf8_str());
+        sciSend(stc, SCI_SETTARGETSTART, start);
+        sciSend(stc, SCI_SETTARGETEND, end);
+        while (searchInTarget(stc, needle, o) >= 0)
+        {
+            const int s = static_cast<int>(sciSend(stc, SCI_GETTARGETSTART));
+            const int e = static_cast<int>(sciSend(stc, SCI_GETTARGETEND));
+            if (!fn(s, e)) return;
+            const int next = advancePast(stc, s, e);
+            if (next > end) return;
+            sciSend(stc, SCI_SETTARGETSTART, next);
+            sciSend(stc, SCI_SETTARGETEND, end);
+        }
+    }
+
+    // Replace every match in [start, end) of `stc`. Shared by Replace All and Replace in Files, which
+    // used to carry two copies of this loop - and the bound arithmetic below is its subtlest line, so
+    // maintaining it twice was the wrong trade. Returns the number of replacements; `end` moves with
+    // them, which is why the caller gets it back through the reference.
+    int replaceAllIn(wxStyledTextCtrl* stc, const FindOpts& o, int start, int& end)
+    {
+        if (!stc || o.find.empty()) return 0;
+        const std::string needle(o.find.utf8_str()), repl(o.repl.utf8_str());
+        int count = 0;
+        sciSend(stc, SCI_SETTARGETSTART, start);
+        sciSend(stc, SCI_SETTARGETEND, end);
+        while (searchInTarget(stc, needle, o) >= 0)
+        {
+            const int ms = static_cast<int>(sciSend(stc, SCI_GETTARGETSTART));
+            const int me = static_cast<int>(sciSend(stc, SCI_GETTARGETEND));
+            replaceTargetWith(stc, repl, o);
+            int ns = static_cast<int>(sciSend(stc, SCI_GETTARGETEND));
+            end += (ns - me);                    // the bound grows/shrinks with the replacement
+            // A zero-width match leaves the caret where it was, so resume one CHARACTER on - by byte
+            // would land mid-sequence on any non-ASCII text. Regex makes this reachable in a way the
+            // old literal-only path never was ("x*", "\b", a bare lookahead).
+            if (me == ms) ns = advancePast(stc, ns, ns);
+            sciSend(stc, SCI_SETTARGETSTART, ns);
+            sciSend(stc, SCI_SETTARGETEND, end);
+            ++count;
+            if (ns > end) break;
+        }
+        return count;
+    }
     int doReplaceAll(const FindOpts& o)
     {
         if (o.find.empty()) return 0;
-        const wxScopedCharBuffer n = o.find.ToUTF8(), r = o.repl.ToUTF8();
         int start, end; searchBounds(o, start, end);
-        sci(SCI_SETSEARCHFLAGS, searchFlags(o));
         sci(SCI_BEGINUNDOACTION);
-        int count = 0; sci(SCI_SETTARGETSTART, start); sci(SCI_SETTARGETEND, end);
-        while (sci(SCI_SEARCHINTARGET, n.length(), reinterpret_cast<sptr_t>(n.data())) >= 0)
-        {
-            const int ms = static_cast<int>(sci(SCI_GETTARGETSTART)), me = static_cast<int>(sci(SCI_GETTARGETEND));
-            if (o.regex) sci(SCI_REPLACETARGETRE, r.length(), reinterpret_cast<sptr_t>(r.data()));
-            else         sci(SCI_REPLACETARGET,   r.length(), reinterpret_cast<sptr_t>(r.data()));
-            int ns = static_cast<int>(sci(SCI_GETTARGETEND));
-            end += (ns - me);                    // the bound grows/shrinks with the replacement
-            if (me == ms) ++ns;                  // zero-length match guard
-            sci(SCI_SETTARGETSTART, ns); sci(SCI_SETTARGETEND, end); ++count;
-        }
+        const int count = replaceAllIn(m_stc, o, start, end);
         sci(SCI_ENDUNDOACTION);
         if (o.inSelection && count > 0) sci(SCI_SETSEL, start, end);   // keep the (resized) selection
         return count;
@@ -11029,14 +11515,14 @@ private:
         int start, end; searchBounds(o, start, end);
         sci(SCI_SETSEARCHFLAGS, searchFlags(o));
         sci(SCI_SETINDICATORCURRENT, MARK_INDIC);
-        int count = 0; sci(SCI_SETTARGETSTART, start); sci(SCI_SETTARGETEND, end);
-        while (sci(SCI_SEARCHINTARGET, n.length(), reinterpret_cast<sptr_t>(n.data())) >= 0)
-        {
-            int s = static_cast<int>(sci(SCI_GETTARGETSTART)), e = static_cast<int>(sci(SCI_GETTARGETEND));
-            if (e <= s) e = s + 1;
-            sci(SCI_INDICATORFILLRANGE, s, e - s);
-            sci(SCI_SETTARGETSTART, e); sci(SCI_SETTARGETEND, end); ++count;
-        }
+        int count = 0;
+        forEachMatch(m_stc, o, start, end, [&](int s, int e) {
+            // A zero-width match is counted like any other but highlights nothing - the old code
+            // filled one byte, underlining a character the pattern never matched.
+            if (e > s) sci(SCI_INDICATORFILLRANGE, s, e - s);
+            ++count;
+            return true;
+        });
         return count;
     }
     wxString selText() { const std::string s = getSelUtf8(); return wxString::FromUTF8(s.data(), s.size()); }
@@ -11065,31 +11551,37 @@ private:
                       .Bottom().Layer(1).BestSize(wxSize(-1, 200)).CloseButton(true).MaximizeButton(false));
         m_aui.Update();
     }
-    // Scan one file for matches using the SAME Scintilla search/regex engine as in-document Find (the hidden
-    // scratch buffer + searchFlags), so Find, the Find-dialog's Find-in-Files tab, and the Find-in-Files menu
-    // all match identically (Unicode- and whole-word-correct). Fills FifHit with 1-based line numbers.
+    // Scan one file for matches using the SAME engine as in-document Find - PCRE2 over the scratch buffer's
+    // bytes for regex, Scintilla for literal text - so Find, the Find-dialog's Find-in-Files tab, and the
+    // Find-in-Files menu all match identically (Unicode- and whole-word-correct, and patterns may cross line
+    // breaks here exactly as they do in the editor). Fills FifHit with 1-based line numbers.
     // cap == 0 means uncapped; a non-zero cap stops this file early once `hits` reaches it. The CALLER must
     // also stop its own file loop at the cap - returning here only ends the current file.
     void fifScanFile(const wxString& file, const FindOpts& o, std::vector<FifHit>& hits, size_t cap = 0)
     {
         wxString content;
         { wxFile fh(file); if (!fh.IsOpened() || !fh.ReadAll(&content)) return; }
+        // Its own precondition, not the caller's. The scratch control is created lazily, and both
+        // existing callers happened to create it first - so a new one dereferenced null instead, which
+        // is a crash rather than a missing result. Making the function responsible for what it needs
+        // costs one branch and removes the trap.
+        ensureFifScratch();
         m_fifScratch->SetReadOnly(false);
         m_fifScratch->SetText(content);
-        m_fifScratch->SetSearchFlags(static_cast<int>(searchFlags(o)));
         const int len = m_fifScratch->GetLength();
-        int pos = 0;
-        while (pos <= len)
-        {
-            m_fifScratch->SetTargetStart(pos); m_fifScratch->SetTargetEnd(len);
-            if (m_fifScratch->SearchInTarget(o.find) < 0) break;
-            const int s = m_fifScratch->GetTargetStart(), e = m_fifScratch->GetTargetEnd();
+        const std::string needle(o.find.utf8_str());
+        if (needle.empty()) return;
+
+        // No regex-vs-literal branch here: searchInTarget takes the control and picks the engine. The
+        // line number and line text still come from Scintilla, whose offsets agree because the search
+        // ran over this same buffer's bytes.
+        forEachMatch(m_fifScratch, o, 0, len, [&](int s, int) {
             const int line = m_fifScratch->LineFromPosition(s);
-            wxString lt = m_fifScratch->GetTextRange(m_fifScratch->PositionFromLine(line), m_fifScratch->GetLineEndPosition(line));
-            hits.push_back({ file, line + 1, lt });
-            pos = (e > s) ? e : e + 1;                       // advance past the match; +1 guards zero-length
-            if (cap && hits.size() >= cap) return;
-        }
+            hits.push_back({ file, line + 1,
+                             m_fifScratch->GetTextRange(m_fifScratch->PositionFromLine(line),
+                                                        m_fifScratch->GetLineEndPosition(line)) });
+            return !cap || hits.size() < cap;   // false stops the scan
+        });
     }
     // The file set both Find-in-Files entry points scan: ';'-separated wildcard patterns under `dir`, deduped
     // (a file matching two patterns is scanned once). Shared so the two paths cannot drift apart on filter
@@ -11132,15 +11624,9 @@ private:
                 wxString content;
                 { wxFile fh(file); if (!fh.IsOpened() || !fh.ReadAll(&content)) continue; }
                 m_fifScratch->SetReadOnly(false); m_fifScratch->SetText(content);
-                m_fifScratch->SetSearchFlags(static_cast<int>(searchFlags(o)));
-                int n = 0, end = m_fifScratch->GetLength(); m_fifScratch->SetTargetStart(0); m_fifScratch->SetTargetEnd(end);
-                while (m_fifScratch->SearchInTarget(o.find) >= 0)
-                {
-                    const int s = m_fifScratch->GetTargetStart(), e = m_fifScratch->GetTargetEnd();
-                    if (o.regex) m_fifScratch->ReplaceTargetRE(o.repl); else m_fifScratch->ReplaceTarget(o.repl);
-                    int ne = m_fifScratch->GetTargetEnd(); end += (ne - e); if (e == s) ++ne;
-                    m_fifScratch->SetTargetStart(ne); m_fifScratch->SetTargetEnd(end); ++n;
-                }
+                // The same loop doReplaceAll runs, against the scratch buffer instead of the editor.
+                int scratchEnd = m_fifScratch->GetLength();
+                const int n = replaceAllIn(m_fifScratch, o, 0, scratchEnd);
                 if (n > 0) { wxFile w(file, wxFile::write); if (w.IsOpened()) w.Write(m_fifScratch->GetText()); ++replFiles; repl += n; out(wxString::Format(_("  %s  (%d replaced)"), file, n), file, 0); }
             }
             else   // same scan engine as the Find-in-Files menu command; only the sink differs
@@ -13703,6 +14189,7 @@ private:
                 break;
             }
             case myID_QUICK_OPEN: quickOpen(); break;
+            case myID_INSERT_SNIPPET: insertSnippetPicked(); break;
             case kCmdCmdLineArguments:
                 // Preamble only - the file-argument forms the parser cannot describe. Everything after
                 // it is generated from the parser, so it stays correct and stays translatable per line.
@@ -13916,17 +14403,37 @@ private:
                     auto* p = static_cast<EditorPage*>(nb->GetPage(i));
                     if (p && p->dirty) anyDirty = true;
                 }
+        // What the buffer's language can actually express. A format with NEITHER form (JSON, Diff,
+        // Intel HEX, S-Record) or an unknown language cannot be commented at all, so those commands are
+        // greyed rather than left clickable to report failure afterwards. Block Comment stays available
+        // whenever anything exists - for a line-only language it falls back to the line token.
+        const WxnCommentLang* clang = activeCommentLang();
+        const WxnCommentStyle cs    = clang ? clang->style : WxnCommentStyle{};
+        const bool canComment = !cs.empty();
+        // The language identity, not just the yes/no, has to be part of the change test: switching
+        // between two commentable languages leaves canComment true while the TOOLTIP must still be
+        // rewritten from "//" to "#".
+        const void* clangId = static_cast<const void*>(clang);
+
         if (dirty == m_stSave && anyDirty == m_stSaveAll && canUndo == m_stUndo && canRedo == m_stRedo &&
-            hasSel == m_stSel && canPaste == m_stPaste && hasPath == m_stHasPath)
+            hasSel == m_stSel && canPaste == m_stPaste && hasPath == m_stHasPath &&
+            canComment == m_stCanComment && clangId == m_stCommentLang)
             return;   // nothing changed
         m_stSave = dirty; m_stSaveAll = anyDirty; m_stUndo = canUndo; m_stRedo = canRedo;
         m_stSel = hasSel; m_stPaste = canPaste; m_stHasPath = hasPath;
+        m_stCanComment = canComment; m_stCommentLang = clangId;
         if (auto* tb = toolBar())
         {
             tb->EnableTool(kCmdFileSave, dirty);   tb->EnableTool(kCmdFileSaveall, anyDirty);
             tb->EnableTool(kCmdEditUndo, canUndo); tb->EnableTool(kCmdEditRedo, canRedo);
             tb->EnableTool(kCmdEditCut, hasSel);   tb->EnableTool(kCmdEditCopy, hasSel);
             tb->EnableTool(kCmdEditPaste, canPaste);
+            tb->EnableTool(kCmdEditBlockComment, canComment);
+            // Name the actual token in the tooltip, so the button says what it will insert rather than
+            // making the user press it to find out.
+            tb->SetToolShortHelp(kCmdEditBlockComment,
+                canComment ? wxString::Format(_("Toggle Comment (%s)"), commentTokenHint(cs))
+                           : wxString::Format(_("%s has no comment syntax"), commentLangLabel(clang)));
         }
         if (auto* mb = menuBar())
         {
@@ -13940,6 +14447,11 @@ private:
             // directory for untitled buffers.
             mb->Enable(kCmdFileOpenDefaultViewer, hasPath);
             mb->Enable(kCmdFileReload, hasPath);
+            // The whole Comment/Uncomment submenu follows the toolbar button: a language with no
+            // comment form at all cannot service any of the five.
+            for (int id : { kCmdEditBlockComment, kCmdEditBlockCommentSet, kCmdEditBlockUncomment,
+                            kCmdEditStreamComment, kCmdEditStreamUncomment })
+                mb->Enable(id, canComment);
         }
     }
 
@@ -14089,6 +14601,11 @@ private:
     bool        m_hint = false;   // a "needs full app" message is showing in status field 0
     // cached toolbar/menu enable states (start enabled, matching the freshly-built toolbar)
     bool        m_stSave = true, m_stSaveAll = true, m_stUndo = true, m_stRedo = true, m_stSel = true, m_stPaste = true, m_stHasPath = true;
+    // Comment/Uncomment enable state. m_stCommentLang is the identity of the row in comment_tokens.h's
+    // static table (a stable pointer, never freed), tracked alongside the boolean so that switching
+    // between two commentable languages still refreshes the token named in the tooltip.
+    bool        m_stCanComment = true;
+    const void* m_stCommentLang = nullptr;
     int         m_newCount = 0;   // counter for "new N" tab titles
     int         m_zoom = 0;       // shared zoom level across all tabs (Ctrl+wheel), persisted
     WxnTheme    m_theme;          // theme colours (loaded from theme XML)

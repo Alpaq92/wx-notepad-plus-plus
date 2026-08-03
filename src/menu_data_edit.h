@@ -190,6 +190,11 @@ static const MenuItemDef kEditMenuItems[] = {
       kEditConvertCaseToItems, WXSIZEOF(kEditConvertCaseToItems) },
     { MenuItemKind::Submenu, 0, &Label::EditCommentUncomment, "edit.commentUncomment",
       kEditCommentUncommentItems, WXSIZEOF(kEditCommentUncommentItems) },
+    // A snippet is otherwise only reachable by knowing its trigger word, which makes the whole feature
+    // invisible. This lists what applies to the current buffer's language. NOT Ctrl+J - that is
+    // Join Lines, right above in this same menu.
+    { MenuItemKind::Normal, myID_INSERT_SNIPPET, &Label::EditInsertSnippet, "edit.insertSnippet",
+      nullptr, 0, false, "Ctrl+Shift+J" },
     { MenuItemKind::Submenu, 0, &Label::EditIndent, "edit.indent",
       kEditIndentItems, WXSIZEOF(kEditIndentItems) },
     { MenuItemKind::Submenu, 0, &Label::EditLineOperations, "edit.lineOperations",

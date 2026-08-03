@@ -3237,3 +3237,36 @@ msgstr "%s hat keine Kommentarsyntax - nichts wurde geändert"
 
 msgid "%s has no block comment - used its line comment instead"
 msgstr "%s hat keinen Blockkommentar - stattdessen Zeilenkommentar verwendet"
+
+msgid "Toggle Comment"
+msgstr "Kommentar umschalten"
+
+msgid "Toggle Comment (%s)"
+msgstr "Kommentar umschalten (%s)"
+
+msgid "%s has no comment syntax"
+msgstr "%s hat keine Kommentarsyntax"
+
+msgid "Invalid regular expression: %s"
+msgstr "Ungültiger regulärer Ausdruck: %s"
+
+msgid "Insert &Snippet..."
+msgstr "&Baustein einfügen..."
+
+msgid "Insert Snippet"
+msgstr "Baustein einfügen"
+
+msgid "Type a snippet name"
+msgstr "Bausteinnamen eingeben"
+
+msgid "any language"
+msgstr "beliebige Sprache"
+
+msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.txt in the user data folder."
+msgstr "Keine Bausteine für die Sprache dieser Datei.\n\nEigene in snippets.txt im Benutzerdatenordner hinzufügen."
+
+msgid "Regular expressions use PCRE2: a pattern can span line breaks, and lookbehind, named groups and case conversion in replacements all work."
+msgstr "Reguläre Ausdrücke verwenden PCRE2: Ein Muster kann Zeilenumbrüche überspannen, und Lookbehind, benannte Gruppen sowie Groß-/Kleinschreibung in Ersetzungen funktionieren."
+
+msgid "&. matches newline"
+msgstr "&. entspricht Zeilenumbruch"

@@ -3239,3 +3239,36 @@ msgstr ""
 
 msgid "%s has no block comment - used its line comment instead"
 msgstr ""
+
+msgid "Toggle Comment"
+msgstr ""
+
+msgid "Toggle Comment (%s)"
+msgstr ""
+
+msgid "%s has no comment syntax"
+msgstr ""
+
+msgid "Invalid regular expression: %s"
+msgstr ""
+
+msgid "Insert &Snippet..."
+msgstr ""
+
+msgid "Insert Snippet"
+msgstr ""
+
+msgid "Type a snippet name"
+msgstr ""
+
+msgid "any language"
+msgstr ""
+
+msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.txt in the user data folder."
+msgstr ""
+
+msgid "Regular expressions use PCRE2: a pattern can span line breaks, and lookbehind, named groups and case conversion in replacements all work."
+msgstr ""
+
+msgid "&. matches newline"
+msgstr ""

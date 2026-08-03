@@ -3237,3 +3237,36 @@ msgstr "%s에는 주석 구문이 없습니다 - 아무것도 변경되지 않�
 
 msgid "%s has no block comment - used its line comment instead"
 msgstr "%s에는 블록 주석이 없습니다 - 줄 주석을 사용했습니다"
+
+msgid "Toggle Comment"
+msgstr "주석 토글"
+
+msgid "Toggle Comment (%s)"
+msgstr "주석 토글 (%s)"
+
+msgid "%s has no comment syntax"
+msgstr "%s에는 주석 구문이 없습니다"
+
+msgid "Invalid regular expression: %s"
+msgstr "잘못된 정규식: %s"
+
+msgid "Insert &Snippet..."
+msgstr "스니페입 삽입(&S)..."
+
+msgid "Insert Snippet"
+msgstr "스니페입 삽입"
+
+msgid "Type a snippet name"
+msgstr "스니페입 이름 입력"
+
+msgid "any language"
+msgstr "모든 언어"
+
+msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.txt in the user data folder."
+msgstr "이 파일의 언어에 맞는 스니페입이 없습니다.\n\n사용자 데이터 폴더의 snippets.txt에 추가하세요."
+
+msgid "Regular expressions use PCRE2: a pattern can span line breaks, and lookbehind, named groups and case conversion in replacements all work."
+msgstr "정규식은 PCRE2를 사용합니다. 패턴이 줄 바꿈을 가로질러 수 있으며 후방 탐색, 명명된 그룹, 치환 시 대소문자 변환이 모두 동작합니다."
+
+msgid "&. matches newline"
+msgstr "&. 이 줄 바꿈과 일치"

@@ -71,6 +71,7 @@ namespace Label
     inline const wxString EditLineOpsSortLengthDescending() { return _("Sort Lines By Length Descending"); }
 
     inline const wxString EditCommentUncomment() { return _("Co&mment/Uncomment"); }
+    inline const wxString EditInsertSnippet()       { return _("Insert &Snippet..."); }
     inline const wxString EditCommentToggleSingle() { return _("Toggle Single Line Comment"); }
     inline const wxString EditCommentSetSingle() { return _("Single Line Comment"); }
     inline const wxString EditCommentUnsetSingle() { return _("Single Line Uncomment"); }
