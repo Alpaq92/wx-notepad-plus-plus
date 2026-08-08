@@ -5,6 +5,8 @@ All notable changes to wxNote are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-08
+
 ### Added
 - **Snippet transforms.** A field can show a derived version of another:
   `class ${1:my_thing}` with `${1/^(\w)|_(\w)/\U$1$2/g}()` types the name once and the constructor
@@ -19,6 +21,8 @@ All notable changes to wxNote are documented here. Format loosely follows
   turn on ligatures — the shipped faces are the ligature-free variants by choice.)
 
 ### Fixed
+- Korean: the word for “snippet” was mistranslated in every snippet string shipped in 0.16.0
+  (스니페입 → 스니펫).
 - Documentation: the audit listed Windows font ligatures as blocked on an upstream wxWidgets change.
   That was wrong — wx already ships the Direct2D surface, and wxNote simply never asked for it.
 
