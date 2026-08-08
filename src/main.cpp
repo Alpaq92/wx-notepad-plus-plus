@@ -4224,7 +4224,12 @@ private:
         if (m_snip.active)
         {
             if (code == WXK_TAB && plain) { snippetStep(k.ShiftDown() ? -1 : +1); return; }
-            if (code == WXK_ESCAPE)       { snippetCancel(); return; }
+            // Finalize BEFORE cancelling. Esc ends the session but leaves the text in the document,
+            // so without this a derived field keeps whatever it showed before the last edit - and that
+            // wrong text is then committed to the file, which is worse than merely stale. Only the
+            // user-driven exits finalize; the forced teardowns (buffer switch, error) must not, since
+            // they run either inside a modification event or after the document has already changed.
+            if (code == WXK_ESCAPE)       { snippetSyncTransforms(); snippetCancel(); return; }
         }
         else if (code == WXK_TAB && plain && !k.ShiftDown() && sci(SCI_GETSELECTIONEMPTY) != 0)
         {
@@ -4359,8 +4364,15 @@ private:
         std::vector<int>          order;       // stop numbers in visit order, 0 last
         size_t                    at = 0;      // index into order
         EditorPage*               page = nullptr;
+        bool                      anyXform = false;   // no transforms -> the sync funnel is a no-op
     };
     SnippetSession m_snip;
+    // Set while snippetApplyTransforms is writing. snippetAdjust exists to follow the USER's typing,
+    // and its insert rule grows any field whose end coincides with the insertion point - correct for
+    // "the caret is in this field", wrong for a programmatic write at a field BOUNDARY, where it made
+    // the neighbour swallow the derived text. Transform writes therefore opt out and fix the offsets
+    // themselves, which they can do exactly: they know the range and the replacement length.
+    bool m_snipWriting = false;
 
     void snippetCancel()
     {
@@ -4402,19 +4414,29 @@ private:
         const int base = static_cast<int>(sci(SCI_GETSELECTIONSTART));
         sci(SCI_BEGINUNDOACTION);
         sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(p.text.c_str()));
-        sci(SCI_ENDUNDOACTION);
 
         snippetCancel();
-        if (!hasStops) return false;         // plain text: inserted, but there is nothing to walk
-        const std::vector<int> order = p.visitOrder();
-        if (order.empty()) return false;
+        if (!hasStops) { sci(SCI_ENDUNDOACTION); return false; }   // inserted; nothing to walk
+        std::vector<int> order = p.visitOrder();
+        if (order.empty()) { sci(SCI_ENDUNDOACTION); return false; }
 
         m_snip.active       = true;
         m_snip.page         = activePage();
-        m_snip.fields       = p.fields;
-        m_snip.order        = order;
+        m_snip.fields       = std::move(p.fields);   // p is dead after this; a copy is per-field strings now
+        m_snip.order        = std::move(order);
         m_snip.at           = 0;
-        for (SnippetField& f : m_snip.fields) f.start += static_cast<size_t>(base);
+        m_snip.anyXform     = false;
+        for (SnippetField& f : m_snip.fields)
+        {
+            f.start += static_cast<size_t>(base);
+            if (f.xform.active) m_snip.anyXform = true;
+        }
+        // Seed each transform from its stop's initial placeholder, so a snippet whose derived field is
+        // visible before you touch anything shows the right thing rather than a gap. Inside the SAME
+        // undo action as the insertion: expanding a snippet is one edit, and a Ctrl+Z that peeled off
+        // one stop's derived text and left the body half-seeded would be a strange thing to offer.
+        snippetSyncTransforms();
+        sci(SCI_ENDUNDOACTION);
         snippetGotoCurrent();
         return true;
     }
@@ -4424,8 +4446,11 @@ private:
         if (!m_snip.active || m_snip.at >= m_snip.order.size()) { snippetCancel(); return; }
         const int stop = m_snip.order[m_snip.at];
 
+        // Transform fields are deliberately NOT selected: they show a derived view, and including them
+        // in the multiple selection would let one keystroke type raw characters over the derived text.
         std::vector<const SnippetField*> occ;
-        for (const SnippetField& f : m_snip.fields) if (f.stop == stop) occ.push_back(&f);
+        for (const SnippetField& f : m_snip.fields)
+            if (f.stop == stop && !f.xform.active) occ.push_back(&f);
         if (occ.empty()) { snippetCancel(); return; }
 
         if (stop == 0)   // the exit stop: drop the caret and end the session
@@ -4445,11 +4470,127 @@ private:
         sci(SCI_SCROLLCARET);
     }
 
+    // Rewrites every ${N/find/replace/} field of `stop` from that stop's current text.
+    //
+    // Transforms cannot ride on multiple-selection typing the way plain mirrors do: typing puts the
+    // SAME characters into every selection, and a transform by definition shows something different.
+    // So they are recomputed explicitly - when you leave the stop, which is the moment its text is
+    // final. That is a visible difference from editors that update them per keystroke, and it is the
+    // honest trade for not re-entering the document on every character.
+    void snippetApplyTransforms(int stop)
+    {
+        if (!m_snip.active) return;
+        // Same guard snippetAdjust carries. This function WRITES through sci(), which follows the
+        // focused view - so without it, finalizing after a click into the other half of a split would
+        // splice derived text into a different document at this one's offsets.
+        if (activePage() != m_snip.page) return;
+
+        // ONE pass, and the cheap test first. The stop's text comes from its PRIMARY occurrence - a
+        // transform must never be its own source, or the second Tab would transform already
+        // transformed text. Finding out there is nothing to do costs a scan, not a document
+        // round-trip: rangeText is three Scintilla messages plus an allocation, and every built-in
+        // snippet has zero transforms, so paying it before this bail was pure waste on every insert.
+        const SnippetField* src = nullptr;
+        bool anyTarget = false;
+        for (const SnippetField& f : m_snip.fields)
+        {
+            if (f.stop != stop) continue;
+            if (f.xform.active)   anyTarget = true;
+            else if (!src)        src = &f;
+        }
+        if (!src || !anyTarget) return;
+
+        const std::string text = rangeText(static_cast<int>(src->start),
+                                           static_cast<int>(src->start + src->len));
+
+        // Back-to-front: fields are in document order, so rewriting a later one cannot disturb an
+        // earlier one still to come. Offsets are maintained HERE rather than by snippetAdjust - see
+        // m_snipWriting. Values are copied out of the vector before each write, so a re-entrant
+        // snippetCancel (a plugin handling the modification event and switching buffers) cannot leave
+        // this loop holding a reference into a freed vector.
+        bool opened = false;
+        for (size_t k = m_snip.fields.size(); k-- > 0; )
+        {
+            if (!m_snip.active || k >= m_snip.fields.size()) break;   // cancelled underneath us
+            if (m_snip.fields[k].stop != stop || !m_snip.fields[k].xform.active) continue;
+
+            const SnippetTransform x   = m_snip.fields[k].xform;   // by value: the write may re-enter
+            const size_t           beg = m_snip.fields[k].start;
+            const size_t           len = m_snip.fields[k].len;
+
+            wxnre::Options ro;
+            ro.matchCase = !x.ignoreCase;
+            wxnre::Regex re;
+            std::string err;
+            if (!re.compile(x.pattern, ro, &err))
+            {
+                // A bad transform leaves the field alone rather than emptying it - the snippet
+                // author's mistake must not eat the user's text. setStatus, not findResult: the
+                // latter also writes into the Find dialog's result line, and a snippet typo has no
+                // business overwriting what the user's own search just reported. m_hint is what stops
+                // the 150 ms status refresh wiping the explanation before it can be read.
+                setStatus(0, wxString::Format(_("Snippet transform is not a valid regular expression: %s"),
+                                              wxString::FromUTF8(err.c_str())));
+                m_hint = true;
+                continue;
+            }
+
+            const std::string out = re.replaceAll(text, x.replacement, x.global);
+            // Nothing to do is the COMMON case - insert seeds the field and the first Tab recomputes
+            // the identical string. Writing it anyway costs a real document edit, a dead Ctrl+Z, and
+            // a phantom text-changed event to plugins.
+            if (out.size() == len && out == rangeText(static_cast<int>(beg), static_cast<int>(beg + len)))
+                continue;
+
+            if (!opened) { sci(SCI_BEGINUNDOACTION); opened = true; }
+            m_snipWriting = true;
+            sci(SCI_SETTARGETSTART, static_cast<int>(beg));
+            sci(SCI_SETTARGETEND,   static_cast<int>(beg + len));
+            sci(SCI_REPLACETARGET, out.size(), reinterpret_cast<sptr_t>(out.data()));
+            m_snipWriting = false;
+            if (!m_snip.active) break;                                // re-entrant cancel during the write
+
+            // Exact fix-up, replacing what snippetAdjust would have guessed. The written field takes
+            // the new length; everything at or after the OLD end shifts by the delta. A field that
+            // merely ENDS at `beg` is left alone - that is the bug this replaces - and one that STARTS
+            // there (the synthetic $0, or a sibling transform) moves after the derived text, so the
+            // exit caret lands past it instead of inside it.
+            const long long delta = static_cast<long long>(out.size()) - static_cast<long long>(len);
+            for (size_t g = 0; g < m_snip.fields.size(); ++g)
+            {
+                if (g == k) { m_snip.fields[g].len = out.size(); continue; }
+                if (m_snip.fields[g].start >= beg + len)
+                    m_snip.fields[g].start = static_cast<size_t>(
+                        static_cast<long long>(m_snip.fields[g].start) + delta);
+            }
+        }
+        if (opened) sci(SCI_ENDUNDOACTION);
+    }
+
+    // The one funnel for "derived text may be out of date": rewrite every transform from its stop's
+    // current text. Called to seed the session, and by every USER-driven exit from a stop - Tab,
+    // Shift+Tab, Esc - so a transform cannot be left showing pre-edit text. Deliberately NOT called
+    // from snippetCancel itself: that also runs from inside a modification event (where Scintilla
+    // forbids re-entering the document) and after a buffer switch (where the offsets belong to a
+    // document that is no longer mounted).
+    //
+    // EVERY stop, not just order[at]. m_snip.at only tracks Tab, so a stop the user reached with the
+    // mouse - or left via Shift+Tab at index 0, which returns before the old call site - kept its
+    // seed value for the life of the session and committed it.
+    void snippetSyncTransforms()
+    {
+        if (!m_snip.active || !m_snip.anyXform) return;   // the common case: no transforms at all
+        // Index, not a range-for: applying one stop can cancel the session and clear `order`.
+        for (size_t k = 0; k < m_snip.order.size() && m_snip.active; ++k)
+            snippetApplyTransforms(m_snip.order[k]);
+    }
+
     void snippetStep(int delta)
     {
         if (!m_snip.active) return;
         const long long next = static_cast<long long>(m_snip.at) + delta;
         if (next < 0) return;                                    // Shift+Tab at the first stop: stay put
+        snippetSyncTransforms();   // after the no-op bail: a keystroke that moves nowhere rewrites nothing
         m_snip.at = static_cast<size_t>(next);
         if (m_snip.at >= m_snip.order.size()) { snippetCancel(); return; }
         snippetGotoCurrent();
@@ -4460,7 +4601,28 @@ private:
     void snippetAdjust(int mt, int pos, int len)
     {
         if (!m_snip.active || len <= 0) return;
+        if (m_snipWriting) return;   // a transform write maintains its own offsets exactly - see there
         if (activePage() != m_snip.page) { snippetCancel(); return; }   // buffer switched out from under it
+
+        // UNDO/REDO cannot be tracked. Shifting offsets by the reported delta keeps them arithmetically
+        // consistent while the TEXT reverts to something else entirely, so the fields end up describing
+        // ranges that mean nothing - and the next Tab or Esc would then write a transform through them.
+        // A session cannot survive its own history being rewritten.
+        if (mt & (SC_PERFORMED_UNDO | SC_PERFORMED_REDO)) { snippetCancel(); return; }
+
+        // Likewise a modification that swallows the whole session. SCI_SETTEXT - which Trim Trailing
+        // Space, Remove Empty Lines, Tabs<->Spaces and re-interpreting the encoding all issue - deletes
+        // everything and re-inserts it, which used to collapse every field onto [0,0) and then grow
+        // them all to the whole document. The next Tab replaced the entire file with a transform of
+        // itself. Detect it by extent rather than by guessing which commands do it.
+        if ((mt & SC_MOD_DELETETEXT) && !m_snip.fields.empty())
+        {
+            size_t lo = m_snip.fields[0].start, hi = 0;
+            for (const SnippetField& f : m_snip.fields)
+            { lo = f.start < lo ? f.start : lo; hi = (f.start + f.len) > hi ? f.start + f.len : hi; }
+            if (static_cast<size_t>(pos) <= lo && static_cast<size_t>(pos + len) >= hi)
+            { snippetCancel(); return; }
+        }
 
         const size_t at = static_cast<size_t>(pos), n = static_cast<size_t>(len);
         for (SnippetField& f : m_snip.fields)
@@ -9321,6 +9483,12 @@ private:
     bool writeFile(const wxString& path)
     {
         EditorPage* p = activePage();
+        // Bring any live snippet's derived fields up to date BEFORE the bytes go out. Without this,
+        // editing a stop and pressing Ctrl+S without Tabbing out wrote the pre-edit derived text to
+        // disk - the same "committed to the file" failure the Esc path exists to prevent, reached by
+        // a far more common gesture. Covers Save and Save As; Save a Copy does its own write and
+        // syncs there. Before the SAVING event, so a subscriber editing the buffer sees final text.
+        snippetSyncTransforms();   // no-ops unless a session with transforms is live on this page
         // nib.events v2: about to write this buffer (fires whether or not the write then succeeds -
         // NPPN_FILEBEFORESAVE semantics in the bridge). The buffer is mounted, so a subscriber's edits
         // (trim-on-save style) land in exactly the content that is written below.
@@ -9338,6 +9506,10 @@ private:
     bool writePageToDisk(EditorPage* p)
     {
         if (!p || p->path.empty()) return false;
+        // Backstop only: a session is cancelled by any buffer switch, so m_snip.page is always the
+        // ACTIVE page while one lives, and onSaveAll routes the active page through writeFile. This
+        // fires only if that invariant ever loosens - the callee no-ops otherwise.
+        snippetSyncTransforms();
         nibFireDocEvent(NIB_EV_DOCUMENT_SAVING, p);   // v2 - carries THIS page's id, not the active one's
         if (!writeMountedDoc(p, p->path)) return false;
         sci(SCI_SETSAVEPOINT); clearRecovery(p); p->dirty = false; stampDiskStat(p);
@@ -10453,6 +10625,7 @@ private:
     {
         wxFileDialog dlg(this, _("Save a Copy As"), wxFileName(curPath()).GetPath(), wxFileNameFromPath(curPath()), _("All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
         if (dlg.ShowModal() != wxID_OK) return;
+        snippetSyncTransforms();   // this path writes the buffer itself, so it needs its own sync
         const std::string body = encodeForPage(getDocUtf8(), activePage());
         wxFile f(dlg.GetPath(), wxFile::write);
         if (f.IsOpened()) { f.Write(body.data(), body.size()); setStatus(0, wxString::Format(_("Copy saved: %s"), dlg.GetPath())); }
@@ -11839,6 +12012,7 @@ private:
         c->Read("Editing/AutoComplete", &m_autocomplete, true);
         c->Read("Editing/CaretLine", &m_caretLine, true);
         c->Read("Editing/AutoIndent", &m_autoindent, true);
+        c->Read("Editing/DirectWrite", &m_directWrite, true);
         long cw = 1; c->Read("Editing/CaretWidth", &cw, 1L); m_caretWidth = (int)cw;
         long ec = 0; c->Read("Editing/EdgeColumn", &ec, 0L); m_edgeColumn = (int)ec;
         long de = SC_EOL_CRLF; c->Read("NewDoc/Eol", &de, (long)SC_EOL_CRLF); m_defaultEol = (int)de;
@@ -11874,6 +12048,7 @@ private:
         c->Write("View/StatusBar", m_showStatusbar);      c->Write("Editing/AutoComplete", m_autocomplete);
         c->Write("View/ZoomField", m_showZoomField);
         c->Write("Editing/CaretLine", m_caretLine);       c->Write("Editing/AutoIndent", m_autoindent);
+        c->Write("Editing/DirectWrite", m_directWrite);
         c->Write("Editing/CaretWidth", (long)m_caretWidth); c->Write("Editing/EdgeColumn", (long)m_edgeColumn);
         c->Write("NewDoc/Eol", (long)m_defaultEol);         c->Write("NewDoc/Lang", (long)m_defaultLangId);
         c->Write("NewDoc/Encoding", (long)m_defaultEncoding);
@@ -11927,6 +12102,17 @@ private:
             sci(SCI_SETCARETPERIOD, m_caretBlink);
             sci(SCI_SETENDATLASTLINE, m_scrollBeyond ? 0 : 1);
             sci(SCI_SETMULTIPLESELECTION, m_multiEdit ? 1 : 0);
+#ifdef __WXMSW__
+            // Applied to BOTH views, not just the active one - m_stc follows focus, and the inactive
+            // half of a split would otherwise keep drawing through GDI until it was next touched.
+            //
+            // Live, no restart: ScintillaWX's handler drops cached graphics and re-lays out. It also
+            // fails soft - if Direct2D or DirectWrite will not load it returns without changing the
+            // technology, so an old or locked-down machine keeps GDI rather than losing its text.
+            for (wxStyledTextCtrl* v : { m_main.stc, m_sub.stc })
+                if (v) sciSend(v, SCI_SETTECHNOLOGY,
+                               m_directWrite ? SC_TECHNOLOGY_DIRECTWRITE : SC_TECHNOLOGY_DEFAULT);
+#endif
             if (m_lineNumbers) updateLineMargin(); else sci(SCI_SETMARGINWIDTHN, 0, 0);
         }
         if (auto* mb = menuBar()) { mb->Check(kCmdViewWrap, m_wrap); mb->Check(kCmdViewAllCharacters, m_ws); mb->Check(kCmdViewNpc, m_ws); mb->Check(kCmdViewIndentGuide, m_guides); }
@@ -12104,6 +12290,16 @@ private:
         auto* cbScroll  = new wxCheckBox(ed, wxID_ANY, _("Enable scrolling beyond last line"));      cbScroll->SetValue(m_scrollBeyond);
         auto* cbMulti   = new wxCheckBox(ed, wxID_ANY, _("Enable multi-editing (multi-selection)")); cbMulti->SetValue(m_multiEdit);
         for (auto* c : { cbLineNum, cbGuides, cbWs, cbWrapSym, cbWrap, cbCaretLn, cbScroll, cbMulti }) row(es, c);
+#ifdef __WXMSW__
+        // Windows only: SC_TECHNOLOGY_DIRECTWRITE is a no-op on the GTK and macOS ports, whose
+        // backends already shape text properly, so offering the choice there would be a dead control.
+        auto* cbDWrite = new wxCheckBox(ed, wxID_ANY, _("Smoother text rendering (DirectWrite)"));
+        cbDWrite->SetValue(m_directWrite);
+        cbDWrite->SetToolTip(_("Draw text through DirectWrite instead of GDI: sub-pixel positioning, "
+                               "better glyph shapes, and OpenType features in fonts that have them. "
+                               "Takes effect immediately."));
+        row(es, cbDWrite);
+#endif
         auto* erow = new wxBoxSizer(wxHORIZONTAL);
         erow->Add(new wxStaticText(ed, wxID_ANY, _("Caret width:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spCaret = new SpinField(ed, 1, 3, m_caretWidth, m_dark, 60);
@@ -12352,6 +12548,9 @@ private:
         m_tabWidth = spTab->GetValue(); m_useTabs = !cbSpace->GetValue(); m_lineNumbers = cbLineNum->GetValue();
         m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
         m_caretLine = cbCaretLn->GetValue(); m_autoindent = cbIndent->GetValue(); m_caretWidth = spCaret->GetValue(); m_edgeColumn = spEdge->GetValue();
+#ifdef __WXMSW__
+        m_directWrite = cbDWrite->GetValue();
+#endif
         m_scrollBeyond = cbScroll->GetValue(); m_multiEdit = cbMulti->GetValue(); m_caretBlink = spBlink->GetValue();
         // Both spinners use 0 as the "check off" sentinel, and SpinField::GetValue() returns m_min for an
         // unparseable box - so a field the user merely cleared would silently disable that guard. Treat an
@@ -14576,6 +14775,11 @@ private:
     bool        m_showZoomField = false;
     bool        m_autocomplete = true;                            // auto word/keyword completion while typing
     bool        m_caretLine = true, m_autoindent = true;          // highlight the current line; auto-indent new lines
+    // Windows text rendering. Scintilla draws through GDI unless told otherwise, and GDI does no
+    // OpenType shaping and no sub-pixel positioning. Default ON: it is strictly better output, and it
+    // does NOT reintroduce ligatures on its own - the shipped faces (Cascadia Mono, Iosevka Fixed) are
+    // the ligature-free variants by choice, so this only changes HOW glyphs are drawn, not which.
+    bool        m_directWrite = true;
     int         m_caretWidth = 1, m_edgeColumn = 0;               // caret thickness (px); long-line marker column (0 = off)
     int         m_defaultEol = SC_EOL_CRLF, m_defaultLangId = -1; // New Document: default line-ending + language (kCmdLang*; -1 = Normal Text)
     int         m_defaultEncoding = ENC_UTF8;                     // New Document: default on-disk encoding (Enc enum)

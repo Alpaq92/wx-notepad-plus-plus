@@ -171,9 +171,38 @@ public:
         return searchBackward(hay.data(), hay.size(), from, to, out);
     }
 
-    // Advances past a match when iterating (Replace All, Mark, Count). A zero-width match must move on
-    // by one CHARACTER, never one byte - stepping into the middle of a UTF-8 sequence would make the
-    // next match start on a continuation byte.
+    // Replace every match (or just the first, with global=false) in a plain string.
+    //
+    // This lives here rather than at any call site because the loop is subtle in three ways that are
+    // easy to get individually right and collectively wrong: a zero-width match must still advance,
+    // the character it advanced over must be re-emitted, and the tail after the last match must be
+    // appended. It was written out by hand in two places before this existed, and the copy in the test
+    // meant the test asserted against a reimplementation rather than shipped code.
+    //
+    // The DOCUMENT path deliberately does not use this: it drives Scintilla's target so that undo,
+    // markers and notifications behave, and it matches over the whole buffer so lookbehind and \b see
+    // the text outside the replaced range. This is for text that is already detached from a document.
+    std::string replaceAll(const std::string& hay, const std::string& repl, bool global = true) const
+    {
+        if (!ok()) return hay;
+        std::string out;
+        out.reserve(hay.size());
+        size_t at = 0;
+        Match m;
+        while (at <= hay.size() && search(hay, at, hay.size(), m))
+        {
+            out.append(hay, at, m.start - at);
+            out += expand(repl, hay, m);
+            const size_t next = advanceOver(hay.data(), hay.size(), m.start, m.end);
+            if (m.empty() && m.start < hay.size())
+                out.append(hay, m.start, next - m.start);   // keep the character we stepped over
+            at = next;
+            if (!global) break;
+        }
+        if (at <= hay.size()) out.append(hay, at, std::string::npos);
+        return out;
+    }
+
     // Where an iteration must resume after a match (Replace All, Mark, Count). A zero-width match has
     // to move on by one CHARACTER, never one byte: stepping into the middle of a UTF-8 sequence would
     // start the next match on a continuation byte.

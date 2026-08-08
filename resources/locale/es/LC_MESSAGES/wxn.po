@@ -3270,3 +3270,12 @@ msgstr "Las expresiones regulares usan PCRE2: un patrón puede abarcar saltos de
 
 msgid "&. matches newline"
 msgstr "&. coincide con nueva línea"
+
+msgid "Smoother text rendering (DirectWrite)"
+msgstr "Renderizado de texto más suave (DirectWrite)"
+
+msgid "Draw text through DirectWrite instead of GDI: sub-pixel positioning, better glyph shapes, and OpenType features in fonts that have them. Takes effect immediately."
+msgstr "Dibujar el texto con DirectWrite en lugar de GDI: posicionamiento subpíxel, mejores formas de glifos y funciones OpenType en las fuentes que las tienen. Surte efecto de inmediato."
+
+msgid "Snippet transform is not a valid regular expression: %s"
+msgstr "La transformación del fragmento no es una expresión regular válida: %s"

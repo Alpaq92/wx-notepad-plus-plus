@@ -119,7 +119,58 @@ int main()
     check(wxnParseSnippet("${nope}").fields.empty(), "malformed: literal text produces no fields");
     // Unsupported constructs must NOT be half-parsed - the whole thing stays literal.
     eq(wxnParseSnippet("${1:${2:x}}").text, "${1:${2:x}}", "malformed: a nested stop is rejected whole, not truncated");
-    eq(wxnParseSnippet("${1/a/b/}").text,   "${1/a/b/}",   "malformed: a transform is left literal (no engine for it yet)");
+    // A transform with an unknown flag is a construct meant for some other engine, so the whole span
+    // stays literal rather than being applied with the flag quietly dropped.
+    eq(wxnParseSnippet("${1/a/b/x}").text,  "${1/a/b/x}",  "transform: an unknown flag keeps the span literal");
+    eq(wxnParseSnippet("${1/a/b}").text,    "${1/a/b}",    "transform: too few slashes keeps it literal");
+    eq(wxnParseSnippet("${1/a/b/").text,    "${1/a/b/",    "transform: an unclosed transform keeps it literal");
+    // A rejected transform must be skipped WHOLE. spanEnd counts only ${ and }, so the '}' of a
+    // quantifier used to end the span early: the tail "/\U$1/gm}" was then parsed as body text and
+    // its $1 became a real tab stop - a phantom stop conjured from the leftovers, on ordinary regex.
+    {
+        const SnippetParse p = wxnParseSnippet("${1:v} ${1/(\\w){2}/\\U$1/gm}");
+        eq(p.text, "v ${1/(\\w){2}/\\U$1/gm}", "transform: a rejected flag skips a span containing {n} whole");
+        check(p.fields.size() == 1, "transform: ...and conjures no phantom stop from the tail");
+        eq(order(p), "1", "transform: ...leaving only the real stop");
+    }
+    // Same trap, reached the other way: a MISSING trailing delimiter (a plausible typo) leaves only
+    // two slashes, so there is no flag run to reject - the shape simply fails. readTransform still
+    // has to report the end from the last delimiter it saw, because spanEnd would stop at the '}' of
+    // the {2} quantifier and hand the tail "/\U$1}" back to the body parser.
+    {
+        const SnippetParse p = wxnParseSnippet("${1:v} ${1/(\\w){2}/\\U$1}");
+        eq(p.text, "v ${1/(\\w){2}/\\U$1}", "transform: a missing delimiter skips the span whole too");
+        check(p.fields.size() == 1, "transform: ...and still conjures no phantom stop");
+    }
+    // A refused transform must not swallow what comes AFTER it either - the end is taken from the
+    // last delimiter seen, not from the end of the body.
+    {
+        const SnippetParse p = wxnParseSnippet("${1:v} ${1/a/b} $2");
+        eq(p.text, "v ${1/a/b} ", "transform: too few slashes stays literal without eating the tail");
+        eq(order(p), "1,2", "transform: ...so a real stop after it still parses");
+    }
+    // Pass 1 has to see a definition ANYWHERE, including the last two bytes of the body: an earlier
+    // bound stopped short and refused this perfectly valid transform as undefined.
+    {
+        const SnippetParse p = wxnParseSnippet("${1/a/b/} $1");
+        check(p.fields.size() == 2, "transform: a definition at the very tail still defines the stop");
+        check(p.fields[0].xform.active, "transform: ...so the forward-referencing transform is accepted");
+    }
+    // A transform whose stop is never defined has nothing to derive from: it would expand to nothing,
+    // never become a stop, and never be written - silently deleting itself. A one-digit typo did it.
+    eq(wxnParseSnippet("${1/a/b/}").text, "${1/a/b/}", "transform: an undefined stop keeps it literal");
+    check(wxnParseSnippet("${1/a/b/}").fields.empty(), "transform: ...and produces no field");
+    {
+        const SnippetParse p = wxnParseSnippet("${1:x} ${2/a/b/}");
+        eq(p.text, "x ${2/a/b/}", "transform: a typo'd stop number stays visible rather than vanishing");
+    }
+    // ${0/../../} is a mirror, so it can never BE the exit stop - it must not suppress the real one.
+    {
+        const SnippetParse p = wxnParseSnippet("${0:z} ${0/z/Z/}");
+        check(p.hasZero, "transform: a real $0 alongside a transform still counts");
+    }
+    check(!wxnParseSnippet("${1:x} ${0/a/b/}").hasZero,
+          "transform: a transform on stop 0 does NOT count as the exit stop");
 
     // ---- (i) an escaped brace inside a placeholder ------------------------------------------------
     {
@@ -177,6 +228,49 @@ int main()
     {
         const SnippetParse p = wxnParseSnippet("${1:\xC5\xBA\xC3\xB3\xC5\x82w}");   // "źółw"
         eq(at(p, 0), "\xC5\xBA\xC3\xB3\xC5\x82w", "utf8: the field covers whole multi-byte characters");
+    }
+
+    // ---- (n2) transforms: ${1/find/replace/flags} -------------------------------------------------
+    // Parsed here, applied by the editor (it needs a regex engine, which this header deliberately
+    // has no access to). What the grammar owes is the three parts, intact.
+    {
+        const SnippetParse p = wxnParseSnippet("${1:name} -> ${1/a/b/g}");
+        eq(p.text, "name -> ", "transform: expands empty, since its content is computed later");
+        check(p.fields.size() == 2, "transform: two fields");
+        check(!p.fields[0].xform.active, "transform: the plain stop carries no transform");
+        check(p.fields[1].xform.active,  "transform: the second one does");
+        check(p.fields[1].mirror, "transform: it is a mirror - never a navigation target");
+        eq(p.fields[1].xform.pattern,     "a", "transform: pattern captured");
+        eq(p.fields[1].xform.replacement, "b", "transform: replacement captured");
+        check(p.fields[1].xform.global && !p.fields[1].xform.ignoreCase,
+              "transform: the flag letters are decoded here, not passed on as a string");
+        eq(order(p), "1", "transform: it adds no extra stop to the visit order");
+    }
+    {
+        // Each body defines its stop: a transform whose stop is never defined is refused and stays
+        // literal (see below), so a transform-only body would produce no fields at all.
+        // Regex text must survive verbatim - both halves are handed to the engine as-is.
+        const SnippetParse p = wxnParseSnippet("${1:v} ${1/\\s+/_/g}");
+        eq(p.fields[1].xform.pattern, "\\s+", "transform: a backslash escape is preserved in the pattern");
+    }
+    {
+        const SnippetParse p = wxnParseSnippet("${1:v} ${1/(\\w)/\\U$1/}");
+        eq(p.fields[1].xform.replacement, "\\U$1", "transform: case operators survive into the replacement");
+        check(!p.fields[1].xform.global && !p.fields[1].xform.ignoreCase,
+              "transform: empty flags decode to both off");
+    }
+    {
+        // An escaped slash is a literal one and must not end the part.
+        const SnippetParse p = wxnParseSnippet("${1:v} ${1/a\\/b/c/}");
+        eq(p.fields[1].xform.pattern, "a/b", "transform: \\/ is a literal slash inside the pattern");
+    }
+    {
+        // A transform on a stop that also has a placeholder elsewhere still mirrors that stop.
+        const SnippetParse p = wxnParseSnippet("${1:Hello} ${1/l/L/g} $1");
+        check(p.fields.size() == 3, "transform: three occurrences of stop 1");
+        check(!p.fields[0].mirror && p.fields[1].mirror && p.fields[2].mirror,
+              "transform: only the first occurrence is primary");
+        eq(p.text, "Hello  Hello", "transform: the plain mirror repeats the text, the transform starts empty");
     }
 
     // ---- (n) the store format --------------------------------------------------------------------

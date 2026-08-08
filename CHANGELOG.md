@@ -3,6 +3,25 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Snippet transforms.** A field can show a derived version of another:
+  `class ${1:my_thing}` with `${1/^(\w)|_(\w)/\U$1$2/g}()` types the name once and the constructor
+  reads `MyThing()`. The `find` half is a full regular expression and the `replace` half takes `$1`,
+  `\U`, `\L` and friends — the same engine and vocabulary as Replace. `g` and `i` flags. Derived fields
+  update when you leave the field they follow, are never a stop you can tab into, and never take
+  typing. An invalid pattern leaves your text alone and says why.
+- **Smoother text rendering on Windows** — **Preferences ▸ Editing ▸ Smoother text rendering
+  (DirectWrite)**, on by default and applied immediately. Text is drawn through DirectWrite instead of
+  GDI: sub-pixel positioning, better glyph shapes, and OpenType features in fonts that have them. If
+  DirectWrite cannot load, drawing falls back to GDI rather than failing. (This does not by itself
+  turn on ligatures — the shipped faces are the ligature-free variants by choice.)
+
+### Fixed
+- Documentation: the audit listed Windows font ligatures as blocked on an upstream wxWidgets change.
+  That was wrong — wx already ships the Direct2D surface, and wxNote simply never asked for it.
+
 ## [0.16.0] - 2026-08-03
 
 ### Added

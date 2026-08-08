@@ -3270,3 +3270,12 @@ msgstr "정규식은 PCRE2를 사용합니다. 패턴이 줄 바꿈을 가로질
 
 msgid "&. matches newline"
 msgstr "&. 이 줄 바꿈과 일치"
+
+msgid "Smoother text rendering (DirectWrite)"
+msgstr "더 부드러운 텍스트 렌더링 (DirectWrite)"
+
+msgid "Draw text through DirectWrite instead of GDI: sub-pixel positioning, better glyph shapes, and OpenType features in fonts that have them. Takes effect immediately."
+msgstr "GDI 대신 DirectWrite로 텍스트를 그립니다: 서브픽셀 배치, 더 나은 글자 모양, 지원하는 글꼴의 OpenType 기능. 즉시 적용됩니다."
+
+msgid "Snippet transform is not a valid regular expression: %s"
+msgstr "스니페입 변환이 올바른 정규식이 아닙니다: %s"

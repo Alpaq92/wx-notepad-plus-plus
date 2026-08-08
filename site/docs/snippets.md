@@ -77,10 +77,39 @@ A short, deliberately unambitious set — the loops and guards people retype mos
 
 It is a starting point, not a library — the intent is that you add the ones you actually use.
 
+## Transforms
+
+A field can show a **derived** version of another one:
+
+```
+[cpp:cls]
+class ${1:my_thing}
+{
+public:
+    ${1/^(\w)|_(\w)/\U$1$2/g}();
+};
+```
+
+Type `my_thing` once and the constructor reads `MyThing()`. The syntax is
+`${N/find/replace/flags}`:
+
+| Part | |
+| --- | --- |
+| `find` | a regular expression — the same PCRE2 engine [Search](search.md) uses |
+| `replace` | `$1`, `\1`, and `\U` `\L` `\E` `\u` `\l` for case, as in Replace |
+| `flags` | `g` replace every match, `i` match case-insensitively |
+
+A `/` inside either half is written `\/`.
+
+**Transforms update when you leave the field**, not on every keystroke — press <kbd>Tab</kbd> and the
+derived text catches up. A derived field is never a stop you can tab into, and never takes typing: it
+belongs to the field it mirrors.
+
+If the pattern isn't a valid regular expression, the field is left exactly as it was and the status bar
+says why. An author's mistake never eats your text.
+
 ## Not supported
 
-Transforms like `${1/find/replace/}` are left as literal text rather than half-applied. They depend on
-replacement case operators, and are worth doing properly rather than partially.
-
-Nested fields (`${1:${2:x}}`) are likewise left alone — the whole construct stays as written instead
-of silently dropping part of it.
+Nested fields (`${1:${2:x}}`) are left as literal text — the whole construct stays as written instead
+of silently dropping part of it. The same applies to a transform with a flag this engine doesn't know:
+better to show it unchanged than to apply it with the flag quietly ignored.

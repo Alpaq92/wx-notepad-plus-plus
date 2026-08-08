@@ -3270,3 +3270,12 @@ msgstr "Регулярные выражения используют PCRE2: ша
 
 msgid "&. matches newline"
 msgstr "&. соответствует переносу строки"
+
+msgid "Smoother text rendering (DirectWrite)"
+msgstr "Более плавная отрисовка текста (DirectWrite)"
+
+msgid "Draw text through DirectWrite instead of GDI: sub-pixel positioning, better glyph shapes, and OpenType features in fonts that have them. Takes effect immediately."
+msgstr "Рисовать текст через DirectWrite вместо GDI: субпиксельное позиционирование, лучшие формы глифов и функции OpenType в шрифтах, где они есть. Действует сразу."
+
+msgid "Snippet transform is not a valid regular expression: %s"
+msgstr "Преобразование фрагмента не является верным регулярным выражением: %s"

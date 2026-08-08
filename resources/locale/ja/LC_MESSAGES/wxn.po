@@ -3270,3 +3270,12 @@ msgstr "正規表現は PCRE2 を使用します。パターンは改行をま�
 
 msgid "&. matches newline"
 msgstr "改行にも . を一致させる(&.)"
+
+msgid "Smoother text rendering (DirectWrite)"
+msgstr "なめらかなテキスト描画 (DirectWrite)"
+
+msgid "Draw text through DirectWrite instead of GDI: sub-pixel positioning, better glyph shapes, and OpenType features in fonts that have them. Takes effect immediately."
+msgstr "GDI ではなく DirectWrite でテキストを描画します。サブピクセル位置揃え、より良いグリフ形状、対応フォントでの OpenType 機能が利用できます。すぐに適用されます。"
+
+msgid "Snippet transform is not a valid regular expression: %s"
+msgstr "スニペットの変換が正しい正規表現ではありません: %s"

@@ -82,7 +82,7 @@ listed code paths are Windows-gated. The integrated borderless title bar being W
 | Feature | Status | Evidence | Blocker |
 | --- | --- | --- | --- |
 | **Change History** (Next/Prev/Clear) | blocked-upstream | all three → `notImpl` — [main.cpp:10775](../src/main.cpp) | needs Scintilla ≥ 5.3; wx vendors 5.0.0 |
-| **Font ligatures on Windows** | blocked-upstream | Scintilla draws via GDI; `SC_TECHNOLOGY_DIRECTWRITE` never set — [main.cpp:11795](../src/main.cpp) | GDI does no OpenType shaping |
+| ~~**Font ligatures on Windows**~~ | ✅ **done** (unreleased) — *this row was WRONG* | Not upstream-blocked at all. wx 3.3.1 ships the full Direct2D surface in `src/stc/PlatWX.cpp` behind `HAVE_DIRECTWRITE_TECHNOLOGY`, which it defines whenever `__WXMSW__ && wxUSE_GRAPHICS_DIRECT2D` — both true in this build (`wxUSE_GRAPHICS_CONTEXT` is 1) — and `ScintillaWX::WndProc` handles `SCI_SETTECHNOLOGY` there. `dumpbin` finds **312** `SurfaceD2D`-family symbols in the linked `wxmsw33u_stc.lib`. The app simply never sent the message. | Now **Preferences ▸ Editing ▸ Smoother text rendering (DirectWrite)**, on by default, applied live to both split views. It fails soft: if D2D/DirectWrite will not load, ScintillaWX keeps GDI rather than losing text. Runtime-verified — `DWrite.dll` + `d2d1.dll` load into the process. Note this does not by itself add ligatures: the shipped faces (Cascadia Mono, Iosevka Fixed) are the ligature-free variants deliberately, so what changes is glyph quality and sub-pixel positioning |
 
 ## 6. Planned-deferred (infra wired, gated on non-code factors)
 
@@ -121,6 +121,9 @@ listed code paths are Windows-gated. The integrated borderless title bar being W
    `nib.events` still having no unsubscribe.
 4. **Larger builds**: Style Configurator depth (fg/bg + bold/italic only), a Calltips API/signature
    database, and Plugins Admin (designed in `PLUGINS_ADMIN_DESIGN.md`, unbuilt).
-5. **Track, don't act**: Change History and Windows ligatures (upstream-blocked); signing (secrets).
+5. **Track, don't act**: Change History (genuinely upstream-blocked — needs Scintilla ≥ 5.3, wx vendors
+   5.0.0); signing (gated on secrets). **Windows ligatures were listed here in error** and turned out to
+   be a single unsent message — a reminder that "blocked-upstream" is a claim worth re-checking against
+   the vendored source rather than inheriting between audits.
 
 *Regenerate this audit by re-running the `missing-functionality-audit` workflow.*

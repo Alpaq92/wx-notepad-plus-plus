@@ -40,28 +40,16 @@ static std::string firstMatch(const std::string& pat, const std::string& hay, Op
     return hay.substr(m.start, m.end - m.start);
 }
 
-// Replace every match, the way Replace All drives the engine.
+// Replace every match. This calls the SHIPPED helper rather than reproducing its loop: the previous
+// version was a hand copy, so these assertions verified a reimplementation and would still have
+// passed if the real one drifted. A pattern that could loop forever fails the test by hanging, which
+// is what the zero-width cases below are really checking.
 static std::string replaceAll(const std::string& pat, const std::string& repl,
                               const std::string& hay, Options o = Options{})
 {
     Regex re;
     if (!re.compile(pat, o)) return "<badpattern>";
-    std::string out;
-    size_t at = 0;
-    int guard = 0;
-    Match m;
-    while (at <= hay.size() && re.search(hay, at, hay.size(), m))
-    {
-        if (++guard > 10000) return "<runaway>";
-        out += hay.substr(at, m.start - at);
-        out += Regex::expand(repl, hay, m);
-        const size_t next = Regex::advanceOver(hay.data(), hay.size(), m.start, m.end);
-        if (m.empty() && m.start < hay.size())
-            out += hay.substr(m.start, next - m.start);   // keep the character we stepped over
-        at = next;
-    }
-    if (at <= hay.size()) out += hay.substr(at > hay.size() ? hay.size() : at);
-    return out;
+    return re.replaceAll(hay, repl);
 }
 
 int main()
@@ -154,6 +142,16 @@ int main()
     eq(replaceAll("x*", "-", "abc"),   "-a-b-c-",  "zero-width: an all-optional pattern terminates");
     eq(replaceAll("\\b", "|", "ab cd"), "|ab| |cd|", "zero-width: word boundaries terminate");
     eq(replaceAll("(?=b)", "!", "abc"), "a!bc",     "zero-width: a bare lookahead terminates");
+    {
+        // The non-global form, which snippet transforms use when their pattern carries no 'g'.
+        Regex re;
+        Options cs; cs.matchCase = true;
+        check(re.compile("a", cs), "replaceAll: compiles");
+        eq(re.replaceAll("aaa", "X", /*global=*/false), "Xaa", "replaceAll: !global stops after the first");
+        eq(re.replaceAll("aaa", "X", /*global=*/true),  "XXX", "replaceAll: global replaces every one");
+        eq(re.replaceAll("zzz", "X"), "zzz", "replaceAll: no match returns the subject unchanged");
+        eq(re.replaceAll("", "X"), "", "replaceAll: an empty subject is safe");
+    }
     {
         // The engine's own advance() is what guarantees this.
         Regex re;
