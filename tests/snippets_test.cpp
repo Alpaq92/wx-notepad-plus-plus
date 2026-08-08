@@ -156,6 +156,24 @@ int main()
         check(p.fields.size() == 2, "transform: a definition at the very tail still defines the stop");
         check(p.fields[0].xform.active, "transform: ...so the forward-referencing transform is accepted");
     }
+    // The same trap once more, now with the SECOND delimiter missing, so there is no later delimiter
+    // to measure from. The end scan is brace-balanced for exactly this: the '}' of {2} belongs to the
+    // regex, and treating it as the close handed "$2}" back to the body parser as a real stop.
+    {
+        const SnippetParse p = wxnParseSnippet("${1:x} ${1/(\\w){2}$2}");
+        eq(p.text, "x ${1/(\\w){2}$2}", "transform: a missing second delimiter stays literal past the {n}");
+        check(p.fields.size() == 1, "transform: ...and conjures no stop 2 from the tail");
+        eq(order(p), "1", "transform: ...leaving only the real stop");
+    }
+    // A definition that never closes is not a definition. Pass 2 emits "${1:unterminated" literally
+    // and makes no field, so a transform accepted against it would have no source to derive from -
+    // and having been accepted, it contributes no text either. Both halves would silently vanish.
+    {
+        const SnippetParse p = wxnParseSnippet("${1/a/b/} ${1:unterminated");
+        eq(p.text, "${1/a/b/} ${1:unterminated",
+           "transform: an unterminated definition does not license a transform");
+        check(p.fields.empty(), "transform: ...and neither half produces a field");
+    }
     // A transform whose stop is never defined has nothing to derive from: it would expand to nothing,
     // never become a stop, and never be written - silently deleting itself. A one-digit typo did it.
     eq(wxnParseSnippet("${1/a/b/}").text, "${1/a/b/}", "transform: an undefined stop keeps it literal");

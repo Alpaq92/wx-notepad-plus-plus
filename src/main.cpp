@@ -9506,10 +9506,12 @@ private:
     bool writePageToDisk(EditorPage* p)
     {
         if (!p || p->path.empty()) return false;
-        // Backstop only: a session is cancelled by any buffer switch, so m_snip.page is always the
-        // ACTIVE page while one lives, and onSaveAll routes the active page through writeFile. This
-        // fires only if that invariant ever loosens - the callee no-ops otherwise.
-        snippetSyncTransforms();
+        // Only when THIS page hosts the session. The callee's own guard is not enough here: onSaveAll
+        // and peekDoc mount a background document with a raw SCI_SETDOCPOINTER and never touch the
+        // notebook selection, so activePage() still returns the session's page and that guard passes
+        // while sci() is talking to a DIFFERENT document. Syncing there would splice derived text into
+        // another file at this session's offsets, and writeMountedDoc would put it on disk.
+        if (p == m_snip.page) snippetSyncTransforms();
         nibFireDocEvent(NIB_EV_DOCUMENT_SAVING, p);   // v2 - carries THIS page's id, not the active one's
         if (!writeMountedDoc(p, p->path)) return false;
         sci(SCI_SETSAVEPOINT); clearRecovery(p); p->dirty = false; stampDiskStat(p);

@@ -81,7 +81,7 @@ It is a starting point, not a library — the intent is that you add the ones yo
 
 A field can show a **derived** version of another one:
 
-```
+```text
 [cpp:cls]
 class ${1:my_thing}
 {
