@@ -3251,19 +3251,19 @@ msgid "Invalid regular expression: %s"
 msgstr "잘못된 정규식: %s"
 
 msgid "Insert &Snippet..."
-msgstr "스니페입 삽입(&S)..."
+msgstr "스니펫 삽입(&S)..."
 
 msgid "Insert Snippet"
-msgstr "스니페입 삽입"
+msgstr "스니펫 삽입"
 
 msgid "Type a snippet name"
-msgstr "스니페입 이름 입력"
+msgstr "스니펫 이름 입력"
 
 msgid "any language"
 msgstr "모든 언어"
 
 msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.txt in the user data folder."
-msgstr "이 파일의 언어에 맞는 스니페입이 없습니다.\n\n사용자 데이터 폴더의 snippets.txt에 추가하세요."
+msgstr "이 파일의 언어에 맞는 스니펫이 없습니다.\n\n사용자 데이터 폴더의 snippets.txt에 추가하세요."
 
 msgid "Regular expressions use PCRE2: a pattern can span line breaks, and lookbehind, named groups and case conversion in replacements all work."
 msgstr "정규식은 PCRE2를 사용합니다. 패턴이 줄 바꿈을 가로질러 수 있으며 후방 탐색, 명명된 그룹, 치환 시 대소문자 변환이 모두 동작합니다."
@@ -3278,4 +3278,4 @@ msgid "Draw text through DirectWrite instead of GDI: sub-pixel positioning, bett
 msgstr "GDI 대신 DirectWrite로 텍스트를 그립니다: 서브픽셀 배치, 더 나은 글자 모양, 지원하는 글꼴의 OpenType 기능. 즉시 적용됩니다."
 
 msgid "Snippet transform is not a valid regular expression: %s"
-msgstr "스니페입 변환이 올바른 정규식이 아닙니다: %s"
+msgstr "스니펫 변환이 올바른 정규식이 아닙니다: %s"

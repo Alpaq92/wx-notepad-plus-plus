@@ -124,14 +124,20 @@ inline bool readTransform(const std::string& s, size_t& i, SnippetTransform& t)
         return out;
     };
 
-    // First unescaped '}' at or after `k`. Called only once a delimiter run has failed, from the
-    // last delimiter we did see - past that point a '}' can no longer belong to a part we are still
-    // reading, so it is the construct's own close.
+    // The construct's own closing '}' at or after `k`, or npos. Called once a delimiter run has
+    // failed, starting from the last delimiter we did see.
+    //
+    // Brace-BALANCED, because everything it walks over is regex source: a bare '}' closing a "{n}"
+    // quantifier is not the end of the construct. Counting it as one is the same phantom-stop trap
+    // described above, just reached from a different typo - "${1/(\w){2}$2}" would end at the '}' of
+    // {2} and hand "$2}" back to the body parser as a real stop.
     auto closeFrom = [&s](size_t k) -> size_t {
+        int depth = 0;
         for (; k < s.size(); ++k)
         {
             if (s[k] == '\\' && k + 1 < s.size()) { ++k; continue; }
-            if (s[k] == '}') return k + 1;
+            if (s[k] == '{') { ++depth; continue; }
+            if (s[k] == '}') { if (depth == 0) return k + 1; --depth; }
         }
         return std::string::npos;
     };
@@ -210,6 +216,11 @@ inline SnippetParse wxnParseSnippet(const std::string& body)
         if (braced) ++q;
         int s = 0;
         if (!readIndex(body, q, s)) continue;
+        // A braced construct that never closes defines nothing: pass 2 emits it literally and creates
+        // no field, so counting it here would accept a transform whose source then does not exist -
+        // and the transform, having been accepted, contributes no text either. Both halves vanish.
+        // spanEnd is the same closure test pass 2 uses, so the two cannot drift on this point.
+        if (braced && spanEnd(body, k) == std::string::npos) continue;
         // A bare $1, or ${1} / ${1:...} - anything except ${1/.../.../}
         if (!braced || (q < body.size() && body[q] != '/'))
             if (std::find(defined.begin(), defined.end(), s) == defined.end()) defined.push_back(s);
