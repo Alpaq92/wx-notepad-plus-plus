@@ -10,9 +10,12 @@
 #
 # 2. THE DEFENDER FALSE POSITIVE - per artifact, per hash, and NOT predictable from the format.
 #    winget's pipeline downloads the exact InstallerUrl and runs it in a sandbox under Defender, so a
-#    flagged asset fails validation and blocks the whole listing. Measured for v0.14.3 through the
-#    browser download path (IAttachmentExecute::Save), SI 1.455.470.0, all six Windows assets in one
-#    sitting:
+#    flagged asset fails validation and blocks the whole listing. The table below is the record, and
+#    its absence of a row for the PackageVersion above is what tells you the selection is still
+#    inherited rather than measured - do not submit until this file's newest row matches that version.
+#
+#    Measured for v0.14.3 through the browser download path (IAttachmentExecute::Save),
+#    SI 1.455.470.0, all six Windows assets in one sitting:
 #        wxNote-0.14.3-Setup.exe          clean   <- listed
 #        wxNote-0.14.3-arm64-Setup.exe    clean   <- listed
 #        wxNote-0.14.3-x86-Setup.exe      clean   <- listed
@@ -20,35 +23,35 @@
 #        wxNote-0.14.3-arm64-windows.zip  clean
 #        wxNote-0.14.3-x86-windows.zip    FLAGGED
 #    Compare v0.14.2, where the ARM64 *installer* was flagged and its *zip* was clean - the exact
-#    inverse of what x86 shows here. Neither format is safe by nature, so re-measure every release
-#    rather than assuming this shape holds; the procedure is in docs/PACKAGING_WINGET.md.
+#    inverse of what x86 shows here. Neither format is safe by nature, and the verdict is per HASH, so
+#    a clean result last release says nothing about this one. Re-measure every time.
 #
 # All three architectures use nullsoft this time, which is the outcome to prefer: the NSIS path gives
 # users a Start Menu shortcut, wxNote's own Add/Remove Programs entry and its own uninstaller, none of
 # which the portable zip route provides. Fall back to a zip entry only for an architecture whose
 # installer measures flagged.
 PackageIdentifier: wxNoteProject.wxNote
-PackageVersion: 0.14.3
+PackageVersion: 0.16.0
 InstallerType: nullsoft
 Scope: user
 InstallerSwitches:
   Silent: /S
   SilentWithProgress: /S
 UpgradeBehavior: install
-ReleaseDate: 2026-08-02
+ReleaseDate: 2026-08-03
 AppsAndFeaturesEntries:
 - DisplayName: wxNote
   Publisher: wxNote Project
   ProductCode: wxNote
 Installers:
 - Architecture: x64
-  InstallerUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/download/v0.14.3/wxNote-0.14.3-Setup.exe
-  InstallerSha256: 79946296AF0610A187849750C3875830D453060DFF7BE19FEE4B2FF74D45376F
+  InstallerUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/download/v0.16.0/wxNote-0.16.0-Setup.exe
+  InstallerSha256: 9C790C7E9C74CD5B86788C66CF370378725536680B827883C47752B1E90A604C
 - Architecture: arm64
-  InstallerUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/download/v0.14.3/wxNote-0.14.3-arm64-Setup.exe
-  InstallerSha256: C55DDA8F076A2F53508A92C0BD25ED7E8F48B586EA9A2C39E2F8F593BC4664C3
+  InstallerUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/download/v0.16.0/wxNote-0.16.0-arm64-Setup.exe
+  InstallerSha256: 89D07304A00E069C257CA7466752456E3208A290B93E82D480E0CB4432E95A94
 - Architecture: x86
-  InstallerUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/download/v0.14.3/wxNote-0.14.3-x86-Setup.exe
-  InstallerSha256: F3D7D1A06EADE225D53A86936BDBD9189C78B389A1FCE3C64B1494BB045BBD61
+  InstallerUrl: https://github.com/Alpaq92/wx-notepad-plus-plus/releases/download/v0.16.0/wxNote-0.16.0-x86-Setup.exe
+  InstallerSha256: 1E19A9DFBDB8DE312BFDC61833C038B560F3642B0FB4A4C9A70F5CD24799D514
 ManifestType: installer
 ManifestVersion: 1.12.0

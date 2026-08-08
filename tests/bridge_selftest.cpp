@@ -267,6 +267,135 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         f->closeActive();                   // drop the scratch document again
     }
 
+    // ---- snippet transforms: ${1/find/replace/flags} ---------------------------------------------
+    {
+        load("");
+        check(f->snippetInsert("${1:hello world} -> ${1/o/0/g}"),
+              "transform: a body with a transform starts a session");
+        check(text() == "hello world -> hell0 w0rld",
+              "transform: seeded from the placeholder at insert time");
+
+        // Retype the stop; the transform must follow when the stop is left.
+        f->sci(SCI_SETSELECTION, 11, 0);
+        f->sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>("foo boo"));
+        f->snippetStep(+1);
+        check(text() == "foo boo -> f00 b00", "transform: recomputed from the stop's new text on Tab");
+        f->snippetCancel();
+    }
+    {
+        // Without 'g' only the first match is replaced; 'i' makes it case-insensitive.
+        load("");
+        f->snippetInsert("${1:aaa} ${1/a/X/}");
+        check(text() == "aaa Xaa", "transform: no 'g' replaces only the first match");
+        f->snippetCancel();
+
+        load("");
+        f->snippetInsert("${1:ABC} ${1/b/x/i}");
+        check(text() == "ABC AxC", "transform: 'i' matches case-insensitively");
+        f->snippetCancel();
+    }
+    {
+        // Case operators in the replacement, which is what PCRE2 unblocked.
+        load("");
+        f->snippetInsert("${1:some name} ${1/(\\w+)/\\U$1/g}");
+        check(text() == "some name SOME NAME", "transform: \\U works in a transform replacement");
+        f->snippetCancel();
+    }
+    {
+        // A transform is never a navigation target, and never selected for typing.
+        load("");
+        f->snippetInsert("${1:x} ${1/x/y/} $2");
+        check(f->sci(SCI_GETSELECTIONS) == 1,
+              "transform: the derived field is excluded from the mirror selection");
+        f->snippetCancel();
+    }
+    {
+        // A broken transform must leave the text alone rather than emptying the field. Assert the
+        // WHOLE string: a prefix check passed even if the derived field was filled with garbage.
+        load("");
+        f->snippetInsert("${1:keep} ${1/(unclosed/z/}");
+        check(text() == "keep ", "transform: an invalid pattern leaves the stop's text intact");
+        f->snippetCancel();
+    }
+    {
+        // ADJACENCY. A transform written at a field boundary used to be absorbed by the neighbour:
+        // the primary grew over the derived text, so landing selected it and every Tab compounded.
+        load("");
+        f->snippetInsert("${1:foo}${1/o/0/g}");
+        check(text() == "foof00", "adjacency: a transform with no separator expands correctly");
+        check(f->sci(SCI_GETSELECTIONSTART) == 0 && f->sci(SCI_GETSELECTIONEND) == 3,
+              "adjacency: the primary still covers ONLY its own text, not the derived output");
+        f->snippetStep(+1);
+        check(text() == "foof00", "adjacency: a second pass does not compound");
+        f->snippetCancel();
+    }
+    {
+        // The exit caret must land AFTER a trailing transform, not inside it. The synthetic $0 shares
+        // the transform's offset, so it has to be pushed past the derived text rather than grown.
+        load("");
+        f->snippetInsert("${1:ab} ${1/a/X/}");
+        check(text() == "ab Xb", "exit caret: body expands");
+        f->snippetStep(+1);   // past the last stop -> lands on $0 and ends the session
+        check(!f->m_snip.active, "exit caret: session ends");
+        check(f->sci(SCI_GETCURRENTPOS) == 5,
+              "exit caret: lands at the END of the snippet, not before the derived text");
+    }
+    {
+        // Two transforms on one stop: the back-to-front loop must not let one overwrite the other.
+        load("");
+        f->snippetInsert("${1:ab} ${1/a/X/} ${1/b/Y/}");
+        check(text() == "ab Xb aY", "two transforms: both are written, neither is lost");
+        f->snippetCancel();
+    }
+    {
+        // Esc must finalize before ending the session - otherwise the pre-edit derived text is what
+        // stays in the document, and gets saved. No test drove this path before.
+        load("");
+        f->snippetInsert("${1:hello} ${1/l/L/g}");
+        check(text() == "hello heLLo", "esc: seeded");
+        f->sci(SCI_SETSELECTION, 5, 0);
+        f->sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>("full"));
+        wxKeyEvent esc(wxEVT_KEY_DOWN);
+        esc.m_keyCode = WXK_ESCAPE;
+        f->onStcKeyDown(esc);                       // the real handler, not snippetCancel
+        check(!f->m_snip.active, "esc: the key handler ends the session");
+        check(text() == "full fuLL", "esc: ...after bringing the derived field up to date");
+    }
+    {
+        // Saving mid-session must finalize too - Ctrl+S was the commonest way to commit stale text.
+        load("");
+        f->snippetInsert("${1:hello} ${1/l/L/g}");
+        f->sci(SCI_SETSELECTION, 5, 0);
+        f->sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>("bell"));
+        const wxString tmp = wxFileName::GetTempDir() + wxFILE_SEP_PATH + "wxn_snip_save.txt";
+        f->writeFile(tmp);
+        wxString onDisk;
+        { wxFile r(tmp); r.ReadAll(&onDisk); }
+        check(onDisk.StartsWith("bell beLL"), "save: Ctrl+S finalizes before the bytes go out");
+        f->snippetCancel();
+        wxRemoveFile(tmp);
+    }
+    {
+        // Undo cannot be tracked, so the session must end rather than write through stale offsets.
+        load("x");
+        f->sci(SCI_SETSELECTION, 1, 1);
+        f->snippetInsert("${1:a} ${1/a/A/}");
+        check(f->m_snip.active, "undo: session live");
+        f->sci(SCI_UNDO);
+        check(!f->m_snip.active, "undo: the session ends rather than tracking a rewritten history");
+        check(text() == "x", "undo: insert plus seeding is ONE undo step");
+    }
+    {
+        // A whole-document rewrite likewise ends the session; before, every field aliased to the
+        // whole buffer and the next Tab replaced the entire file with a transform of itself.
+        load("");
+        f->snippetInsert("${1:a} ${1/a/A/}");
+        check(f->m_snip.active, "doc-rewrite: session live");
+        f->setDocUtf8("completely different text");
+        check(!f->m_snip.active, "doc-rewrite: SCI_SETTEXT ends the session");
+        check(text() == "completely different text", "doc-rewrite: ...and does not corrupt the new text");
+    }
+
     // ---- (10) wrap-around, in-selection bounds, and Replace-and-find-next ------------------------
     {
         load("target a target b");

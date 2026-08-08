@@ -76,8 +76,13 @@ The font *size* is not a preference: it comes from the theme (the bundled themes
 and zoom adjusts it from there. That is also why zoom percentages are quantised — see
 [The zoom control](preferences.md#the-zoom-control).
 
-Cascadia Mono is chosen over Cascadia *Code* deliberately: Code's programming ligatures would never be
-drawn anyway, because Scintilla renders through GDI on Windows and GDI does no OpenType shaping.
+Cascadia Mono is chosen over Cascadia *Code* deliberately: the two are the same typeface, and Mono is
+the variant without programming ligatures. That is a taste decision, not a technical limit — if you
+prefer them, install a ligature font such as Cascadia Code or Fira Code and pick it in Preferences.
+
+On Windows they will render, provided **Preferences ▸ Editing ▸ Smoother text rendering (DirectWrite)**
+is on, which it is by default. (Before that option existed, text was drawn through GDI, which does no
+OpenType shaping — so ligatures genuinely could not appear no matter which font you chose.)
 
 Licensing for both (they are not equally permissive — Cascadia carries a Reserved Font Name) is in the
 repository's `resources/fonts/CREDITS.md` and `LICENSING.md`.

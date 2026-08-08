@@ -3270,3 +3270,12 @@ msgstr "Reguläre Ausdrücke verwenden PCRE2: Ein Muster kann Zeilenumbrüche ü
 
 msgid "&. matches newline"
 msgstr "&. entspricht Zeilenumbruch"
+
+msgid "Smoother text rendering (DirectWrite)"
+msgstr "Weichere Textdarstellung (DirectWrite)"
+
+msgid "Draw text through DirectWrite instead of GDI: sub-pixel positioning, better glyph shapes, and OpenType features in fonts that have them. Takes effect immediately."
+msgstr "Text über DirectWrite statt GDI zeichnen: Subpixel-Positionierung, bessere Glyphenformen und OpenType-Funktionen in Schriften, die sie bieten. Wirkt sofort."
+
+msgid "Snippet transform is not a valid regular expression: %s"
+msgstr "Die Bausteintransformation ist kein gültiger regulärer Ausdruck: %s"
