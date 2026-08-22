@@ -1,5 +1,37 @@
-# Shell scripts run on Linux/macOS CI runners - force LF regardless of the checkout platform's
-# core.autocrlf setting (a CRLF shebang/heredoc line silently breaks bash).
+# Line endings. The repository is LF: 681 of the 687 text blobs are pure LF, and the six that are
+# not are the vendored Scintilla headers (excluded below). Without a rule here, Git's line-ending
+# behaviour depends on each checkout's core.autocrlf - which on Windows is `true` in Git's own
+# system gitconfig and frequently `false` in a user's - so the same file round-trips differently on
+# different machines. That drift is not theoretical: it silently rewrote whole files during this
+# project's history, turning a ~120-line edit into a ~29,000-line diff and, once, committing a file
+# with flipped endings. Pin it once, here, where it cannot depend on anyone's local config.
+#
+#   text=auto -> Git decides text vs binary per blob (binaries are never converted)
+#   eol=lf    -> text files are checked out AND stored with LF, on every platform
+* text=auto eol=lf
+
+# Vendored from upstream Scintilla, and deliberately FROZEN as-is: -text means no conversion in
+# either direction, so whatever is committed is what is checked out. This directory is currently
+# MIXED - five files are CRLF as upstream published them, the rest LF - and freezing keeps the
+# vendored bytes exactly as they were audited, which is the property that matters for third-party
+# code. The trade-off, stated plainly: on a future re-vendor, a CRLF upstream file landing on an
+# LF blob (or vice versa) will diff as a whole-file rewrite. That is a deliberate, occasional,
+# visible cost, taken instead of silently rewriting third-party source we did not author.
+third_party/scintilla/** -text
+
+# Binary formats, called out explicitly rather than left to auto-detection. The .mo catalogs matter
+# most: tests/catalog_selftest.cpp asserts each committed .mo is the exact compile of its .po AND
+# that the region-qualified twins (pl_PL, de_DE, ...) are byte-identical to their short-code
+# siblings, so any end-of-line "helpfulness" here would fail the build - or worse, ship a corrupt
+# catalog. Fonts and images are equally unforgiving.
+*.mo  binary
+*.png binary
+*.ttf binary
+*.ico binary
+
+# Shell scripts run on the Linux/macOS CI runners - a CRLF shebang or heredoc line silently breaks
+# bash. Covered by the global rule above, but kept explicit: this one has a failure mode worth
+# naming at the point of the rule.
 *.sh text eol=lf
 
 # Linux packaging config consumed by rpmbuild/flatpak-builder/desktop-file tools on the CI runner -
