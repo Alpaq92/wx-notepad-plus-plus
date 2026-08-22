@@ -20,9 +20,11 @@ and releases exactly as before, just with a `SHA256SUMS` added. Nothing here blo
 | macOS `*.dmg` | unsigned | ✅ codesigned (Developer ID) + notarized + stapled |
 | Linux `.deb`/`.rpm`/`.AppImage`/`.flatpak` | covered by `SHA256SUMS` (+ `.asc`) | — |
 
-**Status.** `SHA256SUMS` is live now. The GPG and Windows Authenticode paths are complete and
-only need their secrets. The **macOS** path is scaffolded but has **not yet been exercised against
-a real Developer ID certificate** — expect to refine the keychain/notarization steps the first time
+**Status.** `SHA256SUMS` is live now. The **GPG** path is complete and only needs its secret —
+it is the one turnkey item on this page. The **Windows** step is wired but reads a `.pfx`, which
+**no CA issues anymore** (see below): for a newly purchased certificate it is a dead end, and a
+working route means workflow changes, not just a secret. The **macOS** path is scaffolded but has
+**not yet been exercised against a real Developer ID certificate** — expect to refine the keychain/notarization steps the first time
 it runs with real credentials.
 
 ## Verifying a download (end users)
@@ -46,13 +48,18 @@ gpg --verify SHA256SUMS.asc SHA256SUMS
 worth exactly as much as your trust that the release page itself is genuine — which is why the
 fingerprint is also printed in the release workflow's log, where it can be compared across releases.)
 
-On **Windows**, a signed installer shows a real publisher in the UAC prompt instead of "Unknown
-publisher". On **macOS**, a notarized `.dmg` opens without the right-click → Open dance.
+On **Windows**, the installer is per-user (`RequestExecutionLevel user`), so there is no UAC
+elevation prompt at all — the dialog signing actually affects is **SmartScreen's** "Windows
+protected your PC" gate on downloaded files, which names the publisher once the signature (and its
+reputation) exists. On **macOS**, a notarized `.dmg` opens without the right-click → Open dance.
 
 ## Configuring signing (maintainer)
 
-Add these under **Settings → Secrets and variables → Actions**. Each group is independent; add only
-the ones you have. Missing groups just skip.
+Add these under **Settings → Secrets and variables → Actions**. The GPG and Windows groups are
+independent; add only the ones you have, and a missing group just skips. The five `APPLE_*` secrets
+are **not** independent of each other: set all five or none. The cert pair alone signs but never
+notarizes (Gatekeeper still blocks the result); the notarytool trio alone submits an *unsigned*
+`.dmg`, which Apple rejects — and the release job fails with it.
 
 ### GPG signature of `SHA256SUMS` — free
 
@@ -84,13 +91,15 @@ gpg --armor --export <KEY_ID> > wxnote-public.asc  # attach to a release / publi
 | Route | Cost | Notes |
 |---|---|---|
 | [SignPath Foundation](https://signpath.org/) | free for OSS | Built for exactly this case: public repo, OSI licence, builds in public CI. wxNote (Apache-2.0, public, GitHub Actions) fits the criteria. Signing happens on their infrastructure, so no key ever reaches the runner. |
-| [Azure Trusted Signing](https://learn.microsoft.com/azure/trusted-signing/) | ~$10/month | Microsoft-operated; treated like EV for SmartScreen, so reputation is immediate rather than accrued. Verify individual-developer eligibility first. |
+| [Azure Trusted Signing](https://learn.microsoft.com/azure/trusted-signing/) | ~$10/month | Microsoft-operated PKI, short-lived certs. Good SmartScreen standing in practice, but Microsoft does **not** document an instant-reputation guarantee — do not buy on that promise. Its tooling signs on **Windows runners only** (the current step runs on Linux). Verify individual-developer eligibility first; it has been gated on years of verifiable identity history. |
 | Certum Open Source | ~€100 / 2 years | Hardware card posted to you; signing is done locally, not in CI. |
-| SSL.com eSigner / DigiCert KeyLocker | commercial | Cloud HSM; `osslsigncode` can drive these via `-pkcs11engine`/`-pkcs11module`, so the existing Linux publish job keeps working with a flag change. |
+| SSL.com eSigner / DigiCert KeyLocker | commercial | Cloud HSM; `osslsigncode` can drive these via `-pkcs11engine`/`-pkcs11module` from the existing Linux publish job — but that is a real workflow edit (a PKCS#11 module install plus new secrets replacing the `-pkcs12` invocation), not a flag change. |
 
 Whichever route: the certificate subject must be a **real legal or individual identity**. "wxNote
 Project" is not an entity that can hold an OV certificate, so whatever name goes on the certificate
-should also replace `CompanyName` in `resources/app.rc.in` and `installer/windows/wxnote.nsi`.
+should also replace it everywhere the publisher is named: `CompanyName` in `resources/app.rc.in`,
+both `CompanyName` and the Add/Remove-Programs `Publisher` in `installer/windows/wxnote.nsi`, and
+the `Publisher` fields in `installer/winget/*.yaml`.
 
 **Sign inside-out.** The current step signs `dist/*.exe` — i.e. only the outer installer, after
 `makensis` has already packed an unsigned `wxnote.exe` and `nib/npp_bridge.dll` inside it. Defender
