@@ -5,6 +5,18 @@ All notable changes to wxNote are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-08-08
+
+### Fixed
+- **Split view: preferences now reach both halves immediately.** Wrap, whitespace and EOL marks,
+  indent guides, caret line/width/blink, the vertical edge, multi-selection, scroll-beyond-last-line
+  and the line-number margin were applied only to the focused half; the other half kept the old
+  settings until it was next clicked into.
+- **New tabs no longer ignore your indentation preferences.** Tab width and tabs-vs-spaces live on
+  the document in Scintilla, and a freshly opened tab got Scintilla's own defaults (width 8, real
+  tabs) instead of the configured values. They are now applied to every document on creation and
+  every time one is shown.
+
 ## [0.17.0] - 2026-08-08
 
 ### Added
