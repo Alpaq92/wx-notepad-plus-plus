@@ -92,8 +92,24 @@ inline bool validPathComponent(const std::string& s)
     if (s.empty() || s.size() > 64)          return false;
     if (s[0] == '.')                         return false;  // blocks ".", "..", and hidden dotfiles
     if (s.find("..") != std::string::npos)   return false;  // anywhere, not just as a full component
+    // Windows strips a trailing dot or space when opening a path, so "plug" and "plug " resolve to
+    // the SAME directory while the catalog would treat them as distinct entries.
+    if (s.back() == '.' || s.back() == ' ')  return false;
+    // Explicit ALLOWLIST, not a blocklist: [A-Za-z0-9._ -] and nothing else. This is what rejects
+    // separators, drive colons, NULs, control bytes and the Windows wildcard/pipe set without
+    // having to enumerate them - enumerating rejects is how one gets forgotten.
     for (char c : s)
-        if (c == '/' || c == '\\' || c == ':' || c == '\0') return false;
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+              c == '.' || c == '_' || c == '-' || c == ' '))
+            return false;
+    // Windows reserved device names are files in EVERY directory, and the reservation is on the
+    // STEM: "con.dll" is still CON. Case-insensitive by definition.
+    std::string stem = s.substr(0, s.find('.'));
+    for (char& c : stem) if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 32);
+    static const char* const kReserved[] = { "CON", "PRN", "AUX", "NUL",
+        "COM1","COM2","COM3","COM4","COM5","COM6","COM7","COM8","COM9",
+        "LPT1","LPT2","LPT3","LPT4","LPT5","LPT6","LPT7","LPT8","LPT9" };
+    for (const char* r : kReserved) if (stem == r) return false;
     return true;
 }
 
@@ -108,6 +124,14 @@ inline bool validPackageUrl(const std::string& url)
         "objects.githubusercontent.com",           // where the redirect lands
         "release-assets.githubusercontent.com",    // newer asset CDN host
     };
+
+    if (url.size() > 2048) return false;                     // sanity bound
+    // Printable ASCII only, over the WHOLE url - not just the authority. An embedded CR/LF
+    // ("https://github.com/a\r\nHost: evil") passes a scheme+authority check because the authority
+    // stops at the first '/', and if any later layer ever builds a request line or header from
+    // this string, that is request splitting. Nothing on the allowlisted hosts needs non-ASCII.
+    for (unsigned char c : url)
+        if (c <= 0x20 || c >= 0x7F) return false;
 
     const std::string scheme = "https://";
     if (url.size() <= scheme.size() || url.compare(0, scheme.size(), scheme) != 0) return false;
@@ -185,13 +209,21 @@ inline ParseResult parseIndex(const std::string& jsonText, Index& out)
     if (!wxnjson::JsonParser(jsonText).parse(root)) { r.error = "index: not valid JSON";         return r; }
     if (root.type != wxnjson::Json::Obj)            { r.error = "index: root is not an object";  return r; }
 
+    // Range-check BEFORE the integer casts, the same order parseTargetList already uses for
+    // install.size: converting an out-of-range double (JSON "1e400" arrives here as inf) to an
+    // integer type is undefined behavior, not merely a wrong value.
     const wxnjson::Json* m = root.member("schema");
-    if (!m || m->type != wxnjson::Json::Num) { r.error = "index: missing numeric \"schema\""; return r; }
+    if (!m || m->type != wxnjson::Json::Num || !(m->num >= 0 && m->num <= 1e6)) {
+        r.error = "index: missing numeric \"schema\"";
+        return r;
+    }
     out.schema = static_cast<int>(m->num);
     if (out.schema != 1) { r.error = "index: unsupported \"schema\" version"; return r; }
 
     m = root.member("serial");
-    if (!m || m->type != wxnjson::Json::Num || m->num < 0) {
+    // 2^53: the largest integer a double carries exactly - and more catalog publishes than can
+    // ever happen under a monotonic serial.
+    if (!m || m->type != wxnjson::Json::Num || !(m->num >= 0 && m->num <= 9007199254740992.0)) {
         r.error = "index: missing numeric \"serial\"";
         return r;
     }
@@ -289,10 +321,15 @@ inline ParseResult parseTargetList(const std::string& jsonText, std::vector<Entr
         if (!detail::takeStr(je, "homepage",    e.homepage,    present, ferr)) return bad(ferr);
         if (!detail::takeStr(je, "license",     e.licenseSpdx, present, ferr)) return bad(ferr);
 
-        // ABI window - optional; absent means "no constraint" on that side
+        // ABI window. min-host-abi is REQUIRED: abiSatisfied's major-equality gate means a
+        // defaulted minAbi of 0 can never match a real host, so an entry that omitted the field
+        // was silently uninstallable everywhere - and in a curated, SIGNED catalog a missing bound
+        // is a publishing bug to surface by name, not to guess around. max-host-abi stays
+        // optional: absent means "no upper bound", which the open default already encodes.
         std::string abiText;
         if (!detail::takeStr(je, "min-host-abi", abiText, present, ferr)) return bad(ferr);
-        if (present && !detail::parseAbi(abiText, e.minAbi))
+        if (!present) return bad("missing \"min-host-abi\"");
+        if (!detail::parseAbi(abiText, e.minAbi))
             return bad("\"min-host-abi\" must look like \"1.6\"");
         if (!detail::takeStr(je, "max-host-abi", abiText, present, ferr)) return bad(ferr);
         if (present && !detail::parseAbi(abiText, e.maxAbi))

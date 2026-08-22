@@ -127,11 +127,29 @@ struct JsonParser
                     case 'r': out+='\r'; break;  case 't': out+='\t'; break;
                     case 'u':
                     {
-                        if (i+4 > s.size()) return fail();
-                        unsigned cp = 0;
-                        for (int k=0;k<4;++k){ char h=s[i++]; cp<<=4;
-                            if(h>='0'&&h<='9')cp|=h-'0'; else if(h>='a'&&h<='f')cp|=h-'a'+10;
-                            else if(h>='A'&&h<='F')cp|=h-'A'+10; else return fail(); }
+                        unsigned cp;
+                        if (!hex4(cp)) return fail();
+                        // Surrogate handling. JSON escapes astral code points as a \uD8xx\uDCxx
+                        // PAIR; encoding the halves separately produces CESU-8, which is not valid
+                        // UTF-8 - wxString::FromUTF8 answers EMPTY for it, losing the whole field
+                        // instead of one character. Combine pairs; map a LONE half - and U+0000,
+                        // which silently truncates every downstream c_str() consumer - to U+FFFD.
+                        if (cp >= 0xD800 && cp <= 0xDBFF &&
+                            i + 1 < s.size() && s[i] == '\\' && s[i+1] == 'u')
+                        {
+                            i += 2;
+                            unsigned lo;
+                            if (!hex4(lo)) return fail();
+                            if (lo >= 0xDC00 && lo <= 0xDFFF)
+                                cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
+                            else
+                            {
+                                appendUtf8(out, 0xFFFD);   // the orphaned high half
+                                cp = (lo == 0 || (lo >= 0xD800 && lo <= 0xDFFF)) ? 0xFFFD : lo;
+                            }
+                        }
+                        else if (cp >= 0xD800 && cp <= 0xDFFF) cp = 0xFFFD;
+                        if (cp == 0) cp = 0xFFFD;
                         appendUtf8(out, cp);
                         break;
                     }
@@ -158,11 +176,24 @@ struct JsonParser
         v.type = Json::Num; v.num = toNumber(s.substr(start, i-start));
         return true;
     }
+    bool hex4(unsigned& cp)
+    {
+        if (i + 4 > s.size()) return false;
+        cp = 0;
+        for (int k = 0; k < 4; ++k)
+        {
+            char h = s[i++]; cp <<= 4;
+            if (h>='0'&&h<='9') cp |= h-'0'; else if (h>='a'&&h<='f') cp |= h-'a'+10;
+            else if (h>='A'&&h<='F') cp |= h-'A'+10; else return false;
+        }
+        return true;
+    }
     static void appendUtf8(std::string& out, unsigned cp)
     {
         if (cp < 0x80) out += (char)cp;
         else if (cp < 0x800) { out += (char)(0xC0|(cp>>6)); out += (char)(0x80|(cp&0x3F)); }
-        else { out += (char)(0xE0|(cp>>12)); out += (char)(0x80|((cp>>6)&0x3F)); out += (char)(0x80|(cp&0x3F)); }
+        else if (cp < 0x10000) { out += (char)(0xE0|(cp>>12)); out += (char)(0x80|((cp>>6)&0x3F)); out += (char)(0x80|(cp&0x3F)); }
+        else { out += (char)(0xF0|(cp>>18)); out += (char)(0x80|((cp>>12)&0x3F)); out += (char)(0x80|((cp>>6)&0x3F)); out += (char)(0x80|(cp&0x3F)); }
     }
     // The atof() stand-in that keeps <cstdlib> out of this header. Same grammar strtod applies in
     // the "C" locale over the characters number() collects ([0-9+-.eE]): optional sign, a digit run

@@ -164,9 +164,11 @@ inline bool parseMinisigDoc(const std::string& fileText, Signature& out)
     out.trustedComment.clear();
     out.hasGlobal = false;
 
-    if (!detail::nextLine(fileText, pos, line)) return true;              // no global section at all
-    if (line.empty()) return !detail::nextLine(fileText, pos, line);      // lone trailing blank line
-
+    // The trusted comment and its global signature are REQUIRED, matching the stock minisign
+    // verifier. While they were optional, anyone holding a validly signed document could simply
+    // DELETE the last two lines and the truncated file still verified - un-binding the very
+    // comment this format exists to bind.
+    if (!detail::nextLine(fileText, pos, line))            return false;
     if (!detail::hasPrefix(line, "trusted comment: "))     return false;
     out.trustedComment = line.substr(std::strlen("trusted comment: "));
 
@@ -185,8 +187,9 @@ inline bool keyIdMatches(const Signature& s, const PubKey& k)
     return std::memcmp(s.id, k.id, 8) == 0;
 }
 
-// True only if EVERY applicable check passes: key id match, the file signature, and - when the
-// document carries one - the global signature over (sig || trustedComment).
+// True only if EVERY check passes: key id match, the file signature, and the global signature
+// over (sig || trustedComment). The global section is mandatory (see parseMinisigDoc) - a
+// Signature without one, however it was built, must not verify.
 inline bool verifyDetached(const uint8_t* data, size_t len, const Signature& s, const PubKey& k)
 {
     if (!keyIdMatches(s, k)) return false;
@@ -202,7 +205,8 @@ inline bool verifyDetached(const uint8_t* data, size_t len, const Signature& s, 
         if (crypto_ed25519_check(s.sig, k.key, data, len) != 0) return false;
     }
 
-    if (s.hasGlobal) {
+    if (!s.hasGlobal) return false;
+    {
         std::string msg(reinterpret_cast<const char*>(s.sig), 64);
         msg += s.trustedComment;
         if (crypto_ed25519_check(s.globalSig, k.key,

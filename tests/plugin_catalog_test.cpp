@@ -142,7 +142,7 @@ static wxnplug::ParseResult tryEntry(const std::string& folder, const std::strin
 {
     const std::string doc =
         std::string("{\"schema\":1,\"entries\":[{\"id\":\"com.example.bad\",\"version\":\"1.0\",")
-        + "\"kind\":\"nib\",\"install\":{\"folder-name\":\"" + folder + "\",\"binary\":\"" + binary
+        + "\"kind\":\"nib\",\"min-host-abi\":\"1.0\",\"install\":{\"folder-name\":\"" + folder + "\",\"binary\":\"" + binary
         + "\",\"package\":\"" + url + "\",\"sha256\":\"" + sha + "\",\"size\":" + sizeLit + "}}]}";
     std::vector<wxnplug::Entry> es;
     return wxnplug::parseTargetList(doc, es);
@@ -193,9 +193,8 @@ int main()
               "CRLF .minisig doc accepted");
 
         wxnsig::Signature noGlobal;
-        check(wxnsig::parseMinisigDoc(buildMinisigDoc(made, false, false), noGlobal)
-              && !noGlobal.hasGlobal,
-              "doc without trusted-comment lines parses with hasGlobal=false");
+        check(!wxnsig::parseMinisigDoc(buildMinisigDoc(made, false, false), noGlobal),
+              "doc with the trusted-comment lines STRIPPED is rejected (comment-strip attack)");
 
         wxnsig::Signature junk;
         check(!wxnsig::parseMinisigDoc("untrusted comment: x\n!!not*base64!!\n", junk),
@@ -214,7 +213,12 @@ int main()
         const uint8_t* data = reinterpret_cast<const uint8_t*>(payload.data());
         const size_t   len  = payload.size();
 
+        wxnsig::Signature bare = signPrehashed(keyA, payload);
+        check(!wxnsig::verifyDetached(data, len, bare, keyA.pub),
+              "a signature with no global section is refused outright");
+
         wxnsig::Signature s = signPrehashed(keyA, payload);
+        addGlobal(s, keyA, "timestamp:1755820800 file:payload");
         check(wxnsig::verifyDetached(data, len, s, keyA.pub), "good prehashed (\"ED\") signature verifies");
 
         std::string tampered = payload;
@@ -228,6 +232,8 @@ int main()
         check(!wxnsig::verifyDetached(data, len, flipped, keyA.pub), "single flipped signature byte fails");
 
         wxnsig::Signature foreign = signPrehashed(keyB, payload);   // same key id, different key
+        addGlobal(foreign, keyB, "timestamp:1755820800 file:payload");   // self-consistent global, so
+                                                                         // only the crypto can reject it
         check(!wxnsig::verifyDetached(data, len, foreign, keyA.pub),
               "signature under a different seed's key fails (crypto, not key-id routing)");
 
@@ -245,6 +251,7 @@ int main()
               "trusted comment edited after signing fails the global signature");
 
         wxnsig::Signature legacy = signLegacy(keyA, payload);
+        addGlobal(legacy, keyA, "timestamp:1755820800 file:payload");
         check(wxnsig::verifyDetached(data, len, legacy, keyA.pub), "legacy \"Ed\" over raw bytes verifies");
         check(!wxnsig::verifyDetached(reinterpret_cast<const uint8_t*>(tampered.data()),
                                       tampered.size(), legacy, keyA.pub),
@@ -289,6 +296,16 @@ int main()
         std::memcpy(s.id, kKeyId, 8);
         std::memcpy(s.sig, sig, 64);
         s.prehashed = false;                                        // KAT is raw-bytes Ed25519
+        // verifyDetached requires the (now-mandatory) global section; the RFC publishes none, but
+        // it DOES publish the secret seed, so mint one with the vector's own key.
+        s.trustedComment = "rfc8032 test 1";
+        {
+            std::string gm(reinterpret_cast<const char*>(s.sig), 64);
+            gm += s.trustedComment;
+            crypto_ed25519_sign(s.globalSig, sec,
+                                reinterpret_cast<const uint8_t*>(gm.data()), gm.size());
+            s.hasGlobal = true;
+        }
         check(wxnsig::verifyDetached(reinterpret_cast<const uint8_t*>(""), 0, s, pk),
               "TEST 1: same vector passes through wxnsig::verifyDetached (legacy path)");
 
@@ -322,6 +339,13 @@ int main()
         check(!pr.ok, "index without serial rejected");
         check(pr.error.find("serial") != std::string::npos, "error names the missing field");
 
+        // Absurd magnitudes must fail the RANGE CHECK, never reach the integer casts (an
+        // out-of-range double-to-int conversion is undefined behavior; 1e400 arrives as inf).
+        pr = wxnplug::parseIndex("{ \"schema\": 1e400, \"serial\": 1 }", idx);
+        check(!pr.ok, "schema 1e400 rejected before the cast");
+        pr = wxnplug::parseIndex("{ \"schema\": 1, \"serial\": 1e30 }", idx);
+        check(!pr.ok, "serial 1e30 rejected before the cast");
+
         check(!wxnplug::serialAcceptable(5, 4), "serial 5 -> 4 is a rollback: rejected");
         check(wxnplug::serialAcceptable(5, 5), "serial 5 -> 5 is a re-fetch of current: accepted");
         check(wxnplug::serialAcceptable(5, 6), "serial 5 -> 6 is an update: accepted");
@@ -340,6 +364,7 @@ int main()
             "      \"package\": \"https://github.com/example/hexviewer/releases/download/v1.2.3/hexviewer-windows-x86_64.zip\",\n"
             "      \"sha256\": \"") + kGoodSha + "\", \"size\": 123456, \"future-install-field\": 7 } },\n"
             "  { \"id\": \"org.legacy.tool\", \"version\": \"0.9\", \"kind\": \"npp-bridge\",\n"
+            "    \"min-host-abi\": \"1.0\",\n"
             "    \"install\": { \"folder-name\": \"legacytool\", \"binary\": \"legacytool.dll\",\n"
             "      \"package\": \"https://release-assets.githubusercontent.com/example/legacytool.zip\",\n"
             "      \"sha256\": \"" + kGoodSha + "\", \"size\": 1 } }\n"
@@ -364,8 +389,8 @@ int main()
             const wxnplug::Entry& e1 = es[1];
             check(e1.kind == wxnplug::Kind::NppBridge && e1.install.binary == "legacytool.dll"
                   && e1.install.size == 1ull, "entry 2: npp-bridge kind + install land");
-            check(e1.minAbi == 0u && e1.maxAbi == 0xFFFFFFFFu,
-                  "entry 2: absent abi fields default to an open window");
+            check(e1.minAbi == 0x10000u && e1.maxAbi == 0xFFFFFFFFu,
+                  "entry 2: required min lands; absent max stays an open upper bound");
         }
 
         const std::string noSha = std::string(
@@ -376,6 +401,16 @@ int main()
         pr = wxnplug::parseTargetList(noSha, es2);
         check(!pr.ok, "entry without sha256 rejected");
         check(pr.error.find("com.example.nosha") != std::string::npos, "error names the offending entry id");
+
+        const std::string noMin = std::string(
+            "{ \"schema\": 1, \"entries\": [ { \"id\": \"com.example.nomin\", \"version\": \"1.0\","
+            "  \"kind\": \"nib\", \"install\": { \"folder-name\": \"nomin\", \"binary\": \"nomin.nib\","
+            "  \"package\": \"https://github.com/e/r/releases/download/v1/n.zip\","
+            "  \"sha256\": \"") + kGoodSha + "\", \"size\": 10 } } ] }";
+        std::vector<wxnplug::Entry> es3;
+        pr = wxnplug::parseTargetList(noMin, es3);
+        check(!pr.ok && pr.error.find("min-host-abi") != std::string::npos,
+              "entry without min-host-abi rejected by name (a defaulted 0 could never install)");
     }
 
     std::printf("[adversarial install specs: traversal, hosts, hashes, sizes]\n");
@@ -402,6 +437,16 @@ int main()
               "userinfo '@' authority trick rejected");
         check(!tryEntry("demo", "demo.nib", "https://github.com:8443/x.zip",     kGoodSha, "1024").ok,
               "explicit port rejected");
+        check(!tryEntry("demo", "demo.nib", "https://github.com/a\r\nHost: evil", kGoodSha, "1024").ok,
+              "CR/LF inside the package URL rejected (request-splitting shape)");
+
+        // Windows-reality names: a trailing dot/space collapses ("plug " opens the same directory
+        // as "plug"), device names are files in EVERY directory, wildcards are shell hazards.
+        check(!tryEntry("plug ",   "demo.nib", url, kGoodSha, "1024").ok, "trailing space in folder-name rejected");
+        check(!tryEntry("plug.",   "demo.nib", url, kGoodSha, "1024").ok, "trailing dot in folder-name rejected");
+        check(!tryEntry("NUL",     "demo.nib", url, kGoodSha, "1024").ok, "reserved device name rejected");
+        check(!tryEntry("demo",    "con.dll",  url, kGoodSha, "1024").ok, "reserved device stem in binary rejected");
+        check(!tryEntry("a*b",     "demo.nib", url, kGoodSha, "1024").ok, "wildcard character rejected");
 
         check(!tryEntry("demo", "demo.nib", url,
                         "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855", "1024").ok,
@@ -425,6 +470,23 @@ int main()
         std::vector<wxnplug::Entry> es;
         pr = wxnplug::parseTargetList(deep, es);
         check(!pr.ok, "parseTargetList: 200-deep array rejected, no crash");
+
+        // \u escape hardening in the shared reader: a surrogate PAIR combines into one real UTF-8
+        // sequence (separate halves would be CESU-8, which makes wxString::FromUTF8 drop the whole
+        // field downstream), and a lone half or U+0000 becomes U+FFFD instead.
+        wxnplug::Index sIdx;
+        check(wxnplug::parseIndex(
+                  "{ \"schema\": 1, \"serial\": 1, \"generated\": \"\\uD83D\\uDE00\" }", sIdx).ok
+              && sIdx.generated == "\xF0\x9F\x98\x80",
+              "surrogate pair decodes to one 4-byte UTF-8 sequence");
+        check(wxnplug::parseIndex(
+                  "{ \"schema\": 1, \"serial\": 1, \"generated\": \"a\\uD83Db\" }", sIdx).ok
+              && sIdx.generated == "a\xEF\xBF\xBD" "b",
+              "lone high surrogate becomes U+FFFD");
+        check(wxnplug::parseIndex(
+                  "{ \"schema\": 1, \"serial\": 1, \"generated\": \"a\\u0000b\" }", sIdx).ok
+              && sIdx.generated == "a\xEF\xBF\xBD" "b",
+              "embedded \\u0000 becomes U+FFFD (it would truncate c_str consumers)");
     }
 
     std::printf("[targetSlug, abiSatisfied, installable]\n");
