@@ -1986,8 +1986,8 @@ msgstr "Importuj wtyczkę(i)"
 msgid "Plugin files (*.dll)|*.dll"
 msgstr "Pliki wtyczek (*.dll)|*.dll"
 
-msgid "Plugin files (*.dylib)|*.dylib"
-msgstr "Pliki wtyczek (*.dylib)|*.dylib"
+msgid "Plugin files (*.dylib;*.so)|*.dylib;*.so"
+msgstr "Pliki wtyczek (*.dylib;*.so)|*.dylib;*.so"
 
 msgid "Plugin files (*.so)|*.so"
 msgstr "Pliki wtyczek (*.so)|*.so"
@@ -3279,3 +3279,6 @@ msgstr "Rysuj tekst przez DirectWrite zamiast GDI: pozycjonowanie subpikselowe, 
 
 msgid "Snippet transform is not a valid regular expression: %s"
 msgstr "Transformacja fragmentu nie jest prawidłowym wyrażeniem regularnym: %s"
+
+msgid "Could not copy into %s"
+msgstr "Nie można skopiować do %s"

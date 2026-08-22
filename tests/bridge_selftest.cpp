@@ -586,6 +586,49 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         f->applySettings();
     }
 
+    // ---- plugin import lands in the USER dir, and failures are surfaced ---------------------------
+    // importPluginFiles targeted <exe>/nib, which is read-only on installed builds: wxCopyFile
+    // returned false into a dropped local, so the user saw "nothing happened" with no error. The
+    // sandbox traits redirect userDataDir(), so everything below stays inside the test sandbox.
+    {
+        const wxString userNib = f->userPluginDir();
+        check(userNib.StartsWith(f->userDataDir()), "plugins: userPluginDir sits under userDataDir");
+        check(!userNib.StartsWith(wxPathOnly(wxStandardPaths::Get().GetExecutablePath())),
+              "plugins: ...not under the read-only install dir");
+
+        // A real bundled plugin as the import source - build/bin/nib always carries them here.
+#if defined(__WXMSW__)
+        const wxString pat = "*.dll";
+#else
+        const wxString pat = "*.so";   // CMake MODULE libs are .so on macOS too, not .dylib
+#endif
+        const wxString exeNib = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "nib";
+        const wxString src = wxFindFirstFile(exeNib + wxFILE_SEP_PATH + pat, wxFILE);
+        check(!src.empty(), "plugins: a bundled plugin exists to use as an import source");
+        if (!src.empty())
+        {
+            wxArrayString one; one.Add(src);
+            wxString err;
+            const int n = f->importPluginFiles(one, err);
+            const wxString dst = userNib + wxFILE_SEP_PATH + wxFileNameFromPath(src);
+            check(n == 1 && err.empty(), "plugins: import copies one file with no error");
+            check(wxFileExists(dst), "plugins: ...into the user plugin dir");
+            wxRemoveFile(dst);   // leave the sandbox as found
+        }
+
+        // A source that cannot be copied must SAY so - the old code returned "0 imported" silently.
+        wxArrayString ghost; ghost.Add(exeNib + wxFILE_SEP_PATH + "no-such-plugin-xyzzy.dll");
+        wxString err2;
+        const int n2 = f->importPluginFiles(ghost, err2);
+        check(n2 == 0 && !err2.empty(), "plugins: a failed copy reports its target instead of silence");
+#if defined(__WXMSW__)
+        // the probe routed that one to <exe>/plugins/<name>/ and created the dir - remove the leftovers
+        const wxString ghostDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath())
+                                  + wxFILE_SEP_PATH + "plugins" + wxFILE_SEP_PATH + "no-such-plugin-xyzzy";
+        if (wxDirExists(ghostDir)) wxFileName::Rmdir(ghostDir);
+#endif
+    }
+
     // Leave the editor exactly as it was found. Every test above wrote into the buffer, and a DIRTY
     // buffer makes the next close - by a later phase of this suite, or by shutdown - raise a modal
     // "save changes?" prompt with nobody to answer it. That is a hang, not a failure: the process sat

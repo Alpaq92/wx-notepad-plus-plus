@@ -1986,8 +1986,8 @@ msgstr "Импортировать плагин(ы)"
 msgid "Plugin files (*.dll)|*.dll"
 msgstr "Файлы плагинов (*.dll)|*.dll"
 
-msgid "Plugin files (*.dylib)|*.dylib"
-msgstr "Файлы плагинов (*.dylib)|*.dylib"
+msgid "Plugin files (*.dylib;*.so)|*.dylib;*.so"
+msgstr "Файлы плагинов (*.dylib;*.so)|*.dylib;*.so"
 
 msgid "Plugin files (*.so)|*.so"
 msgstr "Файлы плагинов (*.so)|*.so"
@@ -3279,3 +3279,6 @@ msgstr "Рисовать текст через DirectWrite вместо GDI: с�
 
 msgid "Snippet transform is not a valid regular expression: %s"
 msgstr "Преобразование фрагмента не является верным регулярным выражением: %s"
+
+msgid "Could not copy into %s"
+msgstr "Не удалось скопировать в %s"

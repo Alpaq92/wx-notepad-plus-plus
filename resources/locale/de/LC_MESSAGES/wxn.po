@@ -1986,8 +1986,8 @@ msgstr "Plugin(s) importieren"
 msgid "Plugin files (*.dll)|*.dll"
 msgstr "Plugin-Dateien (*.dll)|*.dll"
 
-msgid "Plugin files (*.dylib)|*.dylib"
-msgstr "Plugin-Dateien (*.dylib)|*.dylib"
+msgid "Plugin files (*.dylib;*.so)|*.dylib;*.so"
+msgstr "Plugin-Dateien (*.dylib;*.so)|*.dylib;*.so"
 
 msgid "Plugin files (*.so)|*.so"
 msgstr "Plugin-Dateien (*.so)|*.so"
@@ -3279,3 +3279,6 @@ msgstr "Text über DirectWrite statt GDI zeichnen: Subpixel-Positionierung, bess
 
 msgid "Snippet transform is not a valid regular expression: %s"
 msgstr "Die Bausteintransformation ist kein gültiger regulärer Ausdruck: %s"
+
+msgid "Could not copy into %s"
+msgstr "Konnte nicht nach %s kopieren"

@@ -1575,8 +1575,8 @@ msgstr "请为该语言命名。"
 msgid "Plugin files (*.dll)|*.dll"
 msgstr "插件文件 (*.dll)|*.dll"
 
-msgid "Plugin files (*.dylib)|*.dylib"
-msgstr "插件文件 (*.dylib)|*.dylib"
+msgid "Plugin files (*.dylib;*.so)|*.dylib;*.so"
+msgstr "插件文件 (*.dylib;*.so)|*.dylib;*.so"
 
 msgid "Plugin files (*.so)|*.so"
 msgstr "插件文件 (*.so)|*.so"
@@ -3279,3 +3279,6 @@ msgstr "使用 DirectWrite 而非 GDI 绘制文本：亚像素定位、更好的
 
 msgid "Snippet transform is not a valid regular expression: %s"
 msgstr "代码片段转换不是有效的正则表达式：%s"
+
+msgid "Could not copy into %s"
+msgstr "无法复制到 %s"

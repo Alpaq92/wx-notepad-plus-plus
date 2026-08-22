@@ -2485,11 +2485,25 @@ static int nibCopyUtf8(const std::string& s, char* b, int c)
     return static_cast<int>(s.size());
 }
 
-// Load Nib plugins from <exe>/nib/ via wxDynamicLibrary (portable: .dll / .so / .dylib).
+// The USER-writable Nib plugin dir: <userDataDir>/nib. The bundled sibling (<exe>/nib) is not
+// writable on installed builds (Program Files, /opt/wxnote, inside the .app bundle), so drop-in
+// plugins and Import plugin(s) land here instead. Free-function shape because loadNibPlugins() is
+// one too; the path comes through g_nibUserDataDir - the same sandbox-aware seam every plugin
+// already reads - so --sandbox (and the selftest) cover this dir with no extra plumbing.
+static wxString nibUserPluginDir()
+{
+    char b[2048];
+    const int n = g_nibUserDataDir ? g_nibUserDataDir(b, static_cast<int>(sizeof(b))) : 0;
+    if (n <= 0 || n >= static_cast<int>(sizeof(b))) return wxString();
+    return wxString::FromUTF8(b) + wxFILE_SEP_PATH + "nib";
+}
+
+// Load Nib plugins via wxDynamicLibrary (portable: .dll / .so / .dylib) - from <exe>/nib/ first
+// (the bundled set), then <userDataDir>/nib/ (the user's drop-in dir, the only one writable on an
+// installed build). A file in BOTH places loads once, from <exe>/nib: the bundled copy is the one
+// the release was tested with, and loading both would double-register every command the plugin adds.
 static void loadNibPlugins()
 {
-    const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "nib";
-    if (!wxDirExists(dir)) return;
 #if defined(__WXMSW__)
     const std::vector<wxString> pats = { "*.dll" };
 #elif defined(__WXMAC__)
@@ -2499,10 +2513,18 @@ static void loadNibPlugins()
 #else
     const std::vector<wxString> pats = { "*.so" };
 #endif
+    const wxString exeNib = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "nib";
+    std::vector<wxString> seen;   // basenames already handled (loaded OR failed) - first dir wins
+    for (const wxString& dir : { exeNib, nibUserPluginDir() })
+    {
+    if (dir.empty() || !wxDirExists(dir)) continue;
     wxDir d(dir); wxString f;
     for (const wxString& pat : pats)
     for (bool more = d.GetFirst(&f, pat, wxDIR_FILES); more; more = d.GetNext(&f))
     {
+        const wxString key = f.Lower();
+        if (std::find(seen.begin(), seen.end(), key) != seen.end()) continue;
+        seen.push_back(key);
         auto* lib = new wxDynamicLibrary(dir + wxFILE_SEP_PATH + f);
         bool ok = false;
         if (lib->IsLoaded())
@@ -2512,7 +2534,12 @@ static void loadNibPlugins()
             {
                 NibBootstrap boot{ NIB_ABI_VERSION, sizeof(NibBootstrap), reinterpret_cast<NibHost*>(g_view), &nibQuery, &nibLog };
                 const NibPluginApi* api = entry(&boot);
-                if (api && (api->abi_version >> 16) == (NIB_ABI_VERSION >> 16))   // compatible major version
+                // Same major, and the plugin's declared minor must not EXCEED the host's: minor
+                // bumps add tables/events (nib.events v5, nib.documents v5, ...), so a plugin built
+                // against a newer minor would query interfaces this host cannot hand out and either
+                // no-op silently or crash on the missing entry points. An older-minor plugin is fine.
+                if (api && (api->abi_version >> 16) == (NIB_ABI_VERSION >> 16)
+                        && (api->abi_version & 0xFFFFu) <= (NIB_ABI_VERSION & 0xFFFFu))
                 {
                     if (api->activate) api->activate(reinterpret_cast<NibHost*>(g_view), &nibQuery);
                     g_nibLibs.push_back({ api, lib });
@@ -2521,6 +2548,7 @@ static void loadNibPlugins()
             }
         }
         if (!ok) { lib->Unload(); delete lib; }
+    }
     }
 }
 
@@ -7131,6 +7159,9 @@ private:
     // <exe>/): the install dir isn't user-writable, so a write there used to fail with ENOENT (its parent
     // RecoveryBackups dir couldn't be created) and pop a wxLog error dialog.
     wxString recoveryDir() { return userDataDir() + wxFILE_SEP_PATH + "RecoveryBackups"; }
+    // The user-writable Nib plugin dir, scanned by loadNibPlugins() after <exe>/nib. Member twin of
+    // the free nibUserPluginDir() (which reads the same path through g_nibUserDataDir).
+    wxString userPluginDir() { return userDataDir() + wxFILE_SEP_PATH + "nib"; }
     wxString generateRecoveryId()
     {
         auto* cfg = wxConfigBase::Get();
@@ -13171,30 +13202,29 @@ private:
     // Nib-native plugins (<exe>/nib/*.dll - see loadNibPlugins). Both share the .dll extension on Windows, so
     // each picked file is probed for the nib_plugin_main export and routed to the matching loader's folder.
     // Off Windows there's no ABI bridge (it's Win32-only), so the only format is Nib-native (.so / .dylib).
-    void importPlugin()
+    // The copy half of Import plugin(s), split from the dialog so the selftest can drive it.
+    // Nib-native plugins go to userPluginDir() - the old target was <exe>/nib, which is not writable
+    // on an installed build, so wxCopyFile returned false into a dropped local and the user got the
+    // "nothing happened" outcome with no error. Failures now come back through `err` (the first
+    // failing TARGET directory) for the caller to show. N++-ABI plugins still go to <exe>/plugins -
+    // that is where the GPL bridge scans, and moving it is a bridge change (tracked separately).
+    int importPluginFiles(const wxArrayString& paths, wxString& err)
     {
-#if defined(__WXMSW__)
-        wxFileDialog d(this, _("Import plugin(s)"), "", "", _("Plugin files (*.dll)|*.dll"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
-#elif defined(__WXMAC__)
-        wxFileDialog d(this, _("Import plugin(s)"), "", "", _("Plugin files (*.dylib)|*.dylib"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
-#else
-        wxFileDialog d(this, _("Import plugin(s)"), "", "", _("Plugin files (*.so)|*.so"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
-#endif
-        if (d.ShowModal() != wxID_OK) return;
-        wxArrayString paths; d.GetPaths(paths);
-        const wxString exeDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath());
         int n = 0;
+        const wxString nibDir = userPluginDir();
 #if defined(__WXMSW__)
-        const wxString pluginsBase = exeDir + wxFILE_SEP_PATH + "plugins", nibDir = exeDir + wxFILE_SEP_PATH + "nib";
+        const wxString pluginsBase = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "plugins";
         for (const auto& p : paths)
         {
             wxDynamicLibrary probe(p);   // peek exports to route to the right loader - never call activate/entry here
             const bool isNib = probe.IsLoaded() && probe.HasSymbol("nib_plugin_main");
             if (probe.IsLoaded()) probe.Unload();
+            wxLogNull quiet;   // wxCopyFile/Mkdir log their own dialogs - failures are reported once, via err
             if (isNib)
             {
                 if (!wxDirExists(nibDir)) wxFileName::Mkdir(nibDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
                 if (wxCopyFile(p, nibDir + wxFILE_SEP_PATH + wxFileNameFromPath(p))) ++n;
+                else if (err.empty()) err = nibDir;
             }
             else   // default: a real Notepad++-ABI plugin - the bridge requires <Name>\<Name>.dll exactly
             {
@@ -13202,13 +13232,35 @@ private:
                 const wxString dir  = pluginsBase + wxFILE_SEP_PATH + name;
                 if (!wxDirExists(dir)) wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
                 if (wxCopyFile(p, dir + wxFILE_SEP_PATH + name + ".dll")) ++n;
+                else if (err.empty()) err = dir;
             }
         }
 #else
-        const wxString nibDir = exeDir + wxFILE_SEP_PATH + "nib";
+        wxLogNull quiet;
         if (!wxDirExists(nibDir)) wxFileName::Mkdir(nibDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-        for (const auto& p : paths) if (wxCopyFile(p, nibDir + wxFILE_SEP_PATH + wxFileNameFromPath(p))) ++n;
+        for (const auto& p : paths)
+        {
+            if (wxCopyFile(p, nibDir + wxFILE_SEP_PATH + wxFileNameFromPath(p))) ++n;
+            else if (err.empty()) err = nibDir;
+        }
 #endif
+        return n;
+    }
+    void importPlugin()
+    {
+#if defined(__WXMSW__)
+        wxFileDialog d(this, _("Import plugin(s)"), "", "", _("Plugin files (*.dll)|*.dll"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
+#elif defined(__WXMAC__)
+        wxFileDialog d(this, _("Import plugin(s)"), "", "", _("Plugin files (*.dylib;*.so)|*.dylib;*.so"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
+#else
+        wxFileDialog d(this, _("Import plugin(s)"), "", "", _("Plugin files (*.so)|*.so"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
+#endif
+        if (d.ShowModal() != wxID_OK) return;
+        wxArrayString paths; d.GetPaths(paths);
+        wxString err;
+        const int n = importPluginFiles(paths, err);
+        if (!err.empty())
+            wxMessageBox(wxString::Format(_("Could not copy into %s"), err), "wxNote", wxOK | wxICON_ERROR, this);
         if (n == 0) return;
         if (wxMessageBox(wxString::Format(_("%d plugin(s) imported. Restart wxNote now to load them?"), n),
                           "wxNote", wxYES_NO | wxICON_QUESTION, this) == wxYES)
@@ -14357,20 +14409,15 @@ private:
             case kCmdSettingImportPlugin: importPlugin(); break;
             case kCmdSettingImportStyleThemes: importStyleTheme(); break;
             case kCmdSettingOpenPluginsDir: {
-                // "Open plugins folder" must always land on a real directory - opening a path that
-                // doesn't exist just silently does nothing. Create <exe>/plugins on demand; if the exe
-                // dir isn't writable (installed build) fall back to the always-present <exe>/nib (where
-                // cross-platform Nib plugins live), then the exe dir itself as a last resort.
-                const wxString exeDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath());
-#ifdef __WXMSW__
-                wxString dir = exeDir + wxFILE_SEP_PATH + "plugins";                 // where npp-bridge loads N++ plugin DLLs
-#else
-                wxString dir = userDataDir() + wxFILE_SEP_PATH + "plugins";          // where the POSIX npp-bridge loads plugins
-#endif
+                // Open the one folder where dropping a plugin file WORKS on every build shape:
+                // <userDataDir>/nib, scanned by loadNibPlugins() after <exe>/nib. The old target was
+                // <exe>/plugins (or <exe>/nib) - on installed builds those open fine but are read-only,
+                // so a file dropped there either failed to copy or was never going to be scanned.
+                // (N++-ABI DLLs for the bridge still live in <exe>/plugins; Import plugin(s) routes
+                // them there, and that dir is deliberately not this menu item's target.)
+                const wxString dir = userPluginDir();
                 { wxLogNull noLog; if (!wxDirExists(dir)) wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL); }
-                if (!wxDirExists(dir)) dir = exeDir + wxFILE_SEP_PATH + "nib";       // fallback: the always-present Nib plugin dir
-                if (!wxDirExists(dir)) dir = exeDir;
-                openFolder(dir);
+                openFolder(wxDirExists(dir) ? dir : userDataDir());
                 break;
             }
             case kCmdSettingEditContextMenu: editContextMenu(); break;

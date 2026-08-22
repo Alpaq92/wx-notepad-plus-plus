@@ -1985,7 +1985,7 @@ msgstr ""
 msgid "Plugin files (*.dll)|*.dll"
 msgstr ""
 
-msgid "Plugin files (*.dylib)|*.dylib"
+msgid "Plugin files (*.dylib;*.so)|*.dylib;*.so"
 msgstr ""
 
 msgid "Plugin files (*.so)|*.so"
@@ -3280,4 +3280,7 @@ msgid "Draw text through DirectWrite instead of GDI: sub-pixel positioning, bett
 msgstr ""
 
 msgid "Snippet transform is not a valid regular expression: %s"
+msgstr ""
+
+msgid "Could not copy into %s"
 msgstr ""
