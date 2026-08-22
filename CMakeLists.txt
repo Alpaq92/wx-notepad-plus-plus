@@ -394,6 +394,33 @@ if(MSVC)
     target_compile_options(hash_test PRIVATE /utf-8)
 endif()
 
+# ---- monocypher: vendored Ed25519 + BLAKE2b (third_party/monocypher, CC0/BSD-2 dual, C99, no asm) ---
+# For plugin-catalog signature verification (src/sig_verify.h). Vendored rather than hand-rolled ON
+# PURPOSE: hash_algos.h's self-author doctrine rests on "pinnable to published vectors", which holds
+# for a frozen digest and does NOT hold for signature verify - cofactor handling, small-order points
+# and non-canonical encodings are all places a vector-passing implementation still accepts forgeries.
+add_library(monocypher STATIC
+    third_party/monocypher/monocypher.c
+    third_party/monocypher/monocypher-ed25519.c)
+target_include_directories(monocypher PUBLIC "${CMAKE_SOURCE_DIR}/third_party/monocypher")
+set_target_properties(monocypher PROPERTIES
+    C_STANDARD 99 C_STANDARD_REQUIRED ON POSITION_INDEPENDENT_CODE ON)
+
+# ---- plugin_catalog_test: catalog parser/validator + minisign verify (Plugins Admin, Phase A) -------
+# NOT catalog_selftest - that name is taken by the i18n .po catalog gate. Pure STL + monocypher, no
+# wx, no display, so it runs on every CI arch including the cross-compiled riscv64 leg.
+#   cmake --build build --target plugin_catalog_test && build/bin/plugin_catalog_test
+add_executable(plugin_catalog_test tests/plugin_catalog_test.cpp)
+set_target_properties(plugin_catalog_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(plugin_catalog_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(plugin_catalog_test PRIVATE monocypher)
+if(MSVC)
+    target_compile_options(plugin_catalog_test PRIVATE /utf-8)
+endif()
+
 # ---- fuzzy_test: headless self-test for the fuzzy matcher (src/fuzzy_match.h) -----------------------
 # No GUI, no wx: pure STL, like hash_test. Pins RANKING rather than exact scores - the constants are
 # tunable, but a tuning change that reverses one of the documented orderings is a regression. Also
@@ -690,6 +717,7 @@ enable_testing()
 
 add_custom_target(selftests DEPENDS
     keymap_selftest diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test
+    plugin_catalog_test
     charset_selftest
     hunspell_selftest funclist_selftest comment_tokens_test catalog_selftest bridge_selftest
     terminal_selftest)
@@ -697,7 +725,7 @@ add_custom_target(selftests DEPENDS
 # "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed. file_index_test
 # does call wxInitializer, but it links wx::base only, so it gets console traits and never opens a display.
 foreach(t diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test hunspell_selftest
-          funclist_selftest comment_tokens_test catalog_selftest)
+          funclist_selftest comment_tokens_test catalog_selftest plugin_catalog_test)
     add_test(NAME ${t} COMMAND ${t})
     set_tests_properties(${t} PROPERTIES LABELS pure)
 endforeach()
