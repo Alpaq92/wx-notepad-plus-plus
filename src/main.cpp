@@ -6676,7 +6676,7 @@ private:
         sci(SCI_STYLESETFONT, STYLE_DEFAULT, reinterpret_cast<sptr_t>(effectiveFontFace().ToUTF8().data()));
         sci(SCI_STYLESETSIZE, STYLE_DEFAULT, 11);
         sci(SCI_STYLECLEARALL);
-        sci(SCI_SETTABWIDTH, 4);
+        sci(SCI_SETTABWIDTH, m_tabWidth);   // not a hardcoded 4: this view may outlive a preference change
         sci(SCI_SETSCROLLWIDTH, 1);
         sci(SCI_SETSCROLLWIDTHTRACKING, 1);
         sci(SCI_SETENDATLASTLINE, m_scrollBeyond ? 0 : 1);
@@ -7074,6 +7074,7 @@ private:
         sci(SCI_SETMODEVENTMASK, 0);                                         // quiet during the swap
         sci(SCI_SETDOCPOINTER, 0, p->doc);                                   // the magical switch
         sci(SCI_SETMODEVENTMASK, SC_MODEVENTMASKALL);
+        applyDocSettings(m_stc);   // tab width / use-tabs live on the DOCUMENT - see applyDocSettings
         m_path = p->path;
         setLexerForFile(p->path);                                           // re-apply lexer/styling for this doc
         m_lastFoldSection = -2; refreshFoldNestedAccent();                  // the nested-square accent marker is global to the view - re-evaluate it for the swapped-in document
@@ -12086,36 +12087,55 @@ private:
         c->Write("Window/Maximized", IsMaximized());
         c->Flush();
     }
+    // Scintilla keeps these on the VIEW (ViewStyle / Editor members), so each wxStyledTextCtrl needs
+    // its own copy - a split's two halves do not share them.
+    void applyViewSettings(wxStyledTextCtrl* v)
+    {
+        if (!v) return;
+        sciSend(v, SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE);
+        sciSend(v, SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE);
+        sciSend(v, SCI_SETVIEWEOL, m_ws ? 1 : 0);
+        sciSend(v, SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE);
+        sciSend(v, SCI_SETWRAPVISUALFLAGS, m_wrapSymbol ? SC_WRAPVISUALFLAG_END : SC_WRAPVISUALFLAG_NONE);
+        sciSend(v, SCI_SETCARETLINEVISIBLE, m_caretLine ? 1 : 0);
+        sciSend(v, SCI_SETCARETWIDTH, m_caretWidth);
+        sciSend(v, SCI_SETEDGEMODE, m_edgeColumn > 0 ? EDGE_LINE : EDGE_NONE);
+        sciSend(v, SCI_SETEDGECOLUMN, m_edgeColumn);
+        sciSend(v, SCI_SETCARETPERIOD, m_caretBlink);
+        sciSend(v, SCI_SETENDATLASTLINE, m_scrollBeyond ? 0 : 1);
+        sciSend(v, SCI_SETMULTIPLESELECTION, m_multiEdit ? 1 : 0);
+#ifdef __WXMSW__
+        // Live, no restart: ScintillaWX's handler drops cached graphics and re-lays out. It also fails
+        // soft - if Direct2D or DirectWrite will not load it returns without changing the technology,
+        // so an old or locked-down machine keeps GDI rather than losing its text.
+        sciSend(v, SCI_SETTECHNOLOGY, m_directWrite ? SC_TECHNOLOGY_DIRECTWRITE : SC_TECHNOLOGY_DEFAULT);
+#endif
+        updateLineMarginFor(v);
+    }
+
+    // Scintilla keeps these on the DOCUMENT (pdoc->tabInChars / pdoc->useTabs), so they follow the
+    // BUFFER rather than the view: a freshly created document starts at Scintilla's own defaults
+    // (tab width 8, real tabs) whatever the user configured, and a document that was not mounted when
+    // the preference changed never heard about it. Driven from applySettings for whatever is mounted
+    // now, and again from activateBuffer so every other tab picks it up when it is next shown.
+    void applyDocSettings(wxStyledTextCtrl* v)
+    {
+        if (!v) return;
+        sciSend(v, SCI_SETTABWIDTH, m_tabWidth);
+        sciSend(v, SCI_SETUSETABS, m_useTabs ? 1 : 0);
+    }
+
     void applySettings()   // push the current preferences onto the editor view + chrome
     {
-        if (m_stc)
+        // BOTH halves of a split, not just m_stc. m_stc follows focus, so the inactive half kept the
+        // previous preferences until it was next focused - wrap, whitespace, caret, edge and the
+        // line-number margin visibly disagreed across the splitter. A lazily-created second view had
+        // never seen them at all, since setupScintilla only seeds a handful from the members.
+        for (wxStyledTextCtrl* v : { m_main.stc, m_sub.stc })
         {
-            sci(SCI_SETTABWIDTH, m_tabWidth);
-            sci(SCI_SETUSETABS, m_useTabs ? 1 : 0);
-            sci(SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE);
-            sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE);
-            sci(SCI_SETVIEWEOL, m_ws ? 1 : 0);
-            sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE);
-            sci(SCI_SETWRAPVISUALFLAGS, m_wrapSymbol ? SC_WRAPVISUALFLAG_END : SC_WRAPVISUALFLAG_NONE);
-            sci(SCI_SETCARETLINEVISIBLE, m_caretLine ? 1 : 0);
-            sci(SCI_SETCARETWIDTH, m_caretWidth);
-            sci(SCI_SETEDGEMODE, m_edgeColumn > 0 ? EDGE_LINE : EDGE_NONE);
-            sci(SCI_SETEDGECOLUMN, m_edgeColumn);
-            sci(SCI_SETCARETPERIOD, m_caretBlink);
-            sci(SCI_SETENDATLASTLINE, m_scrollBeyond ? 0 : 1);
-            sci(SCI_SETMULTIPLESELECTION, m_multiEdit ? 1 : 0);
-#ifdef __WXMSW__
-            // Applied to BOTH views, not just the active one - m_stc follows focus, and the inactive
-            // half of a split would otherwise keep drawing through GDI until it was next touched.
-            //
-            // Live, no restart: ScintillaWX's handler drops cached graphics and re-lays out. It also
-            // fails soft - if Direct2D or DirectWrite will not load it returns without changing the
-            // technology, so an old or locked-down machine keeps GDI rather than losing its text.
-            for (wxStyledTextCtrl* v : { m_main.stc, m_sub.stc })
-                if (v) sciSend(v, SCI_SETTECHNOLOGY,
-                               m_directWrite ? SC_TECHNOLOGY_DIRECTWRITE : SC_TECHNOLOGY_DEFAULT);
-#endif
-            if (m_lineNumbers) updateLineMargin(); else sci(SCI_SETMARGINWIDTHN, 0, 0);
+            if (!v) continue;
+            applyViewSettings(v);
+            applyDocSettings(v);
         }
         if (auto* mb = menuBar()) { mb->Check(kCmdViewWrap, m_wrap); mb->Check(kCmdViewAllCharacters, m_ws); mb->Check(kCmdViewNpc, m_ws); mb->Check(kCmdViewIndentGuide, m_guides); }
         if (auto* tb = toolBar()) tb->ToggleTool(kCmdViewWrap, m_wrap);
@@ -14454,21 +14474,25 @@ private:
         updateStatus();
     }
 
-    void updateLineMargin()   // right-justified numbers in a width sized to the digit count
+    // Per-view: the digit count comes from THIS view's line count and the width from its own styles,
+    // so a split's halves size their margins independently.
+    void updateLineMarginFor(wxStyledTextCtrl* v)   // right-justified numbers in a width sized to the digit count
     {
-        if (!m_lineNumbers) { sci(SCI_SETMARGINWIDTHN, 0, 0); return; }   // line-number margin disabled in Preferences
+        if (!v) return;
+        if (!m_lineNumbers) { sciSend(v, SCI_SETMARGINWIDTHN, 0, 0); return; }   // margin disabled in Preferences
         int digits;
         if (m_lineNumWidthMode == 1) {           // CONSTANT policy: a fixed width, independent of line count
             digits = 4;
         } else {                                  // DYNAMIC policy (default): sized to the current line count
-            const int lines = static_cast<int>(sci(SCI_GETLINECOUNT));
+            const int lines = static_cast<int>(sciSend(v, SCI_GETLINECOUNT));
             digits = 1; for (int n = lines; n >= 10; n /= 10) ++digits;
             if (digits < 2) digits = 2;
         }
         const std::string nines(static_cast<size_t>(digits), '9');
-        const int w = static_cast<int>(sci(SCI_TEXTWIDTH, STYLE_LINENUMBER, reinterpret_cast<sptr_t>(nines.c_str())));
-        sci(SCI_SETMARGINWIDTHN, 0, w + 10);   // small left pad + a little right pad; right-justified, flush to text
+        const int w = static_cast<int>(sciSend(v, SCI_TEXTWIDTH, STYLE_LINENUMBER, reinterpret_cast<sptr_t>(nines.c_str())));
+        sciSend(v, SCI_SETMARGINWIDTHN, 0, w + 10);   // small left pad + a little right pad; right-justified, flush to text
     }
+    void updateLineMargin() { updateLineMarginFor(m_stc); }   // the active view - the common case
     // A zoom change (Ctrl+wheel / Zoom In-Out) is persisted. With one shared view, zoom is inherently
     // the same for every tab, so there's nothing to mirror (unlike the old per-tab-HWND model).
     void onZoomChanged(int z)
