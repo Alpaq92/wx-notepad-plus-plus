@@ -83,9 +83,22 @@ carry forward. Do not claim in release notes that being on winget makes SmartScr
 
 ## Which assets to list: decide per release, by measuring
 
-The manifest in this repo is currently zip-only and pinned to **0.14.1**. Read that as "these are the
-two Windows assets that measured clean", not as a format policy. The earlier rationale here — that the
-NSIS stub is what gets flagged and the zip is inherently safe — is **disproven** and has been removed.
+**Current state (2026-08-22): the manifest lists all three NSIS installers at 0.17.1, and the false
+positive has aged out.** All six Windows assets of v0.17.1 measured clean in one sitting
+(SI 1.457.286.0), as did all three v0.17.0 installers after two weeks in the wild — and, decisively,
+**the v0.14.1 x64 installer that measured FLAGGED on 2026-08-01 now measures clean**. That control is
+what distinguishes "the false positive is gone" from "these particular hashes were never scored".
+
+Installers are the outcome to prefer where they measure clean: the NSIS path gives users a Start Menu
+shortcut, an Add/Remove Programs entry and a real uninstaller, none of which the portable zip provides.
+
+**None of that makes the check optional.** The verdict was always per HASH and comes from a cloud ML
+model, so a future build can be flagged again with nothing else changed — and a merged manifest is
+effectively immutable per version. The history below is kept precisely because it shows how
+unpredictable this is: at 0.14.3 the x86 *zip* was flagged while its installer was clean; at 0.14.2 the
+ARM64 *installer* was flagged while its zip was clean. Neither format is safe by nature. The earlier
+rationale — that the NSIS stub is what gets flagged and the zip is inherently safe — is **disproven**
+and has been removed. Measure every asset, every release, before submitting.
 
 In v0.14.2, all four Windows assets from one CI run, measured within three minutes at the same
 definitions:
