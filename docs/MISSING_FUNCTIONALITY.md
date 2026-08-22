@@ -27,7 +27,7 @@ codebase-wide audit (6 parallel investigators, every finding grounded in a `file
 | ~~**File Compare / diff**~~ | ✅ **done** (0.10.0) | side-by-side Compare (View ▸ Compare) via a hand-rolled Myers O(ND) engine — [diff_myers.h](../src/diff_myers.h) + `compareWith` in [main.cpp](../src/main.cpp); engine/plan self-test `tests/diff_myers_test.cpp` (79 tests) | markers + annotation filler + intra-line indicators + scroll-sync; runtime-verified |
 | ~~**Periodic / timed backup (session snapshot)**~~ | ✅ **done** (0.10.0, hardened later) | 30 s `wxTimer` `backupTick` snapshots every dirty buffer (foreground + background via `peekDoc`) — src/main.cpp | a crash between saves is recoverable. Hardened since: **skip-if-unchanged** (an edit serial per page — an idle-dirty buffer no longer re-copies + rewrites every 30 s in perpetuity), **atomic replace** (`.bak.tmp` + rename; a crash mid-backup can no longer destroy the previous good snapshot), **direct UTF-8 write** (one document copy per snapshot instead of three — the old spelling round-tripped through UTF-16), and a **size-stretched cadence** (`wxnBackupThrottleMs`: every tick ≤ 32 MiB, +30 s per 32 MiB above, capped at 5 min; the exit-path backup never waits) |
 | ~~**External-change detection ("file modified on disk, reload?")**~~ | ✅ **done** (0.10.0) | `checkExternalChange` stamps mtime+size on load/save, re-checks on refocus + tab switch, prompts to reload — src/main.cpp | verified live; no longer silently overwrites external edits |
-| **Plugins Admin** (in-app browse/install/update) | foundations built, UI deferred | Extensions menu only offers "Open Plugins Folder…" ([site/docs/menus.md](../site/docs/menus.md)) | No GUI catalog yet; plugins are still dropped in by hand — but that now works on installed builds (plugins load from a user-writable dir), and the signed-catalog core (minisign/Ed25519 verify + parser + validators, 83 tests) is in the tree unused. Browse/install remain gated on there being third-party plugins to list. Status table + open decisions in [PLUGINS_ADMIN_DESIGN.md](PLUGINS_ADMIN_DESIGN.md). |
+| **Plugins Admin** (in-app browse/install/update) | foundations built, UI deferred | Extensions menu only offers "Open Plugins Folder…" ([site/docs/menus.md](../site/docs/menus.md)) | No GUI catalog yet; plugins are still dropped in by hand — but that now works on installed builds (plugins load from a user-writable dir), and the signed-catalog core (minisign/Ed25519 verify + parser + validators, 83 tests) is in the tree unused. Browse, install, and update detection all remain gated on there being third-party plugins to list. Status table + open decisions in [PLUGINS_ADMIN_DESIGN.md](PLUGINS_ADMIN_DESIGN.md). |
 
 ## 2. Cross-platform parity holes — Windows-only, dead on Linux/macOS
 
@@ -120,7 +120,8 @@ listed code paths are Windows-gated. The integrated borderless title bar being W
    `NPPM_CREATESCINTILLAHANDLE`, modeless-dialog keyboard nav, plugin-dialog dark mode, and
    `nib.events` still having no unsubscribe.
 4. **Larger builds**: Style Configurator depth (fg/bg + bold/italic only), a Calltips API/signature
-   database, and Plugins Admin (foundations built, browse/install deferred - `PLUGINS_ADMIN_DESIGN.md`).
+   database, and Plugins Admin (foundations built; browse, install, and update detection deferred -
+   `PLUGINS_ADMIN_DESIGN.md`).
 5. **Track, don't act**: Change History (genuinely upstream-blocked — needs Scintilla ≥ 5.3, wx vendors
    5.0.0); signing (gated on secrets). **Windows ligatures were listed here in error** and turned out to
    be a single unsent message — a reminder that "blocked-upstream" is a claim worth re-checking against

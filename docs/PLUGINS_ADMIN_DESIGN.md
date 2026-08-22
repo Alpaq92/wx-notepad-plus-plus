@@ -20,7 +20,9 @@ user-visible surface.
 | **E — catalog repo + signing tooling** | not built | Needs the maintainer's real minisign key and decision D1. |
 
 `installed.json` (named in the original Phase 0 scope) is **not** written yet — nothing installs
-programmatically, so there is nothing to record. It belongs with Phase C.
+programmatically, so there is nothing to record. It belongs with Phase C, and so does the persisted
+`serial` watermark that makes the anti-rollback check (already written and tested) actually bite across
+restarts — see Trust.
 
 ## What it is (and is deliberately NOT)
 
@@ -110,11 +112,24 @@ forward to Phase 1** (see Trust).
   `userDataDir()`), and `wxUSE_WEBREQUEST` can be **0** on Linux builds whose wx had no libcurl — so the
   dialog needs a documented degraded mode (Installed tab works, Available/Updates disabled), not just a
   disabled button.
-- Pipeline: download → **check size** → **verify SHA-256** → verify signature (below) → extract →
-  per-user plugins dir → mark restart-to-apply. Order matters: each check is strictly more expensive than
-  the last, and nothing is extracted before the signature verifies. Extraction needs `wxZipInputStream`
-  (`wxUSE_ZIPSTREAM`, part of wxBase and on by default) — **not** currently used anywhere in the tree, so
-  it is a new dependency on that flag, not something already in use.
+- **Every catalog document is signature-verified BEFORE it is parsed.** `index.json` and the per-target
+  list are each fetched with their `.minisig` sidecar and passed through `wxnsig::verifyDetached` first;
+  only then does `parseIndex` / `parseTargetList` see the bytes. This is not the same protection as the
+  package hash: the per-entry `sha256` is *catalog metadata*, so an unverified catalog means an attacker
+  chooses which bytes you consider authentic. Nothing downstream — version compare, `serial`, the
+  package URL — may be read out of an unverified document.
+- Package pipeline: **bounded** download → exact-size check → **verify SHA-256** → verify signature →
+  extract → per-user plugins dir → mark restart-to-apply. Order matters: each check is strictly more
+  expensive than the last, and nothing is extracted before the signature verifies.
+- **Bound the transfer as it runs**, not after. The catalog's `size` and the parser's 200 MiB cap are
+  known *before* the first byte arrives, so abort the stream the moment it exceeds `min(entry.size, cap)`
+  and delete the staging file. Checking size only after the download completes lets a hostile or
+  corrupted response fill the user's disk before anything rejects it; the post-transfer check then
+  confirms the exact expected length.
+- Extraction needs `wxZipInputStream` (`wxUSE_ZIPSTREAM`, part of wxBase and on by default) — **not**
+  currently used anywhere in the tree, so it is a new dependency on that flag, not something already in
+  use. Enforce the same bound on the *uncompressed* total while extracting (zip bombs), alongside the
+  per-name `validPathComponent` checks that already reject traversal.
 - A `wxDialog` with Available/Updates/Installed tabs.
 - **Prerequisite (Phase 0, DONE):** the loader scans a per-user plugins root under `userDataDir()`,
   because installed builds cannot write under Program Files / `/opt` / the `.app` bundle. That rule is
@@ -143,9 +158,15 @@ apply: it rests on "exhaustively pinnable to published vectors", which is true o
 false of signature *verification*, where cofactor handling, small-order points and non-canonical encodings
 all let a vector-passing implementation still accept forgeries.
 
-Anti-rollback was pulled forward too: `index.json` carries a monotonic `serial`, and a lower one is
-refused (`serialAcceptable`). A signed *stale* catalog is still a valid signature, so this is the one TUF
-property worth cherry-picking after dropping TUF. (TUF via AWS `tough` solves key rotation and rollback,
+Anti-rollback was pulled forward too — **but only half of it exists.** `index.json` carries a monotonic
+`serial` and `serialAcceptable()` refuses a lower one, and that function is currently called by nothing
+but its tests. The missing half is **persistence**: no production code stores `lastSeen`, so today a
+restart would reset the watermark and an older signed catalog would be accepted again. Phase C owes this
+a durable watermark written **atomically with the catalog it accepts** (both or neither — a crash between
+them either forgets the update or blesses a catalog that was never applied), plus restart/crash tests.
+Until then, treat rollback protection as designed and unit-tested, not as deployed. A signed *stale*
+catalog is still a valid signature, which is why this is the one TUF property worth cherry-picking after
+dropping TUF. (TUF via AWS `tough` solves key rotation and rollback,
 but there is no C/C++ TUF client — reimplementing it is disproportionate for a solo-curated catalog.)
 `kTrustedKeys` ships **empty**: the real release key is generated by the maintainer with the stock
 minisign CLI when the catalog goes live.
@@ -221,7 +242,7 @@ Recorded so they are not re-litigated from scratch. Recommendations are the plan
 | **D2** | Ed25519 implementation | **Settled: Monocypher 4.0.3**, vendored (Phase A). |
 | **D3** | Signature format | **Settled: minisign**, prehashed `ED` mode — stock CLI as the signer, free key-id for rotation. |
 | **D4** | Windows `npp-bridge` install target is not user-writable | Grey out N++-kind entries for MVP; the real fix is teaching the bridge to prefer `<user-data>/plugins` on Windows too, which is a bridge change. |
-| **D5** | Rollback/freeze protection | **Settled: shipped** — monotonic `serial` in the signed index. |
+| **D5** | Rollback/freeze protection | **Half shipped.** The `serial` field and `serialAcceptable()` exist and are tested; nothing persists `lastSeen` yet, so there is no rollback protection in practice until Phase C commits a watermark atomically with the catalog. |
 | **D6** | Key rotation | **Settled: shipped** — `kTrustedKeys` is an array from day one, so rotation is an app update, not a redesign. |
 | **D7** | Loader enforcement of `min-host-abi` | **Settled: shipped** — the loader now refuses a newer declared minor (Phase 0). |
 | **D8** | Where the i18n cost lands | Budget ~240 translations per UI phase; consider a `tools/` helper that seeds new msgids into all eight `.po`. |
