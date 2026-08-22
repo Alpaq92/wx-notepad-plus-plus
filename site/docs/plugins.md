@@ -9,17 +9,21 @@ portability.
 | Licence | Apache-2.0, same as the core | GPL-3.0-or-later |
 | Platforms | Windows, Linux, macOS | precompiled plugin binaries: **Windows only**; recompiled plugins: all platforms |
 | Part of the core? | yes — the API the core speaks | no — an optional module, loaded only if present |
-| Loaded from | `<exe>/nib/` | itself a Nib plugin in `<exe>/nib/`; it then loads N++ plugins |
+| Loaded from | `<exe>/nib/`, then `nib/` in the per-user data directory | itself a Nib plugin in `<exe>/nib/`; it then loads N++ plugins |
 
 The core talks **only** the `nib.*` API. Keeping the Notepad++ ABI reproduction confined to the bridge
 is exactly what lets the core stay permissively licensed.
 
 ## Managing plugins
 
-- **Extensions&nbsp;&rsaquo; Open Plugins Folder…** opens the plugin directory, creating it on demand.
-  On Windows that is `<exe>/plugins`; elsewhere it is `plugins` inside the per-user data directory. If
-  neither can be created it falls back to `<exe>/nib`.
-- **Settings&nbsp;&rsaquo; Import&nbsp;&rsaquo; Import plugin(s)…** copies plugin binaries into place.
+- Plugins load from two places: `<exe>/nib` (the bundled set) and `nib/` inside the **per-user data
+  directory** — the folder to use for your own, since the install directory is read-only on an
+  installed build. A file present in both places loads once, from the bundled set.
+- **Extensions&nbsp;&rsaquo; Open Plugins Folder…** opens that per-user folder, creating it on demand.
+- **Settings&nbsp;&rsaquo; Import&nbsp;&rsaquo; Import plugin(s)…** copies plugin binaries into place:
+  Nib plugins into the per-user folder above; Notepad++-ABI `.dll`s (Windows) into `<exe>/plugins`,
+  where the bridge looks for them. A copy that fails now says so, naming the folder it could not
+  write.
 - Commands registered by loaded plugins appear in the **Extensions** menu.
 - Launching with `--safe` starts the editor **with no plugins loaded at all** — the first thing to try
   if a plugin is misbehaving. See [Command Line](command-line.md).

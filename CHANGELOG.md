@@ -5,6 +5,21 @@ All notable changes to wxNote are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **A user-writable plugin folder.** Plugins now also load from the per-user data directory
+  (`nib/` under it), not just the install directory — which is read-only on installed builds
+  (Program Files, `/opt`, the `.app` bundle), so drop-in plugins simply did not work there.
+  **Settings ▸ Open Plugins Folder** now opens that folder, and **Import plugin(s)** copies into
+  it. A plugin present in both places loads once, from the install directory.
+
+### Fixed
+- **Import plugin(s)** failed silently on installed builds (the copy into the read-only install
+  directory failed with no message). Failures now name the folder that could not be written.
+- macOS: the Import dialog only accepted `.dylib`, but the plugins this project builds are `.so` —
+  they could not be selected at all. Both extensions are accepted now.
+- A plugin built against a newer minor Nib ABI than the host provides is now refused at load,
+  instead of loading and then failing on the interfaces the host cannot hand out.
+
 ## [0.17.1] - 2026-08-08
 
 ### Fixed

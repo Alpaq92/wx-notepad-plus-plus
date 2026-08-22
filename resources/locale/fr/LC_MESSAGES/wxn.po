@@ -1986,8 +1986,8 @@ msgstr "Importer un ou des plugins"
 msgid "Plugin files (*.dll)|*.dll"
 msgstr "Fichiers de plugin (*.dll)|*.dll"
 
-msgid "Plugin files (*.dylib)|*.dylib"
-msgstr "Fichiers de plugin (*.dylib)|*.dylib"
+msgid "Plugin files (*.dylib;*.so)|*.dylib;*.so"
+msgstr "Fichiers de plugin (*.dylib;*.so)|*.dylib;*.so"
 
 msgid "Plugin files (*.so)|*.so"
 msgstr "Fichiers de plugin (*.so)|*.so"
@@ -3279,3 +3279,6 @@ msgstr "Dessiner le texte via DirectWrite plutôt que GDI : positionnement sous
 
 msgid "Snippet transform is not a valid regular expression: %s"
 msgstr "La transformation de l'extrait n'est pas une expression régulière valide : %s"
+
+msgid "Could not copy into %s"
+msgstr "Impossible de copier dans %s"

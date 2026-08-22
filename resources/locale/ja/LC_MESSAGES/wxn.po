@@ -1986,8 +1986,8 @@ msgstr "プラグインをインポート"
 msgid "Plugin files (*.dll)|*.dll"
 msgstr "プラグインファイル (*.dll)|*.dll"
 
-msgid "Plugin files (*.dylib)|*.dylib"
-msgstr "プラグインファイル (*.dylib)|*.dylib"
+msgid "Plugin files (*.dylib;*.so)|*.dylib;*.so"
+msgstr "プラグインファイル (*.dylib;*.so)|*.dylib;*.so"
 
 msgid "Plugin files (*.so)|*.so"
 msgstr "プラグインファイル (*.so)|*.so"
@@ -3279,3 +3279,6 @@ msgstr "GDI ではなく DirectWrite でテキストを描画します。サブ�
 
 msgid "Snippet transform is not a valid regular expression: %s"
 msgstr "スニペットの変換が正しい正規表現ではありません: %s"
+
+msgid "Could not copy into %s"
+msgstr "%s へコピーできませんでした"

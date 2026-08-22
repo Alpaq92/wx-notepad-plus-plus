@@ -1986,8 +1986,8 @@ msgstr "Importar complemento(s)"
 msgid "Plugin files (*.dll)|*.dll"
 msgstr "Archivos de complemento (*.dll)|*.dll"
 
-msgid "Plugin files (*.dylib)|*.dylib"
-msgstr "Archivos de complemento (*.dylib)|*.dylib"
+msgid "Plugin files (*.dylib;*.so)|*.dylib;*.so"
+msgstr "Archivos de complemento (*.dylib;*.so)|*.dylib;*.so"
 
 msgid "Plugin files (*.so)|*.so"
 msgstr "Archivos de complemento (*.so)|*.so"
@@ -3279,3 +3279,6 @@ msgstr "Dibujar el texto con DirectWrite en lugar de GDI: posicionamiento subpí
 
 msgid "Snippet transform is not a valid regular expression: %s"
 msgstr "La transformación del fragmento no es una expresión regular válida: %s"
+
+msgid "Could not copy into %s"
+msgstr "No se pudo copiar en %s"

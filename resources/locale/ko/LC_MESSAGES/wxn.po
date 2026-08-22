@@ -1986,8 +1986,8 @@ msgstr "플러그인 가져오기"
 msgid "Plugin files (*.dll)|*.dll"
 msgstr "플러그인 파일 (*.dll)|*.dll"
 
-msgid "Plugin files (*.dylib)|*.dylib"
-msgstr "플러그인 파일 (*.dylib)|*.dylib"
+msgid "Plugin files (*.dylib;*.so)|*.dylib;*.so"
+msgstr "플러그인 파일 (*.dylib;*.so)|*.dylib;*.so"
 
 msgid "Plugin files (*.so)|*.so"
 msgstr "플러그인 파일 (*.so)|*.so"
@@ -3279,3 +3279,6 @@ msgstr "GDI 대신 DirectWrite로 텍스트를 그립니다: 서브픽셀 배치
 
 msgid "Snippet transform is not a valid regular expression: %s"
 msgstr "스니펫 변환이 올바른 정규식이 아닙니다: %s"
+
+msgid "Could not copy into %s"
+msgstr "%s에 복사할 수 없습니다"
