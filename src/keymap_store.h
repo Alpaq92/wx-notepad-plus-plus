@@ -35,6 +35,7 @@
 #include <cstdio>
 #include <cctype>
 #include <cstdlib>
+#include "json_value.h"
 
 // std::unordered_map with a wxString key: hash via the UTF-8 bytes so we don't depend on whether this
 // wx build ships a usable std::hash<wxString> / WxnKeyHash for the unordered_map Hash slot. Equality
@@ -651,144 +652,16 @@ private:
     }
 
     // ================= minimal JSON =================
-    // No JSON library is vendored; the schema is tiny, so a small recursive-descent reader +
-    // a hand writer keep this header self-contained. Untrusted input: every failure degrades to "ignore
-    // and keep resolving", never a throw/crash (a bad hand-edit must not brick startup).
-    struct Json
-    {
-        enum Type { Null, Bool, Num, Str, Arr, Obj } type = Null;
-        bool b = false; double num = 0; std::string str;
-        std::vector<Json> arr;
-        std::vector<std::pair<std::string, Json>> obj;   // insertion-ordered
-        const Json* member(const char* k) const
-        {
-            if (type != Obj) return nullptr;
-            for (const auto& kv : obj) if (kv.first == k) return &kv.second;
-            return nullptr;
-        }
-        wxString wxstr() const { return type == Str ? wxString::FromUTF8(str.c_str()) : wxString(); }
-    };
-
-    struct JsonParser
-    {
-        const std::string& s; size_t i = 0; bool ok = true;
-        // Nesting bound: object()/array() recurse back through value(), so without a cap a file of a
-        // few thousand nested brackets overflows the stack - an UNCATCHABLE crash that would break the
-        // "a bad hand-edit must not brick startup" contract above (the parse must FAIL, load must fall
-        // back to defaults). Siblings share a level (the counter tracks true nesting only), so wide-
-        // but-shallow input is unaffected; the real schema nests ~4 levels, 64 is generous. Mirrors
-        // the activeSchemeChain() parent-cycle guard.
-        static constexpr int kMaxDepth = 64;
-        int depth = 0;
-        explicit JsonParser(const std::string& src) : s(src) {}
-        void ws() { while (i < s.size() && (s[i]==' '||s[i]=='\t'||s[i]=='\n'||s[i]=='\r')) ++i; }
-        bool parse(Json& out) { ws(); bool r = value(out); ws(); return r && ok; }
-        bool value(Json& v)
-        {
-            ws();
-            if (i >= s.size()) return fail();
-            if (depth >= kMaxDepth) return fail();   // too deeply nested: give up cleanly (see kMaxDepth)
-            ++depth;
-            const bool r = valueDispatch(v);
-            --depth;
-            return r;
-        }
-        bool valueDispatch(Json& v)
-        {
-            char c = s[i];
-            if (c == '{') return object(v);
-            if (c == '[') return array(v);
-            if (c == '"') { v.type = Json::Str; return str(v.str); }
-            if (c == 't' || c == 'f') return boolean(v);
-            if (c == 'n') { if (s.compare(i,4,"null")==0){ i+=4; v.type=Json::Null; return true;} return fail(); }
-            return number(v);
-        }
-        bool object(Json& v)
-        {
-            v.type = Json::Obj; ++i; ws();
-            if (i < s.size() && s[i]=='}') { ++i; return true; }
-            for (;;)
-            {
-                ws(); if (i>=s.size()||s[i]!='"') return fail();
-                std::string key; if (!str(key)) return false;
-                ws(); if (i>=s.size()||s[i]!=':') return fail(); ++i;
-                Json child; if (!value(child)) return false;
-                v.obj.emplace_back(std::move(key), std::move(child));
-                ws(); if (i>=s.size()) return fail();
-                if (s[i]==',') { ++i; continue; }
-                if (s[i]=='}') { ++i; return true; }
-                return fail();
-            }
-        }
-        bool array(Json& v)
-        {
-            v.type = Json::Arr; ++i; ws();
-            if (i < s.size() && s[i]==']') { ++i; return true; }
-            for (;;)
-            {
-                Json child; if (!value(child)) return false;
-                v.arr.push_back(std::move(child));
-                ws(); if (i>=s.size()) return fail();
-                if (s[i]==',') { ++i; continue; }
-                if (s[i]==']') { ++i; return true; }
-                return fail();
-            }
-        }
-        bool str(std::string& out)
-        {
-            if (i>=s.size()||s[i]!='"') return fail(); ++i;
-            while (i < s.size())
-            {
-                char c = s[i++];
-                if (c=='"') return true;
-                if (c=='\\')
-                {
-                    if (i>=s.size()) return fail();
-                    char e = s[i++];
-                    switch (e)
-                    {
-                        case '"': out+='"'; break;   case '\\': out+='\\'; break; case '/': out+='/'; break;
-                        case 'b': out+='\b'; break;  case 'f': out+='\f'; break;  case 'n': out+='\n'; break;
-                        case 'r': out+='\r'; break;  case 't': out+='\t'; break;
-                        case 'u':
-                        {
-                            if (i+4 > s.size()) return fail();
-                            unsigned cp = 0;
-                            for (int k=0;k<4;++k){ char h=s[i++]; cp<<=4;
-                                if(h>='0'&&h<='9')cp|=h-'0'; else if(h>='a'&&h<='f')cp|=h-'a'+10;
-                                else if(h>='A'&&h<='F')cp|=h-'A'+10; else return fail(); }
-                            appendUtf8(out, cp);
-                            break;
-                        }
-                        default: return fail();
-                    }
-                }
-                else out += c;
-            }
-            return fail();
-        }
-        bool boolean(Json& v)
-        {
-            if (s.compare(i,4,"true")==0){ i+=4; v.type=Json::Bool; v.b=true; return true; }
-            if (s.compare(i,5,"false")==0){ i+=5; v.type=Json::Bool; v.b=false; return true; }
-            return fail();
-        }
-        bool number(Json& v)
-        {
-            size_t start = i;
-            while (i<s.size() && (isdigit((unsigned char)s[i])||s[i]=='-'||s[i]=='+'||s[i]=='.'||s[i]=='e'||s[i]=='E')) ++i;
-            if (i==start) return fail();
-            v.type = Json::Num; v.num = atof(s.substr(start, i-start).c_str());
-            return true;
-        }
-        static void appendUtf8(std::string& out, unsigned cp)
-        {
-            if (cp < 0x80) out += (char)cp;
-            else if (cp < 0x800) { out += (char)(0xC0|(cp>>6)); out += (char)(0x80|(cp&0x3F)); }
-            else { out += (char)(0xE0|(cp>>12)); out += (char)(0x80|((cp>>6)&0x3F)); out += (char)(0x80|(cp&0x3F)); }
-        }
-        bool fail() { ok = false; return false; }
-    };
+    // The reader (Json + JsonParser) lived here as a private nested pair until it was lifted out to
+    // src/json_value.h (namespace wxnjson) - wx-free, so the next JSON-reading store reuses it
+    // instead of growing a copy that drifts. Same parser, same contract: untrusted input degrades to
+    // "ignore and keep resolving", never a throw/crash (a bad hand-edit must not brick startup).
+    // Only the hand WRITER below still lives in this header (it is schema-specific). Aliased back so
+    // the parsing code reads as before; the old Json::wxstr() convenience is gone - each call site
+    // (every one already behind a type == Json::Str check, so semantics are unchanged) converts with
+    // wxString::FromUTF8(x.str.c_str()).
+    using Json = wxnjson::Json;
+    using JsonParser = wxnjson::JsonParser;
 
     static KeyScope scopeFromStr(const wxString& w)
     {
@@ -807,15 +680,15 @@ private:
         if (e.type != Json::Obj) return false;
         const Json* cmd = e.member("command");
         if (!cmd || cmd->type != Json::Str || cmd->str.empty()) return false;
-        wxString command = cmd->wxstr();
+        wxString command = wxString::FromUTF8(cmd->str.c_str());
         out.unbind = command.StartsWith("-");
         if (out.unbind) command = command.Mid(1);
         if (command.empty()) return false;
         out.symbolicName = command;
         const Json* key = e.member("key");
-        out.key = (key && key->type == Json::Str) ? key->wxstr() : wxString();
+        out.key = (key && key->type == Json::Str) ? wxString::FromUTF8(key->str.c_str()) : wxString();
         const Json* when = e.member("when");
-        out.scope = when && when->type == Json::Str ? scopeFromStr(when->wxstr()) : KeyScope::Global;
+        out.scope = when && when->type == Json::Str ? scopeFromStr(wxString::FromUTF8(when->str.c_str())) : KeyScope::Global;
         return !(out.unbind == false && out.key.empty());   // a non-unbind must carry a key
     }
 
@@ -829,7 +702,7 @@ private:
             if (v->type == Json::Num && (int)v->num > kCurrentVersion) m_readOnly = true;  // newer file: don't clobber
 
         if (const Json* a = root.member("activeScheme"))
-            if (a->type == Json::Str && !a->str.empty()) m_activeScheme = a->wxstr();
+            if (a->type == Json::Str && !a->str.empty()) m_activeScheme = wxString::FromUTF8(a->str.c_str());
 
         if (const Json* uk = root.member("userKeybindings"))
             if (uk->type == Json::Arr)
@@ -843,10 +716,10 @@ private:
                     if (e.type != Json::Obj) continue;
                     const Json* id = e.member("id");
                     if (!id || id->type != Json::Str || id->str.empty()) continue;
-                    KeymapScheme s; s.id = id->wxstr(); s.bundled = false;
-                    if (const Json* nm = e.member("name"))   if (nm->type == Json::Str) s.name = nm->wxstr();
+                    KeymapScheme s; s.id = wxString::FromUTF8(id->str.c_str()); s.bundled = false;
+                    if (const Json* nm = e.member("name"))   if (nm->type == Json::Str) s.name = wxString::FromUTF8(nm->str.c_str());
                     if (s.name.empty()) s.name = s.id;
-                    if (const Json* pr = e.member("parent")) if (pr->type == Json::Str) s.parent = pr->wxstr();
+                    if (const Json* pr = e.member("parent")) if (pr->type == Json::Str) s.parent = wxString::FromUTF8(pr->str.c_str());
                     if (const Json* kb = e.member("keybindings"))
                         if (kb->type == Json::Arr)
                             for (const Json& be : kb->arr)
