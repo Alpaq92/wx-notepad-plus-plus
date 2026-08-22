@@ -542,8 +542,15 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         check(sciSend(f->m_main.stc, SCI_GETCARETWIDTH) == 3, "settings: caret width reaches the main view");
         check(sciSend(f->m_sub.stc,  SCI_GETCARETWIDTH) == 3,
               "settings: ...and the second view, which is not the focused one");
+        check(sciSend(f->m_main.stc, SCI_GETWRAPMODE) == SC_WRAP_WORD,
+              "settings: wrap mode reaches the main view");
         check(sciSend(f->m_sub.stc,  SCI_GETWRAPMODE) == SC_WRAP_WORD,
               "settings: wrap mode reaches the second view too");
+        // The margin is part of the per-view work (updateLineMarginFor) - assert it, not just the
+        // raw style settings. Line numbers default on, so both views must have a sized margin 0.
+        check(sciSend(f->m_main.stc, SCI_GETMARGINWIDTHN, 0) > 0 &&
+              sciSend(f->m_sub.stc,  SCI_GETMARGINWIDTHN, 0) > 0,
+              "settings: the line-number margin is sized on both views");
 
         // A SECOND, different value - not a revert to savedCaret, which the second view already held
         // and so passed even before the fix.
@@ -566,6 +573,7 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         f->m_useTabs  = false;
         f->applySettings();
         check(f->sci(SCI_GETTABWIDTH) == 3, "settings: tab width applies to the mounted document");
+        check(f->sci(SCI_GETUSETABS) == 0, "settings: ...and so does use-tabs");
 
         f->addDocument(wxString(), "untitled-tabwidth-test");   // activates the new page
         check(f->sci(SCI_GETTABWIDTH) == 3,
