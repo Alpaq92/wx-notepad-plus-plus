@@ -526,6 +526,66 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         f->snippetCancel();
     }
 
+    // ---- preferences reach BOTH halves of a split, and every DOCUMENT -----------------------------
+    // applySettings drove bare sci(), which targets whichever view has focus. The other half of a
+    // split kept the previous preferences until it was next focused, so wrap, whitespace, caret and
+    // the line-number margin visibly disagreed across the splitter.
+    {
+        const int  savedCaret = f->m_caretWidth;
+        const bool savedWrap  = f->m_wrap;
+
+        f->m_caretWidth = 3;
+        f->m_wrap       = true;
+        f->applySettings();
+
+        check(f->m_main.stc && f->m_sub.stc, "settings: both views exist from construction");
+        check(sciSend(f->m_main.stc, SCI_GETCARETWIDTH) == 3, "settings: caret width reaches the main view");
+        check(sciSend(f->m_sub.stc,  SCI_GETCARETWIDTH) == 3,
+              "settings: ...and the second view, which is not the focused one");
+        check(sciSend(f->m_main.stc, SCI_GETWRAPMODE) == SC_WRAP_WORD,
+              "settings: wrap mode reaches the main view");
+        check(sciSend(f->m_sub.stc,  SCI_GETWRAPMODE) == SC_WRAP_WORD,
+              "settings: wrap mode reaches the second view too");
+        // The margin is part of the per-view work (updateLineMarginFor) - assert it, not just the
+        // raw style settings. Line numbers default on, so both views must have a sized margin 0.
+        check(sciSend(f->m_main.stc, SCI_GETMARGINWIDTHN, 0) > 0 &&
+              sciSend(f->m_sub.stc,  SCI_GETMARGINWIDTHN, 0) > 0,
+              "settings: the line-number margin is sized on both views");
+
+        // A SECOND, different value - not a revert to savedCaret, which the second view already held
+        // and so passed even before the fix.
+        f->m_caretWidth = 2;
+        f->applySettings();
+        check(sciSend(f->m_sub.stc, SCI_GETCARETWIDTH) == 2, "settings: ...and a later change reaches it again");
+
+        f->m_caretWidth = savedCaret;
+        f->m_wrap       = savedWrap;
+        f->applySettings();
+    }
+    {
+        // Tab width and use-tabs live on the DOCUMENT, not the view: a fresh Scintilla document
+        // starts at tabInChars 8 / useTabs true regardless of preferences, and nothing re-applied
+        // them, so every newly opened tab silently ignored both settings.
+        const int  savedWidth = f->m_tabWidth;
+        const bool savedTabs  = f->m_useTabs;
+
+        f->m_tabWidth = 3;
+        f->m_useTabs  = false;
+        f->applySettings();
+        check(f->sci(SCI_GETTABWIDTH) == 3, "settings: tab width applies to the mounted document");
+        check(f->sci(SCI_GETUSETABS) == 0, "settings: ...and so does use-tabs");
+
+        f->addDocument(wxString(), "untitled-tabwidth-test");   // activates the new page
+        check(f->sci(SCI_GETTABWIDTH) == 3,
+              "settings: a NEW document gets the configured tab width, not Scintilla's default 8");
+        check(f->sci(SCI_GETUSETABS) == 0, "settings: ...and the configured use-tabs, not its default true");
+        f->closeActive();                                        // drop the scratch document (never dirtied)
+
+        f->m_tabWidth = savedWidth;
+        f->m_useTabs  = savedTabs;
+        f->applySettings();
+    }
+
     // Leave the editor exactly as it was found. Every test above wrote into the buffer, and a DIRTY
     // buffer makes the next close - by a later phase of this suite, or by shutdown - raise a modal
     // "save changes?" prompt with nobody to answer it. That is a hang, not a failure: the process sat
