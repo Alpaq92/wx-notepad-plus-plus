@@ -185,18 +185,28 @@ what the file *looks* like, and a compressed self-extracting installer looks lik
 Detections with an `!ml` suffix (such as `Wacatac.B!ml`) come from a machine-learning guess, not from
 matching known malware.
 
-**The program itself is never flagged — only whichever download happens to have been scored.** We
-measured every Windows asset of one release through the same path a browser uses to save a download,
-and the block landed on the ARM64 installer and the x64 `.zip`, while the x64 installer and the ARM64
-`.zip` came through clean - the same file list built for two architectures, one blocked, one not. Defender's record names
-the file as a single object, with nothing inside it named, and `wxnote.exe` and the plugin bridge DLL
-pass on their own.
+**As of 2026-08-22 this is no longer reproducing.** Every Windows asset of **0.17.1** — all three
+installers and all three `.zip` files — measures clean through the same path a browser uses to save a
+download, as do the 0.17.0 installers after two weeks in circulation. An installer from **0.14.1**
+that *was* blocked when we measured it on 2026-08-01 now comes through clean too, which tells us the
+detection aged out rather than simply missing the newer files. If you are downloading a current
+release and see no warning, that is expected.
 
-So the practical answer is **try the other download**: every release ships both an installer and a
-`.zip` of the same files, and the block rarely hits both. Which one is affected varies by release, so
-we cannot tell you in advance which to pick. What the `.zip` costs you is everything the installer does
-around the files: the Start Menu shortcut, the Add/Remove Programs entry and its uninstaller, and the
-optional "Add to PATH" step. The program itself is identical.
+**If you do hit one**, here is what we know from when it was happening. The program itself is never
+flagged — only whichever download happens to have been scored. Measuring every Windows asset of one
+release, the block landed on the ARM64 installer and the x64 `.zip`, while the x64 installer and the
+ARM64 `.zip` came through clean: the same file list built for two architectures, one blocked, one not.
+Defender's record names the file as a single object, with nothing inside it named, and `wxnote.exe`
+and the plugin bridge DLL pass on their own.
+
+So the practical answer, then and now, is **try the other download**: every release ships both an
+installer and a `.zip` of the same files, and the block rarely hits both. What the `.zip` costs you is
+everything the installer does around the files: the Start Menu shortcut, the Add/Remove Programs entry
+and its uninstaller, and the optional "Add to PATH" step. The program itself is identical.
+
+We cannot promise it stays gone. These verdicts are made per *download*, by a machine-learning model
+in the cloud, so a future build can be scored differently with nothing else changed — which is why we
+re-measure every Windows asset before every release rather than assuming.
 
 You do not have to take our word for any of this:
 
