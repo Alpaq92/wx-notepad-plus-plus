@@ -188,16 +188,17 @@ matching known malware.
 **As of 2026-08-22 this is no longer reproducing.** Every Windows asset of **0.17.1** — all three
 installers and all three `.zip` files — measures clean through the same path a browser uses to save a
 download, as do the 0.17.0 installers after two weeks in circulation. An installer from **0.14.1**
-that *was* blocked when we measured it on 2026-08-01 now comes through clean too, which tells us the
-detection aged out rather than simply missing the newer files. If you are downloading a current
-release and see no warning, that is expected.
+that *was* blocked when we measured it on 2026-08-01 now comes through clean too — so the verdict on
+that exact file changed, which at least rules out "the newer downloads were simply never checked".
+Why it changed we cannot say: these decisions are made in the cloud and we cannot see inside them.
+If you are downloading a current release and see no warning, that is expected.
 
-**If you do hit one**, here is what we know from when it was happening. The program itself is never
-flagged — only whichever download happens to have been scored. Measuring every Windows asset of one
-release, the block landed on the ARM64 installer and the x64 `.zip`, while the x64 installer and the
+**If you do hit one**, here is what we observed while it was happening. In every case we measured,
+the block landed on a whole *download* rather than on anything inside it. Measuring every Windows
+asset of one release, it hit the ARM64 installer and the x64 `.zip`, while the x64 installer and the
 ARM64 `.zip` came through clean: the same file list built for two architectures, one blocked, one not.
-Defender's record names the file as a single object, with nothing inside it named, and `wxnote.exe`
-and the plugin bridge DLL pass on their own.
+Defender's record named the file as a single object, with nothing inside it named, and `wxnote.exe`
+and the plugin bridge DLL passed on their own when we measured them separately.
 
 So the practical answer, then and now, is **try the other download**: every release ships both an
 installer and a `.zip` of the same files, and the block rarely hits both. What the `.zip` costs you is

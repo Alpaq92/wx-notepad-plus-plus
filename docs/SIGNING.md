@@ -23,7 +23,8 @@ and releases exactly as before, just with a `SHA256SUMS` added. Nothing here blo
 **Status.** `SHA256SUMS` is live now. The **GPG** path is **configured as of 2026-08-22**:
 `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` (empty — the key carries no passphrase) are set on the
 repository, so the next tagged release publishes `SHA256SUMS.asc` and `wxnote-signing-key.asc`
-alongside the checksums. The signing key is
+alongside the checksums. **No release carries them yet** — v0.17.1 shipped on 2026-08-22, before the
+key existed, so its assets are `SHA256SUMS` only. Do not read that as the step being broken. The signing key is
 `ed25519/EE844722B54C6852`, valid to 2028-08-21, fingerprint
 `303F7F8A889413AFD9640C98EE844722B54C6852` — written unspaced so it can be compared character for
 character against the `signing key fingerprint:` line the release workflow prints in its log. The **Windows** step is wired but reads a `.pfx`, which
@@ -85,10 +86,19 @@ gpg --armor --export <KEY_ID> > wxnote-public.asc  # attach to a release / publi
 > cannot be read back out. Once the key is uploaded, the only copies of the private half are the
 > maintainer's local GnuPG keyring and that unreadable secret. Losing the machine means losing the
 > signing identity: every future release would have to be signed by a *new* key, and anyone who
-> already imported the old one would see a signature they cannot verify. Export
-> (`gpg --armor --export-secret-keys <KEY_ID>`) to offline storage, and keep the revocation
-> certificate GnuPG wrote under `openpgp-revocs.d/` with it — without that, a compromised or lost
-> key cannot even be revoked.
+> already imported the old one would see a signature they cannot verify.
+>
+> Back it up with an explicit output file — **not** bare `--export-secret-keys`, which writes the key
+> to *stdout* and would leave it sitting in terminal scrollback:
+>
+> ```sh
+> gpg --armor --output wxnote-signing-key-PRIVATE.asc --export-secret-keys <KEY_ID>
+> ```
+>
+> Move that file to offline storage (it is the key in plaintext — do not leave it on the working
+> disk, in a synced folder, or in the repository), and keep the revocation certificate GnuPG wrote
+> under `openpgp-revocs.d/` alongside it. Without that certificate, a lost or compromised key cannot
+> even be revoked.
 
 ### Windows Authenticode — needs a certificate, and the `.pfx` route no longer exists
 
