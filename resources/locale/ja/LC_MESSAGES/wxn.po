@@ -2079,6 +2079,9 @@ msgstr "フォント名(空欄=継承):"
 msgid "Font size (0 = inherit):"
 msgstr "フォントサイズ(0=継承):"
 
+msgid "Font weight (0 = inherit):"
+msgstr "フォントの太さ(0=継承):"
+
 msgid "Underline"
 msgstr "下線"
 
@@ -3282,3 +3285,21 @@ msgstr "スニペットの変換が正しい正規表現ではありません: %
 
 msgid "Could not copy into %s"
 msgstr "%s へコピーできませんでした"
+
+msgid "Revert changes"
+msgstr "変更を元に戻す"
+
+msgid "Style changes reverted"
+msgstr "スタイルの変更を元に戻しました"
+
+msgid "\"%s\" is not a valid theme name."
+msgstr "「%s」はテーマ名として使用できません。"
+
+msgid "A theme named \"%s\" already exists. Overwrite it?"
+msgstr "「%s」という名前のテーマは既に存在します。上書きしますか?"
+
+msgid "Could not write %s"
+msgstr "%s を書き込めませんでした"
+
+msgid "Saved theme \"%s\""
+msgstr "テーマ「%s」を保存しました"

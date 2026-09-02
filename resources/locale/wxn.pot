@@ -2081,6 +2081,9 @@ msgstr ""
 msgid "Font size (0 = inherit):"
 msgstr ""
 
+msgid "Font weight (0 = inherit):"
+msgstr ""
+
 msgid "Underline"
 msgstr ""
 
@@ -3283,4 +3286,22 @@ msgid "Snippet transform is not a valid regular expression: %s"
 msgstr ""
 
 msgid "Could not copy into %s"
+msgstr ""
+
+msgid "Revert changes"
+msgstr ""
+
+msgid "Style changes reverted"
+msgstr ""
+
+msgid "\"%s\" is not a valid theme name."
+msgstr ""
+
+msgid "A theme named \"%s\" already exists. Overwrite it?"
+msgstr ""
+
+msgid "Could not write %s"
+msgstr ""
+
+msgid "Saved theme \"%s\""
 msgstr ""

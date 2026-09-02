@@ -2079,6 +2079,9 @@ msgstr "Schriftname (leer = geerbt):"
 msgid "Font size (0 = inherit):"
 msgstr "Schriftgröße (0 = geerbt):"
 
+msgid "Font weight (0 = inherit):"
+msgstr "Schriftstärke (0 = geerbt):"
+
 msgid "Underline"
 msgstr "Unterstrichen"
 
@@ -3282,3 +3285,21 @@ msgstr "Die Bausteintransformation ist kein gültiger regulärer Ausdruck: %s"
 
 msgid "Could not copy into %s"
 msgstr "Konnte nicht nach %s kopieren"
+
+msgid "Revert changes"
+msgstr "Änderungen verwerfen"
+
+msgid "Style changes reverted"
+msgstr "Stiländerungen verworfen"
+
+msgid "\"%s\" is not a valid theme name."
+msgstr "\"%s\" ist kein gültiger Themenname."
+
+msgid "A theme named \"%s\" already exists. Overwrite it?"
+msgstr "Ein Thema namens \"%s\" existiert bereits. Überschreiben?"
+
+msgid "Could not write %s"
+msgstr "%s konnte nicht geschrieben werden"
+
+msgid "Saved theme \"%s\""
+msgstr "Thema \"%s\" gespeichert"
