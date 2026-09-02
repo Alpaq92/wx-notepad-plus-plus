@@ -3303,3 +3303,6 @@ msgstr "%s을(를) 쓸 수 없습니다"
 
 msgid "Saved theme \"%s\""
 msgstr "테마 \"%s\" 저장됨"
+
+msgid "Plugin commands"
+msgstr "플러그인 명령"

@@ -108,7 +108,8 @@ private:
     // Category filter runs per row on every filter keystroke, so re-deriving it there (by re-testing the
     // "macro.<uid>" symbolicName format that main.cpp's macroSym() owns) would put a cross-file string
     // contract inside the refill hot loop.
-    struct Row { int cmdId = 0; wxString sym; bool editor = false; int sciCmd = 0; wxString name; bool macro = false; };
+    // `plugin` is the third such per-row category, resolved once here for the same reason as `macro`.
+    struct Row { int cmdId = 0; wxString sym; bool editor = false; int sciCmd = 0; wxString name; bool macro = false; bool plugin = false; };
 
     // A SAVED macro's row, i.e. main.cpp's macroSym() format "macro.<uid>" - as opposed to the static
     // Macro-MENU commands, whose symbolicNames also begin "macro." ("macro.startRecording",
@@ -124,6 +125,13 @@ private:
         for (const wxUniChar c : tail) if (!wxIsdigit(c)) return false;
         return true;
     }
+    // A Nib plugin command, i.e. main.cpp's nibCmdSym() format "plugin.<id>" where <id> is the stable
+    // string the plugin passed to nib.commands (NOT the positional NIB_CMD_BASE + i menu id, which moves
+    // when the set of loaded plugins changes). The near-miss to watch is the static menu command
+    // "plugins.openFolder" - it does NOT match, because its seventh character is 's' where this prefix
+    // has '.'. That is the same trap isSavedMacroSym() documents, so the test stays exact rather than
+    // a loose "starts with plugin" check.
+    static bool isPluginSym(const wxString& sym) { return sym.StartsWith("plugin."); }
     // Menu name for a command id via the live menubar (follows the UI language). Falls back to the
     // symbolicName if the item isn't on the bar (shouldn't happen for seeded commands).
     wxString cmdName(int cmdId, const wxString& sym) const
@@ -185,7 +193,7 @@ private:
             // before the mapper opens, so this FindItem test passes and they DO appear, under Category=Macros.
             if (m_mb && !m_mb->FindItem(b->cmdId)) continue;
             m_rows.push_back({ b->cmdId, b->symbolicName, false, 0, cmdName(b->cmdId, b->symbolicName),
-                               isSavedMacroSym(b->symbolicName) });
+                               isSavedMacroSym(b->symbolicName), isPluginSym(b->symbolicName) });
         }
         // The curated Scintilla editor commands - Scope = Editor, remapped via CmdKeyAssign
         // rather than the accel table. Appended after the menu rows; the Scope column separates them.
@@ -234,6 +242,7 @@ private:
         m_category = new wxChoice(panel, wxID_ANY);
         m_category->Append(_("All")); m_category->Append(_("Menu commands"));
         m_category->Append(_("Editor commands")); m_category->Append(_("Macros"));
+        m_category->Append(_("Plugin commands"));
         m_category->SetSelection(0);
         m_category->Bind(wxEVT_CHOICE, [this](wxCommandEvent&){ refillGrid(); });
         filterRow->Add(m_category, 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 12);
@@ -454,12 +463,15 @@ private:
                 else if (cls == ConflictClass::NonEquivShadow) ++warnCount;
             }
 
-            // Category grouping (display-only, after the global count above): 1=Menu, 2=Editor, 3=Macros.
+            // Category grouping (display-only, after the global count above): 1=Menu, 2=Editor,
+            // 3=Macros, 4=Plugin commands. Menu is the "everything else" bucket, so every category
+            // added here has to be subtracted from it too or the row shows up twice.
             if (catSel)
             {
-                if      (catSel == 1 && (r.editor || r.macro)) continue;
-                else if (catSel == 2 && !r.editor)             continue;
-                else if (catSel == 3 && !r.macro)              continue;
+                if      (catSel == 1 && (r.editor || r.macro || r.plugin)) continue;
+                else if (catSel == 2 && !r.editor)                        continue;
+                else if (catSel == 3 && !r.macro)                         continue;
+                else if (catSel == 4 && !r.plugin)                        continue;
             }
 
             wxString shortcut, scopeStr, srcStr;
