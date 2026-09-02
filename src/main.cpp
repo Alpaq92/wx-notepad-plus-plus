@@ -1311,11 +1311,22 @@ struct FLSym { wxString name; int kind; size_t pos, end, rangeEnd; };
 // Run flRules(lang) over `text` (UTF-8), mask comment/string zones, and compute container body ranges.
 // Free function (rather than living inside the frame's parseFuncList) so it is directly testable
 // against plain sample strings without a live editor.
-static std::vector<FLSym> flCollect(const std::string& text, const std::string& lang)
+// `prose`, when non-empty, is one byte per byte of `text`: non-zero marks a comment or string. It comes
+// from the LEXER THAT IS ALREADY RUNNING (flProseMask below reads Scintilla's style bytes and classifies
+// them through proseStyles(), i.e. Lexilla's own TagsOfStyle tags), which is strictly better than the
+// regex approximation this used to rely on for one reason: the regex only ever knew the comment/string
+// syntax someone wrote a pattern for, so a brace inside an unhandled construct - a raw string, a nested
+// or doc comment, an f-string - was counted as real nesting and swallowed the rest of the file. It also
+// skips the regex pass entirely, and with it the std::regex_error(error_stack) that pass can throw on a
+// large block comment. Empty = not available (unstyled container buffer, or a lexer whose styles carry
+// no comment/string tags): fall back to the regex zones, which is what every existing test exercises.
+static std::vector<FLSym> flCollect(const std::string& text, const std::string& lang,
+                                    const std::vector<unsigned char>& prose = {})
 {
     std::vector<FLSym> syms;
     const auto* rules = flRules(lang);
     if (!rules) return syms;
+    const bool haveProse = prose.size() == text.size() && !text.empty();
     // std::regex's backtracking engine can throw std::regex_error(error_stack/error_complexity) on a
     // sufficiently large or pathological span (observed around a ~300 KB block comment) rather than
     // just running slowly - this is a matcher-implementation limit, not a malformed pattern (the
@@ -1324,7 +1335,7 @@ static std::vector<FLSym> flCollect(const std::string& text, const std::string& 
     // every matching pass here is wrapped: on failure the Function List just ends up incomplete for
     // that language/rule instead of crashing.
     std::vector<std::pair<size_t, size_t>> zones;          // comment/string spans to skip
-    if (const std::regex* cre = flCommentRe(lang))
+    if (const std::regex* cre = haveProse ? nullptr : flCommentRe(lang))
     {
         try { for (std::sregex_iterator it(text.begin(), text.end(), *cre), e; it != e; ++it)
             zones.push_back({ (size_t)it->position(0), (size_t)(it->position(0) + it->length(0)) }); } catch (const std::regex_error&) {}
@@ -1336,6 +1347,7 @@ static std::vector<FLSym> flCollect(const std::string& text, const std::string& 
     // single big class body, on every Function List refresh). Only the last zone starting at or before p
     // can contain p.
     auto inZone = [&](size_t p) {
+        if (haveProse) return p < prose.size() && prose[p] != 0;   // O(1), and the lexer's own verdict
         const auto it = std::upper_bound(zones.begin(), zones.end(), p,
             [](size_t v, const std::pair<size_t, size_t>& z) { return v < z.first; });
         return it != zones.begin() && p < std::prev(it)->second;
@@ -5001,7 +5013,7 @@ private:
         {
             const wxCharBuffer cb = m_stc->GetTextRaw();          // UTF-8 bytes - offsets line up with Scintilla
             const std::string text(cb.data(), cb.length());
-            const std::vector<FLSym> syms = flCollect(text, lang);   // extraction + nesting ranges (testable free fn)
+            const std::vector<FLSym> syms = flCollect(text, lang, flProseMask(text.size()));   // extraction + nesting ranges (testable free fn)
             struct Open { size_t rangeEnd; wxTreeItemId item; };
             std::vector<Open> stack;
             for (const auto& s : syms)
@@ -5713,7 +5725,7 @@ private:
         if (lang.empty()) return out;
         const wxCharBuffer cb = m_stc->GetTextRaw();
         const std::string text(cb.data(), cb.length());
-        for (const FLSym& s : flCollect(text, lang))
+        for (const FLSym& s : flCollect(text, lang, flProseMask(text.size())))
         {
             FilterRow r;
             r.primary  = s.name;
@@ -6285,6 +6297,24 @@ private:
         m_stc->Colourise(styled, want);                        // from GetEndStyled(), NOT 0: an edit
         return true;                                           // invalidates back to the caret, so
     }                                                          // starting at 0 re-lexes the whole doc
+    // One byte per document byte, non-zero where the ACTIVE LEXER says comment or string - the mask
+    // flCollect() prefers over its own regex approximation of comment syntax. Empty return means "not
+    // available, use the regex": either the buffer is a container-lexed one that is not styled yet (where
+    // ensureStyledTo deliberately refuses to force a full Lua re-lex), or the lexer exposes no
+    // comment/string tags at all, in which case an all-zero mask would claim there are NO comments and be
+    // worse than the approximation. Both callers are already behind the largeFile guard, which is what
+    // bounds the per-byte GetStyleAt walk here.
+    std::vector<unsigned char> flProseMask(size_t n)
+    {
+        if (!m_stc || n == 0) return {};
+        if (!ensureStyledTo((int)n)) return {};
+        const std::bitset<256>& ps = proseStyles();
+        if (ps.none()) return {};
+        std::vector<unsigned char> mask(n, 0);
+        for (size_t i = 0; i < n; ++i)
+            if (ps.test((size_t)(m_stc->GetStyleAt((int)i) & 0xFF))) mask[i] = 1;
+        return mask;
+    }
     // `doc` is the whole buffer as UTF-8, so a byte index into it IS a Scintilla position - which is what
     // lets a candidate be rejected by the style at its own start. skip empty = harvest everything.
     // (see wxnCollectWords, above the frame class - kept a free function so it is testable without a
