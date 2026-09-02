@@ -2079,6 +2079,9 @@ msgstr "Nazwa czcionki (puste = dziedziczone):"
 msgid "Font size (0 = inherit):"
 msgstr "Rozmiar czcionki (0 = dziedziczony):"
 
+msgid "Font weight (0 = inherit):"
+msgstr "Grubość czcionki (0 = dziedziczona):"
+
 msgid "Underline"
 msgstr "Podkreślenie"
 
@@ -3282,3 +3285,21 @@ msgstr "Transformacja fragmentu nie jest prawidłowym wyrażeniem regularnym: %s
 
 msgid "Could not copy into %s"
 msgstr "Nie można skopiować do %s"
+
+msgid "Revert changes"
+msgstr "Cofnij zmiany"
+
+msgid "Style changes reverted"
+msgstr "Cofnięto zmiany stylów"
+
+msgid "\"%s\" is not a valid theme name."
+msgstr "\"%s\" nie jest prawidłową nazwą motywu."
+
+msgid "A theme named \"%s\" already exists. Overwrite it?"
+msgstr "Motyw o nazwie \"%s\" już istnieje. Zastąpić go?"
+
+msgid "Could not write %s"
+msgstr "Nie można zapisać %s"
+
+msgid "Saved theme \"%s\""
+msgstr "Zapisano motyw \"%s\""

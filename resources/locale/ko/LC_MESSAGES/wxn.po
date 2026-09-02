@@ -2079,6 +2079,9 @@ msgstr "글꼴 이름(비워두면 상속):"
 msgid "Font size (0 = inherit):"
 msgstr "글꼴 크기(0=상속):"
 
+msgid "Font weight (0 = inherit):"
+msgstr "글꼴 두께(0=상속):"
+
 msgid "Underline"
 msgstr "밑줄"
 
@@ -3282,3 +3285,21 @@ msgstr "스니펫 변환이 올바른 정규식이 아닙니다: %s"
 
 msgid "Could not copy into %s"
 msgstr "%s에 복사할 수 없습니다"
+
+msgid "Revert changes"
+msgstr "변경 내용 되돌리기"
+
+msgid "Style changes reverted"
+msgstr "스타일 변경 내용을 되돌렸습니다"
+
+msgid "\"%s\" is not a valid theme name."
+msgstr "\"%s\"은(는) 유효한 테마 이름이 아닙니다."
+
+msgid "A theme named \"%s\" already exists. Overwrite it?"
+msgstr "\"%s\" 테마가 이미 있습니다. 덮어쓰시겠습니까?"
+
+msgid "Could not write %s"
+msgstr "%s을(를) 쓸 수 없습니다"
+
+msgid "Saved theme \"%s\""
+msgstr "테마 \"%s\" 저장됨"
