@@ -2079,6 +2079,9 @@ msgstr "Nom de la police (vide = hérité) :"
 msgid "Font size (0 = inherit):"
 msgstr "Taille de la police (0 = héritée) :"
 
+msgid "Font weight (0 = inherit):"
+msgstr "Graisse de la police (0 = héritée) :"
+
 msgid "Underline"
 msgstr "Souligné"
 
@@ -3282,3 +3285,24 @@ msgstr "La transformation de l'extrait n'est pas une expression régulière vali
 
 msgid "Could not copy into %s"
 msgstr "Impossible de copier dans %s"
+
+msgid "Revert changes"
+msgstr "Annuler les modifications"
+
+msgid "Style changes reverted"
+msgstr "Modifications de style annulées"
+
+msgid "\"%s\" is not a valid theme name."
+msgstr "« %s » n'est pas un nom de thème valide."
+
+msgid "A theme named \"%s\" already exists. Overwrite it?"
+msgstr "Un thème nommé « %s » existe déjà. Le remplacer ?"
+
+msgid "Could not write %s"
+msgstr "Impossible d'écrire %s"
+
+msgid "Saved theme \"%s\""
+msgstr "Thème « %s » enregistré"
+
+msgid "Plugin commands"
+msgstr "Commandes des plugins"
