@@ -933,6 +933,9 @@ msgstr "字体名称(留空=继承):"
 msgid "Font size (0 = inherit):"
 msgstr "字体大小(0=继承):"
 
+msgid "Font weight (0 = inherit):"
+msgstr "字体粗细(0=继承):"
+
 msgid "Footer:"
 msgstr "页脚:"
 
@@ -3282,3 +3285,24 @@ msgstr "代码片段转换不是有效的正则表达式：%s"
 
 msgid "Could not copy into %s"
 msgstr "无法复制到 %s"
+
+msgid "Revert changes"
+msgstr "还原更改"
+
+msgid "Style changes reverted"
+msgstr "已还原样式更改"
+
+msgid "\"%s\" is not a valid theme name."
+msgstr "“%s”不是有效的主题名称。"
+
+msgid "A theme named \"%s\" already exists. Overwrite it?"
+msgstr "名为“%s”的主题已存在。要覆盖它吗?"
+
+msgid "Could not write %s"
+msgstr "无法写入 %s"
+
+msgid "Saved theme \"%s\""
+msgstr "已保存主题“%s”"
+
+msgid "Plugin commands"
+msgstr "插件命令"

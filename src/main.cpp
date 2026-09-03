@@ -313,7 +313,15 @@ struct ViewPane {
 };
 
 // A parsed colour theme (stylers.model.xml / themes/*.xml).
-struct StyleDef { int id; int fg; int bg; int fontStyle; wxString name; };   // fg/bg = -1 when unspecified
+// fg/bg = -1 when unspecified; an empty fontName, a 0 fontSize and a 0 fontWeight likewise mean
+// "inherit". fontName and fontSize are Notepad++ WordsStyle attributes of its own and round-trip to it
+// exactly. fontWeight is a wxNote extension - Notepad++ has no such attribute, so it ignores the value
+// on read and drops it on write: a theme round-tripped through Notepad++ keeps the bold flag (what the
+// weight degrades to there) but loses the exact weight. Deliberate, per the design decision.
+struct StyleDef {
+    int id; int fg; int bg; int fontStyle; wxString name;
+    wxString fontName; int fontSize = 0; int fontWeight = 0;
+};
 struct WxnTheme
 {
     bool loaded = false;
@@ -321,6 +329,30 @@ struct WxnTheme
     std::map<wxString, std::vector<StyleDef>> lexers;   // LexerType name  -> WordsStyles
     std::string defaultFont; int defaultSize = 0;
 };
+// The generic token classes a Scintillua-lexed buffer uses. The style numbers are the ones
+// sciTagToStyle mints; cppDonor is the Notepad++ cpp WordsStyle whose colours the class borrows when a
+// theme carries no genericLangDef block of its own (see WxnFrame::synthesizeGenericStyles). cpp is the
+// donor because it is the one LexerType present, with fgColor set, in all 28 shipped themes and in
+// every Notepad++ theme in the wild - so this works for a theme the user drops in, not just ours.
+// keyword2..8 (styles 6..12) are deliberately absent: no Scintillua lexer emits those tags. They are
+// the udl-compat convention for a UDL's own keyword groups, which Notepad++ stores in the UDL file and
+// not in the theme, so the language definition owns them - they keep the built-in palette.
+static constexpr const char* kGenericLexer = "genericLangDef";
+struct GenericStyle { int id; const char* name; int cppDonor; };
+static constexpr GenericStyle kGenericStyles[] = {
+    {  0, "DEFAULT",      11 },   // cpp 11 is labelled DEFAULT but is SCE_C_IDENTIFIER, which is the
+    {  1, "KEYWORD",       5 },   // right donor: style 0 also catches Scintillua's identifier tag
+    {  2, "STRING",        6 },
+    {  3, "COMMENT",       1 },
+    {  4, "NUMBER",        4 },
+    {  5, "OPERATOR",     10 },
+    { 13, "PREPROCESSOR",  9 },
+    { 14, "TYPE",         16 },
+    { 15, "CONSTANT",     -1 },   // cpp has no constant/variable style. The only universal candidate is
+};                                // USER KEYWORDS 1, but all eight of those slots hold the SAME colour
+                                  // in 28/28 themes and in two of them it equals INSTRUCTION WORD, so
+                                  // constants would render as keywords. Left unspecified instead: it
+                                  // keeps the built-in palette until the user gives it a colour.
 // "RRGGBB" (theme XML) -> Scintilla 0xBBGGRR int, or -1 if empty/invalid.
 static int npp_bgr(const wxString& rrggbb)
 {
@@ -3624,6 +3656,16 @@ public:
                 if (pm->GetMenuItemCount() > 0) pm->AppendSeparator();
                 for (size_t i = 0; i < g_nibCommands.size(); ++i)
                     pm->Append(NIB_CMD_BASE + static_cast<int>(i), wxString::FromUTF8(g_nibCommands[i].title));
+                // Only NOW can these be registered as bindable, which is why this does not sit beside the
+                // macro seeding in buildMenuBar(): that runs earlier in this same ctor, when plugins have
+                // not been loaded and g_nibCommands is still empty. Seeding after m_keymap.load() is safe
+                // because the user layer is keyed by symbolicName and survives having no default row yet -
+                // so a stored "plugin.<id>" binding is picked up by the resolveAll() below. The accel table
+                // must be rebuilt too: buildMenuBar()'s refreshAccelerators() has already run, so without
+                // this a bound plugin shortcut would be in the model but not on the frame.
+                seedNibCommandKeymapDefaults();
+                m_keymap.resolveAll();
+                refreshAccelerators(m_accelScope);
             }
 
         Bind(wxEVT_MENU, &WxnShellFrameT::onCommand, this);          // one dispatcher for all menu+toolbar ids
@@ -8937,6 +8979,13 @@ private:
                         if (s.bg >= 0) sci(SCI_STYLESETBACK, s.id, s.bg);
                         sci(SCI_STYLESETBOLD,   s.id, (s.fontStyle & 1) ? 1 : 0);
                         sci(SCI_STYLESETITALIC, s.id, (s.fontStyle & 2) ? 1 : 0);
+                        // Bit 4 is Notepad++'s underline flag. It was parsed and written back all along but
+                        // never rendered, so 167 styles across the 28 shipped themes (baanc, toml ERROR,
+                        // nsis) have been authored underlined and drawn plain. Bits above this are left
+                        // alone deliberately - 357 perl styles carry a bit 8 whose meaning is documented
+                        // nowhere in Notepad++ or here, so it is preserved and never interpreted.
+                        sci(SCI_STYLESETUNDERLINE, s.id, (s.fontStyle & 4) ? 1 : 0);
+                        applyStyleFont(m_stc, s);
                     }
                     themed = true;
                 }
@@ -11181,8 +11230,8 @@ private:
         if (tag == "foldsym")                                    return 5;   // udl-compat symbol fold markers ({ }) -> operator
         return 0;   // whitespace.*, default, identifier, and anything unmapped
     }
-    // Colour the container styles a Scintillua-lexed buffer uses. A small fixed palette (light + dark),
-    // pending a proper themable "genericLangDef" block.
+    // Colour the container styles a Scintillua-lexed buffer uses: a fixed palette (light + dark) as the
+    // base coat, then the active theme's genericLangDef block overlaid on top of it.
     void applyScintilluaStyles(wxStyledTextCtrl* stc)
     {
         if (!stc) return;
@@ -11218,6 +11267,22 @@ private:
             {12, 0x8B6D00, 0xD7BA7D, true, false },   // keyword8 - gold
         };
         for (const Sty& s : KW) set(s.id, s.lightFg, s.darkFg, s.bold, s.italic);
+        // Theme overlay. loadThemeFile guarantees a genericLangDef block for any theme that has a cpp
+        // section, so this is the normal path, not a special case - the palette above is only the base
+        // coat for what the theme leaves unspecified (notably keyword2..8, which it never specifies).
+        if (!m_theme.loaded) return;
+        auto it = m_theme.lexers.find(kGenericLexer);
+        if (it == m_theme.lexers.end()) return;
+        for (const StyleDef& s : it->second)
+        {
+            if (s.id < 0) continue;
+            if (s.fg >= 0) stc->StyleSetForeground(s.id, bgrToColour(s.fg));
+            if (s.bg >= 0) stc->StyleSetBackground(s.id, bgrToColour(s.bg));
+            stc->StyleSetBold     (s.id, (s.fontStyle & 1) != 0);
+            stc->StyleSetItalic   (s.id, (s.fontStyle & 2) != 0);
+            stc->StyleSetUnderline(s.id, (s.fontStyle & 4) != 0);
+            applyStyleFont(stc, s);
+        }
     }
     // Lex the whole buffer with the named Scintillua lexer and apply the styles (called from STYLENEEDED).
     void scintilluaStyle(wxStyledTextCtrl* stc, const wxString& langName)
@@ -12321,15 +12386,10 @@ private:
         // below, so it stays pinned at the top whatever the system font list contains.
         auto* frow = new wxBoxSizer(wxHORIZONTAL);
         frow->Add(new wxStaticText(ed, wxID_ANY, _("Font:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
-        // wxChoice has no native separator item, so a plain-text divider line stands in for one - harmless
-        // even if somehow selected: it's not a real face name, so effectiveFontFace() falls back to
-        // JetBrains Mono exactly as it would for any other uninstalled/invalid font.
-        const wxString kFontSep = wxString(wxUniChar(0x2500), 20);
-        const wxArrayString kBundledFonts = [] {
-            wxArrayString a; a.Add("Cascadia Mono"); a.Add("JetBrains Mono"); a.Add("IBM Plex Mono"); a.Add("Hack"); a.Add("Iosevka Fixed"); return a; }();
-        wxArrayString fontNames = kBundledFonts; fontNames.Add(kFontSep);
-        { wxArrayString sysFonts = wxFontEnumerator::GetFacenames(); sysFonts.Sort();
-          for (const wxString& f : sysFonts) if (kBundledFonts.Index(f) == wxNOT_FOUND) fontNames.Add(f); }
+        // The divider is harmless even if somehow selected: it is not a real face name, so
+        // effectiveFontFace() falls back to JetBrains Mono exactly as for any uninstalled/invalid font.
+        const wxString kFontSep = fontSeparator();
+        const wxArrayString fontNames = fontFaceList();
         auto* chFont = new wxChoice(ed, wxID_ANY, wxDefaultPosition, wxDefaultSize, fontNames);
         { int sel = fontNames.Index(m_fontFace); chFont->SetSelection(sel != wxNOT_FOUND ? sel : 0); }
         frow->Add(chFont, 1, wxALIGN_CENTRE_VERTICAL);
@@ -12933,6 +12993,26 @@ private:
         for (size_t i = 0; i < m_savedMacros.size() && i < (size_t)kMaxMacroItems; ++i)
             m_keymap.addDefault(macroSym(m_savedMacros[i].uid), myID_MACRO_ITEM + (int)i, wxString());
     }
+    // A Nib plugin command's binding key. Keyed on the STABLE string id the plugin passed to
+    // nib.commands, never on the menu id: those are positional (NIB_CMD_BASE + i), so installing or
+    // removing any plugin would otherwise silently repoint every binding after it at a different
+    // command - the same hazard refreshMacroRegistrations() exists to handle for macros.
+    static wxString nibCmdSym(const wxString& id) { return "plugin." + id; }
+    // Tier-0 rows so a stored "plugin.<id>" binding resolves at m_keymap.load(), and so the Shortcut
+    // Mapper lists these under Show: Plugin commands. Safe to do once at startup with no refresh
+    // counterpart: g_nibCommands is filled by loadNibPlugins() in the shell frame's ctor (before this
+    // runs) and is not touched again until shutdown - importing a plugin asks for a restart rather than
+    // hot-loading it. A command registered with no id gets no row: there would be nothing stable to key
+    // a binding to. It still appears on the Extensions menu, just not as a bindable one.
+    void seedNibCommandKeymapDefaults()
+    {
+        for (size_t i = 0; i < g_nibCommands.size(); ++i)
+        {
+            const wxString id = wxString::FromUTF8(g_nibCommands[i].id);
+            if (id.empty()) continue;
+            m_keymap.addDefault(nibCmdSym(id), NIB_CMD_BASE + (int)i, wxString());
+        }
+    }
     // Re-publish the macro list after it CHANGES (rename / delete / reorder), as opposed to the
     // append-only saveMacro path. Menu ids are positional (myID_MACRO_ITEM + index) while bindings are
     // keyed by uid, so any edit that moves a macro must move its command id with it - and addDefault
@@ -13021,25 +13101,47 @@ private:
     // theme file in that format works here unmodified - but the two shipped-by-default files are
     // wxNote's own regenerated, permissively-licensed replacements, not copied theme data (see
     // resources/themes/DarkModeDefault.xml's header and NOTICE for the license/provenance detail).
+    // Themes live in two folders: the read-only set deployed next to the exe, and a user-writable one
+    // under userDataDir(). The user folder WINS on a name clash, and it is the only one an installed
+    // build can write at all (<exeDir> is not user-writable - same reason recoveryDir() lives here), so
+    // it is where "Save As..." in the Style Configurator puts a new theme.
+    wxString userThemeDir() { return userDataDir() + wxFILE_SEP_PATH + "themes"; }
     wxString themeFilePath(const wxString& name)   // resolve a theme name to its XML on disk
     {
         const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath());
         if (name.empty() || name == "Default") return dir + wxFILE_SEP_PATH + "stylers.model.xml";
+        const wxString user = userThemeDir() + wxFILE_SEP_PATH + name + ".xml";
+        if (wxFileExists(user)) return user;
         return dir + wxFILE_SEP_PATH + "themes" + wxFILE_SEP_PATH + name + ".xml";
     }
+    // The concrete theme currently in effect, never empty. m_themeName is empty when the user has made
+    // no explicit choice and the theme follows dark/light mode, and that empty case resolves DIFFERENTLY
+    // from the literal name "Default": empty + dark mode means themes/DarkModeDefault.xml, while "Default"
+    // means stylers.model.xml. The Style Configurator used to show "Default" in its combo while editing
+    // and saving DarkModeDefault.xml - with "DarkModeDefault" also listed separately, so two entries wrote
+    // the same file and stylers.model.xml was unreachable in dark mode. Resolve once, here.
+    wxString resolvedThemeName() const { return m_themeName.empty() ? wxString(m_dark ? "DarkModeDefault" : "Default") : m_themeName; }
     // The per-user folder where the optional GPL udl-compat plugin reads Notepad++
     // userDefineLang.xml files (see packages/udl-compat); kCmdLangOpenudldir opens it.
     wxString udlDir() { return userDataDir() + wxFILE_SEP_PATH + "userDefineLangs"; }
-    wxArrayString availableThemes()   // "Default" + every themes/*.xml (the 22 bundled themes)
+    wxArrayString availableThemes()   // "Default" + every themes/*.xml, bundled ones then the user's own
     {
         wxArrayString out; out.Add("Default");
-        wxDir d(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "themes");
-        if (d.IsOpened()) { wxString f; bool more = d.GetFirst(&f, "*.xml", wxDIR_FILES); while (more) { out.Add(f.BeforeLast('.')); more = d.GetNext(&f); } }
+        const wxString shipped = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "themes";
+        for (const wxString& dir : { shipped, userThemeDir() })
+        {
+            wxDir d(dir);
+            if (!d.IsOpened()) continue;
+            wxString f; bool more = d.GetFirst(&f, "*.xml", wxDIR_FILES);
+            // A user theme that shadows a bundled name is one entry, not two: themeFilePath() resolves
+            // the pair to the user copy, so listing both would give two entries editing the same file.
+            while (more) { const wxString n = f.BeforeLast('.'); if (out.Index(n) == wxNOT_FOUND) out.Add(n); more = d.GetNext(&f); }
+        }
         return out;
     }
     void loadTheme()   // load the active theme: an explicit Style-Configurator choice, else the dark/light default
     {
-        loadThemeFile(themeFilePath(!m_themeName.empty() ? m_themeName : wxString(m_dark ? "DarkModeDefault" : "Default")));
+        loadThemeFile(themeFilePath(resolvedThemeName()));
     }
     void loadThemeFile(const wxString& path)
     {
@@ -13057,11 +13159,14 @@ private:
                     for (wxXmlNode* w = lt->GetChildren(); w; w = w->GetNext())
                     {
                         if (w->GetName() != "WordsStyle") continue;
-                        long id = -1, fs = 0;
-                        w->GetAttribute("styleID", "-1").ToLong(&id);
-                        w->GetAttribute("fontStyle", "0").ToLong(&fs);
+                        long id = -1, fs = 0, fsz = 0, fw = 0;   // ToLong leaves these at 0 for an empty
+                        w->GetAttribute("styleID", "-1").ToLong(&id);       // attribute, which is exactly how
+                        w->GetAttribute("fontStyle", "0").ToLong(&fs);      // the corpus spells "unset":
+                        w->GetAttribute("fontSize", "0").ToLong(&fsz);      // 49,483 of 49,507 WordsStyle
+                        w->GetAttribute("fontWeight", "0").ToLong(&fw);     // carry fontSize, none a value
                         styles.push_back({ (int)id, npp_bgr(w->GetAttribute("fgColor")),
-                                           npp_bgr(w->GetAttribute("bgColor")), (int)fs, w->GetAttribute("name") });
+                                           npp_bgr(w->GetAttribute("bgColor")), (int)fs, w->GetAttribute("name"),
+                                           w->GetAttribute("fontName"), (int)fsz, (int)fw });
                     }
                     m_theme.lexers[lt->GetAttribute("name")] = std::move(styles);
                 }
@@ -13081,11 +13186,41 @@ private:
                 }
             }
         }
+        synthesizeGenericStyles();
         m_theme.loaded = true;
+    }
+    // Scintillua-lexed buffers have no Notepad++ LexerType to draw from, so no theme could colour them
+    // and every theme rendered them with the same fixed palette. Give them one. The block behaves like
+    // any other LexerType from here on: it lists in the Style Configurator, edits like the rest, and
+    // saveThemeToXml writes a real genericLangDef block into the file the first time one of its styles
+    // is changed. Derived values are defaults only - a theme that already carries the block wins.
+    void synthesizeGenericStyles()
+    {
+        if (m_theme.lexers.count(kGenericLexer)) return;   // authored in the file: leave it alone
+        auto cpp = m_theme.lexers.find("cpp");
+        if (cpp == m_theme.lexers.end()) return;           // no donor: applyScintilluaStyles' palette stands
+        std::vector<StyleDef> out;
+        for (const GenericStyle& g : kGenericStyles)
+        {
+            StyleDef s{ g.id, -1, -1, 0, g.name };
+            if (g.cppDonor >= 0)
+                for (const StyleDef& d : cpp->second)
+                    if (d.id == g.cppDonor) { s.fg = d.fg; s.bg = d.bg; s.fontStyle = d.fontStyle; break; }
+            out.push_back(s);
+        }
+        m_theme.lexers[kGenericLexer] = std::move(out);
     }
     void applyThemeSelection(const wxString& name)   // switch the editor theme live (Style Configurator)
     {
         m_themeName = (name == "Default") ? wxString() : name;
+        reloadThemeLive();
+    }
+    // Re-read whatever theme is already active from disk and push it through the editor. Split out of
+    // applyThemeSelection because the Style Configurator's Revert must NOT go through that one: it would
+    // have to hand back resolvedThemeName(), which turns an implicit "follow dark/light mode"
+    // (m_themeName empty) into an explicit "DarkModeDefault" that then sticks after a switch to light.
+    void reloadThemeLive()
+    {
         loadTheme();
         applyEditorTheme(m_dark);
         if (auto* p = activePage()) setLexerForFile(p->path);   // re-apply per-token colours for the active doc
@@ -13095,69 +13230,169 @@ private:
     // ---- Style Configurator colour helpers + write-back to the theme XML ----
     static wxColour bgrToColour(int bgr) { return bgr < 0 ? wxColour(*wxBLACK) : wxColour(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF); }
     static int colourToBgr(const wxColour& c) { return (c.Blue() << 16) | (c.Green() << 8) | c.Red(); }
+    // Per-style font face/size/weight, shared by the Lexilla and Scintillua paths so the two cannot
+    // drift. Must run AFTER the bold flag is set: an explicit weight deliberately overrides it, which is
+    // the only sane precedence when a style can carry both (Notepad++ only ever writes the bold bit).
+    static void applyStyleFont(wxStyledTextCtrl* stc, const StyleDef& s)
+    {
+        if (!stc || s.id < 0) return;
+        if (!s.fontName.empty()) stc->StyleSetFaceName(s.id, s.fontName);
+        if (s.fontSize   > 0)    stc->StyleSetSize(s.id, s.fontSize);
+        if (s.fontWeight > 0)    stc->SendMsg(SCI_STYLESETWEIGHT, s.id, s.fontWeight);
+    }
+    // The face list both font pickers offer (Preferences and the Style Configurator): bundled faces
+    // first, a drawn divider, then every installed face not already listed. wxChoice has no native
+    // separator item, so the divider is a plain-text rule - harmless even if selected, since it is not a
+    // real face name and every caller screens it out.
+    static wxString fontSeparator() { return wxString(wxUniChar(0x2500), 20); }
+    static wxArrayString fontFaceList()
+    {
+        wxArrayString bundled;
+        bundled.Add("Cascadia Mono"); bundled.Add("JetBrains Mono"); bundled.Add("IBM Plex Mono");
+        bundled.Add("Hack"); bundled.Add("Iosevka Fixed");
+        wxArrayString out = bundled; out.Add(fontSeparator());
+        wxArrayString sys = wxFontEnumerator::GetFacenames(); sys.Sort();
+        for (const wxString& f : sys) if (bundled.Index(f) == wxNOT_FOUND) out.Add(f);
+        return out;
+    }
     static wxString bgrToHex(int bgr) { return wxString::Format("%02X%02X%02X", bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF); }
     static void setAttr(wxXmlNode* n, const wxString& a, const wxString& v) { n->DeleteAttribute(a); n->AddAttribute(a, v); }
-    void saveThemeToXml(const wxString& path)   // persist the edited m_theme back into its theme XML
+    static wxXmlNode* childNamed(wxXmlNode* parent, const wxString& tag)
+    { for (wxXmlNode* n = parent->GetChildren(); n; n = n->GetNext()) if (n->GetName() == tag) return n; return nullptr; }
+    static wxXmlNode* childWith(wxXmlNode* parent, const wxString& tag, const wxString& attr, const wxString& val)
+    { for (wxXmlNode* n = parent->GetChildren(); n; n = n->GetNext()) if (n->GetName() == tag && n->GetAttribute(attr) == val) return n; return nullptr; }
+    // What the Style Configurator actually edited this session: (LexerType name, styleID) pairs and
+    // GlobalStyles WidgetStyle names. saveThemeToXml writes ONLY these. It used to write every style it
+    // had loaded, so one colour change rewrote all 49,507 WordsStyle elements in the file - turning the
+    // 11,189 empty fontStyle attributes into "0", adding the attribute to the 24 nodes that lacked it,
+    // and moving every touched attribute to the end of its element (setAttr deletes then re-adds). A
+    // no-edit "Save & Close" produced the same whole-file diff.
+    std::set<std::pair<wxString,int>> m_styleEdited;
+    std::set<wxString>                m_globalEdited;
+    // Driven off the dirty sets rather than off the document, because one of the blocks the user can now
+    // edit may not exist in the file at all: genericLangDef is synthesized at load time from the theme's
+    // own cpp colours, and only becomes real XML here, the first time one of its styles is changed.
+    // Everything else is found, never created - an unedited node is not touched, and a WidgetStyle the
+    // file does not declare is skipped rather than invented.
+    bool saveThemeToXml(const wxString& path)   // persist the edited styles back into their theme XML
     {
         wxXmlDocument doc;
-        if (!wxFileExists(path) || !doc.Load(path) || !doc.GetRoot()) return;
-        for (wxXmlNode* sec = doc.GetRoot()->GetChildren(); sec; sec = sec->GetNext())
+        if (!wxFileExists(path) || !doc.Load(path) || !doc.GetRoot()) return false;
+        wxXmlNode* lexSec = childNamed(doc.GetRoot(), "LexerStyles");
+        wxXmlNode* gloSec = childNamed(doc.GetRoot(), "GlobalStyles");
+        for (const auto& key : m_styleEdited)   // key = (LexerType name, styleID)
         {
-            if (sec->GetName() == "LexerStyles")
-                for (wxXmlNode* lt = sec->GetChildren(); lt; lt = lt->GetNext())
-                {
-                    if (lt->GetName() != "LexerType") continue;
-                    auto it = m_theme.lexers.find(lt->GetAttribute("name")); if (it == m_theme.lexers.end()) continue;
-                    for (wxXmlNode* w = lt->GetChildren(); w; w = w->GetNext())
-                    {
-                        if (w->GetName() != "WordsStyle") continue;
-                        long id = -1; w->GetAttribute("styleID", "-1").ToLong(&id);
-                        for (const StyleDef& s : it->second) if (s.id == (int)id)
-                        { if (s.fg >= 0) setAttr(w, "fgColor", bgrToHex(s.fg)); if (s.bg >= 0) setAttr(w, "bgColor", bgrToHex(s.bg)); setAttr(w, "fontStyle", wxString::Format("%d", s.fontStyle)); break; }
-                    }
-                }
-            else if (sec->GetName() == "GlobalStyles")
-                for (wxXmlNode* w = sec->GetChildren(); w; w = w->GetNext())
-                {
-                    if (w->GetName() != "WidgetStyle") continue;
-                    auto it = m_theme.global.find(w->GetAttribute("name")); if (it == m_theme.global.end()) continue;
-                    if (it->second.first  >= 0) setAttr(w, "fgColor", bgrToHex(it->second.first));
-                    if (it->second.second >= 0) setAttr(w, "bgColor", bgrToHex(it->second.second));
-                }
+            if (!lexSec) break;
+            auto it = m_theme.lexers.find(key.first); if (it == m_theme.lexers.end()) continue;
+            const StyleDef* sd = nullptr;
+            for (const StyleDef& s : it->second) if (s.id == key.second) { sd = &s; break; }
+            if (!sd) continue;
+            wxXmlNode* lt = childWith(lexSec, "LexerType", "name", key.first);
+            if (!lt)
+            {
+                if (key.first != kGenericLexer) continue;   // only our own block is ever created
+                lt = new wxXmlNode(lexSec, wxXML_ELEMENT_NODE, "LexerType");
+                lt->AddAttribute("name", kGenericLexer);
+                lt->AddAttribute("desc", "Generic (custom languages)");
+                lt->AddAttribute("ext", "");
+            }
+            const wxString sid = wxString::Format("%d", key.second);
+            wxXmlNode* w = childWith(lt, "WordsStyle", "styleID", sid);
+            if (!w)
+            {
+                w = new wxXmlNode(lt, wxXML_ELEMENT_NODE, "WordsStyle");
+                w->AddAttribute("name", sd->name);
+                w->AddAttribute("styleID", sid);
+            }
+            if (sd->fg >= 0) setAttr(w, "fgColor", bgrToHex(sd->fg));
+            if (sd->bg >= 0) setAttr(w, "bgColor", bgrToHex(sd->bg));
+            setAttr(w, "fontStyle", wxString::Format("%d", sd->fontStyle));
+            // Written even when unset, spelled as the empty attribute the corpus already uses, so that
+            // CLEARING a face or size persists instead of silently leaving the old value in the file.
+            setAttr(w, "fontName", sd->fontName);
+            setAttr(w, "fontSize", sd->fontSize > 0 ? wxString::Format("%d", sd->fontSize) : wxString());
+            // fontWeight is ours alone, so it is added only where it is actually used - never as an empty
+            // attribute on the other 49,506 nodes, which would be noise in every diff against Notepad++.
+            if (sd->fontWeight > 0) setAttr(w, "fontWeight", wxString::Format("%d", sd->fontWeight));
+            else                    w->DeleteAttribute("fontWeight");
         }
-        doc.Save(path);
+        for (const wxString& nm : m_globalEdited)
+        {
+            if (!gloSec) break;
+            auto it = m_theme.global.find(nm); if (it == m_theme.global.end()) continue;
+            wxXmlNode* w = childWith(gloSec, "WidgetStyle", "name", nm); if (!w) continue;
+            if (it->second.first  >= 0) setAttr(w, "fgColor", bgrToHex(it->second.first));
+            if (it->second.second >= 0) setAttr(w, "bgColor", bgrToHex(it->second.second));
+        }
+        // The return matters: for the light-mode Default the target is <exeDir>/stylers.model.xml, which is
+        // not writable on an installed build. This used to be discarded and the caller reported success.
+        return doc.Save(path);
     }
     void onStyleConfig()   // Settings > Style Configurator: theme picker + per-language token style editor
     {
-        const wxString original = m_themeName;
+        wxString original = m_themeName;   // not const: "Save As..." moves it onto the theme it just wrote
+        m_styleEdited.clear(); m_globalEdited.clear();
         const wxString kGlobalStyles = _("Global Styles");   // both displayed AND compared-against below - must be the same translated value
-        wxDialog dlg(this, wxID_ANY, _("Style Configurator"), wxDefaultPosition, wxSize(680, 440));
+        const wxString kTitle = _("Style Configurator");
+        // No hard-coded size any more. The widest row is a translated label plus the font-name combo,
+        // and at the old fixed 860x470 the Polish "Nazwa czcionki (puste = dziedziczone):" pushed that
+        // combo off the edge of the panel. SetSizerAndFit at the bottom measures the real strings, and
+        // the resize border lets the user widen it further for a face name longer than any of them.
+        wxDialog dlg(this, wxID_ANY, kTitle, wxDefaultPosition, wxDefaultSize,
+                     wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
         auto* themeRow = new wxBoxSizer(wxHORIZONTAL);
         themeRow->Add(new wxStaticText(&dlg, wxID_ANY, _("Select theme:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* themeCombo = new wxChoice(&dlg, wxID_ANY, wxDefaultPosition, wxSize(220, -1), availableThemes());
-        themeCombo->SetStringSelection(m_themeName.empty() ? "Default" : m_themeName);
+        themeCombo->SetStringSelection(resolvedThemeName());
         themeRow->Add(themeCombo, 0);
         auto* langList  = new wxListBox(&dlg, wxID_ANY, wxDefaultPosition, wxSize(180, 280));
-        auto* styleList = new wxListBox(&dlg, wxID_ANY, wxDefaultPosition, wxSize(180, 280));
+        // Wider than the language list, and the column that takes the slack when the dialog grows: the
+        // GlobalStyles names are long ("Active tab unfocused indicator", "Change History revert origin")
+        // and were being cut off mid-word at the 180 the two lists used to share.
+        auto* styleList = new wxListBox(&dlg, wxID_ANY, wxDefaultPosition, wxSize(240, 280));
         auto* fgPick   = new wxColourPickerCtrl(&dlg, wxID_ANY);
         auto* bgPick   = new wxColourPickerCtrl(&dlg, wxID_ANY);
         auto* cbBold   = new wxCheckBox(&dlg, wxID_ANY, _("Bold"));
         auto* cbItalic = new wxCheckBox(&dlg, wxID_ANY, _("Italic"));
+        auto* cbUnder  = new wxCheckBox(&dlg, wxID_ANY, _("Underline"));
+        // Per-style font. Every entry in the size and weight lists is a numeral, so neither needs a
+        // translated string, and the two labels below reuse msgids the catalogs already carry.
+        const wxString kFontSep = fontSeparator();
+        wxArrayString faces; faces.Add(wxString());   // first entry blank = inherit the editor font
+        { const wxArrayString all = fontFaceList(); for (const wxString& f : all) faces.Add(f); }
+        wxArrayString sizes; sizes.Add("0");
+        for (int p : { 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32 }) sizes.Add(wxString::Format("%d", p));
+        wxArrayString weights; for (int wt = 0; wt <= 900; wt += 100) weights.Add(wxString::Format("%d", wt));
+        auto* chFace   = new wxChoice(&dlg, wxID_ANY, wxDefaultPosition, wxSize(220, -1), faces);
+        auto* chSize   = new wxChoice(&dlg, wxID_ANY, wxDefaultPosition, wxSize(80,  -1), sizes);
+        auto* chWeight = new wxChoice(&dlg, wxID_ANY, wxDefaultPosition, wxSize(80,  -1), weights);
         auto* eg = new wxFlexGridSizer(2, 8, 10);
         eg->Add(new wxStaticText(&dlg, wxID_ANY, _("Foreground colour:")), 0, wxALIGN_CENTRE_VERTICAL); eg->Add(fgPick, 0);
         eg->Add(new wxStaticText(&dlg, wxID_ANY, _("Background colour:")), 0, wxALIGN_CENTRE_VERTICAL); eg->Add(bgPick, 0);
         eg->Add(cbBold, 0); eg->Add(cbItalic, 0);
+        eg->Add(cbUnder, 0); eg->AddSpacer(0);   // fills the row so the labels below start in column 1
+        eg->Add(new wxStaticText(&dlg, wxID_ANY, _("Font name (blank = inherit):")), 0, wxALIGN_CENTRE_VERTICAL); eg->Add(chFace, 0, wxEXPAND);
+        eg->Add(new wxStaticText(&dlg, wxID_ANY, _("Font size (0 = inherit):")),     0, wxALIGN_CENTRE_VERTICAL); eg->Add(chSize, 0);
+        eg->Add(new wxStaticText(&dlg, wxID_ANY, _("Font weight (0 = inherit):")),   0, wxALIGN_CENTRE_VERTICAL); eg->Add(chWeight, 0);
         auto* edBox = new wxStaticBoxSizer(wxVERTICAL, &dlg, _("Style settings")); edBox->Add(eg, 0, wxALL, 8);
         auto col = [&](const wxString& cap, wxWindow* w){ auto* s = new wxBoxSizer(wxVERTICAL); s->Add(new wxStaticText(&dlg, wxID_ANY, cap), 0, wxBOTTOM, 4); s->Add(w, 1, wxEXPAND); return s; };
         auto* mid = new wxBoxSizer(wxHORIZONTAL);
         mid->Add(col(_("Language:"), langList), 0, wxEXPAND | wxRIGHT, 10);
+        // Proportion 0 on both lists, deliberately: wxBoxSizer::CalcMin raises EVERY proportional item
+        // to the widest one's minimum, so giving a list proportion 1 dragged it up to the settings
+        // panel's ~490px and made the dialog 1154 wide. Only edBox grows; the lists keep their own size.
         mid->Add(col(_("Style:"), styleList), 0, wxEXPAND | wxRIGHT, 10);
         mid->Add(edBox, 1, wxEXPAND);
-        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
+        auto* btnSaveAs = new wxButton(&dlg, wxID_ANY, _("Save As..."));
+        auto* btnRevert = new wxButton(&dlg, wxID_ANY, _("Revert changes"));
+        auto* btn = new wxBoxSizer(wxHORIZONTAL);
+        btn->Add(btnSaveAs, 0, wxRIGHT, 6); btn->Add(btnRevert, 0); btn->AddStretchSpacer();
         btn->Add(new wxButton(&dlg, wxID_OK, _("Save && Close")), 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL);
         top->Add(themeRow, 0, wxALL, 12); top->Add(mid, 1, wxEXPAND | wxLEFT | wxRIGHT, 12); top->Add(btn, 0, wxEXPAND | wxALL, 12);
-        dlg.SetSizer(top);
+        eg->AddGrowableCol(1, 1);   // the font-name combo takes any width the dialog gains
+        dlg.SetSizerAndFit(top);
+        dlg.CentreOnParent();
         auto fillLangs = [&]{ langList->Clear(); langList->Append(kGlobalStyles); for (auto& kv : m_theme.lexers) langList->Append(kv.first); };
         auto fillStyles = [&]{
             styleList->Clear(); const wxString lang = langList->GetStringSelection();
@@ -13166,27 +13401,155 @@ private:
         };
         auto loadStyle = [&]{
             const wxString lang = langList->GetStringSelection(); const int si = styleList->GetSelection(); if (si < 0) return;
-            if (lang == kGlobalStyles) { auto it = m_theme.global.begin(); std::advance(it, si); fgPick->SetColour(bgrToColour(it->second.first)); bgPick->SetColour(it->second.second < 0 ? *wxWHITE : bgrToColour(it->second.second)); cbBold->Disable(); cbItalic->Disable(); }
-            else { auto it = m_theme.lexers.find(lang); if (it == m_theme.lexers.end() || si >= (int)it->second.size()) return; const StyleDef& s = it->second[si]; fgPick->SetColour(bgrToColour(s.fg)); bgPick->SetColour(s.bg < 0 ? *wxWHITE : bgrToColour(s.bg)); cbBold->Enable(); cbItalic->Enable(); cbBold->SetValue((s.fontStyle & 1) != 0); cbItalic->SetValue((s.fontStyle & 2) != 0); }
+            // A GlobalStyles entry is only a colour pair in this model, so every font control greys out.
+            auto enableFont = [&](bool on) { cbBold->Enable(on); cbItalic->Enable(on); cbUnder->Enable(on);
+                                             chFace->Enable(on); chSize->Enable(on); chWeight->Enable(on); };
+            if (lang == kGlobalStyles) {
+                auto it = m_theme.global.begin(); std::advance(it, si);
+                fgPick->SetColour(bgrToColour(it->second.first));
+                bgPick->SetColour(it->second.second < 0 ? *wxWHITE : bgrToColour(it->second.second));
+                enableFont(false); return;
+            }
+            auto it = m_theme.lexers.find(lang); if (it == m_theme.lexers.end() || si >= (int)it->second.size()) return;
+            const StyleDef& s = it->second[si];
+            fgPick->SetColour(bgrToColour(s.fg));
+            bgPick->SetColour(s.bg < 0 ? *wxWHITE : bgrToColour(s.bg));
+            enableFont(true);
+            cbBold->SetValue((s.fontStyle & 1) != 0); cbItalic->SetValue((s.fontStyle & 2) != 0); cbUnder->SetValue((s.fontStyle & 4) != 0);
+            // A theme may name a face this machine has not got installed. Append it rather than showing
+            // "inherit", which would misreport the file and read back as a clearing on the next edit.
+            int fi = faces.Index(s.fontName);
+            if (fi == wxNOT_FOUND && !s.fontName.empty()) { faces.Add(s.fontName); chFace->Append(s.fontName); fi = (int)faces.GetCount() - 1; }
+            chFace->SetSelection(fi < 0 ? 0 : fi);
+            // A size outside the offered list displays as inherit but is NOT lost: each control writes
+            // only its own field, so the stored value survives unless the user changes this control.
+            const int szi = sizes.Index(wxString::Format("%d", s.fontSize));
+            chSize->SetSelection(szi == wxNOT_FOUND ? 0 : szi);
+            chWeight->SetSelection((s.fontWeight > 0 && s.fontWeight <= 900 && s.fontWeight % 100 == 0) ? s.fontWeight / 100 : 0);
         };
-        auto applyEdit = [&]{
+        // Each control writes ONLY the field it owns. The previous spelling recomputed every field from
+        // the widgets on every change, which silently destroyed two things it never displayed:
+        //   - the -1 "unspecified" colour sentinel. The pickers substitute black (fg) and white (bg) for
+        //     it, so merely ticking Bold wrote those placeholders out as real fgColor/bgColor attributes,
+        //     onto nodes that never carried them.
+        //   - every fontStyle bit above bold|italic. 167 shipped styles carry the underline bit (4) and
+        //     357 perl styles carry an undocumented bit 8; one edit zeroed them and Save & Close wrote the
+        //     loss to disk, corrupting the theme for Notepad++ as well.
+        enum class SF { Fg, Bg, Bold, Italic, Underline, Face, Size, Weight };
+        auto applyEdit = [&](SF f) {
             const wxString lang = langList->GetStringSelection(); const int si = styleList->GetSelection(); if (si < 0) return;
-            if (lang == kGlobalStyles) { auto it = m_theme.global.begin(); std::advance(it, si); it->second.first = colourToBgr(fgPick->GetColour()); it->second.second = colourToBgr(bgPick->GetColour()); }
-            else { auto it = m_theme.lexers.find(lang); if (it == m_theme.lexers.end() || si >= (int)it->second.size()) return; StyleDef& s = it->second[si]; s.fg = colourToBgr(fgPick->GetColour()); s.bg = colourToBgr(bgPick->GetColour()); s.fontStyle = (cbBold->GetValue() ? 1 : 0) | (cbItalic->GetValue() ? 2 : 0); }
+            if (lang == kGlobalStyles) {
+                if (f != SF::Fg && f != SF::Bg) return;        // global styles carry no font flags
+                auto it = m_theme.global.begin(); std::advance(it, si);
+                if (f == SF::Fg) it->second.first  = colourToBgr(fgPick->GetColour());
+                else             it->second.second = colourToBgr(bgPick->GetColour());
+                m_globalEdited.insert(it->first);
+            } else {
+                auto it = m_theme.lexers.find(lang); if (it == m_theme.lexers.end() || si >= (int)it->second.size()) return;
+                StyleDef& s = it->second[si];
+                switch (f) {
+                    case SF::Fg:        s.fg = colourToBgr(fgPick->GetColour()); break;
+                    case SF::Bg:        s.bg = colourToBgr(bgPick->GetColour()); break;
+                    case SF::Bold:      s.fontStyle = (s.fontStyle & ~1) | (cbBold->GetValue()   ? 1 : 0); break;
+                    case SF::Italic:    s.fontStyle = (s.fontStyle & ~2) | (cbItalic->GetValue() ? 2 : 0); break;
+                    case SF::Underline: s.fontStyle = (s.fontStyle & ~4) | (cbUnder->GetValue()  ? 4 : 0); break;
+                    // The divider is not a face name: bounce the selection back instead of storing it.
+                    case SF::Face:      if (chFace->GetStringSelection() == kFontSep) { chFace->SetSelection(wxMax(0, faces.Index(s.fontName))); return; }
+                                        s.fontName = chFace->GetStringSelection(); break;
+                    case SF::Size:      { long v = 0; chSize->GetStringSelection().ToLong(&v); s.fontSize = (int)v; } break;
+                    case SF::Weight:    s.fontWeight = chWeight->GetSelection() * 100; break;
+                }
+                m_styleEdited.insert({ lang, s.id });
+            }
             applyEditorTheme(m_dark); if (auto* p = activePage()) setLexerForFile(p->path); if (m_stc) m_stc->Refresh();
         };
         fillLangs(); langList->SetSelection(0); fillStyles();
         langList->Bind(wxEVT_LISTBOX,  [&](wxCommandEvent&){ fillStyles(); });
         styleList->Bind(wxEVT_LISTBOX, [&](wxCommandEvent&){ loadStyle(); });
-        fgPick->Bind(wxEVT_COLOURPICKER_CHANGED, [&](wxColourPickerEvent&){ applyEdit(); });
-        bgPick->Bind(wxEVT_COLOURPICKER_CHANGED, [&](wxColourPickerEvent&){ applyEdit(); });
-        cbBold->Bind(wxEVT_CHECKBOX,   [&](wxCommandEvent&){ applyEdit(); });
-        cbItalic->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent&){ applyEdit(); });
-        themeCombo->Bind(wxEVT_CHOICE, [&](wxCommandEvent&){ applyThemeSelection(themeCombo->GetStringSelection()); fillLangs(); langList->SetSelection(0); fillStyles(); });
+        fgPick->Bind(wxEVT_COLOURPICKER_CHANGED, [&](wxColourPickerEvent&){ applyEdit(SF::Fg); });
+        bgPick->Bind(wxEVT_COLOURPICKER_CHANGED, [&](wxColourPickerEvent&){ applyEdit(SF::Bg); });
+        cbBold->Bind(wxEVT_CHECKBOX,   [&](wxCommandEvent&){ applyEdit(SF::Bold); });
+        cbItalic->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent&){ applyEdit(SF::Italic); });
+        cbUnder->Bind(wxEVT_CHECKBOX,  [&](wxCommandEvent&){ applyEdit(SF::Underline); });
+        chFace->Bind(wxEVT_CHOICE,     [&](wxCommandEvent&){ applyEdit(SF::Face); });
+        chSize->Bind(wxEVT_CHOICE,     [&](wxCommandEvent&){ applyEdit(SF::Size); });
+        chWeight->Bind(wxEVT_CHOICE,   [&](wxCommandEvent&){ applyEdit(SF::Weight); });
+        themeCombo->Bind(wxEVT_CHOICE, [&](wxCommandEvent&){
+            // applyThemeSelection reloads m_theme from disk, discarding any unsaved edits - so the dirty
+            // set must be dropped with them, or Save & Close would write style ids belonging to the OLD
+            // theme into the NEW theme's file. Re-select afterwards because the name can resolve to a
+            // different one ("Default" in dark mode -> DarkModeDefault).
+            applyThemeSelection(themeCombo->GetStringSelection());
+            m_styleEdited.clear(); m_globalEdited.clear();
+            themeCombo->SetStringSelection(resolvedThemeName());
+            fillLangs(); langList->SetSelection(0); fillStyles(); });
+        // Both buttons below rebuild the lists, so put the user back where they were rather than
+        // bouncing them to Global Styles - the point of Revert is to keep experimenting on one style.
+        auto refillKeepingSelection = [&]{
+            const wxString lang = langList->GetStringSelection(); const int si = styleList->GetSelection();
+            fillLangs();
+            const int li = langList->FindString(lang);
+            langList->SetSelection(li == wxNOT_FOUND ? 0 : li);
+            fillStyles();
+            if (si >= 0 && si < (int)styleList->GetCount()) { styleList->SetSelection(si); loadStyle(); }
+        };
+        btnRevert->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            // What Cancel does on close, offered as a button: drop this session's edits by re-reading the
+            // theme from disk. Deliberately NOT applyThemeSelection(resolvedThemeName()) - see reloadThemeLive.
+            if (m_styleEdited.empty() && m_globalEdited.empty()) return;
+            m_styleEdited.clear(); m_globalEdited.clear();
+            reloadThemeLive();
+            refillKeepingSelection();
+            setStatus(0, _("Style changes reverted")); m_hint = true; });
+        btnSaveAs->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            wxTextEntryDialog te(&dlg, _("Name:"), _("Save As"), resolvedThemeName());
+            themeDialog(&te);
+            if (te.ShowModal() != wxID_OK) return;
+            const wxString name = te.GetValue().Trim(true).Trim(false);
+            // The name becomes a file name, so reject anything that would escape the folder or that the
+            // filesystem would refuse, instead of silently rewriting what the user typed. "Default" is
+            // reserved: themeFilePath maps it to stylers.model.xml, so a copy under that name would be
+            // listed but never loaded.
+            if (name.empty() || name == "Default" || name.find_first_of("\\/:*?\"<>|") != wxString::npos)
+            {
+                wxMessageBox(wxString::Format(_("\"%s\" is not a valid theme name."), name), kTitle, wxOK | wxICON_WARNING, &dlg);
+                return;
+            }
+            const wxString dest = userThemeDir() + wxFILE_SEP_PATH + name + ".xml";
+            if (wxFileExists(dest)
+                && wxMessageBox(wxString::Format(_("A theme named \"%s\" already exists. Overwrite it?"), name),
+                                kTitle, wxYES_NO | wxICON_QUESTION, &dlg) != wxYES) return;
+            // Copy the whole source theme first, then fold this session's edits into the copy. Both steps
+            // are needed: the result has to be a complete theme file, and saveThemeToXml only ever writes
+            // the styles in the dirty set - on its own it would produce a file with nothing else in it.
+            wxFileName::Mkdir(userThemeDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+            const wxString src = themeFilePath(resolvedThemeName());
+            // Re-saving a user theme under its own name resolves src and dest to the SAME file, and a
+            // copy onto itself either fails outright or truncates. Skip the copy; the edits still fold in.
+            const bool selfSave = wxFileName(src).SameAs(wxFileName(dest));
+            if (!wxFileExists(src) || (!selfSave && !wxCopyFile(src, dest)) || !saveThemeToXml(dest))
+            {
+                wxMessageBox(wxString::Format(_("Could not write %s"), dest), kTitle, wxOK | wxICON_ERROR, &dlg);
+                return;
+            }
+            // The copy now holds every edit, so nothing is pending against the theme they came from. And
+            // `original` moves with them, or Cancel would roll the editor back off the theme just written.
+            m_styleEdited.clear(); m_globalEdited.clear();
+            m_themeName = name; original = name; saveSettings();
+            themeCombo->Set(availableThemes()); themeCombo->SetStringSelection(resolvedThemeName());
+            setStatus(0, wxString::Format(_("Saved theme \"%s\""), name)); m_hint = true; });
         themeDialog(&dlg);
         if (dlg.ShowModal() == wxID_OK)
-        { saveThemeToXml(themeFilePath(m_themeName.empty() ? wxString(m_dark ? "DarkModeDefault" : "Default") : m_themeName)); saveSettings(); setStatus(0, _("Theme styles saved")); m_hint = true; }
+        {
+            saveSettings();   // persists the theme choice even when no individual style was edited
+            // Only touch the file if something actually changed, and only claim success if the write
+            // happened: for the light-mode Default the target is <exeDir>/stylers.model.xml, which an
+            // installed build cannot write. That failure used to be discarded and reported as saved.
+            if ((!m_styleEdited.empty() || !m_globalEdited.empty())
+                && saveThemeToXml(themeFilePath(resolvedThemeName()))) { setStatus(0, _("Theme styles saved")); m_hint = true; }
+        }
         else applyThemeSelection(original.empty() ? "Default" : original);   // Cancel -> reload the original theme from disk
+        m_styleEdited.clear(); m_globalEdited.clear();
     }
     void importStyleTheme()
     {
@@ -13361,6 +13724,12 @@ private:
     {
         m_dark = dark;
         applyEditorTheme(dark);
+        // applyEditorTheme ends in SCI_STYLECLEARALL, which resets every style number to STYLE_DEFAULT's
+        // appearance - so the lexer's per-token colours have to be re-applied afterwards or the buffer
+        // renders flat. onPreferences' OK handler already does this (see the comment there); this caller
+        // did not, which is why toggling full screen used to strip the syntax colouring until the next
+        // tab switch.
+        if (auto* p = activePage()) setLexerForFile(p->path);
         setTitleBarDark(dark);
 #ifdef __WXMSW__
         ::SetWindowTheme(m_sci, dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);  // dark/light native scrollbars
