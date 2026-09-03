@@ -3306,3 +3306,39 @@ msgstr "已保存主题“%s”"
 
 msgid "Plugin commands"
 msgstr "插件命令"
+
+msgid "Save..."
+msgstr "保存..."
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Rename..."
+msgstr "重命名..."
+
+msgid "Command:"
+msgstr "命令:"
+
+msgid "Manage Saved Commands..."
+msgstr "管理已保存的命令..."
+
+msgid "Run commands"
+msgstr "运行命令"
+
+msgid "Saved Run commands"
+msgstr "已保存的运行命令"
+
+msgid "Save Run command"
+msgstr "保存运行命令"
+
+msgid "Saved Run command \"%s\""
+msgstr "已保存运行命令“%s”"
+
+msgid "The saved Run command list is full (%d)."
+msgstr "已保存的运行命令列表已满 (%d)。"
+
+msgid "No saved Run commands yet. Use Run... and press Save to name one."
+msgstr "尚无已保存的运行命令。请使用“运行...”并点击“保存”为其命名。"
+
+msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "runcommands.dat 由更新版本的 wxNote 写入，因此在此为只读。"

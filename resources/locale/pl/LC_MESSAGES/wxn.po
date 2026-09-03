@@ -3306,3 +3306,39 @@ msgstr "Zapisano motyw \"%s\""
 
 msgid "Plugin commands"
 msgstr "Polecenia wtyczek"
+
+msgid "Save..."
+msgstr "Zapisz..."
+
+msgid "Delete"
+msgstr "Usuń"
+
+msgid "Rename..."
+msgstr "Zmień nazwę..."
+
+msgid "Command:"
+msgstr "Polecenie:"
+
+msgid "Manage Saved Commands..."
+msgstr "Zarządzaj zapisanymi poleceniami..."
+
+msgid "Run commands"
+msgstr "Polecenia uruchamiania"
+
+msgid "Saved Run commands"
+msgstr "Zapisane polecenia uruchamiania"
+
+msgid "Save Run command"
+msgstr "Zapisz polecenie uruchamiania"
+
+msgid "Saved Run command \"%s\""
+msgstr "Zapisano polecenie uruchamiania \"%s\""
+
+msgid "The saved Run command list is full (%d)."
+msgstr "Lista zapisanych poleceń uruchamiania jest pełna (%d)."
+
+msgid "No saved Run commands yet. Use Run... and press Save to name one."
+msgstr "Nie ma jeszcze zapisanych poleceń uruchamiania. Użyj Uruchom... i naciśnij Zapisz, aby nadać nazwę."
+
+msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "Plik runcommands.dat został zapisany przez nowszą wersję wxNote, więc jest tu tylko do odczytu."
