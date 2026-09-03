@@ -87,7 +87,8 @@ static void activate(NibHost* host, NibQueryFn query)
 }
 
 static const NibPluginApi PLUGIN = {
-    NIB_ABI_VERSION, sizeof(NibPluginApi), "com.wxn.nibtest", activate, /*deactivate*/ nullptr
+    NIB_ABI_VERSION, sizeof(NibPluginApi), "com.wxn.nibtest", activate, /*deactivate*/ nullptr,
+    "Nib test plugin", "1.0.0"
 };
 
 // The single symbol the host resolves by name.

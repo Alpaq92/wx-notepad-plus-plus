@@ -2099,6 +2099,34 @@ struct NibCmd { std::string id, title; NibCommandFn fn; void* user; };
 static std::vector<NibCmd>            g_nibCommands;
 struct NibLoaded { const NibPluginApi* api; wxDynamicLibrary* lib; };   // a loaded Nib plugin (kept for teardown)
 static std::vector<NibLoaded> g_nibLibs;
+
+// Why a plugin file is not currently loaded. A CODE, not a message: loadNibPlugins runs from the frame
+// ctor and has no business owning UI strings, and the catalog gate would demand msgids for them there.
+// The Plugins Admin dialog turns these into translated text at display time.
+enum class NibFail { None, Disabled, OpenFailed, NoEntry, NoApi, AbiMajor, AbiMinor };
+
+// One entry per plugin FILE the loader considered - loaded or not. Built even for failures, because
+// until now a plugin that did not load simply vanished: no list, no message, nowhere for a user to see
+// that it had been rejected or why. That is the complaint the Installed tab answers first.
+struct NibPluginInfo {
+    std::string id;                 // NibPluginApi::id, or empty if it never got that far
+    std::string name;               // ABI 1.7 display name; empty -> fall back to id, then to `file`
+    std::string version;            // ABI 1.7 version string; may be empty
+    std::string file;               // base name, e.g. "udl_compat.dll"
+    std::string dir;                // the folder it was found in
+    bool        bundled = false;    // found in <exe>/nib rather than the user's own nib dir
+    bool        loaded  = false;
+    uint32_t    abi     = 0;        // the plugin's declared NIB_ABI_VERSION (0 if never read)
+    NibFail     fail    = NibFail::None;
+};
+static std::vector<NibPluginInfo> g_nibPlugins;
+
+// Plugins the user has switched off, keyed by LOWERCASED FILE NAME - deliberately not by plugin id.
+// The id lives inside the plugin and is only knowable by loading it, which is the exact thing being
+// avoided; the file name is known from the directory scan. It is also the key the loader's existing
+// first-dir-wins dedupe uses, so the two agree.
+static std::set<std::string> g_nibDisabledFiles;
+static bool nibIsDisabled(const wxString& file) { return g_nibDisabledFiles.count(std::string(file.Lower().utf8_str())) != 0; }
 static const int NIB_CMD_BASE = 63000;   // Nib command menu ids (clear of kCmd*, doc-list 61xxx, bridge plugins 62xxx)
 static const int kSciLangMenuBase = 63500;   // Language-menu ids for registered Scintillua languages (clear of NIB_CMD_BASE)
 
@@ -2558,6 +2586,7 @@ static void loadNibPlugins()
     const std::vector<wxString> pats = { "*.so" };
 #endif
     const wxString exeNib = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "nib";
+    g_nibPlugins.clear();         // rebuilt from scratch on every scan, alongside g_nibLibs
     std::vector<wxString> seen;   // basenames already handled (loaded OR failed) - first dir wins
     for (const wxString& dir : { exeNib, nibUserPluginDir() })
     {
@@ -2569,21 +2598,49 @@ static void loadNibPlugins()
         const wxString key = f.Lower();
         if (std::find(seen.begin(), seen.end(), key) != seen.end()) continue;
         seen.push_back(key);
+        // Recorded for EVERY candidate file, before anything can go wrong, so a failure still produces
+        // a row. `info` is filled in as the load progresses and pushed exactly once, at the end.
+        NibPluginInfo info;
+        info.file    = std::string(f.utf8_str());
+        info.dir     = std::string(dir.utf8_str());
+        info.bundled = (dir == exeNib);
+        if (nibIsDisabled(f))   // switched off by the user: not an error, and not loaded
+        {
+            info.fail = NibFail::Disabled;
+            g_nibPlugins.push_back(info);
+            continue;
+        }
         auto* lib = new wxDynamicLibrary(dir + wxFILE_SEP_PATH + f);
         bool ok = false;
+        info.fail = NibFail::OpenFailed;
         if (lib->IsLoaded())
         {
+            info.fail = NibFail::NoEntry;
             auto entry = reinterpret_cast<NibPluginMainFn>(lib->GetSymbol("nib_plugin_main"));
             if (entry)
             {
                 NibBootstrap boot{ NIB_ABI_VERSION, sizeof(NibBootstrap), reinterpret_cast<NibHost*>(g_view), &nibQuery, &nibLog };
                 const NibPluginApi* api = entry(&boot);
+                info.fail = NibFail::NoApi;
+                if (api)
+                {
+                    info.abi = api->abi_version;
+                    if (api->id) info.id = api->id;
+                    // ABI 1.7 additions - guarded on the PLUGIN's struct_size, never on the host's
+                    // version: the plugin decides how much struct it actually supplied.
+                    if (NIB_PLUGIN_API_HAS(api, name)    && api->name)    info.name    = api->name;
+                    if (NIB_PLUGIN_API_HAS(api, version) && api->version) info.version = api->version;
+                    info.fail = (api->abi_version >> 16) != (NIB_ABI_VERSION >> 16)      ? NibFail::AbiMajor
+                              : (api->abi_version & 0xFFFFu) > (NIB_ABI_VERSION & 0xFFFFu) ? NibFail::AbiMinor
+                              : NibFail::None;
+                }
                 // Same major, and the plugin's declared minor must not EXCEED the host's: minor
                 // bumps add tables/events (nib.events v5, nib.documents v5, ...), so a plugin built
                 // against a newer minor would query interfaces this host cannot hand out and either
                 // no-op silently or crash on the missing entry points. An older-minor plugin is fine.
-                if (api && (api->abi_version >> 16) == (NIB_ABI_VERSION >> 16)
-                        && (api->abi_version & 0xFFFFu) <= (NIB_ABI_VERSION & 0xFFFFu))
+                // The verdict itself is computed into info.fail above, so the load gate and what the
+                // Installed list reports about that plugin can never disagree.
+                if (info.fail == NibFail::None)
                 {
                     if (api->activate) api->activate(reinterpret_cast<NibHost*>(g_view), &nibQuery);
                     g_nibLibs.push_back({ api, lib });
@@ -2592,6 +2649,8 @@ static void loadNibPlugins()
             }
         }
         if (!ok) { lib->Unload(); delete lib; }
+        info.loaded = ok;
+        g_nibPlugins.push_back(info);
     }
     }
 }

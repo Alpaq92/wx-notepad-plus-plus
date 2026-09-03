@@ -221,7 +221,8 @@ void activate(NibHost* host, NibQueryFn query)
 }
 
 const NibPluginApi g_api = {
-    NIB_ABI_VERSION, sizeof(NibPluginApi), "org.wxnote.npp-shortcuts-compat", activate, nullptr
+    NIB_ABI_VERSION, sizeof(NibPluginApi), "org.wxnote.npp-shortcuts-compat", activate, nullptr,
+    "Notepad++ shortcuts import", "1.0.0"   // ABI 1.7 display fields; the host reads them via struct_size
 };
 
 }  // namespace
