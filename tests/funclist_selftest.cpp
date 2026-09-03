@@ -42,10 +42,11 @@ static bool contains(const std::vector<std::string>& v, const std::string& s)
 { return std::find(v.begin(), v.end(), s) != v.end(); }
 
 // The symbol names flCollect extracts, in document order.
-static std::vector<std::string> names(const std::string& text, const std::string& lang)
+static std::vector<std::string> names(const std::string& text, const std::string& lang,
+                                      const std::vector<unsigned char>& prose = {})
 {
     std::vector<std::string> out;
-    for (const FLSym& s : flCollect(text, lang)) out.push_back(std::string(s.name.utf8_str()));
+    for (const FLSym& s : flCollect(text, lang, prose)) out.push_back(std::string(s.name.utf8_str()));
     return out;
 }
 
@@ -62,11 +63,22 @@ static void expectNames(const std::string& text, const std::string& lang,
     }
 }
 
+// A prose mask marking every occurrence of `needle` - stands in for what the live editor gets from the
+// active lexer's style bytes (see flProseMask), so the mask path is testable with no editor at all.
+static std::vector<unsigned char> maskOf(const std::string& text, const std::string& needle)
+{
+    std::vector<unsigned char> m(text.size(), 0);
+    for (size_t p = text.find(needle); p != std::string::npos; p = text.find(needle, p + 1))
+        for (size_t i = p; i < p + needle.size() && i < m.size(); ++i) m[i] = 1;
+    return m;
+}
+
 // Is `child` nested inside `parent`'s container body range? That is what drives the tree's shape.
 static bool nestedIn(const std::string& text, const std::string& lang,
-                     const std::string& parent, const std::string& child)
+                     const std::string& parent, const std::string& child,
+                     const std::vector<unsigned char>& prose = {})
 {
-    const std::vector<FLSym> syms = flCollect(text, lang);
+    const std::vector<FLSym> syms = flCollect(text, lang, prose);
     const FLSym* p = nullptr;
     for (const FLSym& s : syms) if (std::string(s.name.utf8_str()) == parent) { p = &s; break; }
     if (!p || p->kind != 1) return false;
@@ -297,6 +309,45 @@ int main(int argc, char** argv)
         check(wxnBackupThrottleMs(64 * MiB) == 60000, "backupThrottle: 64 MiB backs up every other tick");
         check(wxnBackupThrottleMs(320 * MiB) == 300000, "backupThrottle: the stretch caps at 5 minutes");
         check(wxnBackupThrottleMs(4096 * MiB) == 300000, "backupThrottle: 4 GiB still caps at 5 minutes");
+    }
+
+    // ---- prose mask: the lexer's comment/string verdict beats flCollect's own regex approximation ----
+    // The live editor passes flProseMask() here; these feed the same shape by hand. The point of the
+    // mask is the braces it hides: the regex only knows the comment/string forms someone wrote a pattern
+    // for, so a brace inside anything else is counted as real nesting and swallows the rest of the file.
+    {
+        // A MULTI-LINE C++ raw string holding an unbalanced '{'. The regex mask cannot reach this: its
+        // string alternative is "(?:\\.|[^"\\\n])* ", which by construction cannot cross a newline, so
+        // the brace is counted, Outer's body never closes, and everything after it becomes its child.
+        // (A single-line raw string is NOT a good test here - it happens to read as an ordinary quoted
+        // string, so the regex masks it by luck and the case passes with or without the fix.)
+        const std::string lit = "R\"(\n    { unbalanced\n)\"";
+        const std::string raw =
+            "class Outer {\n"
+            "    const char* s = " + lit + ";\n"
+            "    void a() {}\n"
+            "};\n"
+            "void after() {}\n";
+        check(!nestedIn(raw, "cpp", "Outer", "after", maskOf(raw, lit)),
+              "prose mask: a brace inside a multi-line raw string does not extend the class body");
+        check(nestedIn(raw, "cpp", "Outer", "a", maskOf(raw, lit)),
+              "prose mask: the class's own method is still nested inside it");
+        // The contrast that justifies the mask: unmasked, the same buffer mis-nests.
+        check(nestedIn(raw, "cpp", "Outer", "after"),
+              "prose mask: without it, the regex mask really does mis-nest this buffer");
+
+        // A masked span also suppresses extraction, not just brace counting.
+        const std::string commented =
+            "void real() {}\n"
+            "// void fake() {}\n";
+        const std::vector<std::string> got = names(commented, "cpp", maskOf(commented, "// void fake() {}"));
+        check(got.size() == 1 && got[0] == "real", "prose mask: a symbol inside a masked span is not extracted");
+
+        // A wrong-sized mask is ignored rather than trusted part-way: flCollect requires one byte per
+        // byte, so a stale mask from a since-edited buffer falls back to the regex instead of masking
+        // the wrong offsets.
+        std::vector<unsigned char> shortMask(3, 1);
+        check(!names(commented, "cpp", shortMask).empty(), "prose mask: a size mismatch falls back, not silently mis-masks");
     }
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
