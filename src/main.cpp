@@ -3656,6 +3656,16 @@ public:
                 if (pm->GetMenuItemCount() > 0) pm->AppendSeparator();
                 for (size_t i = 0; i < g_nibCommands.size(); ++i)
                     pm->Append(NIB_CMD_BASE + static_cast<int>(i), wxString::FromUTF8(g_nibCommands[i].title));
+                // Only NOW can these be registered as bindable, which is why this does not sit beside the
+                // macro seeding in buildMenuBar(): that runs earlier in this same ctor, when plugins have
+                // not been loaded and g_nibCommands is still empty. Seeding after m_keymap.load() is safe
+                // because the user layer is keyed by symbolicName and survives having no default row yet -
+                // so a stored "plugin.<id>" binding is picked up by the resolveAll() below. The accel table
+                // must be rebuilt too: buildMenuBar()'s refreshAccelerators() has already run, so without
+                // this a bound plugin shortcut would be in the model but not on the frame.
+                seedNibCommandKeymapDefaults();
+                m_keymap.resolveAll();
+                refreshAccelerators(m_accelScope);
             }
 
         Bind(wxEVT_MENU, &WxnShellFrameT::onCommand, this);          // one dispatcher for all menu+toolbar ids
@@ -12982,6 +12992,26 @@ private:
     {
         for (size_t i = 0; i < m_savedMacros.size() && i < (size_t)kMaxMacroItems; ++i)
             m_keymap.addDefault(macroSym(m_savedMacros[i].uid), myID_MACRO_ITEM + (int)i, wxString());
+    }
+    // A Nib plugin command's binding key. Keyed on the STABLE string id the plugin passed to
+    // nib.commands, never on the menu id: those are positional (NIB_CMD_BASE + i), so installing or
+    // removing any plugin would otherwise silently repoint every binding after it at a different
+    // command - the same hazard refreshMacroRegistrations() exists to handle for macros.
+    static wxString nibCmdSym(const wxString& id) { return "plugin." + id; }
+    // Tier-0 rows so a stored "plugin.<id>" binding resolves at m_keymap.load(), and so the Shortcut
+    // Mapper lists these under Show: Plugin commands. Safe to do once at startup with no refresh
+    // counterpart: g_nibCommands is filled by loadNibPlugins() in the shell frame's ctor (before this
+    // runs) and is not touched again until shutdown - importing a plugin asks for a restart rather than
+    // hot-loading it. A command registered with no id gets no row: there would be nothing stable to key
+    // a binding to. It still appears on the Extensions menu, just not as a bindable one.
+    void seedNibCommandKeymapDefaults()
+    {
+        for (size_t i = 0; i < g_nibCommands.size(); ++i)
+        {
+            const wxString id = wxString::FromUTF8(g_nibCommands[i].id);
+            if (id.empty()) continue;
+            m_keymap.addDefault(nibCmdSym(id), NIB_CMD_BASE + (int)i, wxString());
+        }
     }
     // Re-publish the macro list after it CHANGES (rename / delete / reorder), as opposed to the
     // append-only saveMacro path. Menu ids are positional (myID_MACRO_ITEM + index) while bindings are

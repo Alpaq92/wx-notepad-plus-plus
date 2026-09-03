@@ -3303,3 +3303,6 @@ msgstr "%s を書き込めませんでした"
 
 msgid "Saved theme \"%s\""
 msgstr "テーマ「%s」を保存しました"
+
+msgid "Plugin commands"
+msgstr "プラグインコマンド"

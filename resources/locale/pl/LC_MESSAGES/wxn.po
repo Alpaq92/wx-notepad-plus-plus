@@ -3303,3 +3303,6 @@ msgstr "Nie można zapisać %s"
 
 msgid "Saved theme \"%s\""
 msgstr "Zapisano motyw \"%s\""
+
+msgid "Plugin commands"
+msgstr "Polecenia wtyczek"
