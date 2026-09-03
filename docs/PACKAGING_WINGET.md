@@ -84,10 +84,12 @@ carry forward. Do not claim in release notes that being on winget makes SmartScr
 ## Which assets to list: decide per release, by measuring
 
 **Current state (2026-08-22): the manifest lists all three NSIS installers at 0.17.1, and the false
-positive has aged out.** All six Windows assets of v0.17.1 measured clean in one sitting
+positive no longer reproduces.** All six Windows assets of v0.17.1 measured clean in one sitting
 (SI 1.457.286.0), as did all three v0.17.0 installers after two weeks in the wild — and, decisively,
 **the v0.14.1 x64 installer that measured FLAGGED on 2026-08-01 now measures clean**. That control is
-what distinguishes "the false positive is gone" from "these particular hashes were never scored".
+what distinguishes "the detection stopped firing" from "these particular hashes were never scored".
+**Why** it stopped, we cannot say: the verdict comes from a cloud model we cannot inspect. Record this
+as a measurement, not as an explanation, and not as a prediction about the next build.
 
 Installers are the outcome to prefer where they measure clean: the NSIS path gives users a Start Menu
 shortcut, an Add/Remove Programs entry and a real uninstaller, none of which the portable zip provides.
@@ -113,8 +115,8 @@ definitions:
 Both formats land on both sides of the line inside a single release, and two archives whose contents
 differ only by architecture get opposite verdicts. Nothing about the installer stub, self-extraction,
 compression or NSIS explains that; every file added to the 0.14.2 zip is clean on its own, `wxnote.exe`
-and `nib/npp_bridge.dll` have never been flagged, and the detection record names the archive as a
-single object with no member inside it named. The verdict is **per-artifact and per-hash**, and is not
+and `nib/npp_bridge.dll` came back clean in every measurement we took, and the detection record names
+the archive as a single object with no member inside it named. The verdict is **per-artifact and per-hash**, and is not
 predictable from format or content.
 
 So there is no format that can be picked in advance. Each release, measure, then list whichever

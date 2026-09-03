@@ -24,10 +24,12 @@
 #        wxNote-0.17.1-arm64-windows.zip  clean
 #        wxNote-0.17.1-x86-windows.zip    clean
 #
-#    THE FALSE POSITIVE HAS AGED OUT. Same sitting, as controls: all three v0.17.0 installers
-#    (public two weeks) clean, AND the v0.14.1 x64 installer - which read FLAGGED when measured on
-#    2026-08-01 - now reads clean. That last one is what makes it conclusive: it is not "the newer
-#    hashes were never scored", the previously-flagged hash itself now passes.
+#    THE FALSE POSITIVE NO LONGER REPRODUCES. Same sitting, as controls: all three v0.17.0
+#    installers (public two weeks) clean, AND the v0.14.1 x64 installer - which read FLAGGED when
+#    measured on 2026-08-01 - now reads clean. That control rules out "the newer hashes were simply
+#    never scored": the previously-flagged hash itself now passes. What it does NOT establish is WHY
+#    the verdict changed - that decision is made by a cloud model we cannot inspect. It is a
+#    measurement, not an explanation.
 #
 #    Do NOT read that as "this cannot come back". The verdict was always per HASH and produced by a
 #    cloud ML model, so a future build can be flagged again with nothing else changed. The historical
