@@ -3303,3 +3303,6 @@ msgstr "无法写入 %s"
 
 msgid "Saved theme \"%s\""
 msgstr "已保存主题“%s”"
+
+msgid "Plugin commands"
+msgstr "插件命令"

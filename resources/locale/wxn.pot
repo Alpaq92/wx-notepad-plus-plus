@@ -3305,3 +3305,6 @@ msgstr ""
 
 msgid "Saved theme \"%s\""
 msgstr ""
+
+msgid "Plugin commands"
+msgstr ""

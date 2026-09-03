@@ -3303,3 +3303,6 @@ msgstr "Impossible d'écrire %s"
 
 msgid "Saved theme \"%s\""
 msgstr "Thème « %s » enregistré"
+
+msgid "Plugin commands"
+msgstr "Commandes des plugins"

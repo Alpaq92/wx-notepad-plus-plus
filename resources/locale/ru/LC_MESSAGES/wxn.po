@@ -3303,3 +3303,6 @@ msgstr "Не удалось записать %s"
 
 msgid "Saved theme \"%s\""
 msgstr "Тема \"%s\" сохранена"
+
+msgid "Plugin commands"
+msgstr "Команды плагинов"

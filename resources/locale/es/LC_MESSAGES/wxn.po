@@ -3303,3 +3303,6 @@ msgstr "No se pudo escribir %s"
 
 msgid "Saved theme \"%s\""
 msgstr "Tema \"%s\" guardado"
+
+msgid "Plugin commands"
+msgstr "Comandos de complementos"
