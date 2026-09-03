@@ -247,6 +247,11 @@ static bool resolveDark(long themeMode) { return themeMode == 1 ? true : themeMo
 static const int myID_DOCLIST_ITEM = 61000;   // base id for the document-list dropdown entries
 static const int myID_MACRO_ITEM   = 62100;   // base id for saved-macro entries at the bottom of the Macro menu
 static const int kMaxMacroItems    = 200;     // width of the reserved myID_MACRO_ITEM id block (menu entries + bindable commands)
+// Saved Run commands, the same shape as saved macros one block up. 62400 rather than 62300 so the
+// macro block keeps room to grow without either range having to be renumbered - these ids reach the
+// menu, so once a user has bound one, moving it would repoint their shortcut at a different command.
+static const int myID_RUN_ITEM     = 62400;   // base id for saved Run-command entries at the bottom of the Run menu
+static const int kMaxRunItems      = 100;     // width of the reserved myID_RUN_ITEM id block
 static const int myID_OPENFOLDER_TOOL_BASE = 60300;   // base id for File > Open Containing Folder's dynamically-detected entries
 
 // The one persistent editor view (set by the frame), used to release a tab's Document when its
@@ -272,6 +277,59 @@ static int encodingFromName(const wxString& name)
 // One recorded Scintilla command in a macro (Macro menu: record / playback / run multiple).
 struct MacroStep { int msg; uptr_t wparam; sptr_t lparam; bool hasText = false; std::string text; };
 struct SavedMacro { long uid = 0; wxString name; std::vector<MacroStep> steps; };   // persisted to macros.dat
+
+// A user-defined Run command: a name for the Run menu, and the command line it launches with the same
+// $(...) variables the Run dialog documents. Persisted to runcommands.dat beside macros.dat, and keyed
+// by a monotonic uid so a keyboard binding survives the list being reordered (see runSym()).
+struct SavedRun { long uid = 0; wxString name; wxString cmd; };
+
+// The on-disk format, split out as free functions so it round-trips in a test with no frame. Name and
+// command are base64'd for the reason macros.dat base64s its name: the format is line-oriented and
+// either field may legitimately contain spaces, quotes, or a newline.
+static wxString wxnSerializeRuns(const std::vector<SavedRun>& runs, long nextUid)
+{
+    wxString out; out << "wxn-runs 1\n" << "next " << nextUid << "\n";
+    for (const SavedRun& r : runs)
+    {
+        const wxScopedCharBuffer nu = r.name.utf8_str();
+        const wxScopedCharBuffer cu = r.cmd.utf8_str();
+        out += wxString::Format("R %ld %s %s\n", r.uid,
+                                wxBase64Encode(nu.data(), nu.length()),
+                                wxBase64Encode(cu.data(), cu.length()));
+    }
+    return out;
+}
+// False means the file was written by a NEWER format version: the caller must then treat the set as
+// read-only rather than rewrite it, or saving would silently drop whatever it could not represent.
+// That is the same rule macros.dat follows.
+static bool wxnParseRuns(const wxString& text, std::vector<SavedRun>& out, long& nextUid)
+{
+    out.clear(); nextUid = 1;
+    wxStringTokenizer lines(text, "\n", wxTOKEN_STRTOK);
+    while (lines.HasMoreTokens())
+    {
+        wxString line = lines.GetNextToken(); line.Trim(true);   // drop any trailing \r
+        wxStringTokenizer tk(line, " ", wxTOKEN_STRTOK);
+        if (!tk.HasMoreTokens()) continue;
+        const wxString tag = tk.GetNextToken();
+        if (tag == "wxn-runs") { long v = 0; tk.GetNextToken().ToLong(&v); if (v > 1) { out.clear(); return false; } }
+        else if (tag == "next") { long n = 1; if (tk.GetNextToken().ToLong(&n)) nextUid = n; }
+        else if (tag == "R")
+        {
+            long uid = 0; if (!tk.GetNextToken().ToLong(&uid)) continue;
+            const wxMemoryBuffer nb = wxBase64Decode(tk.GetNextToken());
+            const wxMemoryBuffer cb = wxBase64Decode(tk.GetNextToken());
+            SavedRun r;
+            r.uid  = uid;
+            r.name = wxString::FromUTF8((const char*)nb.GetData(), nb.GetDataLen());
+            r.cmd  = wxString::FromUTF8((const char*)cb.GetData(), cb.GetDataLen());
+            if (r.name.empty() || r.cmd.empty()) continue;   // a half-written row is dropped, not shown blank
+            if (uid >= nextUid) nextUid = uid + 1;           // keep nextUid ahead of any uid on disk
+            out.push_back(r);
+        }
+    }
+    return true;
+}
 
 class EditorPage : public wxPanel
 {
@@ -2418,7 +2476,8 @@ static const NibToolbarApi g_nibToolbarApi = { 2, sizeof(NibToolbarApi), nibTool
 //   * command ids - frozen kCmd*/IDM_* menu ids 1001..50011 (src/command_ids.h), wx stock ids (< 6000,
 //     incl. wxID_FILE1..9 MRU), myID_TIMER block 60000..60007, wxNote-private commands 60220..60230
 //     (src/private_ids.h), UI-language radios 60100..60109,
-//     Open-Containing-Folder tools 60300+, doc-list dropdown 61000..61999, saved macros 62100+,
+//     Open-Containing-Folder tools 60300+, doc-list dropdown 61000..61999, saved macros 62100..62299,
+//     saved Run commands 62400..62499,
 //     Nib plugin commands NIB_CMD_BASE 63000..63499, Scintillua language menu 63500..63999.
 //     Pool: 64000..64999 - and < 65536 on purpose, so a granted id survives the 16-bit WM_COMMAND
 //     path unwrapped (see MSWWindowProc / onCommand's & 0xFFFF; ids > 32767 arrive sign-wrapped and
@@ -6013,7 +6072,16 @@ private:
         auto* tc = new wxTextCtrl(&dlg, wxID_ANY, cmd, wxDefaultPosition, wxSize(520, -1));
         auto* browse = new wxButton(&dlg, wxID_ANY, "...", wxDefaultPosition, wxSize(32, -1));
         auto* row = new wxBoxSizer(wxHORIZONTAL); row->Add(tc, 1, wxEXPAND); row->Add(browse, 0, wxLEFT, 4);
-        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
+        // Save names the command and lists it on the Run menu, where it also becomes bindable in the
+        // Shortcut Mapper. It deliberately does NOT also launch: naming a command and running it are
+        // separate intents, and a command worth saving is often one you are still composing.
+        bool saveRequested = false;
+        auto* btn = new wxBoxSizer(wxHORIZONTAL);
+        auto* saveb = new wxButton(&dlg, wxID_ANY, _("Save..."));
+        saveb->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            if (tc->GetValue().Trim().Trim(false).empty()) return;
+            saveRequested = true; dlg.EndModal(wxID_OK); });
+        btn->Add(saveb, 0); btn->AddStretchSpacer();
         auto* runb = new wxButton(&dlg, wxID_OK, _("Run")); runb->SetDefault();
         btn->Add(runb, 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL);
@@ -6027,8 +6095,34 @@ private:
         if (dlg.ShowModal() != wxID_OK) return;
         cmd = tc->GetValue().Trim().Trim(false); if (cmd.empty()) return;
         wxConfigBase::Get()->Write("RunCommand", cmd); wxConfigBase::Get()->Flush();
+        if (saveRequested) { saveRunCommandAs(cmd); return; }
         const wxString full = substituteRunVars(cmd);
         if (wxExecute(full, wxEXEC_ASYNC) == 0) wxMessageBox(_("Failed to run:\n") + full, _("Run"), wxOK | wxICON_ERROR, this);
+    }
+    // Name `cmd` and publish it: Run menu entry, keymap row, disk. Runs AFTER the Run dialog has closed
+    // (onRun defers to here) so the naming prompt is not a modal on top of a modal.
+    void saveRunCommandAs(const wxString& cmd)
+    {
+        if (m_runsReadOnly)
+        {
+            wxMessageBox(_("runcommands.dat was written by a newer version of wxNote, so it is read-only here."),
+                         _("Saved Run commands"), wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+        if (m_savedRuns.size() >= (size_t)kMaxRunItems)
+        {
+            wxMessageBox(wxString::Format(_("The saved Run command list is full (%d)."), kMaxRunItems),
+                         _("Saved Run commands"), wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+        wxTextEntryDialog te(this, _("Name:"), _("Save Run command"), cmd);
+        themeDialog(&te);
+        if (te.ShowModal() != wxID_OK) return;
+        const wxString name = te.GetValue().Trim(true).Trim(false);
+        if (name.empty()) return;
+        m_savedRuns.push_back({ m_runNextUid++, name, cmd });
+        refreshRunRegistrations();
+        setStatus(0, wxString::Format(_("Saved Run command \"%s\""), name)); m_hint = true;
     }
 
     // ----- sessions (File > Save / Load Session + the nib.session/1 by-path surface) ------------------
@@ -8103,6 +8197,9 @@ private:
         loadSavedMacros();                    // restore saved macros from macros.dat...
         appendMacroMenuItems();               // ...list them on the (already-built) Macro menu...
         seedMacroKeymapDefaults();            // ...and register "macro.<uid>" so a stored binding resolves + the mapper shows them
+        loadSavedRuns();                      // same three steps for the saved Run commands
+        appendRunMenuItems();
+        seedRunKeymapDefaults();
         registerKeymapSchemes(m_keymap);
         m_keymap.load(userDataDir());
         loadFunctionListRules(userDataDir() + wxFILE_SEP_PATH + "functionList.conf");   // user-defined Function List languages
@@ -13125,6 +13222,145 @@ private:
         wxnWriteFileAtomic(macrosFilePath(), u.data(), u.length());   // atomic replace; short write keeps the old file
     }
 
+    // ----- saved Run commands ------------------------------------------------------------------------
+    // The Run menu's counterpart to saved macros, and deliberately the same machinery: a named command
+    // list, listed at the bottom of its menu, seeded into the keymap under a uid-keyed symbolic name so
+    // the Shortcut Mapper can bind it. Menu ids are positional (myID_RUN_ITEM + index) while bindings
+    // are keyed by uid, so anything that REORDERS the list has to move the command ids with it -
+    // refreshRunRegistrations() below, exactly as refreshMacroRegistrations() does for macros.
+    wxString runsFilePath() { return userDataDir() + wxFILE_SEP_PATH + "runcommands.dat"; }
+    static wxString runSym(long uid) { return wxString::Format("run.%ld", uid); }
+    void loadSavedRuns()
+    {
+        m_savedRuns.clear(); m_runNextUid = 1; m_runsReadOnly = false;
+        wxLogNull noLog;
+        const wxString path = runsFilePath();
+        if (!wxFileExists(path)) return;
+        wxFile f(path); wxString raw;
+        if (!f.IsOpened() || !f.ReadAll(&raw, wxConvUTF8)) return;
+        if (!wxnParseRuns(raw, m_savedRuns, m_runNextUid)) m_runsReadOnly = true;
+    }
+    void saveSavedRuns()
+    {
+        if (m_runsReadOnly) return;
+        wxLogNull noLog;
+        const wxString dir = userDataDir();
+        if (!wxDirExists(dir)) wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        const wxScopedCharBuffer u = wxnSerializeRuns(m_savedRuns, m_runNextUid).utf8_str();
+        wxnWriteFileAtomic(runsFilePath(), u.data(), u.length());
+    }
+    void appendRunMenuItems()   // (re)list the saved commands at the bottom of the Run menu
+    {
+        wxMenu* menu = m_menuRegistry.find("menu.run"); if (!menu) return;
+        for (int id = myID_RUN_ITEM; id < myID_RUN_ITEM + kMaxRunItems; ++id) if (auto* it = menu->FindItem(id)) menu->Destroy(it);
+        // Same separator rule as the Macro menu: it only earns its place while something follows it, so
+        // deleting the last command must not leave the menu ending in a bare rule.
+        if (m_savedRuns.empty() && m_runSepAdded)
+        {
+            const auto& items = menu->GetMenuItems();
+            if (!items.IsEmpty() && items.GetLast()->GetData()->IsSeparator()) menu->Destroy(items.GetLast()->GetData());
+            m_runSepAdded = false;
+        }
+        if (!m_savedRuns.empty() && !m_runSepAdded) { menu->AppendSeparator(); m_runSepAdded = true; }
+        for (size_t i = 0; i < m_savedRuns.size() && i < (size_t)kMaxRunItems; ++i) menu->Append(myID_RUN_ITEM + (int)i, m_savedRuns[i].name);
+    }
+    void seedRunKeymapDefaults()   // Tier-0 rows so a stored "run.<uid>" binding resolves at m_keymap.load()
+    {
+        for (size_t i = 0; i < m_savedRuns.size() && i < (size_t)kMaxRunItems; ++i)
+            m_keymap.addDefault(runSym(m_savedRuns[i].uid), myID_RUN_ITEM + (int)i, wxString());
+    }
+    // Re-publish after the list CHANGES (add / rename / delete). `goneUids` are commands that no longer
+    // exist: their Tier-0 row and any user binding go with them, since a uid is never reused.
+    void refreshRunRegistrations(const std::vector<long>& goneUids = {})
+    {
+        for (long uid : goneUids) m_keymap.removeDefault(runSym(uid));
+        for (size_t i = 0; i < m_savedRuns.size() && i < (size_t)kMaxRunItems; ++i)
+            m_keymap.remapCmdId(runSym(m_savedRuns[i].uid), myID_RUN_ITEM + (int)i);
+        seedRunKeymapDefaults();     // covers any command not yet seeded (remapCmdId ignores unknown syms)
+        m_keymap.resolveAll();
+        appendRunMenuItems();        // must precede refreshAccelerators: it re-Appends the items whose
+                                     // labels the native menubar derives its accelerators from
+        refreshAccelerators(m_accelScope);
+        m_keymap.save();
+        saveSavedRuns();
+    }
+    // Run the saved command at `index` (the Run menu's positional entry, and what a bound shortcut hits).
+    void runSavedCommand(size_t index)
+    {
+        if (index >= m_savedRuns.size()) return;
+        const wxString full = substituteRunVars(m_savedRuns[index].cmd);
+        if (wxExecute(full, wxEXEC_ASYNC) == 0)
+            wxMessageBox(_("Failed to run:\n") + full, _("Run"), wxOK | wxICON_ERROR, this);
+    }
+    // Run ▸ Manage Saved Commands…: rename, edit and delete. Mirrors manageMacros(); the list is worked
+    // on a copy and committed only on OK, so Cancel cannot half-apply a rename.
+    void manageRunCommands()
+    {
+        if (m_runsReadOnly)
+        {
+            wxMessageBox(_("runcommands.dat was written by a newer version of wxNote, so it is read-only here."),
+                         _("Saved Run commands"), wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+        if (m_savedRuns.empty())
+        {
+            wxMessageBox(_("No saved Run commands yet. Use Run... and press Save to name one."),
+                         _("Saved Run commands"), wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+        std::vector<SavedRun> work = m_savedRuns;   // committed only on OK
+        wxDialog dlg(this, wxID_ANY, _("Saved Run commands"), wxDefaultPosition, wxDefaultSize,
+                     wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+        auto* list = new wxListBox(&dlg, wxID_ANY, wxDefaultPosition, wxSize(280, 240));
+        auto* cmdTc = new wxTextCtrl(&dlg, wxID_ANY, "", wxDefaultPosition, wxSize(360, -1));
+        auto* btnRename = new wxButton(&dlg, wxID_ANY, _("Rename..."));
+        auto* btnDelete = new wxButton(&dlg, wxID_ANY, _("Delete"));
+        auto fill = [&]{ list->Clear(); for (const SavedRun& r : work) list->Append(r.name); };
+        auto showSel = [&]{ const int i = list->GetSelection();
+                            cmdTc->SetValue(i >= 0 && i < (int)work.size() ? work[(size_t)i].cmd : wxString()); };
+        fill(); if (!work.empty()) { list->SetSelection(0); showSel(); }
+        list->Bind(wxEVT_LISTBOX, [&](wxCommandEvent&){ showSel(); });
+        btnRename->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            const int i = list->GetSelection(); if (i < 0 || i >= (int)work.size()) return;
+            wxTextEntryDialog te(&dlg, _("Name:"), _("Rename"), work[(size_t)i].name);
+            themeDialog(&te);
+            if (te.ShowModal() != wxID_OK) return;
+            const wxString n = te.GetValue().Trim(true).Trim(false);
+            if (n.empty()) return;
+            work[(size_t)i].name = n; fill(); list->SetSelection(i); showSel(); });
+        btnDelete->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            const int i = list->GetSelection(); if (i < 0 || i >= (int)work.size()) return;
+            work.erase(work.begin() + i); fill();
+            if (!work.empty()) list->SetSelection(wxMin(i, (int)work.size() - 1));
+            showSel(); });
+        auto* side = new wxBoxSizer(wxVERTICAL);
+        side->Add(btnRename, 0, wxEXPAND | wxBOTTOM, 6); side->Add(btnDelete, 0, wxEXPAND);
+        auto* mid = new wxBoxSizer(wxHORIZONTAL);
+        mid->Add(list, 1, wxEXPAND | wxRIGHT, 10); mid->Add(side, 0);
+        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
+        btn->Add(new wxButton(&dlg, wxID_OK, _("OK")), 0, wxRIGHT, 6);
+        btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
+        auto* top = new wxBoxSizer(wxVERTICAL);
+        top->Add(mid, 1, wxEXPAND | wxALL, 12);
+        top->Add(new wxStaticText(&dlg, wxID_ANY, _("Command:")), 0, wxLEFT | wxRIGHT, 12);
+        top->Add(cmdTc, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 12);
+        top->Add(btn, 0, wxEXPAND | wxALL, 12);
+        dlg.SetSizerAndFit(top); dlg.CentreOnParent();
+        themeDialog(&dlg);
+        if (dlg.ShowModal() != wxID_OK) return;
+        // Whatever is no longer in `work` has been deleted: drop its binding too, or shortcuts.json
+        // keeps resurrecting an orphan row for a command that can never come back.
+        std::vector<long> gone;
+        for (const SavedRun& before : m_savedRuns)
+        {
+            bool still = false;
+            for (const SavedRun& after : work) if (after.uid == before.uid) { still = true; break; }
+            if (!still) gone.push_back(before.uid);
+        }
+        m_savedRuns = std::move(work);
+        refreshRunRegistrations(gone);
+    }
+
     // ----- dark / light theme -------------------------------------------
     // Parse the theme XML (dark = themes/DarkModeDefault.xml, light = stylers.model.xml)
     // deployed next to the exe. The schema is a Notepad++-compatible format, so a third-party
@@ -14464,6 +14700,8 @@ private:
         { applyScintilluaToActiveBuffer(m_sciLangs[cmd - kSciLangMenuBase].name); return; }
         if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + kMaxMacroItems)   // a saved macro from the Macro menu
         { const size_t n = (size_t)(cmd - myID_MACRO_ITEM); if (n < m_savedMacros.size()) playMacro(m_savedMacros[n].steps); return; }
+        if (cmd >= myID_RUN_ITEM && cmd < myID_RUN_ITEM + kMaxRunItems)   // a saved command from the Run menu
+        { runSavedCommand((size_t)(cmd - myID_RUN_ITEM)); return; }
         if (cmd >= myID_OPENFOLDER_TOOL_BASE && cmd < myID_OPENFOLDER_TOOL_BASE + (int)m_openFolderTools.size())
         { openHereToolAt(cmd - myID_OPENFOLDER_TOOL_BASE); return; }   // a dynamically-detected File > Open Containing Folder entry
         if (cmd >= myID_SPELL_SUGGEST_BASE && cmd < myID_SPELL_SUGGEST_BASE + 9)   // spell right-click: apply a suggestion
@@ -14872,6 +15110,7 @@ private:
                 break;
 
             case kCmdExecuteBase: onRun(); break;   // Run... (F5)
+            case kCmdExecuteManageSaved: manageRunCommands(); break;
 
             case kCmdExecuteValidateShortcutsXml: {   // 49001: "Validate shortcuts.xml"
                 // Stay N++-agnostic: the core knows only that SOME plugin may offer a well-known
@@ -15274,6 +15513,10 @@ private:
     long                    m_macroNextUid = 1;      // monotonic; never reused, so a shortcut binding never leaks to another macro
     bool                    m_macrosReadOnly = false; // true if macros.dat is a newer format version -> never overwrite it
     bool        m_macroSepAdded = false;
+    std::vector<SavedRun>   m_savedRuns;      // named Run commands; persisted to runcommands.dat under userDataDir()
+    long                    m_runNextUid = 1;        // monotonic, same contract as m_macroNextUid
+    bool                    m_runsReadOnly = false;  // true if runcommands.dat is a newer format version -> never overwrite it
+    bool                    m_runSepAdded = false;
     bool        m_hint = false;   // a "needs full app" message is showing in status field 0
     // cached toolbar/menu enable states (start enabled, matching the freshly-built toolbar)
     bool        m_stSave = true, m_stSaveAll = true, m_stUndo = true, m_stRedo = true, m_stSel = true, m_stPaste = true, m_stHasPath = true;
@@ -15843,6 +16086,7 @@ public:
     // frozen, ABI-compatibility command ranges that intentionally live above 32767 -
     //     doc-list dropdown   myID_DOCLIST_ITEM   61000+   (core: fires when the tab list is opened)
     //     saved macros        myID_MACRO_ITEM     62100+
+    //     saved Run commands  myID_RUN_ITEM       62400+   (appended to the Run menu, like the macros above)
     //     Nib plugin cmds     NIB_CMD_BASE        63000+   (appended at startup if a plugin registers)
     //     Scintillua langs    kSciLangMenuBase    63500+   (appended at startup, e.g. via udl-compat)
     //     nib.alloc pool      NIB_ALLOC_CMD_FIRST 64000+

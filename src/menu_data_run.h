@@ -6,8 +6,12 @@
 // wxNote Run menu: the everyday action (Execute an external command) leads;
 // the niche maintenance action (validate the shortcuts XML) is separated below
 // so power-user tooling never crowds the primary control.
+// Saved Run commands are appended BELOW these at runtime (appendRunMenuItems, myID_RUN_ITEM+n) the way
+// saved macros are appended to the Macro menu - so the manager sits with Run..., which creates them,
+// rather than down among the maintenance items.
 static const MenuItemDef kRunMenuItems[] = {
     { MenuItemKind::Normal, kCmdExecuteBase,                       &Label::RunExecute,              "run.execute", nullptr, 0, false, "F5" },
+    { MenuItemKind::Normal, kCmdExecuteManageSaved,          &Label::RunManageSaved,           "run.manageSaved" },
     { MenuItemKind::Separator },
     { MenuItemKind::Normal, kCmdExecuteValidateShortcutsXml, &Label::RunValidateShortcutsXml,  "run.validateShortcutsXml" },
 };

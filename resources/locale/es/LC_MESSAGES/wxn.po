@@ -3306,3 +3306,39 @@ msgstr "Tema \"%s\" guardado"
 
 msgid "Plugin commands"
 msgstr "Comandos de complementos"
+
+msgid "Save..."
+msgstr "Guardar..."
+
+msgid "Delete"
+msgstr "Eliminar"
+
+msgid "Rename..."
+msgstr "Cambiar nombre..."
+
+msgid "Command:"
+msgstr "Comando:"
+
+msgid "Manage Saved Commands..."
+msgstr "Administrar comandos guardados..."
+
+msgid "Run commands"
+msgstr "Comandos de ejecución"
+
+msgid "Saved Run commands"
+msgstr "Comandos de ejecución guardados"
+
+msgid "Save Run command"
+msgstr "Guardar comando de ejecución"
+
+msgid "Saved Run command \"%s\""
+msgstr "Comando de ejecución \"%s\" guardado"
+
+msgid "The saved Run command list is full (%d)."
+msgstr "La lista de comandos de ejecución guardados está llena (%d)."
+
+msgid "No saved Run commands yet. Use Run... and press Save to name one."
+msgstr "Aún no hay comandos de ejecución guardados. Use Ejecutar... y pulse Guardar para dar nombre a uno."
+
+msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "runcommands.dat fue escrito por una versión más reciente de wxNote, por lo que aquí es de sólo lectura."
