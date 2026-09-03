@@ -3306,3 +3306,87 @@ msgstr "テーマ「%s」を保存しました"
 
 msgid "Plugin commands"
 msgstr "プラグインコマンド"
+
+msgid "Plugins"
+msgstr "プラグイン"
+
+msgid "Plugin"
+msgstr "プラグイン"
+
+msgid "Version"
+msgstr "バージョン"
+
+msgid "Status"
+msgstr "状態"
+
+msgid "Bundled"
+msgstr "同梱"
+
+msgid "Enable"
+msgstr "有効化"
+
+msgid "Disable"
+msgstr "無効化"
+
+msgid "Disabled"
+msgstr "無効"
+
+msgid "Uninstall"
+msgstr "アンインストール"
+
+msgid "Loaded"
+msgstr "読み込み済み"
+
+msgid "Not loaded"
+msgstr "未読み込み"
+
+msgid "Could not be opened"
+msgstr "開けませんでした"
+
+msgid "Not a plugin (no entry point)"
+msgstr "プラグインではありません (エントリポイントなし)"
+
+msgid "The plugin declined to start"
+msgstr "プラグインが起動を拒否しました"
+
+msgid "Built for a different plugin ABI"
+msgstr "別のプラグイン ABI 用にビルドされています"
+
+msgid "Needs a newer version of wxNote"
+msgstr "より新しいバージョンの wxNote が必要です"
+
+msgid "Will be enabled"
+msgstr "有効化されます"
+
+msgid "Will be disabled"
+msgstr "無効化されます"
+
+msgid "Will be uninstalled"
+msgstr "アンインストールされます"
+
+msgid "No plugins found."
+msgstr "プラグインが見つかりません。"
+
+msgid "(no id)"
+msgstr "(ID なし)"
+
+msgid "Manage Plugins..."
+msgstr "プラグインの管理..."
+
+msgid "Plugin ABI %u.%u"
+msgstr "プラグイン ABI %u.%u"
+
+msgid "Bundled plugins can be disabled but not uninstalled."
+msgstr "同梱プラグインは無効化できますが、アンインストールはできません。"
+
+msgid "%d pending change(s) - they take effect when wxNote restarts."
+msgstr "保留中の変更が %d 件あります - wxNote の再起動時に適用されます。"
+
+msgid "Apply the pending plugin changes and restart wxNote now?"
+msgstr "保留中のプラグインの変更を適用して、wxNote を今すぐ再起動しますか?"
+
+msgid "Plugin changes will take effect when wxNote restarts"
+msgstr "プラグインの変更は wxNote の再起動時に適用されます"
+
+msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "plugins.dat はより新しいバージョンの wxNote で作成されているため、ここでは読み取り専用です。"

@@ -2562,12 +2562,118 @@ static int nibCopyUtf8(const std::string& s, char* b, int c)
 // plugins and Import plugin(s) land here instead. Free-function shape because loadNibPlugins() is
 // one too; the path comes through g_nibUserDataDir - the same sandbox-aware seam every plugin
 // already reads - so --sandbox (and the selftest) cover this dir with no extra plumbing.
-static wxString nibUserPluginDir()
+// The user data dir as the free functions here see it - through the same sandbox-aware g_nibUserDataDir
+// hook every plugin reads, so --sandbox covers these files with no extra plumbing. Free-function shape
+// because loadNibPlugins() and the plugin-state file below both run before/outside the frame.
+static wxString nibUserDataRoot()
 {
     char b[2048];
     const int n = g_nibUserDataDir ? g_nibUserDataDir(b, static_cast<int>(sizeof(b))) : 0;
     if (n <= 0 || n >= static_cast<int>(sizeof(b))) return wxString();
-    return wxString::FromUTF8(b) + wxFILE_SEP_PATH + "nib";
+    return wxString::FromUTF8(b);
+}
+static wxString nibUserPluginDir()
+{
+    const wxString root = nibUserDataRoot();
+    return root.empty() ? wxString() : root + wxFILE_SEP_PATH + "nib";
+}
+
+// ---- plugin state: which plugins the user switched off, and which are queued for removal ----------
+// Two lists, both keyed by lowercased file name (see g_nibDisabledFiles for why not by plugin id):
+//   D <file>  disabled - found, listed, deliberately not loaded
+//   U <file>  queued for uninstall - deleted at the NEXT startup, before anything is loaded
+// Uninstall is queued rather than immediate because the file is mapped into this process the moment it
+// loaded: Windows refuses to delete it outright, and POSIX would unlink a library still in use. This is
+// the same "scheduled operations, applied on restart" model Visual Studio uses, and the reason the
+// dialog talks about pending changes rather than pretending the work happened.
+static std::set<std::string> g_nibPendingUninstall;
+
+static wxString wxnSerializePluginState(const std::set<std::string>& disabled,
+                                        const std::set<std::string>& uninstall)
+{
+    wxString out; out << "wxn-plugins 1\n";
+    for (const std::string& f : disabled)  out << "D " << wxString::FromUTF8(f) << "\n";
+    for (const std::string& f : uninstall) out << "U " << wxString::FromUTF8(f) << "\n";
+    return out;
+}
+// False for a newer format version: the caller must then leave the file alone rather than rewrite it,
+// the same rule macros.dat and runcommands.dat follow. File names may contain spaces, so the payload is
+// the rest of the line, not the next whitespace-delimited token.
+static bool wxnParsePluginState(const wxString& text, std::set<std::string>& disabled,
+                                std::set<std::string>& uninstall)
+{
+    disabled.clear(); uninstall.clear();
+    wxStringTokenizer lines(text, "\n", wxTOKEN_STRTOK);
+    while (lines.HasMoreTokens())
+    {
+        wxString line = lines.GetNextToken(); line.Trim(true);
+        if (line.StartsWith("wxn-plugins"))
+        {
+            long v = 0;
+            if (line.Mid(11).Trim(false).ToLong(&v) && v > 1) { disabled.clear(); uninstall.clear(); return false; }
+            continue;
+        }
+        if (line.length() < 3) continue;
+        const wxString payload = line.Mid(2).Trim(false).Lower();
+        if (payload.empty()) continue;
+        if      (line[0] == 'D') disabled.insert(std::string(payload.utf8_str()));
+        else if (line[0] == 'U') uninstall.insert(std::string(payload.utf8_str()));
+    }
+    return true;
+}
+
+static bool g_nibStateReadOnly = false;   // plugins.dat is a newer format version -> never overwrite it
+static wxString nibPluginStatePath()
+{
+    const wxString root = nibUserDataRoot();
+    return root.empty() ? wxString() : root + wxFILE_SEP_PATH + "plugins.dat";
+}
+static void loadNibPluginState()
+{
+    g_nibDisabledFiles.clear(); g_nibPendingUninstall.clear(); g_nibStateReadOnly = false;
+    wxLogNull noLog;
+    const wxString p = nibPluginStatePath();
+    if (p.empty() || !wxFileExists(p)) return;
+    wxFile f(p); wxString raw;
+    if (!f.IsOpened() || !f.ReadAll(&raw, wxConvUTF8)) return;
+    if (!wxnParsePluginState(raw, g_nibDisabledFiles, g_nibPendingUninstall)) g_nibStateReadOnly = true;
+}
+static void saveNibPluginState()
+{
+    if (g_nibStateReadOnly) return;
+    wxLogNull noLog;
+    const wxString root = nibUserDataRoot();
+    if (root.empty()) return;
+    if (!wxDirExists(root)) wxFileName::Mkdir(root, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+    const wxScopedCharBuffer u = wxnSerializePluginState(g_nibDisabledFiles, g_nibPendingUninstall).utf8_str();
+    wxnWriteFileAtomic(nibPluginStatePath(), u.data(), u.length());
+}
+// Delete anything queued for removal, BEFORE the loader maps any of it - that ordering is the whole
+// point of queueing. Only the user's own plugin dir is touched: <exe>/nib is not user-writable on an
+// installed build, so a bundled plugin can be disabled but never uninstalled, and the dialog offers
+// exactly that. An entry whose file is already gone is dropped (the job is done); one whose delete
+// FAILS stays queued and is retried next launch rather than being silently forgotten.
+static void applyPendingPluginUninstalls()
+{
+    if (g_nibPendingUninstall.empty()) return;
+    wxLogNull noLog;
+    const wxString dir = nibUserPluginDir();
+    std::set<std::string> stillQueued;
+    for (const std::string& want : g_nibPendingUninstall)
+    {
+        const wxString lower = wxString::FromUTF8(want);
+        wxString onDisk;
+        if (!dir.empty() && wxDirExists(dir))
+        {
+            wxDir d(dir); wxString f;
+            for (bool more = d.GetFirst(&f, wxEmptyString, wxDIR_FILES); more; more = d.GetNext(&f))
+                if (f.Lower() == lower) { onDisk = f; break; }
+        }
+        if (onDisk.empty()) continue;                                   // already gone: nothing to do
+        if (!wxRemoveFile(dir + wxFILE_SEP_PATH + onDisk)) stillQueued.insert(want);
+    }
+    g_nibPendingUninstall = std::move(stillQueued);
+    saveNibPluginState();
 }
 
 // Load Nib plugins via wxDynamicLibrary (portable: .dll / .so / .dylib) - from <exe>/nib/ first
@@ -3719,6 +3825,11 @@ public:
             }
             m_nibToolIds.clear();
         };
+        // Read the user's plugin state and act on it BEFORE the loader maps anything: the disabled set
+        // decides what loadNibPlugins skips, and a queued uninstall can only delete a file that is not
+        // yet mapped into this process.
+        loadNibPluginState();
+        applyPendingPluginUninstalls();
         if (!g_safeMode)    // --safe: load nothing from <exe>/nib - our own Nib plugins AND the GPL npp-bridge
             loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
         if (!g_nibCommands.empty())   // surface registered Nib commands in the Plugins menu
@@ -13720,6 +13831,188 @@ private:
         else
         { setStatus(0, wxString::Format(_("Imported %d plugin(s) - restart to load them"), n)); m_hint = true; }
     }
+
+    // ----- Extensions > Manage Plugins... (the Plugins Admin "Installed" surface) --------------------
+    // Deliberately Installed-only for now. Available/Updates need a catalog, a network fetch and a
+    // signed index; this needs none of the three, so it ships on its own and is useful to anyone who has
+    // ever dropped a plugin into the folder by hand. See docs/PLUGINS_ADMIN_DESIGN.md.
+    //
+    // Every operation is QUEUED and applied on restart, following Visual Studio's scheduled-operations
+    // model, because the alternative is not available to us: a plugin that is loaded is mapped into this
+    // process, so it cannot be deleted, and unloading one live is what the npp_bridge shutdown crash was
+    // about. Queue-and-restart is one honest mechanism rather than enable-now / uninstall-later.
+    enum class PluginOp { None, Enable, Disable, Uninstall };
+    static wxString nibStatusText(const NibPluginInfo& p)
+    {
+        switch (p.fail)
+        {
+            case NibFail::Disabled:   return _("Disabled");
+            case NibFail::OpenFailed: return _("Could not be opened");
+            case NibFail::NoEntry:    return _("Not a plugin (no entry point)");
+            case NibFail::NoApi:      return _("The plugin declined to start");
+            case NibFail::AbiMajor:   return _("Built for a different plugin ABI");
+            case NibFail::AbiMinor:   return _("Needs a newer version of wxNote");
+            default:                  return p.loaded ? _("Loaded") : _("Not loaded");
+        }
+    }
+    void managePlugins()
+    {
+        std::map<std::string, PluginOp> pend;   // keyed by lowercased file name, like every plugin set
+        auto keyOf = [](const NibPluginInfo& p) { return std::string(wxString::FromUTF8(p.file).Lower().utf8_str()); };
+        auto opFor = [&](const NibPluginInfo& p) {
+            auto it = pend.find(keyOf(p)); return it == pend.end() ? PluginOp::None : it->second; };
+        // What the row WILL be once the pending changes are applied - what the checkbox has to show, or
+        // ticking a box would appear to do nothing until the restart.
+        auto willBeDisabled = [&](const NibPluginInfo& p) {
+            switch (opFor(p)) { case PluginOp::Enable:  return false;
+                                case PluginOp::Disable: return true;
+                                default: return p.fail == NibFail::Disabled; } };
+
+        wxDialog dlg(this, wxID_ANY, _("Plugins"), wxDefaultPosition, wxDefaultSize,
+                     wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+        auto* list = new wxListCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxSize(620, 260),
+                                    wxLC_REPORT | wxLC_SINGLE_SEL);
+        list->AppendColumn(_("Plugin"),  wxLIST_FORMAT_LEFT, 240);
+        list->AppendColumn(_("Version"), wxLIST_FORMAT_LEFT, 80);
+        list->AppendColumn(_("Status"),  wxLIST_FORMAT_LEFT, 200);
+        list->AppendColumn(_("Source"),  wxLIST_FORMAT_LEFT, 90);
+        auto* detail  = new wxStaticText(&dlg, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 56));
+        auto* pending = new wxStaticText(&dlg, wxID_ANY, "");
+        auto* btnToggle    = new wxButton(&dlg, wxID_ANY, _("Disable"));
+        auto* btnUninstall = new wxButton(&dlg, wxID_ANY, _("Uninstall"));
+
+        auto fill = [&]{
+            list->DeleteAllItems();
+            for (size_t i = 0; i < g_nibPlugins.size(); ++i)
+            {
+                const NibPluginInfo& p = g_nibPlugins[i];
+                const wxString shown = !p.name.empty()  ? wxString::FromUTF8(p.name)
+                                     : !p.id.empty()    ? wxString::FromUTF8(p.id)
+                                                        : wxString::FromUTF8(p.file);
+                const long row = list->InsertItem((long)i, shown);
+                list->SetItem(row, 1, wxString::FromUTF8(p.version));
+                // The pending op wins the Status cell: it is the answer to "what did my click do?".
+                wxString status;
+                switch (opFor(p))
+                {
+                    case PluginOp::Enable:    status = _("Will be enabled");     break;
+                    case PluginOp::Disable:   status = _("Will be disabled");    break;
+                    case PluginOp::Uninstall: status = _("Will be uninstalled"); break;
+                    default:                  status = nibStatusText(p);         break;
+                }
+                list->SetItem(row, 2, status);
+                list->SetItem(row, 3, p.bundled ? _("Bundled") : _("User"));
+                list->SetItemData(row, (long)i);
+                if (opFor(p) != PluginOp::None)      list->SetItemTextColour(row, wxColour(0x4A, 0x90, 0xD9));
+                else if (p.fail == NibFail::Disabled) list->SetItemTextColour(row, wxColour(0x88, 0x88, 0x88));
+                else if (!p.loaded)                   list->SetItemTextColour(row, wxColour(0xE0, 0x40, 0x40));
+            }
+        };
+        auto selected = [&]() -> const NibPluginInfo* {
+            const long r = list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+            if (r < 0) return nullptr;
+            const size_t i = (size_t)list->GetItemData(r);
+            return i < g_nibPlugins.size() ? &g_nibPlugins[i] : nullptr;
+        };
+        auto refreshButtons = [&]{
+            const NibPluginInfo* p = selected();
+            btnToggle->Enable(p != nullptr);
+            // Bundled plugins live in <exe>/nib, which an installed build cannot write - so they can be
+            // switched off but never removed. Saying so beats a button that fails.
+            btnUninstall->Enable(p && !p->bundled);
+            if (p) btnToggle->SetLabel(willBeDisabled(*p) ? _("Enable") : _("Disable"));
+            wxString d;
+            if (p)
+            {
+                d << (p->id.empty() ? _("(no id)") : wxString::FromUTF8(p->id)) << "\n"
+                  << wxString::FromUTF8(p->file) << "  -  " << wxString::FromUTF8(p->dir);
+                if (p->abi) d << "\n" << wxString::Format(_("Plugin ABI %u.%u"), p->abi >> 16, p->abi & 0xFFFFu);
+                if (p->bundled) d << "    " << _("Bundled plugins can be disabled but not uninstalled.");
+            }
+            detail->SetLabel(d);
+            int n = 0; for (const auto& kv : pend) if (kv.second != PluginOp::None) ++n;
+            pending->SetLabel(n == 0 ? wxString()
+                                     : wxString::Format(_("%d pending change(s) - they take effect when wxNote restarts."), n));
+        };
+        auto setOp = [&](PluginOp op) {
+            const NibPluginInfo* p = selected(); if (!p) return;
+            const long r = list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+            // Choosing the state the plugin is already in cancels the pending op rather than recording a
+            // no-op, so the pending count only ever counts real changes.
+            const bool alreadyDisabled = (p->fail == NibFail::Disabled);
+            if ((op == PluginOp::Disable && alreadyDisabled) || (op == PluginOp::Enable && !alreadyDisabled))
+                pend.erase(keyOf(*p));
+            else
+                pend[keyOf(*p)] = op;
+            fill();
+            if (r >= 0 && r < list->GetItemCount())
+                list->SetItemState(r, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED,
+                                      wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
+            refreshButtons();
+        };
+        btnToggle->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            const NibPluginInfo* p = selected(); if (!p) return;
+            setOp(willBeDisabled(*p) ? PluginOp::Enable : PluginOp::Disable); });
+        btnUninstall->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){ setOp(PluginOp::Uninstall); });
+        list->Bind(wxEVT_LIST_ITEM_SELECTED,   [&](wxListEvent&){ refreshButtons(); });
+        list->Bind(wxEVT_LIST_ITEM_DESELECTED, [&](wxListEvent&){ refreshButtons(); });
+
+        auto* side = new wxBoxSizer(wxVERTICAL);
+        side->Add(btnToggle, 0, wxEXPAND | wxBOTTOM, 6); side->Add(btnUninstall, 0, wxEXPAND);
+        auto* mid = new wxBoxSizer(wxHORIZONTAL);
+        mid->Add(list, 1, wxEXPAND | wxRIGHT, 10); mid->Add(side, 0);
+        auto* btn = new wxBoxSizer(wxHORIZONTAL);
+        btn->Add(pending, 1, wxALIGN_CENTRE_VERTICAL);
+        btn->Add(new wxButton(&dlg, wxID_OK, _("OK")), 0, wxRIGHT, 6);
+        btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
+        auto* top = new wxBoxSizer(wxVERTICAL);
+        if (g_nibPlugins.empty())
+            top->Add(new wxStaticText(&dlg, wxID_ANY, _("No plugins found.")), 0, wxALL, 12);
+        top->Add(mid, 1, wxEXPAND | wxALL, 12);
+        top->Add(detail, 0, wxEXPAND | wxLEFT | wxRIGHT, 12);
+        top->Add(btn, 0, wxEXPAND | wxALL, 12);
+        dlg.SetSizerAndFit(top); dlg.CentreOnParent();
+        fill(); refreshButtons();
+        themeDialog(&dlg);
+#ifdef __WXMSW__
+        // The report-mode header is a SysHeader32 child of the list and is NOT reached by themeDialog's
+        // recursive pass, so in dark mode it renders as a white band across the top. Same fix, and same
+        // ordering requirement, as the Shortcut Mapper's darkenGridHeaderMSW(): it has to run AFTER
+        // themeDialog, or that pass's blanket Explorer theme overwrites it.
+        if (m_dark)
+            if (HWND hdr = ::FindWindowExW(static_cast<HWND>(list->GetHandle()), nullptr, L"SysHeader32", nullptr))
+                ::SetWindowTheme(hdr, L"DarkMode_ItemsView", nullptr);
+#endif
+        if (dlg.ShowModal() != wxID_OK || pend.empty()) return;
+
+        if (g_nibStateReadOnly)
+        {
+            wxMessageBox(_("plugins.dat was written by a newer version of wxNote, so it is read-only here."),
+                         _("Plugins"), wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+        for (const auto& kv : pend)
+        {
+            switch (kv.second)
+            {
+                case PluginOp::Enable:    g_nibDisabledFiles.erase(kv.first);     break;
+                case PluginOp::Disable:   g_nibDisabledFiles.insert(kv.first);    break;
+                // An uninstall also drops any disabled flag: the file is going away, and leaving a
+                // stale entry behind would silently disable a plugin of the same name reinstalled later.
+                case PluginOp::Uninstall: g_nibDisabledFiles.erase(kv.first);
+                                          g_nibPendingUninstall.insert(kv.first); break;
+                default: break;
+            }
+        }
+        saveNibPluginState();
+        // restartWithTheme() is the project's one clean-relaunch path (save prompts, session save,
+        // relaunch); the name is historical - importPlugin() already reuses it for exactly this.
+        if (wxMessageBox(_("Apply the pending plugin changes and restart wxNote now?"),
+                         _("Plugins"), wxYES_NO | wxICON_QUESTION, this) == wxYES)
+            restartWithTheme();
+        else
+        { setStatus(0, _("Plugin changes will take effect when wxNote restarts")); m_hint = true; }
+    }
     void applyEditorTheme(bool dark)
     {
         if (m_theme.loaded)
@@ -14866,6 +15159,7 @@ private:
             case kCmdLangstyleConfigDlg: onStyleConfig(); break;
             case kCmdSettingImportPlugin: importPlugin(); break;
             case kCmdSettingImportStyleThemes: importStyleTheme(); break;
+            case kCmdSettingPluginadm: managePlugins(); break;
             case kCmdSettingOpenPluginsDir: {
                 // Open the one folder where dropping a plugin file WORKS on every build shape:
                 // <userDataDir>/nib, scanned by loadNibPlugins() after <exe>/nib. The old target was

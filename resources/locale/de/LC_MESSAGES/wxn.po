@@ -3306,3 +3306,87 @@ msgstr "Thema \"%s\" gespeichert"
 
 msgid "Plugin commands"
 msgstr "Plugin-Befehle"
+
+msgid "Plugins"
+msgstr "Plugins"
+
+msgid "Plugin"
+msgstr "Plugin"
+
+msgid "Version"
+msgstr "Version"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Bundled"
+msgstr "Mitgeliefert"
+
+msgid "Enable"
+msgstr "Aktivieren"
+
+msgid "Disable"
+msgstr "Deaktivieren"
+
+msgid "Disabled"
+msgstr "Deaktiviert"
+
+msgid "Uninstall"
+msgstr "Deinstallieren"
+
+msgid "Loaded"
+msgstr "Geladen"
+
+msgid "Not loaded"
+msgstr "Nicht geladen"
+
+msgid "Could not be opened"
+msgstr "Konnte nicht geöffnet werden"
+
+msgid "Not a plugin (no entry point)"
+msgstr "Kein Plugin (kein Einstiegspunkt)"
+
+msgid "The plugin declined to start"
+msgstr "Das Plugin hat den Start abgelehnt"
+
+msgid "Built for a different plugin ABI"
+msgstr "Für eine andere Plugin-ABI gebaut"
+
+msgid "Needs a newer version of wxNote"
+msgstr "Erfordert eine neuere wxNote-Version"
+
+msgid "Will be enabled"
+msgstr "Wird aktiviert"
+
+msgid "Will be disabled"
+msgstr "Wird deaktiviert"
+
+msgid "Will be uninstalled"
+msgstr "Wird deinstalliert"
+
+msgid "No plugins found."
+msgstr "Keine Plugins gefunden."
+
+msgid "(no id)"
+msgstr "(keine ID)"
+
+msgid "Manage Plugins..."
+msgstr "Plugins verwalten..."
+
+msgid "Plugin ABI %u.%u"
+msgstr "Plugin-ABI %u.%u"
+
+msgid "Bundled plugins can be disabled but not uninstalled."
+msgstr "Mitgelieferte Plugins können deaktiviert, aber nicht deinstalliert werden."
+
+msgid "%d pending change(s) - they take effect when wxNote restarts."
+msgstr "%d ausstehende Änderung(en) - sie werden nach einem Neustart von wxNote wirksam."
+
+msgid "Apply the pending plugin changes and restart wxNote now?"
+msgstr "Ausstehende Plugin-Änderungen anwenden und wxNote jetzt neu starten?"
+
+msgid "Plugin changes will take effect when wxNote restarts"
+msgstr "Plugin-Änderungen werden nach einem Neustart von wxNote wirksam"
+
+msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "plugins.dat wurde von einer neueren wxNote-Version geschrieben und ist hier schreibgeschützt."

@@ -3306,3 +3306,87 @@ msgstr "테마 \"%s\" 저장됨"
 
 msgid "Plugin commands"
 msgstr "플러그인 명령"
+
+msgid "Plugins"
+msgstr "플러그인"
+
+msgid "Plugin"
+msgstr "플러그인"
+
+msgid "Version"
+msgstr "버전"
+
+msgid "Status"
+msgstr "상태"
+
+msgid "Bundled"
+msgstr "기본 제공"
+
+msgid "Enable"
+msgstr "사용"
+
+msgid "Disable"
+msgstr "사용 안 함"
+
+msgid "Disabled"
+msgstr "사용 안 함"
+
+msgid "Uninstall"
+msgstr "제거"
+
+msgid "Loaded"
+msgstr "로드됨"
+
+msgid "Not loaded"
+msgstr "로드되지 않음"
+
+msgid "Could not be opened"
+msgstr "열 수 없음"
+
+msgid "Not a plugin (no entry point)"
+msgstr "플러그인이 아님 (진입점 없음)"
+
+msgid "The plugin declined to start"
+msgstr "플러그인이 시작을 거부했습니다"
+
+msgid "Built for a different plugin ABI"
+msgstr "다른 플러그인 ABI용으로 빌드됨"
+
+msgid "Needs a newer version of wxNote"
+msgstr "더 새로운 버전의 wxNote가 필요합니다"
+
+msgid "Will be enabled"
+msgstr "사용하도록 설정됩니다"
+
+msgid "Will be disabled"
+msgstr "사용하지 않도록 설정됩니다"
+
+msgid "Will be uninstalled"
+msgstr "제거됩니다"
+
+msgid "No plugins found."
+msgstr "플러그인을 찾을 수 없습니다."
+
+msgid "(no id)"
+msgstr "(id 없음)"
+
+msgid "Manage Plugins..."
+msgstr "플러그인 관리..."
+
+msgid "Plugin ABI %u.%u"
+msgstr "플러그인 ABI %u.%u"
+
+msgid "Bundled plugins can be disabled but not uninstalled."
+msgstr "기본 제공 플러그인은 사용하지 않도록 설정할 수 있지만 제거할 수는 없습니다."
+
+msgid "%d pending change(s) - they take effect when wxNote restarts."
+msgstr "보류 중인 변경 사항 %d개 - wxNote를 다시 시작하면 적용됩니다."
+
+msgid "Apply the pending plugin changes and restart wxNote now?"
+msgstr "보류 중인 플러그인 변경 사항을 적용하고 wxNote를 지금 다시 시작하시겠습니까?"
+
+msgid "Plugin changes will take effect when wxNote restarts"
+msgstr "플러그인 변경 사항은 wxNote를 다시 시작하면 적용됩니다"
+
+msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "plugins.dat가 더 새 버전의 wxNote에서 작성되어 여기서는 읽기 전용입니다."

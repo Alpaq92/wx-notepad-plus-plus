@@ -350,6 +350,37 @@ int main(int argc, char** argv)
         check(!names(commented, "cpp", shortMask).empty(), "prose mask: a size mismatch falls back, not silently mis-masks");
     }
 
+    // ---- plugin state (plugins.dat): disabled + queued-for-uninstall round-trip -------------------
+    {
+        std::set<std::string> dis, uni, d2, u2;
+        dis.insert("udl_compat.dll");
+        dis.insert("my plugin with spaces.dll");   // file names may contain spaces: the payload is the
+        uni.insert("old_thing.dll");               // rest of the line, not the next token
+        check(wxnParsePluginState(wxnSerializePluginState(dis, uni), d2, u2),
+              "plugins.dat: current format version parses");
+        check(d2 == dis, "plugins.dat: the disabled set round-trips, spaces in file names included");
+        check(u2 == uni, "plugins.dat: the queued-uninstall set round-trips");
+
+        // Keys are compared lowercased everywhere (nibIsDisabled lowercases before lookup), so a file
+        // recorded in mixed case must come back lowercased or a disable would silently stop matching.
+        std::set<std::string> mixed, back, none2;
+        mixed.insert("MiXeD.DLL");
+        wxnParsePluginState("wxn-plugins 1\nD MiXeD.DLL\n", back, none2);
+        check(back.size() == 1 && *back.begin() == "mixed.dll", "plugins.dat: keys normalise to lowercase");
+
+        // A newer format version is refused outright rather than partly read - the caller then leaves
+        // the file alone instead of rewriting it and dropping what it could not represent.
+        std::set<std::string> a, b;
+        check(!wxnParsePluginState("wxn-plugins 2\nD x.dll\n", a, b), "plugins.dat: a newer version is refused");
+        check(a.empty() && b.empty(), "plugins.dat: ... and yields nothing rather than a partial set");
+
+        // Junk is skipped, and an unknown leading tag contributes nothing.
+        std::set<std::string> c, d;
+        check(wxnParsePluginState("wxn-plugins 1\nnonsense\nX y.dll\nD ok.dll\n", c, d),
+              "plugins.dat: junk and unknown tags are skipped");
+        check(c.size() == 1 && *c.begin() == "ok.dll" && d.empty(), "plugins.dat: ... leaving only the valid row");
+    }
+
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
