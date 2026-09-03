@@ -3,9 +3,21 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.18.0] - 2026-09-03
 
 ### Added
+- **Style Configurator: per-style fonts, and custom languages finally follow the theme.** Each style
+  can now carry its own font name, size and weight alongside fg/bg and bold/italic. Scintillua-lexed
+  (custom / UDL) languages get a `genericLangDef` entry derived from each theme's own C++ styles, so
+  they are themed instead of drawing from one fixed palette - this works for third-party Notepad++
+  themes too, not just the bundled ones.
+- **Style Configurator: Save As... and Revert changes.** Save As writes a copy of the active theme
+  into your user data folder, which is the only theme folder an installed build can write - so edits
+  to a bundled theme can now be kept. Revert drops the session's edits without closing the dialog.
+- **Shortcut Mapper: plugin commands are bindable.** Commands registered by plugins appear under a new
+  **Show: Plugin commands** category and can be given a shortcut. Bindings are keyed on the plugin's
+  own command id, so installing or removing a plugin never repoints an existing binding at a
+  different command.
 - **A user-writable plugin folder.** Plugins now also load from the per-user data directory
   (`nib/` under it), not just the install directory — which is read-only on installed builds
   (Program Files, `/opt`, the `.app` bundle), so drop-in plugins simply did not work there.
@@ -13,6 +25,21 @@ All notable changes to wxNote are documented here. Format loosely follows
   it. A plugin present in both places loads once, from the install directory.
 
 ### Fixed
+- **Style Configurator no longer damages theme files.** Editing one style rewrote all 49,507
+  `WordsStyle` elements in the file; ticking Bold wrote the colour pickers' black/white placeholders
+  out as real `fgColor`/`bgColor` onto styles that had none; and every `fontStyle` bit above
+  bold|italic was zeroed, losing the underline flag on 167 shipped styles. Only edited styles are
+  written now, and unknown bits are preserved. A save that cannot write its file also reports the
+  failure instead of claiming success.
+- **Underline now renders.** The flag was read from the theme and written back all along, but never
+  applied, so 167 styles across the 28 bundled themes were authored underlined and drew plain.
+- **Style Configurator sizing.** The dialog is sized from its contents rather than a fixed width,
+  which was clipping the font-name control in some translations, and long style names are no longer
+  cut off.
+- **Function List: braces inside strings and comments no longer break nesting.** Comment and string
+  regions are now identified by the lexer already highlighting the file rather than by a per-language
+  regex, so a construct no pattern covered - a multi-line raw string, a nested or doc comment - can no
+  longer be mistaken for real nesting and swallow the rest of the file into one symbol.
 - **Import plugin(s)** failed silently on installed builds (the copy into the read-only install
   directory failed with no message). Failures now name the folder that could not be written.
 - macOS: the Import dialog only accepted `.dylib`, but the plugins this project builds are `.so` —
