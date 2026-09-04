@@ -13988,14 +13988,24 @@ private:
         mid->Add(edBox, 1, wxEXPAND);
         auto* btnSaveAs = new wxButton(&dlg, wxID_ANY, _("Save As..."));
         auto* btnRevert = new wxButton(&dlg, wxID_ANY, _("Revert changes"));
+        // The counterpart to Save As..., and the only way to undo it. A user copy SHADOWS a bundled theme
+        // of the same name (themeFilePath prefers it), so without this a Save As... over "Zenburn" made
+        // the bundled Zenburn permanently unreachable from inside the app - the file had to be deleted by
+        // hand. Enabled only when the selected theme actually has a user copy to remove.
+        auto* btnDelete = new wxButton(&dlg, wxID_ANY, _("Delete user copy"));
+        // Defined here, above every Bind, so the theme-combo handler further down can call it too.
+        // Only a USER copy can be deleted; a bundled theme lives next to the exe and is not ours to remove.
+        auto userCopyPath = [this]{ return userThemeDir() + wxFILE_SEP_PATH + resolvedThemeName() + ".xml"; };
+        auto syncDeleteButton = [&]{ btnDelete->Enable(wxFileExists(userCopyPath())); };
         auto* btn = new wxBoxSizer(wxHORIZONTAL);
-        btn->Add(btnSaveAs, 0, wxRIGHT, 6); btn->Add(btnRevert, 0); btn->AddStretchSpacer();
+        btn->Add(btnSaveAs, 0, wxRIGHT, 6); btn->Add(btnDelete, 0, wxRIGHT, 6); btn->Add(btnRevert, 0); btn->AddStretchSpacer();
         btn->Add(new wxButton(&dlg, wxID_OK, _("Save && Close")), 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL);
         top->Add(themeRow, 0, wxALL, 12); top->Add(mid, 1, wxEXPAND | wxLEFT | wxRIGHT, 12); top->Add(btn, 0, wxEXPAND | wxALL, 12);
         eg->AddGrowableCol(1, 1);   // the font-name combo takes any width the dialog gains
         dlg.SetSizerAndFit(top);
         dlg.CentreOnParent();
+        syncDeleteButton();   // the theme the dialog opens on may already have a user copy
         auto fillLangs = [&]{ langList->Clear(); langList->Append(kGlobalStyles); for (auto& kv : m_theme.lexers) langList->Append(kv.first); };
         auto fillStyles = [&]{
             styleList->Clear(); const wxString lang = langList->GetStringSelection();
@@ -14085,7 +14095,7 @@ private:
             applyThemeSelection(themeCombo->GetStringSelection());
             m_styleEdited.clear(); m_globalEdited.clear();
             themeCombo->SetStringSelection(resolvedThemeName());
-            fillLangs(); langList->SetSelection(0); fillStyles(); });
+            fillLangs(); langList->SetSelection(0); fillStyles(); syncDeleteButton(); });
         // Both buttons below rebuild the lists, so put the user back where they were rather than
         // bouncing them to Global Styles - the point of Revert is to keep experimenting on one style.
         auto refillKeepingSelection = [&]{
@@ -14140,7 +14150,36 @@ private:
             m_styleEdited.clear(); m_globalEdited.clear();
             m_themeName = name; original = name; saveSettings();
             themeCombo->Set(availableThemes()); themeCombo->SetStringSelection(resolvedThemeName());
+            syncDeleteButton();
             setStatus(0, wxString::Format(_("Saved theme \"%s\""), name)); m_hint = true; });
+        btnDelete->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            const wxString name = resolvedThemeName();
+            const wxString path = userCopyPath();
+            if (!wxFileExists(path)) return;
+            // Whether a bundled theme of the same name is waiting underneath decides what this DOES:
+            // reveal it again, or remove the theme outright. Say which, because they are different acts.
+            const wxString shipped = wxPathOnly(wxStandardPaths::Get().GetExecutablePath())
+                                   + wxFILE_SEP_PATH + "themes" + wxFILE_SEP_PATH + name + ".xml";
+            const bool revealsBundled = wxFileExists(shipped);
+            if (wxMessageBox(wxString::Format(revealsBundled
+                                 ? _("Delete your copy of \"%s\" and go back to the built-in theme?")
+                                 : _("Delete the theme \"%s\"? This cannot be undone."), name),
+                             kTitle, wxYES_NO | wxICON_QUESTION, &dlg) != wxYES) return;
+            if (!wxRemoveFile(path))
+            {
+                wxMessageBox(wxString::Format(_("Could not write %s"), path), kTitle, wxOK | wxICON_ERROR, &dlg);
+                return;
+            }
+            // Edits pending against the file just deleted are meaningless, so drop them with it.
+            m_styleEdited.clear(); m_globalEdited.clear();
+            // The bundled theme now resolves under the same name; with nothing underneath, fall back to
+            // Default rather than leaving the combo pointing at a theme that no longer exists.
+            applyThemeSelection(revealsBundled ? name : "Default");
+            original = m_themeName;
+            saveSettings();
+            themeCombo->Set(availableThemes()); themeCombo->SetStringSelection(resolvedThemeName());
+            syncDeleteButton(); refillKeepingSelection();
+            setStatus(0, wxString::Format(_("Deleted your copy of \"%s\""), name)); m_hint = true; });
         themeDialog(&dlg);
         if (dlg.ShowModal() == wxID_OK)
         {
@@ -14148,8 +14187,19 @@ private:
             // Only touch the file if something actually changed, and only claim success if the write
             // happened: for the light-mode Default the target is <exeDir>/stylers.model.xml, which an
             // installed build cannot write. That failure used to be discarded and reported as saved.
-            if ((!m_styleEdited.empty() || !m_globalEdited.empty())
-                && saveThemeToXml(themeFilePath(resolvedThemeName()))) { setStatus(0, _("Theme styles saved")); m_hint = true; }
+            if (!m_styleEdited.empty() || !m_globalEdited.empty())
+            {
+                if (saveThemeToXml(themeFilePath(resolvedThemeName()))) { setStatus(0, _("Theme styles saved")); m_hint = true; }
+                // A failed write is almost always the light-mode Default on an installed build: its
+                // target is <exeDir>/stylers.model.xml, which is not user-writable. Reporting the failure
+                // honestly was the previous fix; saying NOTHING still threw the user's edits away with no
+                // explanation and no way forward. Name the escape hatch - Save As... writes to the user
+                // data dir, which is always writable.
+                else wxMessageBox(_("Could not write the theme file.\n\nBuilt-in themes live next to the "
+                                    "program and cannot be modified there. Use \"Save As...\" to keep these "
+                                    "changes as your own copy of the theme."),
+                                  kTitle, wxOK | wxICON_WARNING, this);
+            }
         }
         else applyThemeSelection(original.empty() ? "Default" : original);   // Cancel -> reload the original theme from disk
         m_styleEdited.clear(); m_globalEdited.clear();
@@ -15313,11 +15363,12 @@ private:
             case kCmdSearchPrevBookmark: gotoBookmark(false); break;
             case kCmdSearchClearBookmarks: sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); break;
             // Change History: SCI_SETCHANGEHISTORY was added in upstream Scintilla 5.3.0; wx vendors its
-            // own Scintilla fork (github.com/wxWidgets/scintilla, "wx" branch) at 5.0.0 - confirmed still
-            // true as of the latest wx release (3.3.2, 2026-03) by checking that fork's pinned commit
-            // directly, not just our own currently-built 3.3.1. This isn't a "bump our pinned version"
-            // fix - there is currently no wxWidgets release whose vendored Scintilla is new enough, so
-            // there's nothing to bump TO. Revisit if/when wx's own Scintilla fork catches up upstream.
+            // own Scintilla fork (github.com/wxWidgets/scintilla, "wx" branch) at 5.0.0 - RE-CONFIRMED
+            // 2026-09-03, after wx 3.3.3 shipped (2026-07-07), by reading that fork's own version.txt on
+            // the wx branch: still "500". Checked there rather than in our built 3.3.1 tree, because the
+            // question is what any wx release could give us, not what ours happens to carry. This isn't a
+            // "bump our pinned version" fix - there is still no wxWidgets release whose vendored Scintilla
+            // is new enough, so there is nothing to bump TO. Revisit if that fork catches up upstream.
             case kCmdSearchChangedNext:
             case kCmdSearchChangedPrev:
             case kCmdSearchClearChangeHistory: notImpl(_("Change History (needs a newer Scintilla than this wx build carries)")); break;
