@@ -130,7 +130,8 @@ forward to Phase 1** (see Trust).
   currently used anywhere in the tree, so it is a new dependency on that flag, not something already in
   use. Enforce the same bound on the *uncompressed* total while extracting (zip bombs), alongside the
   per-name `validPathComponent` checks that already reject traversal.
-- A `wxDialog` with Available/Updates/Installed tabs.
+- A `wxDialog` with Available/Updates/Installed tabs. **See the UX survey below** - it revises
+  both the tab set and the build order.
 - **Prerequisite (Phase 0, DONE):** the loader scans a per-user plugins root under `userDataDir()`,
   because installed builds cannot write under Program Files / `/opt` / the `.app` bundle. That rule is
   stated in the `userDataDir()` header comment (`src/main.cpp`, search `wxString userDataDir()`) — there
@@ -231,6 +232,85 @@ UI phase; "leave it blank for now" is not an option the gate permits.
 - Crypto + catalog: `src/sig_verify.h`, `src/plugin_catalog.h`, `src/json_value.h`,
   `third_party/monocypher/`, `tests/plugin_catalog_test.cpp`.
 - Tracking: `docs/MISSING_FUNCTIONALITY.md` (Plugins Admin row), user docs `site/docs/plugins.md` / `site/docs/menus.md`.
+
+## UX survey: eight editors (2026-09)
+
+The July survey compared **distribution and ops**. This one compares **what the user actually touches**,
+across the eight editors worth learning from. Sources are listed at the end of this section.
+
+| Editor | Surface | Install model | Enable/disable without uninstalling | Applied when |
+| --- | --- | --- | --- | --- |
+| **Notepad++** | Modal dialog, **4** tabs: Available / Updates / Installed / **Incompatible** | Checkboxes + one batch **Install** button | "Deactivated" state | External updater (GUP.exe), then restart |
+| **Visual Studio** | Modal "Manage Extensions": Browse / Installed / Updates | Per-item, but **queued**: a "Scheduled For Install / Update / Uninstall" list, plus a **Pending** filter | yes | **On IDE close**, in bulk |
+| **JetBrains** (Rider/IDEA) | Settings page, Marketplace / Installed | Per-item Install, search + detail pane | **Checkbox per plugin**, "Disable all" per category | Restart if prompted; dynamic plugins since 2020.1 avoid it |
+| **VS Code** | Side-bar view, list + detail pane | Per-item Install | yes, first-class | Usually no restart (JS) |
+| **Pulsar** | Settings view, Install / Packages / Updates | Per-item Install, search box | yes | No relaunch (JS) |
+| **Sublime** | **Command palette only** - no GUI at all | `Package Control: Install Package` | via disabled_packages | Usually none (Python) |
+| **TextMate** | Preferences -> Bundles, checkbox list | Checkbox, plus a **just-in-time offer**: opening an unrecognised file type offers to install the bundle for it | checkbox | - |
+| **Notepad4** | **none - no plugin system at all** | - | - | - |
+
+**What each one teaches this project:**
+
+- **Visual Studio is the closest structural match, and the model to copy.** Its scheduled-operations
+  design exists for the reason wxNote has: you cannot modify a binary the process has mapped. This
+  document already reached that conclusion for *uninstall* (Phase C, "a mapped `.dll`/`.so` cannot be
+  deleted in place") but left install as immediate, which is an asymmetry users have to learn. Adopt the
+  whole model instead: every operation queues into one visible **Pending changes** list applied on
+  restart. One honest mechanism beats install-now / uninstall-later.
+- **Notepad++'s `Incompatible` tab beats greying rows.** The plan says "greyed rows for wrong
+  kind/arch/ABI, install button disabled" - a dead end that never says why. wxNote has *more*
+  incompatibility axes than Notepad++ does (kind `nib` vs `npp-bridge`, arch including riscv64, ABI major
+  AND minor, and on Windows the bridge root is not user-writable - D4), so the reason matters more here,
+  not less. Keep the row visible and give it an explicit reason, rather than a silent grey.
+- **JetBrains and TextMate: enable/disable is a separate axis from install, and wxNote has no concept of
+  it.** Today a plugin is either present or deleted. A disabled-list honoured by `loadNibPlugins` is the
+  cheapest possible safety valve: a plugin that crashes or misbehaves gets switched off without a
+  download, a delete, or `--safe`. Notepad++ has it too ("Deactivated").
+- **TextMate's just-in-time offer is the discovery answer**, and worth keeping in view even though it is
+  not MVP: nobody browses a plugin store, but everybody opens a file the editor cannot highlight. That is
+  the moment to offer the plugin that handles it.
+- **Sublime proves the GUI is optional.** wxNote already has a Command Palette; plugin actions should be
+  reachable from it as well as from the dialog. Cheap, and it is the keyboard-first path.
+- **Pulsar's install-without-relaunch is exactly what wxNote cannot copy** - it works because packages are
+  JavaScript. Native `.dll`/`.so` is what forces the restart, and no UX trick removes that.
+- **Notepad4 is the control case, and the most uncomfortable one.** A Scintilla-based, solo-maintained
+  editor with a serious feature set and *no plugin system at all*. It is the honest alternative to
+  shipping a browser with nothing to browse.
+
+### What this changes: build the Installed tab first, and ship it alone
+
+Phase B as written builds Available + Updates + Installed together, against a catalog that does not exist
+(**D10**). The survey inverts that, because the three tabs have completely different prerequisites:
+
+| Tab | Needs a catalog? | Needs network? | Needs signing? | Shippable today? |
+| --- | --- | --- | --- | --- |
+| **Installed** | no | no | no | **yes** |
+| Available | yes | yes | yes | no - blocked on D10 |
+| Updates | yes | yes | yes | no - blocked on D10 |
+
+An **Installed** pane - list what is loaded, with version, kind, ABI, and load-failure reason; enable /
+disable; uninstall on restart - is useful on day one, to every user who has ever dropped a plugin in by
+hand. It needs no catalog, no server, no key, and no network, so it cannot be blocked by D10 and does not
+have to wait for an ecosystem that may never arrive. It also builds the pending-changes plumbing that
+Available and Updates will need, so nothing is thrown away if the catalog does land.
+
+It answers a real complaint that exists **now**: when a plugin fails to load there is currently nowhere to
+see that it failed, or why.
+
+**Recommended order:** Installed (+ enable/disable + pending changes) -> [D10 decision] -> Available ->
+Updates -> just-in-time offers.
+
+Sources: [Notepad++ user manual](https://npp-user-manual.org/docs/plugins/),
+[Notepad++ extension systems](https://deepwiki.com/notepad-plus-plus/notepad-plus-plus/5-extension-systems),
+[Visual Studio extensions](https://learn.microsoft.com/en-us/visualstudio/ide/finding-and-using-visual-studio-extensions?view=visualstudio),
+[VS Extension Manager updates](https://devblogs.microsoft.com/visualstudio/extension-manager-updates-in-visual-studio/),
+[JetBrains Rider plugins](https://www.jetbrains.com/help/rider/Managing_Plugins.html),
+[IntelliJ plugins](https://www.jetbrains.com/help/idea/managing-plugins.html),
+[Package Control usage](https://docs.sublimetext.io/guide/package-control/usage.html),
+[Pulsar packages](https://docs.pulsar-edit.dev/using-pulsar/packages/),
+[TextMate bundles](https://macromates.com/textmate/manual/bundles),
+[TextMate FAQ](https://github.com/textmate/textmate/wiki/FAQ),
+[Notepad4](https://github.com/zufuliu/notepad4).
 
 ## Open decisions (for the maintainer)
 
