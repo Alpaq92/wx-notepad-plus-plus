@@ -3114,8 +3114,8 @@ msgstr "Systemeigen"
 msgid "Windows-style (flat)"
 msgstr "Windows-Stil (flach)"
 
-msgid "Opera-style (rounded)"
-msgstr "Opera-Stil (abgerundet)"
+msgid "Minimal (custom style)"
+msgstr "Minimal (eigener Stil)"
 
 msgid "&Manage Saved Macros..."
 msgstr "Gespeicherte Makros &verwalten..."

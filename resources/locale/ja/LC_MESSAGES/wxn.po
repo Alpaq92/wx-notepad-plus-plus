@@ -3114,8 +3114,8 @@ msgstr "システム標準"
 msgid "Windows-style (flat)"
 msgstr "Windows スタイル（フラット）"
 
-msgid "Opera-style (rounded)"
-msgstr "Opera スタイル（角丸）"
+msgid "Minimal (custom style)"
+msgstr "ミニマル（独自スタイル）"
 
 msgid "&Manage Saved Macros..."
 msgstr "保存したマクロの管理(&M)..."
