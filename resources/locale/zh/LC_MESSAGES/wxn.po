@@ -3342,3 +3342,87 @@ msgstr "尚无已保存的运行命令。请使用“运行...”并点击“保
 
 msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
 msgstr "runcommands.dat 由更新版本的 wxNote 写入，因此在此为只读。"
+
+msgid "Plugins"
+msgstr "插件"
+
+msgid "Plugin"
+msgstr "插件"
+
+msgid "Version"
+msgstr "版本"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Bundled"
+msgstr "内置"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Disable"
+msgstr "禁用"
+
+msgid "Disabled"
+msgstr "已禁用"
+
+msgid "Uninstall"
+msgstr "卸载"
+
+msgid "Loaded"
+msgstr "已加载"
+
+msgid "Not loaded"
+msgstr "未加载"
+
+msgid "Could not be opened"
+msgstr "无法打开"
+
+msgid "Not a plugin (no entry point)"
+msgstr "不是插件 (没有入口点)"
+
+msgid "The plugin declined to start"
+msgstr "插件拒绝启动"
+
+msgid "Built for a different plugin ABI"
+msgstr "为不同的插件 ABI 构建"
+
+msgid "Needs a newer version of wxNote"
+msgstr "需要更新版本的 wxNote"
+
+msgid "Will be enabled"
+msgstr "将被启用"
+
+msgid "Will be disabled"
+msgstr "将被禁用"
+
+msgid "Will be uninstalled"
+msgstr "将被卸载"
+
+msgid "No plugins found."
+msgstr "未找到插件。"
+
+msgid "(no id)"
+msgstr "(无 id)"
+
+msgid "Manage Plugins..."
+msgstr "管理插件..."
+
+msgid "Plugin ABI %u.%u"
+msgstr "插件 ABI %u.%u"
+
+msgid "Bundled plugins can be disabled but not uninstalled."
+msgstr "内置插件可以禁用，但无法卸载。"
+
+msgid "%d pending change(s) - they take effect when wxNote restarts."
+msgstr "有 %d 项待处理的更改 - 将在 wxNote 重启后生效。"
+
+msgid "Apply the pending plugin changes and restart wxNote now?"
+msgstr "要应用待处理的插件更改并立即重启 wxNote 吗?"
+
+msgid "Plugin changes will take effect when wxNote restarts"
+msgstr "插件更改将在 wxNote 重启后生效"
+
+msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "plugins.dat 由更新版本的 wxNote 写入，因此在此为只读。"

@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-#define NIB_ABI_VERSION 0x00010006u   // (major << 16) | minor  ->  1.6 (additive: nib.events v5 raw editor input - char-added / margin-click / dwell / hotspot)
+#define NIB_ABI_VERSION 0x00010007u   // (major << 16) | minor  ->  1.7 (additive: NibPluginApi name/version, for the Plugins Admin Installed list)
 
 #if defined(_WIN32)
   #define NIB_API __declspec(dllexport)
@@ -635,7 +635,20 @@ typedef struct NibPluginApi {
     const char* id;                                   // e.g. "com.example.hello"
     void (*activate)(NibHost* host, NibQueryFn query); // register commands/panels/etc. here
     void (*deactivate)(NibHost* host);                 // optional teardown; may be NULL
+    // --- added in ABI 1.7; read ONLY when struct_size covers them (see NIB_PLUGIN_API_HAS) ---
+    // Both are optional and may be NULL. `id` remains the identity - these exist purely so a host
+    // can show something a human recognises. A plugin built against 1.6 or earlier reports a smaller
+    // struct_size, so the host reads neither and falls back to the id and the file name.
+    const char* name;                                 // human-readable, e.g. "Hello World"
+    const char* version;                              // free-form, e.g. "1.2.0"
 } NibPluginApi;
+
+// The additive-growth test a host MUST apply before reading anything added after ABI 1.6. struct_size
+// is what makes growing this struct safe: an older plugin reports a smaller one, and this returns 0
+// for every member it does not carry. Testing the host's abi_version instead would be wrong - the
+// plugin, not the host, decides how much struct it actually provides.
+#define NIB_PLUGIN_API_HAS(p, field) \
+    ((p) && (p)->struct_size >= offsetof(NibPluginApi, field) + sizeof(((NibPluginApi*)0)->field))
 
 // The one symbol every Nib plugin exports (the plugin defines it with NIB_API):
 //   extern "C" NIB_API const NibPluginApi* nib_plugin_main(const NibBootstrap*);

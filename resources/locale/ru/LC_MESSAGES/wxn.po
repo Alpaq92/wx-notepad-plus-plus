@@ -3342,3 +3342,87 @@ msgstr "Сохранённых команд запуска пока нет. От
 
 msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
 msgstr "Файл runcommands.dat записан более новой версией wxNote, поэтому здесь он только для чтения."
+
+msgid "Plugins"
+msgstr "Плагины"
+
+msgid "Plugin"
+msgstr "Плагин"
+
+msgid "Version"
+msgstr "Версия"
+
+msgid "Status"
+msgstr "Состояние"
+
+msgid "Bundled"
+msgstr "Встроенный"
+
+msgid "Enable"
+msgstr "Включить"
+
+msgid "Disable"
+msgstr "Отключить"
+
+msgid "Disabled"
+msgstr "Отключён"
+
+msgid "Uninstall"
+msgstr "Удалить"
+
+msgid "Loaded"
+msgstr "Загружен"
+
+msgid "Not loaded"
+msgstr "Не загружен"
+
+msgid "Could not be opened"
+msgstr "Не удалось открыть"
+
+msgid "Not a plugin (no entry point)"
+msgstr "Не плагин (нет точки входа)"
+
+msgid "The plugin declined to start"
+msgstr "Плагин отказался запускаться"
+
+msgid "Built for a different plugin ABI"
+msgstr "Собран для другого ABI плагинов"
+
+msgid "Needs a newer version of wxNote"
+msgstr "Требуется более новая версия wxNote"
+
+msgid "Will be enabled"
+msgstr "Будет включён"
+
+msgid "Will be disabled"
+msgstr "Будет отключён"
+
+msgid "Will be uninstalled"
+msgstr "Будет удалён"
+
+msgid "No plugins found."
+msgstr "Плагины не найдены."
+
+msgid "(no id)"
+msgstr "(нет id)"
+
+msgid "Manage Plugins..."
+msgstr "Управление плагинами..."
+
+msgid "Plugin ABI %u.%u"
+msgstr "ABI плагинов %u.%u"
+
+msgid "Bundled plugins can be disabled but not uninstalled."
+msgstr "Встроенные плагины можно отключить, но не удалить."
+
+msgid "%d pending change(s) - they take effect when wxNote restarts."
+msgstr "Ожидающих изменений: %d - они вступят в силу после перезапуска wxNote."
+
+msgid "Apply the pending plugin changes and restart wxNote now?"
+msgstr "Применить ожидающие изменения плагинов и перезапустить wxNote сейчас?"
+
+msgid "Plugin changes will take effect when wxNote restarts"
+msgstr "Изменения плагинов вступят в силу после перезапуска wxNote"
+
+msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "Файл plugins.dat записан более новой версией wxNote, поэтому здесь он только для чтения."

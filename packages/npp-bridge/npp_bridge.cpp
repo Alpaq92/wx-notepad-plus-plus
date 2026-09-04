@@ -1894,7 +1894,9 @@ static void deactivate(NibHost*)
 }
 
 static const NibPluginApi PLUGIN = {
-    NIB_ABI_VERSION, sizeof(NibPluginApi), "org.wxn.npp-bridge", activate, deactivate
+    NIB_ABI_VERSION, sizeof(NibPluginApi), "org.wxn.npp-bridge", activate, deactivate,
+    "Notepad++ plugin bridge (GPL)", "1.0.0"   // ABI 1.7 display fields; named as GPL because the
+                                               // Installed list is where a user decides to disable it
 };
 
 extern "C" NIB_API const NibPluginApi* nib_plugin_main(const NibBootstrap* boot)

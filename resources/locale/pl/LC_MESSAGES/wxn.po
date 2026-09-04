@@ -3342,3 +3342,87 @@ msgstr "Nie ma jeszcze zapisanych poleceń uruchamiania. Użyj Uruchom... i naci
 
 msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
 msgstr "Plik runcommands.dat został zapisany przez nowszą wersję wxNote, więc jest tu tylko do odczytu."
+
+msgid "Plugins"
+msgstr "Wtyczki"
+
+msgid "Plugin"
+msgstr "Wtyczka"
+
+msgid "Version"
+msgstr "Wersja"
+
+msgid "Status"
+msgstr "Stan"
+
+msgid "Bundled"
+msgstr "Wbudowana"
+
+msgid "Enable"
+msgstr "Włącz"
+
+msgid "Disable"
+msgstr "Wyłącz"
+
+msgid "Disabled"
+msgstr "Wyłączona"
+
+msgid "Uninstall"
+msgstr "Odinstaluj"
+
+msgid "Loaded"
+msgstr "Załadowana"
+
+msgid "Not loaded"
+msgstr "Niezaładowana"
+
+msgid "Could not be opened"
+msgstr "Nie można otworzyć"
+
+msgid "Not a plugin (no entry point)"
+msgstr "To nie jest wtyczka (brak punktu wejścia)"
+
+msgid "The plugin declined to start"
+msgstr "Wtyczka odmówiła uruchomienia"
+
+msgid "Built for a different plugin ABI"
+msgstr "Zbudowana dla innego ABI wtyczek"
+
+msgid "Needs a newer version of wxNote"
+msgstr "Wymaga nowszej wersji wxNote"
+
+msgid "Will be enabled"
+msgstr "Zostanie włączona"
+
+msgid "Will be disabled"
+msgstr "Zostanie wyłączona"
+
+msgid "Will be uninstalled"
+msgstr "Zostanie odinstalowana"
+
+msgid "No plugins found."
+msgstr "Nie znaleziono wtyczek."
+
+msgid "(no id)"
+msgstr "(brak id)"
+
+msgid "Manage Plugins..."
+msgstr "Zarządzaj wtyczkami..."
+
+msgid "Plugin ABI %u.%u"
+msgstr "ABI wtyczek %u.%u"
+
+msgid "Bundled plugins can be disabled but not uninstalled."
+msgstr "Wbudowane wtyczki można wyłączyć, ale nie odinstalować."
+
+msgid "%d pending change(s) - they take effect when wxNote restarts."
+msgstr "Oczekujące zmiany: %d - zostaną zastosowane po ponownym uruchomieniu wxNote."
+
+msgid "Apply the pending plugin changes and restart wxNote now?"
+msgstr "Zastosować oczekujące zmiany wtyczek i uruchomić wxNote ponownie teraz?"
+
+msgid "Plugin changes will take effect when wxNote restarts"
+msgstr "Zmiany wtyczek zostaną zastosowane po ponownym uruchomieniu wxNote"
+
+msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "Plik plugins.dat został zapisany przez nowszą wersję wxNote, więc jest tu tylko do odczytu."

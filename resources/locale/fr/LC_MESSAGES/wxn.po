@@ -3342,3 +3342,87 @@ msgstr "Aucune commande d'exécution enregistrée. Utilisez Exécuter... puis En
 
 msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
 msgstr "runcommands.dat a été écrit par une version plus récente de wxNote : il est en lecture seule ici."
+
+msgid "Plugins"
+msgstr "Extensions"
+
+msgid "Plugin"
+msgstr "Extension"
+
+msgid "Version"
+msgstr "Version"
+
+msgid "Status"
+msgstr "État"
+
+msgid "Bundled"
+msgstr "Fourni"
+
+msgid "Enable"
+msgstr "Activer"
+
+msgid "Disable"
+msgstr "Désactiver"
+
+msgid "Disabled"
+msgstr "Désactivé"
+
+msgid "Uninstall"
+msgstr "Désinstaller"
+
+msgid "Loaded"
+msgstr "Chargé"
+
+msgid "Not loaded"
+msgstr "Non chargé"
+
+msgid "Could not be opened"
+msgstr "Impossible à ouvrir"
+
+msgid "Not a plugin (no entry point)"
+msgstr "Pas une extension (aucun point d'entrée)"
+
+msgid "The plugin declined to start"
+msgstr "L'extension a refusé de démarrer"
+
+msgid "Built for a different plugin ABI"
+msgstr "Compilé pour une autre ABI d'extension"
+
+msgid "Needs a newer version of wxNote"
+msgstr "Nécessite une version plus récente de wxNote"
+
+msgid "Will be enabled"
+msgstr "Sera activé"
+
+msgid "Will be disabled"
+msgstr "Sera désactivé"
+
+msgid "Will be uninstalled"
+msgstr "Sera désinstallé"
+
+msgid "No plugins found."
+msgstr "Aucune extension trouvée."
+
+msgid "(no id)"
+msgstr "(pas d'id)"
+
+msgid "Manage Plugins..."
+msgstr "Gérer les extensions..."
+
+msgid "Plugin ABI %u.%u"
+msgstr "ABI d'extension %u.%u"
+
+msgid "Bundled plugins can be disabled but not uninstalled."
+msgstr "Les extensions fournies peuvent être désactivées mais pas désinstallées."
+
+msgid "%d pending change(s) - they take effect when wxNote restarts."
+msgstr "%d modification(s) en attente - elles prendront effet au redémarrage de wxNote."
+
+msgid "Apply the pending plugin changes and restart wxNote now?"
+msgstr "Appliquer les modifications d'extensions en attente et redémarrer wxNote maintenant ?"
+
+msgid "Plugin changes will take effect when wxNote restarts"
+msgstr "Les modifications d'extensions prendront effet au redémarrage de wxNote"
+
+msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "plugins.dat a été écrit par une version plus récente de wxNote : il est en lecture seule ici."
