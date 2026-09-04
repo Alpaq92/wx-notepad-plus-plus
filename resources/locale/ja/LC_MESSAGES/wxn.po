@@ -3426,3 +3426,18 @@ msgstr "プラグインの変更は wxNote の再起動時に適用されます"
 
 msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
 msgstr "plugins.dat はより新しいバージョンの wxNote で作成されているため、ここでは読み取り専用です。"
+
+msgid "Delete user copy"
+msgstr "自分のコピーを削除"
+
+msgid "Delete your copy of \"%s\" and go back to the built-in theme?"
+msgstr "「%s」の自分のコピーを削除して、同梱テーマに戻しますか?"
+
+msgid "Delete the theme \"%s\"? This cannot be undone."
+msgstr "テーマ「%s」を削除しますか? この操作は元に戻せません。"
+
+msgid "Deleted your copy of \"%s\""
+msgstr "「%s」の自分のコピーを削除しました"
+
+msgid "Could not write the theme file.\n\nBuilt-in themes live next to the program and cannot be modified there. Use \"Save As...\" to keep these changes as your own copy of the theme."
+msgstr "テーマファイルを書き込めませんでした。\n\n同梱テーマはプログラムの隣にあり、そこでは変更できません。「保存...」を使って、この変更を自分のコピーとして保存してください。"
