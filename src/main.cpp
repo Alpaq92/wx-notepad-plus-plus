@@ -2920,11 +2920,11 @@ private:
 // later" artifact. Painting the button entirely by hand removes the native GtkButton (and its independent
 // repaint cycle) from the picture - there is nothing left for wx's own Refresh() to race against.
 // Background painter shared by the two hand-drawn caption buttons (TitleBarBtn below, and the MSW-only
-// RoundCaptionBtn): the chrome fill, plus - when hovered - either the Opera-style inset rounded pill or the
-// Windows-style flat full-cell fill. Single-sourced deliberately: the pill geometry (margins + radius) was
-// settled over several rounds of visual feedback, and with a copy per class the next tweak would have to
-// find both. Takes the concrete wxAutoBufferedPaintDC (not wxDC&) because wxGraphicsContext::Create has no
-// wxDC& overload - passing the same static type both call sites already use keeps resolution identical.
+// RoundCaptionBtn): the chrome fill, plus - when hovered - either the minimal style's inset circle or the
+// Windows-style flat full-cell fill. Single-sourced deliberately: the highlight geometry (margins + diameter)
+// was settled by measuring the reference it imitates, and with a copy per class the next tweak would have to
+// find both. Takes the concrete wxAutoBufferedPaintDC (not wxDC&) because wxGraphicsContext::Create
+// has no wxDC& overload - passing the same static type both call sites already use keeps resolution identical.
 static void paintCaptionBtnBg(wxAutoBufferedPaintDC& dc, const wxWindow& win, const wxSize& sz,
                               const wxColour& bg, const wxColour& hotBg, bool hot, bool rounded)
 {
@@ -2932,13 +2932,23 @@ static void paintCaptionBtnBg(wxAutoBufferedPaintDC& dc, const wxWindow& win, co
     dc.SetBrush(wxBrush(bg));
     dc.DrawRectangle(0, 0, sz.x, sz.y);
     if (!hot) return;
-    if (rounded)   // Opera: an inset rounded pill smaller than the cell (antialiased)
+    if (rounded)   // minimal: a centred CIRCLE inset well inside the cell (antialiased)
     {
-        const int mx = win.FromDIP(4), my = win.FromDIP(3);
+        // Diameter is derived from the cell rather than hardcoded so it survives a change of caption-button
+        // size and scales with DPI on its own: inset top and bottom, take what is left as the diameter, then
+        // centre that horizontally. The cell is much wider than it is tall (46x30 DIP), so a highlight that
+        // fills the width reads as a pill - the whole point of this style is that it does not. wxMax keeps
+        // the maths safe if a future cell is ever narrower than it is tall.
+        // The inset is what sets the visual weight: at 5 DIP the circle is 20px in a 30px bar (~2/3 of the
+        // height), which is the proportion this style is meant to read at. Copying an absolute diameter from
+        // a taller reference bar is what made an earlier attempt look oversized here - keep this a ratio.
+        const int my   = win.FromDIP(5);
+        const int dia  = sz.y - 2 * my;
+        const int mx   = wxMax(0, (sz.x - dia) / 2);
         if (wxGraphicsContext* gc = wxGraphicsContext::Create(dc))
         {
             gc->SetPen(wxNullPen); gc->SetBrush(wxBrush(hotBg));
-            gc->DrawRoundedRectangle(mx, my, sz.x - 2 * mx, sz.y - 2 * my, win.FromDIP(6));
+            gc->DrawEllipse(mx, my, dia, dia);
             delete gc;
         }
     }
@@ -2966,6 +2976,9 @@ public:
         });
     }
     void SetGlyph(const wxBitmapBundle& glyph) { m_glyph = glyph; Refresh(); }
+    // Base (non-hover) fill. Painted from a stored colour rather than the wx background, so the
+    // backdrop repaint in applyChromeActivation cannot reach it through SetBackgroundColour.
+    void SetBaseBg(const wxColour& c) { m_bg = c; Refresh(); }
 
 private:
     void onPaint(wxPaintEvent&)
@@ -2984,9 +2997,10 @@ private:
 };
 
 #ifdef __WXMSW__
-// Opera-style rounded caption button for the integrated title bar's NON-native window controls: instead of a
-// native wxButton's flat full-cell hover fill, this paints an inset, antialiased rounded-rectangle behind the
-// Segoe/MDL2 font glyph (close goes red with a white glyph). Custom-drawn like TitleBarBtn so wx owns every pixel.
+// Rounded caption button for the integrated title bar's NON-native window controls: instead of a native
+// wxButton's flat full-cell hover fill, this paints an inset, antialiased circle behind the
+// Segoe/MDL2 font glyph (in the flat style close goes red under a white glyph; the minimal style hovers
+// every button the same grey). Custom-drawn like TitleBarBtn so wx owns every pixel.
 class RoundCaptionBtn : public wxWindow
 {
 public:
@@ -3002,6 +3016,7 @@ public:
         Bind(wxEVT_LEFT_UP, [this](wxMouseEvent&){ wxCommandEvent ev(wxEVT_BUTTON, GetId()); ev.SetEventObject(this); ProcessWindowEvent(ev); });
     }
     void SetGlyph(wchar_t g) { m_glyph = g; Refresh(); }
+    void SetBaseBg(const wxColour& c) { m_bg = c; Refresh(); }   // see TitleBarBtn::SetBaseBg
 private:
     void onPaint(wxPaintEvent&)
     {
@@ -3239,12 +3254,30 @@ public:
 #ifdef WXN_HAS_BORDERLESS
     static constexpr bool kBorderless = std::is_base_of<wxBorderlessFrameBase, FB>::value;
     static constexpr int  kTitleBarH  = 30;   // height (px) of the integrated top bar
-    // Window-control glyphs drawn (not text): crisp + correctly sized, in a 10x10 box. Restore is the
-    // canonical two-overlapping-squares; maximize is a single square.
-    static constexpr const char* GLYPH_MIN     = "M1 6 H11";                          // ~10px line, centered (matches native)
-    static constexpr const char* GLYPH_MAX     = "M1 1 H11 V11 H1 Z";                 // ~10px square
-    static constexpr const char* GLYPH_RESTORE = "M1 4 H8 V11 H1 Z M4 4 V1 H11 V8 H8"; // two overlapping squares
-    static constexpr const char* GLYPH_CLOSE   = "M1 1 L11 11 M11 1 L1 11";           // ~10px X
+    // Window-control glyphs, drawn as SVG (not text), and fed to winGlyph() as inner markup. Two families,
+    // each kept in its OWN coordinate space and stroke style: rescaling one into the other's box would
+    // flatten exactly the difference the two styles exist to express.
+    // Windows-imitating set, for the native and flat styles: 12x12 box, square caps, hard corners. Restore
+    // is the canonical two-overlapping-squares; maximize is a single square.
+    static constexpr const char* GLYPH_MIN     = "<path d='M1 6 H11'/>";                           // ~10px line, centered (matches native)
+    static constexpr const char* GLYPH_MAX     = "<path d='M1 1 H11 V11 H1 Z'/>";                  // ~10px square
+    static constexpr const char* GLYPH_RESTORE = "<path d='M1 4 H8 V11 H1 Z M4 4 V1 H11 V8 H8'/>"; // two overlapping squares
+    static constexpr const char* GLYPH_CLOSE   = "<path d='M1 1 L11 11 M11 1 L1 11'/>";            // ~10px X
+    // Lucide (ISC licence), for the minimal style: Lucide's minus, square, copy and x, kept in its 24x24 box
+    // and its 2-unit round-capped stroke - that rounded, even-weight look is the whole reason to pull the set
+    // in, so these are NOT redrawn into the 12x12 box above.
+    // They ARE, however, scaled to a common 12-unit extent (6..18, centred on 12), which upstream does not
+    // have: Lucide sizes each icon for optical balance in running text, so `square` fills 18 of 24 units
+    // where `x` fills only 12. Dropped into caption cells at one box size that reads as a maximize button
+    // half again bigger than its neighbours. Scaling the artwork while leaving stroke-width at 2 keeps every
+    // glyph the same size AND the same stroke weight; scaling the whole SVG instead would have thinned the
+    // stroke of whichever icon was shrunk most.
+    static constexpr const char* LU_MIN     = "<path d='M6 12h12'/>";                              // minus, 14u -> 12u
+    static constexpr const char* LU_MAX     = "<rect width='12' height='12' x='6' y='6' rx='2'/>"; // square, 18u -> 12u
+    static constexpr const char* LU_RESTORE =                                                      // copy, 20u -> 12u
+        "<rect width='8.4' height='8.4' x='9.6' y='9.6' rx='1.5'/>"
+        "<path d='M7.2 14.4c-.66 0-1.2-.54-1.2-1.2V7.2c0-.66.54-1.2 1.2-1.2h6c.66 0 1.2.54 1.2 1.2'/>";
+    static constexpr const char* LU_CLOSE   = "<path d='M18 6 6 18'/><path d='m6 6 12 12'/>";      // x, already 12u
 #else
     static constexpr bool kBorderless = false;
 #endif
@@ -3949,6 +3982,7 @@ public:
         };
         SetDropTarget(new FileDrop([this](const wxArrayString& fs) { for (const auto& f : fs) openPath(f); }));
         Bind(wxEVT_CLOSE_WINDOW, &WxnShellFrameT::onCloseWindow, this);                 // prompt to save on exit
+        Bind(wxEVT_ACTIVATE, [this](wxActivateEvent& e){ applyChromeActivation(e.GetActive()); e.Skip(); });   // dim the wx-painted chrome when unfocused
         Bind(wxEVT_ACTIVATE, [this](wxActivateEvent& e){ if (e.GetActive()) CallAfter([this]{ checkExternalChange(activePage()); }); e.Skip(); });   // "changed on disk?" watch on refocus
         m_timer.Start(150);
         // Quick Open's crawler. Bound but NOT started: it only runs while a workspace is being indexed,
@@ -8555,15 +8589,24 @@ private:
 
         sz->AddStretchSpacer(1);   // empty middle stays draggable
 
-        // Window controls (right): minimize, maximize/restore, close (close hovers red, VS-style)
+        // Window controls (right): minimize, maximize/restore, close. In the flat/native styles close hovers
+        // red, VS-style; the minimal style hovers every button alike (see the ctrl() calls below).
 #ifdef __WXMSW__
         // Windows draws its caption buttons from the Segoe MDL2 Assets icon font - use the very same font
         // + glyphs (Chrome{Minimize,Maximize,Restore,Close}) so the controls are pixel-identical to native.
         // Native-buttons mode upgrades to Win11's Segoe Fluent Icons where installed (identical codepoints
         // for these four glyphs); the default mode stays on MDL2 so OFF remains byte-identical to before.
         const bool fluent = nativeWinButtons() && wxFontEnumerator::IsValidFacename("Segoe Fluent Icons");
-        const wxFont mdl2(wxFontInfo(10).FaceName(fluent ? "Segoe Fluent Icons" : "Segoe MDL2 Assets"));
+        const wxFont mdl2(wxFontInfo(minimalButtons() ? 8 : 10)
+                              .FaceName(fluent ? "Segoe Fluent Icons" : "Segoe MDL2 Assets"));
 #endif
+        // Caption-cell metrics, per style. The native and flat styles imitate Windows' own caption buttons -
+        // 46 DIP wide with a ~12px glyph - so they keep those numbers exactly. The minimal style is instead
+        // proportioned against the bar: a 24-wide cell leaves only a few pixels between neighbouring circles
+        // (they are meant to read as a tight cluster, not three widely spaced cells), and a 10px glyph sits
+        // inside the 20px circle with room around it instead of crowding its edge.
+        const int cellW   = minimalButtons() ? 24 : 46;
+        const int glyphPx = capGlyphPx();
         auto ctrl = [&](wchar_t mdl2Glyph, const char* svgPath, int which, const wxColour& hot) -> wxWindow* {
 #ifdef __WXMSW__
             // Windows: native wxButton, pixel-identical to the OS's own caption buttons (see mdl2 above).
@@ -8579,17 +8622,19 @@ private:
                 // Native mode: hit-test-transparent wxButton, pixel-identical to the OS caption buttons;
                 // clicks + hover then arrive as the frame's wxEVT_NC_* events (handlers below).
                 wxButton* b = new HitPass<wxButton>;
-                b->Create(m_titleBar, wxID_ANY, "", wxDefaultPosition, wxSize(46, kTitleBarH), wxBU_EXACTFIT | wxBORDER_NONE);
+                b->Create(m_titleBar, wxID_ANY, "", wxDefaultPosition, wxSize(cellW, kTitleBarH), wxBU_EXACTFIT | wxBORDER_NONE);
                 b->SetFont(mdl2); b->SetLabel(wxString(wxUniChar(mdl2Glyph)));
                 b->SetForegroundColour(fg); b->SetBackgroundColour(barBg);
                 m_capBtns[which] = { b, hot };
                 sz->Add(b, 0, wxEXPAND);
                 return b;
             }
-            // Non-native mode: wxNote-drawn button - rounded pill (Opera) or flat full-cell (Windows-style),
-            // per operaButtons(); close hovers red with a white glyph either way.
-            const wxColour hotFg = (which == 2) ? wxColour(255, 255, 255) : fg;
-            auto* b = new RoundCaptionBtn(m_titleBar, wxID_ANY, wxSize(46, kTitleBarH), mdl2Glyph, mdl2, barBg, hot, fg, hotFg, operaButtons());
+            // Non-native mode: wxNote-drawn button - inset circle (minimal) or flat full-cell
+            // (Windows-style), per minimalButtons(). Only the Windows-style close hovers red, so only it
+            // needs the white glyph that keeps contrast on that red; the minimal style hovers every button
+            // the same neutral grey, on which a white glyph would be invisible.
+            const wxColour hotFg = (which == 2 && !minimalButtons()) ? wxColour(255, 255, 255) : fg;
+            auto* b = new RoundCaptionBtn(m_titleBar, wxID_ANY, wxSize(cellW, kTitleBarH), mdl2Glyph, mdl2, barBg, hot, fg, hotFg, minimalButtons());
             b->Bind(wxEVT_BUTTON, [this, which](wxCommandEvent&) { onWindowControl(which); });
             sz->Add(b, 0, wxEXPAND);
             return b;
@@ -8597,7 +8642,7 @@ private:
             (void)mdl2Glyph;
             // GTK non-native: our bundled SVG glyph in a flat TitleBarBtn. (GTK native-buttons mode never
             // reaches here - it's hbMode, where the desktop theme draws the real buttons in the header bar.)
-            auto* b = new TitleBarBtn(m_titleBar, wxID_ANY, wxSize(46, kTitleBarH), winGlyph(svgPath), barBg, hot, 12, operaButtons());
+            auto* b = new TitleBarBtn(m_titleBar, wxID_ANY, wxSize(cellW, kTitleBarH), winGlyph(svgPath, minimalButtons(), glyphPx), barBg, hot, glyphPx, minimalButtons());
             b->Bind(wxEVT_BUTTON, [this, which](wxCommandEvent&) { onWindowControl(which); });
             sz->Add(b, 0, wxEXPAND);
             return b;
@@ -8606,9 +8651,11 @@ private:
         const wxColour hover = m_dark ? wxColour(63, 63, 70) : wxColour(220, 220, 220);
         if (!hbMode)   // hbMode: GTK's header bar draws the real theme min/max/close - we draw none
         {
-            ctrl(0xE921, GLYPH_MIN, 0, hover);                                                                 // minimize
-            m_maxBtn = ctrl(IsMaximized() ? 0xE923 : 0xE922, IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX, 1, hover);  // max/restore
-            ctrl(0xE8BB, GLYPH_CLOSE, 2, wxColour(232, 17, 35));                                                // close (red hover)
+            ctrl(0xE921, capGlyph(0), 0, hover);                                                  // minimize
+            m_maxBtn = ctrl(IsMaximized() ? 0xE923 : 0xE922, capGlyph(1), 1, hover);              // max/restore
+            // Close: red in the Windows-style flat mode (the convention it imitates), but the same neutral
+            // grey as its siblings in the minimal style, which deliberately gives no button special weight.
+            ctrl(0xE8BB, capGlyph(2), 2, minimalButtons() ? hover : wxColour(232, 17, 35));
         }
 #ifdef __WXMSW__
         if (nativeWinButtons())
@@ -8669,14 +8716,39 @@ private:
     }
 
     // A window-control glyph stroked into a small bitmap (10x10 box), themed to the bar.
-    wxBitmapBundle winGlyph(const char* path) const
+    // Which glyph family the current style draws from, and at what box size. Single-sourced so the three
+    // ctrl() calls and updateMaxGlyph() below cannot drift onto different sets or sizes. Lucide's icons sit
+    // in a larger box with more padding around the artwork, so they need a bigger box to read at the same
+    // optical size as the 12x12 set - hence the two numbers rather than one shared constant.
+    const char* capGlyph(int which) const
+    {
+        const bool lu = minimalButtons();
+        switch (which)
+        {
+        case 0:  return lu ? LU_MIN : GLYPH_MIN;
+        case 1:  return IsMaximized() ? (lu ? LU_RESTORE : GLYPH_RESTORE) : (lu ? LU_MAX : GLYPH_MAX);
+        default: return lu ? LU_CLOSE : GLYPH_CLOSE;
+        }
+    }
+    // 18 not 12: the Lucide artwork occupies only the middle 12 of its 24-unit box, so half the bitmap is
+    // padding and it needs the larger box to land at ~9px of visible glyph inside the 20px circle - roughly
+    // the glyph-to-circle ratio the style is copying. The 12x12 set has almost no padding, so 12 is 12.
+    int capGlyphPx() const { return minimalButtons() ? 18 : 12; }
+    // Renders one window-control glyph from its inner SVG markup. viewBox, stroke weight and cap/join style
+    // all move together with the family, so that is one flag rather than four call-site arguments that could
+    // disagree with each other.
+    wxBitmapBundle winGlyph(const char* body, bool lucide, int px) const
     {
         const char* col = m_dark ? "#f0f0f0" : "#171717";
+        const int   vb  = lucide ? 24 : 12;
         const wxString svg = wxString::Format(
-            "<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'>"
-            "<path d='%s' fill='none' stroke='%s' stroke-width='1.3' stroke-linecap='square' stroke-linejoin='miter'/></svg>",
-            path, col);
-        return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(12, 12));
+            // Presentation attributes go on a <g>, not on the root <svg>: nanosvg pushes a style frame for
+            // <g> but only reads width/height/viewBox off <svg>, so attributes left up there are dropped.
+            "<svg xmlns='http://www.w3.org/2000/svg' width='%d' height='%d' viewBox='0 0 %d %d'>"
+            "<g fill='none' stroke='%s' stroke-width='%s' stroke-linecap='%s' stroke-linejoin='%s'>%s</g></svg>",
+            px, px, vb, vb, col,
+            lucide ? "2" : "1.3", lucide ? "round" : "square", lucide ? "round" : "miter", body);
+        return wxBitmapBundle::FromSVG(svg.utf8_str().data(), wxSize(px, px));
     }
     void updateMaxGlyph()
     {
@@ -8686,7 +8758,7 @@ private:
         if (nativeWinButtons()) static_cast<wxButton*>(m_maxBtn)->SetLabel(wxString(wxUniChar(g)));
         else                    static_cast<RoundCaptionBtn*>(m_maxBtn)->SetGlyph(g);
 #else
-        static_cast<TitleBarBtn*>(m_maxBtn)->SetGlyph(winGlyph(IsMaximized() ? GLYPH_RESTORE : GLYPH_MAX));
+        static_cast<TitleBarBtn*>(m_maxBtn)->SetGlyph(winGlyph(capGlyph(1), minimalButtons(), capGlyphPx()));
 #endif
     }
     void onWindowControl(int which)
@@ -9104,6 +9176,21 @@ private:
 #endif
         const int styles[8] = { wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT, wxSB_FLAT };
         sb->SetStatusStyles(8, styles);   // flat fields - no per-field sunken background
+        // Own-draw the bar's background. wxStatusBarGeneric::OnPaint never fills it - it paints the size
+        // grip and then the field text with a TRANSPARENT background mode - so the bar shows whatever GTK
+        // paints behind the widget. applyChromeActivation's SetBackgroundColour cannot reach that, which is
+        // why the status bar stayed lit while the title bar (a wxPanel, which does fill) dimmed on backdrop.
+        // Same fix as TitleBarBtn::SetBaseBg above: paint from the stored chrome colour, not the wx bg.
+        sb->SetBackgroundStyle(wxBG_STYLE_ERASE);
+        sb->Bind(wxEVT_ERASE_BACKGROUND, [this](wxEraseEvent& e) {
+            wxStatusBar* bar = GetStatusBar();
+            if (!bar || !e.GetDC()) { e.Skip(); return; }
+            wxDC& dc = *e.GetDC();
+            dc.SetPen(*wxTRANSPARENT_PEN);
+            dc.SetBrush(wxBrush(chromeBgFor(m_dark, m_chromeActive)));
+            const wxSize sz = bar->GetClientSize();
+            dc.DrawRectangle(0, 0, sz.x, sz.y);
+        });
         sb->Bind(wxEVT_LEFT_DCLICK, &WxnShellFrameT::onStatusDClick, this);   // interactive status bar: double-click a field to act
         // Editable zoom combo, parked over field 6 (INS/OVR moved to 7). m_zoom is already restored from
         // config at this point (the ctor reads it before building any chrome), so seed the field directly
@@ -12401,8 +12488,10 @@ private:
         // no meaningful toggle to offer. On macOS the integrated bar always uses the native traffic lights.
 #if defined(WXN_HAS_BORDERLESS)
         // Top-bar window-button style (Preferences > General): 0 = system-native (Win snap-layouts / GTK
-        // header bar), 1 = wxNote's flat buttons, 2 = Opera-style rounded pills. Default: native on Windows,
-        // our own buttons on Linux. Migrates the old boolean "NativeWinButtons" if the new key is absent.
+        // header bar), 1 = wxNote's flat buttons, 2 = minimal (inset circle). Default: native on
+        // Windows, our own buttons on Linux. Migrates the old boolean "NativeWinButtons" if the new key is
+        // absent. 2 used to mean an Opera-style rounded pill; the value is reused rather than retired, so a
+        // config that already selected it lands on the style that replaced it instead of silently resetting.
         long btnStyle =
 #ifdef __WXMSW__
             0;
@@ -12641,10 +12730,10 @@ private:
 #endif
 #if defined(WXN_HAS_BORDERLESS)
         // Window-button style for the integrated top bar (Windows + Linux): system-native (OS snap-layouts /
-        // GTK header bar), wxNote's own flat buttons, or Opera-style rounded pills. Added to the combo grid
-        // below; only takes effect while the integrated bar is on. Restart to apply.
+        // GTK header bar), wxNote's own flat buttons, or the minimal style's inset circle. Added to
+        // the combo grid below; only takes effect while the integrated bar is on. Restart to apply.
         auto* chBtns = new wxChoice(gen, wxID_ANY);
-        chBtns->Append(_("System-native")); chBtns->Append(_("Windows-style (flat)")); chBtns->Append(_("Opera-style (rounded)"));
+        chBtns->Append(_("System-native")); chBtns->Append(_("Windows-style (flat)")); chBtns->Append(_("Minimal (custom style)"));
         chBtns->SetSelection(m_topBarBtnStyle);
 #endif
 #ifdef __WXGTK__
@@ -14378,6 +14467,62 @@ private:
         (void)dark;
 #endif
     }
+    // ---- backdrop (unfocused window) ------------------------------------------------------------
+    // The integrated top bar and the status bar are painted by wx, not by the desktop theme, so they
+    // stayed fully saturated when the window lost focus - while the drop shadow the theme draws under
+    // the window did drop away (gtk_native.cpp carries :backdrop rules for scrollbars only). Losing the
+    // elevation while nothing dimmed is what made an unfocused window read as flat rather than as
+    // inactive. GTK, AppKit and DWM all signal inactive the same way: drain the foreground, let the
+    // background drift a few points toward the desktop. Do that by hand, so the cue is deliberate and
+    // identical on all three platforms instead of depending on a theme that never sees these widgets.
+    static wxColour chromeBgFor(bool dark, bool active)
+    {
+        return dark ? (active ? wxColour(32, 32, 32)    : wxColour(38, 38, 38))
+                    : (active ? wxColour(240, 240, 240) : wxColour(232, 232, 232));
+    }
+    static wxColour chromeFgFor(bool dark, bool active)
+    {
+        return dark ? (active ? wxColour(220, 220, 220) : wxColour(140, 140, 140))
+                    : (active ? wxColour(0, 0, 0)       : wxColour(112, 112, 112));
+    }
+    bool m_chromeActive = true;
+    // force: applyTheme repaints all the chrome in the ACTIVE colours unconditionally, so it has to
+    // re-run this afterwards even when the activation state itself has not changed - otherwise a theme
+    // switch (or a fullscreen toggle, which re-runs applyTheme) snaps an unfocused window back to lit.
+    void applyChromeActivation(bool active, bool force = false)
+    {
+        if (active == m_chromeActive && !force) return;
+        m_chromeActive = active;
+        const wxColour bg = chromeBgFor(m_dark, active);
+        const wxColour fg = chromeFgFor(m_dark, active);
+#ifdef __WXGTK__
+        // Header-bar mode re-parents the panel into wxbf's real GtkHeaderBar, which the desktop theme
+        // then owns - including its own :backdrop styling. Leave it alone or we fight the theme.
+        const bool hbMode = nativeWinButtons();
+#else
+        const bool hbMode = false;
+#endif
+        if (m_titleBar && !hbMode)
+        {
+            m_titleBar->SetBackgroundColour(bg);
+            for (wxWindow* c : m_titleBar->GetChildren())
+            {
+                if (auto* t = dynamic_cast<TitleBarBtn*>(c)) t->SetBaseBg(bg);
+#ifdef __WXMSW__
+                else if (auto* r = dynamic_cast<RoundCaptionBtn*>(c)) r->SetBaseBg(bg);
+#endif
+                else { c->SetBackgroundColour(bg); c->SetForegroundColour(fg); }
+                c->Refresh();
+            }
+            m_titleBar->Refresh();
+        }
+        if (auto* sb = GetStatusBar())
+        {
+            sb->SetBackgroundColour(bg);
+            sb->SetForegroundColour(fg);
+            sb->Refresh();
+        }
+    }
     void applyTheme(bool dark)
     {
         m_dark = dark;
@@ -14432,6 +14577,7 @@ private:
             m_aui.Update();
         }
         this->SetBackgroundColour(chromeBg);   // frame backing shows through the Win11 rounded corners - chrome, not black
+        applyChromeActivation(m_chromeActive, /*force=*/true);   // everything above painted lit; restore backdrop if unfocused
     }
 
     // ShowFullScreen() alone leaves the toolbar looking two-toned: the AUI dock-art background strip
@@ -15831,14 +15977,14 @@ private:
 #endif
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
     // Integrated-bar window-button style (TopBarButtonStyle in Preferences, restart-to-apply): 0 = system-
-    // native (Win snap-layouts / GTK header bar), 1 = wxNote's flat buttons, 2 = Opera-style rounded pills.
-    // Stored as the one value that is read and written; the two modes callers actually branch on are derived
-    // below rather than mirrored into members, so "native" and "opera" cannot go out of sync. Defaults to 1,
-    // which is what macOS and any non-WXN_HAS_BORDERLESS build want - neither is ever assigned there, and
-    // macOS always uses its native traffic lights regardless.
+    // native (Win snap-layouts / GTK header bar), 1 = wxNote's flat buttons, 2 = minimal (inset circle).
+    // Stored as the one value that is read and written; the two modes callers actually branch on are
+    // derived below rather than mirrored into members, so "native" and "minimal" cannot go out of sync.
+    // Defaults to 1, which is what macOS and any non-WXN_HAS_BORDERLESS build want - neither is ever assigned
+    // there, and macOS always uses its native traffic lights regardless.
     int         m_topBarBtnStyle = 1;
     bool nativeWinButtons() const { return m_topBarBtnStyle == 0; }
-    bool operaButtons()     const { return m_topBarBtnStyle == 2; }
+    bool minimalButtons()    const { return m_topBarBtnStyle == 2; }
     bool        m_ignorePlatformDeco = false;    // Linux/GTK native header bar: keep the window corners SHARP (skip the platform-matching rounding); restart-to-apply
     int         m_iconStyle = 1;                 // toolbar icon style: 0 = line icons, 1 = Solar (default), 2 = IconPark, 3 = Streamline (restart-to-apply)
     int         m_toolbarIconSize = 16;          // toolbar icon size in px (16/20/24/32, default 16; restart-to-apply)

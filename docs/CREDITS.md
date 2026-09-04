@@ -178,6 +178,10 @@ No code was taken from any of these; each contributed ideas, structure, or
 - **[IconPark](https://github.com/bytedance/IconPark)** (ByteDance,
   Apache-2.0) — the "IconPark (teal/lime)" toolbar option, recolored to Open
   Color teal-7/lime-5; also via Iconify.
+- **[Lucide](https://lucide.dev)** (Lucide Contributors, ISC) — the integrated
+  top bar's window controls in the **Minimal** button style: `minus`, `square`,
+  `copy` and `x`, embedded as path data in `src/main.cpp` rather than shipped as
+  files, and left in Lucide's own 24×24 box and round-cap stroke.
 - **Free icons from [Streamline](https://streamlinehq.com)** (Core flat set,
   CC BY 4.0) — the "Streamline (green/teal)" toolbar option, recolored to Open
   Color green-4/teal-8; obtained from the first-party
