@@ -432,6 +432,54 @@ int main(int argc, char** argv)
         check(ok.empty(), "runs: ... and contribute no commands");
     }
 
+    // ---- call-tip signatures: the extractor shared by the keystroke path and the workspace index ---
+    {
+        const std::string doc =
+            "int add(int a, int b) { return a + b; }\n"
+            "static void log_line(const char* msg,\n"
+            "                     int level)\n"
+            "{\n}\n"
+            "void caller() { add(1, 2); }\n";
+
+        // wxnSigAt: the '(' position and the identifier start are the caller's job; this normalizes.
+        const size_t op = doc.find("add(");
+        check(wxnSigAt(doc, op, op + 3) == "int add(int a, int b)",
+              "sigAt: picks up the preceding return type");
+
+        // A signature split across lines collapses to one line - a call tip is one line.
+        const size_t lp = doc.find("log_line(");
+        check(wxnSigAt(doc, lp, lp + 8) == "void log_line(const char* msg, int level)",
+              "sigAt: a multi-line parameter list collapses to single spaces");
+
+        // Unbalanced parens yield nothing rather than a truncated half-signature.
+        const std::string bad = "void oops(int a\n";
+        check(wxnSigAt(bad, 5, 9).empty(), "sigAt: an unclosed paren yields no signature");
+
+        // wxnIndexSigs: one pass, every name.
+        std::map<std::string, std::vector<std::string>> idx;
+        wxnIndexSigs(doc, idx);
+        check(idx.count("add") == 1,      "indexSigs: finds a definition");
+        check(idx.count("log_line") == 1, "indexSigs: finds a multi-line definition");
+        check(idx.count("caller") == 1,   "indexSigs: finds every name, not just the first");
+        // The CALL site "add(1, 2)" is a second signature for the same name - both are kept, and the
+        // definition is what makes the tip useful, so it must not be crowded out.
+        check(std::find(idx["add"].begin(), idx["add"].end(), "int add(int a, int b)") != idx["add"].end(),
+              "indexSigs: the definition survives alongside the call site");
+
+        // "3(x)" is not a call; a bare "(" with no identifier is not either.
+        std::map<std::string, std::vector<std::string>> idx2;
+        wxnIndexSigs("x = 3(y);\nz = (a + b);\n", idx2);
+        check(idx2.find("3") == idx2.end(), "indexSigs: a number before '(' is not a call");
+        check(idx2.empty(), "indexSigs: a parenthesised expression contributes nothing");
+
+        // The per-name overload cap holds, so one heavily-overloaded name cannot grow without bound.
+        std::string many;
+        for (int i = 0; i < 30; ++i) many += "void f(int a" + std::to_string(i) + ") {}\n";
+        std::map<std::string, std::vector<std::string>> idx3;
+        wxnIndexSigs(many, idx3, /*perName=*/8);
+        check(idx3["f"].size() <= 8, "indexSigs: the per-name overload cap is enforced");
+    }
+
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
