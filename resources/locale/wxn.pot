@@ -3309,6 +3309,42 @@ msgstr ""
 msgid "Plugin commands"
 msgstr ""
 
+msgid "Save..."
+msgstr ""
+
+msgid "Delete"
+msgstr ""
+
+msgid "Rename..."
+msgstr ""
+
+msgid "Command:"
+msgstr ""
+
+msgid "Manage Saved Commands..."
+msgstr ""
+
+msgid "Run commands"
+msgstr ""
+
+msgid "Saved Run commands"
+msgstr ""
+
+msgid "Save Run command"
+msgstr ""
+
+msgid "Saved Run command \"%s\""
+msgstr ""
+
+msgid "The saved Run command list is full (%d)."
+msgstr ""
+
+msgid "No saved Run commands yet. Use Run... and press Save to name one."
+msgstr ""
+
+msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr ""
+
 msgid "Plugins"
 msgstr ""
 

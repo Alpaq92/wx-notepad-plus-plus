@@ -3307,6 +3307,42 @@ msgstr "Тема \"%s\" сохранена"
 msgid "Plugin commands"
 msgstr "Команды плагинов"
 
+msgid "Save..."
+msgstr "Сохранить..."
+
+msgid "Delete"
+msgstr "Удалить"
+
+msgid "Rename..."
+msgstr "Переименовать..."
+
+msgid "Command:"
+msgstr "Команда:"
+
+msgid "Manage Saved Commands..."
+msgstr "Управление сохранёнными командами..."
+
+msgid "Run commands"
+msgstr "Команды запуска"
+
+msgid "Saved Run commands"
+msgstr "Сохранённые команды запуска"
+
+msgid "Save Run command"
+msgstr "Сохранить команду запуска"
+
+msgid "Saved Run command \"%s\""
+msgstr "Команда запуска \"%s\" сохранена"
+
+msgid "The saved Run command list is full (%d)."
+msgstr "Список сохранённых команд запуска заполнен (%d)."
+
+msgid "No saved Run commands yet. Use Run... and press Save to name one."
+msgstr "Сохранённых команд запуска пока нет. Откройте «Запустить...» и нажмите «Сохранить», чтобы задать имя."
+
+msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "Файл runcommands.dat записан более новой версией wxNote, поэтому здесь он только для чтения."
+
 msgid "Plugins"
 msgstr "Плагины"
 

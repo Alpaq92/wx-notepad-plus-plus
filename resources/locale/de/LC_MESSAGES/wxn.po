@@ -3307,6 +3307,42 @@ msgstr "Thema \"%s\" gespeichert"
 msgid "Plugin commands"
 msgstr "Plugin-Befehle"
 
+msgid "Save..."
+msgstr "Speichern..."
+
+msgid "Delete"
+msgstr "Löschen"
+
+msgid "Rename..."
+msgstr "Umbenennen..."
+
+msgid "Command:"
+msgstr "Befehl:"
+
+msgid "Manage Saved Commands..."
+msgstr "Gespeicherte Befehle verwalten..."
+
+msgid "Run commands"
+msgstr "Ausführungsbefehle"
+
+msgid "Saved Run commands"
+msgstr "Gespeicherte Ausführungsbefehle"
+
+msgid "Save Run command"
+msgstr "Ausführungsbefehl speichern"
+
+msgid "Saved Run command \"%s\""
+msgstr "Ausführungsbefehl \"%s\" gespeichert"
+
+msgid "The saved Run command list is full (%d)."
+msgstr "Die Liste gespeicherter Ausführungsbefehle ist voll (%d)."
+
+msgid "No saved Run commands yet. Use Run... and press Save to name one."
+msgstr "Noch keine gespeicherten Ausführungsbefehle. Verwenden Sie Ausführen... und drücken Sie Speichern, um einen zu benennen."
+
+msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "runcommands.dat wurde von einer neueren wxNote-Version geschrieben und ist hier schreibgeschützt."
+
 msgid "Plugins"
 msgstr "Plugins"
 

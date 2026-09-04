@@ -3307,6 +3307,42 @@ msgstr "テーマ「%s」を保存しました"
 msgid "Plugin commands"
 msgstr "プラグインコマンド"
 
+msgid "Save..."
+msgstr "保存..."
+
+msgid "Delete"
+msgstr "削除"
+
+msgid "Rename..."
+msgstr "名前の変更..."
+
+msgid "Command:"
+msgstr "コマンド:"
+
+msgid "Manage Saved Commands..."
+msgstr "保存したコマンドの管理..."
+
+msgid "Run commands"
+msgstr "実行コマンド"
+
+msgid "Saved Run commands"
+msgstr "保存した実行コマンド"
+
+msgid "Save Run command"
+msgstr "実行コマンドを保存"
+
+msgid "Saved Run command \"%s\""
+msgstr "実行コマンド「%s」を保存しました"
+
+msgid "The saved Run command list is full (%d)."
+msgstr "保存した実行コマンドの一覧が一杯です (%d)。"
+
+msgid "No saved Run commands yet. Use Run... and press Save to name one."
+msgstr "保存した実行コマンドはまだありません。「実行...」から「保存」を押して名前を付けてください。"
+
+msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "runcommands.dat はより新しいバージョンの wxNote で作成されているため、ここでは読み取り専用です。"
+
 msgid "Plugins"
 msgstr "プラグイン"
 

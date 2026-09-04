@@ -3307,6 +3307,42 @@ msgstr "테마 \"%s\" 저장됨"
 msgid "Plugin commands"
 msgstr "플러그인 명령"
 
+msgid "Save..."
+msgstr "저장..."
+
+msgid "Delete"
+msgstr "삭제"
+
+msgid "Rename..."
+msgstr "이름 바꾸기..."
+
+msgid "Command:"
+msgstr "명령:"
+
+msgid "Manage Saved Commands..."
+msgstr "저장된 명령 관리..."
+
+msgid "Run commands"
+msgstr "실행 명령"
+
+msgid "Saved Run commands"
+msgstr "저장된 실행 명령"
+
+msgid "Save Run command"
+msgstr "실행 명령 저장"
+
+msgid "Saved Run command \"%s\""
+msgstr "실행 명령 \"%s\" 저장됨"
+
+msgid "The saved Run command list is full (%d)."
+msgstr "저장된 실행 명령 목록이 가득 찼습니다 (%d)."
+
+msgid "No saved Run commands yet. Use Run... and press Save to name one."
+msgstr "저장된 실행 명령이 아직 없습니다. 실행...을 열고 저장을 눌러 이름을 지정하세요."
+
+msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "runcommands.dat가 더 새 버전의 wxNote에서 작성되어 여기서는 읽기 전용입니다."
+
 msgid "Plugins"
 msgstr "플러그인"
 

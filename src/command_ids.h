@@ -494,6 +494,11 @@ inline constexpr int kCmdMacroStopRecordingMacro    = 42019;
 // ---- Automation menu - run ----
 inline constexpr int kCmdExecuteBase                 = 49000;
 inline constexpr int kCmdExecuteValidateShortcutsXml = 49001;
+// wxNote-only. Deliberately 49500 rather than the next free 49002: Notepad++ hands its own
+// user-defined Run commands the ids IDM_EXECUTE+1, +2, ... so the low end of this block belongs to
+// that list in the ABI the bridge mirrors. Our own saved Run commands avoid the question entirely by
+// living at myID_RUN_ITEM (62400+, beside saved macros), and this one menu command stays clear of it.
+inline constexpr int kCmdExecuteManageSaved          = 49500;
 
 // ---- Automation menu - tools ----
 inline constexpr int kCmdToolMd5Generate                 = 48501;
