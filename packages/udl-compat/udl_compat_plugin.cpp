@@ -49,7 +49,8 @@ static void activate(NibHost* host, NibQueryFn query)
 }
 
 static const NibPluginApi g_api = {
-    NIB_ABI_VERSION, sizeof(NibPluginApi), "org.wxnote.udl-compat", activate, nullptr
+    NIB_ABI_VERSION, sizeof(NibPluginApi), "org.wxnote.udl-compat", activate, nullptr,
+    "User-Defined Language compatibility", "1.0.0"
 };
 
 extern "C" NIB_API const NibPluginApi* nib_plugin_main(const NibBootstrap*) { return &g_api; }

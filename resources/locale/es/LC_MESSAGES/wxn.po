@@ -3306,3 +3306,123 @@ msgstr "Tema \"%s\" guardado"
 
 msgid "Plugin commands"
 msgstr "Comandos de complementos"
+
+msgid "Save..."
+msgstr "Guardar..."
+
+msgid "Delete"
+msgstr "Eliminar"
+
+msgid "Rename..."
+msgstr "Cambiar nombre..."
+
+msgid "Command:"
+msgstr "Comando:"
+
+msgid "Manage Saved Commands..."
+msgstr "Administrar comandos guardados..."
+
+msgid "Run commands"
+msgstr "Comandos de ejecución"
+
+msgid "Saved Run commands"
+msgstr "Comandos de ejecución guardados"
+
+msgid "Save Run command"
+msgstr "Guardar comando de ejecución"
+
+msgid "Saved Run command \"%s\""
+msgstr "Comando de ejecución \"%s\" guardado"
+
+msgid "The saved Run command list is full (%d)."
+msgstr "La lista de comandos de ejecución guardados está llena (%d)."
+
+msgid "No saved Run commands yet. Use Run... and press Save to name one."
+msgstr "Aún no hay comandos de ejecución guardados. Use Ejecutar... y pulse Guardar para dar nombre a uno."
+
+msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "runcommands.dat fue escrito por una versión más reciente de wxNote, por lo que aquí es de sólo lectura."
+
+msgid "Plugins"
+msgstr "Complementos"
+
+msgid "Plugin"
+msgstr "Complemento"
+
+msgid "Version"
+msgstr "Versión"
+
+msgid "Status"
+msgstr "Estado"
+
+msgid "Bundled"
+msgstr "Incluido"
+
+msgid "Enable"
+msgstr "Activar"
+
+msgid "Disable"
+msgstr "Desactivar"
+
+msgid "Disabled"
+msgstr "Desactivado"
+
+msgid "Uninstall"
+msgstr "Desinstalar"
+
+msgid "Loaded"
+msgstr "Cargado"
+
+msgid "Not loaded"
+msgstr "No cargado"
+
+msgid "Could not be opened"
+msgstr "No se pudo abrir"
+
+msgid "Not a plugin (no entry point)"
+msgstr "No es un complemento (sin punto de entrada)"
+
+msgid "The plugin declined to start"
+msgstr "El complemento se negó a iniciarse"
+
+msgid "Built for a different plugin ABI"
+msgstr "Compilado para otra ABI de complementos"
+
+msgid "Needs a newer version of wxNote"
+msgstr "Requiere una versión más reciente de wxNote"
+
+msgid "Will be enabled"
+msgstr "Se activará"
+
+msgid "Will be disabled"
+msgstr "Se desactivará"
+
+msgid "Will be uninstalled"
+msgstr "Se desinstalará"
+
+msgid "No plugins found."
+msgstr "No se encontraron complementos."
+
+msgid "(no id)"
+msgstr "(sin id)"
+
+msgid "Manage Plugins..."
+msgstr "Administrar complementos..."
+
+msgid "Plugin ABI %u.%u"
+msgstr "ABI de complementos %u.%u"
+
+msgid "Bundled plugins can be disabled but not uninstalled."
+msgstr "Los complementos incluidos se pueden desactivar, pero no desinstalar."
+
+msgid "%d pending change(s) - they take effect when wxNote restarts."
+msgstr "%d cambio(s) pendiente(s): se aplicarán al reiniciar wxNote."
+
+msgid "Apply the pending plugin changes and restart wxNote now?"
+msgstr "¿Aplicar los cambios de complementos pendientes y reiniciar wxNote ahora?"
+
+msgid "Plugin changes will take effect when wxNote restarts"
+msgstr "Los cambios de complementos se aplicarán al reiniciar wxNote"
+
+msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "plugins.dat fue escrito por una versión más reciente de wxNote, por lo que aquí es de sólo lectura."

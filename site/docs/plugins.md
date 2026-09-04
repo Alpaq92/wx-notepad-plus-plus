@@ -42,7 +42,10 @@ extern "C" NIB_API const NibPluginApi* nib_plugin_main(const NibBootstrap*);
 ```
 
 It returns a lifecycle vtable with an `id`, an `activate(host, query)` and an optional
-`deactivate(host)`. Everything else is negotiated at runtime: the plugin asks the host for a capability
+`deactivate(host)`. Since ABI **1.7** it may also carry an optional human-readable `name` and
+`version`, which is what the host shows in its installed-plugins list; both are read only when the
+plugin's own `struct_size` covers them, so older plugins are unaffected and simply display by `id`.
+`id` remains the identity - `name` and `version` are for display only. Everything else is negotiated at runtime: the plugin asks the host for a capability
 by **stable string id + minimum version**, and gets back a typed function table — or `NULL` if the host
 cannot satisfy it.
 

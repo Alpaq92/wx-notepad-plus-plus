@@ -5,4 +5,5 @@ namespace Label {
 inline const wxString MenuRun()                 { return _("&Run"); }
 inline const wxString RunExecute()              { return _("&Run..."); }
 inline const wxString RunValidateShortcutsXml() { return _("Validate shortcuts.xml"); }
+inline const wxString RunManageSaved()          { return _("Manage Saved Commands..."); }
 }

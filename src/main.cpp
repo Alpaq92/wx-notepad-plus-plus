@@ -247,6 +247,11 @@ static bool resolveDark(long themeMode) { return themeMode == 1 ? true : themeMo
 static const int myID_DOCLIST_ITEM = 61000;   // base id for the document-list dropdown entries
 static const int myID_MACRO_ITEM   = 62100;   // base id for saved-macro entries at the bottom of the Macro menu
 static const int kMaxMacroItems    = 200;     // width of the reserved myID_MACRO_ITEM id block (menu entries + bindable commands)
+// Saved Run commands, the same shape as saved macros one block up. 62400 rather than 62300 so the
+// macro block keeps room to grow without either range having to be renumbered - these ids reach the
+// menu, so once a user has bound one, moving it would repoint their shortcut at a different command.
+static const int myID_RUN_ITEM     = 62400;   // base id for saved Run-command entries at the bottom of the Run menu
+static const int kMaxRunItems      = 100;     // width of the reserved myID_RUN_ITEM id block
 static const int myID_OPENFOLDER_TOOL_BASE = 60300;   // base id for File > Open Containing Folder's dynamically-detected entries
 
 // The one persistent editor view (set by the frame), used to release a tab's Document when its
@@ -272,6 +277,59 @@ static int encodingFromName(const wxString& name)
 // One recorded Scintilla command in a macro (Macro menu: record / playback / run multiple).
 struct MacroStep { int msg; uptr_t wparam; sptr_t lparam; bool hasText = false; std::string text; };
 struct SavedMacro { long uid = 0; wxString name; std::vector<MacroStep> steps; };   // persisted to macros.dat
+
+// A user-defined Run command: a name for the Run menu, and the command line it launches with the same
+// $(...) variables the Run dialog documents. Persisted to runcommands.dat beside macros.dat, and keyed
+// by a monotonic uid so a keyboard binding survives the list being reordered (see runSym()).
+struct SavedRun { long uid = 0; wxString name; wxString cmd; };
+
+// The on-disk format, split out as free functions so it round-trips in a test with no frame. Name and
+// command are base64'd for the reason macros.dat base64s its name: the format is line-oriented and
+// either field may legitimately contain spaces, quotes, or a newline.
+static wxString wxnSerializeRuns(const std::vector<SavedRun>& runs, long nextUid)
+{
+    wxString out; out << "wxn-runs 1\n" << "next " << nextUid << "\n";
+    for (const SavedRun& r : runs)
+    {
+        const wxScopedCharBuffer nu = r.name.utf8_str();
+        const wxScopedCharBuffer cu = r.cmd.utf8_str();
+        out += wxString::Format("R %ld %s %s\n", r.uid,
+                                wxBase64Encode(nu.data(), nu.length()),
+                                wxBase64Encode(cu.data(), cu.length()));
+    }
+    return out;
+}
+// False means the file was written by a NEWER format version: the caller must then treat the set as
+// read-only rather than rewrite it, or saving would silently drop whatever it could not represent.
+// That is the same rule macros.dat follows.
+static bool wxnParseRuns(const wxString& text, std::vector<SavedRun>& out, long& nextUid)
+{
+    out.clear(); nextUid = 1;
+    wxStringTokenizer lines(text, "\n", wxTOKEN_STRTOK);
+    while (lines.HasMoreTokens())
+    {
+        wxString line = lines.GetNextToken(); line.Trim(true);   // drop any trailing \r
+        wxStringTokenizer tk(line, " ", wxTOKEN_STRTOK);
+        if (!tk.HasMoreTokens()) continue;
+        const wxString tag = tk.GetNextToken();
+        if (tag == "wxn-runs") { long v = 0; tk.GetNextToken().ToLong(&v); if (v > 1) { out.clear(); return false; } }
+        else if (tag == "next") { long n = 1; if (tk.GetNextToken().ToLong(&n)) nextUid = n; }
+        else if (tag == "R")
+        {
+            long uid = 0; if (!tk.GetNextToken().ToLong(&uid)) continue;
+            const wxMemoryBuffer nb = wxBase64Decode(tk.GetNextToken());
+            const wxMemoryBuffer cb = wxBase64Decode(tk.GetNextToken());
+            SavedRun r;
+            r.uid  = uid;
+            r.name = wxString::FromUTF8((const char*)nb.GetData(), nb.GetDataLen());
+            r.cmd  = wxString::FromUTF8((const char*)cb.GetData(), cb.GetDataLen());
+            if (r.name.empty() || r.cmd.empty()) continue;   // a half-written row is dropped, not shown blank
+            if (uid >= nextUid) nextUid = uid + 1;           // keep nextUid ahead of any uid on disk
+            out.push_back(r);
+        }
+    }
+    return true;
+}
 
 class EditorPage : public wxPanel
 {
@@ -2103,6 +2161,34 @@ struct NibCmd { std::string id, title; NibCommandFn fn; void* user; };
 static std::vector<NibCmd>            g_nibCommands;
 struct NibLoaded { const NibPluginApi* api; wxDynamicLibrary* lib; };   // a loaded Nib plugin (kept for teardown)
 static std::vector<NibLoaded> g_nibLibs;
+
+// Why a plugin file is not currently loaded. A CODE, not a message: loadNibPlugins runs from the frame
+// ctor and has no business owning UI strings, and the catalog gate would demand msgids for them there.
+// The Plugins Admin dialog turns these into translated text at display time.
+enum class NibFail { None, Disabled, OpenFailed, NoEntry, NoApi, AbiMajor, AbiMinor };
+
+// One entry per plugin FILE the loader considered - loaded or not. Built even for failures, because
+// until now a plugin that did not load simply vanished: no list, no message, nowhere for a user to see
+// that it had been rejected or why. That is the complaint the Installed tab answers first.
+struct NibPluginInfo {
+    std::string id;                 // NibPluginApi::id, or empty if it never got that far
+    std::string name;               // ABI 1.7 display name; empty -> fall back to id, then to `file`
+    std::string version;            // ABI 1.7 version string; may be empty
+    std::string file;               // base name, e.g. "udl_compat.dll"
+    std::string dir;                // the folder it was found in
+    bool        bundled = false;    // found in <exe>/nib rather than the user's own nib dir
+    bool        loaded  = false;
+    uint32_t    abi     = 0;        // the plugin's declared NIB_ABI_VERSION (0 if never read)
+    NibFail     fail    = NibFail::None;
+};
+static std::vector<NibPluginInfo> g_nibPlugins;
+
+// Plugins the user has switched off, keyed by LOWERCASED FILE NAME - deliberately not by plugin id.
+// The id lives inside the plugin and is only knowable by loading it, which is the exact thing being
+// avoided; the file name is known from the directory scan. It is also the key the loader's existing
+// first-dir-wins dedupe uses, so the two agree.
+static std::set<std::string> g_nibDisabledFiles;
+static bool nibIsDisabled(const wxString& file) { return g_nibDisabledFiles.count(std::string(file.Lower().utf8_str())) != 0; }
 static const int NIB_CMD_BASE = 63000;   // Nib command menu ids (clear of kCmd*, doc-list 61xxx, bridge plugins 62xxx)
 static const int kSciLangMenuBase = 63500;   // Language-menu ids for registered Scintillua languages (clear of NIB_CMD_BASE)
 
@@ -2422,7 +2508,8 @@ static const NibToolbarApi g_nibToolbarApi = { 2, sizeof(NibToolbarApi), nibTool
 //   * command ids - frozen kCmd*/IDM_* menu ids 1001..50011 (src/command_ids.h), wx stock ids (< 6000,
 //     incl. wxID_FILE1..9 MRU), myID_TIMER block 60000..60007, wxNote-private commands 60220..60230
 //     (src/private_ids.h), UI-language radios 60100..60109,
-//     Open-Containing-Folder tools 60300+, doc-list dropdown 61000..61999, saved macros 62100+,
+//     Open-Containing-Folder tools 60300+, doc-list dropdown 61000..61999, saved macros 62100..62299,
+//     saved Run commands 62400..62499,
 //     Nib plugin commands NIB_CMD_BASE 63000..63499, Scintillua language menu 63500..63999.
 //     Pool: 64000..64999 - and < 65536 on purpose, so a granted id survives the 16-bit WM_COMMAND
 //     path unwrapped (see MSWWindowProc / onCommand's & 0xFFFF; ids > 32767 arrive sign-wrapped and
@@ -2538,12 +2625,118 @@ static int nibCopyUtf8(const std::string& s, char* b, int c)
 // plugins and Import plugin(s) land here instead. Free-function shape because loadNibPlugins() is
 // one too; the path comes through g_nibUserDataDir - the same sandbox-aware seam every plugin
 // already reads - so --sandbox (and the selftest) cover this dir with no extra plumbing.
-static wxString nibUserPluginDir()
+// The user data dir as the free functions here see it - through the same sandbox-aware g_nibUserDataDir
+// hook every plugin reads, so --sandbox covers these files with no extra plumbing. Free-function shape
+// because loadNibPlugins() and the plugin-state file below both run before/outside the frame.
+static wxString nibUserDataRoot()
 {
     char b[2048];
     const int n = g_nibUserDataDir ? g_nibUserDataDir(b, static_cast<int>(sizeof(b))) : 0;
     if (n <= 0 || n >= static_cast<int>(sizeof(b))) return wxString();
-    return wxString::FromUTF8(b) + wxFILE_SEP_PATH + "nib";
+    return wxString::FromUTF8(b);
+}
+static wxString nibUserPluginDir()
+{
+    const wxString root = nibUserDataRoot();
+    return root.empty() ? wxString() : root + wxFILE_SEP_PATH + "nib";
+}
+
+// ---- plugin state: which plugins the user switched off, and which are queued for removal ----------
+// Two lists, both keyed by lowercased file name (see g_nibDisabledFiles for why not by plugin id):
+//   D <file>  disabled - found, listed, deliberately not loaded
+//   U <file>  queued for uninstall - deleted at the NEXT startup, before anything is loaded
+// Uninstall is queued rather than immediate because the file is mapped into this process the moment it
+// loaded: Windows refuses to delete it outright, and POSIX would unlink a library still in use. This is
+// the same "scheduled operations, applied on restart" model Visual Studio uses, and the reason the
+// dialog talks about pending changes rather than pretending the work happened.
+static std::set<std::string> g_nibPendingUninstall;
+
+static wxString wxnSerializePluginState(const std::set<std::string>& disabled,
+                                        const std::set<std::string>& uninstall)
+{
+    wxString out; out << "wxn-plugins 1\n";
+    for (const std::string& f : disabled)  out << "D " << wxString::FromUTF8(f) << "\n";
+    for (const std::string& f : uninstall) out << "U " << wxString::FromUTF8(f) << "\n";
+    return out;
+}
+// False for a newer format version: the caller must then leave the file alone rather than rewrite it,
+// the same rule macros.dat and runcommands.dat follow. File names may contain spaces, so the payload is
+// the rest of the line, not the next whitespace-delimited token.
+static bool wxnParsePluginState(const wxString& text, std::set<std::string>& disabled,
+                                std::set<std::string>& uninstall)
+{
+    disabled.clear(); uninstall.clear();
+    wxStringTokenizer lines(text, "\n", wxTOKEN_STRTOK);
+    while (lines.HasMoreTokens())
+    {
+        wxString line = lines.GetNextToken(); line.Trim(true);
+        if (line.StartsWith("wxn-plugins"))
+        {
+            long v = 0;
+            if (line.Mid(11).Trim(false).ToLong(&v) && v > 1) { disabled.clear(); uninstall.clear(); return false; }
+            continue;
+        }
+        if (line.length() < 3) continue;
+        const wxString payload = line.Mid(2).Trim(false).Lower();
+        if (payload.empty()) continue;
+        if      (line[0] == 'D') disabled.insert(std::string(payload.utf8_str()));
+        else if (line[0] == 'U') uninstall.insert(std::string(payload.utf8_str()));
+    }
+    return true;
+}
+
+static bool g_nibStateReadOnly = false;   // plugins.dat is a newer format version -> never overwrite it
+static wxString nibPluginStatePath()
+{
+    const wxString root = nibUserDataRoot();
+    return root.empty() ? wxString() : root + wxFILE_SEP_PATH + "plugins.dat";
+}
+static void loadNibPluginState()
+{
+    g_nibDisabledFiles.clear(); g_nibPendingUninstall.clear(); g_nibStateReadOnly = false;
+    wxLogNull noLog;
+    const wxString p = nibPluginStatePath();
+    if (p.empty() || !wxFileExists(p)) return;
+    wxFile f(p); wxString raw;
+    if (!f.IsOpened() || !f.ReadAll(&raw, wxConvUTF8)) return;
+    if (!wxnParsePluginState(raw, g_nibDisabledFiles, g_nibPendingUninstall)) g_nibStateReadOnly = true;
+}
+static void saveNibPluginState()
+{
+    if (g_nibStateReadOnly) return;
+    wxLogNull noLog;
+    const wxString root = nibUserDataRoot();
+    if (root.empty()) return;
+    if (!wxDirExists(root)) wxFileName::Mkdir(root, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+    const wxScopedCharBuffer u = wxnSerializePluginState(g_nibDisabledFiles, g_nibPendingUninstall).utf8_str();
+    wxnWriteFileAtomic(nibPluginStatePath(), u.data(), u.length());
+}
+// Delete anything queued for removal, BEFORE the loader maps any of it - that ordering is the whole
+// point of queueing. Only the user's own plugin dir is touched: <exe>/nib is not user-writable on an
+// installed build, so a bundled plugin can be disabled but never uninstalled, and the dialog offers
+// exactly that. An entry whose file is already gone is dropped (the job is done); one whose delete
+// FAILS stays queued and is retried next launch rather than being silently forgotten.
+static void applyPendingPluginUninstalls()
+{
+    if (g_nibPendingUninstall.empty()) return;
+    wxLogNull noLog;
+    const wxString dir = nibUserPluginDir();
+    std::set<std::string> stillQueued;
+    for (const std::string& want : g_nibPendingUninstall)
+    {
+        const wxString lower = wxString::FromUTF8(want);
+        wxString onDisk;
+        if (!dir.empty() && wxDirExists(dir))
+        {
+            wxDir d(dir); wxString f;
+            for (bool more = d.GetFirst(&f, wxEmptyString, wxDIR_FILES); more; more = d.GetNext(&f))
+                if (f.Lower() == lower) { onDisk = f; break; }
+        }
+        if (onDisk.empty()) continue;                                   // already gone: nothing to do
+        if (!wxRemoveFile(dir + wxFILE_SEP_PATH + onDisk)) stillQueued.insert(want);
+    }
+    g_nibPendingUninstall = std::move(stillQueued);
+    saveNibPluginState();
 }
 
 // Load Nib plugins via wxDynamicLibrary (portable: .dll / .so / .dylib) - from <exe>/nib/ first
@@ -2562,6 +2755,7 @@ static void loadNibPlugins()
     const std::vector<wxString> pats = { "*.so" };
 #endif
     const wxString exeNib = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "nib";
+    g_nibPlugins.clear();         // rebuilt from scratch on every scan, alongside g_nibLibs
     std::vector<wxString> seen;   // basenames already handled (loaded OR failed) - first dir wins
     for (const wxString& dir : { exeNib, nibUserPluginDir() })
     {
@@ -2573,21 +2767,49 @@ static void loadNibPlugins()
         const wxString key = f.Lower();
         if (std::find(seen.begin(), seen.end(), key) != seen.end()) continue;
         seen.push_back(key);
+        // Recorded for EVERY candidate file, before anything can go wrong, so a failure still produces
+        // a row. `info` is filled in as the load progresses and pushed exactly once, at the end.
+        NibPluginInfo info;
+        info.file    = std::string(f.utf8_str());
+        info.dir     = std::string(dir.utf8_str());
+        info.bundled = (dir == exeNib);
+        if (nibIsDisabled(f))   // switched off by the user: not an error, and not loaded
+        {
+            info.fail = NibFail::Disabled;
+            g_nibPlugins.push_back(info);
+            continue;
+        }
         auto* lib = new wxDynamicLibrary(dir + wxFILE_SEP_PATH + f);
         bool ok = false;
+        info.fail = NibFail::OpenFailed;
         if (lib->IsLoaded())
         {
+            info.fail = NibFail::NoEntry;
             auto entry = reinterpret_cast<NibPluginMainFn>(lib->GetSymbol("nib_plugin_main"));
             if (entry)
             {
                 NibBootstrap boot{ NIB_ABI_VERSION, sizeof(NibBootstrap), reinterpret_cast<NibHost*>(g_view), &nibQuery, &nibLog };
                 const NibPluginApi* api = entry(&boot);
+                info.fail = NibFail::NoApi;
+                if (api)
+                {
+                    info.abi = api->abi_version;
+                    if (api->id) info.id = api->id;
+                    // ABI 1.7 additions - guarded on the PLUGIN's struct_size, never on the host's
+                    // version: the plugin decides how much struct it actually supplied.
+                    if (NIB_PLUGIN_API_HAS(api, name)    && api->name)    info.name    = api->name;
+                    if (NIB_PLUGIN_API_HAS(api, version) && api->version) info.version = api->version;
+                    info.fail = (api->abi_version >> 16) != (NIB_ABI_VERSION >> 16)      ? NibFail::AbiMajor
+                              : (api->abi_version & 0xFFFFu) > (NIB_ABI_VERSION & 0xFFFFu) ? NibFail::AbiMinor
+                              : NibFail::None;
+                }
                 // Same major, and the plugin's declared minor must not EXCEED the host's: minor
                 // bumps add tables/events (nib.events v5, nib.documents v5, ...), so a plugin built
                 // against a newer minor would query interfaces this host cannot hand out and either
                 // no-op silently or crash on the missing entry points. An older-minor plugin is fine.
-                if (api && (api->abi_version >> 16) == (NIB_ABI_VERSION >> 16)
-                        && (api->abi_version & 0xFFFFu) <= (NIB_ABI_VERSION & 0xFFFFu))
+                // The verdict itself is computed into info.fail above, so the load gate and what the
+                // Installed list reports about that plugin can never disagree.
+                if (info.fail == NibFail::None)
                 {
                     if (api->activate) api->activate(reinterpret_cast<NibHost*>(g_view), &nibQuery);
                     g_nibLibs.push_back({ api, lib });
@@ -2596,6 +2818,8 @@ static void loadNibPlugins()
             }
         }
         if (!ok) { lib->Unload(); delete lib; }
+        info.loaded = ok;
+        g_nibPlugins.push_back(info);
     }
     }
 }
@@ -3664,6 +3888,11 @@ public:
             }
             m_nibToolIds.clear();
         };
+        // Read the user's plugin state and act on it BEFORE the loader maps anything: the disabled set
+        // decides what loadNibPlugins skips, and a queued uninstall can only delete a file that is not
+        // yet mapped into this process.
+        loadNibPluginState();
+        applyPendingPluginUninstalls();
         if (!g_safeMode)    // --safe: load nothing from <exe>/nib - our own Nib plugins AND the GPL npp-bridge
             loadNibPlugins();   // cross-platform: plugins written against our own Nib API (include/nib/nib.h)
         if (!g_nibCommands.empty())   // surface registered Nib commands in the Plugins menu
@@ -6021,7 +6250,16 @@ private:
         auto* tc = new wxTextCtrl(&dlg, wxID_ANY, cmd, wxDefaultPosition, wxSize(520, -1));
         auto* browse = new wxButton(&dlg, wxID_ANY, "...", wxDefaultPosition, wxSize(32, -1));
         auto* row = new wxBoxSizer(wxHORIZONTAL); row->Add(tc, 1, wxEXPAND); row->Add(browse, 0, wxLEFT, 4);
-        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
+        // Save names the command and lists it on the Run menu, where it also becomes bindable in the
+        // Shortcut Mapper. It deliberately does NOT also launch: naming a command and running it are
+        // separate intents, and a command worth saving is often one you are still composing.
+        bool saveRequested = false;
+        auto* btn = new wxBoxSizer(wxHORIZONTAL);
+        auto* saveb = new wxButton(&dlg, wxID_ANY, _("Save..."));
+        saveb->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            if (tc->GetValue().Trim().Trim(false).empty()) return;
+            saveRequested = true; dlg.EndModal(wxID_OK); });
+        btn->Add(saveb, 0); btn->AddStretchSpacer();
         auto* runb = new wxButton(&dlg, wxID_OK, _("Run")); runb->SetDefault();
         btn->Add(runb, 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL);
@@ -6035,8 +6273,34 @@ private:
         if (dlg.ShowModal() != wxID_OK) return;
         cmd = tc->GetValue().Trim().Trim(false); if (cmd.empty()) return;
         wxConfigBase::Get()->Write("RunCommand", cmd); wxConfigBase::Get()->Flush();
+        if (saveRequested) { saveRunCommandAs(cmd); return; }
         const wxString full = substituteRunVars(cmd);
         if (wxExecute(full, wxEXEC_ASYNC) == 0) wxMessageBox(_("Failed to run:\n") + full, _("Run"), wxOK | wxICON_ERROR, this);
+    }
+    // Name `cmd` and publish it: Run menu entry, keymap row, disk. Runs AFTER the Run dialog has closed
+    // (onRun defers to here) so the naming prompt is not a modal on top of a modal.
+    void saveRunCommandAs(const wxString& cmd)
+    {
+        if (m_runsReadOnly)
+        {
+            wxMessageBox(_("runcommands.dat was written by a newer version of wxNote, so it is read-only here."),
+                         _("Saved Run commands"), wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+        if (m_savedRuns.size() >= (size_t)kMaxRunItems)
+        {
+            wxMessageBox(wxString::Format(_("The saved Run command list is full (%d)."), kMaxRunItems),
+                         _("Saved Run commands"), wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+        wxTextEntryDialog te(this, _("Name:"), _("Save Run command"), cmd);
+        themeDialog(&te);
+        if (te.ShowModal() != wxID_OK) return;
+        const wxString name = te.GetValue().Trim(true).Trim(false);
+        if (name.empty()) return;
+        m_savedRuns.push_back({ m_runNextUid++, name, cmd });
+        refreshRunRegistrations();
+        setStatus(0, wxString::Format(_("Saved Run command \"%s\""), name)); m_hint = true;
     }
 
     // ----- sessions (File > Save / Load Session + the nib.session/1 by-path surface) ------------------
@@ -8143,6 +8407,9 @@ private:
         loadSavedMacros();                    // restore saved macros from macros.dat...
         appendMacroMenuItems();               // ...list them on the (already-built) Macro menu...
         seedMacroKeymapDefaults();            // ...and register "macro.<uid>" so a stored binding resolves + the mapper shows them
+        loadSavedRuns();                      // same three steps for the saved Run commands
+        appendRunMenuItems();
+        seedRunKeymapDefaults();
         registerKeymapSchemes(m_keymap);
         m_keymap.load(userDataDir());
         loadFunctionListRules(userDataDir() + wxFILE_SEP_PATH + "functionList.conf");   // user-defined Function List languages
@@ -13165,6 +13432,145 @@ private:
         wxnWriteFileAtomic(macrosFilePath(), u.data(), u.length());   // atomic replace; short write keeps the old file
     }
 
+    // ----- saved Run commands ------------------------------------------------------------------------
+    // The Run menu's counterpart to saved macros, and deliberately the same machinery: a named command
+    // list, listed at the bottom of its menu, seeded into the keymap under a uid-keyed symbolic name so
+    // the Shortcut Mapper can bind it. Menu ids are positional (myID_RUN_ITEM + index) while bindings
+    // are keyed by uid, so anything that REORDERS the list has to move the command ids with it -
+    // refreshRunRegistrations() below, exactly as refreshMacroRegistrations() does for macros.
+    wxString runsFilePath() { return userDataDir() + wxFILE_SEP_PATH + "runcommands.dat"; }
+    static wxString runSym(long uid) { return wxString::Format("run.%ld", uid); }
+    void loadSavedRuns()
+    {
+        m_savedRuns.clear(); m_runNextUid = 1; m_runsReadOnly = false;
+        wxLogNull noLog;
+        const wxString path = runsFilePath();
+        if (!wxFileExists(path)) return;
+        wxFile f(path); wxString raw;
+        if (!f.IsOpened() || !f.ReadAll(&raw, wxConvUTF8)) return;
+        if (!wxnParseRuns(raw, m_savedRuns, m_runNextUid)) m_runsReadOnly = true;
+    }
+    void saveSavedRuns()
+    {
+        if (m_runsReadOnly) return;
+        wxLogNull noLog;
+        const wxString dir = userDataDir();
+        if (!wxDirExists(dir)) wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        const wxScopedCharBuffer u = wxnSerializeRuns(m_savedRuns, m_runNextUid).utf8_str();
+        wxnWriteFileAtomic(runsFilePath(), u.data(), u.length());
+    }
+    void appendRunMenuItems()   // (re)list the saved commands at the bottom of the Run menu
+    {
+        wxMenu* menu = m_menuRegistry.find("menu.run"); if (!menu) return;
+        for (int id = myID_RUN_ITEM; id < myID_RUN_ITEM + kMaxRunItems; ++id) if (auto* it = menu->FindItem(id)) menu->Destroy(it);
+        // Same separator rule as the Macro menu: it only earns its place while something follows it, so
+        // deleting the last command must not leave the menu ending in a bare rule.
+        if (m_savedRuns.empty() && m_runSepAdded)
+        {
+            const auto& items = menu->GetMenuItems();
+            if (!items.IsEmpty() && items.GetLast()->GetData()->IsSeparator()) menu->Destroy(items.GetLast()->GetData());
+            m_runSepAdded = false;
+        }
+        if (!m_savedRuns.empty() && !m_runSepAdded) { menu->AppendSeparator(); m_runSepAdded = true; }
+        for (size_t i = 0; i < m_savedRuns.size() && i < (size_t)kMaxRunItems; ++i) menu->Append(myID_RUN_ITEM + (int)i, m_savedRuns[i].name);
+    }
+    void seedRunKeymapDefaults()   // Tier-0 rows so a stored "run.<uid>" binding resolves at m_keymap.load()
+    {
+        for (size_t i = 0; i < m_savedRuns.size() && i < (size_t)kMaxRunItems; ++i)
+            m_keymap.addDefault(runSym(m_savedRuns[i].uid), myID_RUN_ITEM + (int)i, wxString());
+    }
+    // Re-publish after the list CHANGES (add / rename / delete). `goneUids` are commands that no longer
+    // exist: their Tier-0 row and any user binding go with them, since a uid is never reused.
+    void refreshRunRegistrations(const std::vector<long>& goneUids = {})
+    {
+        for (long uid : goneUids) m_keymap.removeDefault(runSym(uid));
+        for (size_t i = 0; i < m_savedRuns.size() && i < (size_t)kMaxRunItems; ++i)
+            m_keymap.remapCmdId(runSym(m_savedRuns[i].uid), myID_RUN_ITEM + (int)i);
+        seedRunKeymapDefaults();     // covers any command not yet seeded (remapCmdId ignores unknown syms)
+        m_keymap.resolveAll();
+        appendRunMenuItems();        // must precede refreshAccelerators: it re-Appends the items whose
+                                     // labels the native menubar derives its accelerators from
+        refreshAccelerators(m_accelScope);
+        m_keymap.save();
+        saveSavedRuns();
+    }
+    // Run the saved command at `index` (the Run menu's positional entry, and what a bound shortcut hits).
+    void runSavedCommand(size_t index)
+    {
+        if (index >= m_savedRuns.size()) return;
+        const wxString full = substituteRunVars(m_savedRuns[index].cmd);
+        if (wxExecute(full, wxEXEC_ASYNC) == 0)
+            wxMessageBox(_("Failed to run:\n") + full, _("Run"), wxOK | wxICON_ERROR, this);
+    }
+    // Run ▸ Manage Saved Commands…: rename, edit and delete. Mirrors manageMacros(); the list is worked
+    // on a copy and committed only on OK, so Cancel cannot half-apply a rename.
+    void manageRunCommands()
+    {
+        if (m_runsReadOnly)
+        {
+            wxMessageBox(_("runcommands.dat was written by a newer version of wxNote, so it is read-only here."),
+                         _("Saved Run commands"), wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+        if (m_savedRuns.empty())
+        {
+            wxMessageBox(_("No saved Run commands yet. Use Run... and press Save to name one."),
+                         _("Saved Run commands"), wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+        std::vector<SavedRun> work = m_savedRuns;   // committed only on OK
+        wxDialog dlg(this, wxID_ANY, _("Saved Run commands"), wxDefaultPosition, wxDefaultSize,
+                     wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+        auto* list = new wxListBox(&dlg, wxID_ANY, wxDefaultPosition, wxSize(280, 240));
+        auto* cmdTc = new wxTextCtrl(&dlg, wxID_ANY, "", wxDefaultPosition, wxSize(360, -1));
+        auto* btnRename = new wxButton(&dlg, wxID_ANY, _("Rename..."));
+        auto* btnDelete = new wxButton(&dlg, wxID_ANY, _("Delete"));
+        auto fill = [&]{ list->Clear(); for (const SavedRun& r : work) list->Append(r.name); };
+        auto showSel = [&]{ const int i = list->GetSelection();
+                            cmdTc->SetValue(i >= 0 && i < (int)work.size() ? work[(size_t)i].cmd : wxString()); };
+        fill(); if (!work.empty()) { list->SetSelection(0); showSel(); }
+        list->Bind(wxEVT_LISTBOX, [&](wxCommandEvent&){ showSel(); });
+        btnRename->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            const int i = list->GetSelection(); if (i < 0 || i >= (int)work.size()) return;
+            wxTextEntryDialog te(&dlg, _("Name:"), _("Rename"), work[(size_t)i].name);
+            themeDialog(&te);
+            if (te.ShowModal() != wxID_OK) return;
+            const wxString n = te.GetValue().Trim(true).Trim(false);
+            if (n.empty()) return;
+            work[(size_t)i].name = n; fill(); list->SetSelection(i); showSel(); });
+        btnDelete->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            const int i = list->GetSelection(); if (i < 0 || i >= (int)work.size()) return;
+            work.erase(work.begin() + i); fill();
+            if (!work.empty()) list->SetSelection(wxMin(i, (int)work.size() - 1));
+            showSel(); });
+        auto* side = new wxBoxSizer(wxVERTICAL);
+        side->Add(btnRename, 0, wxEXPAND | wxBOTTOM, 6); side->Add(btnDelete, 0, wxEXPAND);
+        auto* mid = new wxBoxSizer(wxHORIZONTAL);
+        mid->Add(list, 1, wxEXPAND | wxRIGHT, 10); mid->Add(side, 0);
+        auto* btn = new wxBoxSizer(wxHORIZONTAL); btn->AddStretchSpacer();
+        btn->Add(new wxButton(&dlg, wxID_OK, _("OK")), 0, wxRIGHT, 6);
+        btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
+        auto* top = new wxBoxSizer(wxVERTICAL);
+        top->Add(mid, 1, wxEXPAND | wxALL, 12);
+        top->Add(new wxStaticText(&dlg, wxID_ANY, _("Command:")), 0, wxLEFT | wxRIGHT, 12);
+        top->Add(cmdTc, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 12);
+        top->Add(btn, 0, wxEXPAND | wxALL, 12);
+        dlg.SetSizerAndFit(top); dlg.CentreOnParent();
+        themeDialog(&dlg);
+        if (dlg.ShowModal() != wxID_OK) return;
+        // Whatever is no longer in `work` has been deleted: drop its binding too, or shortcuts.json
+        // keeps resurrecting an orphan row for a command that can never come back.
+        std::vector<long> gone;
+        for (const SavedRun& before : m_savedRuns)
+        {
+            bool still = false;
+            for (const SavedRun& after : work) if (after.uid == before.uid) { still = true; break; }
+            if (!still) gone.push_back(before.uid);
+        }
+        m_savedRuns = std::move(work);
+        refreshRunRegistrations(gone);
+    }
+
     // ----- dark / light theme -------------------------------------------
     // Parse the theme XML (dark = themes/DarkModeDefault.xml, light = stylers.model.xml)
     // deployed next to the exe. The schema is a Notepad++-compatible format, so a third-party
@@ -13700,6 +14106,188 @@ private:
             restartWithTheme();
         else
         { setStatus(0, wxString::Format(_("Imported %d plugin(s) - restart to load them"), n)); m_hint = true; }
+    }
+
+    // ----- Extensions > Manage Plugins... (the Plugins Admin "Installed" surface) --------------------
+    // Deliberately Installed-only for now. Available/Updates need a catalog, a network fetch and a
+    // signed index; this needs none of the three, so it ships on its own and is useful to anyone who has
+    // ever dropped a plugin into the folder by hand. See docs/PLUGINS_ADMIN_DESIGN.md.
+    //
+    // Every operation is QUEUED and applied on restart, following Visual Studio's scheduled-operations
+    // model, because the alternative is not available to us: a plugin that is loaded is mapped into this
+    // process, so it cannot be deleted, and unloading one live is what the npp_bridge shutdown crash was
+    // about. Queue-and-restart is one honest mechanism rather than enable-now / uninstall-later.
+    enum class PluginOp { None, Enable, Disable, Uninstall };
+    static wxString nibStatusText(const NibPluginInfo& p)
+    {
+        switch (p.fail)
+        {
+            case NibFail::Disabled:   return _("Disabled");
+            case NibFail::OpenFailed: return _("Could not be opened");
+            case NibFail::NoEntry:    return _("Not a plugin (no entry point)");
+            case NibFail::NoApi:      return _("The plugin declined to start");
+            case NibFail::AbiMajor:   return _("Built for a different plugin ABI");
+            case NibFail::AbiMinor:   return _("Needs a newer version of wxNote");
+            default:                  return p.loaded ? _("Loaded") : _("Not loaded");
+        }
+    }
+    void managePlugins()
+    {
+        std::map<std::string, PluginOp> pend;   // keyed by lowercased file name, like every plugin set
+        auto keyOf = [](const NibPluginInfo& p) { return std::string(wxString::FromUTF8(p.file).Lower().utf8_str()); };
+        auto opFor = [&](const NibPluginInfo& p) {
+            auto it = pend.find(keyOf(p)); return it == pend.end() ? PluginOp::None : it->second; };
+        // What the row WILL be once the pending changes are applied - what the checkbox has to show, or
+        // ticking a box would appear to do nothing until the restart.
+        auto willBeDisabled = [&](const NibPluginInfo& p) {
+            switch (opFor(p)) { case PluginOp::Enable:  return false;
+                                case PluginOp::Disable: return true;
+                                default: return p.fail == NibFail::Disabled; } };
+
+        wxDialog dlg(this, wxID_ANY, _("Plugins"), wxDefaultPosition, wxDefaultSize,
+                     wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+        auto* list = new wxListCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxSize(620, 260),
+                                    wxLC_REPORT | wxLC_SINGLE_SEL);
+        list->AppendColumn(_("Plugin"),  wxLIST_FORMAT_LEFT, 240);
+        list->AppendColumn(_("Version"), wxLIST_FORMAT_LEFT, 80);
+        list->AppendColumn(_("Status"),  wxLIST_FORMAT_LEFT, 200);
+        list->AppendColumn(_("Source"),  wxLIST_FORMAT_LEFT, 90);
+        auto* detail  = new wxStaticText(&dlg, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 56));
+        auto* pending = new wxStaticText(&dlg, wxID_ANY, "");
+        auto* btnToggle    = new wxButton(&dlg, wxID_ANY, _("Disable"));
+        auto* btnUninstall = new wxButton(&dlg, wxID_ANY, _("Uninstall"));
+
+        auto fill = [&]{
+            list->DeleteAllItems();
+            for (size_t i = 0; i < g_nibPlugins.size(); ++i)
+            {
+                const NibPluginInfo& p = g_nibPlugins[i];
+                const wxString shown = !p.name.empty()  ? wxString::FromUTF8(p.name)
+                                     : !p.id.empty()    ? wxString::FromUTF8(p.id)
+                                                        : wxString::FromUTF8(p.file);
+                const long row = list->InsertItem((long)i, shown);
+                list->SetItem(row, 1, wxString::FromUTF8(p.version));
+                // The pending op wins the Status cell: it is the answer to "what did my click do?".
+                wxString status;
+                switch (opFor(p))
+                {
+                    case PluginOp::Enable:    status = _("Will be enabled");     break;
+                    case PluginOp::Disable:   status = _("Will be disabled");    break;
+                    case PluginOp::Uninstall: status = _("Will be uninstalled"); break;
+                    default:                  status = nibStatusText(p);         break;
+                }
+                list->SetItem(row, 2, status);
+                list->SetItem(row, 3, p.bundled ? _("Bundled") : _("User"));
+                list->SetItemData(row, (long)i);
+                if (opFor(p) != PluginOp::None)      list->SetItemTextColour(row, wxColour(0x4A, 0x90, 0xD9));
+                else if (p.fail == NibFail::Disabled) list->SetItemTextColour(row, wxColour(0x88, 0x88, 0x88));
+                else if (!p.loaded)                   list->SetItemTextColour(row, wxColour(0xE0, 0x40, 0x40));
+            }
+        };
+        auto selected = [&]() -> const NibPluginInfo* {
+            const long r = list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+            if (r < 0) return nullptr;
+            const size_t i = (size_t)list->GetItemData(r);
+            return i < g_nibPlugins.size() ? &g_nibPlugins[i] : nullptr;
+        };
+        auto refreshButtons = [&]{
+            const NibPluginInfo* p = selected();
+            btnToggle->Enable(p != nullptr);
+            // Bundled plugins live in <exe>/nib, which an installed build cannot write - so they can be
+            // switched off but never removed. Saying so beats a button that fails.
+            btnUninstall->Enable(p && !p->bundled);
+            if (p) btnToggle->SetLabel(willBeDisabled(*p) ? _("Enable") : _("Disable"));
+            wxString d;
+            if (p)
+            {
+                d << (p->id.empty() ? _("(no id)") : wxString::FromUTF8(p->id)) << "\n"
+                  << wxString::FromUTF8(p->file) << "  -  " << wxString::FromUTF8(p->dir);
+                if (p->abi) d << "\n" << wxString::Format(_("Plugin ABI %u.%u"), p->abi >> 16, p->abi & 0xFFFFu);
+                if (p->bundled) d << "    " << _("Bundled plugins can be disabled but not uninstalled.");
+            }
+            detail->SetLabel(d);
+            int n = 0; for (const auto& kv : pend) if (kv.second != PluginOp::None) ++n;
+            pending->SetLabel(n == 0 ? wxString()
+                                     : wxString::Format(_("%d pending change(s) - they take effect when wxNote restarts."), n));
+        };
+        auto setOp = [&](PluginOp op) {
+            const NibPluginInfo* p = selected(); if (!p) return;
+            const long r = list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+            // Choosing the state the plugin is already in cancels the pending op rather than recording a
+            // no-op, so the pending count only ever counts real changes.
+            const bool alreadyDisabled = (p->fail == NibFail::Disabled);
+            if ((op == PluginOp::Disable && alreadyDisabled) || (op == PluginOp::Enable && !alreadyDisabled))
+                pend.erase(keyOf(*p));
+            else
+                pend[keyOf(*p)] = op;
+            fill();
+            if (r >= 0 && r < list->GetItemCount())
+                list->SetItemState(r, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED,
+                                      wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
+            refreshButtons();
+        };
+        btnToggle->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            const NibPluginInfo* p = selected(); if (!p) return;
+            setOp(willBeDisabled(*p) ? PluginOp::Enable : PluginOp::Disable); });
+        btnUninstall->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){ setOp(PluginOp::Uninstall); });
+        list->Bind(wxEVT_LIST_ITEM_SELECTED,   [&](wxListEvent&){ refreshButtons(); });
+        list->Bind(wxEVT_LIST_ITEM_DESELECTED, [&](wxListEvent&){ refreshButtons(); });
+
+        auto* side = new wxBoxSizer(wxVERTICAL);
+        side->Add(btnToggle, 0, wxEXPAND | wxBOTTOM, 6); side->Add(btnUninstall, 0, wxEXPAND);
+        auto* mid = new wxBoxSizer(wxHORIZONTAL);
+        mid->Add(list, 1, wxEXPAND | wxRIGHT, 10); mid->Add(side, 0);
+        auto* btn = new wxBoxSizer(wxHORIZONTAL);
+        btn->Add(pending, 1, wxALIGN_CENTRE_VERTICAL);
+        btn->Add(new wxButton(&dlg, wxID_OK, _("OK")), 0, wxRIGHT, 6);
+        btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
+        auto* top = new wxBoxSizer(wxVERTICAL);
+        if (g_nibPlugins.empty())
+            top->Add(new wxStaticText(&dlg, wxID_ANY, _("No plugins found.")), 0, wxALL, 12);
+        top->Add(mid, 1, wxEXPAND | wxALL, 12);
+        top->Add(detail, 0, wxEXPAND | wxLEFT | wxRIGHT, 12);
+        top->Add(btn, 0, wxEXPAND | wxALL, 12);
+        dlg.SetSizerAndFit(top); dlg.CentreOnParent();
+        fill(); refreshButtons();
+        themeDialog(&dlg);
+#ifdef __WXMSW__
+        // The report-mode header is a SysHeader32 child of the list and is NOT reached by themeDialog's
+        // recursive pass, so in dark mode it renders as a white band across the top. Same fix, and same
+        // ordering requirement, as the Shortcut Mapper's darkenGridHeaderMSW(): it has to run AFTER
+        // themeDialog, or that pass's blanket Explorer theme overwrites it.
+        if (m_dark)
+            if (HWND hdr = ::FindWindowExW(static_cast<HWND>(list->GetHandle()), nullptr, L"SysHeader32", nullptr))
+                ::SetWindowTheme(hdr, L"DarkMode_ItemsView", nullptr);
+#endif
+        if (dlg.ShowModal() != wxID_OK || pend.empty()) return;
+
+        if (g_nibStateReadOnly)
+        {
+            wxMessageBox(_("plugins.dat was written by a newer version of wxNote, so it is read-only here."),
+                         _("Plugins"), wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+        for (const auto& kv : pend)
+        {
+            switch (kv.second)
+            {
+                case PluginOp::Enable:    g_nibDisabledFiles.erase(kv.first);     break;
+                case PluginOp::Disable:   g_nibDisabledFiles.insert(kv.first);    break;
+                // An uninstall also drops any disabled flag: the file is going away, and leaving a
+                // stale entry behind would silently disable a plugin of the same name reinstalled later.
+                case PluginOp::Uninstall: g_nibDisabledFiles.erase(kv.first);
+                                          g_nibPendingUninstall.insert(kv.first); break;
+                default: break;
+            }
+        }
+        saveNibPluginState();
+        // restartWithTheme() is the project's one clean-relaunch path (save prompts, session save,
+        // relaunch); the name is historical - importPlugin() already reuses it for exactly this.
+        if (wxMessageBox(_("Apply the pending plugin changes and restart wxNote now?"),
+                         _("Plugins"), wxYES_NO | wxICON_QUESTION, this) == wxYES)
+            restartWithTheme();
+        else
+        { setStatus(0, _("Plugin changes will take effect when wxNote restarts")); m_hint = true; }
     }
     void applyEditorTheme(bool dark)
     {
@@ -14504,6 +15092,8 @@ private:
         { applyScintilluaToActiveBuffer(m_sciLangs[cmd - kSciLangMenuBase].name); return; }
         if (cmd >= myID_MACRO_ITEM && cmd < myID_MACRO_ITEM + kMaxMacroItems)   // a saved macro from the Macro menu
         { const size_t n = (size_t)(cmd - myID_MACRO_ITEM); if (n < m_savedMacros.size()) playMacro(m_savedMacros[n].steps); return; }
+        if (cmd >= myID_RUN_ITEM && cmd < myID_RUN_ITEM + kMaxRunItems)   // a saved command from the Run menu
+        { runSavedCommand((size_t)(cmd - myID_RUN_ITEM)); return; }
         if (cmd >= myID_OPENFOLDER_TOOL_BASE && cmd < myID_OPENFOLDER_TOOL_BASE + (int)m_openFolderTools.size())
         { openHereToolAt(cmd - myID_OPENFOLDER_TOOL_BASE); return; }   // a dynamically-detected File > Open Containing Folder entry
         if (cmd >= myID_SPELL_SUGGEST_BASE && cmd < myID_SPELL_SUGGEST_BASE + 9)   // spell right-click: apply a suggestion
@@ -14847,6 +15437,7 @@ private:
             case kCmdLangstyleConfigDlg: onStyleConfig(); break;
             case kCmdSettingImportPlugin: importPlugin(); break;
             case kCmdSettingImportStyleThemes: importStyleTheme(); break;
+            case kCmdSettingPluginadm: managePlugins(); break;
             case kCmdSettingOpenPluginsDir: {
                 // Open the one folder where dropping a plugin file WORKS on every build shape:
                 // <userDataDir>/nib, scanned by loadNibPlugins() after <exe>/nib. The old target was
@@ -14912,6 +15503,7 @@ private:
                 break;
 
             case kCmdExecuteBase: onRun(); break;   // Run... (F5)
+            case kCmdExecuteManageSaved: manageRunCommands(); break;
 
             case kCmdExecuteValidateShortcutsXml: {   // 49001: "Validate shortcuts.xml"
                 // Stay N++-agnostic: the core knows only that SOME plugin may offer a well-known
@@ -15314,6 +15906,10 @@ private:
     long                    m_macroNextUid = 1;      // monotonic; never reused, so a shortcut binding never leaks to another macro
     bool                    m_macrosReadOnly = false; // true if macros.dat is a newer format version -> never overwrite it
     bool        m_macroSepAdded = false;
+    std::vector<SavedRun>   m_savedRuns;      // named Run commands; persisted to runcommands.dat under userDataDir()
+    long                    m_runNextUid = 1;        // monotonic, same contract as m_macroNextUid
+    bool                    m_runsReadOnly = false;  // true if runcommands.dat is a newer format version -> never overwrite it
+    bool                    m_runSepAdded = false;
     bool        m_hint = false;   // a "needs full app" message is showing in status field 0
     // cached toolbar/menu enable states (start enabled, matching the freshly-built toolbar)
     bool        m_stSave = true, m_stSaveAll = true, m_stUndo = true, m_stRedo = true, m_stSel = true, m_stPaste = true, m_stHasPath = true;
@@ -15883,6 +16479,7 @@ public:
     // frozen, ABI-compatibility command ranges that intentionally live above 32767 -
     //     doc-list dropdown   myID_DOCLIST_ITEM   61000+   (core: fires when the tab list is opened)
     //     saved macros        myID_MACRO_ITEM     62100+
+    //     saved Run commands  myID_RUN_ITEM       62400+   (appended to the Run menu, like the macros above)
     //     Nib plugin cmds     NIB_CMD_BASE        63000+   (appended at startup if a plugin registers)
     //     Scintillua langs    kSciLangMenuBase    63500+   (appended at startup, e.g. via udl-compat)
     //     nib.alloc pool      NIB_ALLOC_CMD_FIRST 64000+

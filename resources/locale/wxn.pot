@@ -3308,3 +3308,123 @@ msgstr ""
 
 msgid "Plugin commands"
 msgstr ""
+
+msgid "Save..."
+msgstr ""
+
+msgid "Delete"
+msgstr ""
+
+msgid "Rename..."
+msgstr ""
+
+msgid "Command:"
+msgstr ""
+
+msgid "Manage Saved Commands..."
+msgstr ""
+
+msgid "Run commands"
+msgstr ""
+
+msgid "Saved Run commands"
+msgstr ""
+
+msgid "Save Run command"
+msgstr ""
+
+msgid "Saved Run command \"%s\""
+msgstr ""
+
+msgid "The saved Run command list is full (%d)."
+msgstr ""
+
+msgid "No saved Run commands yet. Use Run... and press Save to name one."
+msgstr ""
+
+msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr ""
+
+msgid "Plugins"
+msgstr ""
+
+msgid "Plugin"
+msgstr ""
+
+msgid "Version"
+msgstr ""
+
+msgid "Status"
+msgstr ""
+
+msgid "Bundled"
+msgstr ""
+
+msgid "Enable"
+msgstr ""
+
+msgid "Disable"
+msgstr ""
+
+msgid "Disabled"
+msgstr ""
+
+msgid "Uninstall"
+msgstr ""
+
+msgid "Loaded"
+msgstr ""
+
+msgid "Not loaded"
+msgstr ""
+
+msgid "Could not be opened"
+msgstr ""
+
+msgid "Not a plugin (no entry point)"
+msgstr ""
+
+msgid "The plugin declined to start"
+msgstr ""
+
+msgid "Built for a different plugin ABI"
+msgstr ""
+
+msgid "Needs a newer version of wxNote"
+msgstr ""
+
+msgid "Will be enabled"
+msgstr ""
+
+msgid "Will be disabled"
+msgstr ""
+
+msgid "Will be uninstalled"
+msgstr ""
+
+msgid "No plugins found."
+msgstr ""
+
+msgid "(no id)"
+msgstr ""
+
+msgid "Manage Plugins..."
+msgstr ""
+
+msgid "Plugin ABI %u.%u"
+msgstr ""
+
+msgid "Bundled plugins can be disabled but not uninstalled."
+msgstr ""
+
+msgid "%d pending change(s) - they take effect when wxNote restarts."
+msgstr ""
+
+msgid "Apply the pending plugin changes and restart wxNote now?"
+msgstr ""
+
+msgid "Plugin changes will take effect when wxNote restarts"
+msgstr ""
+
+msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr ""

@@ -108,8 +108,9 @@ private:
     // Category filter runs per row on every filter keystroke, so re-deriving it there (by re-testing the
     // "macro.<uid>" symbolicName format that main.cpp's macroSym() owns) would put a cross-file string
     // contract inside the refill hot loop.
-    // `plugin` is the third such per-row category, resolved once here for the same reason as `macro`.
-    struct Row { int cmdId = 0; wxString sym; bool editor = false; int sciCmd = 0; wxString name; bool macro = false; bool plugin = false; };
+    // `plugin` and `run` are the third and fourth such per-row categories, resolved once here for the
+    // same reason as `macro`.
+    struct Row { int cmdId = 0; wxString sym; bool editor = false; int sciCmd = 0; wxString name; bool macro = false; bool plugin = false; bool run = false; };
 
     // A SAVED macro's row, i.e. main.cpp's macroSym() format "macro.<uid>" - as opposed to the static
     // Macro-MENU commands, whose symbolicNames also begin "macro." ("macro.startRecording",
@@ -117,10 +118,18 @@ private:
     // together, which put the six built-in menu commands under Show: Macros and hid them from Show: Menu
     // commands. The uid suffix is all-digits and the menu commands are all camelCase, so requiring digits
     // separates them without changing the on-disk binding key (existing shortcuts.json rows keep working).
-    static bool isSavedMacroSym(const wxString& sym)
+    static bool isSavedMacroSym(const wxString& sym) { return isUidSym(sym, "macro."); }
+    // A SAVED Run command, main.cpp's runSym() format "run.<uid>". The same trap as macros, and here it
+    // is not hypothetical: the static Run-MENU commands are "run.execute", "run.manageSaved" and
+    // "run.validateShortcutsXml", so a bare StartsWith("run.") would file all three under
+    // Show: Run commands and hide them from Show: Menu commands.
+    static bool isSavedRunSym(const wxString& sym) { return isUidSym(sym, "run."); }
+    // Shared test: `prefix` followed by an all-digits uid. The menu commands that share these prefixes
+    // are all camelCase, so requiring digits separates them without changing any on-disk binding key.
+    static bool isUidSym(const wxString& sym, const wxString& prefix)
     {
-        if (!sym.StartsWith("macro.")) return false;
-        const wxString tail = sym.Mid(6);
+        if (!sym.StartsWith(prefix)) return false;
+        const wxString tail = sym.Mid(prefix.length());
         if (tail.empty()) return false;
         for (const wxUniChar c : tail) if (!wxIsdigit(c)) return false;
         return true;
@@ -193,7 +202,8 @@ private:
             // before the mapper opens, so this FindItem test passes and they DO appear, under Category=Macros.
             if (m_mb && !m_mb->FindItem(b->cmdId)) continue;
             m_rows.push_back({ b->cmdId, b->symbolicName, false, 0, cmdName(b->cmdId, b->symbolicName),
-                               isSavedMacroSym(b->symbolicName), isPluginSym(b->symbolicName) });
+                               isSavedMacroSym(b->symbolicName), isPluginSym(b->symbolicName),
+                               isSavedRunSym(b->symbolicName) });
         }
         // The curated Scintilla editor commands - Scope = Editor, remapped via CmdKeyAssign
         // rather than the accel table. Appended after the menu rows; the Scope column separates them.
@@ -242,7 +252,7 @@ private:
         m_category = new wxChoice(panel, wxID_ANY);
         m_category->Append(_("All")); m_category->Append(_("Menu commands"));
         m_category->Append(_("Editor commands")); m_category->Append(_("Macros"));
-        m_category->Append(_("Plugin commands"));
+        m_category->Append(_("Plugin commands")); m_category->Append(_("Run commands"));
         m_category->SetSelection(0);
         m_category->Bind(wxEVT_CHOICE, [this](wxCommandEvent&){ refillGrid(); });
         filterRow->Add(m_category, 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 12);
@@ -464,14 +474,15 @@ private:
             }
 
             // Category grouping (display-only, after the global count above): 1=Menu, 2=Editor,
-            // 3=Macros, 4=Plugin commands. Menu is the "everything else" bucket, so every category
-            // added here has to be subtracted from it too or the row shows up twice.
+            // 3=Macros, 4=Plugin commands, 5=Run commands. Menu is the "everything else" bucket, so
+            // every category added here has to be subtracted from it too or the row shows up twice.
             if (catSel)
             {
-                if      (catSel == 1 && (r.editor || r.macro || r.plugin)) continue;
-                else if (catSel == 2 && !r.editor)                        continue;
-                else if (catSel == 3 && !r.macro)                         continue;
-                else if (catSel == 4 && !r.plugin)                        continue;
+                if      (catSel == 1 && (r.editor || r.macro || r.plugin || r.run)) continue;
+                else if (catSel == 2 && !r.editor)                                  continue;
+                else if (catSel == 3 && !r.macro)                                   continue;
+                else if (catSel == 4 && !r.plugin)                                  continue;
+                else if (catSel == 5 && !r.run)                                     continue;
             }
 
             wxString shortcut, scopeStr, srcStr;
