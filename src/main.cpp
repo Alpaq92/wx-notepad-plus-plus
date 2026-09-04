@@ -1320,6 +1320,73 @@ static std::pair<long long, long long> wxnHarvestWindow(long long docLen, long l
     if (e > docLen) { s -= e - docLen; e = docLen; if (s < 0) s = 0; }   // near the bottom: to the head
     return { s, e };
 }
+// ---- call-tip signature extraction (shared by the keystroke path and the workspace index) ---------
+// Given the '(' at `op` and the start of its identifier at `nameStart`, produce the normalized
+// signature text: back up over any preceding return-type / `def` / `fn` token, run forward to the
+// MATCHING ')', and collapse whitespace runs to single spaces so a signature split across lines reads
+// as one line in the tip. Returns "" when the parens do not balance within the scan cap.
+//
+// Factored out because two callers need exactly this and must not drift: callTipSigs() scans the caret
+// window for ONE name on every '(' typed, while wxnIndexSigs() scans a whole file for EVERY name when
+// the workspace index is built. They differ only in how they find the '(' - not in what a signature is.
+static constexpr size_t kWxnSigParenCap = 500;   // give up rather than scan a runaway unclosed paren
+static constexpr size_t kWxnSigMaxLen   = 300;   // a call tip is a hint, not a page
+
+static std::string wxnSigAt(const std::string& doc, size_t nameStart, size_t op)
+{
+    int depth = 0; size_t i = op;
+    for (; i < doc.size() && i < op + kWxnSigParenCap; ++i)
+    {
+        const char c = doc[i];
+        if (c == '(') ++depth;
+        else if (c == ')' && --depth == 0) { ++i; break; }
+    }
+    if (depth != 0) return std::string();
+    size_t s = nameStart;   // include a preceding return-type / def token when there is one
+    {
+        size_t k = nameStart;
+        while (k && (doc[k - 1] == ' ' || doc[k - 1] == '\t')) --k;
+        const size_t we = k;
+        while (k && (std::isalnum((unsigned char)doc[k - 1]) || doc[k - 1] == '_')) --k;
+        if (k < we) s = k;
+    }
+    std::string norm; bool sp = false;
+    for (size_t j = s; j < i; ++j)
+    {
+        const char c = doc[j];
+        if (c == '\n' || c == '\r' || c == '\t' || c == ' ') { if (!norm.empty()) sp = true; }
+        else { if (sp) { norm += ' '; sp = false; } norm += c; }
+    }
+    if (norm.size() > kWxnSigMaxLen) norm.resize(kWxnSigMaxLen);
+    return norm;
+}
+
+// One pass over `doc`, recording every `identifier(` call signature it can extract, keyed by identifier.
+// This is the INDEX side: the keystroke path knows the name it wants and searches for it directly,
+// while indexing does not know what will be asked for later, so it takes them all.
+// `perName` bounds how many distinct overloads are kept for one name - a project with a thousand
+// overloads of the same helper should not be able to grow this without limit.
+static void wxnIndexSigs(const std::string& doc, std::map<std::string, std::vector<std::string>>& out,
+                         size_t perName = 8)
+{
+    for (size_t i = 0; i < doc.size(); ++i)
+    {
+        if (doc[i] != '(') continue;
+        size_t e = i;                                   // one past the identifier's last character
+        while (e && (doc[e - 1] == ' ' || doc[e - 1] == '\t')) --e;
+        size_t b = e;
+        while (b && (std::isalnum((unsigned char)doc[b - 1]) || doc[b - 1] == '_')) --b;
+        if (b == e) continue;                           // "(" with no identifier before it
+        if (std::isdigit((unsigned char)doc[b])) continue;   // 3(x) is not a call
+        const std::string name = doc.substr(b, e - b);
+        auto& v = out[name];
+        if (v.size() >= perName) { continue; }
+        const std::string sig = wxnSigAt(doc, b, i);
+        if (sig.empty()) continue;
+        if (std::find(v.begin(), v.end(), sig) == v.end()) v.push_back(sig);
+    }
+}
+
 // The shared per-keystroke read budget: what autoComplete harvests and what callTipSigs scans for
 // signatures, per event, regardless of document size. 1 MiB is the whole-document ceiling the
 // autocomplete style filter had always been allowed to spend per keystroke, now applied uniformly.
@@ -5190,10 +5257,18 @@ private:
                           .Right().BestSize(210, 400).MinSize(110, 80).CloseButton(true).Hide());
         m_aui.Update();
     }
+    // The active document's Function List language. Split from flLangKeyForName so the workspace
+    // signature index can ask the same question about a file it is not showing - one language table,
+    // not two that drift.
     std::string flLangKey()
     {
-        wxString ext, base;
-        if (auto* p = activePage()) { base = wxFileName(p->path).GetFullName().Lower(); ext = wxnExtOfName(base); }
+        if (auto* p = activePage()) return flLangKeyForName(wxFileName(p->path).GetFullName().Lower());
+        return flLangKeyForName(wxString());
+    }
+    std::string flLangKeyForName(const wxString& baseLower)
+    {
+        const wxString base = baseLower;
+        const wxString ext  = base.empty() ? wxString() : wxnExtOfName(base);
         if (auto u = g_flUserExtToLang.find(std::string(ext.utf8_str())); u != g_flUserExtToLang.end()) return u->second;   // user-mapped extension
         if (ext=="cpp"||ext=="cc"||ext=="cxx"||ext=="c"||ext=="h"||ext=="hpp"||ext=="hxx"||ext=="ino") return "cpp";
         if (ext=="py"||ext=="pyw") return "python";
@@ -5877,7 +5952,63 @@ private:
     void onIndexTick(wxTimerEvent&)
     {
         // 12 ms per 60 ms tick: a fifth of the time budget, so the crawl never costs a dropped frame.
-        if (!m_fileIndex.step(12)) m_indexTimer.Stop();
+        // Phase two (signatures) runs on the same slice once the file list exists, and only then: it
+        // reads file CONTENT, so it must not compete with the walk that tells it which files to read.
+        if (!m_fileIndex.step(12) && !stepSigIndex(12)) m_indexTimer.Stop();
+    }
+
+    // ---- workspace signature index (call tips beyond the open document) ---------------------------
+    // Call tips used to describe only functions defined in the file already on screen - the case you
+    // least need them for. This reads the files Quick Open's crawl found and records every call
+    // signature in them, so a function defined elsewhere in the project still gets a hint.
+    //
+    // Bounded four ways, because this reads a whole project: only files whose extension maps to a
+    // Function List language, a per-file byte cap, a cap on distinct overloads per name (wxnIndexSigs),
+    // and a cap on total names. It is best-effort by design - an unreadable or oversized file is
+    // skipped, never retried, and never reported.
+    static constexpr size_t kSigIndexFileCap = 1u << 20;   // bigger is nearly always generated or vendored
+    static constexpr size_t kSigIndexNameCap = 40000;      // stop growing rather than swallow the workspace
+    std::map<std::string, std::vector<std::string>> m_sigIndex;
+    size_t m_sigNext = 0;   // next entry of m_fileIndex.files() to read
+    bool stepSigIndex(int budgetMs)
+    {
+        const auto& files = m_fileIndex.files();
+        if (m_sigNext >= files.size()) return false;
+        const long long deadline = wxnMonoMs() + budgetMs;
+        while (m_sigNext < files.size())
+        {
+            harvestSigsFrom(files[m_sigNext++]);
+            if (wxnMonoMs() >= deadline) break;
+        }
+        return m_sigNext < files.size();
+    }
+    void harvestSigsFrom(const wxString& path)
+    {
+        if (m_sigIndex.size() >= kSigIndexNameCap) return;
+        // Language gate first: it is a string compare, and it rejects the .json/.md/.txt bulk of a real
+        // tree before any I/O happens. wxnSkipExt in the crawler is a blocklist for binaries; this is
+        // the allowlist for "something whose parentheses mean a call".
+        if (flLangKeyForName(wxFileName(path).GetFullName().Lower()).empty()) return;
+        wxLogNull noLog;
+        wxFile f(path);
+        if (!f.IsOpened()) return;
+        const wxFileOffset len = f.Length();
+        if (len <= 0 || static_cast<wxULongLong_t>(len) > kSigIndexFileCap) return;
+        std::string buf(static_cast<size_t>(len), '\0');
+        if (f.Read(&buf[0], static_cast<size_t>(len)) != static_cast<ssize_t>(len)) return;
+        wxnIndexSigs(buf, m_sigIndex);
+    }
+    // Signatures for `name` from the workspace index - the open document is searched separately and
+    // wins, because a definition you can see should be the first overload offered.
+    void appendProjectSigs(const std::string& name, std::vector<std::string>& out)
+    {
+        const auto it = m_sigIndex.find(name);
+        if (it == m_sigIndex.end()) return;
+        for (const std::string& s : it->second)
+        {
+            if (out.size() >= 12) return;
+            if (std::find(out.begin(), out.end(), s) == out.end()) out.push_back(s);
+        }
     }
 
     void quickOpen()
@@ -6758,16 +6889,10 @@ private:
             if ((pos == 0 && headCut) ||
                 (pos && (std::isalnum((unsigned char)doc[pos - 1]) || doc[pos - 1] == '_'))) { pos += 1; continue; }   // not a word boundary
             const size_t op = pos + name.size();   // the '('
-            int depth = 0; size_t i = op;
-            for (; i < doc.size() && i < op + 500; ++i) { const char c = doc[i]; if (c == '(') ++depth; else if (c == ')' && --depth == 0) { ++i; break; } }
-            if (depth != 0) { pos = op; continue; }
-            size_t s = pos;   // include a preceding return-type / 'def' token
-            { size_t k = pos; while (k && (doc[k - 1] == ' ' || doc[k - 1] == '\t')) --k; const size_t we = k; while (k && (std::isalnum((unsigned char)doc[k - 1]) || doc[k - 1] == '_')) --k; if (k < we) s = k; }
-            std::string norm; bool sp = false;   // collapse whitespace runs to single spaces
-            for (size_t j = s; j < i; ++j) { const char c = doc[j]; if (c == '\n' || c == '\r' || c == '\t' || c == ' ') { if (!norm.empty()) sp = true; } else { if (sp) { norm += ' '; sp = false; } norm += c; } }
-            if (norm.size() > 300) norm.resize(300);
-            if (!norm.empty() && seen.insert(norm).second) out.push_back(norm);
-            pos = i;
+            const std::string norm = wxnSigAt(doc, pos, op);   // shared with the workspace index
+            if (norm.empty()) { pos = op; continue; }
+            if (seen.insert(norm).second) out.push_back(norm);
+            pos = op;
             if (out.size() >= 12) break;
         }
         return out;
@@ -6807,7 +6932,9 @@ private:
         int ne = open; while (ne && std::isspace((unsigned char)sci(SCI_GETCHARAT, ne - 1))) --ne;
         const int ns = (int)sci(SCI_WORDSTARTPOSITION, ne, 1);
         if (ns >= ne) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; }
-        m_ctSigs = callTipSigs(rangeText(ns, ne));
+        const std::string callName = rangeText(ns, ne);
+        m_ctSigs = callTipSigs(callName);
+        appendProjectSigs(callName, m_ctSigs);   // then anything the workspace index knows
         if (m_ctSigs.empty()) { sci(SCI_CALLTIPCANCEL); return; }
         m_ctIdx = 0; m_ctOpen = open; renderCallTip();
     }
@@ -13950,14 +14077,24 @@ private:
         mid->Add(edBox, 1, wxEXPAND);
         auto* btnSaveAs = new wxButton(&dlg, wxID_ANY, _("Save As..."));
         auto* btnRevert = new wxButton(&dlg, wxID_ANY, _("Revert changes"));
+        // The counterpart to Save As..., and the only way to undo it. A user copy SHADOWS a bundled theme
+        // of the same name (themeFilePath prefers it), so without this a Save As... over "Zenburn" made
+        // the bundled Zenburn permanently unreachable from inside the app - the file had to be deleted by
+        // hand. Enabled only when the selected theme actually has a user copy to remove.
+        auto* btnDelete = new wxButton(&dlg, wxID_ANY, _("Delete user copy"));
+        // Defined here, above every Bind, so the theme-combo handler further down can call it too.
+        // Only a USER copy can be deleted; a bundled theme lives next to the exe and is not ours to remove.
+        auto userCopyPath = [this]{ return userThemeDir() + wxFILE_SEP_PATH + resolvedThemeName() + ".xml"; };
+        auto syncDeleteButton = [&]{ btnDelete->Enable(wxFileExists(userCopyPath())); };
         auto* btn = new wxBoxSizer(wxHORIZONTAL);
-        btn->Add(btnSaveAs, 0, wxRIGHT, 6); btn->Add(btnRevert, 0); btn->AddStretchSpacer();
+        btn->Add(btnSaveAs, 0, wxRIGHT, 6); btn->Add(btnDelete, 0, wxRIGHT, 6); btn->Add(btnRevert, 0); btn->AddStretchSpacer();
         btn->Add(new wxButton(&dlg, wxID_OK, _("Save && Close")), 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL);
         top->Add(themeRow, 0, wxALL, 12); top->Add(mid, 1, wxEXPAND | wxLEFT | wxRIGHT, 12); top->Add(btn, 0, wxEXPAND | wxALL, 12);
         eg->AddGrowableCol(1, 1);   // the font-name combo takes any width the dialog gains
         dlg.SetSizerAndFit(top);
         dlg.CentreOnParent();
+        syncDeleteButton();   // the theme the dialog opens on may already have a user copy
         auto fillLangs = [&]{ langList->Clear(); langList->Append(kGlobalStyles); for (auto& kv : m_theme.lexers) langList->Append(kv.first); };
         auto fillStyles = [&]{
             styleList->Clear(); const wxString lang = langList->GetStringSelection();
@@ -14047,7 +14184,7 @@ private:
             applyThemeSelection(themeCombo->GetStringSelection());
             m_styleEdited.clear(); m_globalEdited.clear();
             themeCombo->SetStringSelection(resolvedThemeName());
-            fillLangs(); langList->SetSelection(0); fillStyles(); });
+            fillLangs(); langList->SetSelection(0); fillStyles(); syncDeleteButton(); });
         // Both buttons below rebuild the lists, so put the user back where they were rather than
         // bouncing them to Global Styles - the point of Revert is to keep experimenting on one style.
         auto refillKeepingSelection = [&]{
@@ -14102,7 +14239,36 @@ private:
             m_styleEdited.clear(); m_globalEdited.clear();
             m_themeName = name; original = name; saveSettings();
             themeCombo->Set(availableThemes()); themeCombo->SetStringSelection(resolvedThemeName());
+            syncDeleteButton();
             setStatus(0, wxString::Format(_("Saved theme \"%s\""), name)); m_hint = true; });
+        btnDelete->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            const wxString name = resolvedThemeName();
+            const wxString path = userCopyPath();
+            if (!wxFileExists(path)) return;
+            // Whether a bundled theme of the same name is waiting underneath decides what this DOES:
+            // reveal it again, or remove the theme outright. Say which, because they are different acts.
+            const wxString shipped = wxPathOnly(wxStandardPaths::Get().GetExecutablePath())
+                                   + wxFILE_SEP_PATH + "themes" + wxFILE_SEP_PATH + name + ".xml";
+            const bool revealsBundled = wxFileExists(shipped);
+            if (wxMessageBox(wxString::Format(revealsBundled
+                                 ? _("Delete your copy of \"%s\" and go back to the built-in theme?")
+                                 : _("Delete the theme \"%s\"? This cannot be undone."), name),
+                             kTitle, wxYES_NO | wxICON_QUESTION, &dlg) != wxYES) return;
+            if (!wxRemoveFile(path))
+            {
+                wxMessageBox(wxString::Format(_("Could not write %s"), path), kTitle, wxOK | wxICON_ERROR, &dlg);
+                return;
+            }
+            // Edits pending against the file just deleted are meaningless, so drop them with it.
+            m_styleEdited.clear(); m_globalEdited.clear();
+            // The bundled theme now resolves under the same name; with nothing underneath, fall back to
+            // Default rather than leaving the combo pointing at a theme that no longer exists.
+            applyThemeSelection(revealsBundled ? name : "Default");
+            original = m_themeName;
+            saveSettings();
+            themeCombo->Set(availableThemes()); themeCombo->SetStringSelection(resolvedThemeName());
+            syncDeleteButton(); refillKeepingSelection();
+            setStatus(0, wxString::Format(_("Deleted your copy of \"%s\""), name)); m_hint = true; });
         themeDialog(&dlg);
         if (dlg.ShowModal() == wxID_OK)
         {
@@ -14110,8 +14276,19 @@ private:
             // Only touch the file if something actually changed, and only claim success if the write
             // happened: for the light-mode Default the target is <exeDir>/stylers.model.xml, which an
             // installed build cannot write. That failure used to be discarded and reported as saved.
-            if ((!m_styleEdited.empty() || !m_globalEdited.empty())
-                && saveThemeToXml(themeFilePath(resolvedThemeName()))) { setStatus(0, _("Theme styles saved")); m_hint = true; }
+            if (!m_styleEdited.empty() || !m_globalEdited.empty())
+            {
+                if (saveThemeToXml(themeFilePath(resolvedThemeName()))) { setStatus(0, _("Theme styles saved")); m_hint = true; }
+                // A failed write is almost always the light-mode Default on an installed build: its
+                // target is <exeDir>/stylers.model.xml, which is not user-writable. Reporting the failure
+                // honestly was the previous fix; saying NOTHING still threw the user's edits away with no
+                // explanation and no way forward. Name the escape hatch - Save As... writes to the user
+                // data dir, which is always writable.
+                else wxMessageBox(_("Could not write the theme file.\n\nBuilt-in themes live next to the "
+                                    "program and cannot be modified there. Use \"Save As...\" to keep these "
+                                    "changes as your own copy of the theme."),
+                                  kTitle, wxOK | wxICON_WARNING, this);
+            }
         }
         else applyThemeSelection(original.empty() ? "Default" : original);   // Cancel -> reload the original theme from disk
         m_styleEdited.clear(); m_globalEdited.clear();
@@ -15332,11 +15509,12 @@ private:
             case kCmdSearchPrevBookmark: gotoBookmark(false); break;
             case kCmdSearchClearBookmarks: sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); break;
             // Change History: SCI_SETCHANGEHISTORY was added in upstream Scintilla 5.3.0; wx vendors its
-            // own Scintilla fork (github.com/wxWidgets/scintilla, "wx" branch) at 5.0.0 - confirmed still
-            // true as of the latest wx release (3.3.2, 2026-03) by checking that fork's pinned commit
-            // directly, not just our own currently-built 3.3.1. This isn't a "bump our pinned version"
-            // fix - there is currently no wxWidgets release whose vendored Scintilla is new enough, so
-            // there's nothing to bump TO. Revisit if/when wx's own Scintilla fork catches up upstream.
+            // own Scintilla fork (github.com/wxWidgets/scintilla, "wx" branch) at 5.0.0 - RE-CONFIRMED
+            // 2026-09-03, after wx 3.3.3 shipped (2026-07-07), by reading that fork's own version.txt on
+            // the wx branch: still "500". Checked there rather than in our built 3.3.1 tree, because the
+            // question is what any wx release could give us, not what ours happens to carry. This isn't a
+            // "bump our pinned version" fix - there is still no wxWidgets release whose vendored Scintilla
+            // is new enough, so there is nothing to bump TO. Revisit if that fork catches up upstream.
             case kCmdSearchChangedNext:
             case kCmdSearchChangedPrev:
             case kCmdSearchClearChangeHistory: notImpl(_("Change History (needs a newer Scintilla than this wx build carries)")); break;

@@ -3428,3 +3428,18 @@ msgstr ""
 
 msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
 msgstr ""
+
+msgid "Delete user copy"
+msgstr ""
+
+msgid "Delete your copy of \"%s\" and go back to the built-in theme?"
+msgstr ""
+
+msgid "Delete the theme \"%s\"? This cannot be undone."
+msgstr ""
+
+msgid "Deleted your copy of \"%s\""
+msgstr ""
+
+msgid "Could not write the theme file.\n\nBuilt-in themes live next to the program and cannot be modified there. Use \"Save As...\" to keep these changes as your own copy of the theme."
+msgstr ""

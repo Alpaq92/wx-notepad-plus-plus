@@ -3426,3 +3426,18 @@ msgstr "Изменения плагинов вступят в силу посл�
 
 msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
 msgstr "Файл plugins.dat записан более новой версией wxNote, поэтому здесь он только для чтения."
+
+msgid "Delete user copy"
+msgstr "Удалить свою копию"
+
+msgid "Delete your copy of \"%s\" and go back to the built-in theme?"
+msgstr "Удалить вашу копию темы \"%s\" и вернуться к встроенной теме?"
+
+msgid "Delete the theme \"%s\"? This cannot be undone."
+msgstr "Удалить тему \"%s\"? Это действие нельзя отменить."
+
+msgid "Deleted your copy of \"%s\""
+msgstr "Ваша копия темы \"%s\" удалена"
+
+msgid "Could not write the theme file.\n\nBuilt-in themes live next to the program and cannot be modified there. Use \"Save As...\" to keep these changes as your own copy of the theme."
+msgstr "Не удалось записать файл темы.\n\nВстроенные темы расположены рядом с программой, и изменить их там нельзя. Используйте \"Сохранить как...\", чтобы сохранить эти изменения в собственной копии темы."

@@ -3426,3 +3426,18 @@ msgstr "Plugin-Änderungen werden nach einem Neustart von wxNote wirksam"
 
 msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
 msgstr "plugins.dat wurde von einer neueren wxNote-Version geschrieben und ist hier schreibgeschützt."
+
+msgid "Delete user copy"
+msgstr "Eigene Kopie löschen"
+
+msgid "Delete your copy of \"%s\" and go back to the built-in theme?"
+msgstr "Eigene Kopie des Themas \"%s\" löschen und zum mitgelieferten Thema zurückkehren?"
+
+msgid "Delete the theme \"%s\"? This cannot be undone."
+msgstr "Thema \"%s\" löschen? Dies kann nicht rückgängig gemacht werden."
+
+msgid "Deleted your copy of \"%s\""
+msgstr "Eigene Kopie von \"%s\" gelöscht"
+
+msgid "Could not write the theme file.\n\nBuilt-in themes live next to the program and cannot be modified there. Use \"Save As...\" to keep these changes as your own copy of the theme."
+msgstr "Die Themendatei konnte nicht geschrieben werden.\n\nMitgelieferte Themen liegen neben dem Programm und können dort nicht geändert werden. Verwenden Sie \"Speichern unter...\", um diese Änderungen als eigene Kopie zu behalten."

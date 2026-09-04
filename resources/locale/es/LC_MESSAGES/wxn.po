@@ -3426,3 +3426,18 @@ msgstr "Los cambios de complementos se aplicarán al reiniciar wxNote"
 
 msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
 msgstr "plugins.dat fue escrito por una versión más reciente de wxNote, por lo que aquí es de sólo lectura."
+
+msgid "Delete user copy"
+msgstr "Eliminar mi copia"
+
+msgid "Delete your copy of \"%s\" and go back to the built-in theme?"
+msgstr "¿Eliminar su copia del tema \"%s\" y volver al tema incluido?"
+
+msgid "Delete the theme \"%s\"? This cannot be undone."
+msgstr "¿Eliminar el tema \"%s\"? Esta acción no se puede deshacer."
+
+msgid "Deleted your copy of \"%s\""
+msgstr "Se eliminó su copia de \"%s\""
+
+msgid "Could not write the theme file.\n\nBuilt-in themes live next to the program and cannot be modified there. Use \"Save As...\" to keep these changes as your own copy of the theme."
+msgstr "No se pudo escribir el archivo del tema.\n\nLos temas incluidos están junto al programa y no se pueden modificar allí. Use \"Guardar como...\" para conservar estos cambios como su propia copia del tema."
