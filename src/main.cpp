@@ -15236,11 +15236,12 @@ private:
             case kCmdSearchPrevBookmark: gotoBookmark(false); break;
             case kCmdSearchClearBookmarks: sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); break;
             // Change History: SCI_SETCHANGEHISTORY was added in upstream Scintilla 5.3.0; wx vendors its
-            // own Scintilla fork (github.com/wxWidgets/scintilla, "wx" branch) at 5.0.0 - confirmed still
-            // true as of the latest wx release (3.3.2, 2026-03) by checking that fork's pinned commit
-            // directly, not just our own currently-built 3.3.1. This isn't a "bump our pinned version"
-            // fix - there is currently no wxWidgets release whose vendored Scintilla is new enough, so
-            // there's nothing to bump TO. Revisit if/when wx's own Scintilla fork catches up upstream.
+            // own Scintilla fork (github.com/wxWidgets/scintilla, "wx" branch) at 5.0.0 - RE-CONFIRMED
+            // 2026-09-03, after wx 3.3.3 shipped (2026-07-07), by reading that fork's own version.txt on
+            // the wx branch: still "500". Checked there rather than in our built 3.3.1 tree, because the
+            // question is what any wx release could give us, not what ours happens to carry. This isn't a
+            // "bump our pinned version" fix - there is still no wxWidgets release whose vendored Scintilla
+            // is new enough, so there is nothing to bump TO. Revisit if that fork catches up upstream.
             case kCmdSearchChangedNext:
             case kCmdSearchChangedPrev:
             case kCmdSearchClearChangeHistory: notImpl(_("Change History (needs a newer Scintilla than this wx build carries)")); break;
