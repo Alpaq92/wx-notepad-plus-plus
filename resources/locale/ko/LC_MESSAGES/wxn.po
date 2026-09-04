@@ -3114,8 +3114,8 @@ msgstr "시스템 기본"
 msgid "Windows-style (flat)"
 msgstr "Windows 스타일(평면)"
 
-msgid "Opera-style (rounded)"
-msgstr "Opera 스타일(둥근)"
+msgid "Minimal (custom style)"
+msgstr "미니멀(사용자 지정 스타일)"
 
 msgid "&Manage Saved Macros..."
 msgstr "저장된 매크로 관리(&M)..."

@@ -3114,8 +3114,8 @@ msgstr "系统原生"
 msgid "Windows-style (flat)"
 msgstr "Windows 样式（扁平）"
 
-msgid "Opera-style (rounded)"
-msgstr "Opera 样式（圆角）"
+msgid "Minimal (custom style)"
+msgstr "极简（自定义样式）"
 
 msgid "&Manage Saved Macros..."
 msgstr "管理已保存的宏(&M)..."
