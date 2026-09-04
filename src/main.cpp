@@ -14672,6 +14672,12 @@ private:
         m_chromeActive = active;
         const wxColour bg = chromeBgFor(m_dark, active);
         const wxColour fg = chromeFgFor(m_dark, active);
+        // m_titleBar exists ONLY under WXN_HAS_BORDERLESS (Windows + Linux) - see its declaration. macOS
+        // keeps the native title bar and its traffic lights, so there is no wx-painted bar to re-tint
+        // there; without this guard the whole file fails to compile on macOS with "use of undeclared
+        // identifier 'm_titleBar'". The status-bar repaint below is deliberately OUTSIDE the guard: it
+        // is platform-neutral and macOS wants it too.
+#ifdef WXN_HAS_BORDERLESS
 #ifdef __WXGTK__
         // Header-bar mode re-parents the panel into wxbf's real GtkHeaderBar, which the desktop theme
         // then owns - including its own :backdrop styling. Leave it alone or we fight the theme.
@@ -14693,6 +14699,7 @@ private:
             }
             m_titleBar->Refresh();
         }
+#endif
         if (auto* sb = GetStatusBar())
         {
             sb->SetBackgroundColour(bg);
