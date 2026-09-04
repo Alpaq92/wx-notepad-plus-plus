@@ -3426,3 +3426,18 @@ msgstr "Zmiany wtyczek zostaną zastosowane po ponownym uruchomieniu wxNote"
 
 msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
 msgstr "Plik plugins.dat został zapisany przez nowszą wersję wxNote, więc jest tu tylko do odczytu."
+
+msgid "Delete user copy"
+msgstr "Usuń swoją kopię"
+
+msgid "Delete your copy of \"%s\" and go back to the built-in theme?"
+msgstr "Usunąć swoją kopię motywu \"%s\" i wrócić do motywu wbudowanego?"
+
+msgid "Delete the theme \"%s\"? This cannot be undone."
+msgstr "Usunąć motyw \"%s\"? Tej operacji nie można cofnąć."
+
+msgid "Deleted your copy of \"%s\""
+msgstr "Usunięto Twoją kopię motywu \"%s\""
+
+msgid "Could not write the theme file.\n\nBuilt-in themes live next to the program and cannot be modified there. Use \"Save As...\" to keep these changes as your own copy of the theme."
+msgstr "Nie można zapisać pliku motywu.\n\nMotywy wbudowane znajdują się obok programu i nie można ich tam modyfikować. Użyj polecenia \"Zapisz jako...\", aby zachować te zmiany jako własną kopię motywu."
