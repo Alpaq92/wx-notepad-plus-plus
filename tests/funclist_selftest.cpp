@@ -43,7 +43,7 @@ static bool contains(const std::vector<std::string>& v, const std::string& s)
 
 // The symbol names flCollect extracts, in document order.
 static std::vector<std::string> names(const std::string& text, const std::string& lang,
-                                      const std::vector<unsigned char>& prose = {})
+                                      const FLZones* prose = nullptr)
 {
     std::vector<std::string> out;
     for (const FLSym& s : flCollect(text, lang, prose)) out.push_back(std::string(s.name.utf8_str()));
@@ -63,20 +63,21 @@ static void expectNames(const std::string& text, const std::string& lang,
     }
 }
 
-// A prose mask marking every occurrence of `needle` - stands in for what the live editor gets from the
-// active lexer's style bytes (see flProseMask), so the mask path is testable with no editor at all.
-static std::vector<unsigned char> maskOf(const std::string& text, const std::string& needle)
+// Prose spans covering every occurrence of `needle` - stands in for what the live editor gets from the
+// active lexer's style bytes (see flProseZones), so the lexer path is testable with no editor at all.
+// Built left to right, so the result is sorted and non-overlapping, exactly as flProseZones guarantees.
+static FLZones zonesOf(const std::string& text, const std::string& needle)
 {
-    std::vector<unsigned char> m(text.size(), 0);
+    FLZones z;
     for (size_t p = text.find(needle); p != std::string::npos; p = text.find(needle, p + 1))
-        for (size_t i = p; i < p + needle.size() && i < m.size(); ++i) m[i] = 1;
-    return m;
+        z.push_back({ p, std::min(p + needle.size(), text.size()) });
+    return z;
 }
 
 // Is `child` nested inside `parent`'s container body range? That is what drives the tree's shape.
 static bool nestedIn(const std::string& text, const std::string& lang,
                      const std::string& parent, const std::string& child,
-                     const std::vector<unsigned char>& prose = {})
+                     const FLZones* prose = nullptr)
 {
     const std::vector<FLSym> syms = flCollect(text, lang, prose);
     const FLSym* p = nullptr;
@@ -328,9 +329,10 @@ int main(int argc, char** argv)
             "    void a() {}\n"
             "};\n"
             "void after() {}\n";
-        check(!nestedIn(raw, "cpp", "Outer", "after", maskOf(raw, lit)),
+        const FLZones litZones = zonesOf(raw, lit);
+        check(!nestedIn(raw, "cpp", "Outer", "after", &litZones),
               "prose mask: a brace inside a multi-line raw string does not extend the class body");
-        check(nestedIn(raw, "cpp", "Outer", "a", maskOf(raw, lit)),
+        check(nestedIn(raw, "cpp", "Outer", "a", &litZones),
               "prose mask: the class's own method is still nested inside it");
         // The contrast that justifies the mask: unmasked, the same buffer mis-nests.
         check(nestedIn(raw, "cpp", "Outer", "after"),
@@ -340,14 +342,26 @@ int main(int argc, char** argv)
         const std::string commented =
             "void real() {}\n"
             "// void fake() {}\n";
-        const std::vector<std::string> got = names(commented, "cpp", maskOf(commented, "// void fake() {}"));
+        const FLZones cz = zonesOf(commented, "// void fake() {}");
+        const std::vector<std::string> got = names(commented, "cpp", &cz);
         check(got.size() == 1 && got[0] == "real", "prose mask: a symbol inside a masked span is not extracted");
 
-        // A wrong-sized mask is ignored rather than trusted part-way: flCollect requires one byte per
-        // byte, so a stale mask from a since-edited buffer falls back to the regex instead of masking
-        // the wrong offsets.
-        std::vector<unsigned char> shortMask(3, 1);
-        check(!names(commented, "cpp", shortMask).empty(), "prose mask: a size mismatch falls back, not silently mis-masks");
+        // The presence test is the POINTER, not emptiness. An empty-but-supplied list is the lexer
+        // positively reporting "this file has no comments or strings", and must NOT quietly fall back
+        // to the regex - otherwise a file the lexer cleared would still be second-guessed by a pattern.
+        // A stray brace inside a // comment discriminates the two: the regex fallback masks it, an
+        // empty supplied list does not, so the nesting differs and the branch actually taken is visible.
+        const std::string braceInComment =
+            "class Outer {\n"
+            "    // a stray brace { lives in this comment\n"
+            "    void a() {}\n"
+            "};\n"
+            "void after() {}\n";
+        const FLZones none;
+        check(nestedIn(braceInComment, "cpp", "Outer", "after", &none),
+              "prose mask: an EMPTY supplied zone list means 'no comments' - the brace is counted");
+        check(!nestedIn(braceInComment, "cpp", "Outer", "after"),
+              "prose mask: no zone list at all falls back to the regex, which masks that comment");
     }
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
