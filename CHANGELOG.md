@@ -3,6 +3,46 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.19.0] - 2026-09-04
+
+### Added
+- **Saved Run commands.** **Run ▸ Run…** gained a **Save…** button: name a command and it is kept,
+  listed at the bottom of the Run menu, and renameable or removable from **Run ▸ Manage Saved
+  Commands…**. Named commands can be bound to a shortcut, which also completes the Shortcut Mapper -
+  its **Show:** filter now covers All / Menu / Editor / Macros / Plugin commands / Run commands.
+- **Plugin commands are bindable.** Commands registered by plugins appear in the Shortcut Mapper and
+  can be given a shortcut. Bindings are keyed on the plugin's own command id, so installing or
+  removing a plugin never repoints an existing shortcut at a different command.
+- **Extensions ▸ Manage Plugins…** - the first piece of Plugins Admin. It lists every plugin the
+  loader considered, **loaded or not**, with its name, version, source and, for anything that did not
+  load, *why*: a plugin that failed used to vanish silently with nowhere to see it had been rejected.
+  Plugins can be enabled or disabled (including the bundled ones), and user-installed ones removed.
+  Every change is queued and applied on restart, because a loaded plugin is mapped into the process
+  and cannot be deleted or unloaded in place.
+- **Call tips now cover the whole project.** Signatures come from the open document first and then
+  from a workspace index, so a function defined in *another file* of your project gets a hint too -
+  previously you only got one for a function already on screen.
+- **A Minimal window-button style** for the integrated top bar, replacing the previous Opera-style
+  option: a small inset circle on hover, centred in the cell, with close in the same neutral grey as
+  its siblings rather than red.
+- **Plugin API 1.7:** plugins may declare a human-readable name and version, which is what the new
+  Manage Plugins list shows. Older plugins are unaffected and display by id.
+
+### Fixed
+- **The Function List no longer stalls on large files.** Its comment/string scan asked Scintilla for
+  one style byte per document byte - about 15.8 million calls on a 15 MiB file, on a path that re-runs
+  after every edit pause. Measured on a 15.1 MiB buffer: **753 ms → 214 ms**, with transient memory
+  down from 15.9 MB to 1.7 MB. (Introduced in 0.18.0.)
+- **Style Configurator: a failed save now says so, and says what to do.** Saving a built-in theme on
+  an installed build cannot write next to the program; that case previously produced no message at
+  all and the edits were discarded in silence. It now points at **Save As…**.
+- **Style Configurator: Save As… can be undone.** A saved copy shadows the built-in theme of the same
+  name, and there was no way back without deleting the file by hand. **Delete user copy** removes it.
+- The window-button style combo box lost its translations in eight languages when the option was
+  renamed; the catalog entry is retargeted rather than orphaned.
+- macOS build fix for the new chrome-activation dimming, which referenced the integrated title bar
+  that only exists on Windows and Linux.
+
 ## [0.18.0] - 2026-09-03
 
 ### Added
