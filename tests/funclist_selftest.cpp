@@ -350,6 +350,43 @@ int main(int argc, char** argv)
         check(!names(commented, "cpp", shortMask).empty(), "prose mask: a size mismatch falls back, not silently mis-masks");
     }
 
+    // ---- saved Run commands: the runcommands.dat format round-trips -------------------------------
+    // Free functions precisely so this needs no frame. The fields are base64'd because either may hold
+    // a space, a quote or a newline, and the format is line-oriented - so those are what get tested.
+    {
+        std::vector<SavedRun> in = {
+            { 1, "Build",              "cmake --build build" },
+            { 7, "Open in \"Notepad\"", "notepad \"$(FULL_CURRENT_PATH)\"" },
+            { 9, "Multi\nline name",   "echo a\nb" },
+        };
+        std::vector<SavedRun> out; long nextUid = 0;
+        check(wxnParseRuns(wxnSerializeRuns(in, 42), out, nextUid), "runs: current format version parses");
+        check(out.size() == 3, "runs: all three commands survive the round trip");
+        check(nextUid == 42, "runs: nextUid is carried through");
+        bool same = out.size() == in.size();
+        for (size_t i = 0; same && i < in.size(); ++i)
+            same = out[i].uid == in[i].uid && out[i].name == in[i].name && out[i].cmd == in[i].cmd;
+        check(same, "runs: uid, name and command all round-trip verbatim (spaces, quotes, newlines)");
+
+        // A uid on disk at or above the stored nextUid must push nextUid past it, or the next saved
+        // command would reuse a uid and inherit a shortcut bound to the old one.
+        std::vector<SavedRun> hi = { { 500, "X", "x" } };
+        std::vector<SavedRun> back; long n2 = 0;
+        wxnParseRuns(wxnSerializeRuns(hi, 1), back, n2);
+        check(n2 == 501, "runs: nextUid is pulled ahead of the highest uid on disk");
+
+        // A newer format version is refused rather than silently truncated - the caller marks the set
+        // read-only so saving cannot drop commands it could not represent.
+        std::vector<SavedRun> none; long n3 = 0;
+        check(!wxnParseRuns("wxn-runs 2\nnext 5\n", none, n3), "runs: a newer format version is refused");
+        check(none.empty(), "runs: ... and yields no commands rather than a partial set");
+
+        // Garbage lines are skipped, not fatal.
+        std::vector<SavedRun> ok; long n4 = 0;
+        check(wxnParseRuns("wxn-runs 1\nnonsense\nR notanumber zz zz\n", ok, n4), "runs: junk lines are skipped");
+        check(ok.empty(), "runs: ... and contribute no commands");
+    }
+
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

@@ -3306,3 +3306,39 @@ msgstr "Thème « %s » enregistré"
 
 msgid "Plugin commands"
 msgstr "Commandes des plugins"
+
+msgid "Save..."
+msgstr "Enregistrer..."
+
+msgid "Delete"
+msgstr "Supprimer"
+
+msgid "Rename..."
+msgstr "Renommer..."
+
+msgid "Command:"
+msgstr "Commande :"
+
+msgid "Manage Saved Commands..."
+msgstr "Gérer les commandes enregistrées..."
+
+msgid "Run commands"
+msgstr "Commandes d'exécution"
+
+msgid "Saved Run commands"
+msgstr "Commandes d'exécution enregistrées"
+
+msgid "Save Run command"
+msgstr "Enregistrer la commande d'exécution"
+
+msgid "Saved Run command \"%s\""
+msgstr "Commande d'exécution « %s » enregistrée"
+
+msgid "The saved Run command list is full (%d)."
+msgstr "La liste des commandes d'exécution enregistrées est pleine (%d)."
+
+msgid "No saved Run commands yet. Use Run... and press Save to name one."
+msgstr "Aucune commande d'exécution enregistrée. Utilisez Exécuter... puis Enregistrer pour en nommer une."
+
+msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
+msgstr "runcommands.dat a été écrit par une version plus récente de wxNote : il est en lecture seule ici."
