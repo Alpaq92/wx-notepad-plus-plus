@@ -3441,3 +3441,15 @@ msgstr "「%s」の自分のコピーを削除しました"
 
 msgid "Could not write the theme file.\n\nBuilt-in themes live next to the program and cannot be modified there. Use \"Save As...\" to keep these changes as your own copy of the theme."
 msgstr "テーマファイルを書き込めませんでした。\n\n同梱テーマはプログラムの隣にあり、そこでは変更できません。「保存...」を使って、この変更を自分のコピーとして保存してください。"
+
+msgid "Show in the applications menu and \"Open With\""
+msgstr "アプリケーションメニューと「プログラムから開く」に表示"
+
+msgid "This AppImage does not contain wxnote.desktop, so it cannot register itself."
+msgstr "この AppImage には wxnote.desktop が含まれていないため、登録できません。"
+
+msgid "Could not write %s."
+msgstr "%s を書き込めませんでした。"
+
+msgid "Add wxNote to your applications menu?\n\nAn AppImage is not installed, so your desktop does not know wxNote exists - which is why it does not appear under \"Open With\", and cannot be chosen as the default editor for a file type. This adds a launcher in your home folder, and changes nothing outside it.\n\nYou can undo this later in Preferences."
+msgstr "wxNote をアプリケーションメニューに追加しますか?\n\nAppImage はインストールされないため、デスクトップは wxNote の存在を認識できません。そのため「プログラムから開く」に表示されず、ファイル形式の既定のエディターとして選択することもできません。この操作はホームフォルダーにランチャーを追加するだけで、それ以外は変更しません。\n\n後で設定から元に戻せます。"

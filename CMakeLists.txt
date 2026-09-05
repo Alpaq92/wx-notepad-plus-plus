@@ -11,7 +11,7 @@
 
 cmake_minimum_required(VERSION 3.20)
 # C is enabled for the vendored Lua + LPeg (Scintillua's runtime) - both are C.
-project(wxNote VERSION 0.19.0 LANGUAGES CXX C)
+project(wxNote VERSION 0.20.0 LANGUAGES CXX C)
 
 include(FetchContent)
 
@@ -469,6 +469,23 @@ if(MSVC)
     target_compile_options(comment_tokens_test PRIVATE /utf-8)
 endif()
 
+# ---- desktop_entry_test: the .desktop rewriting behind AppImage self-integration -------------------
+# Links NOTHING - src/desktop_entry.h is a standalone header over std::string. Reads the SHIPPED
+# installer/linux/wxnote.desktop as data, so the suite fails if integration ever stops preserving the
+# MIME list it is the whole point of rewriting (rather than regenerating) that file to keep.
+#   cmake --build build --target desktop_entry_test && build/bin/desktop_entry_test
+add_executable(desktop_entry_test tests/desktop_entry_test.cpp)
+set_target_properties(desktop_entry_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(desktop_entry_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_compile_definitions(desktop_entry_test PRIVATE
+    DESKTOP_FILE="${CMAKE_SOURCE_DIR}/installer/linux/wxnote.desktop")
+if(MSVC)
+    target_compile_options(desktop_entry_test PRIVATE /utf-8)
+endif()
+
 # ---- snippets_test: self-test for the snippet grammar (src/snippets.h) -----------------------------
 # Pure STL like hash_test - no wx. The grammar is where a snippet body silently loses a placeholder or
 # a field offset drifts off the text it marks, and both are visible from the parse result alone.
@@ -720,12 +737,13 @@ add_custom_target(selftests DEPENDS
     plugin_catalog_test
     charset_selftest
     hunspell_selftest funclist_selftest comment_tokens_test catalog_selftest bridge_selftest
+    desktop_entry_test
     terminal_selftest)
 
 # "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed. file_index_test
 # does call wxInitializer, but it links wx::base only, so it gets console traits and never opens a display.
 foreach(t diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test hunspell_selftest
-          funclist_selftest comment_tokens_test catalog_selftest plugin_catalog_test)
+          funclist_selftest comment_tokens_test catalog_selftest plugin_catalog_test desktop_entry_test)
     add_test(NAME ${t} COMMAND ${t})
     set_tests_properties(${t} PROPERTIES LABELS pure)
 endforeach()

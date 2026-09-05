@@ -3441,3 +3441,15 @@ msgstr "Votre copie de « %s » a été supprimée"
 
 msgid "Could not write the theme file.\n\nBuilt-in themes live next to the program and cannot be modified there. Use \"Save As...\" to keep these changes as your own copy of the theme."
 msgstr "Impossible d'écrire le fichier de thème.\n\nLes thèmes fournis se trouvent à côté du programme et ne peuvent pas y être modifiés. Utilisez « Enregistrer sous... » pour conserver ces modifications dans votre propre copie."
+
+msgid "Show in the applications menu and \"Open With\""
+msgstr "Afficher dans le menu des applications et dans « Ouvrir avec »"
+
+msgid "This AppImage does not contain wxnote.desktop, so it cannot register itself."
+msgstr "Cet AppImage ne contient pas wxnote.desktop ; il ne peut donc pas s'enregistrer."
+
+msgid "Could not write %s."
+msgstr "Impossible d'écrire %s."
+
+msgid "Add wxNote to your applications menu?\n\nAn AppImage is not installed, so your desktop does not know wxNote exists - which is why it does not appear under \"Open With\", and cannot be chosen as the default editor for a file type. This adds a launcher in your home folder, and changes nothing outside it.\n\nYou can undo this later in Preferences."
+msgstr "Ajouter wxNote au menu des applications ?\n\nUn AppImage ne s'installe pas : votre bureau ignore donc que wxNote existe, ce qui explique qu'il n'apparaisse pas dans « Ouvrir avec » et ne puisse pas être choisi comme éditeur par défaut d'un type de fichier. Cette action ajoute un lanceur dans votre dossier personnel et ne modifie rien en dehors.\n\nVous pourrez annuler cela plus tard dans les Préférences."

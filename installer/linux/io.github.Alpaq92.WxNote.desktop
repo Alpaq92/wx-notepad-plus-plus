@@ -7,4 +7,9 @@ Exec=wxnote %F
 Icon=io.github.Alpaq92.WxNote
 Terminal=false
 Categories=Utility;TextEditor;Development;
-MimeType=text/plain;
+# Types wxNote offers to open. Being listed here makes wxNote appear in "Open With" and lets it
+# be *chosen* as the default for these types - it never becomes the default by being installed.
+# inode/directory is deliberately absent even though wxNote does accept a folder argument: a user
+# who set it default there would lose their file manager, and the gain is a menu entry they can
+# already reach through "Open With Other Application".
+MimeType=text/plain;text/markdown;text/x-markdown;text/csv;text/tab-separated-values;text/richtext;text/rtf;text/troff;text/x-rst;text/x-asciidoc;text/x-tex;text/x-bibtex;text/vtt;application/x-subrip;text/x-c;text/x-csrc;text/x-chdr;text/x-c++;text/x-c++src;text/x-c++hdr;text/x-java;text/x-java-source;text/x-csharp;text/x-objcsrc;text/x-go;text/x-rust;text/x-swift;text/x-kotlin;text/x-scala;text/x-vala;text/x-dsrc;text/x-pascal;text/x-fortran;text/x-asm;text/x-ada;text/x-haskell;text/x-erlang;text/x-lisp;text/x-scheme;text/x-ocaml;text/x-python;text/x-python3;application/x-python;text/x-ruby;application/x-ruby;text/x-perl;application/x-perl;text/x-php;text/x-lua;text/x-tcl;text/x-awk;application/x-awk;text/x-shellscript;application/x-shellscript;text/html;application/xhtml+xml;text/css;text/javascript;application/javascript;application/x-javascript;application/x-typescript;text/x-typescript;image/svg+xml;application/json;application/ld+json;application/xml;text/xml;application/xslt+xml;application/x-yaml;text/x-yaml;application/toml;text/x-toml;text/x-ini;application/x-desktop;application/sql;text/x-sql;text/x-makefile;text/x-cmake;text/x-meson;text/x-diff;text/x-patch;text/x-gettext-translation;text/x-gettext-translation-template;application/octet-stream;

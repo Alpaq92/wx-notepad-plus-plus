@@ -183,6 +183,7 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 #include "keymap_schemes.h"    // bundled read-only keymap presets ("wxNote" + "Notepad++") - Tier 1 of the shortcut model
 #include "shortcut_mapper_dialog.h"  // the Shortcut Mapper dialog + conflict engine (implements kCmdSettingShortcutMapper 48009)
 #include "shortcut_labels.h"   // curated Scintilla "Editor commands" tier: seedEditorKeymapDefaults + wx<->SCK translation
+#include "desktop_entry.h"      // .desktop rewriting for AppImage self-integration (see wxnAppImageIntegrate)
 #include "scintillua_engine.h" // embedded Lua+LPeg+Scintillua engine (the native language-definition engine)
 #include "command_palette.h"   // Ctrl+Shift+P: harvests the live menu bar into the shared filter list
 #include "file_index.h"        // Ctrl+Shift+O: the time-sliced workspace crawler behind Quick Open
@@ -660,6 +661,163 @@ struct WxnOpenRequest
 // (see WxnIpcConnection below) because "reuse an existing window" is active. gotoLine/gotoCol/forceEnc
 // are -1 when not requested by the sending launch.
 static std::function<void(const WxnOpenRequest&)> g_ipcOpenRequest;
+
+#ifdef __WXOSX__
+// Paths Finder handed us before any frame existed - see WxnApp::MacOpenFiles for why that is a
+// case rather than a theoretical one, and OnInit for where they are folded back in.
+static wxArrayString g_macPendingOpen;
+#endif
+
+
+// ---- AppImage self-integration -------------------------------------------------------------------
+// An AppImage installs nothing. It is a single file the user drops anywhere and runs, so nothing ever
+// writes a .desktop into the desktop's search path - and without one, every MIME type wxNote declares
+// is inert: it cannot appear under "Open With", cannot be made the default for a file type, and has no
+// applications-menu entry. The .deb, .rpm and Windows installers all register on the user's behalf;
+// from an AppImage the running program is the only thing that can, so it registers itself.
+//
+// Deliberately NOT inside #ifdef __linux__. Every API used here is cross-platform, and the gate that
+// actually matters is a runtime one: $APPIMAGE and $APPDIR are set by the AppImage runtime and by
+// nothing else, so wxnRunningAsAppImage() is simply false everywhere else and none of this is reached.
+// Compiling it on all three platforms means the Windows and macOS builds type-check the code too,
+// rather than leaving a Linux-only block for CI to discover - which is exactly how the macOS build
+// broke the last time a platform-guarded block went in unverified.
+static wxString wxnEnv(const char* name)
+{
+    wxString v;
+    return wxGetEnv(name, &v) ? v : wxString();
+}
+static wxString wxnAppImagePath() { return wxnEnv("APPIMAGE"); }   // absolute path OF the .AppImage file
+static bool wxnRunningAsAppImage() { return !wxnAppImagePath().empty() && !wxnEnv("APPDIR").empty(); }
+
+// XDG_DATA_HOME, or the specification's default. Explicitly NOT wxStandardPaths::GetUserDataDir():
+// that answers wxNote's OWN config directory, whereas these two files have to land exactly where the
+// desktop environment looks for them or they may as well not exist.
+static wxString wxnXdgDataHome()
+{
+    const wxString xdg = wxnEnv("XDG_DATA_HOME");
+    return xdg.empty() ? (wxFileName::GetHomeDir() + "/.local/share") : xdg;
+}
+static wxString wxnDesktopEntryPath()   { return wxnXdgDataHome() + "/applications/wxnote.desktop"; }
+static wxString wxnIntegratedIconPath() { return wxnXdgDataHome() + "/icons/hicolor/scalable/apps/wxnote.svg"; }
+
+// Raw bytes both ways: a .desktop is UTF-8 by specification, and the rewriting in desktop_entry.h is
+// byte-preserving by design (that is what keeps the MIME list identical to the shipped file), so
+// decoding and re-encoding it through wxString would be a lossy round trip for no gain.
+static bool wxnReadWholeFile(const wxString& path, std::string& out)
+{
+    wxFile f(path, wxFile::read);
+    if (!f.IsOpened()) return false;
+    const wxFileOffset len = f.Length();
+    if (len < 0) return false;
+    out.assign(static_cast<size_t>(len), '\0');
+    return len == 0 || f.Read(&out[0], out.size()) == static_cast<ssize_t>(out.size());
+}
+static bool wxnWriteWholeFile(const wxString& path, const std::string& data)
+{
+    wxFile f(path, wxFile::write);
+    return f.IsOpened() && (data.empty() || f.Write(data.data(), data.size()) == data.size());
+}
+
+// Best-effort and deliberately silent: where update-desktop-database is missing the entry still works,
+// it just may not be picked up until the next login. wxLogNull because a failed wxExecute pops a modal
+// error dialog, which would turn a cosmetic shortfall into an interruption at startup.
+static void wxnRefreshDesktopDatabase()
+{
+    wxLogNull noPopups;
+    wxExecute("update-desktop-database \"" + wxnXdgDataHome() + "/applications\"", wxEXEC_ASYNC);
+}
+
+// True when an entry we wrote is present AND still names THIS AppImage. The second half is the part
+// that matters in practice: the user moves or renames the file, TryExec now points at nothing, and the
+// desktop quietly hides the launcher - wxNote disappears from the menus with no error anywhere.
+static bool wxnAppImageIsIntegrated()
+{
+    std::string cur;
+    if (!wxnReadWholeFile(wxnDesktopEntryPath(), cur)) return false;
+    return wxnDesktopValue(cur, "TryExec") == std::string(wxnAppImagePath().utf8_str());
+}
+
+// Install the launcher + icon into the user's home. Returns false with *err set; never pops a dialog
+// itself, so the caller decides whether a failure is worth interrupting for.
+static bool wxnAppImageIntegrate(wxString* err)
+{
+    const wxString img = wxnAppImagePath(), dir = wxnEnv("APPDIR");
+    if (img.empty() || dir.empty()) { if (err) *err = "not running as an AppImage"; return false; }
+
+    wxLogNull noPopups;   // failures are reported through *err, never through a wxLog dialog
+
+    // Icon first, because the entry written below points at it and an entry whose Icon is missing
+    // shows a generic placeholder. Non-fatal on its own: a placeholder icon is still a working launcher.
+    const wxString iconDst = wxnIntegratedIconPath();
+    wxFileName::Mkdir(wxPathOnly(iconDst), 0755, wxPATH_MKDIR_FULL);
+    wxCopyFile(dir + "/wxnote.svg", iconDst, true);
+
+    // Rewrite the entry the AppImage already carries rather than generating one: that file is
+    // installer/linux/wxnote.desktop, MIME list and all, so this cannot drift away from what the .deb
+    // and .rpm register. See desktop_entry.h.
+    std::string bundled;
+    if (!wxnReadWholeFile(dir + "/wxnote.desktop", bundled))
+    {
+        if (err) *err = _("This AppImage does not contain wxnote.desktop, so it cannot register itself.");
+        return false;
+    }
+    const std::string entry = wxnIntegrateDesktopEntry(bundled, std::string(img.utf8_str()),
+                                                       std::string(iconDst.utf8_str()));
+    const wxString dst = wxnDesktopEntryPath();
+    wxFileName::Mkdir(wxPathOnly(dst), 0755, wxPATH_MKDIR_FULL);
+    if (!wxnWriteWholeFile(dst, entry))
+    {
+        if (err) *err = wxString::Format(_("Could not write %s."), dst);
+        return false;
+    }
+    wxnRefreshDesktopDatabase();
+    return true;
+}
+
+static void wxnAppImageUnintegrate()
+{
+    wxLogNull noPopups;
+    wxRemoveFile(wxnDesktopEntryPath());
+    wxRemoveFile(wxnIntegratedIconPath());
+    wxnRefreshDesktopDatabase();
+}
+
+// Once per launch, after the window is up. Three cases, and only one of them talks to the user:
+//   * integrated and still current     - nothing to do
+//   * integrated but the AppImage moved - rewrite it silently; the user already consented once, and
+//                                         re-asking every time they reorganise a folder would be noise
+//   * never asked                       - ask, exactly once, whatever the answer
+static void wxnMaybeIntegrateAppImage(wxWindow* parent)
+{
+    if (!wxnRunningAsAppImage()) return;
+    wxConfigBase* cfg = wxConfigBase::Get();
+    bool integrated = false;
+    cfg->Read("AppImageIntegrated", &integrated, false);
+    if (integrated)
+    {
+        if (!wxnAppImageIsIntegrated()) { wxString e; wxnAppImageIntegrate(&e); }
+        return;
+    }
+    bool asked = false;
+    cfg->Read("AppImageIntegrationAsked", &asked, false);
+    if (asked) return;
+    // Recorded BEFORE the dialog, so a prompt that is dismissed by closing the window - or one that
+    // never returns because the session ends - still counts as asked. A prompt that reappears every
+    // launch is worse than one the user never sees again.
+    cfg->Write("AppImageIntegrationAsked", true);
+    const int r = wxMessageBox(
+        _("Add wxNote to your applications menu?\n\n"
+          "An AppImage is not installed, so your desktop does not know wxNote exists - which is why it "
+          "does not appear under \"Open With\", and cannot be chosen as the default editor for a file "
+          "type. This adds a launcher in your home folder, and changes nothing outside it.\n\n"
+          "You can undo this later in Preferences."),
+        "wxNote", wxYES_NO | wxICON_QUESTION, parent);
+    if (r != wxYES) return;
+    wxString err;
+    if (wxnAppImageIntegrate(&err)) cfg->Write("AppImageIntegrated", true);
+    else wxMessageBox(err, "wxNote", wxOK | wxICON_EXCLAMATION, parent);
+}
 
 // ---- -w/--wait: block the launching process until the file's tab is closed (git core.editor / $EDITOR) --
 // The exe IS the GUI process - there is no separate console-subsystem CLI shim that could block on our
@@ -3072,9 +3230,10 @@ class RoundCaptionBtn : public wxWindow
 {
 public:
     RoundCaptionBtn(wxWindow* parent, wxWindowID id, const wxSize& size, wchar_t glyph, const wxFont& font,
-                    const wxColour& bg, const wxColour& hotBg, const wxColour& fg, const wxColour& hotFg, bool rounded)
+                    const wxColour& bg, const wxColour& hotBg, const wxColour& fg, const wxColour& hotFg, bool rounded,
+                    const wxBitmapBundle& bmp = wxBitmapBundle())
         : wxWindow(parent, id, wxDefaultPosition, size, wxBORDER_NONE),
-          m_glyph(glyph), m_font(font), m_bg(bg), m_hotBg(hotBg), m_fg(fg), m_hotFg(hotFg), m_rounded(rounded)
+          m_glyph(glyph), m_font(font), m_bmp(bmp), m_bg(bg), m_hotBg(hotBg), m_fg(fg), m_hotFg(hotFg), m_rounded(rounded)
     {
         SetBackgroundStyle(wxBG_STYLE_PAINT);
         Bind(wxEVT_PAINT, &RoundCaptionBtn::onPaint, this);
@@ -3083,6 +3242,7 @@ public:
         Bind(wxEVT_LEFT_UP, [this](wxMouseEvent&){ wxCommandEvent ev(wxEVT_BUTTON, GetId()); ev.SetEventObject(this); ProcessWindowEvent(ev); });
     }
     void SetGlyph(wchar_t g) { m_glyph = g; Refresh(); }
+    void SetGlyphBitmap(const wxBitmapBundle& b) { m_bmp = b; Refresh(); }
     void SetBaseBg(const wxColour& c) { m_bg = c; Refresh(); }   // see TitleBarBtn::SetBaseBg
 private:
     void onPaint(wxPaintEvent&)
@@ -3090,6 +3250,12 @@ private:
         wxAutoBufferedPaintDC dc(this);
         const wxSize sz = GetClientSize();
         paintCaptionBtnBg(dc, *this, sz, m_bg, m_hotBg, m_hot, m_rounded);
+        if (m_bmp.IsOk())   // minimal style: drawn artwork, sized to the circle (see the ctrl() call)
+        {
+            const wxSize bs = m_bmp.GetPreferredBitmapSizeFor(this);
+            dc.DrawBitmap(m_bmp.GetBitmap(bs), (sz.x - bs.x) / 2, (sz.y - bs.y) / 2, true);
+            return;
+        }
         dc.SetFont(m_font);
         dc.SetTextForeground(m_hot ? m_hotFg : m_fg);
         const wxString g = wxString(wxUniChar(m_glyph));
@@ -3098,6 +3264,9 @@ private:
     }
     wchar_t  m_glyph;
     wxFont   m_font;
+    // Empty in the flat/Windows-style mode, which draws the MDL2 font glyph above; set in the minimal
+    // style, whose glyph size is a ratio of the hover circle rather than a caption-font point size.
+    wxBitmapBundle m_bmp;
     wxColour m_bg, m_hotBg, m_fg, m_hotFg;
     bool     m_rounded = false;   // always set from the ctor's required param; matches TitleBarBtn's default
     bool     m_hot = false;
@@ -8742,7 +8911,6 @@ private:
             // Native-buttons mode swaps in the hit-test-transparent variant (see HitPass): same rendering,
             // but clicks and hover are then driven by the frame's wxEVT_NC_* handlers below, not client
             // events. Two-phase Create keeps a single argument list across the two variants.
-            (void)svgPath;
             const wxColour fg = m_dark ? wxColour(240, 240, 240) : wxColour(20, 20, 20);
             if (nativeWinButtons())
             {
@@ -8761,7 +8929,13 @@ private:
             // needs the white glyph that keeps contrast on that red; the minimal style hovers every button
             // the same neutral grey, on which a white glyph would be invisible.
             const wxColour hotFg = (which == 2 && !minimalButtons()) ? wxColour(255, 255, 255) : fg;
-            auto* b = new RoundCaptionBtn(m_titleBar, wxID_ANY, wxSize(cellW, kTitleBarH), mdl2Glyph, mdl2, barBg, hot, fg, hotFg, minimalButtons());
+            // Glyph source is per style, not per platform. The flat style imitates Windows' own caption
+            // buttons, so it draws Windows' own MDL2 font glyphs. The minimal style imitates nothing native:
+            // its proportions are measured against the hover circle, so it draws the same Lucide artwork at
+            // the same capGlyphPx() the GTK build uses. Sizing that one by caption-font points instead is
+            // what left Windows with ~11px glyphs crowding a 20px circle while GTK sat at the intended ~9.
+            auto* b = new RoundCaptionBtn(m_titleBar, wxID_ANY, wxSize(cellW, kTitleBarH), mdl2Glyph, mdl2, barBg, hot, fg, hotFg,
+                                          minimalButtons(), minimalButtons() ? winGlyph(svgPath, true, glyphPx) : wxBitmapBundle());
             b->Bind(wxEVT_BUTTON, [this, which](wxCommandEvent&) { onWindowControl(which); });
             sz->Add(b, 0, wxEXPAND);
             return b;
@@ -8882,8 +9056,11 @@ private:
         if (!m_maxBtn) return;   // null in GTK header-bar mode (GTK draws the buttons) - nothing to sync
 #ifdef __WXMSW__
         const wchar_t g = IsMaximized() ? 0xE923 : 0xE922;   // ChromeRestore / ChromeMaximize
-        if (nativeWinButtons()) static_cast<wxButton*>(m_maxBtn)->SetLabel(wxString(wxUniChar(g)));
-        else                    static_cast<RoundCaptionBtn*>(m_maxBtn)->SetGlyph(g);
+        if      (nativeWinButtons()) static_cast<wxButton*>(m_maxBtn)->SetLabel(wxString(wxUniChar(g)));
+        // Mirrors the ctrl() split above: whichever glyph source the button was built with is the one
+        // that gets swapped, or maximize/restore would silently stop updating in the minimal style.
+        else if (minimalButtons())  static_cast<RoundCaptionBtn*>(m_maxBtn)->SetGlyphBitmap(winGlyph(capGlyph(1), true, capGlyphPx()));
+        else                        static_cast<RoundCaptionBtn*>(m_maxBtn)->SetGlyph(g);
 #else
         static_cast<TitleBarBtn*>(m_maxBtn)->SetGlyph(winGlyph(capGlyph(1), minimalButtons(), capGlyphPx()));
 #endif
@@ -12843,6 +13020,16 @@ private:
         // rather than blocking on a Save/Don't Save/Cancel prompt every time.
         auto* cbAskClose = new wxCheckBox(gen, wxID_ANY, _("Ask before closing unsaved changes"));
         cbAskClose->SetValue(m_askBeforeClose); row(gs, cbAskClose);
+        // AppImage builds only - see wxnMaybeIntegrateAppImage. Added rather than merely disabled
+        // elsewhere, because on an installed build the package manager already registered the
+        // launcher and a control that cannot do anything is worse than no control at all.
+        wxCheckBox* cbAppImage = nullptr;
+        if (wxnRunningAsAppImage())
+        {
+            cbAppImage = new wxCheckBox(gen, wxID_ANY, _("Show in the applications menu and \"Open With\""));
+            cbAppImage->SetValue(wxnAppImageIsIntegrated());
+            row(gs, cbAppImage);
+        }
         // Off by default: the toolbar stays visible in full screen. On: full screen hides it (macOS-style).
         auto* cbFsToolbar = new wxCheckBox(gen, wxID_ANY, _("Auto-hide toolbar in full screen"));
         cbFsToolbar->SetValue(m_fsAutohideToolbar); row(gs, cbFsToolbar);
@@ -13210,6 +13397,21 @@ private:
         m_showToolbar = cbToolbar->GetValue(); m_showStatusbar = cbStatus->GetValue();
         m_showZoomField = cbZoomField->GetValue();
         m_askBeforeClose = cbAskClose->GetValue();
+        if (cbAppImage)   // null unless running as an AppImage (see above)
+        {
+            const bool want = cbAppImage->GetValue();
+            // Compare against what is actually on disk, not the stored flag: the entry can have been
+            // removed by hand since, in which case re-ticking the box has to rewrite it rather than
+            // decide nothing changed.
+            if (want != wxnAppImageIsIntegrated())
+            {
+                wxString err;
+                if (!want)                              wxnAppImageUnintegrate();
+                else if (!wxnAppImageIntegrate(&err))   wxMessageBox(err, "wxNote", wxOK | wxICON_EXCLAMATION, this);
+                wxConfigBase::Get()->Write("AppImageIntegrated", want && err.empty());
+                wxConfigBase::Get()->Write("AppImageIntegrationAsked", true);   // an explicit choice: never prompt
+            }
+        }
         m_fsAutohideToolbar = cbFsToolbar->GetValue();
         m_tabWidth = spTab->GetValue(); m_useTabs = !cbSpace->GetValue(); m_lineNumbers = cbLineNum->GetValue();
         m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
@@ -16733,6 +16935,17 @@ public:
         // in the real recovery dir. That is the part a sandbox must not do.
         const bool restoreOnStart = !wait && !g_cleanMode && !g_sandboxMode;
 
+#ifdef __WXOSX__
+        // Fold in anything Finder delivered while the frame was still being built (MacOpenFiles),
+        // so a double-clicked file opens exactly like one named on the command line. lines/cols are
+        // parallel to paths and must grow with it, or every later index would be off by one.
+        for (const wxString& p : g_macPendingOpen)
+        {
+            if (wxDirExists(p)) { req.folders.Add(p); continue; }
+            req.paths.Add(p); req.lines.Add(-1); req.cols.Add(-1);
+        }
+        g_macPendingOpen.Clear();
+#endif
         auto applyRequest = [&](auto* frame) {
             for (const auto& d : req.folders) frame->openFolderPath(d);   // last folder wins: the browser is single-root
             // Files (as tabs or into the split), per-file :line[:col], the launch-wide -g/-e (or +N),
@@ -16747,6 +16960,10 @@ public:
             // -pluginMessage=<text>: hand it to plugins now that they are loaded and the startup files are in
             // (the GPL npp-bridge forwards it as NPPN_CMDLINEPLUGINMSG). --safe (no plugins) makes this inert.
             if (!g_pluginMessage.empty()) nibFireCmdlinePluginMsg(g_pluginMessage);
+            // AppImage only (a no-op everywhere else): offer to register the launcher the first time,
+            // and silently refresh a stale entry when the AppImage has been moved since. Deferred so
+            // the prompt lands over a painted window instead of mid-construction.
+            frame->CallAfter([frame] { wxnMaybeIntegrateAppImage(frame); });
         };
 #ifdef WXN_HAS_BORDERLESS
         // Integrated top bar (Settings > Preferences, restart-to-apply): a borderless frame whose chrome is
@@ -16831,6 +17048,34 @@ public:
             return;   // deliberate frozen command id above SHRT_MAX - not a bug; swallow the false positive
         wxApp::OnAssertFailure(file, line, func, cond, msg);
     }
+
+#ifdef __WXOSX__
+    // Finder does NOT pass a double-clicked file on argv - it sends the kAEOpenDocuments Apple
+    // Event, which wx delivers here. Without this override the CFBundleDocumentTypes declared in
+    // installer/macos/build-dmg.sh would make wxNote *offered* as a handler and then open an empty
+    // window, which reads as a broken association rather than a missing one. Same for "Open With"
+    // on an already-running instance, and for files dropped on the Dock icon.
+    void MacOpenFiles(const wxArrayString& fileNames) override
+    {
+        // The frame installs g_ipcOpenRequest in its constructor, and that hook already routes a
+        // set of paths into whichever of the two frame types is live - the same problem the IPC
+        // handoff solved, so it is reused rather than duplicated with a pair of dynamic_casts.
+        if (!g_ipcOpenRequest)
+        {
+            // Launched BY the double-click: the event can beat the frame into existence, so there
+            // is nothing to deliver to yet. Stash and let OnInit merge it into this launch.
+            for (const wxString& f : fileNames) g_macPendingOpen.Add(f);
+            return;
+        }
+        WxnOpenRequest req;
+        for (const wxString& f : fileNames)
+        {
+            if (wxDirExists(f)) { req.folders.Add(f); continue; }   // wxNote takes a folder too
+            req.paths.Add(f); req.lines.Add(-1); req.cols.Add(-1);
+        }
+        g_ipcOpenRequest(req);
+    }
+#endif
 
 private:
     wxLocale m_locale;   // must outlive OnInit() - destroying it would revert the process's locale
