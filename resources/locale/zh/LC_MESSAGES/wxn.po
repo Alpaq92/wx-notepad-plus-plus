@@ -3441,3 +3441,15 @@ msgstr "已删除您的“%s”副本"
 
 msgid "Could not write the theme file.\n\nBuilt-in themes live next to the program and cannot be modified there. Use \"Save As...\" to keep these changes as your own copy of the theme."
 msgstr "无法写入主题文件。\n\n内置主题位于程序旁边，无法在此修改。请使用“保存...”将这些更改保存为您自己的主题副本。"
+
+msgid "Show in the applications menu and \"Open With\""
+msgstr "在应用程序菜单和“打开方式”中显示"
+
+msgid "This AppImage does not contain wxnote.desktop, so it cannot register itself."
+msgstr "此 AppImage 不包含 wxnote.desktop，因此无法注册自身。"
+
+msgid "Could not write %s."
+msgstr "无法写入 %s。"
+
+msgid "Add wxNote to your applications menu?\n\nAn AppImage is not installed, so your desktop does not know wxNote exists - which is why it does not appear under \"Open With\", and cannot be chosen as the default editor for a file type. This adds a launcher in your home folder, and changes nothing outside it.\n\nYou can undo this later in Preferences."
+msgstr "将 wxNote 添加到应用程序菜单？\n\nAppImage 不会被安装，因此桌面环境并不知道 wxNote 的存在 - 这就是它不出现在“打开方式”中、也无法被设为某种文件类型默认编辑器的原因。此操作会在您的主目录中添加一个启动器，不会改动其他任何位置。\n\n以后可以在“首选项”中撤销。"

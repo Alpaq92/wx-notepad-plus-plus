@@ -33,6 +33,13 @@
 !define APP_URL     "https://github.com/Alpaq92/wx-notepad-plus-plus"
 !define APP_EXE     "wxnote.exe"
 !define ARP_KEY     "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
+; File-association identity. PROGID is the registry name for "a file wxNote opens" - Windows will not
+; offer an application as a handler at all until one exists. CAP_KEY is the Capabilities subkey that
+; lists wxNote in Settings > Default apps; it deliberately sits UNDER Software\wxNote, the app's own
+; settings key, so every removal path below deletes that SUBKEY alone and leaves the settings beside it.
+!define PROGID      "wxNote.Document"
+!define CAP_KEY     "Software\wxNote\Capabilities"
+!define DOC_ICON    "wxnote-doc.ico"
 
 ; TARGET_ARM64 / TARGET_X86 (makensis /DTARGET_ARM64, /DTARGET_X86): the windows-arm64 and windows-x86
 ; CI legs build an ARM64 / 32-bit x86 wxnote.exe and pass their define so the installer is named apart
@@ -100,6 +107,326 @@ VIAddVersionKey /LANG=1033 "Comments"         "Open-source text editor. Source: 
 ; requires a native ARM64 Windows (x64 Windows can't run ARM64 binaries); the x64 build keeps the
 ; broader RunningX64 check - it deliberately still installs on ARM64 Windows 11, where x64 apps
 ; run fine under the OS's built-in emulation.
+; ---- file associations, Open-with and the Explorer context menu -------------------------------
+; ONE list of extensions, walked by whichever per-extension operation is passed in. Registration and
+; removal MUST agree exactly: a drifted list would leave wxNote advertised for types the uninstaller
+; no longer knows to clean up, and Windows would go on offering a handler whose exe is gone.
+;
+; The list is deliberately long rather than exhaustive. Being offered for *any* file at all - including
+; extensions nobody has heard of, and files with no extension - is handled by the SupportedTypes and
+; OpenWithList wildcards in AssocRegister below. THIS list is the narrower question of which types
+; wxNote offers to be the DEFAULT for in Settings > Default apps, where Windows requires them named.
+!macro ForEachExt _OP
+  ; plain text, notes and documentation
+  !insertmacro ${_OP} ".txt"
+  !insertmacro ${_OP} ".log"
+  !insertmacro ${_OP} ".md"
+  !insertmacro ${_OP} ".markdown"
+  !insertmacro ${_OP} ".mdown"
+  !insertmacro ${_OP} ".mkd"
+  !insertmacro ${_OP} ".rst"
+  !insertmacro ${_OP} ".adoc"
+  !insertmacro ${_OP} ".asciidoc"
+  !insertmacro ${_OP} ".text"
+  !insertmacro ${_OP} ".me"
+  !insertmacro ${_OP} ".nfo"
+  !insertmacro ${_OP} ".rtf"
+  !insertmacro ${_OP} ".tex"
+  !insertmacro ${_OP} ".bib"
+  !insertmacro ${_OP} ".srt"
+  !insertmacro ${_OP} ".vtt"
+  ; configuration and dotfiles Explorer treats as extensions
+  !insertmacro ${_OP} ".ini"
+  !insertmacro ${_OP} ".cfg"
+  !insertmacro ${_OP} ".conf"
+  !insertmacro ${_OP} ".config"
+  !insertmacro ${_OP} ".properties"
+  !insertmacro ${_OP} ".toml"
+  !insertmacro ${_OP} ".yaml"
+  !insertmacro ${_OP} ".yml"
+  !insertmacro ${_OP} ".env"
+  !insertmacro ${_OP} ".editorconfig"
+  !insertmacro ${_OP} ".gitignore"
+  !insertmacro ${_OP} ".gitattributes"
+  !insertmacro ${_OP} ".gitmodules"
+  !insertmacro ${_OP} ".dockerignore"
+  !insertmacro ${_OP} ".npmrc"
+  !insertmacro ${_OP} ".babelrc"
+  !insertmacro ${_OP} ".eslintrc"
+  !insertmacro ${_OP} ".prettierrc"
+  !insertmacro ${_OP} ".htaccess"
+  !insertmacro ${_OP} ".reg"
+  !insertmacro ${_OP} ".inf"
+  !insertmacro ${_OP} ".desktop"
+  ; structured data and interchange
+  !insertmacro ${_OP} ".json"
+  !insertmacro ${_OP} ".json5"
+  !insertmacro ${_OP} ".jsonc"
+  !insertmacro ${_OP} ".jsonl"
+  !insertmacro ${_OP} ".ndjson"
+  !insertmacro ${_OP} ".xml"
+  !insertmacro ${_OP} ".xsd"
+  !insertmacro ${_OP} ".xsl"
+  !insertmacro ${_OP} ".xslt"
+  !insertmacro ${_OP} ".dtd"
+  !insertmacro ${_OP} ".csv"
+  !insertmacro ${_OP} ".tsv"
+  !insertmacro ${_OP} ".plist"
+  !insertmacro ${_OP} ".proto"
+  !insertmacro ${_OP} ".thrift"
+  !insertmacro ${_OP} ".avsc"
+  !insertmacro ${_OP} ".graphql"
+  !insertmacro ${_OP} ".gql"
+  !insertmacro ${_OP} ".cue"
+  !insertmacro ${_OP} ".hcl"
+  !insertmacro ${_OP} ".tf"
+  !insertmacro ${_OP} ".tfvars"
+  !insertmacro ${_OP} ".nix"
+  ; web
+  !insertmacro ${_OP} ".html"
+  !insertmacro ${_OP} ".htm"
+  !insertmacro ${_OP} ".xhtml"
+  !insertmacro ${_OP} ".shtml"
+  !insertmacro ${_OP} ".css"
+  !insertmacro ${_OP} ".scss"
+  !insertmacro ${_OP} ".sass"
+  !insertmacro ${_OP} ".less"
+  !insertmacro ${_OP} ".styl"
+  !insertmacro ${_OP} ".js"
+  !insertmacro ${_OP} ".mjs"
+  !insertmacro ${_OP} ".cjs"
+  !insertmacro ${_OP} ".jsx"
+  !insertmacro ${_OP} ".ts"
+  !insertmacro ${_OP} ".tsx"
+  !insertmacro ${_OP} ".mts"
+  !insertmacro ${_OP} ".cts"
+  !insertmacro ${_OP} ".vue"
+  !insertmacro ${_OP} ".svelte"
+  !insertmacro ${_OP} ".astro"
+  !insertmacro ${_OP} ".php"
+  !insertmacro ${_OP} ".phtml"
+  !insertmacro ${_OP} ".asp"
+  !insertmacro ${_OP} ".aspx"
+  !insertmacro ${_OP} ".jsp"
+  !insertmacro ${_OP} ".ejs"
+  !insertmacro ${_OP} ".hbs"
+  !insertmacro ${_OP} ".njk"
+  !insertmacro ${_OP} ".pug"
+  !insertmacro ${_OP} ".twig"
+  !insertmacro ${_OP} ".liquid"
+  !insertmacro ${_OP} ".svg"
+  ; systems and application languages
+  !insertmacro ${_OP} ".c"
+  !insertmacro ${_OP} ".h"
+  !insertmacro ${_OP} ".i"
+  !insertmacro ${_OP} ".cpp"
+  !insertmacro ${_OP} ".cxx"
+  !insertmacro ${_OP} ".cc"
+  !insertmacro ${_OP} ".c++"
+  !insertmacro ${_OP} ".hpp"
+  !insertmacro ${_OP} ".hxx"
+  !insertmacro ${_OP} ".hh"
+  !insertmacro ${_OP} ".h++"
+  !insertmacro ${_OP} ".ipp"
+  !insertmacro ${_OP} ".inl"
+  !insertmacro ${_OP} ".m"
+  !insertmacro ${_OP} ".mm"
+  !insertmacro ${_OP} ".cs"
+  !insertmacro ${_OP} ".java"
+  !insertmacro ${_OP} ".kt"
+  !insertmacro ${_OP} ".kts"
+  !insertmacro ${_OP} ".go"
+  !insertmacro ${_OP} ".rs"
+  !insertmacro ${_OP} ".swift"
+  !insertmacro ${_OP} ".d"
+  !insertmacro ${_OP} ".zig"
+  !insertmacro ${_OP} ".nim"
+  !insertmacro ${_OP} ".v"
+  !insertmacro ${_OP} ".vala"
+  !insertmacro ${_OP} ".pas"
+  !insertmacro ${_OP} ".pp"
+  !insertmacro ${_OP} ".f"
+  !insertmacro ${_OP} ".f90"
+  !insertmacro ${_OP} ".f95"
+  !insertmacro ${_OP} ".for"
+  !insertmacro ${_OP} ".ada"
+  !insertmacro ${_OP} ".adb"
+  !insertmacro ${_OP} ".ads"
+  ; scripting and dynamic languages
+  !insertmacro ${_OP} ".py"
+  !insertmacro ${_OP} ".pyw"
+  !insertmacro ${_OP} ".pyi"
+  !insertmacro ${_OP} ".rb"
+  !insertmacro ${_OP} ".rbw"
+  !insertmacro ${_OP} ".erb"
+  !insertmacro ${_OP} ".pl"
+  !insertmacro ${_OP} ".pm"
+  !insertmacro ${_OP} ".pod"
+  !insertmacro ${_OP} ".t"
+  !insertmacro ${_OP} ".lua"
+  !insertmacro ${_OP} ".tcl"
+  !insertmacro ${_OP} ".php3"
+  !insertmacro ${_OP} ".r"
+  !insertmacro ${_OP} ".rmd"
+  !insertmacro ${_OP} ".jl"
+  !insertmacro ${_OP} ".dart"
+  !insertmacro ${_OP} ".groovy"
+  !insertmacro ${_OP} ".scala"
+  !insertmacro ${_OP} ".sc"
+  !insertmacro ${_OP} ".clj"
+  !insertmacro ${_OP} ".cljs"
+  !insertmacro ${_OP} ".cljc"
+  !insertmacro ${_OP} ".edn"
+  !insertmacro ${_OP} ".ex"
+  !insertmacro ${_OP} ".exs"
+  !insertmacro ${_OP} ".erl"
+  !insertmacro ${_OP} ".hrl"
+  !insertmacro ${_OP} ".hs"
+  !insertmacro ${_OP} ".lhs"
+  !insertmacro ${_OP} ".ml"
+  !insertmacro ${_OP} ".mli"
+  !insertmacro ${_OP} ".fs"
+  !insertmacro ${_OP} ".fsi"
+  !insertmacro ${_OP} ".fsx"
+  !insertmacro ${_OP} ".elm"
+  !insertmacro ${_OP} ".purs"
+  !insertmacro ${_OP} ".re"
+  !insertmacro ${_OP} ".res"
+  ; shells, batch and build
+  !insertmacro ${_OP} ".sh"
+  !insertmacro ${_OP} ".bash"
+  !insertmacro ${_OP} ".zsh"
+  !insertmacro ${_OP} ".fish"
+  !insertmacro ${_OP} ".ksh"
+  !insertmacro ${_OP} ".csh"
+  !insertmacro ${_OP} ".ps1"
+  !insertmacro ${_OP} ".psm1"
+  !insertmacro ${_OP} ".psd1"
+  !insertmacro ${_OP} ".bat"
+  !insertmacro ${_OP} ".cmd"
+  !insertmacro ${_OP} ".awk"
+  !insertmacro ${_OP} ".sed"
+  !insertmacro ${_OP} ".vim"
+  !insertmacro ${_OP} ".el"
+  !insertmacro ${_OP} ".mk"
+  !insertmacro ${_OP} ".mak"
+  !insertmacro ${_OP} ".makefile"
+  !insertmacro ${_OP} ".cmake"
+  !insertmacro ${_OP} ".gradle"
+  !insertmacro ${_OP} ".sbt"
+  !insertmacro ${_OP} ".ninja"
+  !insertmacro ${_OP} ".bazel"
+  !insertmacro ${_OP} ".bzl"
+  !insertmacro ${_OP} ".bp"
+  !insertmacro ${_OP} ".pro"
+  !insertmacro ${_OP} ".pri"
+  !insertmacro ${_OP} ".am"
+  !insertmacro ${_OP} ".ac"
+  !insertmacro ${_OP} ".spec"
+  !insertmacro ${_OP} ".rules"
+  ; query, diff and misc developer output
+  !insertmacro ${_OP} ".sql"
+  !insertmacro ${_OP} ".psql"
+  !insertmacro ${_OP} ".ddl"
+  !insertmacro ${_OP} ".diff"
+  !insertmacro ${_OP} ".patch"
+  !insertmacro ${_OP} ".po"
+  !insertmacro ${_OP} ".pot"
+  !insertmacro ${_OP} ".pgsql"
+  !insertmacro ${_OP} ".asm"
+  !insertmacro ${_OP} ".s"
+  !insertmacro ${_OP} ".lst"
+  !insertmacro ${_OP} ".map"
+  !insertmacro ${_OP} ".sym"
+  !insertmacro ${_OP} ".dump"
+  !insertmacro ${_OP} ".trace"
+  !insertmacro ${_OP} ".out"
+  !insertmacro ${_OP} ".err"
+!macroend
+
+!macro AssocRegisterExt EXT
+  ; Register the ProgId as a CHOICE for this extension, never as its default. OpenWithProgids is
+  ; additive and is what "Open with" and the Default apps UI read; writing the extension key's own
+  ; default value instead would silently seize the type from whatever already owns it, which is
+  ; exactly the behaviour that makes installers infamous.
+  WriteRegStr HKCU "${CAP_KEY}\FileAssociations" "${EXT}" "${PROGID}"
+  WriteRegStr HKCU "Software\Classes\${EXT}\OpenWithProgids" "${PROGID}" ""
+!macroend
+
+!macro AssocUnregisterExt EXT
+  ; Delete only OUR value under a key we share. DeleteRegKey here would take every other application's
+  ; registration for that extension with it.
+  DeleteRegValue HKCU "Software\Classes\${EXT}\OpenWithProgids" "${PROGID}"
+  DeleteRegValue HKCU "${CAP_KEY}\FileAssociations" "${EXT}"
+!macroend
+
+; Everything the association option writes. Nothing here makes wxNote the default handler for anything:
+; since Windows 8 an installer cannot set a default, and attempting it through the undocumented
+; UserChoice hash is what gets an installer flagged as malware. All of this only makes wxNote
+; SELECTABLE - the user still picks it, in Open with or in Settings > Default apps.
+!macro AssocRegister
+  ; 1. The ProgId: what a "wxNote document" is, and the icon Explorer draws for one.
+  WriteRegStr HKCU "Software\Classes\${PROGID}" "" "wxNote Document"
+  WriteRegStr HKCU "Software\Classes\${PROGID}" "FriendlyTypeName" "wxNote Document"
+  WriteRegStr HKCU "Software\Classes\${PROGID}\DefaultIcon" "" "$INSTDIR\${DOC_ICON},0"
+  WriteRegStr HKCU "Software\Classes\${PROGID}\shell\open\command" "" '"$INSTDIR\${APP_EXE}" "%1"'
+
+  ; 2. The application. A SupportedTypes value of "*" is the documented way to say "this app opens ANY
+  ; file", and it is what puts wxNote in "Open with > Choose another app" for an extension it has never
+  ; been told about - the "all possible files" half of the requirement.
+  WriteRegStr HKCU "Software\Classes\Applications\${APP_EXE}" "FriendlyAppName" "${APP_NAME}"
+  WriteRegStr HKCU "Software\Classes\Applications\${APP_EXE}\DefaultIcon" "" "$INSTDIR\${APP_EXE},0"
+  WriteRegStr HKCU "Software\Classes\Applications\${APP_EXE}\shell\open\command" "" '"$INSTDIR\${APP_EXE}" "%1"'
+  WriteRegStr HKCU "Software\Classes\Applications\${APP_EXE}\SupportedTypes" "*" ""
+
+  ; 3. ...and offer it in the Open-with list of every file type, extension or not.
+  WriteRegStr HKCU "Software\Classes\*\OpenWithList\${APP_EXE}" "" ""
+
+  ; 4. Explorer context menu: on any file, on a folder, and on the background of an open folder. The
+  ; last one takes %V, not %1 - %1 is empty for a background click, %V is the folder clicked into.
+  ; wxNote accepts a directory as well as a file (see its `file-or-folder` command-line parameter),
+  ; which is what makes the two folder entries meaningful rather than an error message.
+  ; On Windows 11 these land under "Show more options": the top-level menu only accepts a packaged
+  ; IExplorerCommand handler, which a plain per-user NSIS install has no way to register.
+  WriteRegStr HKCU "Software\Classes\*\shell\${APP_NAME}" "" "Edit with ${APP_NAME}"
+  WriteRegStr HKCU "Software\Classes\*\shell\${APP_NAME}" "Icon" "$INSTDIR\${APP_EXE},0"
+  WriteRegStr HKCU "Software\Classes\*\shell\${APP_NAME}\command" "" '"$INSTDIR\${APP_EXE}" "%1"'
+  WriteRegStr HKCU "Software\Classes\Directory\shell\${APP_NAME}" "" "Open folder with ${APP_NAME}"
+  WriteRegStr HKCU "Software\Classes\Directory\shell\${APP_NAME}" "Icon" "$INSTDIR\${APP_EXE},0"
+  WriteRegStr HKCU "Software\Classes\Directory\shell\${APP_NAME}\command" "" '"$INSTDIR\${APP_EXE}" "%1"'
+  WriteRegStr HKCU "Software\Classes\Directory\Background\shell\${APP_NAME}" "" "Open folder with ${APP_NAME}"
+  WriteRegStr HKCU "Software\Classes\Directory\Background\shell\${APP_NAME}" "Icon" "$INSTDIR\${APP_EXE},0"
+  WriteRegStr HKCU "Software\Classes\Directory\Background\shell\${APP_NAME}\command" "" '"$INSTDIR\${APP_EXE}" "%V"'
+
+  ; 5. Settings > Default apps. RegisteredApplications -> Capabilities is what lists wxNote there at
+  ; all; the FileAssociations written per extension below are the types it offers to be default for.
+  WriteRegStr HKCU "${CAP_KEY}" "ApplicationName" "${APP_NAME}"
+  WriteRegStr HKCU "${CAP_KEY}" "ApplicationDescription" "Open-source cross-platform text and code editor."
+  WriteRegStr HKCU "${CAP_KEY}" "ApplicationIcon" "$INSTDIR\${APP_EXE},0"
+  WriteRegStr HKCU "Software\RegisteredApplications" "${APP_NAME}" "${CAP_KEY}"
+  !insertmacro ForEachExt AssocRegisterExt
+!macroend
+
+; The exact inverse of AssocRegister. Safe to run when nothing was ever registered.
+!macro AssocUnregister
+  !insertmacro ForEachExt AssocUnregisterExt
+  DeleteRegKey   HKCU "Software\Classes\${PROGID}"
+  DeleteRegKey   HKCU "Software\Classes\Applications\${APP_EXE}"
+  DeleteRegKey   HKCU "Software\Classes\*\OpenWithList\${APP_EXE}"
+  DeleteRegKey   HKCU "Software\Classes\*\shell\${APP_NAME}"
+  DeleteRegKey   HKCU "Software\Classes\Directory\shell\${APP_NAME}"
+  DeleteRegKey   HKCU "Software\Classes\Directory\Background\shell\${APP_NAME}"
+  DeleteRegValue HKCU "Software\RegisteredApplications" "${APP_NAME}"
+  ; The Capabilities SUBKEY only. Software\wxNote beside it is the user's settings and must survive,
+  ; exactly as the uninstaller's closing comment promises.
+  DeleteRegKey   HKCU "${CAP_KEY}"
+!macroend
+
+; Explorer caches association data; without this the new entries do not appear until it restarts.
+!macro AssocNotifyShell
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
+!macroend
+
 Function .onInit
   ; All three Windows builds install to the same per-user directory and share one Add/Remove Programs
   ; entry, so installing a different architecture over an existing one silently replaces it. That was
@@ -143,6 +470,10 @@ Section "${APP_NAME} (required)" SecCore
   ; files as well. NOTICE carries the third-party attributions (bundled fonts, the GPL bridge plugins).
   File "..\..\LICENSE"
   File "..\..\NOTICE"
+  ; The icon Explorer draws for files handled by wxNote (see SecAssoc). Installed unconditionally even
+  ; though the association section is optional: a DefaultIcon pointing at a file that is not there
+  ; renders as a blank sheet, and that would outlive any later re-tick of the section.
+  File "..\..\resources\${DOC_ICON}"
   File "..\..\build\bin\stylers.model.xml"
   File "..\..\build\bin\contextMenu.xml"
   File /r "..\..\build\bin\icons"
@@ -200,6 +531,34 @@ SectionEnd
 ; Unchecked by default, matching the previous installer's optional desktop-icon task.
 Section /o "Desktop shortcut" SecDesktop
   CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
+SectionEnd
+
+; ON by default. Registering does NOT make wxNote the default for anything - see AssocRegister - it
+; makes wxNote selectable: present in "Open with" for every file type, listed in Settings > Default
+; apps, and offered in the Explorer right-click menu for files and folders.
+Section "File associations and context menu" SecAssoc
+  !insertmacro AssocRegister
+  ; Ownership marker, mirroring AddedToPath: it records that THIS installer created the registration,
+  ; so the undo section below and the uninstaller only ever remove entries they actually put there.
+  WriteRegDWORD HKCU "Software\wxNote-Installer" "RegisteredAssoc" 1
+  !insertmacro AssocNotifyShell
+SectionEnd
+
+; Unticking the option on a re-install has to UNDO what an earlier install wrote - an unselected NSIS
+; section simply does not run, so without this the entries would survive every install that turned the
+; option off. Same shape, and the same reasoning, as "-UndoPathIfUnticked" below.
+Section "-UndoAssocIfUnticked"
+  SectionGetFlags ${SecAssoc} $0
+  IntOp $0 $0 & ${SF_SELECTED}
+  ${If} $0 == 0
+    ReadRegDWORD $1 HKCU "Software\wxNote-Installer" "RegisteredAssoc"
+    ${If} $1 == 1
+      !insertmacro AssocUnregister
+      DeleteRegValue HKCU "Software\wxNote-Installer" "RegisteredAssoc"
+      !insertmacro AssocNotifyShell
+      DetailPrint "Removed the wxNote file associations, as that option was unticked."
+    ${EndIf}
+  ${EndIf}
 SectionEnd
 
 ; Optional, and ON by default: put $INSTDIR on the user's PATH so `wxnote` works from any shell.
@@ -284,6 +643,7 @@ Section "Uninstall"
   Delete "$INSTDIR\${APP_EXE}"
   Delete "$INSTDIR\LICENSE"
   Delete "$INSTDIR\NOTICE"
+  Delete "$INSTDIR\${DOC_ICON}"
   Delete "$INSTDIR\stylers.model.xml"
   Delete "$INSTDIR\contextMenu.xml"
   RMDir /r "$INSTDIR\icons"
@@ -324,6 +684,11 @@ Section "Uninstall"
     SetOutPath "$TEMP"   ; don't hold $INSTDIR open, or RMDir below fails
     SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
   ${EndIf}
+
+  ; File associations, Open-with entries, context-menu items and the Default-apps registration.
+  ; Unconditional: this is the exact inverse of AssocRegister and is harmless if it never ran.
+  !insertmacro AssocUnregister
+  !insertmacro AssocNotifyShell
 
   DeleteRegKey HKCU "${ARP_KEY}"
   DeleteRegKey HKCU "Software\wxNote-Installer"   ; installer state only - the user's settings under Software\wxNote survive uninstall

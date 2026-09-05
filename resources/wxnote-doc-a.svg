@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"
+     role="img" aria-label="wxNote document icon">
+  <title>wxNote - document icon (variant A)</title>
+
+  <!-- page: the app mark re-cut as a document, folded corner top-right -->
+  <path d="M59 14 H156 L212 74 V227 A15 15 0 0 1 197 242 H59 A15 15 0 0 1 44 227 V29 A15 15 0 0 1 59 14 Z" fill="#ffffff" stroke="#c8ccd0" stroke-width="3"/>
+  <path d="M156 14 L212 74 H156 Z" fill="#e6e9ec"/>
+
+  <!-- "N" monogram: the polyline from resources/wxnote.svg, scaled and nudged clear of the fold -->
+  <path d="M88 174 L88 82 L168 174 L168 82" fill="none" stroke="#37b24d" stroke-width="28"
+        stroke-linecap="round" stroke-linejoin="round"
+        transform="translate(128 148) scale(0.82) translate(-128 -128)"/>
+</svg>

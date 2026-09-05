@@ -3,6 +3,52 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.20.0] - 2026-09-05
+
+### Added
+- **wxNote can be chosen as the default application for any file, on all three platforms.** Note the
+  word *chosen*: no installer on any of these systems has been able to silently take over a file type
+  for years, and wxNote does not try. What it does is make itself available everywhere the choice is
+  offered.
+  - **Windows** - the installer gained a **File associations and context menu** option (on by
+    default). It registers a `wxNote.Document` type, lists wxNote in **Open with** for *every* file
+    including extensions it has never heard of, and adds it to **Settings ▸ Default apps** for 217
+    text and source extensions. Unticking the option on a re-install removes what an earlier install
+    wrote, and uninstalling removes all of it.
+  - **Linux** - the `.desktop` files went from advertising `text/plain` alone to 84 MIME types, plus
+    `application/octet-stream` so wxNote can be picked for a file of unknown type. The `.deb` and
+    `.rpm` now refresh the desktop and MIME caches on install, so the entry appears immediately
+    instead of after the next login.
+  - **AppImage** - an AppImage installs nothing, so none of the above reaches the desktop: it never
+    learns wxNote exists. It now registers itself. On first run it asks once whether to add a
+    launcher; saying yes writes a `.desktop` and icon under `~/.local/share`, and nothing outside it.
+    The entry is *rewritten* from the one the AppImage already carries rather than generated, so the
+    MIME list stays single-sourced with the `.deb` and `.rpm`. Later launches notice if the AppImage
+    has been moved or renamed and quietly repoint the entry, instead of leaving a launcher that has
+    silently stopped working. It can be undone from **Preferences ▸ General**, which shows the option
+    only when actually running as an AppImage.
+  - **macOS** - the `.app` declares `CFBundleDocumentTypes`, so wxNote shows up in **Open With** for
+    text and source files and can be reached for any file through *Open With ▸ Other*.
+- **Explorer context menu (Windows).** **Edit with wxNote** on any file, and **Open folder with
+  wxNote** on a folder and on the background of an open folder. On Windows 11 these live under
+  *Show more options* - the top-level menu only accepts a packaged shell extension, which a per-user
+  install cannot register.
+- **A document icon** for files wxNote handles - Explorer on Windows, Finder on macOS - drawn from
+  the app's own mark, so it carries no third-party licence and reads as part of the same family.
+  `tools/make_doc_icon.py` generates `resources/wxnote-doc.ico` and its exact vector twin
+  `resources/wxnote-doc.svg` from shared geometry, so the two platforms cannot ship different icons;
+  the three designs considered are kept as `resources/wxnote-doc-{a,b,c}.svg`.
+- **macOS: files opened from Finder actually open.** Finder delivers a double-clicked file as an
+  Apple Event rather than on the command line, which nothing handled before - so this had to land
+  with the document types above, or the association would have opened an empty window.
+
+### Fixed
+- **Windows: the Minimal window buttons were drawn too heavy.** They used Windows' own Segoe MDL2
+  caption glyphs at a font size, which landed ~11px inside a 20px hover circle and made the three
+  buttons read as crowded; the Linux build has always drawn the same style from the bundled Lucide
+  artwork, sized to the circle. Windows now uses that same artwork at the same size, so the style
+  looks identical on both platforms.
+
 ## [0.19.0] - 2026-09-04
 
 ### Added

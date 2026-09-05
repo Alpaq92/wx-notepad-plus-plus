@@ -3443,3 +3443,15 @@ msgstr ""
 
 msgid "Could not write the theme file.\n\nBuilt-in themes live next to the program and cannot be modified there. Use \"Save As...\" to keep these changes as your own copy of the theme."
 msgstr ""
+
+msgid "Show in the applications menu and \"Open With\""
+msgstr ""
+
+msgid "This AppImage does not contain wxnote.desktop, so it cannot register itself."
+msgstr ""
+
+msgid "Could not write %s."
+msgstr ""
+
+msgid "Add wxNote to your applications menu?\n\nAn AppImage is not installed, so your desktop does not know wxNote exists - which is why it does not appear under \"Open With\", and cannot be chosen as the default editor for a file type. This adds a launcher in your home folder, and changes nothing outside it.\n\nYou can undo this later in Preferences."
+msgstr ""

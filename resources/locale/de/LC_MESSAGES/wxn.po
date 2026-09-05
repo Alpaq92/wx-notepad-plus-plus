@@ -3441,3 +3441,15 @@ msgstr "Eigene Kopie von \"%s\" gelöscht"
 
 msgid "Could not write the theme file.\n\nBuilt-in themes live next to the program and cannot be modified there. Use \"Save As...\" to keep these changes as your own copy of the theme."
 msgstr "Die Themendatei konnte nicht geschrieben werden.\n\nMitgelieferte Themen liegen neben dem Programm und können dort nicht geändert werden. Verwenden Sie \"Speichern unter...\", um diese Änderungen als eigene Kopie zu behalten."
+
+msgid "Show in the applications menu and \"Open With\""
+msgstr "Im Anwendungsmenü und unter \"Öffnen mit\" anzeigen"
+
+msgid "This AppImage does not contain wxnote.desktop, so it cannot register itself."
+msgstr "Dieses AppImage enthält keine wxnote.desktop und kann sich daher nicht registrieren."
+
+msgid "Could not write %s."
+msgstr "%s konnte nicht geschrieben werden."
+
+msgid "Add wxNote to your applications menu?\n\nAn AppImage is not installed, so your desktop does not know wxNote exists - which is why it does not appear under \"Open With\", and cannot be chosen as the default editor for a file type. This adds a launcher in your home folder, and changes nothing outside it.\n\nYou can undo this later in Preferences."
+msgstr "wxNote zum Anwendungsmenü hinzufügen?\n\nEin AppImage wird nicht installiert, daher weiß Ihre Arbeitsumgebung nichts von wxNote - deshalb erscheint es nicht unter \"Öffnen mit\" und kann nicht als Standardeditor für einen Dateityp gewählt werden. Dies legt einen Starter in Ihrem persönlichen Ordner an und ändert nichts außerhalb davon.\n\nSie können dies später in den Einstellungen rückgängig machen."

@@ -3441,3 +3441,15 @@ msgstr "Ваша копия темы \"%s\" удалена"
 
 msgid "Could not write the theme file.\n\nBuilt-in themes live next to the program and cannot be modified there. Use \"Save As...\" to keep these changes as your own copy of the theme."
 msgstr "Не удалось записать файл темы.\n\nВстроенные темы расположены рядом с программой, и изменить их там нельзя. Используйте \"Сохранить как...\", чтобы сохранить эти изменения в собственной копии темы."
+
+msgid "Show in the applications menu and \"Open With\""
+msgstr "Показывать в меню приложений и в «Открыть с помощью»"
+
+msgid "This AppImage does not contain wxnote.desktop, so it cannot register itself."
+msgstr "Этот AppImage не содержит wxnote.desktop, поэтому не может зарегистрироваться."
+
+msgid "Could not write %s."
+msgstr "Не удалось записать %s."
+
+msgid "Add wxNote to your applications menu?\n\nAn AppImage is not installed, so your desktop does not know wxNote exists - which is why it does not appear under \"Open With\", and cannot be chosen as the default editor for a file type. This adds a launcher in your home folder, and changes nothing outside it.\n\nYou can undo this later in Preferences."
+msgstr "Добавить wxNote в меню приложений?\n\nAppImage не устанавливается, поэтому рабочий стол не знает о существовании wxNote - именно поэтому программа не появляется в «Открыть с помощью» и её нельзя выбрать редактором по умолчанию для типа файлов. Будет добавлен ярлык в вашем домашнем каталоге; за его пределами ничего не изменится.\n\nОтменить это можно позже в настройках."

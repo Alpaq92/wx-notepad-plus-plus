@@ -36,6 +36,16 @@ install -m 644 %{_srcdir}/installer/linux/wxnote.desktop %{buildroot}/usr/share/
 mkdir -p %{buildroot}/usr/share/icons/hicolor/scalable/apps
 install -m 644 "%{_srcdir}/resources/wxnote.svg" %{buildroot}/usr/share/icons/hicolor/scalable/apps/wxnote.svg
 
+%post
+# Same reasoning as the .deb's postinst: refresh the desktop/MIME caches so the associations
+# registered by wxnote.desktop are visible immediately, and never fail the transaction for it.
+command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || :
+command -v gtk-update-icon-cache   >/dev/null 2>&1 && gtk-update-icon-cache -qtf /usr/share/icons/hicolor || :
+
+%postun
+command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || :
+command -v gtk-update-icon-cache   >/dev/null 2>&1 && gtk-update-icon-cache -qtf /usr/share/icons/hicolor || :
+
 %files
 /opt/wxnote
 /usr/bin/wxnote

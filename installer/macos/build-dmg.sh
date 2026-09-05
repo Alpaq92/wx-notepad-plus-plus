@@ -30,19 +30,32 @@ mkdir -p "$APPDIR/Contents/MacOS" "$APPDIR/Contents/Resources" "$OUTDIR"
 cp -r build/bin/. "$APPDIR/Contents/MacOS/"
 rm -rf "$APPDIR/Contents/MacOS/nib/nib_test_plugin."* "$APPDIR/Contents/MacOS/plugins"
 
-# App icon: rasterize the SVG (sips can't read SVG directly) via librsvg, then build a proper
+# Icons: rasterize the SVG (sips can't read SVG directly) via librsvg, then build a proper
 # multi-resolution .iconset for iconutil. librsvg is a fast Homebrew install on GitHub's
 # macos-latest runners (bottled, no compile).
 brew install --quiet librsvg
-rsvg-convert -w 1024 -h 1024 resources/wxnote.svg -o build/icon-src.png
-ICONSET="build/wxnote.iconset"
-rm -rf "$ICONSET"; mkdir -p "$ICONSET"
-for size in 16 32 128 256 512; do
-    sips -z "$size" "$size" build/icon-src.png --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
-    double=$((size * 2))
-    sips -z "$double" "$double" build/icon-src.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
-done
-iconutil -c icns "$ICONSET" -o "$APPDIR/Contents/Resources/wxnote.icns"
+
+# $1 = source .svg, $2 = basename of the .icns to produce in the bundle's Resources.
+# Two icons now go through this - the application's and the document type's - and the iconset dance
+# (rasterize once at 1024, then every size and its @2x) is identical for both.
+make_icns() {
+    rsvg-convert -w 1024 -h 1024 "$1" -o "build/$2-src.png"
+    iconset="build/$2.iconset"
+    rm -rf "$iconset"; mkdir -p "$iconset"
+    for size in 16 32 128 256 512; do
+        sips -z "$size" "$size" "build/$2-src.png" --out "$iconset/icon_${size}x${size}.png" >/dev/null
+        double=$((size * 2))
+        sips -z "$double" "$double" "build/$2-src.png" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+    done
+    iconutil -c icns "$iconset" -o "$APPDIR/Contents/Resources/$2.icns"
+}
+
+make_icns resources/wxnote.svg     wxnote
+# The document icon Finder draws for files wxNote handles (CFBundleTypeIconFile below). Deliberately
+# the canonical resources/wxnote-doc.svg rather than one of the -a/-b/-c variants beside it: that file
+# is written by tools/make_doc_icon.py as the exact vector twin of resources/wxnote-doc.ico, so macOS
+# and Windows cannot end up shipping two different document icons.
+make_icns resources/wxnote-doc.svg wxnote-doc
 
 cat > "$APPDIR/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -57,6 +70,51 @@ cat > "$APPDIR/Contents/Info.plist" <<EOF
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleExecutable</key><string>wxnote</string>
     <key>CFBundleIconFile</key><string>wxnote.icns</string>
+    <!-- Document types. LSHandlerRank is the whole story here: "Alternate" puts wxNote in the Open With
+         menu for text and source files without claiming to own them, while public.data at "None" keeps
+         it out of that menu for arbitrary binaries yet still lets a user reach it through Open With >
+         Other with "All Applications" - and then make it the default. That is what "selectable as the
+         default for any file" means on macOS; nothing an installer does can set a default here either.
+         Requires WxnApp::MacOpenFiles (src/main.cpp): Finder delivers these as an Apple Event, not argv. -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key><string>Text Document</string>
+            <key>CFBundleTypeRole</key><string>Editor</string>
+            <key>CFBundleTypeIconFile</key><string>wxnote-doc.icns</string>
+            <key>LSHandlerRank</key><string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.text</string>
+                <string>public.plain-text</string>
+                <string>public.utf8-plain-text</string>
+                <string>public.utf16-plain-text</string>
+                <string>public.source-code</string>
+                <string>public.script</string>
+                <string>public.shell-script</string>
+                <string>public.xml</string>
+                <string>public.json</string>
+                <string>public.yaml</string>
+                <string>public.comma-separated-values-text</string>
+                <string>public.tab-separated-values-text</string>
+                <string>public.log</string>
+                <string>public.patch-file</string>
+                <string>net.daringfireball.markdown</string>
+            </array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key><string>Folder</string>
+            <key>CFBundleTypeRole</key><string>Editor</string>
+            <key>LSHandlerRank</key><string>None</string>
+            <key>LSItemContentTypes</key><array><string>public.folder</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key><string>Any File</string>
+            <key>CFBundleTypeRole</key><string>Editor</string>
+            <key>LSHandlerRank</key><string>None</string>
+            <key>LSItemContentTypes</key><array><string>public.data</string></array>
+        </dict>
+    </array>
     <key>LSMinimumSystemVersion</key><string>11.0</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSHumanReadableCopyright</key><string>Apache-2.0 - see LICENSE</string>

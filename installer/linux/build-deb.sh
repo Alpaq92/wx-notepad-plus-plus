@@ -45,5 +45,22 @@ Description: Experimental cross-platform text editor
  Windows compatibility bridge for legacy Notepad++ plugin binaries.
 EOF
 
+# The same cache refresh runs on install and on removal - see the script body for why each call
+# is best-effort. Without this the new MIME associations are invisible until the next login.
+for script in postinst postrm; do
+  cat > "$PKGDIR/DEBIAN/$script" <<'HOOK'
+#!/bin/sh
+set -e
+# Refresh the desktop and MIME caches so wxNote appears in "Open With" straight away rather than
+# after the next login. Every call is best-effort: a minimal system need not have these tools, and
+# a missing cache updater must never fail the package installation.
+command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || true
+command -v update-mime-database    >/dev/null 2>&1 && update-mime-database /usr/share/mime          || true
+command -v gtk-update-icon-cache   >/dev/null 2>&1 && gtk-update-icon-cache -qtf /usr/share/icons/hicolor || true
+exit 0
+HOOK
+  chmod 755 "$PKGDIR/DEBIAN/$script"
+done
+
 dpkg-deb --build --root-owner-group "$PKGDIR" "$OUTDIR/wxnote_${VERSION}_${DEB_ARCH}.deb"
 echo "Built $OUTDIR/wxnote_${VERSION}_${DEB_ARCH}.deb"
