@@ -3453,3 +3453,24 @@ msgstr "%s을(를) 쓸 수 없습니다."
 
 msgid "Add wxNote to your applications menu?\n\nAn AppImage is not installed, so your desktop does not know wxNote exists - which is why it does not appear under \"Open With\", and cannot be chosen as the default editor for a file type. This adds a launcher in your home folder, and changes nothing outside it.\n\nYou can undo this later in Preferences."
 msgstr "wxNote를 애플리케이션 메뉴에 추가할까요?\n\nAppImage는 설치되지 않으므로 데스크톱이 wxNote의 존재를 알지 못합니다. 그래서 \"연결 프로그램\"에 표시되지 않고 파일 형식의 기본 편집기로 선택할 수도 없습니다. 이 작업은 홈 폴더에 실행기를 추가할 뿐 그 밖의 것은 바꾸지 않습니다.\n\n나중에 환경설정에서 되돌릴 수 있습니다."
+
+msgid "Default ext.:"
+msgstr "기본 확장자:"
+
+msgid "User ext.:"
+msgstr "사용자 확장자:"
+
+msgid "File extensions"
+msgstr "파일 확장자"
+
+msgid "Files with these extensions open as %s. Separate them with spaces."
+msgstr "이 확장자의 파일은 %s(으)로 열립니다. 확장자는 공백으로 구분하세요."
+
+msgid "This theme adds: %s"
+msgstr "이 테마가 추가하는 확장자: %s"
+
+msgid ".%s now opens as %s instead of %s"
+msgstr ".%s 파일은 이제 %s(으)로 열립니다 (이전: %s)"
+
+msgid "File extensions saved"
+msgstr "파일 확장자 저장됨"

@@ -495,6 +495,7 @@ target_include_directories(lang_detect_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(lang_detect_test PRIVATE lua_lpeg)
 target_compile_definitions(lang_detect_test PRIVATE
     SRC_DIR="${CMAKE_SOURCE_DIR}/src"
+    RESOURCES_DIR="${CMAKE_SOURCE_DIR}/resources"   # the shipped themes, whose LexerType names it checks
     SCINTILLUA_LEXER_DIR="${CMAKE_BINARY_DIR}/scintillua"
     BUILD_DIR="${CMAKE_BINARY_DIR}")     # the engine's writable dir; detection never writes to it
 if(MSVC)

@@ -7,6 +7,8 @@
 // opened as plain text, and .go was handed to a Lexilla lexer that does not exist. It is now
 // Scintillua's lexer.detect() behind wxNote's overrides, so this suite pins:
 //   * the answers for the files people actually open - by name, by first line, by user mapping;
+//   * the Style Configurator's two extension lines: the User ext. precedence (over everything, while
+//     a theme's own ext attributes only fill gaps), and the Default ext. lists it shows;
 //   * that every name the glue tables hand out is a real Language-menu entry;
 //   * that lexer.lua still speaks the vocabulary those tables were written against. A language
 //     Scintillua adds or renames fails here when the pin in CMakeLists.txt is bumped, instead of
@@ -19,8 +21,10 @@
 #include "lang_detect.h"
 #include "scintillua_engine.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <set>
@@ -66,12 +70,13 @@ static void loadMenuNames()
     }
 }
 
+static std::string scDetect(const std::string& f, const std::string& l) { return g_eng->detect(f, l); }
+static bool known(const std::string& n) { return g_menu.count(n) != 0; }
+
 static std::string detect(const std::string& file, const std::string& head = std::string(),
-                          const std::map<std::string, std::string>* user = nullptr)
+                          const WxnUserExtMaps& user = WxnUserExtMaps{})
 {
-    auto sc    = [](const std::string& f, const std::string& l) { return g_eng->detect(f, l); };
-    auto known = [](const std::string& n) { return g_menu.count(n) != 0; };
-    return wxnDetectLanguage(file, head, user, sc, known);
+    return wxnDetectLanguage(file, head, user, scDetect, known);
 }
 
 static void expectLang(const std::string& file, const std::string& want, const std::string& head = std::string())
@@ -189,15 +194,140 @@ static void testFirstLine()
 static void testUserMapping()
 {
     std::printf("\n-- the user's functionList.conf `ext` mapping --\n");
-    const std::map<std::string, std::string> user = {
+    const std::map<std::string, std::string> keys = {
         { "foo", "python" }, { "cfg", "ini" }, { "tmpl", "html" }, { "h", "cpp" }, { "zz", "no-such-key" },
     };
-    expectEq(detect("a.foo", "", &user), "Python", "\"a.foo\" mapped to python -> Python");
-    expectEq(detect("A.FOO", "", &user), "Python", "\"A.FOO\" - the mapping is case-blind like the rest");
-    expectEq(detect("a.cfg", "", &user), "Properties", "\"a.cfg\" mapped to ini -> Properties");
-    expectEq(detect("a.tmpl", "", &user), "HTML", "\"a.tmpl\" mapped to html -> HTML");
-    expectEq(detect("a.h", "", &user), "C++", "\"a.h\" mapped to cpp beats wxNote's own .h override");
-    expectEq(detect("a.zz", "", &user), "", "\"a.zz\" mapped to an unknown key falls through (to nothing here)");
+    WxnUserExtMaps user; user.toKey = &keys;
+    expectEq(detect("a.foo", "", user), "Python", "\"a.foo\" mapped to python -> Python");
+    expectEq(detect("A.FOO", "", user), "Python", "\"A.FOO\" - the mapping is case-blind like the rest");
+    expectEq(detect("a.cfg", "", user), "Properties", "\"a.cfg\" mapped to ini -> Properties");
+    expectEq(detect("a.tmpl", "", user), "HTML", "\"a.tmpl\" mapped to html -> HTML");
+    expectEq(detect("a.h", "", user), "C++", "\"a.h\" mapped to cpp beats wxNote's own .h override");
+    expectEq(detect("a.zz", "", user), "", "\"a.zz\" mapped to an unknown key falls through (to nothing here)");
+}
+
+static void testStyleConfiguratorExtensions()
+{
+    std::printf("\n-- the Style Configurator's User ext., and a theme's ext attributes --\n");
+    const std::map<std::string, std::string> mine = {
+        { "inc", "PHP" }, { "txt", "Python" }, { "h", "C++" }, { "bak", "XML" }, { "zz", "No Such Language" },
+    };
+    const std::map<std::string, std::string> keys  = { { "inc", "pascal" }, { "tpl", "html" } };
+    // Twilight's real stray values (bash ext="po", xml ext="wpl"), plus one for an ambiguous extension.
+    const std::map<std::string, std::string> theme = { { "po", "Shell" }, { "wpl", "XML" }, { "m", "MATLAB" }, { "inc", "Perl" } };
+    WxnUserExtMaps all; all.toLang = &mine; all.toKey = &keys; all.themeToLang = &theme;
+    expectEq(detect("defs.inc", "", all), "PHP", "User ext. beats functionList.conf and the theme");
+    expectEq(detect("notes.txt", "", all), "Python", "User ext. on an extension no table knows");
+    expectEq(detect("api.h", "", all), "C++", "User ext. beats wxNote's own .h override");
+    expectEq(detect("NOTES.TXT", "", all), "Python", "case-blind, like every other rule");
+    expectEq(detect("x.zz", "", all), "", "a mapping to a language the menu lacks falls through");
+    expectEq(detect("page.tpl", "", all), "HTML", "functionList.conf still applies under it");
+    expectEq(detect("main.cpp.bak", "", all), "XML", "a mapped \"bak\" wins over looking under the suffix");
+    expectEq(detect("main.cpp.orig", "", all), "C++", "an unmapped backup suffix is still looked under");
+
+    WxnUserExtMaps themeOnly; themeOnly.themeToLang = &theme;
+    expectEq(detect("messages.po", "", themeOnly), "gettext PO", "a theme's stray .po -> bash does not override detection");
+    expectEq(detect("list.wpl", "", themeOnly), "XML", "a theme maps an extension nothing else places");
+    expectEq(detect("plot.m", "", themeOnly), "MATLAB", "a theme settles an extension the tables leave ambiguous");
+    expectEq(detect("defs.inc", "", themeOnly), "Perl", "...as does the theme for .inc");
+    expectEq(detect("plot.m", "#!/usr/bin/octave\n", WxnUserExtMaps{}), "MATLAB", "without it, .m still goes by content");
+}
+
+static void testUserExtParsing()
+{
+    std::printf("\n-- what the User ext. field accepts --\n");
+    expectEq(wxnUserExtNormalize("inc"), "inc", "plain");
+    expectEq(wxnUserExtNormalize(".INC"), "inc", "leading dot, upper case");
+    expectEq(wxnUserExtNormalize("*.Tpl"), "tpl", "a wildcard spelling");
+    expectEq(wxnUserExtNormalize("  c++ "), "c++", "padding; punctuation that extensions use is kept");
+    expectEq(wxnUserExtNormalize("tar.gz"), "", "a dotted name is not an extension");
+    expectEq(wxnUserExtNormalize("a/b"), "", "a path is not an extension");
+    expectEq(wxnUserExtNormalize("*"), "", "nor is a bare wildcard");
+    expectEq(wxnUserExtNormalize(""), "", "nor is nothing");
+    expectEq(wxnUserExtJoin(wxnUserExtParse("tpl, .INC;phtml  tpl\t*.x")), "tpl inc phtml x",
+             "spaces, commas and semicolons separate; order kept; duplicates dropped");
+    expectEq(wxnUserExtJoin(wxnUserExtParse("ok bad/one also.bad")), "ok", "entries that are not extensions are dropped");
+}
+
+// Every LexerType a shipped theme declares is either a language the Language menu has, or one of the
+// blocks deliberately listed as not a language - so a User ext. typed under any entry has somewhere to go.
+static void testNppLexerTypes()
+{
+    std::printf("\n-- Notepad++ LexerType names -> Language-menu names --\n");
+    std::size_t n; int bad = 0;
+    const WxnLangNppRow* t = wxnLangNppTable(n);
+    std::set<std::string> rows;
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        if (*t[i].lang && !g_menu.count(t[i].lang)) { ++bad; std::printf("        [%s] -> [%s] is not a menu language\n", t[i].npp, t[i].lang); }
+        if (!rows.insert(t[i].npp).second) { ++bad; std::printf("        [%s] listed twice\n", t[i].npp); }
+    }
+    check(bad == 0, "the table names only menu languages, each LexerType once");
+
+    namespace fs = std::filesystem;
+    std::vector<fs::path> themes = { fs::u8path(std::string(RESOURCES_DIR) + "/stylers.model.xml") };
+    std::error_code ec;
+    for (fs::directory_iterator it(fs::u8path(std::string(RESOURCES_DIR) + "/themes"), ec), end; !ec && it != end; it.increment(ec))
+        if (it->path().extension() == ".xml") themes.push_back(it->path());
+    int files = 0, missing = 0;
+    std::set<std::string> reported;
+    for (const fs::path& f : themes)
+    {
+        const std::string xml = readFile(f.u8string());
+        if (xml.empty()) continue;
+        ++files;
+        for (std::size_t i = xml.find("<LexerType name=\""); i != std::string::npos; i = xml.find("<LexerType name=\"", i + 1))
+        {
+            const std::size_t a = i + 17, b = xml.find('"', a);
+            const std::string name = xml.substr(a, b - a);
+            if (!rows.count(name) && reported.insert(name).second)
+            { ++missing; std::printf("        %s: LexerType [%s] has no row\n", f.filename().u8string().c_str(), name.c_str()); }
+        }
+    }
+    check(files > 20, "read " + std::to_string(files) + " shipped theme files");
+    check(missing == 0, "every LexerType they declare has a row");
+    expectEq(wxnLangForNppLexerType("cpp"), "C++", "cpp -> C++");
+    expectEq(wxnLangForNppLexerType("javascript.js"), "JavaScript", "javascript.js -> JavaScript");
+    expectEq(wxnLangForNppLexerType("javascript"), "", "javascript (embedded in HTML) -> not a language");
+    expectEq(wxnLangForNppLexerType("fortran77"), "Fortran (fixed form)", "fortran77 -> Fortran (fixed form)");
+    expectEq(wxnLangForNppLexerType("bash"), "Shell", "bash -> Shell");
+    expectEq(wxnLangForNppLexerType("ini"), "", "ini -> none: .ini opens as Properties but comments with ';', Properties' own files with '#'");
+    expectEq(wxnLangForNppLexerType("props"), "Properties", "props -> Properties");
+}
+
+// The Style Configurator's "Default ext." list, built from the engine's keys exactly as the editor does.
+static void testDefaultExtensions()
+{
+    std::printf("\n-- \"Default ext.\": what each language opens by itself --\n");
+    const std::vector<std::string> keys = g_eng->detectionKeys();
+    check(keys.size() > 300, "engine lists detect()'s keys (" + std::to_string(keys.size()) + ")");
+    check(std::find(keys.begin(), keys.end(), "Makefile") != keys.end(), "...whole file names among them");
+    const auto def = wxnDefaultExtensions(wxnLangCandidateExts(keys), scDetect, known);
+    auto has = [&](const std::string& lang, const std::string& ext) {
+        const auto it = def.find(lang);
+        return it != def.end() && std::find(it->second.begin(), it->second.end(), ext) != it->second.end();
+    };
+    check(has("Python", "py") && has("Python", "pyw"), "Python: py, pyw");
+    check(has("C", "h") && !has("C++", "h"), "C: h (wxNote's override), not C++");
+    check(has("Kotlin", "kt"), "Kotlin: kt (from the comment table - Scintillua has no Kotlin)");
+    check(has("Fortran (fixed form)", "f") && has("Fortran (free form)", "f90"), "Fortran: f fixed form, f90 free form");
+    check(has("HTML", "html") && has("PHP", "php") && has("Markdown", "md"), "HTML, PHP and Markdown have theirs");
+    bool incAnywhere = false, dotted = false;
+    std::set<std::string> seen; int twice = 0;
+    for (const auto& kv : def)
+        for (const std::string& e : kv.second)
+        {
+            if (e == "inc" || e == "m") incAnywhere = true;
+            if (e.find('.') != std::string::npos) dotted = true;
+            if (!seen.insert(e).second) ++twice;
+        }
+    check(!incAnywhere, "the ambiguous .inc and .m belong to no language");
+    check(!dotted, "no dotted names in the lists");
+    check(twice == 0, "no extension is listed under two languages");
+    std::size_t total = 0; for (const auto& kv : def) total += kv.second.size();
+    // 260 over 89 at the pinned lexer.lua: its 338 keys include whole names and languages wxNote cannot
+    // highlight, which list nowhere. A big drop means candidates or detection broke.
+    check(def.size() > 80 && total > 230, std::to_string(total) + " extensions over " + std::to_string(def.size()) + " languages");
 }
 
 // ---- the tables -------------------------------------------------------------------------------------
@@ -337,6 +467,10 @@ int main()
     testKnownButUnhighlightable();
     testFirstLine();
     testUserMapping();
+    testStyleConfiguratorExtensions();
+    testUserExtParsing();
+    testNppLexerTypes();
+    testDefaultExtensions();
     testTablesNameMenuLanguages();
     testLexerLuaVocabulary();
     testHighlightMatchesComments();

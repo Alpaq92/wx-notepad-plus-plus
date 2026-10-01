@@ -3453,3 +3453,24 @@ msgstr "Nie można zapisać %s."
 
 msgid "Add wxNote to your applications menu?\n\nAn AppImage is not installed, so your desktop does not know wxNote exists - which is why it does not appear under \"Open With\", and cannot be chosen as the default editor for a file type. This adds a launcher in your home folder, and changes nothing outside it.\n\nYou can undo this later in Preferences."
 msgstr "Dodać wxNote do menu aplikacji?\n\nAppImage nie jest instalowany, więc Twoje środowisko graficzne nie wie, że wxNote istnieje - dlatego program nie pojawia się w \"Otwórz za pomocą\" i nie można go wybrać jako domyślnego edytora dla typu pliku. Ta operacja doda skrót w Twoim katalogu domowym i nie zmieni niczego poza nim.\n\nMożesz to cofnąć później w Preferencjach."
+
+msgid "Default ext.:"
+msgstr "Domyślne rozszerzenia:"
+
+msgid "User ext.:"
+msgstr "Własne rozszerzenia:"
+
+msgid "File extensions"
+msgstr "Rozszerzenia plików"
+
+msgid "Files with these extensions open as %s. Separate them with spaces."
+msgstr "Pliki z tymi rozszerzeniami otwierają się jako %s. Rozdzielaj je spacjami."
+
+msgid "This theme adds: %s"
+msgstr "Ten motyw dodaje: %s"
+
+msgid ".%s now opens as %s instead of %s"
+msgstr ".%s otwiera się teraz jako %s zamiast %s"
+
+msgid "File extensions saved"
+msgstr "Rozszerzenia plików zapisane"

@@ -629,6 +629,84 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
 #endif
     }
 
+    // ---- the user's own file extensions (Style Configurator "User ext.") -----------------------------
+    // lang_detect_test pins the precedence by itself; this is the wiring inside the frame. One mapping
+    // has to re-type a document for highlighting, Toggle Comment and the Function List alike, survive a
+    // trip through the settings, and a theme's ext attribute may only fill gaps.
+    {
+        EditorPage* p = f->activePage();
+        check(p != nullptr, "user ext: there is a page to re-type");
+        if (p)
+        {
+            const wxString savedPath = p->path, savedForcedName = p->forcedName, savedForcedLexer = p->forcedLexer, savedSciLang = p->sciLang;
+            const bool savedForced = p->langForced;
+            const auto savedUser  = f->m_userExt;
+            const auto savedTheme = f->m_theme.extToLang;
+            load("plain words, no shebang\n");   // so the first-line rules have nothing to say
+            auto retype = [&](const char* name) { p->path = wxString::FromUTF8(name); p->langForced = false; f->setLexerForFile(p->path); };
+
+            // .sh is in every table already (Shell), so each of these fails if its own lookup of the
+            // user's map is removed - an extension no table knows would pass on the detected-language
+            // fallback alone.
+            f->m_userExt.clear();
+            retype("build.sh");
+            check(p->autoLang == "Shell" && f->flLangKey() == "sh", "user ext: .sh is Shell by itself");
+            f->m_userExt["sh"] = "Python";
+            retype("build.sh");
+            check(p->autoLang == "Python", "user ext: sh -> Python re-types the highlighting");
+            const WxnCommentLang* cl = f->activeCommentLang();
+            check(cl && std::string(cl->name) == "Python", "user ext: ...Toggle Comment (Python's row, not Shell's)");
+            check(f->flLangKey() == "python", "user ext: ...the Function List");
+            check(f->flLangKeyForName("build.sh") == "python", "user ext: ...and the workspace symbol index, which asks by name");
+            f->m_userExt["inc"] = "PHP";
+            retype("defs.inc");
+            check(p->autoLang == "PHP" && f->flLangKey() == "php", "user ext: inc (no owner of its own) -> PHP");
+
+            f->saveUserExt();
+            f->m_userExt.clear();
+            f->loadUserExt(wxConfigBase::Get());
+            check(f->m_userExt.size() == 2 && f->m_userExt["sh"] == "Python" && f->m_userExt["inc"] == "PHP",
+                  "user ext: the mapping round-trips through the settings");
+
+            // A plugin language claiming the same extension does not outrank the user's mapping.
+            f->m_sciLangs.push_back({ "Probe Lang", "inc" });
+            retype("defs.inc");
+            check(p->sciLang.empty() && p->autoLang == "PHP", "user ext: beats a plugin language's own extension list");
+            f->m_sciLangs.pop_back();
+
+            // The Function List takes a Language-menu pick as the answer, as Toggle Comment does - and a
+            // plugin-language pick, which leaves forcedName at the previous pick, gets no list at all.
+            p->path = "main.c"; p->langForced = true; p->forcedName = "Python"; p->sciLang.clear();
+            check(f->flLangKey() == "python", "Function List: a Language-menu pick beats the file name");
+            p->sciLang = "Probe Lang";
+            check(f->flLangKey().empty(), "Function List: no stale pick on a plugin-language page");
+            p->sciLang.clear();
+            p->forcedName = "MS SQL";
+            check(f->flLangKey() == "sql", "Function List: MS SQL uses the SQL rules");
+
+            f->m_userExt.clear();
+            f->m_theme.extToLang["wpl"]   = "XML";
+            f->m_theme.extToLang["po"]    = "Shell";   // Twilight ships exactly this stray value
+            f->m_theme.extToLang["cmake"] = "CMake";   // and every shipped theme this redundant one
+            retype("list.wpl");
+            check(p->autoLang == "XML", "theme ext: fills an extension nothing places");
+            retype("messages.po");
+            check(p->autoLang == "gettext PO", "theme ext: ...but never overrides detection");
+            check(f->themeOnlyExtensionsFor("XML") == std::vector<std::string>{ "wpl" }, "theme ext: the dialog credits the theme with .wpl");
+            check(f->themeOnlyExtensionsFor("CMake").empty(), "theme ext: ...but not with .cmake, which detection places anyway");
+            check(f->themeOnlyExtensionsFor("Shell").empty(), "theme ext: ...nor with a stray value that decides nothing");
+
+            const std::vector<std::string>& py = f->defaultExtensionsFor("Python");
+            check(std::find(py.begin(), py.end(), "py") != py.end(), "user ext: Default ext. lists py for Python");
+
+            f->m_userExt = savedUser; f->saveUserExt();
+            f->m_theme.extToLang = savedTheme;
+            p->path = savedPath; p->langForced = savedForced; p->forcedName = savedForcedName;
+            p->forcedLexer = savedForcedLexer; p->sciLang = savedSciLang;
+            f->setLexerForFile(p->path);
+        }
+    }
+
     // Leave the editor exactly as it was found. Every test above wrote into the buffer, and a DIRTY
     // buffer makes the next close - by a later phase of this suite, or by shutdown - raise a modal
     // "save changes?" prompt with nobody to answer it. That is a hang, not a failure: the process sat

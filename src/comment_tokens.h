@@ -244,18 +244,12 @@ inline std::string wxnCommentLangKeyForName(const std::string& displayName)
     return {};
 }
 
-// Canonical key for a file, from its LOWERCASED base name (e.g. "main.cpp", "makefile",
-// "dockerfile.dev"). Extension first, then the handful of languages whose NAME carries the language
-// - the same precedence flLangKey() uses, so an explicit extension always wins. "" = don't know.
-inline std::string wxnCommentLangKeyForFileName(const std::string& lowerBaseName)
+// Lower-case extension -> canonical key. Its own function so the extensions can be listed (the
+// Style Configurator's "Default ext.", via lang_detect.h), not only looked up.
+struct WxnCommentExtRow { const char* ext; const char* key; };
+inline const WxnCommentExtRow* wxnCommentExtTable(std::size_t& n)
 {
-    std::string ext;
-    const std::size_t dot = lowerBaseName.find_last_of('.');
-    // A leading dot is part of the name, not an extension separator: ".bashrc" has no extension.
-    if (dot != std::string::npos && dot > 0) ext = lowerBaseName.substr(dot + 1);
-
-    struct ExtMap { const char* ext; const char* key; };
-    static const ExtMap kExt[] = {
+    static const WxnCommentExtRow kExt[] = {
         { "c", "c" }, { "h", "c" },
         { "cpp", "cpp" }, { "cc", "cpp" }, { "cxx", "cpp" }, { "c++", "cpp" }, { "hpp", "cpp" },
         { "hxx", "cpp" }, { "hh", "cpp" }, { "ino", "cpp" }, { "inl", "cpp" },
@@ -315,8 +309,25 @@ inline std::string wxnCommentLangKeyForFileName(const std::string& lowerBaseName
         { "mod", "modula" }, { "i3", "modula" }, { "m3", "modula" },
         { "as", "actionscript" }, { "eps", "ps" },
     };
+    n = sizeof(kExt) / sizeof(kExt[0]);
+    return kExt;
+}
+
+// Canonical key for a file, from its LOWERCASED base name (e.g. "main.cpp", "makefile",
+// "dockerfile.dev"). Extension first, then the handful of languages whose NAME carries the language
+// - the same precedence flLangKey() uses, so an explicit extension always wins. "" = don't know.
+inline std::string wxnCommentLangKeyForFileName(const std::string& lowerBaseName)
+{
+    std::string ext;
+    const std::size_t dot = lowerBaseName.find_last_of('.');
+    // A leading dot is part of the name, not an extension separator: ".bashrc" has no extension.
+    if (dot != std::string::npos && dot > 0) ext = lowerBaseName.substr(dot + 1);
+
     if (!ext.empty())
-        for (const auto& m : kExt) if (ext == m.ext) return m.key;
+    {
+        std::size_t n; const WxnCommentExtRow* t = wxnCommentExtTable(n);
+        for (std::size_t i = 0; i < n; ++i) if (ext == t[i].ext) return t[i].key;
+    }
 
     // Files whose NAME carries the language. Checked after the extension table so "Makefile.in"
     // style suffixes never override an explicit one; matched by prefix so "Dockerfile.dev" works.

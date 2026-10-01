@@ -21,6 +21,21 @@ For the selected style you can set the **Foreground colour**, the **Background c
 Changes preview live in the editor as you make them. The dialog has **Save &amp; Close** and **Cancel**,
 so unlike Preferences you can back out.
 
+### File extensions
+
+Below the lists, the **File extensions** box shows which files open as the selected language:
+
+- **Default ext.** — the extensions wxNote already recognises for it (read-only).
+- **User ext.** — your own, separated by spaces: `inc` under *php*, say, or `txt` under *python*.
+  Press <kbd>Enter</kbd> to try them on the open document; **Save &amp; Close** keeps them.
+
+Your extensions decide the highlighting, Toggle Comment and the Function List together, and win over
+every built-in rule and over a plugin language's own extensions. An extension belongs to one language
+at a time, so typing it under another language moves it there. (INI-style files open as *Properties*,
+so their extensions go under *props*.) They are kept in wxNote's settings, not in the theme file as in Notepad++,
+so they stay when you switch themes (or the theme follows dark/light mode). A Notepad++ theme's own
+`ext` attributes are read as well, but only for extensions wxNote does not already place.
+
 ## Bundled themes
 
 27 themes ship with the editor:

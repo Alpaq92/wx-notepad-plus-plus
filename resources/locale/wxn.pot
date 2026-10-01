@@ -3455,3 +3455,24 @@ msgstr ""
 
 msgid "Add wxNote to your applications menu?\n\nAn AppImage is not installed, so your desktop does not know wxNote exists - which is why it does not appear under \"Open With\", and cannot be chosen as the default editor for a file type. This adds a launcher in your home folder, and changes nothing outside it.\n\nYou can undo this later in Preferences."
 msgstr ""
+
+msgid "Default ext.:"
+msgstr ""
+
+msgid "User ext.:"
+msgstr ""
+
+msgid "File extensions"
+msgstr ""
+
+msgid "Files with these extensions open as %s. Separate them with spaces."
+msgstr ""
+
+msgid "This theme adds: %s"
+msgstr ""
+
+msgid ".%s now opens as %s instead of %s"
+msgstr ""
+
+msgid "File extensions saved"
+msgstr ""

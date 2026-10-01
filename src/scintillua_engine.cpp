@@ -66,6 +66,30 @@ const char* kBootstrap =
     // _wxn_detect(filename, line) -> Scintillua lexer name, or nil.
     "function _wxn_detect(filename, line)\n"
     "  return require('lexer').detect(filename, line)\n"
+    "end\n"
+    // _wxn_detect_keys() -> sorted list of every name and extension detect() knows. Its table is a
+    // local that detect() rebuilds on each call, so it cannot be reached from outside; evaluate the
+    // same constructor from lexer.lua's source instead - in an empty environment, as data. It is one
+    // brace-balanced block of string literals (lang_detect_test pins that), plus the run-time
+    // additions in lexer.detect_extensions.
+    "function _wxn_detect_keys()\n"
+    "  local L = require('lexer')\n"
+    "  local keys, seen = {}, {}\n"
+    "  local function add(t) for k in pairs(t) do\n"
+    "    if type(k) == 'string' and not seen[k] then seen[k] = true; keys[#keys + 1] = k end end end\n"
+    "  add(L.detect_extensions or {})\n"
+    "  local src = debug.getinfo(L.detect, 'S').source\n"
+    "  local f = src:sub(1, 1) == '@' and io.open(src:sub(2), 'rb')\n"
+    "  if f then\n"
+    "    local text = f:read('a'); f:close()\n"
+    "    local body = text:match('local extensions = (%b{})')\n"
+    "    local chunk = body and load('return ' .. body, '=extensions', 't', {})\n"
+    "    local ok, t = false, nil\n"
+    "    if chunk then ok, t = pcall(chunk) end\n"
+    "    if ok and type(t) == 'table' then add(t) end\n"
+    "  end\n"
+    "  table.sort(keys)\n"
+    "  return keys\n"
     "end\n";
 
 // Lua's package.path matches with forward slashes on every platform; normalize so a Windows
@@ -265,6 +289,32 @@ std::string Engine::detect(const std::string& fileName, const std::string& first
     }
     const char* name = lua_type(L_, -1) == LUA_TSTRING ? lua_tostring(L_, -1) : nullptr;
     std::string out = name ? name : "";
+    lua_pop(L_, 1);
+    return out;
+}
+
+std::vector<std::string> Engine::detectionKeys()
+{
+    std::vector<std::string> out;
+    if (!ready_) return out;
+    lua_getglobal(L_, "_wxn_detect_keys");
+    if (lua_pcall(L_, 0, 1, 0) != LUA_OK) {
+        const char* e = lua_tostring(L_, -1);
+        err_ = e ? e : "detect keys failed";
+        lua_pop(L_, 1);
+        return out;
+    }
+    if (lua_istable(L_, -1)) {
+        const lua_Integer n = luaL_len(L_, -1);
+        out.reserve(static_cast<size_t>(n));
+        for (lua_Integer i = 1; i <= n; ++i) {
+            lua_rawgeti(L_, -1, i);
+            size_t len = 0;
+            const char* k = lua_tolstring(L_, -1, &len);
+            if (k) out.emplace_back(k, len);
+            lua_pop(L_, 1);
+        }
+    }
     lua_pop(L_, 1);
     return out;
 }

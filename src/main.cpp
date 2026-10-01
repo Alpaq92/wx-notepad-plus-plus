@@ -389,6 +389,9 @@ struct WxnTheme
     std::map<wxString, std::pair<int,int>>   global;   // WidgetStyle name -> (fg,bg)
     std::map<wxString, std::vector<StyleDef>> lexers;   // LexerType name  -> WordsStyles
     std::string defaultFont; int defaultSize = 0;
+    // The LexerType ext attributes - Notepad++'s user extensions - as extension -> Language-menu name.
+    // Read only, and below the built-in tables in detection (see WxnUserExtMaps in lang_detect.h).
+    std::map<std::string, std::string> extToLang;
 };
 // The generic token classes a Scintillua-lexed buffer uses. The style numbers are the ones
 // sciTagToStyle mints; cppDonor is the Notepad++ cpp WordsStyle whose colours the class borrows when a
@@ -5430,16 +5433,39 @@ private:
     }
     // The active document's Function List language. Split from flLangKeyForName so the workspace
     // signature index can ask the same question about a file it is not showing - one language table,
-    // not two that drift.
+    // not two that drift. A Language-menu pick is the answer, as it is for Toggle Comment
+    // (activeCommentLang): forced Normal Text, or a pick of a plugin's language, has no list. Otherwise
+    // the name decides, and where it says nothing, what detection found (a shebang script, Rakefile, an
+    // extension only the theme maps).
     std::string flLangKey()
     {
-        if (auto* p = activePage()) return flLangKeyForName(wxFileName(p->path).GetFullName().Lower());
-        return flLangKeyForName(wxString());
+        auto* p = activePage();
+        if (!p) return flLangKeyForName(wxString());
+        // sciLang is checked too: picking a plugin language sets langForced but leaves forcedName at
+        // whatever was picked before it.
+        if (p->langForced) return p->sciLang.empty() ? flKeyForLanguage(std::string(p->forcedName.utf8_str())) : std::string();
+        const std::string key = flLangKeyForName(wxFileName(p->path).GetFullName().Lower());
+        if (!key.empty()) return key;
+        return flKeyForLanguage(std::string(p->autoLang.utf8_str()));
+    }
+    // The Function List key for a Language-menu language: the comment table's key, which is the same
+    // vocabulary, except where the Function List files several languages under one rule set.
+    static std::string flKeyForLanguage(const std::string& lang)
+    {
+        const std::string k = wxnCommentLangKeyForName(lang);
+        if (k == "c") return "cpp";
+        if (k == "typescript") return "js";
+        if (k == "props" || k == "toml") return "ini";
+        if (k == "scss" || k == "less") return "css";
+        if (k == "mssql" || k == "mysql") return "sql";
+        return k;
     }
     std::string flLangKeyForName(const wxString& baseLower)
     {
         const wxString base = baseLower;
         const wxString ext  = base.empty() ? wxString() : wxnExtOfName(base);
+        if (auto u = m_userExt.find(std::string(ext.utf8_str())); u != m_userExt.end())   // Style Configurator "User ext."
+            if (const std::string k = flKeyForLanguage(u->second); !k.empty()) return k;
         if (auto u = g_flUserExtToLang.find(std::string(ext.utf8_str())); u != g_flUserExtToLang.end()) return u->second;   // user-mapped extension
         if (ext=="cpp"||ext=="cc"||ext=="cxx"||ext=="c"||ext=="h"||ext=="hpp"||ext=="hxx"||ext=="ino") return "cpp";
         if (ext=="py"||ext=="pyw") return "python";
@@ -9554,10 +9580,18 @@ private:
     }
 
     // ----- syntax highlighting (Lexilla + theme colours) -------
+    // lang_detect.h's two callbacks: Scintillua's lexer.detect(), and "is this a Language-menu name?".
+    std::string scintilluaDetect(const std::string& file, const std::string& line)
+    {
+        scintillua::Engine* eng = scintilluaEngine();
+        return (eng && eng->ok()) ? eng->detect(file, line) : std::string();
+    }
+    static bool isMenuLanguage(const std::string& n) { return wxnLangFindByName(n) != nullptr; }
     // Which Language-menu language a document opens as; nullptr = Normal Text. lang_detect.h has the
-    // order (the user's functionList.conf mapping, Scintillua's lexer.detect() on the name, wxNote's
-    // overrides and comment table, then the first line). Reads the buffer head for the first-line
-    // checks, so it must run once the text is loaded - setLexerForFile's callers already guarantee that.
+    // order (the user's own extensions - Style Configurator, then functionList.conf -, Scintillua's
+    // lexer.detect() on the name, wxNote's overrides and comment table, the theme's ext attributes, then
+    // the first line). Reads the buffer head for the first-line checks, so it must run once the text is
+    // loaded - setLexerForFile's callers already guarantee that.
     const WxnLang* detectLanguage(const wxString& path)
     {
         const std::string base(wxFileName(path).GetFullName().utf8_str());
@@ -9569,12 +9603,44 @@ private:
             const wxCharBuffer b = m_stc->GetTextRangeRaw(0, wxMin((int)m_stc->GetLength(), 512));
             head.assign(b.data(), b.length());
         }
-        scintillua::Engine* eng = scintilluaEngine();
-        auto scDetect = [eng](const std::string& file, const std::string& line) {
-            return (eng && eng->ok()) ? eng->detect(file, line) : std::string();
-        };
-        auto known = [](const std::string& n) { return wxnLangFindByName(n) != nullptr; };
-        return wxnLangFindByName(wxnDetectLanguage(base, head, &g_flUserExtToLang, scDetect, known));
+        auto scDetect = [this](const std::string& file, const std::string& line) { return scintilluaDetect(file, line); };
+        const WxnUserExtMaps user{ &m_userExt, &g_flUserExtToLang, &m_theme.extToLang };
+        return wxnLangFindByName(wxnDetectLanguage(base, head, user, scDetect, isMenuLanguage));
+    }
+    // The Style Configurator's "Default ext.": the extensions `lang` (a Language-menu name) opens by
+    // default, worked out once from the detection tables themselves - see wxnDefaultExtensions.
+    const std::vector<std::string>& defaultExtensionsFor(const std::string& lang)
+    {
+        if (!m_defaultExtReady)
+        {
+            m_defaultExtReady = true;
+            scintillua::Engine* eng = scintilluaEngine();
+            const std::vector<std::string> keys = (eng && eng->ok()) ? eng->detectionKeys() : std::vector<std::string>();
+            auto scDetect = [this](const std::string& file, const std::string& line) { return scintilluaDetect(file, line); };
+            m_defaultExt = wxnDefaultExtensions(wxnLangCandidateExts(keys), scDetect, isMenuLanguage);
+        }
+        static const std::vector<std::string> kNone;
+        const auto it = m_defaultExt.find(lang);
+        return it == m_defaultExt.end() ? kNone : it->second;
+    }
+    // The active theme's ext attributes that actually decide something for `lang`: with the theme's map
+    // a file "x.<ext>" opens as `lang`, without it as something else. Every shipped theme lists cmake
+    // and asp, which detection places anyway, and an extension the user has mapped is the user's.
+    std::vector<std::string> themeOnlyExtensionsFor(const std::string& lang)
+    {
+        auto scDetect = [this](const std::string& file, const std::string& line) { return scintilluaDetect(file, line); };
+        const WxnUserExtMaps with{ &m_userExt, &g_flUserExtToLang, &m_theme.extToLang };
+        const WxnUserExtMaps without{ &m_userExt, &g_flUserExtToLang, nullptr };
+        std::vector<std::string> out;
+        for (const auto& kv : m_theme.extToLang)
+        {
+            if (kv.second != lang) continue;
+            const std::string file = "x." + kv.first;
+            if (wxnDetectLanguage(file, std::string(), with, scDetect, isMenuLanguage) == lang
+                && wxnDetectLanguage(file, std::string(), without, scDetect, isMenuLanguage) != lang)
+                out.push_back(kv.first);
+        }
+        return out;
     }
     // Friendly document-type label for the status bar, from a wxnLangTable name ("" = Normal Text). The
     // languages the bar has always described keep their long labels ("C++ source file"); every other one
@@ -9649,8 +9715,13 @@ private:
             return;
         }
         // Registered Scintillua language: auto-detect by extension (unless one is already chosen/forced),
-        // then container-lex it via the embedded engine.
-        if (page && page->sciLang.empty() && !page->langForced)
+        // then container-lex it via the embedded engine. An extension the user mapped in the Style
+        // Configurator is theirs, ahead of a plugin language's own list - Toggle Comment and the Function
+        // List already go by that mapping, so the highlighting must too - and this re-types a page such a
+        // plugin language had claimed before the mapping existed.
+        const bool userMapped = page && !page->langForced && m_userExt.count(std::string(wxnExtOf(path).utf8_str()));
+        if (userMapped) page->sciLang.clear();
+        if (page && page->sciLang.empty() && !page->langForced && !userMapped)
         {
             const wxString ext = wxnExtOf(path);
             for (const auto& l : m_sciLangs)
@@ -11594,12 +11665,13 @@ private:
     //   2. an explicit Language-menu pick (langForced). A pick is the ANSWER, not a hint: forcing
     //      Normal Text means "no comments here", so this branch never falls through to the
     //      extension guess it was deliberately chosen to override.
-    //   3. the user's own functionList.conf `ext` mapping (the keys are the same vocabulary).
+    //   3. the user's own extensions: the Style Configurator's "User ext.", then a functionList.conf
+    //      `ext` line (the keys are the same vocabulary) - the order detection uses.
     //   4. the built-in extension/filename table.
     //   5. the language detection gave the buffer (EditorPage::autoLang) - for what the table has no
-    //      row for: a shebang script with no extension, CMakeLists.txt, PKGBUILD, a systemd unit.
-    //      Last, so the table's finer distinctions (INI's ';' vs a .conf's '#', SCSS's "//" where
-    //      the CSS lexer draws it) still win wherever it has an opinion.
+    //      row for: a shebang script with no extension, CMakeLists.txt, PKGBUILD, a systemd unit, an
+    //      extension only the theme maps. Last, so the table's finer distinctions (INI's ';' vs a
+    //      .conf's '#', SCSS's "//" where the CSS lexer draws it) still win wherever it has an opinion.
     // nullptr = we don't know this buffer's language, which callers treat exactly like a language
     // with no comment form: touch nothing, say so. That is the point - a wrong guess is what broke
     // files before, and "I don't know" is a strictly better answer than "//".
@@ -11621,6 +11693,8 @@ private:
         if (p->langForced) return p->sciLang.empty() ? byLabel(p->forcedName) : nullptr;
         const wxString full = wxFileName(p->path).GetFullName().Lower();
         const std::string ext(wxnExtOfName(full).utf8_str());
+        if (auto u = m_userExt.find(ext); u != m_userExt.end())
+            if (const WxnCommentLang* l = byLabel(wxString::FromUTF8(u->second))) return l;
         if (auto u = g_flUserExtToLang.find(ext); u != g_flUserExtToLang.end())
             if (const WxnCommentLang* l = wxnCommentLangForKey(u->second)) return l;
         if (const WxnCommentLang* l = wxnCommentLangForKey(wxnCommentLangKeyForFileName(std::string(full.utf8_str())))) return l;
@@ -12865,6 +12939,7 @@ private:
         long acf = 3; c->Read("AutoComplete/FromChar", &acf, 3L); m_autoCompFrom = (int)acf;
         c->Read("AutoComplete/InsertPairs", &m_autoInsertPairs, false);
         c->Read("Theme", &m_themeName, wxEmptyString);
+        loadUserExt(c);
         c->Read("Print/Header", &m_printHeader, wxEmptyString);
         c->Read("Print/Footer", &m_printFooter, wxEmptyString);
         long se = 0; c->Read("Editing/SearchEngine", &se, 0L); m_searchEngine = (int)se;
@@ -12877,6 +12952,32 @@ private:
         c->Read("Window/W", &ww, 1100L);                 c->Read("Window/H", &wh, 720L);
         m_normalRect = wxRect(wxPoint((int)wx_, (int)wy_), wxSize((int)ww, (int)wh));
         c->Read("Window/Maximized", &m_wasMaximized, false);
+    }
+    // /UserExt: one entry per extension, e.g. inc=PHP. Read back through the normaliser the field uses,
+    // so a hand-edited ".INC" still counts; an entry naming no menu language is dropped. Not part of
+    // saveSettings(): only the Style Configurator's Save & Close and Save As... write it, so Cancel
+    // there can still take an edit back.
+    void loadUserExt(wxConfigBase* c)
+    {
+        m_userExt.clear();
+        const wxString old = c->GetPath();
+        c->SetPath("/UserExt");
+        wxString key; long idx = 0;
+        for (bool more = c->GetFirstEntry(key, idx); more; more = c->GetNextEntry(key, idx))
+        {
+            wxString lang; c->Read(key, &lang);
+            const std::string e = wxnUserExtNormalize(std::string(key.utf8_str()));
+            const std::string l(lang.utf8_str());
+            if (!e.empty() && isMenuLanguage(l)) m_userExt[e] = l;
+        }
+        c->SetPath(old);
+    }
+    void saveUserExt()
+    {
+        auto* c = wxConfigBase::Get();
+        c->DeleteGroup("/UserExt");
+        for (const auto& kv : m_userExt) c->Write("/UserExt/" + wxString::FromUTF8(kv.first), wxString::FromUTF8(kv.second));
+        c->Flush();
     }
     void saveSettings()
     {
@@ -14074,6 +14175,11 @@ private:
                                            npp_bgr(w->GetAttribute("bgColor")), (int)fs, w->GetAttribute("name"),
                                            w->GetAttribute("fontName"), (int)fsz, (int)fw });
                     }
+                    // An extension two LexerTypes both list stays with the first.
+                    const std::string extLang = wxnLangForNppLexerType(std::string(lt->GetAttribute("name").utf8_str()));
+                    if (!extLang.empty() && wxnLangFindByName(extLang))
+                        for (const std::string& e : wxnUserExtParse(std::string(lt->GetAttribute("ext").utf8_str())))
+                            m_theme.extToLang.emplace(e, extLang);
                     m_theme.lexers[lt->GetAttribute("name")] = std::move(styles);
                 }
             }
@@ -14130,6 +14236,9 @@ private:
         loadTheme();
         applyEditorTheme(m_dark);
         if (auto* p = activePage()) setLexerForFile(p->path);   // re-apply per-token colours for the active doc
+        // A theme's ext attributes take part in detection, so the reload can re-type the document: the
+        // status bar's language and the Function List follow it.
+        updateStatus(); parseFuncList();
         if (m_stc) m_stc->Refresh();
         nibFireDocEvent(NIB_EV_STYLE_UPDATED, activePage());   // -> NPPN_WORDSTYLESUPDATED (editor styles re-applied)
     }
@@ -14281,6 +14390,23 @@ private:
         eg->Add(new wxStaticText(&dlg, wxID_ANY, _("Font size (0 = inherit):")),     0, wxALIGN_CENTRE_VERTICAL); eg->Add(chSize, 0);
         eg->Add(new wxStaticText(&dlg, wxID_ANY, _("Font weight (0 = inherit):")),   0, wxALIGN_CENTRE_VERTICAL); eg->Add(chWeight, 0);
         auto* edBox = new wxStaticBoxSizer(wxVERTICAL, &dlg, _("Style settings")); edBox->Add(eg, 0, wxALL, 8);
+        // The selected language's file extensions, as Notepad++ lays them out: what wxNote opens as this
+        // language by itself, and the user's own additions. Those live in wxNote's settings, not in the
+        // theme file as in Notepad++ (WxnUserExtMaps in lang_detect.h says why), so they hold whichever
+        // theme is active.
+        auto* tcDefExt  = new wxTextCtrl(&dlg, wxID_ANY, wxString(), wxDefaultPosition, wxDefaultSize, wxTE_READONLY);
+        auto* tcUserExt = new wxTextCtrl(&dlg, wxID_ANY, wxString(), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+        // Room for two lines from the start (the second only when the theme adds extensions), so the
+        // dialog does not re-flow as the selection moves between languages.
+        auto* stExtNote = new wxStaticText(&dlg, wxID_ANY, wxString(), wxDefaultPosition,
+                                           wxSize(-1, 2 * dlg.GetCharHeight() + 4), wxST_NO_AUTORESIZE);
+        auto* xg = new wxFlexGridSizer(2, 8, 10);
+        xg->Add(new wxStaticText(&dlg, wxID_ANY, _("Default ext.:")), 0, wxALIGN_CENTRE_VERTICAL); xg->Add(tcDefExt, 1, wxEXPAND);
+        xg->Add(new wxStaticText(&dlg, wxID_ANY, _("User ext.:")),    0, wxALIGN_CENTRE_VERTICAL); xg->Add(tcUserExt, 1, wxEXPAND);
+        xg->AddGrowableCol(1, 1);
+        auto* extBox = new wxStaticBoxSizer(wxVERTICAL, &dlg, _("File extensions"));
+        extBox->Add(xg, 0, wxEXPAND | wxALL, 8);
+        extBox->Add(stExtNote, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
         auto col = [&](const wxString& cap, wxWindow* w){ auto* s = new wxBoxSizer(wxVERTICAL); s->Add(new wxStaticText(&dlg, wxID_ANY, cap), 0, wxBOTTOM, 4); s->Add(w, 1, wxEXPAND); return s; };
         auto* mid = new wxBoxSizer(wxHORIZONTAL);
         mid->Add(col(_("Language:"), langList), 0, wxEXPAND | wxRIGHT, 10);
@@ -14304,7 +14430,8 @@ private:
         btn->Add(btnSaveAs, 0, wxRIGHT, 6); btn->Add(btnDelete, 0, wxRIGHT, 6); btn->Add(btnRevert, 0); btn->AddStretchSpacer();
         btn->Add(new wxButton(&dlg, wxID_OK, _("Save && Close")), 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL);
-        top->Add(themeRow, 0, wxALL, 12); top->Add(mid, 1, wxEXPAND | wxLEFT | wxRIGHT, 12); top->Add(btn, 0, wxEXPAND | wxALL, 12);
+        top->Add(themeRow, 0, wxALL, 12); top->Add(mid, 1, wxEXPAND | wxLEFT | wxRIGHT, 12);
+        top->Add(extBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 12); top->Add(btn, 0, wxEXPAND | wxALL, 12);
         eg->AddGrowableCol(1, 1);   // the font-name combo takes any width the dialog gains
         dlg.SetSizerAndFit(top);
         dlg.CentreOnParent();
@@ -14314,6 +14441,65 @@ private:
             styleList->Clear(); const wxString lang = langList->GetStringSelection();
             if (lang == kGlobalStyles) { for (auto& kv : m_theme.global) styleList->Append(kv.first); }
             else { auto it = m_theme.lexers.find(lang); if (it != m_theme.lexers.end()) for (auto& s : it->second) styleList->Append(s.name.empty() ? wxString::Format(_("Style %d"), s.id) : s.name); }
+        };
+        // ---- File extensions ----
+        // extLang: the Language-menu language the selected entry's files open as ("" for Global Styles
+        // and the blocks that are not a language). userExtSaved: what /UserExt holds on disk - where
+        // Cancel and Revert go back to, and what Save & Close compares against.
+        wxString extLang;
+        std::map<std::string, std::string> userExtSaved = m_userExt;
+        auto userExtOf = [&](const std::string& lang) {
+            std::vector<std::string> v;
+            for (const auto& kv : m_userExt) if (kv.second == lang) v.push_back(kv.first);
+            return v;
+        };
+        auto applyExtChange = [&]{   // re-detect the document in front, as a colour edit re-styles it
+            if (auto* p = activePage()) setLexerForFile(p->path);
+            updateStatus(); parseFuncList();
+            if (m_stc) m_stc->Refresh();
+        };
+        auto loadExt = [&]{
+            const wxString sel = langList->GetStringSelection();
+            const std::string lang = (sel == kGlobalStyles) ? std::string() : wxnLangForNppLexerType(std::string(sel.utf8_str()));
+            const bool on = isMenuLanguage(lang);
+            extLang = on ? wxString::FromUTF8(lang) : wxString();
+            tcDefExt->ChangeValue(on ? wxString::FromUTF8(wxnUserExtJoin(defaultExtensionsFor(lang))) : wxString());
+            tcUserExt->ChangeValue(on ? wxString::FromUTF8(wxnUserExtJoin(userExtOf(lang))) : wxString());
+            tcDefExt->Enable(on); tcUserExt->Enable(on);
+            wxString note;
+            if (on)
+            {
+                note = wxString::Format(_("Files with these extensions open as %s. Separate them with spaces."), extLang);
+                const std::vector<std::string> fromTheme = themeOnlyExtensionsFor(lang);
+                if (!fromTheme.empty())
+                    note += "\n" + wxString::Format(_("This theme adds: %s"), wxString::FromUTF8(wxnUserExtJoin(fromTheme)));
+            }
+            stExtNote->SetLabel(note);
+        };
+        // The field's list becomes the language's whole set of user extensions. An extension belongs to
+        // one language at a time, so typing one here takes it from whichever language had it. Runs on
+        // Enter and before everything that changes the selection or saves - deliberately not on focus
+        // loss, which can arrive while the dialog is being torn down and the locals captured here are gone.
+        auto commitExt = [&]{
+            if (extLang.empty()) return;
+            const std::string lang(extLang.utf8_str());
+            std::map<std::string, std::string> next = m_userExt;
+            for (auto it = next.begin(); it != next.end();) it = (it->second == lang) ? next.erase(it) : std::next(it);
+            wxString moved;
+            for (const std::string& e : wxnUserExtParse(std::string(tcUserExt->GetValue().utf8_str())))
+            {
+                const auto was = m_userExt.find(e);
+                if (moved.empty() && was != m_userExt.end() && was->second != lang)
+                    moved = wxString::Format(_(".%s now opens as %s instead of %s"), wxString::FromUTF8(e), extLang,
+                                             wxString::FromUTF8(was->second));
+                next[e] = lang;
+            }
+            const bool changed = (next != m_userExt);
+            m_userExt = std::move(next);
+            loadExt();   // shows the list normalised, and the theme note against the new set
+            if (!changed) return;
+            applyExtChange();
+            if (!moved.empty()) { setStatus(0, moved); m_hint = true; }
         };
         auto loadStyle = [&]{
             const wxString lang = langList->GetStringSelection(); const int si = styleList->GetSelection(); if (si < 0) return;
@@ -14379,9 +14565,11 @@ private:
             }
             applyEditorTheme(m_dark); if (auto* p = activePage()) setLexerForFile(p->path); if (m_stc) m_stc->Refresh();
         };
-        fillLangs(); langList->SetSelection(0); fillStyles();
-        langList->Bind(wxEVT_LISTBOX,  [&](wxCommandEvent&){ fillStyles(); });
+        fillLangs(); langList->SetSelection(0); fillStyles(); loadExt();
+        // commitExt still sees the language being left: extLang only moves on in loadExt.
+        langList->Bind(wxEVT_LISTBOX,  [&](wxCommandEvent&){ commitExt(); fillStyles(); loadExt(); });
         styleList->Bind(wxEVT_LISTBOX, [&](wxCommandEvent&){ loadStyle(); });
+        tcUserExt->Bind(wxEVT_TEXT_ENTER, [&](wxCommandEvent&){ commitExt(); });
         fgPick->Bind(wxEVT_COLOURPICKER_CHANGED, [&](wxColourPickerEvent&){ applyEdit(SF::Fg); });
         bgPick->Bind(wxEVT_COLOURPICKER_CHANGED, [&](wxColourPickerEvent&){ applyEdit(SF::Bg); });
         cbBold->Bind(wxEVT_CHECKBOX,   [&](wxCommandEvent&){ applyEdit(SF::Bold); });
@@ -14394,11 +14582,13 @@ private:
             // applyThemeSelection reloads m_theme from disk, discarding any unsaved edits - so the dirty
             // set must be dropped with them, or Save & Close would write style ids belonging to the OLD
             // theme into the NEW theme's file. Re-select afterwards because the name can resolve to a
-            // different one ("Default" in dark mode -> DarkModeDefault).
+            // different one ("Default" in dark mode -> DarkModeDefault). User extensions are not part of
+            // the theme, so a pending one is kept rather than dropped with the style edits.
+            commitExt();
             applyThemeSelection(themeCombo->GetStringSelection());
             m_styleEdited.clear(); m_globalEdited.clear();
             themeCombo->SetStringSelection(resolvedThemeName());
-            fillLangs(); langList->SetSelection(0); fillStyles(); syncDeleteButton(); });
+            fillLangs(); langList->SetSelection(0); fillStyles(); loadExt(); syncDeleteButton(); });
         // Both buttons below rebuild the lists, so put the user back where they were rather than
         // bouncing them to Global Styles - the point of Revert is to keep experimenting on one style.
         auto refillKeepingSelection = [&]{
@@ -14408,16 +14598,21 @@ private:
             langList->SetSelection(li == wxNOT_FOUND ? 0 : li);
             fillStyles();
             if (si >= 0 && si < (int)styleList->GetCount()) { styleList->SetSelection(si); loadStyle(); }
+            loadExt();
         };
         btnRevert->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
             // What Cancel does on close, offered as a button: drop this session's edits by re-reading the
             // theme from disk. Deliberately NOT applyThemeSelection(resolvedThemeName()) - see reloadThemeLive.
-            if (m_styleEdited.empty() && m_globalEdited.empty()) return;
+            // An extension typed but never applied (no Enter yet) is dropped from the field as well.
+            const bool extDirty = (m_userExt != userExtSaved);
+            if (m_styleEdited.empty() && m_globalEdited.empty() && !extDirty) { loadExt(); return; }
             m_styleEdited.clear(); m_globalEdited.clear();
-            reloadThemeLive();
+            m_userExt = userExtSaved;
+            reloadThemeLive();   // re-detects the document in front too
             refillKeepingSelection();
             setStatus(0, _("Style changes reverted")); m_hint = true; });
         btnSaveAs->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            commitExt();
             wxTextEntryDialog te(&dlg, _("Name:"), _("Save As"), resolvedThemeName());
             themeDialog(&te);
             if (te.ShowModal() != wxID_OK) return;
@@ -14452,10 +14647,13 @@ private:
             // `original` moves with them, or Cancel would roll the editor back off the theme just written.
             m_styleEdited.clear(); m_globalEdited.clear();
             m_themeName = name; original = name; saveSettings();
+            // A save is a save: extension edits are kept too, so a later Cancel does not take them back.
+            if (m_userExt != userExtSaved) { saveUserExt(); userExtSaved = m_userExt; }
             themeCombo->Set(availableThemes()); themeCombo->SetStringSelection(resolvedThemeName());
             syncDeleteButton();
             setStatus(0, wxString::Format(_("Saved theme \"%s\""), name)); m_hint = true; });
         btnDelete->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+            commitExt();   // the refill below reloads the field
             const wxString name = resolvedThemeName();
             const wxString path = userCopyPath();
             if (!wxFileExists(path)) return;
@@ -14487,6 +14685,10 @@ private:
         if (dlg.ShowModal() == wxID_OK)
         {
             saveSettings();   // persists the theme choice even when no individual style was edited
+            // The extensions go to wxNote's settings, which are always writable, so unlike the theme file
+            // below this cannot fail on a read-only built-in theme. Saved first, so a theme message wins.
+            commitExt();
+            if (m_userExt != userExtSaved) { saveUserExt(); setStatus(0, _("File extensions saved")); m_hint = true; }
             // Only touch the file if something actually changed, and only claim success if the write
             // happened: for the light-mode Default the target is <exeDir>/stylers.model.xml, which an
             // installed build cannot write. That failure used to be discarded and reported as saved.
@@ -14504,7 +14706,11 @@ private:
                                   kTitle, wxOK | wxICON_WARNING, this);
             }
         }
-        else applyThemeSelection(original.empty() ? "Default" : original);   // Cancel -> reload the original theme from disk
+        else   // Cancel -> take extension edits back, then reload the original theme from disk (which
+        {      // re-detects the document in front against the restored set)
+            m_userExt = userExtSaved;
+            applyThemeSelection(original.empty() ? "Default" : original);
+        }
         m_styleEdited.clear(); m_globalEdited.clear();
     }
     void importStyleTheme()
@@ -16439,6 +16645,12 @@ private:
     int         m_autoCompFrom = 3;                              // auto-completion triggers from the Nth typed character
     bool        m_autoInsertPairs = false;                       // auto-insert matching brackets/quotes while typing
     wxString    m_themeName;                                      // active editor theme (empty = dark/light default); Style Configurator
+    // Style Configurator "User ext.": lower-case extension -> Language-menu name, beating every other
+    // rule in detection, Toggle Comment and the Function List. Settings group /UserExt, one entry per
+    // extension - so an extension belongs to one language at a time by construction.
+    std::map<std::string, std::string>         m_userExt;
+    std::map<std::string, std::vector<std::string>> m_defaultExt;   // defaultExtensionsFor's cache
+    bool                                       m_defaultExtReady = false;
     std::unique_ptr<scintillua::Engine>        m_scintillua;     // native language engine (embedded Lua+LPeg+Scintillua), lazy-created
     struct SciLang { wxString name, exts; };                     // exts = space-separated file extensions
     std::vector<SciLang>                       m_sciLangs;       // languages registered via nib.langdef

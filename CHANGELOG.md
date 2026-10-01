@@ -15,6 +15,16 @@ All notable changes to wxNote are documented here. Format loosely follows
   several languages claim (`.m`, `.inc`, `.cls`, ...) stay plain text rather than being guessed. A
   `functionList.conf` `ext` line now changes the highlighting as well, not only the Function List and
   comments.
+- **Your own file extensions, in the Style Configurator.** Each language now shows a "File extensions"
+  box like Notepad++'s: the extensions wxNote already opens as that language (**Default ext.**), and a
+  **User ext.** field for your own, such as `inc` for PHP or `txt` for Python. They change the
+  highlighting, Toggle Comment and the Function List together, and beat every built-in rule as well as
+  a plugin language's own extensions. Unlike Notepad++ they are stored in wxNote's settings rather
+  than in the theme, so switching themes, or dark and light mode, does not lose them. A Notepad++
+  theme's own `ext` attributes are read too, but only fill in extensions wxNote does not already place.
+- The Function List now follows a language picked from the Language menu, as Toggle Comment already
+  did, and the detected language when its own extension table has no answer - an untitled buffer set to
+  Python, a script with no extension, a `Rakefile`. MS SQL and MySQL use the SQL rules.
 
 ### Fixed
 - `.go` files opened as plain text: they were handed to a Lexilla lexer that does not exist. They now

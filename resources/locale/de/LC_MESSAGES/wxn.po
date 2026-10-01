@@ -3453,3 +3453,24 @@ msgstr "%s konnte nicht geschrieben werden."
 
 msgid "Add wxNote to your applications menu?\n\nAn AppImage is not installed, so your desktop does not know wxNote exists - which is why it does not appear under \"Open With\", and cannot be chosen as the default editor for a file type. This adds a launcher in your home folder, and changes nothing outside it.\n\nYou can undo this later in Preferences."
 msgstr "wxNote zum Anwendungsmenü hinzufügen?\n\nEin AppImage wird nicht installiert, daher weiß Ihre Arbeitsumgebung nichts von wxNote - deshalb erscheint es nicht unter \"Öffnen mit\" und kann nicht als Standardeditor für einen Dateityp gewählt werden. Dies legt einen Starter in Ihrem persönlichen Ordner an und ändert nichts außerhalb davon.\n\nSie können dies später in den Einstellungen rückgängig machen."
+
+msgid "Default ext.:"
+msgstr "Standard-Endungen:"
+
+msgid "User ext.:"
+msgstr "Eigene Endungen:"
+
+msgid "File extensions"
+msgstr "Dateiendungen"
+
+msgid "Files with these extensions open as %s. Separate them with spaces."
+msgstr "Dateien mit diesen Endungen werden als %s geöffnet. Mehrere durch Leerzeichen trennen."
+
+msgid "This theme adds: %s"
+msgstr "Dieses Farbschema ergänzt: %s"
+
+msgid ".%s now opens as %s instead of %s"
+msgstr ".%s wird jetzt als %s statt als %s geöffnet"
+
+msgid "File extensions saved"
+msgstr "Dateiendungen gespeichert"
