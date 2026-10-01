@@ -166,6 +166,7 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 #include "diff_myers.h"          // Myers O(ND) diff engine + side-by-side plan for File Compare
 #include "comment_tokens.h"      // per-language comment tokens - what Ctrl+/ and Stream Comment insert
 #include "lang_detect.h"         // which language a file opens as (Scintillua's lexer.detect() + wxNote's overrides)
+#include "keywords.h"            // the keyword lists each language's lexer gets - SciTE's, by language and slot
 #include "snippets.h"            // snippet grammar + store: $1 / ${1:default} / $0 tab stops and mirrors
 #include "regex_engine.h"        // PCRE2 behind Find/Replace - std::regex could not cross a line break
 #include "spell_engine.h"        // pluggable spell-check backend (OS-native: ISpellChecker / NSSpellChecker)
@@ -349,7 +350,7 @@ public:
     wxString forcedName;                   // that pick's display label for the status bar, e.g. "C++"
     wxString sciLang;                      // name of a registered Scintillua language when active ("" = none); container-lexed via m_scintillua
     wxString autoLang;                     // the wxnLangTable name detection chose (lang_detect.h); "" = Normal Text, a manual pick, or not detected yet
-    const char* lexKeywords = nullptr;      // the keyword set actually handed to this page's lexer (autocomplete reads THIS, not a second table keyed on extension). Borrowed: every value is a file-scope *_KEYWORDS literal
+    const char* lexKeywords = nullptr;      // every word of the keyword lists handed to this page's lexer (autocomplete reads THIS, not a second table keyed on extension). Borrowed from wxnKeywordWords (keywords.h), which keeps it for the program's life
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
@@ -449,116 +450,6 @@ static int selection_fore_bgr(int selBackBgr, int themeForeBgr)
     }
     return autoFore;
 }
-
-// Keyword lists for the languages we ship words for (others still colour comments/strings/numbers).
-static const char CPP_KEYWORDS[] =
-    "alignas alignof and auto bool break case catch char char8_t char16_t char32_t class const "
-    "consteval constexpr constinit continue decltype default delete do double dynamic_cast else "
-    "enum explicit export extern false float for friend goto if inline int long mutable namespace "
-    "new noexcept nullptr operator or private protected public register reinterpret_cast return "
-    "short signed sizeof static static_assert static_cast struct switch template this thread_local "
-    "throw true try typedef typeid typename union unsigned using virtual void volatile wchar_t while";
-static const char JS_KEYWORDS[] =   // JavaScript / TypeScript (still the C++ lexer)
-    "abstract any as async await boolean break case catch class const continue debugger declare "
-    "default delete do else enum export extends false finally for from function get if implements "
-    "import in instanceof interface is keyof let module namespace never new null number object of "
-    "package private protected public readonly return set static string super switch symbol this "
-    "throw true try type typeof undefined var void while with yield";
-static const char JAVA_KEYWORDS[] =
-    "abstract assert boolean break byte case catch char class const continue default do double else "
-    "enum extends final finally float for goto if implements import instanceof int interface long "
-    "native new package private protected public record return sealed short static strictfp super "
-    "switch synchronized this throw throws transient try var void volatile while true false null yield";
-static const char CS_KEYWORDS[] =
-    "abstract as async await base bool break byte case catch char checked class const continue decimal "
-    "default delegate do double dynamic else enum event explicit extern false finally fixed float for "
-    "foreach goto if implicit in int interface internal is lock long nameof namespace new null object "
-    "operator out override params private protected public readonly ref return sbyte sealed short sizeof "
-    "stackalloc static string struct switch this throw true try typeof uint ulong unchecked unsafe ushort "
-    "using var virtual void volatile when where while yield";
-static const char CSS_KEYWORDS[] =   // common properties (CSS lexer keyword list 0)
-    "align-content align-items align-self animation background background-color background-image "
-    "background-position background-repeat background-size border border-bottom border-color "
-    "border-left border-radius border-right border-style border-top border-width bottom box-shadow "
-    "box-sizing clear color content cursor display flex flex-basis flex-direction flex-grow flex-shrink "
-    "flex-wrap float font font-family font-size font-style font-weight gap grid grid-template-columns "
-    "grid-template-rows height justify-content left letter-spacing line-height list-style margin "
-    "margin-bottom margin-left margin-right margin-top max-height max-width min-height min-width opacity "
-    "outline overflow padding padding-bottom padding-left padding-right padding-top position right "
-    "text-align text-decoration text-transform top transform transition vertical-align visibility "
-    "white-space width word-spacing z-index";
-static const char BATCH_KEYWORDS[] =
-    "if else for in do goto call exit set echo setlocal endlocal shift cd chdir md mkdir rd rmdir del "
-    "erase copy xcopy move ren rename type cls pause rem start exist not errorlevel defined equ neq "
-    "lss leq gtr geq";
-static const char PERL_KEYWORDS[] =
-    "if elsif else unless while until for foreach do sub return my our local use require package and or "
-    "not eq ne lt gt le ge cmp print printf say sprintf chomp chop split join push pop shift unshift "
-    "splice reverse sort map grep keys values each defined exists delete wantarray ref bless die warn "
-    "last next redo qw scalar";
-static const char RUBY_KEYWORDS[] =
-    "alias and begin break case class def defined? do else elsif end ensure false for if in module next "
-    "nil not or redo rescue retry return self super then true undef unless until when while yield require "
-    "require_relative include extend attr_accessor attr_reader attr_writer puts print raise lambda proc new";
-static const char PS_KEYWORDS[] =   // PowerShell
-    "begin break catch continue data do dynamicparam else elseif end exit filter finally for foreach from "
-    "function if in param process return switch throw trap try until while class enum using namespace";
-static const char CSS_PSEUDO[] =   // pseudo-classes (CSS lexer keyword list 1) so :hover etc. aren't flagged red
-    "active checked default disabled empty enabled first first-child first-of-type focus focus-within "
-    "hover in-range invalid last-child last-of-type link not nth-child nth-last-child nth-last-of-type "
-    "nth-of-type only-child only-of-type optional out-of-range read-only read-write required root target "
-    "valid visited";
-static const char JSON_KEYWORDS[] = "true false null";
-static const char PY_KEYWORDS[] =
-    "and as assert async await break class continue def del elif else except finally for from "
-    "global if import in is lambda nonlocal not or pass raise return try while with yield True False None";
-static const char SQL_KEYWORDS[] =
-    "add all alter and as asc between by case check column create database default delete desc distinct "
-    "drop else end exists foreign from full group having in index inner insert into is join key left "
-    "like limit not null on or order outer primary references right select set table then top union "
-    "unique update values view where";
-static const char LUA_KEYWORDS[] =
-    "and break do else elseif end false for function goto if in local nil not or repeat return then true until while";
-static const char BASH_KEYWORDS[] =
-    "if then else elif fi case esac for select while until do done in function time coproc echo cd export local read return test";
-static const char GO_KEYWORDS[] =
-    "break case chan const continue default defer else fallthrough for func go goto if import interface map package range "
-    "return select struct switch type var bool byte rune string int int8 int16 int32 int64 uint float32 float64 true false nil iota";
-static const char RUST_KEYWORDS[] =
-    "as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub "
-    "ref return self Self static struct super trait true type unsafe use where while bool char str u8 u32 u64 i32 i64 usize Vec String Option Result";
-// The lists below were curated from permissive sources - Scintillua's per-language lexers (MIT, (c)
-// Mitchell) and SciTE .properties (HPND, the same license as the vendored Lexilla) - as facts (a
-// language's reserved words + common builtins), not copied expression. Autocomplete keys purely on the
-// file extension, so these apply even for languages with no wired Lexilla lexer (they render as plain text).
-static const char PHP_KEYWORDS[] =
-    "abstract and array as break callable case catch class clone const continue declare default do echo "
-    "else elseif empty enddeclare endfor endforeach endif endswitch endwhile enum extends final finally fn "
-    "for foreach function global goto if implements include include_once instanceof insteadof interface isset "
-    "list match namespace new or print private protected public readonly require require_once return static "
-    "switch throw trait try unset use var while xor yield true false null __construct __destruct";
-static const char KOTLIN_KEYWORDS[] =
-    "abstract actual annotation as break by catch class companion const constructor continue crossinline data "
-    "do dynamic else enum expect external false final finally for fun get if import in infix init inline inner "
-    "interface internal is lateinit noinline null object open operator out override package private protected "
-    "public reified return sealed set super suspend tailrec this throw true try typealias val var vararg when "
-    "where while Int Long Float Double Boolean Char String Unit Any List Map Set";
-static const char SWIFT_KEYWORDS[] =
-    "actor as associatedtype async await break case catch class continue default defer deinit do else enum "
-    "extension fallthrough false fileprivate final for func guard if import in indirect init inout internal "
-    "is lazy let mutating nil nonmutating open operator private protocol public repeat rethrows return self "
-    "Self static struct subscript super switch throw throws true try typealias var weak where while "
-    "Int Double Float Bool String Character Array Dictionary Set Optional Any";
-static const char R_KEYWORDS[] =
-    "if else repeat while function for in next break TRUE FALSE NULL Inf NaN NA NA_integer_ NA_real_ "
-    "NA_character_ library require return invisible c list vector matrix data.frame factor print cat paste "
-    "paste0 sapply lapply vapply mapply apply names length nrow ncol dim sum mean median";
-static const char YAML_KEYWORDS[] = "true false null yes no on off";
-static const char HTML_KEYWORDS[] =   // common tag + attribute names for tag-context completion
-    "html head body title meta link script style div span p a img ul ol li table thead tbody tr td th form "
-    "input button select option textarea label nav header footer main section article aside h1 h2 h3 h4 h5 "
-    "h6 br hr strong em code pre blockquote iframe video audio canvas svg class id href src alt type value "
-    "name placeholder rel content charset width height onclick data";
 
 // nib.sci/1 - the portable Scintilla passthrough tail. The frame installs g_coreSciCall (it needs
 // m_main/m_sub/m_stc); coreSciCall routes a view index (0=main, 1=sub, -1=active) into that editor's
@@ -6834,37 +6725,13 @@ private:
     // document that share the typed prefix (a linear scan - the document itself is the best dictionary
     // for its own identifiers), the active language's keyword list, and filesystem paths.
     std::string rangeText(int a, int b) { if (b <= a) return {}; sci(SCI_SETTARGETSTART, a); sci(SCI_SETTARGETEND, b); std::string s((size_t)(b - a) + 1, '\0'); sci(SCI_GETTARGETTEXT, 0, reinterpret_cast<sptr_t>(&s[0])); s.resize(b - a); return s; }
-    static const char* keywordsForExt(const wxString& ext)
+    // The keyword words completion offers for the active page when setLexerForFile has recorded none: its
+    // language's lists (keywords.h), the same table the lexer gets. nullptr = document words only.
+    const char* keywordsForActiveLang()
     {
-        // Keyed on file extension. Most lists are the same constants the lexer-styling path already uses
-        // (SCI_SETKEYWORDS in setLexerForFile); a table makes adding a language a one-line entry. ts/tsx
-        // reuse JS_KEYWORDS, which already carries the TypeScript keywords.
-        struct KwMap { const char* ext; const char* words; };
-        static const KwMap TABLE[] = {
-            { "c", CPP_KEYWORDS }, { "cpp", CPP_KEYWORDS }, { "cc", CPP_KEYWORDS }, { "cxx", CPP_KEYWORDS },
-            { "h", CPP_KEYWORDS }, { "hpp", CPP_KEYWORDS }, { "hxx", CPP_KEYWORDS }, { "rc", CPP_KEYWORDS },
-            { "js", JS_KEYWORDS }, { "jsx", JS_KEYWORDS }, { "mjs", JS_KEYWORDS }, { "cjs", JS_KEYWORDS },
-            { "ts", JS_KEYWORDS }, { "tsx", JS_KEYWORDS },
-            { "java", JAVA_KEYWORDS }, { "cs", CS_KEYWORDS },
-            { "py", PY_KEYWORDS }, { "pyw", PY_KEYWORDS },
-            { "json", JSON_KEYWORDS }, { "sql", SQL_KEYWORDS },
-            { "css", CSS_KEYWORDS }, { "scss", CSS_KEYWORDS }, { "less", CSS_KEYWORDS },
-            { "lua", LUA_KEYWORDS },
-            { "sh", BASH_KEYWORDS }, { "bash", BASH_KEYWORDS }, { "zsh", BASH_KEYWORDS },
-            { "bat", BATCH_KEYWORDS }, { "cmd", BATCH_KEYWORDS },
-            { "pl", PERL_KEYWORDS }, { "pm", PERL_KEYWORDS },
-            { "rb", RUBY_KEYWORDS }, { "rs", RUST_KEYWORDS }, { "go", GO_KEYWORDS },
-            { "ps1", PS_KEYWORDS }, { "psm1", PS_KEYWORDS }, { "psd1", PS_KEYWORDS },
-            { "php", PHP_KEYWORDS }, { "php3", PHP_KEYWORDS }, { "phtml", PHP_KEYWORDS },
-            { "kt", KOTLIN_KEYWORDS }, { "kts", KOTLIN_KEYWORDS },
-            { "swift", SWIFT_KEYWORDS }, { "r", R_KEYWORDS },
-            { "yml", YAML_KEYWORDS }, { "yaml", YAML_KEYWORDS },
-            { "html", HTML_KEYWORDS }, { "htm", HTML_KEYWORDS }, { "xhtml", HTML_KEYWORDS },
-        };
-        for (const auto& m : TABLE) if (ext == m.ext) return m.words;
-        return nullptr;   // no keyword list -> document-word completion only
+        auto* p = activePage();
+        return p ? wxnKeywordWords(std::string((p->langForced ? p->forcedName : p->autoLang).utf8_str())) : nullptr;
     }
-    const char* keywordsForActiveLang() { auto* p = activePage(); return p ? keywordsForExt(wxnExtOf(p->path)) : nullptr; }
     // Which styles carry PROSE - comments and string literals - for the active document. Two consumers
     // want exactly this set from opposite directions: completion drops these words, spell-check checks
     // ONLY these words. It used to be written out twice, ~3500 lines apart, and the copies had already
@@ -6987,8 +6854,8 @@ private:
     // live editor, the same reason flCollect is one)
     void collectKeywords(const std::string& prefix, std::set<std::string, std::less<>>& out)
     {
-        // The set the LEXER got (recorded in setLexerForFile), falling back to the extension table only
-        // for a page that has not been through it. Reading the extension table directly is what made
+        // The set the LEXER got (recorded in setLexerForFile), falling back to the page's language only
+        // for a page that has not been through it. Going by the file extension instead is what once made
         // Ctrl+Space silently keyword-less after a manual Language pick.
         auto* p = activePage();
         const char* kw = (p && p->lexKeywords) ? p->lexKeywords : keywordsForActiveLang();
@@ -9788,44 +9655,16 @@ private:
             // lexer: on any other (Markdown, Dart, Zig... - no stylers block in a Notepad++ theme) they
             // would colour arbitrary tokens. Those keep the theme's base style, as plain text does.
             if (!themed) { if (lx == "python") stylePythonFallback(); else if (lx == "cpp") styleCppFallback(); }
-            // Record what the lexer was ACTUALLY given, so completion offers the same keyword set the
-            // highlighter is using. collectKeywords used to re-derive its own list from the file
-            // extension, which silently diverged whenever the user picks a Language by hand - the
-            // extension no longer decides, but the old lookup still went by it. (Scintillua languages are
-            // NOT covered here: that branch returns well above this point, so those pages keep an empty
-            // lexKeywords and fall through to collectKeywords' extension-table default.)
-            auto kw = [&](const char* words) {
-                sci(SCI_SETKEYWORDS, 0, reinterpret_cast<sptr_t>(words));
-                if (page) page->lexKeywords = words;
-            };
-            if (lx == "cpp") {   // shared C-family lexer: the keywords follow the language, not the lexer
-                const wxString& v = langName;
-                if      (v=="JavaScript"||v=="TypeScript"||v=="ActionScript") kw(JS_KEYWORDS);
-                else if (v=="Java")                                           kw(JAVA_KEYWORDS);
-                else if (v=="C#")                                             kw(CS_KEYWORDS);
-                else if (v=="Go")                                             kw(GO_KEYWORDS);
-                else if (v=="Kotlin")                                         kw(KOTLIN_KEYWORDS);
-                else if (v=="Swift")                                          kw(SWIFT_KEYWORDS);
-                else                                                          kw(CPP_KEYWORDS);
-            }
-            else if (lx == "python")     kw(PY_KEYWORDS);
-            else if (lx == "sql")        kw(SQL_KEYWORDS);
-            else if (lx == "lua")        kw(LUA_KEYWORDS);
-            else if (lx == "bash")       kw(BASH_KEYWORDS);
-            else if (lx == "rust")       kw(RUST_KEYWORDS);
-            else if (lx == "css")      { kw(CSS_KEYWORDS); sci(SCI_SETKEYWORDS, 1, reinterpret_cast<sptr_t>(CSS_PSEUDO)); }
-            else if (lx == "batch")      kw(BATCH_KEYWORDS);
-            else if (lx == "perl")       kw(PERL_KEYWORDS);
-            else if (lx == "ruby")       kw(RUBY_KEYWORDS);
-            else if (lx == "powershell") kw(PS_KEYWORDS);
-            else if (lx == "json")       kw(JSON_KEYWORDS);
-            else if (lx == "hypertext") {   // HTML/PHP/ASP/JSP: the keywords of the script languages embedded in the markup
-                // Set 0 (tag and attribute names) stays EMPTY on purpose: LexHTML then treats every tag and
-                // attribute as known, where an incomplete list would paint the rest in the "unknown tag"
-                // colour several themes make red. Completion keeps its extension-keyed list for these.
-                sci(SCI_SETKEYWORDS, 1, reinterpret_cast<sptr_t>(JS_KEYWORDS));    // <script>
-                sci(SCI_SETKEYWORDS, 4, reinterpret_cast<sptr_t>(PHP_KEYWORDS));   // <?php ... ?>
-            }
+            // Keyword lists by LANGUAGE, slot by slot (keywords.h): SciTE's wherever it has them, so the
+            // languages sharing a lexer (C, C#, Java, Go... on cpp; HTML, PHP, ASP, JSP on hypertext, with
+            // the script languages embedded in the markup) each get their own. Completion is handed every
+            // word of them, so what the highlighter knows is what Ctrl+Space offers, and a manual Language
+            // pick changes both. (Scintillua languages return well above this point: no lexKeywords.)
+            const std::string lang(langName.utf8_str());
+            wxnForEachKeywordList(lang, [&](const WxnKeywordList& k) {
+                sci(SCI_SETKEYWORDS, k.slot, reinterpret_cast<sptr_t>(k.words));
+            });
+            if (page) page->lexKeywords = wxnKeywordWords(lang);
         }
         sci(SCI_COLOURISE, 0, -1);
     }

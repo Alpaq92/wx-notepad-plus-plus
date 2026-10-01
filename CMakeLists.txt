@@ -481,6 +481,22 @@ if(MSVC)
     target_compile_options(comment_tokens_test PRIVATE /utf-8)
 endif()
 
+# ---- keywords_test: the keyword lists each language's lexer gets (src/keywords.h, keywords_scite.h) ----
+# Links the real Lexilla to check every list lands in a slot its lexer takes. No wx:
+# menu_data_language.h is read as data, as in comment_tokens_test.
+#   cmake --build build --target keywords_test && build/bin/keywords_test
+add_executable(keywords_test tests/keywords_test.cpp)
+set_target_properties(keywords_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(keywords_test PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/third_party/scintilla/include")
+target_link_libraries(keywords_test PRIVATE lexilla)
+target_compile_definitions(keywords_test PRIVATE SRC_DIR="${CMAKE_SOURCE_DIR}/src")
+if(MSVC)
+    target_compile_options(keywords_test PRIVATE /EHsc /utf-8)
+endif()
+
 # ---- lang_detect_test: which language a file opens as (Scintillua's lexer.detect() + src/lang_detect.h) -
 # Links the REAL engine (scintillua_engine.cpp over Lua + LPeg) and runs it against the lexer.lua this
 # configure fetched, so a language Scintillua adds or renames upstream fails here when the pin above is
@@ -598,6 +614,22 @@ target_compile_definitions(catalog_selftest PRIVATE
     LOCALE_DIR="${CMAKE_SOURCE_DIR}/resources/locale")
 if(MSVC)
     target_compile_options(catalog_selftest PRIVATE /utf-8)
+endif()
+
+# ---- scite_keywords: dev-only generator of src/keywords_scite.h (tools/scite_keywords.cpp) ----------
+# EXCLUDE_FROM_ALL, like po2mo below: a maintainer tool, run when SciTE is updated to regenerate the
+# committed header from SciTE's language files. It links Lexilla to drop any list SciTE assigns to a
+# keyword slot the lexer does not have. Usage is in the tool's header.
+#   cmake --build build --target scite_keywords
+add_executable(scite_keywords EXCLUDE_FROM_ALL tools/scite_keywords.cpp)
+target_link_libraries(scite_keywords PRIVATE lexilla)
+target_include_directories(scite_keywords PRIVATE "${CMAKE_SOURCE_DIR}/third_party/scintilla/include")
+set_target_properties(scite_keywords PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(MSVC)
+    target_compile_options(scite_keywords PRIVATE /EHsc /utf-8)
 endif()
 
 # ---- po2mo: dev-only .po -> .mo compiler (tools/po2mo.c), the C port of the former po2mo.py ---------
@@ -769,14 +801,14 @@ add_custom_target(selftests DEPENDS
     keymap_selftest diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test
     plugin_catalog_test
     charset_selftest
-    hunspell_selftest funclist_selftest comment_tokens_test lang_detect_test catalog_selftest bridge_selftest
+    hunspell_selftest funclist_selftest comment_tokens_test lang_detect_test keywords_test catalog_selftest bridge_selftest
     desktop_entry_test
     terminal_selftest)
 
 # "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed. file_index_test
 # does call wxInitializer, but it links wx::base only, so it gets console traits and never opens a display.
 foreach(t diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test hunspell_selftest
-          funclist_selftest comment_tokens_test lang_detect_test catalog_selftest plugin_catalog_test desktop_entry_test)
+          funclist_selftest comment_tokens_test lang_detect_test keywords_test catalog_selftest plugin_catalog_test desktop_entry_test)
     add_test(NAME ${t} COMMAND ${t})
     set_tests_properties(${t} PROPERTIES LABELS pure)
 endforeach()

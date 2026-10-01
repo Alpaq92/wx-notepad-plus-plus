@@ -25,6 +25,13 @@ All notable changes to wxNote are documented here. Format loosely follows
 - The Function List now follows a language picked from the Language menu, as Toggle Comment already
   did, and the detected language when its own extension table has no answer - an untitled buffer set to
   Python, a script with no extension, a `Rakefile`. MS SQL and MySQL use the SQL rules.
+- **Keyword lists for 89 languages, from SciTE.** Pascal, Fortran, Ada, VB, Haskell, Tcl, Verilog,
+  VHDL, NSIS, Inno Setup, AutoIt, COBOL, LaTeX and about 60 more languages had no keyword list, so their
+  keywords looked like any other word; they now get SciTE's - Lexilla's companion editor, whose lists
+  are written for exactly these lexers - in every keyword slot the lexer has (keywords, types, built-in
+  functions...). Dart, Nix, TOML and Zig, which SciTE's files leave out, get Lexilla's own lists.
+  Autocomplete offers the same words. `tools/scite_keywords.cpp` regenerates the table from a newer
+  SciTE.
 
 ### Fixed
 - `.go` files opened as plain text: they were handed to a Lexilla lexer that does not exist. They now
@@ -39,6 +46,12 @@ All notable changes to wxNote are documented here. Format loosely follows
   extension, `CMakeLists.txt`, `PKGBUILD`, systemd units), and comments `.inf` files with `;`.
 
 ### Changed
+- wxNote's own hand-written keyword lists (C/C++, JavaScript, Java, C#, Python, SQL, CSS and a dozen
+  more) are replaced by SciTE's for the same languages; only Kotlin, which SciTE has no list for, keeps
+  wxNote's. HTML now gets SciTE's tag and attribute list too, so an element or attribute it does not
+  know (a custom element, a framework attribute) takes the theme's "unknown tag" style, as in SciTE and
+  Notepad++ - the same colour as a known tag in 20 of the 28 bundled themes, a warning colour in the
+  other eight (Bespin, Solarized, khaki...).
 - New Toggle Comment toolbar icons in all four icon sets: the code tag with its slash doubled (`<//>`)
   in the default set, Solar's own `code-circle`, IconPark's own `hashtag-key`, and a double slash on a
   tile in Streamline.

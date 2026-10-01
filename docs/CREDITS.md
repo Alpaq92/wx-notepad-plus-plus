@@ -69,6 +69,13 @@ Scintilla runs inside wxWidgets' `wxStyledTextCtrl`; Lexilla is vendored in
 those vendored lexers (Dart, Nix, TOML, Zig) are themselves based on **Zufu
 Liu's Notepad4** lexers, adapted for Scintilla by Jiri Techet — see below.
 
+The keyword lists those lexers are given (`src/keywords_scite.h`) are
+**[SciTE](https://www.scintilla.org/SciTE.html)**'s — Lexilla's companion
+editor, by the same author and under the same licence — taken from the
+language files of SciTE 5.6.7, plus Lexilla's own lists for Dart, Nix, TOML
+and Zig from the same source archive. `tools/scite_keywords.cpp` regenerates
+the file; its header reproduces the licence notice.
+
 ## Scintillua, Lua & LPeg — the native language engine
 
 wxNote's own cross-platform custom-language engine (`src/scintillua_engine.{h,cpp}`,
