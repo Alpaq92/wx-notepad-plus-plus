@@ -16,6 +16,7 @@
 #include "command_ids.h"
 #include <wx/menu.h>
 #include <wx/intl.h>
+#include <string>
 
 // The app's full built-in Language list, each mapped to the Lexilla lexer that highlights it (the
 // CreateLexer name, which doubles as the theme/styler key for per-token colours). Shared so it both
@@ -27,7 +28,8 @@ inline const WxnLang* wxnLangTable(size_t& n)
 {
     static const WxnLang t[] = {
         { kCmdLangAbl,           "ABL (OpenEdge)",        "abl"          },
-        { kCmdLangFlash,         "ActionScript",          "as"           },
+        // "cpp", as in Notepad++. Lexilla's "as" is the GNU ASSEMBLER lexer (LexAsm.cxx), not ActionScript.
+        { kCmdLangFlash,         "ActionScript",          "cpp"          },
         { kCmdLangAda,           "Ada",                   "ada"          },
         { kCmdLangAsciidoc,      "AsciiDoc",              "asciidoc"     },
         { kCmdLangAsn1,          "ASN.1",                 "asn1"         },
@@ -150,6 +152,13 @@ inline const WxnLang* wxnLangFind(int id)
 {
     size_t n; const WxnLang* t = wxnLangTable(n);
     for (size_t i = 0; i < n; ++i) if (t[i].id == id) return &t[i];
+    return nullptr;
+}
+// By the `name` column, exactly as spelled there (lang_detect.h answers in these names).
+inline const WxnLang* wxnLangFindByName(const std::string& name)
+{
+    size_t n; const WxnLang* t = wxnLangTable(n);
+    for (size_t i = 0; i < n; ++i) if (name == t[i].name) return &t[i];
     return nullptr;
 }
 

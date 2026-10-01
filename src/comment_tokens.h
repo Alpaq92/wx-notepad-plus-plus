@@ -279,7 +279,7 @@ inline std::string wxnCommentLangKeyForFileName(const std::string& lowerBaseName
         { "ps1", "powershell" }, { "psm1", "powershell" }, { "psd1", "powershell" },
         { "bat", "batch" }, { "cmd", "batch" },
         { "yml", "yaml" }, { "yaml", "yaml" }, { "toml", "toml" },
-        { "ini", "ini" }, { "reg", "registry" },
+        { "ini", "ini" }, { "inf", "ini" }, { "reg", "registry" },   // Windows .inf setup files comment with ';' too
         { "cfg", "conf" }, { "conf", "conf" }, { "properties", "props" },
         { "md", "markdown" }, { "markdown", "markdown" }, { "mdown", "markdown" }, { "mkd", "markdown" },
         { "adoc", "asciidoc" }, { "asciidoc", "asciidoc" },

@@ -165,6 +165,7 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 #include "hash_algos.h"          // portable MD5/SHA-1/SHA-256/SHA-512 for the Tools > digest generators
 #include "diff_myers.h"          // Myers O(ND) diff engine + side-by-side plan for File Compare
 #include "comment_tokens.h"      // per-language comment tokens - what Ctrl+/ and Stream Comment insert
+#include "lang_detect.h"         // which language a file opens as (Scintillua's lexer.detect() + wxNote's overrides)
 #include "snippets.h"            // snippet grammar + store: $1 / ${1:default} / $0 tab stops and mirrors
 #include "regex_engine.h"        // PCRE2 behind Find/Replace - std::regex could not cross a line break
 #include "spell_engine.h"        // pluggable spell-check backend (OS-native: ISpellChecker / NSSpellChecker)
@@ -347,6 +348,7 @@ public:
     wxString forcedLexer;                  // that pick's Lexilla lexer name ("" = forced Normal Text)
     wxString forcedName;                   // that pick's display label for the status bar, e.g. "C++"
     wxString sciLang;                      // name of a registered Scintillua language when active ("" = none); container-lexed via m_scintillua
+    wxString autoLang;                     // the wxnLangTable name detection chose (lang_detect.h); "" = Normal Text, a manual pick, or not detected yet
     const char* lexKeywords = nullptr;      // the keyword set actually handed to this page's lexer (autocomplete reads THIS, not a second table keyed on extension). Borrowed: every value is a file-scope *_KEYWORDS literal
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
@@ -9552,87 +9554,76 @@ private:
     }
 
     // ----- syntax highlighting (Lexilla + theme colours) -------
-    struct LexMap { const char* lexer; const char* theme; };   // Lexilla lexer name, theme LexerType name
-    static LexMap lexerForExt(const wxString& e)
+    // Which Language-menu language a document opens as; nullptr = Normal Text. lang_detect.h has the
+    // order (the user's functionList.conf mapping, Scintillua's lexer.detect() on the name, wxNote's
+    // overrides and comment table, then the first line). Reads the buffer head for the first-line
+    // checks, so it must run once the text is loaded - setLexerForFile's callers already guarantee that.
+    const WxnLang* detectLanguage(const wxString& path)
     {
-        auto m = [](const char* l, const char* t){ return LexMap{ l, t }; };
-        if (e=="c"||e=="cpp"||e=="cc"||e=="cxx"||e=="h"||e=="hpp"||e=="hxx"||e=="cs"||
-            e=="java"||e=="js"||e=="jsx"||e=="ts"||e=="tsx"||e=="rc")          return m("cpp", "cpp");
-        if (e=="py"||e=="pyw")                                                return m("python", "python");
-        if (e=="json")                                                       return m("json", "json");
-        if (e=="sql")                                                        return m("sql", "sql");
-        if (e=="css")                                                        return m("css", "css");
-        if (e=="lua")                                                        return m("lua", "lua");
-        if (e=="sh"||e=="bash")                                              return m("bash", "bash");
-        if (e=="bat"||e=="cmd")                                              return m("batch", "batch");
-        if (e=="pl"||e=="pm")                                                return m("perl", "perl");
-        if (e=="rb")                                                         return m("ruby", "ruby");
-        if (e=="rs")                                                         return m("rust", "rust");
-        if (e=="go")                                                         return m("go", "go");
-        if (e=="ps1"||e=="psm1")                                             return m("powershell", "powershell");
-        if (e=="ini"||e=="properties"||e=="cfg")                            return m("props", "props");
-        if (e=="yml"||e=="yaml")                                             return m("yaml", "yaml");
-        if (e=="xml"||e=="svg"||e=="xaml"||e=="xsd"||e=="xsl"||e=="vcxproj") return m("xml", "xml");
-        return m(nullptr, nullptr);   // plain text
-    }
-    // Friendly document-type label for the status bar (e.g. "C++ source file"). Translated at the
-    // point of construction: this string's only consumer is EditorPage::lang, which updateStatus()
-    // paints into status field 0 (the session XML's "lang" attribute is written but never read back).
-    static wxString langDisplayName(const wxString& e)
-    {
-        if (e=="cpp"||e=="cc"||e=="cxx"||e=="hpp"||e=="hxx") return _("C++ source file");
-        if (e=="c"||e=="h")                                  return _("C source file");
-        if (e=="cs")                                         return _("C# source file");
-        if (e=="java")                                       return _("Java source file");
-        if (e=="js"||e=="jsx")                               return _("JavaScript file");
-        if (e=="ts"||e=="tsx")                               return _("TypeScript file");
-        if (e=="py"||e=="pyw")                               return _("Python file");
-        if (e=="json")                                       return _("JSON file");
-        if (e=="xml"||e=="svg"||e=="xaml"||e=="xsd"||e=="xsl"||e=="vcxproj") return _("XML file");
-        if (e=="css")                                        return _("CSS file");
-        if (e=="sql")                                        return _("SQL file");
-        if (e=="lua")                                        return _("Lua source file");
-        if (e=="sh"||e=="bash")                              return _("Shell script file");
-        if (e=="bat"||e=="cmd")                              return _("Batch file");
-        if (e=="rb")                                         return _("Ruby source file");
-        if (e=="rs")                                         return _("Rust source file");
-        if (e=="go")                                         return _("Go source file");
-        if (e=="pl"||e=="pm")                                return _("Perl source file");
-        if (e=="ps1"||e=="psm1")                             return _("PowerShell file");
-        if (e=="ini"||e=="properties"||e=="cfg")            return _("Properties file");
-        if (e=="yml"||e=="yaml")                             return _("YAML file");
-        return _("Normal text file");
-    }
-    // Content-based language sniff for documents the extension table can't place (no extension, or an
-    // unknown one): shebang interpreters, XML/HTML prologs and JSON shapes. Returns the CANONICAL
-    // extension for the existing ext-driven tables (lexerForExt / langDisplayName / keyword pick), so
-    // detection has exactly one downstream path; "" = no idea, stay plain text. Only languages the app
-    // actually has lexers for are returned (e.g. HTML maps to the XML lexer - tag colouring beats plain).
-    static wxString extFromContent(const wxString& head)
-    {
-        wxString h = head; h.Replace("\r", "\n");
-        wxString first = h.BeforeFirst('\n'); first.Trim(true).Trim(false);
-        if (first.StartsWith("#!"))
+        const std::string base(wxFileName(path).GetFullName().utf8_str());
+        std::string head;
+        if (m_stc && m_stc->GetLength() > 0)
         {
-            wxString cmd = first.Mid(2); cmd.Replace("\t", " "); cmd.Trim(true).Trim(false);
-            wxArrayString parts = wxSplit(cmd, ' ');
-            wxString interp = parts.empty() ? wxString() : parts[0].AfterLast('/');
-            if (interp == "env" && parts.size() > 1) interp = parts[1].AfterLast('/');   // "#!/usr/bin/env python3"
-            if (interp.StartsWith("python")) return "py";
-            if (interp.StartsWith("perl"))   return "pl";
-            if (interp.StartsWith("ruby"))   return "rb";
-            if (interp.StartsWith("node"))   return "js";
-            if (interp.StartsWith("lua"))    return "lua";
-            if (interp.StartsWith("pwsh"))   return "ps1";
-            return "sh";   // sh/bash/zsh/ksh/dash/fish or an unknown interpreter: shell beats plain text
+            // Raw bytes, not GetTextRange: a 512-byte cut can split a UTF-8 sequence, and a wxString
+            // conversion of that tail can come back empty.
+            const wxCharBuffer b = m_stc->GetTextRangeRaw(0, wxMin((int)m_stc->GetLength(), 512));
+            head.assign(b.data(), b.length());
         }
-        wxString t = h; t.Trim(false);
-        const wxString tl = t.Lower();
-        if (tl.StartsWith("<?xml"))                              return "xml";
-        if (tl.StartsWith("<!doctype html") || tl.StartsWith("<html")) return "xml";   // no dedicated HTML lexer wired (yet)
-        if (!t.empty() && (t[0] == '{' || t[0] == '['))
-            if (t.Contains("\":") || t.Contains("\" :"))         return "json";        // opener + a quoted-key colon = JSON-ish
-        return "";
+        scintillua::Engine* eng = scintilluaEngine();
+        auto scDetect = [eng](const std::string& file, const std::string& line) {
+            return (eng && eng->ok()) ? eng->detect(file, line) : std::string();
+        };
+        auto known = [](const std::string& n) { return wxnLangFindByName(n) != nullptr; };
+        return wxnLangFindByName(wxnDetectLanguage(base, head, &g_flUserExtToLang, scDetect, known));
+    }
+    // Friendly document-type label for the status bar, from a wxnLangTable name ("" = Normal Text). The
+    // languages the bar has always described keep their long labels ("C++ source file"); every other one
+    // shows its Language-menu name, which is also what a manual pick shows. Translated at the point of
+    // construction: this string's only consumer is EditorPage::lang, which updateStatus() paints into
+    // status field 0 (the session XML's "lang" attribute is written but never read back).
+    static wxString langDisplayName(const wxString& n)
+    {
+        if (n.empty())         return _("Normal text file");
+        if (n == "C++")        return _("C++ source file");
+        if (n == "C")          return _("C source file");
+        if (n == "C#")         return _("C# source file");
+        if (n == "Java")       return _("Java source file");
+        if (n == "JavaScript") return _("JavaScript file");
+        if (n == "TypeScript") return _("TypeScript file");
+        if (n == "Python")     return _("Python file");
+        if (n == "JSON")       return _("JSON file");
+        if (n == "XML")        return _("XML file");
+        if (n == "CSS")        return _("CSS file");
+        if (n == "SQL")        return _("SQL file");
+        if (n == "Lua")        return _("Lua source file");
+        if (n == "Shell")      return _("Shell script file");
+        if (n == "Batch")      return _("Batch file");
+        if (n == "Ruby")       return _("Ruby source file");
+        if (n == "Rust")       return _("Rust source file");
+        if (n == "Go")         return _("Go source file");
+        if (n == "Perl")       return _("Perl source file");
+        if (n == "PowerShell") return _("PowerShell file");
+        if (n == "Properties") return _("Properties file");
+        if (n == "YAML")       return _("YAML file");
+        return n;
+    }
+    // The theme blocks that colour `lexer` for the language `langName`. Themes are Notepad++ stylers
+    // files, keyed by Notepad++'s language names, which are mostly the Lexilla lexer name too - the
+    // aliases are where they differ. Without them fixed-form Fortran ("f77"), PostScript ("ps") and the
+    // rest found no block and got the C++ fallback palette, painted onto style numbers that mean
+    // something else entirely in their lexers. HTML/PHP/ASP/JSP share the "hypertext" lexer, which
+    // Notepad++ colours from FOUR blocks over disjoint style numbers: the markup and the three script
+    // languages embedded in it.
+    std::vector<std::string> themeKeysFor(const std::string& lexer, const wxString& langName) const
+    {
+        if (lexer == "hypertext") return { "html", "javascript", "php", "asp" };
+        if (m_theme.lexers.count(lexer)) return { lexer };
+        static const struct { const char* lang; const char* key; } kAlias[] = {
+            { "Fortran (fixed form)", "fortran77" }, { "PostScript", "postscript" }, { "AutoIt", "autoit" },
+            { "BaanC", "baanc" }, { "COBOL", "cobol" }, { "Octave", "matlab" }, { "VBScript", "vb" },
+        };
+        for (const auto& a : kAlias) if (langName == a.lang) return { a.key };
+        return {};
     }
     void setLexerForFile(const wxString& path)
     {
@@ -9644,7 +9635,8 @@ private:
         // Save-As'ing to notes.txt kept the C++ keyword list on a now-plain-text page, and because
         // collectKeywords PREFERS this field over the extension table, Ctrl+Space offered the whole of
         // C++ in a text file. Cleared, such pages fall through to the extension-table default as before.
-        if (page) page->lexKeywords = nullptr;
+        // autoLang likewise: only the detection branch below may set it.
+        if (page) { page->lexKeywords = nullptr; page->autoLang.clear(); }
         // Large-file mode: skip lexing/styling/folding entirely (both the Scintillua container path and
         // Lexilla) so a huge or long-line buffer never triggers the synchronous whole-buffer re-lex.
         // Picking a Language from the menu sets langForced, which overrides this and forces the lexer on.
@@ -9676,30 +9668,33 @@ private:
             m_stc->Colourise(0, -1);   // fires STYLENEEDED -> scintilluaStyle, which sets every fold level
             return;
         }
-        // A manual Language pick forces its lexer directly; otherwise auto-detect from the file extension.
-        wxString lexer, themeKey, disp, ext;
-        if (page && page->langForced) { lexer = page->forcedLexer; themeKey = page->forcedLexer; disp = page->forcedName; }
-        else { ext = wxnExtOf(path); LexMap lm = lexerForExt(ext);
-               if (!lm.lexer && m_stc && m_stc->GetLength() > 0)
-               {   // the extension told us nothing - sniff the buffer head (shebang / prolog / JSON shape)
-                   const wxString sniffed = extFromContent(m_stc->GetTextRange(0, wxMin((int)m_stc->GetLength(), 512)));
-                   if (!sniffed.empty()) { ext = sniffed; lm = lexerForExt(ext); }
-               }
-               lexer = lm.lexer ? lm.lexer : ""; themeKey = lm.theme ? lm.theme : ""; disp = langDisplayName(ext); }
+        // A manual Language pick forces its lexer directly; otherwise detect the language (lang_detect.h).
+        // `langName` is the wxnLangTable name either way - what picks the keywords when several languages
+        // share one lexer - and "" for Normal Text.
+        wxString lexer, disp, langName;
+        if (page && page->langForced) { lexer = page->forcedLexer; disp = page->forcedName; langName = page->forcedName; }
+        else
+        {
+            const WxnLang* L = detectLanguage(path);
+            if (L) { lexer = wxString::FromUTF8(L->lexer); langName = wxString::FromUTF8(L->name); }
+            disp = langDisplayName(langName);
+            if (page) page->autoLang = langName;
+        }
         if (page) page->lang = disp;
-        const bool hasLexer = !lexer.empty();
         const std::string lx = lexer.ToStdString();
-        sci(SCI_SETILEXER, 0, reinterpret_cast<sptr_t>(hasLexer ? CreateLexer(lx.c_str()) : nullptr));
-        if (hasLexer)
+        Scintilla::ILexer5* lexerObj = lx.empty() ? nullptr : CreateLexer(lx.c_str());   // null for a name Lexilla doesn't know
+        sci(SCI_SETILEXER, 0, reinterpret_cast<sptr_t>(lexerObj));
+        if (lexerObj)
         {
             sci(SCI_SETPROPERTY, reinterpret_cast<uptr_t>("fold"), reinterpret_cast<sptr_t>("1"));
             sci(SCI_SETPROPERTY, reinterpret_cast<uptr_t>("fold.compact"), reinterpret_cast<sptr_t>("0"));
             bool themed = false;
             if (m_theme.loaded)
             {
-                auto it = m_theme.lexers.find(themeKey.ToStdString());
-                if (it != m_theme.lexers.end())
+                for (const std::string& key : themeKeysFor(lx, langName))
                 {
+                    auto it = m_theme.lexers.find(key);
+                    if (it == m_theme.lexers.end()) continue;
                     for (const StyleDef& s : it->second)   // apply the theme's exact per-token colours
                     {
                         if (s.id < 0) continue;
@@ -9718,7 +9713,10 @@ private:
                     themed = true;
                 }
             }
-            if (!themed) { if (lx == "python") stylePythonFallback(); else styleCppFallback(); }
+            // The fallback palettes are written in their own lexer's style numbers, so they only fit that
+            // lexer: on any other (Markdown, Dart, Zig... - no stylers block in a Notepad++ theme) they
+            // would colour arbitrary tokens. Those keep the theme's base style, as plain text does.
+            if (!themed) { if (lx == "python") stylePythonFallback(); else if (lx == "cpp") styleCppFallback(); }
             // Record what the lexer was ACTUALLY given, so completion offers the same keyword set the
             // highlighter is using. collectKeywords used to re-derive its own list from the file
             // extension, which silently diverged whenever the user picks a Language by hand - the
@@ -9729,18 +9727,20 @@ private:
                 sci(SCI_SETKEYWORDS, 0, reinterpret_cast<sptr_t>(words));
                 if (page) page->lexKeywords = words;
             };
-            if (lx == "cpp") {   // shared C-family lexer: pick keywords by extension (auto) or picked name (forced)
-                const wxString v = (page && page->langForced) ? page->forcedName : ext;
-                if      (v=="js"||v=="jsx"||v=="ts"||v=="tsx"||v=="JavaScript"||v=="TypeScript") kw(JS_KEYWORDS);
-                else if (v=="java"||v=="Java")                                                   kw(JAVA_KEYWORDS);
-                else if (v=="cs"||v=="C#")                                                       kw(CS_KEYWORDS);
-                else                                                                             kw(CPP_KEYWORDS);
+            if (lx == "cpp") {   // shared C-family lexer: the keywords follow the language, not the lexer
+                const wxString& v = langName;
+                if      (v=="JavaScript"||v=="TypeScript"||v=="ActionScript") kw(JS_KEYWORDS);
+                else if (v=="Java")                                           kw(JAVA_KEYWORDS);
+                else if (v=="C#")                                             kw(CS_KEYWORDS);
+                else if (v=="Go")                                             kw(GO_KEYWORDS);
+                else if (v=="Kotlin")                                         kw(KOTLIN_KEYWORDS);
+                else if (v=="Swift")                                          kw(SWIFT_KEYWORDS);
+                else                                                          kw(CPP_KEYWORDS);
             }
             else if (lx == "python")     kw(PY_KEYWORDS);
             else if (lx == "sql")        kw(SQL_KEYWORDS);
             else if (lx == "lua")        kw(LUA_KEYWORDS);
             else if (lx == "bash")       kw(BASH_KEYWORDS);
-            else if (lx == "go")         kw(GO_KEYWORDS);
             else if (lx == "rust")       kw(RUST_KEYWORDS);
             else if (lx == "css")      { kw(CSS_KEYWORDS); sci(SCI_SETKEYWORDS, 1, reinterpret_cast<sptr_t>(CSS_PSEUDO)); }
             else if (lx == "batch")      kw(BATCH_KEYWORDS);
@@ -9748,6 +9748,13 @@ private:
             else if (lx == "ruby")       kw(RUBY_KEYWORDS);
             else if (lx == "powershell") kw(PS_KEYWORDS);
             else if (lx == "json")       kw(JSON_KEYWORDS);
+            else if (lx == "hypertext") {   // HTML/PHP/ASP/JSP: the keywords of the script languages embedded in the markup
+                // Set 0 (tag and attribute names) stays EMPTY on purpose: LexHTML then treats every tag and
+                // attribute as known, where an incomplete list would paint the rest in the "unknown tag"
+                // colour several themes make red. Completion keeps its extension-keyed list for these.
+                sci(SCI_SETKEYWORDS, 1, reinterpret_cast<sptr_t>(JS_KEYWORDS));    // <script>
+                sci(SCI_SETKEYWORDS, 4, reinterpret_cast<sptr_t>(PHP_KEYWORDS));   // <?php ... ?>
+            }
         }
         sci(SCI_COLOURISE, 0, -1);
     }
@@ -11589,6 +11596,10 @@ private:
     //      extension guess it was deliberately chosen to override.
     //   3. the user's own functionList.conf `ext` mapping (the keys are the same vocabulary).
     //   4. the built-in extension/filename table.
+    //   5. the language detection gave the buffer (EditorPage::autoLang) - for what the table has no
+    //      row for: a shebang script with no extension, CMakeLists.txt, PKGBUILD, a systemd unit.
+    //      Last, so the table's finer distinctions (INI's ';' vs a .conf's '#', SCSS's "//" where
+    //      the CSS lexer draws it) still win wherever it has an opinion.
     // nullptr = we don't know this buffer's language, which callers treat exactly like a language
     // with no comment form: touch nothing, say so. That is the point - a wrong guess is what broke
     // files before, and "I don't know" is a strictly better answer than "//".
@@ -11612,7 +11623,8 @@ private:
         const std::string ext(wxnExtOfName(full).utf8_str());
         if (auto u = g_flUserExtToLang.find(ext); u != g_flUserExtToLang.end())
             if (const WxnCommentLang* l = wxnCommentLangForKey(u->second)) return l;
-        return wxnCommentLangForKey(wxnCommentLangKeyForFileName(std::string(full.utf8_str())));
+        if (const WxnCommentLang* l = wxnCommentLangForKey(wxnCommentLangKeyForFileName(std::string(full.utf8_str())))) return l;
+        return byLabel(p->autoLang);
     }
     WxnCommentStyle activeCommentStyle()
     { const WxnCommentLang* l = activeCommentLang(); return l ? l->style : WxnCommentStyle{}; }

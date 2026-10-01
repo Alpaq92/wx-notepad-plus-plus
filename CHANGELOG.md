@@ -3,6 +3,35 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Language detection now recognises about 340 file extensions and file names, and first lines.** It
+  uses the detection built into Scintillua (already shipped with wxNote) instead of a table of 16
+  extension groups, so `.html`, `.php`, `.md`, `.toml`, `.go`, `.kt`, `Makefile`, `CMakeLists.txt`,
+  `Dockerfile`, `PKGBUILD`, `.bashrc` and the rest of the Language menu now open highlighted.
+  Upper-case names and backup copies (`.orig`, `.bak`, a trailing `~`) are recognised too, and a file
+  with no extension is placed by its shebang, XML prolog, HTML doctype or JSON shape. Extensions that
+  several languages claim (`.m`, `.inc`, `.cls`, ...) stay plain text rather than being guessed. A
+  `functionList.conf` `ext` line now changes the highlighting as well, not only the Function List and
+  comments.
+
+### Fixed
+- `.go` files opened as plain text: they were handed to a Lexilla lexer that does not exist. They now
+  highlight as Go, with Go keywords - and picking Go, Kotlin or Swift from the Language menu now gets
+  that language's keywords instead of C++'s.
+- ActionScript was highlighted by Lexilla's GNU-assembler lexer; it now uses the C++ lexer, as in
+  Notepad++.
+- HTML, PHP, ASP, JSP, fixed-form Fortran, PostScript, AutoIt, BaanC, COBOL, Octave and VBScript found
+  no theme colours and were painted with the C++ fallback colours on unrelated tokens. They now use
+  their own theme sections, and JavaScript and PHP inside HTML are coloured too.
+- Toggle Comment now works in files whose language is only known from detection (scripts with no
+  extension, `CMakeLists.txt`, `PKGBUILD`, systemd units), and comments `.inf` files with `;`.
+
+### Changed
+- The build pins Scintillua's `lexer.lua` to one upstream commit and checks its SHA-256. It used to be
+  taken from Scintillua's moving `default` branch, so a clean build could ship a different file.
+
 ## [0.20.0] - 2026-09-05
 
 ### Added

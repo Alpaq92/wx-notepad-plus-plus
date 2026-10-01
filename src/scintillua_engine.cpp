@@ -62,6 +62,10 @@ const char* kBootstrap =
     "    folds = lex:fold(text, 1, L.FOLD_BASE)\n"
     "  end\n"
     "  return tokens, folds\n"
+    "end\n"
+    // _wxn_detect(filename, line) -> Scintillua lexer name, or nil.
+    "function _wxn_detect(filename, line)\n"
+    "  return require('lexer').detect(filename, line)\n"
     "end\n";
 
 // Lua's package.path matches with forward slashes on every platform; normalize so a Windows
@@ -244,6 +248,24 @@ std::vector<Token> Engine::lexAndFold(const std::string& name, const char* data,
     }
     lua_pop(L_, 1);                               // pop folds; tokens table now on top
     readTokenTableTop(out);
+    return out;
+}
+
+std::string Engine::detect(const std::string& fileName, const std::string& firstLine)
+{
+    if (!ready_) return std::string();
+    lua_getglobal(L_, "_wxn_detect");
+    lua_pushlstring(L_, fileName.data(), fileName.size());
+    lua_pushlstring(L_, firstLine.data(), firstLine.size());
+    if (lua_pcall(L_, 2, 1, 0) != LUA_OK) {
+        const char* e = lua_tostring(L_, -1);
+        err_ = e ? e : "detect failed";
+        lua_pop(L_, 1);
+        return std::string();
+    }
+    const char* name = lua_type(L_, -1) == LUA_TSTRING ? lua_tostring(L_, -1) : nullptr;
+    std::string out = name ? name : "";
+    lua_pop(L_, 1);
     return out;
 }
 

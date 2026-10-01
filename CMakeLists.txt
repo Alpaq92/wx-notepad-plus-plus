@@ -80,22 +80,34 @@ if(MSVC)
 endif()
 
 # Scintillua's lexer.lua (the engine's Lua half); staged so the resource copy below ships it.
+# Pinned to one upstream commit and hash-checked, rather than taken from the moving `default` branch:
+# language detection (src/lang_detect.h) is keyed to the lexer names this file's detect() hands out,
+# so a new upstream revision is a reviewed change, not something the next clean configure picks up.
+# To bump: set both values, reconfigure, and run lang_detect_test - it fails on any language
+# Scintillua added or renamed until lang_detect.h has an answer for it.
+set(SCINTILLUA_COMMIT 73b9f0a7fe70e307e71d8b3607ed1b2697ebfd14)   # "Added support for Odin", 2026-06-19
+set(SCINTILLUA_LEXER_SHA256 c604a9800557bafe51c8ed8d0538e035e0bd2523b43138999b95a5e83eea3ee1)
 set(SCINTILLUA_LEXER_LUA "${CMAKE_BINARY_DIR}/scintillua/lexer.lua")
 # A zero-byte file from a previously interrupted configure would otherwise be treated as "already
-# downloaded" and ship an empty lexer, so require non-empty, not just present.
+# downloaded" and ship an empty lexer, so require the pinned content, not just a file.
+set(_sl_have 0)
 if(EXISTS "${SCINTILLUA_LEXER_LUA}")
-    file(SIZE "${SCINTILLUA_LEXER_LUA}" _sl_have)
-else()
-    set(_sl_have 0)
+    file(SHA256 "${SCINTILLUA_LEXER_LUA}" _sl_hash)
+    if(_sl_hash STREQUAL SCINTILLUA_LEXER_SHA256)
+        set(_sl_have 1)
+    else()
+        file(REMOVE "${SCINTILLUA_LEXER_LUA}")   # empty, partial, or another revision: fetch the pinned one
+    endif()
 endif()
-if(NOT _sl_have GREATER 0)
+if(NOT _sl_have)
     # Retry the fetch: CI runners intermittently hit transient TLS/network errors against
     # raw.githubusercontent.com (curl 35 "SSL connect error"), which would otherwise fail a whole
     # release configure. Try a handful of times with timeouts before giving up.
     set(_sl_code 1)
     foreach(_sl_try RANGE 1 5)
-        file(DOWNLOAD "https://raw.githubusercontent.com/orbitalquark/scintillua/default/lexers/lexer.lua"
+        file(DOWNLOAD "https://raw.githubusercontent.com/orbitalquark/scintillua/${SCINTILLUA_COMMIT}/lexers/lexer.lua"
              "${SCINTILLUA_LEXER_LUA}"
+             EXPECTED_HASH SHA256=${SCINTILLUA_LEXER_SHA256}
              STATUS _sl_status
              TLS_VERIFY ON
              INACTIVITY_TIMEOUT 30
@@ -469,6 +481,26 @@ if(MSVC)
     target_compile_options(comment_tokens_test PRIVATE /utf-8)
 endif()
 
+# ---- lang_detect_test: which language a file opens as (Scintillua's lexer.detect() + src/lang_detect.h) -
+# Links the REAL engine (scintillua_engine.cpp over Lua + LPeg) and runs it against the lexer.lua this
+# configure fetched, so a language Scintillua adds or renames upstream fails here when the pin above is
+# bumped. No wx: menu_data_language.h is read as data, as in comment_tokens_test.
+#   cmake --build build --target lang_detect_test && build/bin/lang_detect_test
+add_executable(lang_detect_test tests/lang_detect_test.cpp src/scintillua_engine.cpp)
+set_target_properties(lang_detect_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(lang_detect_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(lang_detect_test PRIVATE lua_lpeg)
+target_compile_definitions(lang_detect_test PRIVATE
+    SRC_DIR="${CMAKE_SOURCE_DIR}/src"
+    SCINTILLUA_LEXER_DIR="${CMAKE_BINARY_DIR}/scintillua"
+    BUILD_DIR="${CMAKE_BINARY_DIR}")     # the engine's writable dir; detection never writes to it
+if(MSVC)
+    target_compile_options(lang_detect_test PRIVATE /utf-8)
+endif()
+
 # ---- desktop_entry_test: the .desktop rewriting behind AppImage self-integration -------------------
 # Links NOTHING - src/desktop_entry.h is a standalone header over std::string. Reads the SHIPPED
 # installer/linux/wxnote.desktop as data, so the suite fails if integration ever stops preserving the
@@ -736,14 +768,14 @@ add_custom_target(selftests DEPENDS
     keymap_selftest diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test
     plugin_catalog_test
     charset_selftest
-    hunspell_selftest funclist_selftest comment_tokens_test catalog_selftest bridge_selftest
+    hunspell_selftest funclist_selftest comment_tokens_test lang_detect_test catalog_selftest bridge_selftest
     desktop_entry_test
     terminal_selftest)
 
 # "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed. file_index_test
 # does call wxInitializer, but it links wx::base only, so it gets console traits and never opens a display.
 foreach(t diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test hunspell_selftest
-          funclist_selftest comment_tokens_test catalog_selftest plugin_catalog_test desktop_entry_test)
+          funclist_selftest comment_tokens_test lang_detect_test catalog_selftest plugin_catalog_test desktop_entry_test)
     add_test(NAME ${t} COMMAND ${t})
     set_tests_properties(${t} PROPERTIES LABELS pure)
 endforeach()
