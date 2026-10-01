@@ -60,6 +60,12 @@ built from — so `floppy.svg` is byte-identical to `save.svg`. That is intentio
 disk *is* the save glyph, and the two never appear next to each other (one is a toolbar
 button, the other a file-tree node).
 
+### Toggle Comment
+
+`comment.svg` is Solar's `code-circle-bold-duotone`, recolored/flattened exactly as above: the
+`</>` code tag in a disc, for the command that comments code out and back in. Solar's chat
+glyphs mean messaging, not commenting out code.
+
 ### Composited concepts
 
 The free Solar set has no direct glyph for a couple of concepts, so these two were assembled

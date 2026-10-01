@@ -18,14 +18,15 @@ sibling sets.
 
 ## Original glyphs (NOT from Tabler)
 
-Three files in this directory were drawn for wxNote rather than selected from Tabler, and are
+Four files in this directory were drawn for wxNote rather than selected from Tabler, and are
 therefore **not** covered by the Tabler attribution above. They are licensed under the
-project's own licence (Apache-2.0, see the root `LICENSE`). All three follow this set's
+project's own licence (Apache-2.0, see the root `LICENSE`). All four follow this set's
 conventions — 24x24 viewBox, `fill="none"`, `stroke="currentColor"`, round caps/joins — so
 they retint with the theme exactly like the selected Tabler icons:
 
 | File                 | Why it exists                                                        |
 | -------------------- | -------------------------------------------------------------------- |
+| `comment.svg`        | The `</>` code tag with its slash doubled into `//` - "this code, commented out". Tabler's `message` / `notes` mean a remark on a document, not commenting out code, and its `code` glyph is the plain tag. |
 | `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". Tabler has no glyph for this concept, and every near-miss (`braces`, `code`) is already spoken for by another wxNote command. |
 | `print-preview.svg`  | Page text with a magnifier over it. Tabler's print glyphs are the printer device itself, which cannot distinguish preview from print. |
 | `func-node.svg`      | The Function List tree's GROUP node (class/namespace/section): a stack of layers, drawn in the idiom of Tabler's own `stack-2` but on this set's own coordinates. The tree's LEAF node next to it is Tabler's stock `math-function` (the italic *fx*), which is a selected glyph and *is* covered by the attribution above. |

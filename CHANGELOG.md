@@ -29,6 +29,9 @@ All notable changes to wxNote are documented here. Format loosely follows
   extension, `CMakeLists.txt`, `PKGBUILD`, systemd units), and comments `.inf` files with `;`.
 
 ### Changed
+- New Toggle Comment toolbar icons in all four icon sets: the code tag with its slash doubled (`<//>`)
+  in the default set, Solar's own `code-circle`, IconPark's own `hashtag-key`, and a double slash on a
+  tile in Streamline.
 - The build pins Scintillua's `lexer.lua` to one upstream commit and checks its SHA-256. It used to be
   taken from Scintillua's moving `default` branch, so a clean build could ship a different file.
 

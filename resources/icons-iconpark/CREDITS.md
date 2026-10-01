@@ -68,6 +68,12 @@ styles:
 silhouette, so those three read as a consistent family (as they do in the default set).
 The existing 38 toolbar files were left byte-for-byte unchanged when these were added.
 
+## Toggle Comment
+
+`comment.svg` is IconPark's `hashtag-key`, re-baked with the identical recipe (`#2F88FF` ->
+teal-7, `stroke-width` 4 -> 2.5): the `#` line-comment token on a key. IconPark's comment
+glyphs are all chat bubbles, which mean messaging rather than commenting out code.
+
 ## Original glyphs (NOT from IconPark)
 
 Four files in this directory are original wxNote artwork rather than recolored IconPark
