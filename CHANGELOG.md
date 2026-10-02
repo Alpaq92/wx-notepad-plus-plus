@@ -144,6 +144,8 @@ All notable changes to wxNote are documented here. Format loosely follows
   the Flatpak's licence folder and inside the macOS app. `NOTICE` now also holds the full MIT and BSD
   texts the bundled third-party code asks to travel with it.
 - **File > Open** starts in the active document's folder and opens several files at once.
+- **Save As** proposes the document's own name and folder - an untitled one's tab name, such as
+  `new 2.txt` - instead of always `new 1.txt`.
 
 ## [0.20.0] - 2026-09-05
 

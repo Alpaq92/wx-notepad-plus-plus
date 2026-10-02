@@ -10981,7 +10981,18 @@ private:
         return true;
     }
     void onSave() { if (m_path.empty()) onSaveAs(); else writeFile(m_path); }
-    void onSaveAs() { wxFileDialog d(this, _("Save As"), "", "new 1.txt", _("All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT); if (d.ShowModal() == wxID_OK) writeFile(d.GetPath()); }
+    // Save As starts where the document lives, under its own name; an untitled one under its tab's
+    // name (new 2.txt for "new 2" - it used to propose "new 1.txt" for everything).
+    void onSaveAs()
+    {
+        const EditorPage* p = activePage();
+        const bool named = p && !p->path.empty();
+        wxString name = named ? wxFileNameFromPath(p->path) : (p && !p->title.empty() ? p->title : wxString("new 1"));
+        if (!named && wxFileName(name).GetExt().empty()) name += ".txt";
+        wxFileDialog d(this, _("Save As"), named ? wxPathOnly(p->path) : wxString(), name, _("All files (*.*)|*.*"),
+                       wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        if (d.ShowModal() == wxID_OK) writeFile(d.GetPath());
+    }
     // Repaint page p's tab label (add/remove the unsaved "*") on ITS OWN notebook - works for a page in
     // EITHER split view, unlike refreshTab() which only touches the active view's strip.
     void refreshTabLabel(EditorPage* p)
