@@ -8,6 +8,8 @@
 #include "npp_xml.h"
 
 #include "lang_detect.h"         // wxnLangForNppLexerType: Notepad++ lexer name -> Language-menu name
+#include "lang_table.h"          // each Language-menu language's lexer
+#include "language_defs.h"       // languages.yaml, and wxNote's keyword lists by name
 #include "settings_schema.h"     // the settings a translation may set, and how each is spelled
 #include "yaml_io.h"
 
@@ -155,6 +157,7 @@ NppFileKind detectNppFile(const std::string& xml)
         if (c.name == "ScintillaContextMenu") return NppFileKind::ContextMenu;
         if (c.name == "Session") return NppFileKind::Session;
         if (c.name == "Project") return NppFileKind::Workspace;
+        if (c.name == "Languages") return NppFileKind::Languages;
     }
     return NppFileKind::Unknown;
 }
@@ -169,6 +172,7 @@ const char* nppFileKindName(NppFileKind k)
         case NppFileKind::ContextMenu: return "contextMenu.xml";
         case NppFileKind::Session:     return "session";
         case NppFileKind::Workspace:   return "workspace";
+        case NppFileKind::Languages:   return "langs.xml";
         default:                       return "unknown";
     }
 }
@@ -525,6 +529,374 @@ bool workspaceFromNpp(const std::string& xml, const std::string& baseDir, std::s
     std::string body;
     if (!wxnyaml::emit(t, body)) { if (err) *err = "could not write the workspace"; return false; }
     yaml = "# A wxNote workspace, imported from a Notepad++ project file.\n" + body;
+    return true;
+}
+
+std::string activeThemeFromConfig(const std::string& xml)
+{
+    XmlElement root;
+    if (!parseXml(xml, root)) return std::string();
+    if (const XmlElement* gui = root.child("GUIConfigs"))
+        for (const XmlElement& g : gui->children)
+            if (g.name == "GUIConfig" && g.attr("name") == "stylerTheme")
+            {
+                const std::string path = g.attr("path");
+                return lower(nppFileNameOf(path)) == "stylers.xml" ? std::string() : path;
+            }
+    return std::string();
+}
+
+std::string nppFileNameOf(const std::string& path)
+{
+    const size_t slash = path.find_last_of("/\\");
+    return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
+// ---- langs.xml -------------------------------------------------------------------------------------
+
+namespace {
+
+// One <Language> of langs.xml (or langs.model.xml).
+struct NppLanguage
+{
+    std::string name;
+    std::string ext;
+    bool hasLine = false;
+    std::string line, start, end;
+    std::map<std::string, std::string> keywords;   // keyword class ("instre1", "type2", "substyle3") -> words
+    std::string tabSettings;
+};
+
+bool readNppLanguages(const std::string& xml, std::vector<NppLanguage>& out, std::string* err)
+{
+    XmlElement root;
+    if (!parseXml(xml, root, err)) return false;
+    const XmlElement* langs = root.child("Languages");
+    if (!langs) { if (err) *err = "no <Languages>: not a Notepad++ langs.xml"; return false; }
+    for (const XmlElement& l : langs->children)
+    {
+        if (l.name != "Language" || l.attr("name").empty()) continue;
+        NppLanguage n;
+        n.name = l.attr("name");
+        n.ext = l.attr("ext");
+        n.hasLine = l.hasAttr("commentLine");
+        n.line = l.attr("commentLine");
+        n.start = l.attr("commentStart");
+        n.end = l.attr("commentEnd");
+        n.tabSettings = l.attr("tabSettings");
+        for (const XmlElement& k : l.children)
+            if (k.name == "Keywords" && !k.attr("name").empty()) n.keywords[k.attr("name")] = k.text;
+        out.push_back(std::move(n));
+    }
+    return true;
+}
+
+// Notepad++'s keyword class as its index: instre1 0, instre2 1, type1-type7 2-8 (or the bare digits),
+// substyle1-substyle8 100-107; -1 for anything else.
+int keywordClassIndex(const std::string& c)
+{
+    if (c == "instre1") return 0;
+    if (c == "instre2") return 1;
+    if (c.size() == 5 && c.compare(0, 4, "type") == 0 && c[4] >= '1' && c[4] <= '7') return 2 + (c[4] - '1');
+    if (c.size() == 9 && c.compare(0, 8, "substyle") == 0 && c[8] >= '1' && c[8] <= '8') return 100 + (c[8] - '1');
+    if (c.size() == 1 && c[0] >= '0' && c[0] <= '8') return c[0] - '0';
+    return -1;
+}
+
+const char* const kCFamily[] = { "c", "cpp", "cs", "objc", "java", "rc", "javascript.js", "actionscript", "swift",
+                                 "typescript", "go" };
+const char* const kHtmlFamily[] = { "HTML", "PHP", "ASP", "JSP" };
+
+std::string lexerOfLanguage(const std::string& lang)
+{
+    const WxnLang* l = wxnLangFindByName(lang);
+    return l ? std::string(l->lexer) : std::string();
+}
+
+// The wxNote language a Notepad++ <Language> is: "" for the panes and overlays that are none, and for the
+// embedded-script and markup blocks the HTML family shares (they have no file extensions of their own).
+std::string wxnoteLanguage(const std::string& npp)
+{
+    if (npp == "ini") return "Properties";   // wxNote opens .ini files as Properties
+    const std::string l = wxnLangForNppLexerType(npp);
+    return wxnLangFindByName(l) ? l : std::string();
+}
+
+// Where Notepad++'s keyword class `cls` of language `npp` lands in wxNote: (language, list) pairs, none
+// when wxNote has no such list. See languagesFromNpp in the header for the wiring.
+std::vector<std::pair<std::string, std::string>> wxnoteListsFor(const std::string& npp, const std::string& cls)
+{
+    std::vector<std::pair<std::string, std::string>> out;
+    const int idx = keywordClassIndex(cls);
+    if (idx < 0) return out;
+    const bool group = idx >= 100;
+    const int n = group ? idx - 100 : idx;
+    auto slot = [&](const std::string& lang, int s) {
+        for (const WxnKeywordSetName* k : wxnKeywordSetsOf(lexerOfLanguage(lang)))
+            if (k->slot == s) out.emplace_back(lang, k->name);
+    };
+    auto nthGroup = [&](const std::string& lang, int i) {
+        const std::vector<WxnSubstyleGroup> g = wxnSubstyleGroupsOf(lexerOfLanguage(lang), lang);
+        if (i >= 0 && i < static_cast<int>(g.size())) out.emplace_back(lang, g[i].name);
+    };
+    if (npp == "html" || npp == "javascript" || npp == "php" || npp == "asp")
+    {
+        // One lexer for the four, each list set for all of them; the groups after the markup's eight
+        // (tags, attributes) are the language's own script's.
+        for (const char* l : kHtmlFamily)
+        {
+            const std::string lang = l;
+            if (group)
+            {
+                if (npp == "html") nthGroup(lang, n);
+                else if ((npp == "javascript" && (lang == "HTML" || lang == "JSP")) || (npp == "php" && lang == "PHP")
+                         || (npp == "asp" && lang == "ASP"))
+                    nthGroup(lang, 8 + n);
+            }
+            else if (npp == "html" && n == 0) slot(lang, 0);
+            else if (npp == "html" && n == 1) slot(lang, 5);
+            else if (npp == "javascript" && n == 0) slot(lang, 1);
+            else if (npp == "asp" && n == 0) slot(lang, 2);
+            else if (npp == "php" && n == 0) slot(lang, 4);
+        }
+        return out;
+    }
+    if (npp == "xml") { if (group) nthGroup("XML", n); else if (n == 0) slot("XML", 5); return out; }
+    const std::string lang = wxnoteLanguage(npp);
+    if (lang.empty()) return out;
+    if (group) { nthGroup(lang, n); return out; }
+    if (std::find_if(std::begin(kCFamily), std::end(kCFamily), [&](const char* c) { return npp == c; }) != std::end(kCFamily))
+    {
+        if (n == 0) slot(lang, 0);
+        else if (n == 2) slot(lang, 1);
+        else if (n == 1) slot(lang, 3);
+        else if (n == 3 && npp == "cpp")   // the doxygen words, which Notepad++ gives every C-family language but Go
+            for (const char* c : kCFamily)
+                if (std::string(c) != "go")
+                    if (const std::string l = wxnoteLanguage(c); !l.empty()) slot(l, 2);
+        return out;
+    }
+    slot(lang, n);
+    return out;
+}
+
+std::vector<std::string> splitWords(const std::string& s)
+{
+    std::vector<std::string> out;
+    std::string cur;
+    for (const char c : s + " ")
+    {
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') { if (!cur.empty()) out.push_back(cur); cur.clear(); }
+        else cur += c;
+    }
+    return out;
+}
+
+// `a` less `b`, in a's order, each once.
+std::vector<std::string> without(const std::vector<std::string>& a, const std::vector<std::string>& b)
+{
+    const std::set<std::string> drop(b.begin(), b.end());
+    std::set<std::string> seen;
+    std::vector<std::string> out;
+    for (const std::string& w : a) if (!drop.count(w) && seen.insert(w).second) out.push_back(w);
+    return out;
+}
+
+}   // namespace
+
+bool languagesFromNpp(const std::string& langsXml, const std::string& modelXml, const std::string& themeXml,
+                      LanguagesTranslation& out, std::string* err)
+{
+    out = LanguagesTranslation();
+    std::vector<NppLanguage> user, model;
+    if (!langsXml.empty() && !readNppLanguages(langsXml, user, err)) return false;
+    if (!modelXml.empty())
+    {
+        std::string why;
+        if (!readNppLanguages(modelXml, model, &why))
+        {
+            out.notTranslated.push_back("langs.model.xml could not be read (" + why + "), so langs.xml was not compared");
+            model.clear();
+        }
+    }
+    out.compared = !user.empty() && !model.empty();
+
+    // What each wxNote language gets, in the order Notepad++ lists them: words and extensions it adds.
+    using Words = std::vector<std::string>;
+    struct Entry
+    {
+        Words ext;
+        bool line = false, block = false;
+        std::string lineToken, open, close;
+        std::vector<std::pair<std::string, Words>> lists;   // in the order they came
+    };
+    std::vector<std::pair<std::string, Entry>> entries;
+    auto entryOf = [&](const std::string& lang) -> Entry& {
+        for (auto& e : entries) if (e.first == lang) return e.second;
+        entries.emplace_back(lang, Entry());
+        return entries.back().second;
+    };
+    auto addTo = [&](const std::string& lang, const std::string& list, const Words& add) {
+        Entry& e = entryOf(lang);
+        auto it = std::find_if(e.lists.begin(), e.lists.end(), [&](const auto& l) { return l.first == list; });
+        if (it == e.lists.end()) { e.lists.emplace_back(list, Words()); it = e.lists.end() - 1; }
+        for (const std::string& w : add) if (std::find(it->second.begin(), it->second.end(), w) == it->second.end()) it->second.push_back(w);
+    };
+    auto skipped = [](const std::string& npp) {
+        return npp == "normal" || npp == "searchResult" || npp == "errorlist" || npp == "escseq" || npp == "nfo";
+    };
+
+    if (out.compared)
+        for (const NppLanguage& u : user)
+        {
+            if (skipped(u.name)) continue;
+            const auto mi = std::find_if(model.begin(), model.end(), [&](const NppLanguage& m) { return m.name == u.name; });
+            if (mi == model.end())
+            {
+                // Another Notepad++ version's language: nothing in it can be told from that version's own.
+                out.notTranslated.push_back("Notepad++'s " + u.name + ": not in langs.model.xml, so what you changed in it cannot "
+                                            "be told from Notepad++'s own - not imported");
+                continue;
+            }
+            const NppLanguage* m = &*mi;
+            const std::string lang = wxnoteLanguage(u.name);
+            // Extensions, as wxNote spells them.
+            auto exts = [](const std::string& s) {
+                std::vector<std::string> v;
+                for (const std::string& w : splitWords(s)) if (const std::string e = wxnUserExtNormalize(w); !e.empty()) v.push_back(e);
+                return v;
+            };
+            // Only what the user ADDED: what langs.xml lacks against the model is as likely a Notepad++
+            // update the copy has not caught up with, and Notepad++ itself puts such entries back when it
+            // updates - so a removal never lasts there either. It is counted, not imported.
+            const std::vector<std::string> ue = exts(u.ext), me = exts(m->ext);
+            const std::vector<std::string> extAdd = without(ue, me);
+            size_t lacking = without(me, ue).size();
+            if (!extAdd.empty())
+            {
+                if (lang.empty()) out.notTranslated.push_back("Notepad++'s " + u.name + " extensions: wxNote has no such language");
+                else   // ini and props are both Properties: what each adds
+                {
+                    Words& x = entryOf(lang).ext;
+                    for (const std::string& e : extAdd) if (std::find(x.begin(), x.end(), e) == x.end()) x.push_back(e);
+                }
+            }
+            // Comment tokens. Notepad++'s ini and wxNote's Properties comment differently by design (.ini
+            // takes ';' in wxNote too, from its own table), so an ini change is left to the user.
+            const bool lineChanged = u.line != m->line || u.hasLine != m->hasLine;
+            const bool blockChanged = u.start != m->start || u.end != m->end;
+            if (lineChanged || blockChanged)
+            {
+                if (lang.empty() || u.name == "ini")
+                    out.notTranslated.push_back("Notepad++'s " + u.name + " comment tokens: set them in languages.yaml by hand");
+                else
+                {
+                    Entry& e = entryOf(lang);
+                    if (lineChanged) { e.line = true; e.lineToken = u.line; }
+                    if (blockChanged) { e.block = true; e.open = u.start; e.close = u.end; }
+                }
+            }
+            // Keyword lists: what the user added and took away.
+            std::set<std::string> classes;
+            for (const auto& k : u.keywords) classes.insert(k.first);
+            for (const auto& k : m->keywords) classes.insert(k.first);
+            for (const std::string& cls : classes)
+            {
+                const auto uw = u.keywords.count(cls) ? splitWords(u.keywords.at(cls)) : std::vector<std::string>();
+                const auto mw = m->keywords.count(cls) ? splitWords(m->keywords.at(cls)) : std::vector<std::string>();
+                const std::vector<std::string> add = without(uw, mw);
+                lacking += without(mw, uw).size();
+                if (add.empty()) continue;
+                const auto targets = wxnoteListsFor(u.name, cls);
+                if (targets.empty())
+                    out.notTranslated.push_back("Notepad++'s " + u.name + " " + cls + " keywords (" + std::to_string(add.size())
+                                                + " added): wxNote has no such list");
+                for (const auto& t : targets) addTo(t.first, t.second, add);
+            }
+            if (lacking)
+                out.notTranslated.push_back("Notepad++'s " + u.name + ": " + std::to_string(lacking) + " extension(s) or keyword(s) of "
+                                            "Notepad++'s own are missing from langs.xml - Notepad++ restores those when it updates, "
+                                            "so they were not taken away here");
+            if (u.tabSettings != m->tabSettings && !u.tabSettings.empty())
+                out.notTranslated.push_back((lang.empty() ? u.name : lang) + "'s indentation (tabSettings " + u.tabSettings
+                                            + "): set editor.tabSize and editor.useTabs for it under languages: in settings.yaml");
+        }
+    else if (!user.empty())
+        out.notTranslated.push_back("langs.xml: without Notepad++'s langs.model.xml (in the Notepad++ program folder) the changes "
+                                    "you made cannot be told from Notepad++'s own lists, so none were imported - put a copy "
+                                    "beside langs.xml and import again");
+
+    // The theme's "User-defined keywords": additions to the class of the style they sit on.
+    if (!themeXml.empty())
+    {
+        XmlElement root;
+        if (parseXml(themeXml, root))
+            if (const XmlElement* lexers = root.child("LexerStyles"))
+                for (const XmlElement& lt : lexers->children)
+                    for (const XmlElement& ws : lt.children)
+                    {
+                        const std::vector<std::string> words = splitWords(ws.text);
+                        if (ws.name != "WordsStyle" || words.empty()) continue;
+                        const auto targets = wxnoteListsFor(lt.attr("name"), ws.attr("keywordClass"));
+                        if (targets.empty())
+                            out.notTranslated.push_back("the theme's user-defined keywords for " + lt.attr("name") + " " + ws.attr("name")
+                                                        + ": wxNote has no such list");
+                        for (const auto& t : targets)
+                        {
+                            // Words wxNote's own list already has would only repeat it.
+                            std::vector<std::string> builtIn;
+                            for (const WxnKeywordSetName* k : wxnKeywordSetsOf(lexerOfLanguage(t.first)))
+                                if (t.second == k->name)
+                                {
+                                    const auto lists = wxnBuiltinKeywordLists(t.first);
+                                    if (const auto b = lists.find(k->slot); b != lists.end()) builtIn = splitWords(b->second);
+                                }
+                            const std::vector<std::string> add = without(words, builtIn);
+                            if (!add.empty()) addTo(t.first, t.second, add);
+                        }
+                    }
+    }
+
+    // The languages.yaml document.
+    ryml::Tree t;
+    wxnyaml::MutNode root = wxnyaml::resetToMap(t);
+    wxnyaml::MutNode langs = wxnyaml::addMap(root, "languages");
+    auto edit = [&](wxnyaml::MutNode parent, const std::string& key, const Words& add) {   // {add: [...]}
+        wxnyaml::MutNode m = wxnyaml::addMap(parent, key);
+        wxnyaml::setOneLine(m);
+        wxnyaml::MutNode seq = wxnyaml::addSeq(m, "add");
+        for (const std::string& s : add) wxnyaml::setText(wxnyaml::addItem(seq), s);
+    };
+    for (const auto& [lang, e] : entries)
+    {
+        std::vector<std::pair<std::string, Words>> lists;
+        for (const auto& l : e.lists) if (!l.second.empty()) lists.push_back(l);
+        const bool ext = !e.ext.empty();
+        if (!ext && !e.line && !e.block && lists.empty()) continue;
+        wxnyaml::MutNode l = wxnyaml::addMap(langs, lang);
+        if (ext) edit(l, "extensions", e.ext);
+        if (e.line || e.block)
+        {
+            wxnyaml::MutNode c = wxnyaml::addMap(l, "comments");
+            wxnyaml::setOneLine(c);
+            if (e.line) wxnyaml::setText(wxnyaml::addKey(c, "line"), e.lineToken);
+            if (e.block)
+            {
+                wxnyaml::MutNode b = wxnyaml::addSeq(c, "block");
+                if (!e.open.empty() && !e.close.empty()) { wxnyaml::setText(wxnyaml::addItem(b), e.open); wxnyaml::setText(wxnyaml::addItem(b), e.close); }
+            }
+        }
+        if (!lists.empty())
+        {
+            wxnyaml::MutNode k = wxnyaml::addMap(l, "keywords");
+            for (const auto& list : lists) edit(k, list.first, list.second);
+        }
+        out.languages.push_back(lang);
+    }
+    if (out.languages.empty()) return true;
+    std::string body;
+    if (!wxnyaml::emit(t, body)) { if (err) *err = "could not write the language definitions"; return false; }
+    out.yaml = "# Imported from Notepad++.\n" + body;
     return true;
 }
 

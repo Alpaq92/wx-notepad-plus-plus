@@ -1023,6 +1023,9 @@ msgstr "KOI8-R"
 msgid "KOI8-U"
 msgstr "KOI8-U"
 
+msgid "Keywords"
+msgstr "关键字"
+
 msgid "Korean"
 msgstr "韩语"
 
@@ -3169,3 +3172,41 @@ msgstr "无法读取工作区文件。"
 msgid "These files are not wxNote themes and were not imported:"
 msgstr "这些文件不是 wxNote 主题，未导入："
 
+msgid "Edit Language Definitions"
+msgstr "编辑语言定义"
+
+msgid "Could not create a writable languages.yaml to edit."
+msgstr "无法创建可写入的 languages.yaml 以供编辑。"
+
+msgid "languages.yaml: %s - the rest of the file is used"
+msgstr "languages.yaml: %s - 文件的其余部分仍会使用"
+
+msgid "languages.yaml: %s, and %d more like it - the rest of the file is used"
+msgstr "languages.yaml: %s 等，另有 %d 处 - 文件的其余部分仍会使用"
+
+msgid "Keyword list:"
+msgstr "关键字列表:"
+
+msgid "Default keywords:"
+msgstr "默认关键字:"
+
+msgid "User-defined keywords:"
+msgstr "用户自定义关键字:"
+
+msgid "languages.yaml replaces this whole list - change it there (Settings > Edit Language Definitions)."
+msgstr "languages.yaml 替换了整个列表 - 请在那里修改 (设置 > 编辑语言定义)。"
+
+msgid "Saved in languages.yaml, which also takes these away: %s"
+msgstr "保存在 languages.yaml 中，该文件还移除了这些: %s"
+
+msgid "The words you add are saved in languages.yaml. Separate them with spaces."
+msgstr "添加的词保存在 languages.yaml 中。多个词请用空格分隔。"
+
+msgid "Could not read %s"
+msgstr "无法读取 %s"
+
+msgid "languages.yaml could not be changed (%s)."
+msgstr "无法更改 languages.yaml (%s)。"
+
+msgid "Keywords saved"
+msgstr "关键字已保存"

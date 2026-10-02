@@ -23,6 +23,18 @@ All notable changes to wxNote are documented here. Format loosely follows
   than in the theme, so switching themes, or dark and light mode, does not lose them. A theme's own
   `extensions` lists (which a Notepad++ theme brings along when imported) are read too, but only fill in
   extensions wxNote does not already place.
+- **Your own language definitions: `languages.yaml`.** What Notepad++ keeps in `langs.xml` - which files
+  open as each language, how it is commented, and its keyword lists - can now be changed per language
+  in `languages.yaml` (**Settings > Edit Language Definitions**): `extensions`, `filenames` and a
+  `firstLine` pattern, the `comments` tokens, and every keyword list by name (`keywords`, `types`,
+  `functions`, `taskMarkers`...). Each list is either replaced or edited with `{add, remove}`, so a later
+  wxNote's own additions still arrive; the file holds only what you change. The shape follows VS Code,
+  Sublime Text, Pulsar and TextMate where they agree.
+- **The Style Configurator edits keywords.** Each language has a Keywords box like Notepad++'s: the
+  list (with what it holds), wxNote's *Default keywords*, and your *User-defined keywords*, saved to
+  `languages.yaml`. Your own **USER KEYWORDS** groups work now: the themes' USER KEYWORDS 1-8 styles (USER
+  TAGS and USER ATTRIBUTES for HTML and XML, USER SCALAR for shell) colour the words you put in them, as
+  in Notepad++.
 - The Function List now follows a language picked from the Language menu, as Toggle Comment already
   did, and the detected language when its own extension table has no answer - an untitled buffer set to
   Python, a script with no extension, a `Rakefile`. MS SQL and MySQL use the SQL rules.
@@ -46,10 +58,11 @@ All notable changes to wxNote are documented here. Format loosely follows
   word wrap, line numbers, new-document EOL and encoding, dark mode, the theme and more), `shortcuts.xml`
   into a key-binding scheme, its themes into wxNote themes and `contextMenu.xml` into wxNote's right-click
   menu (items named by their menu text such as Notepad++'s own Cut, Copy and Paste, submenus, renamed
-  items and plugin commands included), then reports what came across and what had nowhere to go. A file
-  it replaces is kept aside as `.bak`, never over an earlier backup. **Import the Open Notepad++ File**
-  does the same for one file, and opens a Notepad++ session or turns a Project-panel workspace into a
-  wxNote one. The new `npp2wxnote` command-line tool runs the same translations without wxNote.
+  items and plugin commands included), and what you added to `langs.xml` - extensions, keywords, the
+  Style Configurator's user-defined keywords - into `languages.yaml`, then reports what came across
+  and what had nowhere to go. A file it replaces is kept aside as `.bak`, never over an earlier backup. **Import the Open Notepad++ File** does the
+  same for one file, and opens a Notepad++ session or turns a Project-panel workspace into a wxNote one.
+  The new `npp2wxnote` command-line tool runs the same translations without wxNote.
 - **The right-click menu can have submenus, labels of your own and plugin commands.** In
   `contextmenu.yaml` an item can be `{command: edit.copy, label: Copy Text}`, `{menu: ..., items: [...]}`
   or `{plugin: MIME Tools, command: Base64 Encode}`, as Notepad++'s `contextMenu.xml` allows. Toggles

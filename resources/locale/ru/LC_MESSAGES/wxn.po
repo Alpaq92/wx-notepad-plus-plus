@@ -2028,6 +2028,9 @@ msgstr "ОК"
 msgid "Name:"
 msgstr "Имя:"
 
+msgid "Keywords"
+msgstr "Ключевые слова"
+
 msgid "Theme:"
 msgstr "Тема:"
 
@@ -3169,3 +3172,41 @@ msgstr "Не удалось прочитать файл рабочей обла�
 msgid "These files are not wxNote themes and were not imported:"
 msgstr "Эти файлы не являются темами wxNote и не были импортированы:"
 
+msgid "Edit Language Definitions"
+msgstr "Правка определений языков"
+
+msgid "Could not create a writable languages.yaml to edit."
+msgstr "Не удалось создать доступный для записи файл languages.yaml для редактирования."
+
+msgid "languages.yaml: %s - the rest of the file is used"
+msgstr "languages.yaml: %s - остальная часть файла используется"
+
+msgid "languages.yaml: %s, and %d more like it - the rest of the file is used"
+msgstr "languages.yaml: %s и ещё %d - остальная часть файла используется"
+
+msgid "Keyword list:"
+msgstr "Список ключевых слов:"
+
+msgid "Default keywords:"
+msgstr "Ключевые слова по умолчанию:"
+
+msgid "User-defined keywords:"
+msgstr "Свои ключевые слова:"
+
+msgid "languages.yaml replaces this whole list - change it there (Settings > Edit Language Definitions)."
+msgstr "languages.yaml заменяет весь этот список - меняйте его там (Опции > Правка определений языков)."
+
+msgid "Saved in languages.yaml, which also takes these away: %s"
+msgstr "Сохраняется в languages.yaml, где также убраны: %s"
+
+msgid "The words you add are saved in languages.yaml. Separate them with spaces."
+msgstr "Добавленные слова сохраняются в languages.yaml. Разделяйте их пробелами."
+
+msgid "Could not read %s"
+msgstr "Не удалось прочитать %s"
+
+msgid "languages.yaml could not be changed (%s)."
+msgstr "Не удалось изменить languages.yaml (%s)."
+
+msgid "Keywords saved"
+msgstr "Ключевые слова сохранены"

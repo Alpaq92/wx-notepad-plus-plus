@@ -10,7 +10,7 @@
 //
 // A maintainer tool like po2mo - not built by default, run when SciTE is updated:
 //   cmake --build build --target scite_keywords
-//   build/bin/scite_keywords <scite>/src src/menu_data_language.h src/keywords_scite.h "SciTE 5.6.7" <sha256>
+//   build/bin/scite_keywords <scite>/src src/lang_table.h src/keywords_scite.h "SciTE 5.6.7" <sha256>
 // The last two arguments only label the output: the release the lists came from, and the SHA-256 of its
 // source archive, so a reader can tell which copy of SciTE produced the file.
 //
@@ -155,7 +155,7 @@ static std::vector<std::string> words(const std::string& s)
     return out;
 }
 
-// Rows of menu_data_language.h:  { kCmdLangPascal, "Pascal", "pascal" },
+// Rows of lang_table.h:  { kCmdLangPascal, "Pascal", "pascal" },
 static std::map<std::string, std::string> readMenuLexers(const fs::path& header)
 {
     std::map<std::string, std::string> out;
@@ -198,7 +198,7 @@ int main(int argc, char** argv)
 {
     if (argc < 4)
     {
-        std::fprintf(stderr, "usage: scite_keywords <scite/src> <menu_data_language.h> <out.h> [release] [archive-sha256]\n");
+        std::fprintf(stderr, "usage: scite_keywords <scite/src> <lang_table.h> <out.h> [release] [archive-sha256]\n");
         return 2;
     }
     const fs::path sciteSrc = argv[1], menuHeader = argv[2], outPath = argv[3];

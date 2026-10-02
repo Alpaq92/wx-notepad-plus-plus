@@ -7,7 +7,7 @@
 // scintillua::Engine::detect), knows ~340 extensions and whole file names (Makefile, CMakeLists.txt,
 // Dockerfile, PKGBUILD, Rakefile...) plus a set of first-line patterns (shebangs, the XML prolog,
 // #cloud-config). It answers with a Scintillua lexer name, while wxNote highlights through Lexilla and
-// names its languages by wxnLangTable (menu_data_language.h). This header is the glue between them:
+// names its languages by wxnLangTable (lang_table.h). This header is the glue between them:
 //
 //   wxnLangForScintillua  Scintillua lexer name -> Language-menu name
 //   wxnLangExtOverride    the handful of extensions where wxNote deliberately answers differently
@@ -15,13 +15,14 @@
 //
 //   1. the user's own mappings (WxnUserExtMaps): the Style Configurator's "User ext.", then a
 //      functionlist.yaml `extensions` list. The Function List and the comment commands honour both, so
-//      one entry re-types a file for all three;
+//      one entry re-types a file for all three; then languages.yaml's file names and extensions;
 //   2. wxnLangExtOverride;
 //   3. Scintillua, on the file name as typed, then lower-cased ("FOO.CPP" is C++ too);
 //   4. the comment-token table's extension/file-name map (comment_tokens.h), which knows languages
 //      Scintillua has no entry for (Kotlin, JSON5, Raku, SAS, Inno Setup, Intel HEX...), then the
-//      active theme's `ext` attributes for an extension none of that places;
-//   5. the first line: Scintillua's patterns, then wxnSniffExtFromContent.
+//      active theme's `ext` attributes for an extension none of that places. A name 2-4 would place
+//      under a language whose languages.yaml entry takes it away decides nothing;
+//   5. the first line: languages.yaml's firstLine patterns, Scintillua's, then wxnSniffExtFromContent.
 //
 // The name outranks the content, as it always has here: an .html page that opens with an XML prolog
 // is still HTML. A name that identifies a language wxNote cannot highlight (Elixir, Groovy, AWK...)
@@ -38,8 +39,10 @@
 #include <cstddef>
 #include <cstring>
 #include <map>
+#include <regex>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 inline std::string wxnLangLower(std::string s)
@@ -216,6 +219,44 @@ inline std::string wxnSniffExtFromContent(const std::string& head)
     return "";
 }
 
+// ---- languages.yaml: a language's own file names ----------------------------------------------------
+//
+// What the user's language definitions (language_defs.h) say about the files each language opens:
+// extensions and whole names that open as it, and which of its built-in ones it no longer has - those
+// then decide nothing, and the file goes on to the theme's extensions and its first line as an unknown
+// name would.
+struct WxnLangFileRules
+{
+    std::map<std::string, std::string> extToLang;     // extension -> language
+    std::map<std::string, std::string> nameToLang;    // whole file name, lower case -> language
+    struct Off
+    {
+        bool allExtensions = false;                    // its extension list replaces the built-in one
+        bool allNames      = false;                    // its file-name list does
+        std::set<std::string> extensions, names;       // taken away one by one
+    };
+    std::map<std::string, Off> off;                    // language -> what it no longer has
+    std::vector<std::pair<std::regex, std::string>> firstLine;   // pattern -> language, in file order
+
+    // Has `lang`'s definition taken extension `ext` (or whole name `lowerName`) away from it?
+    bool extensionOff(const std::string& lang, const std::string& ext) const
+    {
+        const auto o = off.find(lang);
+        if (o == off.end()) return false;
+        if (o->second.extensions.count(ext)) return true;
+        const auto m = extToLang.find(ext);
+        return o->second.allExtensions && (m == extToLang.end() || m->second != lang);
+    }
+    bool nameOff(const std::string& lang, const std::string& lowerName) const
+    {
+        const auto o = off.find(lang);
+        if (o == off.end()) return false;
+        if (o->second.names.count(lowerName)) return true;
+        const auto m = nameToLang.find(lowerName);
+        return o->second.allNames && (m == nameToLang.end() || m->second != lang);
+    }
+};
+
 // ---- extensions the user adds ------------------------------------------------------------------
 //
 // Three places map an extension to a language on top of the built-in tables, strongest first:
@@ -228,11 +269,14 @@ inline std::string wxnSniffExtFromContent(const std::string& head)
 //                the built-in tables leave open: a theme is about colours, and stock ones carry stray
 //                values (Twilight files .po under bash and .wpl under XML).
 // All keys are lower-case extensions without the dot, as wxnUserExtNormalize makes them.
+// Next to them, `defs`: languages.yaml's own lists (WxnLangFileRules), which rank below the three above
+// and above the built-in tables.
 struct WxnUserExtMaps
 {
     const std::map<std::string, std::string>* toLang      = nullptr;   // extension -> Language-menu name
     const std::map<std::string, std::string>* toKey       = nullptr;   // extension -> comment/Function List key
     const std::map<std::string, std::string>* themeToLang = nullptr;   // extension -> Language-menu name
+    const WxnLangFileRules*                   defs        = nullptr;   // languages.yaml
 };
 
 // One extension as a user types it - "inc", ".inc", "*.INC" - as the key the maps use, or "" when it
@@ -361,28 +405,45 @@ std::string wxnDetectLanguage(const std::string& fileName, const std::string& he
         const std::string b = wxnLangForCommentKey(lookup(user.toKey, e));
         if (usable(b)) return b;
     }
-
-    // 2-4. the name. Once Scintillua or the comment table recognises it, their verdict is final,
-    // even when wxNote cannot highlight that language.
-    if (const char* o = wxnLangExtOverride(ext))
+    //    Then languages.yaml: a language's own whole names, then its own extensions, in the same order.
+    if (user.defs)
     {
-        if (usable(o)) return o;
+        for (const std::string& n : { wxnLangLower(fileName), lower })
+            if (const auto it = user.defs->nameToLang.find(n); it != user.defs->nameToLang.end() && usable(it->second))
+                return it->second;
+        for (const std::string& e : { wxnLangExtOf(wxnLangLower(fileName)), ext })
+            if (const auto it = user.defs->extToLang.find(e); it != user.defs->extToLang.end() && usable(it->second))
+                return it->second;
     }
-    else
+
+    // 2-4. the name. Once Scintillua or the comment table recognises it, their verdict is final, even when
+    // wxNote cannot highlight that language - unless languages.yaml took that name from the language.
+    struct Verdict { bool decided = false; std::string lang; };
+    auto byName = [&](const std::string& nm, const std::string& nmLower, const std::string& e) {
+        Verdict v;
+        if (const char* o = wxnLangExtOverride(e))
+        {
+            if (usable(o)) { v.decided = true; v.lang = o; }
+            return v;
+        }
+        std::string sc = scDetect(nm, std::string());
+        if (sc.empty() && nmLower != nm) sc = scDetect(nmLower, std::string());
+        if (!sc.empty()) { v.decided = true; v.lang = wxnLangForScintillua(sc); }
+        else if (const std::string key = wxnCommentLangKeyForFileName(nmLower); !key.empty()) { v.decided = true; v.lang = wxnLangForCommentKey(key); }
+        if (!usable(v.lang)) v.lang.clear();
+        return v;
+    };
+    const Verdict v = byName(name, lower, ext);
+    if (v.decided)
     {
-        std::string sc = scDetect(name, std::string());
-        if (sc.empty() && lower != name) sc = scDetect(lower, std::string());
-        if (!sc.empty())
+        bool off = false;
+        if (user.defs && !v.lang.empty())
         {
-            const std::string n = wxnLangForScintillua(sc);
-            return usable(n) ? n : std::string();
+            // Placed by its extension, or by its whole name (CMakeLists.txt)? The extension alone says.
+            const bool byExtension = !ext.empty() && byName("x." + ext, "x." + ext, ext).lang == v.lang;
+            off = byExtension ? user.defs->extensionOff(v.lang, ext) : user.defs->nameOff(v.lang, lower);
         }
-        const std::string key = wxnCommentLangKeyForFileName(lower);
-        if (!key.empty())
-        {
-            const std::string n = wxnLangForCommentKey(key);
-            return usable(n) ? n : std::string();
-        }
+        if (!off) return v.lang;
     }
 
     // 4b. the active theme's ext attributes, only for an extension nothing above placed
@@ -393,6 +454,13 @@ std::string wxnDetectLanguage(const std::string& fileName, const std::string& he
 
     // 5. the content
     const std::string first = head.substr(0, head.find_first_of("\r\n"));
+    if (!first.empty() && user.defs)
+        for (const auto& [re, lang] : user.defs->firstLine)
+        {
+            bool hit = false;
+            try { hit = std::regex_search(first, re); } catch (const std::regex_error&) {}   // a pattern too complex for this line
+            if (hit && usable(lang)) return lang;
+        }
     if (!first.empty())
     {
         const std::string n = wxnLangForScintillua(scDetect(std::string(), first));
@@ -424,16 +492,22 @@ inline std::vector<std::string> wxnLangCandidateExts(const std::vector<std::stri
 }
 
 // What the Style Configurator shows as "Default ext.": Language-menu name -> the extensions that open
-// as it with no user mapping. Each candidate goes through the real detection as "x.<ext>", so the list
-// cannot disagree with what opening such a file does. Extensions in each list are sorted.
+// as it with no user mapping - the built-in ones, as languages.yaml (`defs`, may be null) changes them.
+// Each candidate goes through the real detection as "x.<ext>", so the list cannot disagree with what
+// opening such a file does. Extensions in each list are sorted.
 template <class ScDetect, class KnownLang>
 std::map<std::string, std::vector<std::string>> wxnDefaultExtensions(const std::vector<std::string>& candidates,
-                                                                     ScDetect&& scDetect, KnownLang&& knownLang)
+                                                                     ScDetect&& scDetect, KnownLang&& knownLang,
+                                                                     const WxnLangFileRules* defs = nullptr)
 {
+    std::set<std::string> all(candidates.begin(), candidates.end());
+    if (defs) for (const auto& kv : defs->extToLang) all.insert(kv.first);
+    WxnUserExtMaps maps;
+    maps.defs = defs;
     std::map<std::string, std::vector<std::string>> out;
-    for (const std::string& e : candidates)
+    for (const std::string& e : all)
     {
-        const std::string lang = wxnDetectLanguage("x." + e, std::string(), WxnUserExtMaps{}, scDetect, knownLang);
+        const std::string lang = wxnDetectLanguage("x." + e, std::string(), maps, scDetect, knownLang);
         if (!lang.empty()) out[lang].push_back(e);
     }
     return out;

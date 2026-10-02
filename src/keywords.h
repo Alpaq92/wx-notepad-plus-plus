@@ -19,7 +19,7 @@
 
 struct WxnKeywordList
 {
-    const char* language;   // Language-menu name (menu_data_language.h), e.g. "Pascal"
+    const char* language;   // Language-menu name (lang_table.h), e.g. "Pascal"
     int         slot;       // the lexer's keyword set: SCI_SETKEYWORDS wParam
     const char* words;      // space-separated
 };

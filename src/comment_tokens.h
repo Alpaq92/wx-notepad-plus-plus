@@ -234,7 +234,7 @@ inline WxnCommentStyle wxnCommentStyleForKey(const std::string& key)
 }
 
 // A Language-menu pick hands back wxnLangTable's `name` verbatim (it is deliberately untranslated -
-// see menu_data_language.h), and this table stores the same spelling, so the match is exact.
+// see lang_table.h), and this table stores the same spelling, so the match is exact.
 // "" for Normal Text or any name with no row.
 inline std::string wxnCommentLangKeyForName(const std::string& displayName)
 {

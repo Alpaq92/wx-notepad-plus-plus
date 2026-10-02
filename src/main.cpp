@@ -163,6 +163,7 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 #include "comment_tokens.h"      // per-language comment tokens - what Ctrl+/ and Stream Comment insert
 #include "lang_detect.h"         // which language a file opens as (Scintillua's lexer.detect() + wxNote's overrides)
 #include "keywords.h"            // the keyword lists each language's lexer gets - SciTE's, by language and slot
+#include "language_defs.h"       // languages.yaml: the user's extensions, comment tokens and keyword lists per language
 #include "snippets.h"            // snippet grammar + store: $1 / ${1:default} / $0 tab stops and mirrors
 #include "regex_engine.h"        // PCRE2 behind Find/Replace - std::regex could not cross a line break
 #include "spell_engine.h"        // pluggable spell-check backend (OS-native: ISpellChecker / NSSpellChecker)
@@ -613,7 +614,7 @@ public:
     wxString forcedName;                   // that pick's display label for the status bar, e.g. "C++"
     wxString sciLang;                      // name of a registered Scintillua language when active ("" = none); container-lexed via m_scintillua
     wxString autoLang;                     // the wxnLangTable name detection chose (lang_detect.h); "" = Normal Text, a manual pick, or not detected yet
-    const char* lexKeywords = nullptr;      // every word of the keyword lists handed to this page's lexer (autocomplete reads THIS, not a second table keyed on extension). Borrowed from wxnKeywordWords (keywords.h), which keeps it for the program's life
+    std::shared_ptr<const std::string> lexKeywords;   // every word of the keyword lists handed to this page's lexer (autocomplete reads THIS, not a second table keyed on extension); null for none. Shared with keywordWordsFor, so a later change of the user's lists cannot pull it from under the page
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
     wxString encLabel;                     // when encoding == ENC_CHARSET: its status-bar label
@@ -4645,8 +4646,13 @@ public:
     void reportFileError(const wxString& file, const std::string& error)
     {
         if (error.empty()) return;
-        const wxString msg = wxString::Format(_("%s has an error (%s) and is not used until it is fixed"),
-                                              file, wxString::FromUTF8(error.c_str()));
+        reportFileNotice(wxString::Format(_("%s has an error (%s) and is not used until it is fixed"),
+                                          file, wxString::FromUTF8(error.c_str())));
+    }
+    // The same for a note about a file that IS used - one whose unusable entries were skipped.
+    void reportFileNotice(const wxString& msg)
+    {
+        if (msg.empty()) return;
         if (!m_fileErrorsLive) { m_pendingFileErrors += (m_pendingFileErrors.empty() ? "" : "   ") + msg; return; }
         setStatus(0, msg);
         m_hint = true;
@@ -5715,6 +5721,11 @@ private:
         if (auto u = m_userExt.find(std::string(ext.utf8_str())); u != m_userExt.end())   // Style Configurator "User ext."
             if (const std::string k = flKeyForLanguage(u->second); !k.empty()) return k;
         if (auto u = g_flUserExtToLang.find(std::string(ext.utf8_str())); u != g_flUserExtToLang.end()) return u->second;   // user-mapped extension
+        // languages.yaml's file names, then extensions - detection's order
+        if (auto d = m_langRules.nameToLang.find(std::string(base.utf8_str())); d != m_langRules.nameToLang.end())
+            if (const std::string k = flKeyForLanguage(d->second); !k.empty()) return k;
+        if (auto d = m_langRules.extToLang.find(std::string(ext.utf8_str())); d != m_langRules.extToLang.end())
+            if (const std::string k = flKeyForLanguage(d->second); !k.empty()) return k;
         if (ext=="cpp"||ext=="cc"||ext=="cxx"||ext=="c"||ext=="h"||ext=="hpp"||ext=="hxx"||ext=="ino") return "cpp";
         if (ext=="py"||ext=="pyw") return "python";
         if (ext=="js"||ext=="jsx"||ext=="mjs"||ext=="ts"||ext=="tsx") return "js";
@@ -7141,10 +7152,10 @@ private:
     std::string rangeText(int a, int b) { if (b <= a) return {}; sci(SCI_SETTARGETSTART, a); sci(SCI_SETTARGETEND, b); std::string s((size_t)(b - a) + 1, '\0'); sci(SCI_GETTARGETTEXT, 0, reinterpret_cast<sptr_t>(&s[0])); s.resize(b - a); return s; }
     // The keyword words completion offers for the active page when setLexerForFile has recorded none: its
     // language's lists (keywords.h), the same table the lexer gets. nullptr = document words only.
-    const char* keywordsForActiveLang()
+    std::shared_ptr<const std::string> keywordsForActiveLang()
     {
         auto* p = activePage();
-        return p ? wxnKeywordWords(std::string((p->langForced ? p->forcedName : p->autoLang).utf8_str())) : nullptr;
+        return p ? keywordWordsFor(std::string((p->langForced ? p->forcedName : p->autoLang).utf8_str())) : nullptr;
     }
     // Which styles carry PROSE - comments and string literals - for the active document. Two consumers
     // want exactly this set from opposite directions: completion drops these words, spell-check checks
@@ -7272,9 +7283,9 @@ private:
         // for a page that has not been through it. Going by the file extension instead is what once made
         // Ctrl+Space silently keyword-less after a manual Language pick.
         auto* p = activePage();
-        const char* kw = (p && p->lexKeywords) ? p->lexKeywords : keywordsForActiveLang();
+        const std::shared_ptr<const std::string> kw = (p && p->lexKeywords) ? p->lexKeywords : keywordsForActiveLang();
         if (!kw) return;
-        const std::string_view s(kw);
+        const std::string_view s(*kw);
         const size_t pl = prefix.size();
         for (size_t i = 0; i < s.size(); )
         {
@@ -8761,6 +8772,23 @@ private:
         if (wxFileExists(userPath)) openPath(userPath);
         else setStatus(0, _("Could not create a writable contextmenu.yaml to edit."));   // degenerate: seed failed
     }
+    // Settings > Edit Language Definitions: open the per-user languages.yaml, started the first time from
+    // a template that shows how one is written (language_defs.h). Saving it applies to the next document
+    // shown (refreshLangDefs).
+    void editLanguageDefinitions()
+    {
+        const wxString path = languagesFilePath();
+        if (!wxFileExists(path))
+        {
+            wxLogNull noLog;   // best-effort seed, as for contextmenu.yaml
+            wxFileName::Mkdir(userDataDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+            wxFile f;
+            const std::string t = wxnLanguagesYamlTemplate();
+            if (f.Create(path, false) && f.Write(t.data(), t.size()) != t.size()) { f.Close(); wxRemoveFile(path); }
+        }
+        if (wxFileExists(path)) openPath(path);
+        else setStatus(0, _("Could not create a writable languages.yaml to edit."));
+    }
     void showEditorContext(int screenX, int screenY)
     {
         if (!m_stc) return;
@@ -9159,6 +9187,7 @@ private:
         m_keymap.load(userDataDir());
         reportFileError("functionlist.yaml",                   // user-defined Function List languages
                         loadFunctionListRules(userDataDir() + wxFILE_SEP_PATH + "functionlist.yaml"));
+        refreshLangDefs();                                     // languages.yaml, before the first document is lexed
         m_keymapReady = true;
         // Apply any editor-command overrides to the two persistent STCs now the store is loaded. buildEditor()
         // created them before this point (store empty then), so the setupScintilla-time apply was a no-op;
@@ -10005,8 +10034,120 @@ private:
             head.assign(b.data(), b.length());
         }
         auto scDetect = [this](const std::string& file, const std::string& line) { return scintilluaDetect(file, line); };
-        const WxnUserExtMaps user{ &m_userExt, &g_flUserExtToLang, &m_theme.extToLang };
+        const WxnUserExtMaps user{ &m_userExt, &g_flUserExtToLang, &m_theme.extToLang, &m_langRules };
         return wxnLangFindByName(wxnDetectLanguage(base, head, user, scDetect, isMenuLanguage));
+    }
+
+    // ----- languages.yaml: the user's language definitions (language_defs.h) -------------------------
+    // Read at startup, then again whenever its time stamp or size changes - checked as a document is
+    // lexed (which every tab activation does) and before a comment command, so a saved edit applies to
+    // the next document shown. A file that does not parse is not used and the status bar says where it
+    // broke; one with entries wxNote cannot use is used without them, and the status bar names the first.
+    WxnLangDefs      m_langDefs;
+    WxnLangFileRules m_langRules;
+    wxLongLong       m_langDefsMs = -1;              // stamp of the file the definitions were read from
+    wxULongLong      m_langDefsSize = 0;
+    std::map<std::string, std::shared_ptr<const std::string>> m_langWords;   // language -> its completion words (null: none)
+    // The Style Configurator's keyword edits not yet written to languages.yaml: (language, list) -> the
+    // words the list adds. Laid over the file each time it is read, so the document in front keeps showing
+    // them however the file changes meanwhile; empty whenever the Style Configurator is not open.
+    std::map<std::pair<std::string, std::string>, std::vector<std::string>> m_langKwPending;
+    wxString languagesFilePath() { return userDataDir() + wxFILE_SEP_PATH + "languages.yaml"; }
+    // The Language-menu name `written` stands for, matched without regard to case; "" for none.
+    static std::string canonicalLanguage(const std::string& written)
+    {
+        size_t n; const WxnLang* t = wxnLangTable(n);
+        for (size_t i = 0; i < n; ++i) if (wxnLangLower(t[i].name) == wxnLangLower(written)) return std::string(t[i].name);
+        return std::string();
+    }
+    // Re-read languages.yaml if it changed; true when the definitions did.
+    bool refreshLangDefs()
+    {
+        wxLogNull noLog;
+        const wxString path = languagesFilePath();
+        wxLongLong ms = -1;
+        wxULongLong size = 0;
+        if (wxFileExists(path)) { const wxFileName fn(path); ms = fn.GetModificationTime().GetValue(); size = fn.GetSize(); }
+        if (ms == m_langDefsMs && size == m_langDefsSize) return false;
+        std::string text;
+        WxnLangDefs defs;
+        std::string err;
+        const WxnRead got = wxnReadSettled(path, text, &ms, &size);
+        if (got == WxnRead::Failed)
+        {
+            // Not taken for an empty file: what was read before stays, and the next look tries again (a
+            // stamp no file has - missing, yet one byte long).
+            m_langDefsMs = -1;
+            m_langDefsSize = 1;
+            reportFileNotice(wxString::Format(_("Could not read %s"), path));
+            return false;
+        }
+        m_langDefsMs = ms;
+        m_langDefsSize = size;
+        if (got == WxnRead::Ok)
+        {
+            auto lexerOf = [](const std::string& name) {
+                const WxnLang* L = wxnLangFindByName(name);
+                return L ? std::string(L->lexer) : std::string();
+            };
+            if (!wxnParseLangDefs(text, defs, &err, canonicalLanguage, lexerOf)) defs = WxnLangDefs();
+        }
+        reportFileError("languages.yaml", err);
+        if (err.empty() && !defs.warnings.empty())
+        {
+            const wxString first = wxString::FromUTF8(defs.warnings.front().c_str());
+            reportFileNotice(defs.warnings.size() == 1
+                ? wxString::Format(_("languages.yaml: %s - the rest of the file is used"), first)
+                : wxString::Format(_("languages.yaml: %s, and %d more like it - the rest of the file is used"),
+                                   first, (int)defs.warnings.size() - 1));
+        }
+        m_langDefs = std::move(defs);
+        for (const auto& [key, words] : m_langKwPending) wxnLangDefsSetWords(m_langDefs, key.first, key.second, words);
+        m_langRules = wxnLangFileRulesFrom(m_langDefs);
+        m_langWords.clear();
+        m_defaultExtReady = false;   // Default ext. follows the definitions
+        return true;
+    }
+    // Every word of `lang`'s keyword lists and user keyword groups, as completion offers them; null for
+    // none. Worked out once per language until the definitions change - a page lexed with them shares
+    // them, and keeps them past that.
+    std::shared_ptr<const std::string> keywordWordsFor(const std::string& lang)
+    {
+        auto it = m_langWords.find(lang);
+        if (it == m_langWords.end())
+        {
+            std::string all;
+            const WxnLangDef* def = m_langDefs.find(lang);
+            if (!def || def->keywords.empty()) { if (const char* w = wxnKeywordWords(lang)) all = w; }
+            else
+            {
+                const WxnLang* L = wxnLangFindByName(lang);
+                const std::string lexer = L ? L->lexer : "";
+                for (const auto& kv : wxnEffectiveKeywordLists(lang, lexer, def)) if (!kv.second.empty()) all += (all.empty() ? "" : " ") + kv.second;
+                for (const auto& g : wxnUserKeywordGroups(lang, lexer, def)) all += (all.empty() ? "" : " ") + g.second;
+            }
+            it = m_langWords.emplace(lang, all.empty() ? nullptr : std::make_shared<const std::string>(std::move(all))).first;
+        }
+        return it->second;
+    }
+    // Hand `lang`'s keyword lists - wxNote's, as languages.yaml changes them - to the lexer just set, and
+    // allocate its user keyword groups the way the themes number them (keyword_sets.h).
+    void applyKeywordLists(const std::string& lang, const std::string& lexer)
+    {
+        const WxnLangDef* def = m_langDefs.find(lang);
+        for (const auto& kv : wxnEffectiveKeywordLists(lang, lexer, def))
+            sci(SCI_SETKEYWORDS, kv.first, reinterpret_cast<sptr_t>(kv.second.c_str()));
+        const auto groups = wxnUserKeywordGroups(lang, lexer, def);
+        if (groups.empty()) return;
+        std::map<int, int> first;   // base style -> its first substyle
+        for (const WxnSubstyleRun* r : wxnSubstyleAllocation(lexer))
+            first[r->base] = static_cast<int>(sci(SCI_ALLOCATESUBSTYLES, r->base, r->count));
+        for (const auto& g : groups)
+        {
+            const auto f = first.find(g.first.run->base);
+            if (f != first.end() && f->second >= 0)
+                sci(SCI_SETIDENTIFIERS, f->second + g.first.index, reinterpret_cast<sptr_t>(g.second.c_str()));
+        }
     }
     // The Style Configurator's "Default ext.": the extensions `lang` (a Language-menu name) opens by
     // default, worked out once from the detection tables themselves - see wxnDefaultExtensions.
@@ -10018,7 +10159,7 @@ private:
             scintillua::Engine* eng = scintilluaEngine();
             const std::vector<std::string> keys = (eng && eng->ok()) ? eng->detectionKeys() : std::vector<std::string>();
             auto scDetect = [this](const std::string& file, const std::string& line) { return scintilluaDetect(file, line); };
-            m_defaultExt = wxnDefaultExtensions(wxnLangCandidateExts(keys), scDetect, isMenuLanguage);
+            m_defaultExt = wxnDefaultExtensions(wxnLangCandidateExts(keys), scDetect, isMenuLanguage, &m_langRules);
         }
         static const std::vector<std::string> kNone;
         const auto it = m_defaultExt.find(lang);
@@ -10030,8 +10171,8 @@ private:
     std::vector<std::string> themeOnlyExtensionsFor(const std::string& lang)
     {
         auto scDetect = [this](const std::string& file, const std::string& line) { return scintilluaDetect(file, line); };
-        const WxnUserExtMaps with{ &m_userExt, &g_flUserExtToLang, &m_theme.extToLang };
-        const WxnUserExtMaps without{ &m_userExt, &g_flUserExtToLang, nullptr };
+        const WxnUserExtMaps with{ &m_userExt, &g_flUserExtToLang, &m_theme.extToLang, &m_langRules };
+        const WxnUserExtMaps without{ &m_userExt, &g_flUserExtToLang, nullptr, &m_langRules };
         std::vector<std::string> out;
         for (const auto& kv : m_theme.extToLang)
         {
@@ -10107,6 +10248,7 @@ private:
     }
     void setLexerForFileImpl(const wxString& path)
     {
+        refreshLangDefs();                 // a saved languages.yaml applies from the next document shown
         applyEditorTheme(m_dark);          // reset every style to the theme base (incl. line numbers)
         auto* page = activePage();
         // Clear BEFORE any of the early exits below (large-file, Scintillua, no-lexer), so the field is
@@ -10129,11 +10271,12 @@ private:
             return;
         }
         // Registered Scintillua language: auto-detect by extension (unless one is already chosen/forced),
-        // then container-lex it via the embedded engine. An extension the user mapped in the Style
-        // Configurator is theirs, ahead of a plugin language's own list - Toggle Comment and the Function
-        // List already go by that mapping, so the highlighting must too - and this re-types a page such a
-        // plugin language had claimed before the mapping existed.
-        const bool userMapped = page && !page->langForced && m_userExt.count(std::string(wxnExtOf(path).utf8_str()));
+        // then container-lex it via the embedded engine. An extension the user mapped - in the Style
+        // Configurator, or in a language's languages.yaml list - is theirs, ahead of a plugin language's
+        // own list - Toggle Comment and the Function List already go by that mapping, so the highlighting
+        // must too - and this re-types a page such a plugin language had claimed before the mapping existed.
+        const std::string pathExt(wxnExtOf(path).utf8_str());
+        const bool userMapped = page && !page->langForced && (m_userExt.count(pathExt) || m_langRules.extToLang.count(pathExt));
         if (userMapped) page->sciLang.clear();
         if (page && page->sciLang.empty() && !page->langForced && !userMapped)
         {
@@ -10199,14 +10342,13 @@ private:
             if (!themed) { if (lx == "python") stylePythonFallback(); else if (lx == "cpp") styleCppFallback(); }
             // Keyword lists by LANGUAGE, slot by slot (keywords.h): SciTE's wherever it has them, so the
             // languages sharing a lexer (C, C#, Java, Go... on cpp; HTML, PHP, ASP, JSP on hypertext, with
-            // the script languages embedded in the markup) each get their own. Completion is handed every
-            // word of them, so what the highlighter knows is what Ctrl+Space offers, and a manual Language
-            // pick changes both. (Scintillua languages return well above this point: no lexKeywords.)
+            // the script languages embedded in the markup) each get their own - with what languages.yaml
+            // adds, removes or replaces, and its user keyword groups. Completion is handed every word of
+            // them, so what the highlighter knows is what Ctrl+Space offers, and a manual Language pick
+            // changes both. (Scintillua languages return well above this point: no lexKeywords.)
             const std::string lang(langName.utf8_str());
-            wxnForEachKeywordList(lang, [&](const WxnKeywordList& k) {
-                sci(SCI_SETKEYWORDS, k.slot, reinterpret_cast<sptr_t>(k.words));
-            });
-            if (page) page->lexKeywords = wxnKeywordWords(lang);
+            applyKeywordLists(lang, lx);
+            if (page) page->lexKeywords = keywordWordsFor(lang);
         }
         sci(SCI_COLOURISE, 0, -1);
     }
@@ -12047,8 +12189,10 @@ private:
     //      Normal Text means "no comments here", so this branch never falls through to the
     //      extension guess it was deliberately chosen to override.
     //   3. the user's own extensions: the Style Configurator's "User ext.", then a functionlist.yaml
-    //      `ext` line (the keys are the same vocabulary) - the order detection uses.
-    //   4. the built-in extension/filename table.
+    //      `ext` line (the keys are the same vocabulary), then languages.yaml's file names and extensions -
+    //      the order detection uses.
+    //   4. the built-in extension/filename table, unless languages.yaml took the name or extension away
+    //      from the language the table gives (detection then looks further, and so does this).
     //   5. the language detection gave the buffer (EditorPage::autoLang) - for what the table has no
     //      row for: a shebang script with no extension, CMakeLists.txt, PKGBUILD, a systemd unit, an
     //      extension only the theme maps. Last, so the table's finer distinctions (INI's ';' vs a
@@ -12073,16 +12217,37 @@ private:
         if (const WxnCommentLang* l = byLabel(p->sciLang)) return l;
         if (p->langForced) return p->sciLang.empty() ? byLabel(p->forcedName) : nullptr;
         const wxString full = wxFileName(p->path).GetFullName().Lower();
+        const std::string base(full.utf8_str());
         const std::string ext(wxnExtOfName(full).utf8_str());
         if (auto u = m_userExt.find(ext); u != m_userExt.end())
             if (const WxnCommentLang* l = byLabel(wxString::FromUTF8(u->second))) return l;
         if (auto u = g_flUserExtToLang.find(ext); u != g_flUserExtToLang.end())
             if (const WxnCommentLang* l = wxnCommentLangForKey(u->second)) return l;
-        if (const WxnCommentLang* l = wxnCommentLangForKey(wxnCommentLangKeyForFileName(std::string(full.utf8_str())))) return l;
+        if (auto d = m_langRules.nameToLang.find(base); d != m_langRules.nameToLang.end())
+            if (const WxnCommentLang* l = byLabel(wxString::FromUTF8(d->second))) return l;
+        if (auto d = m_langRules.extToLang.find(ext); d != m_langRules.extToLang.end())
+            if (const WxnCommentLang* l = byLabel(wxString::FromUTF8(d->second))) return l;
+        // Taken away by its extension when the extension alone gives the table's language, else by the
+        // whole name (CMakeLists.txt) - as detection decides it.
+        const std::string key = wxnCommentLangKeyForFileName(base);
+        const std::string keyLang = wxnLangForCommentKey(key);
+        const bool byExtension = !ext.empty() && wxnLangForCommentKey(wxnCommentLangKeyForFileName("x." + ext)) == keyLang;
+        const bool takenAway = !keyLang.empty()
+            && (byExtension ? m_langRules.extensionOff(keyLang, ext) : m_langRules.nameOff(keyLang, base));
+        if (!takenAway) if (const WxnCommentLang* l = wxnCommentLangForKey(key)) return l;
         return byLabel(p->autoLang);
     }
-    WxnCommentStyle activeCommentStyle()
-    { const WxnCommentLang* l = activeCommentLang(); return l ? l->style : WxnCommentStyle{}; }
+    // The comment style the active buffer gets: its row's, with what languages.yaml says for the buffer's
+    // language (as the status bar names it) applied. Reads the definitions already loaded - the commands
+    // that act on it call refreshLangDefs() first; the toolbar's idle refresh must not touch the disk.
+    WxnCommentStyle commentStyleOf(const WxnCommentLang* l)
+    {
+        auto* p = activePage();
+        const std::string lang = (p && p->sciLang.empty())
+            ? std::string((p->langForced ? p->forcedName : p->autoLang).utf8_str()) : std::string();
+        return wxnApplyCommentDef(l ? l->style : WxnCommentStyle{}, lang.empty() ? nullptr : m_langDefs.find(lang));
+    }
+    WxnCommentStyle activeCommentStyle() { return commentStyleOf(activeCommentLang()); }
     // The token to show in the toolbar tooltip: the line form when there is one, otherwise the block
     // pair, which is what Toggle Comment will actually insert for CSS/HTML/XML/Markdown.
     static wxString commentTokenHint(const WxnCommentStyle& cs)
@@ -12105,8 +12270,9 @@ private:
     // is testable without an editor; this loop only turns each plan into Scintilla calls.
     void applyLineComments(WxnCommentMode mode)
     {
+        refreshLangDefs();
         const WxnCommentLang* lang = activeCommentLang();
-        const WxnCommentStyle cs   = lang ? lang->style : WxnCommentStyle{};
+        const WxnCommentStyle cs   = commentStyleOf(lang);
         if (cs.empty())
         {
             setStatus(0, wxString::Format(_("%s has no comment syntax - nothing was changed"),
@@ -12145,8 +12311,9 @@ private:
     // substitution is never silent.
     void streamComment(bool add)
     {
+        refreshLangDefs();
         const WxnCommentLang* lang = activeCommentLang();
-        const WxnCommentStyle cs   = lang ? lang->style : WxnCommentStyle{};
+        const WxnCommentStyle cs   = commentStyleOf(lang);
         if (!cs.hasBlock())
         {
             if (!cs.hasLine())
@@ -14697,6 +14864,7 @@ private:
     }
     void onStyleConfig()   // Settings > Style Configurator: theme picker + per-language token style editor
     {
+        refreshLangDefs();                 // the keyword and extension boxes show languages.yaml as it is now
         wxString original = m_themeName;   // not const: "Save As..." moves it onto the theme it just wrote
         m_styleEdited.clear(); m_globalEdited.clear();
         const wxString kGlobalStyles = _("Global Styles");   // both displayed AND compared-against below - must be the same translated value
@@ -14759,6 +14927,23 @@ private:
         auto* extBox = new wxStaticBoxSizer(wxVERTICAL, &dlg, _("File extensions"));
         extBox->Add(xg, 0, wxEXPAND | wxALL, 8);
         extBox->Add(stExtNote, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
+        // The selected language's keyword lists, as Notepad++ shows them: what wxNote hands the lexer, and
+        // the words the user adds. Notepad++ keeps those in the theme; here they go to languages.yaml with
+        // the rest of the language's definition (language_defs.h), so they hold whichever theme is active.
+        auto* chKwList = new wxChoice(&dlg, wxID_ANY);
+        const wxSize kwBoxSize(-1, 3 * dlg.GetCharHeight() + 10);
+        auto* tcDefKw  = new wxTextCtrl(&dlg, wxID_ANY, wxString(), wxDefaultPosition, kwBoxSize, wxTE_MULTILINE | wxTE_READONLY);
+        auto* tcUserKw = new wxTextCtrl(&dlg, wxID_ANY, wxString(), wxDefaultPosition, kwBoxSize, wxTE_MULTILINE);
+        auto* stKwNote = new wxStaticText(&dlg, wxID_ANY, wxString(), wxDefaultPosition,
+                                          wxSize(-1, 2 * dlg.GetCharHeight() + 4), wxST_NO_AUTORESIZE);
+        auto* kg = new wxFlexGridSizer(2, 8, 10);
+        kg->Add(new wxStaticText(&dlg, wxID_ANY, _("Keyword list:")), 0, wxALIGN_CENTRE_VERTICAL); kg->Add(chKwList, 1, wxEXPAND);
+        kg->Add(new wxStaticText(&dlg, wxID_ANY, _("Default keywords:")), 0, wxTOP, 3);        kg->Add(tcDefKw, 1, wxEXPAND);
+        kg->Add(new wxStaticText(&dlg, wxID_ANY, _("User-defined keywords:")), 0, wxTOP, 3);   kg->Add(tcUserKw, 1, wxEXPAND);
+        kg->AddGrowableCol(1, 1);
+        auto* kwBox = new wxStaticBoxSizer(wxVERTICAL, &dlg, _("Keywords"));
+        kwBox->Add(kg, 0, wxEXPAND | wxALL, 8);
+        kwBox->Add(stKwNote, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
         auto col = [&](const wxString& cap, wxWindow* w){ auto* s = new wxBoxSizer(wxVERTICAL); s->Add(new wxStaticText(&dlg, wxID_ANY, cap), 0, wxBOTTOM, 4); s->Add(w, 1, wxEXPAND); return s; };
         auto* mid = new wxBoxSizer(wxHORIZONTAL);
         mid->Add(col(_("Language:"), langList), 0, wxEXPAND | wxRIGHT, 10);
@@ -14783,7 +14968,11 @@ private:
         btn->Add(new wxButton(&dlg, wxID_OK, _("Save && Close")), 0, wxRIGHT, 6); btn->Add(new wxButton(&dlg, wxID_CANCEL, _("Cancel")), 0);
         auto* top = new wxBoxSizer(wxVERTICAL);
         top->Add(themeRow, 0, wxALL, 12); top->Add(mid, 1, wxEXPAND | wxLEFT | wxRIGHT, 12);
-        top->Add(extBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 12); top->Add(btn, 0, wxEXPAND | wxALL, 12);
+        // Side by side, so the dialog stays as tall as it was before it had keywords.
+        auto* langBoxes = new wxBoxSizer(wxHORIZONTAL);
+        langBoxes->Add(extBox, 1, wxEXPAND | wxRIGHT, 10);
+        langBoxes->Add(kwBox, 1, wxEXPAND);
+        top->Add(langBoxes, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 12); top->Add(btn, 0, wxEXPAND | wxALL, 12);
         eg->AddGrowableCol(1, 1);   // the font-name combo takes any width the dialog gains
         dlg.SetSizerAndFit(top);
         dlg.CentreOnParent();
@@ -14853,6 +15042,136 @@ private:
             applyExtChange();
             if (!moved.empty()) { setStatus(0, moved); m_hint = true; }
         };
+        // ---- Keyword lists ----
+        // kwLang: the Language-menu language the box shows ("" for an entry that is none, or has no lists);
+        // kwNames: its lists and user keyword groups, in the choice's order; kwList: the one shown. An edit
+        // goes into the loaded definitions at once (m_langKwPending), so the document in front shows it, and
+        // is written to languages.yaml by Save & Close or Save As...; Cancel and Revert read the file back
+        // instead.
+        std::string kwLang, kwLexer, kwList;
+        std::vector<std::string> kwNames;
+        // A user keyword group has no built-in words, so a list there is just what the user adds: editable
+        // here, and kept a list when written back.
+        auto kwIsGroup = [&](const std::string& lang, const std::string& list) {
+            const WxnLang* L = wxnLangFindByName(lang);
+            for (const WxnSubstyleGroup& g : wxnSubstyleGroupsOf(L ? L->lexer : "", lang)) if (g.name == list) return true;
+            return false;
+        };
+        auto loadKwList = [&]{
+            const int i = chKwList->GetSelection();
+            kwList = (i >= 0 && i < (int)kwNames.size()) ? kwNames[i] : std::string();
+            wxString defWords, userWords, note;
+            bool editable = !kwList.empty();
+            if (!kwList.empty())
+            {
+                for (const WxnKeywordSetName* s : wxnKeywordSetsOf(kwLexer))
+                    if (kwList == s->name)
+                    {
+                        const auto builtIn = wxnBuiltinKeywordLists(kwLang);
+                        if (const auto b = builtIn.find(s->slot); b != builtIn.end()) defWords = wxString::FromUTF8(b->second.c_str());
+                    }
+                const WxnListEdit* edit = nullptr;
+                if (const WxnLangDef* def = m_langDefs.find(kwLang))
+                    if (const auto e = def->keywords.find(kwList); e != def->keywords.end()) edit = &e->second;
+                if (edit) userWords = wxString::FromUTF8(wxnJoinWords(edit->words).c_str());
+                if (edit && edit->replace && !kwIsGroup(kwLang, kwList))
+                {
+                    editable = false;
+                    note = _("languages.yaml replaces this whole list - change it there (Settings > Edit Language Definitions).");
+                }
+                else if (edit && !edit->remove.empty())
+                    note = wxString::Format(_("Saved in languages.yaml, which also takes these away: %s"),
+                                            wxString::FromUTF8(wxnJoinWords(edit->remove).c_str()));
+                else note = _("The words you add are saved in languages.yaml. Separate them with spaces.");
+            }
+            tcDefKw->ChangeValue(defWords);
+            tcUserKw->ChangeValue(userWords);
+            tcUserKw->SetEditable(editable);
+            stKwNote->SetLabel(note);
+        };
+        auto loadKw = [&]{
+            const wxString sel = langList->GetStringSelection();
+            const std::string lang = (sel == kGlobalStyles) ? std::string() : wxnLangForNppLexerType(std::string(sel.utf8_str()));
+            const WxnLang* L = isMenuLanguage(lang) ? wxnLangFindByName(lang) : nullptr;
+            kwLang  = L ? lang : std::string();
+            kwLexer = L ? std::string(L->lexer) : std::string();
+            kwNames = L ? wxnKeywordListNames(kwLexer, kwLang) : std::vector<std::string>();
+            chKwList->Clear();
+            for (const std::string& n : kwNames)
+            {
+                wxString what;
+                for (const WxnKeywordSetName* s : wxnKeywordSetsOf(kwLexer)) if (n == s->name) what = wxString::FromUTF8(s->label);
+                for (const WxnSubstyleGroup& g : wxnSubstyleGroupsOf(kwLexer, kwLang))   // the theme's style for it
+                    if (n == g.name) what = wxString::Format("%s %d", wxString::FromUTF8(g.run->themeStyle), g.run->firstNumber + g.index);
+                chKwList->Append(wxString::FromUTF8(n.c_str()) + " - " + what);
+            }
+            const bool on = !kwNames.empty();
+            chKwList->Enable(on); tcDefKw->Enable(on); tcUserKw->Enable(on);
+            if (on) chKwList->SetSelection(0);
+            loadKwList();
+        };
+        // The box's words become what the shown list adds, in the loaded definitions.
+        auto commitKw = [&]{
+            if (kwLang.empty() || kwList.empty() || !tcUserKw->IsEditable()) return;
+            const std::vector<std::string> words = wxnSplitWords(std::string(tcUserKw->GetValue().utf8_str()).c_str());
+            std::vector<std::string> was;
+            if (const WxnLangDef* d = m_langDefs.find(kwLang))
+                if (const auto e = d->keywords.find(kwList); e != d->keywords.end()) was = e->second.words;
+            if (words == was) return;
+            m_langKwPending[{ kwLang, kwList }] = words;
+            wxnLangDefsSetWords(m_langDefs, kwLang, kwList, words);
+            m_langWords.clear();
+            if (auto* p = activePage()) setLexerForFile(p->path);   // the document in front shows it now
+            if (m_stc) m_stc->Refresh();
+            loadKwList();
+        };
+        // Write this session's keyword edits into languages.yaml. False once the user has been told why not.
+        auto saveKw = [&]() -> bool {
+            commitKw();
+            if (m_langKwPending.empty()) return true;
+            const wxString path = languagesFilePath();
+            std::string text;
+            const WxnRead got = wxnReadSettled(path, text);
+            if (got == WxnRead::Failed)
+            {
+                wxMessageBox(wxString::Format(_("Could not read %s"), path), kTitle, wxOK | wxICON_ERROR, &dlg);
+                return false;
+            }
+            if (got == WxnRead::Missing) text = wxnLanguagesYamlTemplate();
+            for (const auto& [key, words] : m_langKwPending)
+            {
+                const std::string& lang = key.first;
+                const std::string& list = key.second;
+                const WxnLang* L = wxnLangFindByName(lang);
+                std::string err;
+                if (!wxnLangDefsSetAdded(text, lang, list, wxnMainKeywordList(L ? L->lexer : ""), words, &err, canonicalLanguage,
+                                         kwIsGroup(lang, list)))
+                {
+                    wxMessageBox(wxString::Format(_("languages.yaml could not be changed (%s)."), wxString::FromUTF8(err.c_str())),
+                                 kTitle, wxOK | wxICON_WARNING, &dlg);
+                    return false;
+                }
+            }
+            wxLogNull noLog;
+            wxFileName::Mkdir(userDataDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+            if (!wxnWriteFileAtomic(path, text.data(), text.size()))
+            {
+                wxMessageBox(wxString::Format(_("Could not write %s"), path), kTitle, wxOK | wxICON_ERROR, &dlg);
+                return false;
+            }
+            m_langKwPending.clear();
+            m_langDefsMs = -2;   // reads back what was written, whatever its time stamp
+            refreshLangDefs();
+            return true;
+        };
+        // Cancel and Revert: back to what languages.yaml says.
+        auto dropKw = [&]{
+            if (m_langKwPending.empty()) return;
+            m_langKwPending.clear();
+            m_langDefsMs = -2;   // a stamp no file has: forces the re-read
+            refreshLangDefs();
+            if (auto* p = activePage()) setLexerForFile(p->path);
+        };
         auto loadStyle = [&]{
             const wxString lang = langList->GetStringSelection(); const int si = styleList->GetSelection(); if (si < 0) return;
             // A GlobalStyles entry is only a colour pair in this model, so every font control greys out.
@@ -14913,9 +15232,11 @@ private:
             }
             applyEditorTheme(m_dark); if (auto* p = activePage()) setLexerForFile(p->path); if (m_stc) m_stc->Refresh();
         };
-        fillLangs(); langList->SetSelection(0); fillStyles(); loadExt();
-        // commitExt still sees the language being left: extLang only moves on in loadExt.
-        langList->Bind(wxEVT_LISTBOX,  [&](wxCommandEvent&){ commitExt(); fillStyles(); loadExt(); });
+        fillLangs(); langList->SetSelection(0); fillStyles(); loadExt(); loadKw();
+        // commitExt and commitKw still see the language being left: extLang and kwLang only move on in
+        // loadExt and loadKw.
+        langList->Bind(wxEVT_LISTBOX,  [&](wxCommandEvent&){ commitExt(); commitKw(); fillStyles(); loadExt(); loadKw(); });
+        chKwList->Bind(wxEVT_CHOICE,   [&](wxCommandEvent&){ commitKw(); loadKwList(); });
         styleList->Bind(wxEVT_LISTBOX, [&](wxCommandEvent&){ loadStyle(); });
         tcUserExt->Bind(wxEVT_TEXT_ENTER, [&](wxCommandEvent&){ commitExt(); });
         fgPick->Bind(wxEVT_COLOURPICKER_CHANGED, [&](wxColourPickerEvent&){ applyEdit(SF::Fg); });
@@ -14932,11 +15253,11 @@ private:
             // theme into the NEW theme's file. Re-select afterwards because the name can resolve to a
             // different one ("Default" in dark mode -> DarkModeDefault). User extensions are not part of
             // the theme, so a pending one is kept rather than dropped with the style edits.
-            commitExt();
+            commitExt(); commitKw();
             applyThemeSelection(themeCombo->GetStringSelection());
             m_styleEdited.clear(); m_globalEdited.clear();
             themeCombo->SetStringSelection(resolvedThemeName());
-            fillLangs(); langList->SetSelection(0); fillStyles(); loadExt(); syncDeleteButton(); });
+            fillLangs(); langList->SetSelection(0); fillStyles(); loadExt(); loadKw(); syncDeleteButton(); });
         // Both buttons below rebuild the lists, so put the user back where they were rather than
         // bouncing them to Global Styles - the point of Revert is to keep experimenting on one style.
         auto refillKeepingSelection = [&]{
@@ -14946,21 +15267,23 @@ private:
             langList->SetSelection(li == wxNOT_FOUND ? 0 : li);
             fillStyles();
             if (si >= 0 && si < (int)styleList->GetCount()) { styleList->SetSelection(si); loadStyle(); }
-            loadExt();
+            loadExt(); loadKw();
         };
         btnRevert->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
             // What Cancel does on close, offered as a button: drop this session's edits by re-reading the
             // theme from disk. Deliberately NOT applyThemeSelection(resolvedThemeName()) - see reloadThemeLive.
             // An extension typed but never applied (no Enter yet) is dropped from the field as well.
+            commitKw();
             const bool extDirty = (m_userExt != userExtSaved);
-            if (m_styleEdited.empty() && m_globalEdited.empty() && !extDirty) { loadExt(); return; }
+            if (m_styleEdited.empty() && m_globalEdited.empty() && !extDirty && m_langKwPending.empty()) { loadExt(); loadKw(); return; }
             m_styleEdited.clear(); m_globalEdited.clear();
             m_userExt = userExtSaved;
+            dropKw();
             reloadThemeLive();   // re-detects the document in front too
             refillKeepingSelection();
             setStatus(0, _("Style changes reverted")); m_hint = true; });
         btnSaveAs->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
-            commitExt();
+            commitExt(); commitKw();
             wxTextEntryDialog te(&dlg, _("Name:"), _("Save As"), resolvedThemeName());
             themeDialog(&te);
             if (te.ShowModal() != wxID_OK) return;
@@ -14995,13 +15318,15 @@ private:
             // `original` moves with them, or Cancel would roll the editor back off the theme just written.
             m_styleEdited.clear(); m_globalEdited.clear();
             m_themeName = name; original = name; saveSettings();
-            // A save is a save: extension edits are kept too, so a later Cancel does not take them back.
+            // A save is a save: extension and keyword edits are kept too, so a later Cancel does not take
+            // them back.
             if (m_userExt != userExtSaved) { saveUserExt(); userExtSaved = m_userExt; }
+            saveKw();
             themeCombo->Set(availableThemes()); themeCombo->SetStringSelection(resolvedThemeName());
             syncDeleteButton();
             setStatus(0, wxString::Format(_("Saved theme \"%s\""), name)); m_hint = true; });
         btnDelete->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
-            commitExt();   // the refill below reloads the field
+            commitExt(); commitKw();   // the refill below reloads the fields
             const wxString name = resolvedThemeName();
             const wxString path = userCopyPath();
             if (!wxFileExists(path)) return;
@@ -15036,6 +15361,12 @@ private:
             // below this cannot fail on a read-only built-in theme. Saved first, so a theme message wins.
             commitExt();
             if (m_userExt != userExtSaved) { saveUserExt(); setStatus(0, _("File extensions saved")); m_hint = true; }
+            // The keywords go to languages.yaml, in the user data folder; saveKw says so itself if it cannot,
+            // and what the file says then applies again.
+            commitKw();
+            const bool kwEdited = !m_langKwPending.empty();
+            if (!saveKw()) dropKw();
+            else if (kwEdited) { setStatus(0, _("Keywords saved")); m_hint = true; }
             // Only touch the file if something actually changed, and only claim success if the write
             // happened: for the light-mode Default the target is <exeDir>/themes/Default.yaml, which an
             // installed build cannot write. That failure used to be discarded and reported as saved.
@@ -15053,9 +15384,10 @@ private:
                                   kTitle, wxOK | wxICON_WARNING, this);
             }
         }
-        else   // Cancel -> take extension edits back, then reload the original theme from disk (which
-        {      // re-detects the document in front against the restored set)
+        else   // Cancel -> take extension and keyword edits back, then reload the original theme from disk
+        {      // (which re-detects the document in front against the restored set)
             m_userExt = userExtSaved;
+            dropKw();
             applyThemeSelection(original.empty() ? "Default" : original);
         }
         m_styleEdited.clear(); m_globalEdited.clear();
@@ -16556,6 +16888,7 @@ private:
                 break;
             }
             case kCmdSettingEditContextMenu: editContextMenu(); break;
+            case myID_EDIT_LANGUAGES: editLanguageDefinitions(); break;
             case kCmdLangText: setForcedLang("", _("Normal text file")); break;   // force Normal Text (a manual pick, like the languages)
             case kCmdLangOpenudldir: { wxLogNull noLog; wxFileName::Mkdir(udlDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL); openFolder(udlDir()); break; }   // create-then-open the per-user dir
 
@@ -16816,20 +17149,20 @@ private:
         // greyed rather than left clickable to report failure afterwards. Block Comment stays available
         // whenever anything exists - for a line-only language it falls back to the line token.
         const WxnCommentLang* clang = activeCommentLang();
-        const WxnCommentStyle cs    = clang ? clang->style : WxnCommentStyle{};
+        const WxnCommentStyle cs    = commentStyleOf(clang);
         const bool canComment = !cs.empty();
-        // The language identity, not just the yes/no, has to be part of the change test: switching
-        // between two commentable languages leaves canComment true while the TOOLTIP must still be
-        // rewritten from "//" to "#".
-        const void* clangId = static_cast<const void*>(clang);
+        // What the tooltip will say, not just the yes/no, has to be part of the change test: switching
+        // between two commentable languages - or editing languages.yaml - leaves canComment true while
+        // the TOOLTIP must still be rewritten from "//" to "#".
+        const wxString commentHint = canComment ? commentTokenHint(cs) : commentLangLabel(clang);
 
         if (dirty == m_stSave && anyDirty == m_stSaveAll && canUndo == m_stUndo && canRedo == m_stRedo &&
             hasSel == m_stSel && canPaste == m_stPaste && hasPath == m_stHasPath &&
-            canComment == m_stCanComment && clangId == m_stCommentLang)
+            canComment == m_stCanComment && commentHint == m_stCommentHint)
             return;   // nothing changed
         m_stSave = dirty; m_stSaveAll = anyDirty; m_stUndo = canUndo; m_stRedo = canRedo;
         m_stSel = hasSel; m_stPaste = canPaste; m_stHasPath = hasPath;
-        m_stCanComment = canComment; m_stCommentLang = clangId;
+        m_stCanComment = canComment; m_stCommentHint = commentHint;
         if (auto* tb = toolBar())
         {
             tb->EnableTool(kCmdFileSave, dirty);   tb->EnableTool(kCmdFileSaveall, anyDirty);
@@ -17025,11 +17358,10 @@ private:
     bool        m_hint = false;   // a "needs full app" message is showing in status field 0
     // cached toolbar/menu enable states (start enabled, matching the freshly-built toolbar)
     bool        m_stSave = true, m_stSaveAll = true, m_stUndo = true, m_stRedo = true, m_stSel = true, m_stPaste = true, m_stHasPath = true;
-    // Comment/Uncomment enable state. m_stCommentLang is the identity of the row in comment_tokens.h's
-    // static table (a stable pointer, never freed), tracked alongside the boolean so that switching
-    // between two commentable languages still refreshes the token named in the tooltip.
+    // Comment/Uncomment enable state, and what the toolbar tooltip last said - tracked alongside the
+    // boolean so that switching between two commentable languages still refreshes the token it names.
     bool        m_stCanComment = true;
-    const void* m_stCommentLang = nullptr;
+    wxString    m_stCommentHint;
     int         m_newCount = 0;   // counter for "new N" tab titles
     int         m_zoom = 0;       // shared zoom level across all tabs (Ctrl+wheel), persisted
     WxnTheme    m_theme;          // theme colours (loaded from the theme file)

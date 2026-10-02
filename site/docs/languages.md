@@ -64,6 +64,54 @@ Languages registered at runtime by a plugin (see below) are not in this table: t
 interface has no way to hand their comment characters to the host yet, so those buffers report that
 their comment syntax is unknown instead of guessing.
 
+Any of these can be changed for a language in [`languages.yaml`](#your-own-language-definitions-languagesyaml).
+
+## Your own language definitions — `languages.yaml`
+
+What Notepad++ keeps in `langs.xml` — which files open as each language, how it is commented, and its
+keyword lists — wxNote keeps in its own data, and **`languages.yaml`** in the user data folder holds
+your changes to it. **Settings&nbsp;&rsaquo; Edit Language Definitions** opens it, starting it from a
+commented example the first time. Only what you write there changes; everything else stays as wxNote
+has it, so a later wxNote's new keywords and extensions still reach you.
+
+```yaml
+languages:
+  C++:                                     # the Language menu's name, in any case
+    extensions: {add: [ipp, tpp]}          # files that open as it, without the dot
+    filenames: [conanfile.txt]             # whole file names
+    firstLine: '^//.*-\*-\s*c\+\+'         # a regular expression the first line can match
+    comments: {line: '//', block: ['/*', '*/']}
+    keywords:
+      types: {add: [size_t, ssize_t]}
+      userKeywords1: [Q_OBJECT, emit]      # coloured by the theme's USER KEYWORDS 1
+  Python:
+    keywords: {add: [match, case]}         # short for its "keywords" list
+```
+
+- **Every list takes two forms.** A plain list replaces wxNote's own; `{add: [...], remove: [...]}`
+  changes it. A word or extension you remove stays removed when wxNote's own list grows.
+- **Extensions** you add win over wxNote's own rules (and a plugin language's); one you remove no
+  longer opens as that language, so the file falls back to its first line, or to plain text.
+  The **User ext.** field of the [Style Configurator](themes.md#file-extensions) is the quicker way
+  to map an extension, and wins over this file.
+- **Comments** take a `line` token and a `block` pair; `''` or `[]` takes a form away.
+- **Keyword lists** go by the names the Style Configurator shows for the language — `keywords`,
+  `types`, `functions`, `taskMarkers`… — and `userKeywords1`…`8` (`userTags`, `userAttributes`,
+  `userScalars` for HTML, XML and shell) are your own groups, coloured by the theme's **USER KEYWORDS**
+  styles. What a list holds is what the highlighting and completion use. Write words in the case the
+  language's own list uses (the Style Configurator shows it): SQL's or Pascal's lists are lower case,
+  and their lexers match only lower-case entries. `null`, `Null` and `NULL` are words in a list like
+  any other, though YAML reads them as nothing elsewhere.
+- A language or list name wxNote does not know, or a value of the wrong shape, is skipped and named in
+  the status bar; the rest of the file still counts. A file that does not parse is not used at all
+  until it is fixed; one that cannot be read leaves things as they were. Changes apply to the next
+  document you open or switch to.
+
+The [Style Configurator](themes.md#keywords) edits the keyword part for you, and
+**Extensions&nbsp;&rsaquo; Import from Notepad++…** brings across what you added to Notepad++'s
+`langs.xml` — and the *User-defined keywords* of its Style Configurator — when Notepad++'s own
+`langs.model.xml` is at hand to compare with (an installed Notepad++ has it in its program folder).
+
 ## Code folding
 
 Folding is available for languages whose lexer reports fold levels. The commands live under **View**:

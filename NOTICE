@@ -6,8 +6,8 @@ LICENSE), with a few exceptions among the optional plugins that ship, each of
 which remains GPL-3.0-or-later because it reproduces a Notepad++
 interoperability surface: packages/npp-bridge/ (the plugin ABI),
 packages/udl-compat/ (the userDefineLang.xml UDL format), and
-packages/npp-compat/ (Notepad++'s settings, shortcuts, theme, context-menu, session and
-workspace file formats). Each has
+packages/npp-compat/ (Notepad++'s settings, shortcuts, theme, context-menu, language,
+session and workspace file formats). Each has
 its own LICENSE. npp-bridge's never-shipped, Windows-only test fixture
 packages/test_plugin/ tracks the same GPL license for the same reason. The
 Apache-2.0 core links against none of them. This NOTICE records the project's

@@ -2028,6 +2028,9 @@ msgstr "OK"
 msgid "Name:"
 msgstr "Nom :"
 
+msgid "Keywords"
+msgstr "Mots-clés"
+
 msgid "Theme:"
 msgstr "Thème :"
 
@@ -3169,3 +3172,41 @@ msgstr "Impossible de lire le fichier d'espace de travail."
 msgid "These files are not wxNote themes and were not imported:"
 msgstr "Ces fichiers ne sont pas des thèmes wxNote et n'ont pas été importés :"
 
+msgid "Edit Language Definitions"
+msgstr "Éditer les définitions de langages"
+
+msgid "Could not create a writable languages.yaml to edit."
+msgstr "Impossible de créer un fichier languages.yaml modifiable."
+
+msgid "languages.yaml: %s - the rest of the file is used"
+msgstr "languages.yaml : %s - le reste du fichier est utilisé"
+
+msgid "languages.yaml: %s, and %d more like it - the rest of the file is used"
+msgstr "languages.yaml : %s, et %d autres - le reste du fichier est utilisé"
+
+msgid "Keyword list:"
+msgstr "Liste de mots-clés :"
+
+msgid "Default keywords:"
+msgstr "Mots-clés par défaut :"
+
+msgid "User-defined keywords:"
+msgstr "Mots-clés utilisateur :"
+
+msgid "languages.yaml replaces this whole list - change it there (Settings > Edit Language Definitions)."
+msgstr "languages.yaml remplace toute cette liste - modifiez-la là (Paramètres > Éditer les définitions de langages)."
+
+msgid "Saved in languages.yaml, which also takes these away: %s"
+msgstr "Enregistré dans languages.yaml, qui retire aussi ceux-ci : %s"
+
+msgid "The words you add are saved in languages.yaml. Separate them with spaces."
+msgstr "Les mots ajoutés sont enregistrés dans languages.yaml. Séparez-les par des espaces."
+
+msgid "Could not read %s"
+msgstr "Impossible de lire %s"
+
+msgid "languages.yaml could not be changed (%s)."
+msgstr "Impossible de modifier languages.yaml (%s)."
+
+msgid "Keywords saved"
+msgstr "Mots-clés enregistrés"

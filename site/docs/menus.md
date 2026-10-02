@@ -248,6 +248,9 @@ See [Plugins](plugins.md).
 - **Edit Popup ContextMenu** — opens `contextmenu.yaml` for editing, so the editor's right-click menu can
   be customised: commands, separators, submenus, labels of your own and plugin commands (see the
   [FAQ](faq.md#can-i-customise-the-editors-right-click-menu))
+- **Edit Language Definitions** — opens `languages.yaml`, your changes to each language's file
+  extensions, comment tokens and keyword lists (see
+  [Languages](languages.md#your-own-language-definitions-languagesyaml))
 - **Localization** *(dynamic)* — the UI-language picker, the same list as
   **Preferences&nbsp;&rsaquo; General&nbsp;&rsaquo; Localization**
 

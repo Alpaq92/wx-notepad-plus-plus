@@ -12,16 +12,15 @@
 //   cmake --build build --target keywords_test && build/bin/keywords_test
 //
 #include "keywords.h"
+#include "keyword_sets.h"
+#include "lang_table.h"
 
 #include "ILexer.h"
 #include "Lexilla.h"
 
 #include <cstdio>
-#include <fstream>
 #include <map>
-#include <regex>
 #include <set>
-#include <sstream>
 #include <string>
 
 static int g_pass = 0, g_fail = 0;
@@ -31,16 +30,13 @@ static void check(bool ok, const std::string& what)
     ok ? ++g_pass : ++g_fail;
 }
 
-// menu_data_language.h needs wx, so it is read as DATA (the lang_detect_test pattern):
-//   { kCmdLangPascal, "Pascal", "pascal" },
+// The Language menu's languages and their lexers (lang_table.h).
 static std::map<std::string, std::string> menuLexers()
 {
-    std::ifstream in(std::string(SRC_DIR) + "/menu_data_language.h", std::ios::binary);
-    std::ostringstream s; s << in.rdbuf();
-    const std::string text = s.str();
     std::map<std::string, std::string> out;
-    static const std::regex row(R"re(\{\s*kCmdLang\w+\s*,\s*"([^"]+)"\s*,\s*"([^"]*)")re");
-    for (std::sregex_iterator it(text.begin(), text.end(), row), end; it != end; ++it) out[(*it)[1]] = (*it)[2];
+    std::size_t n;
+    const WxnLang* t = wxnLangTable(n);
+    for (std::size_t i = 0; i < n; ++i) out[t[i].name] = t[i].lexer;
     return out;
 }
 
@@ -164,6 +160,66 @@ int main()
     check(upperCase == 0, "ABL, BibTeX, MS SQL and MySQL lists are lower case, as their lexers look words up");
     check(lexers.count("Clarion") && lexers.at("Clarion") == "clarionnocase",
           "Clarion uses the case-insensitive lexer its upper-case lists are written for");
+
+    std::printf("\n-- the lists' names (keyword_sets.h) --\n");
+    {
+        // Every list wxNote fills has a name, every name is a slot its lexer describes or that wxNote
+        // fills, and no lexer has a name twice.
+        std::set<std::pair<std::string, int>> named, filled;
+        std::size_t n;
+        const WxnKeywordSetName* names = wxnKeywordSetNames(n);
+        int badName = 0;
+        std::set<std::pair<std::string, std::string>> seenName;
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            named.insert({ names[i].lexer, names[i].slot });
+            if (!seenName.insert({ names[i].lexer, names[i].name }).second) { ++badName; std::printf("        %s: \"%s\" twice\n", names[i].lexer, names[i].name); }
+            for (const char* p = names[i].name; *p; ++p)
+                if (!((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9')))
+                { ++badName; std::printf("        %s: \"%s\" is not one word\n", names[i].lexer, names[i].name); break; }
+        }
+        for (const auto& [language, lexer] : lexers)
+            wxnForEachKeywordList(language, [&](const WxnKeywordList& k) { filled.insert({ lexer, k.slot }); });
+        int unnamed = 0, stray = 0;
+        for (const auto& f : filled) if (!named.count(f)) { ++unnamed; std::printf("        %s slot %d has a list but no name\n", f.first.c_str(), f.second); }
+        // LexVerilog describes no lists at run time, though its source names all six it reads.
+        const std::set<std::pair<std::string, int>> readButUndescribed = { { "verilog", 1 }, { "verilog", 3 }, { "verilog", 5 } };
+        for (const auto& nm : named)
+        {
+            if (readButUndescribed.count(nm)) continue;
+            Scintilla::ILexer5* lx = CreateLexer(nm.first.c_str());
+            int described = 0;
+            if (lx) { if (const char* d = lx->DescribeWordListSets()) { described = *d ? 1 : 0; for (; *d; ++d) if (*d == '\n') ++described; } lx->Release(); }
+            if (takesSlot(nm.first, nm.second) != 1 || (nm.second >= described && !filled.count(nm)))
+            { ++stray; std::printf("        %s slot %d is named but neither described nor filled\n", nm.first.c_str(), nm.second); }
+        }
+        check(badName == 0, "list names are single words, once per lexer");
+        check(unnamed == 0, "every list wxNote fills has a name");
+        check(stray == 0, "every name is a list its lexer describes, or one wxNote fills");
+        check(wxnKeywordSetsOf("cpp").size() == 6 && std::string(wxnKeywordSetsOf("cpp")[1]->name) == "types",
+              "C++'s second list is \"types\", where Notepad++ keeps them");
+
+        // The user keyword groups land on the style numbers the themes colour: 128 up, or 192 up for the
+        // HTML lexer, run after run in table order.
+        int badRun = 0;
+        for (const char* lexer : { "cpp", "python", "gdscript", "lua", "bash", "hypertext", "xml" })
+        {
+            Scintilla::ILexer5* lx = CreateLexer(lexer);
+            if (!lx) { ++badRun; continue; }
+            int expect = std::string(lexer) == "hypertext" || std::string(lexer) == "xml" ? 192 : 128;
+            for (const WxnSubstyleRun* r : wxnSubstyleAllocation(lexer))
+            {
+                const int first = lx->AllocateSubStyles(r->base, r->count);
+                if (first != expect) { ++badRun; std::printf("        %s base %d: first style %d, expected %d\n", lexer, r->base, first, expect); }
+                expect += r->count;
+            }
+            lx->Release();
+        }
+        check(badRun == 0, "user keyword groups are allocated at the themes' style numbers");
+        check(wxnSubstyleGroupsOf("hypertext", "PHP").size() == 16 && wxnSubstyleGroupsOf("hypertext", "PHP")[8].run->base == 121,
+              "PHP's userKeywords are PHP words, after the tag and attribute groups");
+        check(wxnSubstyleGroupsOf("lua", "Lua").front().name == "userKeywords5", "Lua's groups are USER KEYWORDS 5-8");
+    }
 
     std::printf("\n-- lookups --\n");
     const char* cpp = wxnKeywordWords("C++");

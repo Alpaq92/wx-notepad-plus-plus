@@ -11,6 +11,8 @@
 #include "npp_session.h"
 #include "npp_translate.h"
 #include "npp_xml.h"
+#include "lang_table.h"
+#include "language_defs.h"
 #include "settings_schema.h"
 
 #include <cstdio>
@@ -362,6 +364,120 @@ static void testSessionAndWorkspace()
     check(detectNppFile(kXml) == NppFileKind::Shortcuts, "detect: shortcuts.xml");
 }
 
+// langs.xml (against langs.model.xml) and the theme's user-defined keywords -> languages.yaml, read back
+// the way wxNote reads it.
+static void testLanguagesTranslation()
+{
+    auto canonical = [](const std::string& w) {
+        size_t n;
+        const WxnLang* t = wxnLangTable(n);
+        for (size_t i = 0; i < n; ++i) if (wxnLangLower(t[i].name) == wxnLangLower(w)) return std::string(t[i].name);
+        return std::string();
+    };
+    auto lexerOf = [](const std::string& name) { const WxnLang* l = wxnLangFindByName(name); return l ? std::string(l->lexer) : std::string(); };
+    auto words = [](const WxnLangDefs& d, const std::string& lang, const std::string& list) {
+        const WxnLangDef* def = d.find(lang);
+        if (!def || !def->keywords.count(list)) return std::string("(none)");
+        std::string s;
+        for (const std::string& w : def->keywords.at(list).words) s += (s.empty() ? "" : " ") + w;
+        return s;
+    };
+    const std::string model =
+        "<NotepadPlus><Languages>"
+        "<Language name=\"python\" ext=\"py pyw\" commentLine=\"#\" tabSettings=\"132\"><Keywords name=\"instre1\">and def lambda</Keywords>"
+        "<Keywords name=\"substyle1\"></Keywords></Language>"
+        "<Language name=\"cpp\" ext=\"cpp h\" commentLine=\"//\" commentStart=\"/*\" commentEnd=\"*/\">"
+        "<Keywords name=\"instre1\">int return</Keywords><Keywords name=\"type1\">size_t</Keywords>"
+        "<Keywords name=\"instre2\">vector</Keywords><Keywords name=\"type2\">brief</Keywords></Language>"
+        "<Language name=\"go\" ext=\"go\" commentLine=\"//\"><Keywords name=\"instre1\">func</Keywords></Language>"
+        "<Language name=\"html\" ext=\"html\" commentStart=\"&lt;!--\" commentEnd=\"--&gt;\"><Keywords name=\"instre1\">div</Keywords></Language>"
+        "<Language name=\"php\" ext=\"php\"><Keywords name=\"instre1\">echo</Keywords></Language>"
+        "<Language name=\"xml\" ext=\"xml\"><Keywords name=\"instre1\">DOCTYPE</Keywords></Language>"
+        "<Language name=\"ini\" ext=\"ini\" commentLine=\";\"/>"
+        "<Language name=\"props\" ext=\"properties\" commentLine=\"#\"/>"
+        "<Language name=\"fcST\" ext=\"st\"/>"
+        "<Language name=\"searchResult\" ext=\"\"/>"
+        "</Languages></NotepadPlus>";
+    const std::string user =
+        "<NotepadPlus><Languages>"
+        "<Language name=\"python\" ext=\"py pyw sage\" commentLine=\"##\" tabSettings=\"136\"><Keywords name=\"instre1\">and def match</Keywords>"
+        "<Keywords name=\"substyle1\">self cls</Keywords></Language>"
+        "<Language name=\"cpp\" ext=\"cpp h ipp\" commentLine=\"//\" commentStart=\"/*\" commentEnd=\"*/\">"
+        "<Keywords name=\"instre1\">int return co_await</Keywords><Keywords name=\"type1\">size_t ssize_t</Keywords>"
+        "<Keywords name=\"instre2\">vector QString</Keywords><Keywords name=\"type2\">brief mytag</Keywords></Language>"
+        "<Language name=\"go\" ext=\"go\" commentLine=\"//\"><Keywords name=\"instre1\">func</Keywords></Language>"
+        "<Language name=\"html\" ext=\"html\" commentStart=\"&lt;!--\" commentEnd=\"--&gt;\"><Keywords name=\"instre1\">div my-element</Keywords></Language>"
+        "<Language name=\"php\" ext=\"php\"><Keywords name=\"instre1\">echo frobnicate</Keywords></Language>"
+        "<Language name=\"xml\" ext=\"xml\"><Keywords name=\"instre1\">DOCTYPE MYDECL</Keywords></Language>"
+        "<Language name=\"ini\" ext=\"ini cnf\" commentLine=\"#\"/>"
+        "<Language name=\"props\" ext=\"properties prp\" commentLine=\"#\"/>"
+        "<Language name=\"lua\" ext=\"lua\" commentLine=\"--\"><Keywords name=\"instre1\">and break</Keywords></Language>"
+        "<Language name=\"fcST\" ext=\"st stx\"/>"
+        "<Language name=\"searchResult\" ext=\"xyz\"/>"
+        "</Languages></NotepadPlus>";
+    const std::string theme =
+        "<NotepadPlus><LexerStyles>"
+        "<LexerType name=\"perl\"><WordsStyle name=\"INSTRUCTION WORD\" styleID=\"5\" keywordClass=\"instre1\">carp croak</WordsStyle></LexerType>"
+        "<LexerType name=\"html\"><WordsStyle name=\"USER ATTRIBUTES1\" styleID=\"196\" keywordClass=\"substyle5\">download</WordsStyle></LexerType>"
+        "<LexerType name=\"cpp\"><WordsStyle name=\"INSTRUCTION WORD\" styleID=\"5\" keywordClass=\"instre1\">constexpr my_kw</WordsStyle></LexerType>"
+        "</LexerStyles></NotepadPlus>";
+
+    LanguagesTranslation t;
+    std::string err;
+    check(languagesFromNpp(user, model, theme, t, &err) && t.compared && !t.yaml.empty(), "languages: translates against the model");
+    WxnLangDefs d;
+    check(wxnParseLangDefs(t.yaml, d, &err, canonical, lexerOf) && d.warnings.empty(), "languages: wxNote reads what it wrote");
+
+    const WxnLangDef* py = d.find("Python");
+    check(py && py->extensions.words == std::vector<std::string>({ "sage" }) && !py->extensions.replace && py->extensions.remove.empty(),
+          "languages: an added extension is added");
+    check(py && py->hasLineComment && py->lineComment == "##" && !py->hasBlockComment, "languages: a changed comment token comes across, alone");
+    check(words(d, "Python", "keywords") == "match", "languages: an added keyword is added, a removed one is not taken away");
+    check(words(d, "Python", "userKeywords1") == "self cls", "languages: substyle1 is the first user keyword group");
+    check(words(d, "C++", "keywords") == "co_await my_kw", "languages: C++ instre1 is its keywords (theme's user keywords added, known ones not)");
+    check(words(d, "C++", "types") == "ssize_t", "languages: the C family's type1 is its types list");
+    check(words(d, "C++", "globalClasses") == "QString", "languages: ...and instre2 its global classes");
+    check(words(d, "C", "docKeywords") == "mytag" && words(d, "Java", "docKeywords") == "mytag" && !d.find("Go"),
+          "languages: C++'s doxygen words go to every C-family language but Go");
+    check(d.find("C++") && d.find("C++")->extensions.words == std::vector<std::string>({ "ipp" }), "languages: C++'s added extension");
+    for (const char* l : { "HTML", "PHP", "ASP", "JSP" })
+        check(words(d, l, "html") == "my-element" && words(d, l, "php") == "frobnicate" && words(d, l, "userAttributes1") == "download",
+              "languages: the HTML family shares the markup's and the scripts' lists, and the theme's attribute group");
+    check(words(d, "XML", "sgml") == "MYDECL", "languages: XML's instre1 is its SGML list");
+    check(words(d, "Perl", "keywords") == "carp croak", "languages: the theme's user-defined keywords are added");
+    check(d.find("Properties") && d.find("Properties")->extensions.words == std::vector<std::string>({ "cnf", "prp" })
+              && !d.find("Properties")->hasLineComment, "languages: ini's extensions go to Properties with props', its comment does not");
+    check(!d.find("Lua"), "languages: a language langs.model.xml lacks brings nothing - not its extensions, comments or keywords");
+    auto noted = [&](const std::string& part) {
+        for (const std::string& s : t.notTranslated) if (contains(s, part)) return true;
+        return false;
+    };
+    check(noted("ini comment tokens"), "languages: ...which is reported");
+    check(noted("fcST extensions: wxNote has no such language"), "languages: a language wxNote lacks is reported");
+    check(noted("lua: not in langs.model.xml"), "languages: ...and so is one the model lacks");
+    check(noted("python: 1 extension(s) or keyword(s)") , "languages: what langs.xml lacks is counted, not imported");
+    check(noted("Python's indentation (tabSettings 136)"), "languages: changed indentation is pointed at settings.yaml");
+    check(!contains(t.yaml, "xyz"), "languages: the search-results pane is no language");
+
+    LanguagesTranslation noModel;
+    check(languagesFromNpp(user, "", theme, noModel, &err) && !noModel.compared, "languages: without the model");
+    WxnLangDefs nd;
+    check(wxnParseLangDefs(noModel.yaml, nd, &err, canonical, lexerOf) && !nd.find("Python") && words(nd, "Perl", "keywords") == "carp croak",
+          "languages: ...only the theme's user-defined keywords come across");
+    check(!noModel.notTranslated.empty() && contains(noModel.notTranslated[0], "langs.model.xml"), "languages: ...and the report says why");
+
+    LanguagesTranslation same;
+    check(languagesFromNpp(model, model, "", same, &err) && same.yaml.empty(), "languages: an unchanged langs.xml brings nothing");
+    check(!languagesFromNpp("<NotepadPlus/>", model, "", same, &err), "languages: a file without <Languages> is refused");
+    check(detectNppFile(model) == NppFileKind::Languages, "detect: langs.xml");
+    check(activeThemeFromConfig("<NotepadPlus><GUIConfigs><GUIConfig name=\"stylerTheme\" path=\"C:\\x\\themes\\Zenburn.xml\" /></GUIConfigs></NotepadPlus>")
+              == "C:\\x\\themes\\Zenburn.xml"
+              && activeThemeFromConfig("<NotepadPlus><GUIConfigs><GUIConfig name=\"stylerTheme\" path=\"C:\\x\\stylers.xml\" /></GUIConfigs></NotepadPlus>").empty(),
+          "config.xml: the active theme, none for stylers.xml");
+    check(nppFileNameOf("C:\\x\\themes\\Zenburn.xml") == "Zenburn.xml" && nppFileNameOf("/home/x/themes/Zenburn.xml") == "Zenburn.xml"
+              && nppFileNameOf("Zenburn.xml") == "Zenburn.xml", "config.xml: a theme path's file name, Windows path or not");
+}
+
 int main()
 {
     // ---- Parsing ----------------------------------------------------------------------------------
@@ -479,6 +595,7 @@ int main()
     testConfigTranslation();
     testContextMenuTranslation();
     testSessionAndWorkspace();
+    testLanguagesTranslation();
 
     if (g_fail == 0) std::printf("ALL PASS (npp-compat selftest)\n");
     else             std::printf("%d CHECK(S) FAILED\n", g_fail);

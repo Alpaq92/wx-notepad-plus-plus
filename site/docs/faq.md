@@ -125,7 +125,7 @@ executable, so installed builds work without write access to their install direc
   edit: wxNote changes single lines in it and keeps your comments. A file that does not parse is left
   alone, and the status bar says where it broke.
 - `state.yaml` — what wxNote remembers by itself: window, zoom, recent files, the last session.
-- `keybindings.yaml`, `snippets.yaml`, `contextmenu.yaml`, `functionlist.yaml`,
+- `keybindings.yaml`, `languages.yaml`, `snippets.yaml`, `contextmenu.yaml`, `functionlist.yaml`,
   `macros.yaml`, `runcommands.yaml`, and your own themes in `themes/` — plus recovery backups and
   user-defined languages.
 

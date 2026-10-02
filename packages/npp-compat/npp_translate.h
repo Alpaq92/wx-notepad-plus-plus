@@ -22,7 +22,7 @@
 namespace nppcompat {
 
 // What the Notepad++ file is, judged by its content (the root element and what is under it).
-enum class NppFileKind { Unknown, Theme, Config, Shortcuts, ContextMenu, Session, Workspace };
+enum class NppFileKind { Unknown, Theme, Config, Shortcuts, ContextMenu, Session, Workspace, Languages };
 NppFileKind detectNppFile(const std::string& xml);
 const char* nppFileKindName(NppFileKind k);
 
@@ -40,6 +40,12 @@ struct ConfigTranslation
     std::vector<std::string> notTranslated;
 };
 bool settingsFromConfig(const std::string& xml, ConfigTranslation& out, std::string* err = nullptr);
+// The theme file config.xml names as the active one (its stylerTheme path, as written there), or "" for
+// Notepad++'s default stylers.xml.
+std::string activeThemeFromConfig(const std::string& xml);
+// The file name at the end of a path Notepad++ wrote: after its last '\' or '/', on every platform - a
+// config.xml copied from Windows names its theme by a Windows path.
+std::string nppFileNameOf(const std::string& path);
 
 // ---- contextMenu.xml -> contextmenu.yaml ---------------------------------------------------------
 // Notepad++ and wxNote share their command numbers, so numbered items translate one for one, and an item
@@ -48,6 +54,27 @@ bool settingsFromConfig(const std::string& xml, ConfigTranslation& out, std::str
 // command a {plugin, command} item. Only names no Notepad++ menu has are reported in notTranslated.
 bool contextMenuFromNpp(const std::string& xml, std::string& yaml, std::vector<std::string>& notTranslated,
                         std::string* err = nullptr);
+
+// ---- langs.xml and the theme's user-defined keywords -> languages.yaml ---------------------------------
+// What the user changed in Notepad++'s language definitions, as languages.yaml entries (language_defs.h):
+// the extensions and keywords they added, and the comment tokens they changed. The user's langs.xml began
+// as a copy of Notepad++'s own langs.model.xml, so the model (`modelXml`) is what tells the user's
+// additions from Notepad++'s stock lists; without it ("") langs.xml cannot be told apart and is left out,
+// and only the keywords the theme adds come across - `themeXml` (may be "") is the active theme, where
+// Notepad++'s Style Configurator keeps its "User-defined keywords". What langs.xml lacks against the model
+// is not taken away: it is as likely an update the copy missed, and Notepad++ itself restores it. Notepad++'s keyword classes land in wxNote's lists as its own lexers
+// wire them: by number, except the C family (types in list 1, global classes in 3, C++'s doxygen words in
+// every C-family language's 2) and the HTML family, whose languages share the markup's and the embedded
+// scripts' lists. substyle1-8 are the language's user keyword groups, in order.
+struct LanguagesTranslation
+{
+    std::string yaml;                         // a languages.yaml document; "" when nothing changed
+    std::vector<std::string> languages;       // the wxNote languages it has entries for
+    std::vector<std::string> notTranslated;   // what had nowhere to go, or was not compared
+    bool compared = false;                    // langs.xml was compared with the model
+};
+bool languagesFromNpp(const std::string& langsXml, const std::string& modelXml, const std::string& themeXml,
+                      LanguagesTranslation& out, std::string* err = nullptr);
 
 // ---- a session: npp_session.h (kept apart so the npp-bridge can include it) ---------------------------
 

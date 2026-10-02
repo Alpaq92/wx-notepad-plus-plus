@@ -2,6 +2,7 @@
 #include "menu_model.h"
 #include "menu_labels_settings.h"
 #include "command_ids.h"
+#include "private_ids.h"
 
 // ----------------------------------------------------------------- Settings
 // wxNote arranges this menu by configuration scope, most-frequent first. Preferences is by far the
@@ -30,6 +31,7 @@ static const MenuItemDef kSettingsMenuItems[] = {
       kSettingsImportItems, WXSIZEOF(kSettingsImportItems) },
     { MenuItemKind::Separator },
     { MenuItemKind::Normal, kCmdSettingEditContextMenu, &Label::SettingsEditContextMenu, "settings.editContextMenu" },
+    { MenuItemKind::Normal, myID_EDIT_LANGUAGES,        &Label::SettingsEditLanguages,   "settings.editLanguages" },
     { MenuItemKind::Separator },
     { MenuItemKind::DynamicSlot, 0, nullptr, "slot.localization" },
 };

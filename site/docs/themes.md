@@ -38,6 +38,21 @@ so they stay when you switch themes (or the theme follows dark/light mode). A th
 per-language `extensions` lists (which a theme imported from Notepad++ brings along) are read as well,
 but only for extensions wxNote does not already place.
 
+### Keywords
+
+Beside it, the **Keywords** box shows the selected language's keyword lists, as Notepad++'s Style
+Configurator does:
+
+- **Keyword list** — each list the language's lexer reads (its keywords, types, built-in functions…),
+  then your own **USER KEYWORDS** groups, which the theme colours with the styles of that name.
+- **Default keywords** — wxNote's own words in that list (read-only).
+- **User-defined keywords** — words you add, separated by spaces. The document in front shows them as
+  you switch lists; **Save &amp; Close** keeps them.
+
+The words are saved in [`languages.yaml`](languages.md#your-own-language-definitions-languagesyaml) with
+the rest of the language's definition — not in the theme, as Notepad++ does — so they stay when you
+switch themes. A list that file replaces whole is shown but not edited here.
+
 ## Bundled themes
 
 28 themes ship with the editor:

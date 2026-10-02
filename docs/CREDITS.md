@@ -23,7 +23,7 @@ this list. It was used throughout development as:
   [`SETTINGS_DESIGN.md`](SETTINGS_DESIGN.md)), and the core reads no
   Notepad++ format at all. The optional GPL packages translate them instead:
   `packages/npp-compat/` brings in a user's `config.xml` (as settings),
-  `shortcuts.xml` (as a key-binding scheme), themes, `contextMenu.xml`,
+  `shortcuts.xml` (as a key-binding scheme), themes, `contextMenu.xml`, `langs.xml`,
   sessions and Project-panel workspaces; `packages/udl-compat/` turns legacy
   `userDefineLang.xml` UDL files into Scintillua lexers (see the
   native-language-engine section above); and `packages/npp-bridge/` answers

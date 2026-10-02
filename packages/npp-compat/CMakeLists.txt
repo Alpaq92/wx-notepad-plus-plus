@@ -1,5 +1,5 @@
 # npp-compat - the optional, GPL Notepad++ compatibility layer: reads Notepad++'s own files
-# (shortcuts.xml, config.xml, themes, contextMenu.xml, sessions, workspaces) and translates them into
+# (shortcuts.xml, config.xml, themes, contextMenu.xml, langs.xml, sessions, workspaces) and translates them into
 # wxNote's. See README.md, and docs/SETTINGS_DESIGN.md ("Notepad++") for what each file becomes.
 #
 # Built as part of wxNote (add_subdirectory from the top-level CMakeLists): its translations write

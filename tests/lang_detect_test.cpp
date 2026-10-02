@@ -19,6 +19,8 @@
 //   cmake --build build --target lang_detect_test && build/bin/lang_detect_test
 //
 #include "lang_detect.h"
+#include "lang_table.h"
+#include "language_defs.h"      // languages.yaml, parsed the way the editor parses it
 #include "scintillua_engine.h"
 #include "theme_file.h"         // the shipped themes, read the way the editor reads them
 
@@ -57,18 +59,12 @@ static std::string readFile(const std::string& path)
 static std::set<std::string> g_menu;           // wxnLangTable names
 static scintillua::Engine*   g_eng = nullptr;
 
-// wxnLangTable needs wx, and this suite links only the engine, so read menu_data_language.h as DATA
-// (the comment_tokens_test pattern). Rows look like:  { kCmdLangPython,  "Python",  "python" },
+// The Language menu's names (lang_table.h).
 static void loadMenuNames()
 {
-    const std::string text = readFile(std::string(SRC_DIR) + "/menu_data_language.h");
-    for (std::size_t i = text.find("{ kCmdLang"); i != std::string::npos; i = text.find("{ kCmdLang", i + 1))
-    {
-        const std::size_t q1 = text.find('"', i), eol = text.find('\n', i);
-        if (q1 == std::string::npos || (eol != std::string::npos && q1 > eol)) continue;
-        const std::size_t q2 = text.find('"', q1 + 1);
-        if (q2 != std::string::npos) g_menu.insert(text.substr(q1 + 1, q2 - q1 - 1));
-    }
+    std::size_t n;
+    const WxnLang* t = wxnLangTable(n);
+    for (std::size_t i = 0; i < n; ++i) g_menu.insert(t[i].name);
 }
 
 static std::string scDetect(const std::string& f, const std::string& l) { return g_eng->detect(f, l); }
@@ -234,6 +230,53 @@ static void testStyleConfiguratorExtensions()
     expectEq(detect("plot.m", "#!/usr/bin/octave\n", WxnUserExtMaps{}), "MATLAB", "without it, .m still goes by content");
 }
 
+static void testLanguageDefinitions()
+{
+    std::printf("\n-- languages.yaml: a language's own extensions, file names and first line --\n");
+    auto canonical = [](const std::string& w) {
+        for (const std::string& n : g_menu) if (wxnLangLower(n) == wxnLangLower(w)) return n;
+        return std::string();
+    };
+    WxnLangDefs defs;
+    const bool parsed = wxnParseLangDefs(
+        "languages:\n"
+        "  PHP:\n    extensions: {add: [inc, tpl]}\n"
+        "  Python:\n    extensions: {remove: [pyw]}\n    filenames: [SConstruct]\n"
+        "    firstLine: '^#\\s*vim:.*ft=python'\n"
+        "  Shell:\n    filenames: {remove: [PKGBUILD]}\n"
+        "  CMake:\n    extensions: [cmake]\n"
+        "  Ruby:\n    extensions: [rb]\n    filenames: [Gemfile]\n",
+        defs, nullptr, canonical, [](const std::string&) { return std::string(); });
+    check(parsed && defs.warnings.empty(), "the definitions parse");
+    const WxnLangFileRules rules = wxnLangFileRulesFrom(defs);
+    WxnUserExtMaps u; u.defs = &rules;
+    expectEq(detect("defs.inc", "", u), "PHP", "an added extension places a file the tables leave open");
+    expectEq(detect("page.TPL", "", u), "PHP", "...in any case");
+    expectEq(detect("SConstruct", "", u), "Python", "an added file name");
+    expectEq(detect("gui.pyw", "", u), "", "a removed extension no longer opens as its language");
+    expectEq(detect("gui.pyw", "#!/usr/bin/env python3\n", u), "Python", "...but the content still can place it");
+    expectEq(detect("main.py", "", u), "Python", "the language keeps the extensions it was not asked to drop");
+    expectEq(detect("PKGBUILD", "", u), "", "a removed file name decides nothing");
+    expectEq(detect("CMakeLists.txt", "", u), "CMake", "a replaced extension list leaves whole names alone");
+    expectEq(detect("build.cmake", "", u), "CMake", "...and keeps what it lists");
+    expectEq(detect("Rakefile", "", u), "", "a replaced file-name list drops the built-in names it leaves out");
+    expectEq(detect("Gemfile", "", u), "Ruby", "...and keeps what it lists");
+    expectEq(detect("notes", "# vim: set ft=python :\n", u), "Python", "a firstLine pattern places a nameless file");
+    expectEq(detect("notes", "# just text\n", u), "", "...only when it matches");
+
+    std::map<std::string, std::string> mine = { { "inc", "Pascal" } };
+    WxnUserExtMaps both = u; both.toLang = &mine;
+    expectEq(detect("defs.inc", "", both), "Pascal", "the Style Configurator's User ext. still beats languages.yaml");
+
+    const auto defaults = wxnDefaultExtensions(wxnLangCandidateExts(g_eng->detectionKeys()), scDetect, known, &rules);
+    auto has = [&](const std::string& lang, const std::string& e) {
+        const auto it = defaults.find(lang);
+        return it != defaults.end() && std::find(it->second.begin(), it->second.end(), e) != it->second.end();
+    };
+    check(has("PHP", "inc") && has("PHP", "php"), "Default ext. shows the added extensions with the built-in ones");
+    check(!has("Python", "pyw") && has("Python", "py"), "...and not the removed ones");
+}
+
 static void testUserExtParsing()
 {
     std::printf("\n-- what the User ext. field accepts --\n");
@@ -333,7 +376,7 @@ static void testDefaultExtensions()
 static void testTablesNameMenuLanguages()
 {
     std::printf("\n-- every name the glue tables hand out is a Language-menu entry --\n");
-    check(g_menu.size() > 100, "read wxnLangTable out of menu_data_language.h (" + std::to_string(g_menu.size()) + " languages)");
+    check(g_menu.size() > 100, "read wxnLangTable (" + std::to_string(g_menu.size()) + " languages)");
     std::size_t n; int bad = 0;
     std::set<std::string> seen;
     const WxnLangScRow* sc = wxnLangScintilluaTable(n);
@@ -466,6 +509,7 @@ int main()
     testFirstLine();
     testUserMapping();
     testStyleConfiguratorExtensions();
+    testLanguageDefinitions();
     testUserExtParsing();
     testNppLexerTypes();
     testDefaultExtensions();

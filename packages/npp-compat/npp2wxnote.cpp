@@ -9,6 +9,9 @@
 //   npp2wxnote theme       <theme.xml>       <out.yaml>
 //   npp2wxnote contextmenu <contextMenu.xml> <out.yaml>
 //   npp2wxnote workspace   <workspace.xml>   <out.yaml>
+//   npp2wxnote languages   <langs.xml>       <out.yaml> [<langs.model.xml> [<theme.xml>]]
+//                          (the changes made to Notepad++'s langs.model.xml, and the theme's user-defined
+//                          keywords, as languages.yaml)
 //   npp2wxnote config      <config.xml>      (prints the settings.yaml lines)
 //   npp2wxnote session     <session.xml>     (prints the files it lists)
 //   npp2wxnote detect      <file.xml>        (prints what kind of Notepad++ file it is)
@@ -51,6 +54,7 @@ static int usage()
 {
     std::fprintf(stderr,
         "usage: npp2wxnote theme|contextmenu|workspace <in.xml> <out.yaml>\n"
+        "       npp2wxnote languages <langs.xml> <out.yaml> [<langs.model.xml> [<theme.xml>]]\n"
         "       npp2wxnote config|session|detect <in.xml>\n");
     return 2;
 }
@@ -92,6 +96,16 @@ static int run(const std::vector<std::string>& args)
         if (ok) { yaml = wxntheme::emit(t); ok = !yaml.empty(); if (!ok) err = "could not write the theme"; }
     }
     else if (cmd == "contextmenu") ok = contextMenuFromNpp(xml, yaml, notTranslated, &err);
+    else if (cmd == "languages")
+    {
+        std::string model, theme;
+        if (args.size() > 4 && !readFile(args[4], model)) { std::fprintf(stderr, "cannot read %s\n", args[4].c_str()); return 1; }
+        if (args.size() > 5 && !readFile(args[5], theme)) { std::fprintf(stderr, "cannot read %s\n", args[5].c_str()); return 1; }
+        LanguagesTranslation t;
+        ok = languagesFromNpp(xml, model, theme, t, &err);
+        yaml = t.yaml.empty() ? std::string("# Nothing to import: no changes to Notepad++'s language definitions.\nlanguages:\n") : t.yaml;
+        notTranslated = t.notTranslated;
+    }
     else if (cmd == "workspace")
     {
         const size_t slash = in.find_last_of("/\\");

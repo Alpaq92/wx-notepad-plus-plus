@@ -70,12 +70,12 @@ ships a standalone `udl2scintillua` converter CLI). Because it knows the Notepad
 licensed **GPL-3.0-or-later** and kept isolated from the Apache-2.0 core, and is built as
 `bin/nib/udl_compat.dll` (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)).
 
-wxNote keeps its own settings, key bindings, themes, sessions and workspaces as
+wxNote keeps its own settings, key bindings, themes, language definitions, sessions and workspaces as
 plain **YAML** files (see [`docs/SETTINGS_DESIGN.md`](docs/SETTINGS_DESIGN.md)); the core reads no
 Notepad++ format. A third optional plugin, `packages/npp-compat`, brings an existing Notepad++ setup
 across: **Extensions > Import from Notepad++...** translates `config.xml` into settings, `shortcuts.xml`
-into a key-binding scheme, and themes and `contextMenu.xml` into wxNote's own
-files, and it also opens a Notepad++ session or workspace (the `npp2wxnote` CLI does the same translations from a terminal). It
+into a key-binding scheme, and themes, `contextMenu.xml` and what was added to `langs.xml` into wxNote's
+own files, and it also opens a Notepad++ session or workspace (the `npp2wxnote` CLI does the same translations from a terminal). It
 reproduces Notepad++'s file formats, so it too is **GPL-3.0-or-later** and kept out of the core.
 
 ## Building

@@ -189,12 +189,13 @@ in [`LICENSING.md`](../LICENSING.md).
 | `src/gtk_native.cpp`, `src/macos_native.mm` | Small per-platform native shims for things wxWidgets doesn't expose (GTK scrollbar theming; macOS title-bar/traffic-light work). Compiled only on their platform, gated in CMake. |
 | `src/app_icon_svg.h` | The app icon as an embedded SVG string, rendered at runtime via `wxBitmapBundle::FromSVG`. |
 | `src/yaml_io.h`, `src/settings_store.h`, `src/settings_schema.h`, `src/theme_file.h`, `src/keymap_store.h` | wxNote's own files: the one wrapper around rapidyaml, the `settings.yaml` / `state.yaml` stores, the table of every setting with its default, the theme model, and the key-binding store (see [`SETTINGS_DESIGN.md`](SETTINGS_DESIGN.md)). |
+| `src/lang_table.h`, `src/lang_detect.h`, `src/comment_tokens.h`, `src/keywords.h`, `src/keyword_sets.h`, `src/language_defs.h` | The languages: the Language menu's table (no wx, so plugins and tests share it), which language a file opens as, each one's comment tokens and keyword lists (SciTE's and other projects', `keywords_scite.h` / `keywords_contrib.h`), the lists' names and the user keyword groups, and `languages.yaml` - the user's changes to all of that. |
 | `src/command_ids.h` | The core's own, authoritative command-id table. Values are frozen (static_asserts) so they stay identical to the plugin ABI's ids and npp-bridge's command passthrough dispatches correctly. |
 | `include/nib/nib.h` | The Nib plugin API — an original, stable C ABI (below). |
 | `include/npp-compat/` | Clean-room redeclarations of the Notepad++ plugin-ABI facts (ids, struct layouts). Consumed only by `packages/npp-bridge/`, `packages/npp-compat/` (Notepad++'s language numbers) and `packages/test_plugin/` — the core includes nothing from here. |
 | `packages/npp-bridge/` | The optional GPL Notepad++ binary-plugin bridge (itself a Nib plugin; builds on every OS — loads real plugin DLLs on Windows, shim-recompiled `.so`/`.dylib` plugins on Linux/macOS). |
 | `packages/udl-compat/` | The optional GPL Notepad++ UDL compatibility plugin: reads legacy `userDefineLang.xml`, translates each into a Scintillua Lua lexer, and registers it via `nib.langdef`. Ships `bin/nib/udl_compat.dll`, a standalone `udl2scintillua` converter CLI, and unit + roundtrip tests. Scoped to move to its own repository. |
-| `packages/npp-compat/` | The optional GPL Notepad++ settings importer: translates `config.xml`, `shortcuts.xml`, themes, `contextMenu.xml`, sessions and Project-panel workspaces into wxNote's YAML through `nib.settings`, `nib.keymap` and wxNote's own file formats. Ships `bin/nib/npp_compat.dll`, the `npp2wxnote` converter CLI (and the maintainer's `npp2accel`), and a self-test. Its session writer is also what npp-bridge answers Notepad++ plugins' session messages with. |
+| `packages/npp-compat/` | The optional GPL Notepad++ settings importer: translates `config.xml`, `shortcuts.xml`, themes, `contextMenu.xml`, `langs.xml`, sessions and Project-panel workspaces into wxNote's YAML through `nib.settings`, `nib.keymap` and wxNote's own file formats. Ships `bin/nib/npp_compat.dll`, the `npp2wxnote` converter CLI (and the maintainer's `npp2accel`), and a self-test. Its session writer is also what npp-bridge answers Notepad++ plugins' session messages with. |
 | `packages/test_plugin/` | A minimal real-ABI Notepad++ plugin used as the bridge's regression fixture (Windows-only, GPL). |
 | `src/plugins/nib_test_plugin/` | A cross-platform reference/smoke-test Nib plugin (Apache-2.0). |
 | `third_party/` | Vendored: Lexilla (lexers, HPND), Scintilla headers (HPND), wxBorderlessFrame (wxWindows Licence). |
@@ -318,8 +319,11 @@ full design and the editors it follows.
   rewritten whole; a save merges only the parts this instance changed into
   what is on disk, so two instances do not undo each other.
 - **Key bindings, snippets, macros, Run commands, the right-click menu,
-  Function List rules** — `keybindings.yaml`, `snippets.yaml`, `macros.yaml`,
-  `runcommands.yaml`, `contextmenu.yaml`, `functionlist.yaml`.
+  Function List rules, language definitions** — `keybindings.yaml`,
+  `snippets.yaml`, `macros.yaml`, `runcommands.yaml`, `contextmenu.yaml`,
+  `functionlist.yaml`, `languages.yaml` (the user's changes to each language's
+  extensions, comment tokens and keyword lists: `src/language_defs.h`, with the
+  keyword lists' names in `src/keyword_sets.h`).
 - **Session** — reopened automatically from `state.yaml` on launch; File >
   Save/Load Session reads/writes a session `.yaml` (caret, scroll, bookmarks
   included). A Notepad++ session comes in through `packages/npp-compat/`.

@@ -16,10 +16,9 @@
 //   cmake --build build --target comment_tokens_test && build/bin/comment_tokens_test
 //
 #include "comment_tokens.h"
+#include "lang_table.h"
 
 #include <cstdio>
-#include <fstream>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -192,7 +191,7 @@ static void testFileNameResolution()
 }
 
 // A Language-menu pick hands back wxnLangTable's `name` verbatim, so every display name that menu
-// can produce has to resolve here. These are the exact spellings from menu_data_language.h.
+// can produce has to resolve here. These are the exact spellings from lang_table.h.
 static void testMenuNameResolution()
 {
     std::printf("\n-- Language-menu name -> language key --\n");
@@ -402,33 +401,22 @@ static void testEveryMappedExtensionHasARow()
 }
 
 // Every language the Language menu can put on a buffer must have a row here, or picking it leaves
-// Ctrl+/ doing nothing with no way for the user to tell why. wxnLangTable is the source of truth for
-// that list, so read menu_data_language.h as DATA (the catalog_selftest pattern, SRC_DIR injected by
-// CMake) rather than including it - it needs wx, and this suite deliberately links nothing.
+// Ctrl+/ doing nothing with no way for the user to tell why. wxnLangTable (lang_table.h) is the source of
+// truth for that list.
 static void testEveryMenuLanguageHasTokens()
 {
     std::printf("\n-- every Language-menu entry has comment tokens --\n");
-    const std::string path = std::string(SRC_DIR) + "/menu_data_language.h";
-    std::ifstream in(path, std::ios::binary);
-    if (!in) { check(false, "read " + path); return; }
-    std::ostringstream ss; ss << in.rdbuf();
-    const std::string text = ss.str();
-
-    // Rows look like:  { kCmdLangPython,  "Python",  "python" },
+    std::size_t n;
+    const WxnLang* table = wxnLangTable(n);
     int found = 0, missing = 0;
-    for (std::size_t i = text.find("{ kCmdLang"); i != std::string::npos; i = text.find("{ kCmdLang", i + 1))
+    for (std::size_t i = 0; i < n; ++i)
     {
-        const std::size_t q1 = text.find('"', i);
-        const std::size_t eol = text.find('\n', i);
-        if (q1 == std::string::npos || (eol != std::string::npos && q1 > eol)) continue;   // no name on this row
-        const std::size_t q2 = text.find('"', q1 + 1);
-        if (q2 == std::string::npos) continue;
-        const std::string name = text.substr(q1 + 1, q2 - q1 - 1);
+        const std::string name = table[i].name;
         ++found;
         if (wxnCommentLangKeyForName(name).empty())
         { ++missing; std::printf("        no comment tokens for menu language [%s]\n", name.c_str()); }
     }
-    check(found > 100, "parsed wxnLangTable out of menu_data_language.h (" + std::to_string(found) + " languages)");
+    check(found > 100, "read wxnLangTable (" + std::to_string(found) + " languages)");
     check(missing == 0, "every Language-menu entry resolves to a comment-token row");
 }
 

@@ -10,7 +10,9 @@
 //                                      folder can be put - and imports everything wxNote has a place for:
 //                                      config.xml -> settings, shortcuts.xml -> a key-binding scheme,
 //                                      contextMenu.xml -> the right-click menu, stylers.xml and themes/ ->
-//                                      themes. One report says what came across and what had nowhere to go.
+//                                      themes, langs.xml and the theme's user-defined keywords ->
+//                                      languages.yaml. One report says what came across and what had nowhere
+//                                      to go.
 //   Import the Open Notepad++ File     the same for one file open in wxNote: any of those, plus a session
 //                                      (its files open) or a Project-panel workspace (a .yaml workspace is
 //                                      written beside it).
@@ -31,6 +33,9 @@
 #include "npp_shortcuts_parse.h"
 #include "npp_shortcuts_accel.h"
 #include "npp_translate.h"
+
+#include "lang_table.h"        // wxNote's languages, to lay an import over languages.yaml
+#include "language_defs.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -309,6 +314,68 @@ void importTheme(NibHost* host, NibQueryFn query, const std::string& xml, const 
     }
 }
 
+// Notepad++'s own langs.model.xml, which tells the user's additions in langs.xml from Notepad++'s lists:
+// beside langs.xml (a portable Notepad++, or a copy put there), else in an installed one's program folder.
+fs::path findLangsModel(const fs::path& dir)
+{
+    std::vector<fs::path> candidates = { dir / "langs.model.xml" };
+#ifdef _WIN32
+    for (const wchar_t* var : { L"ProgramW6432", L"ProgramFiles", L"ProgramFiles(x86)" })
+        if (const wchar_t* pf = _wgetenv(var)) candidates.push_back(fs::path(pf) / L"Notepad++" / L"langs.model.xml");
+#endif
+    std::error_code ec;
+    for (const fs::path& p : candidates) if (fs::exists(p, ec)) return p;
+    return fs::path();
+}
+
+// langs.xml (against `model`), and the active theme's user-defined keywords, into the user's languages.yaml:
+// laid over what it already says (language_defs.h), the previous file kept aside.
+void importLanguages(NibHost* host, NibQueryFn query, const std::string& langs, const fs::path& model,
+                     const std::string& theme, std::string& report)
+{
+    LanguagesTranslation t;
+    std::string err;
+    if (!languagesFromNpp(langs, model.empty() ? std::string() : readFile(model), theme, t, &err))
+    {
+        report += "  langs.xml could not be read: " + err + "\n";
+        return;
+    }
+    if (t.compared) report += "  compared with " + utf8Of(model) + "\n";
+    if (t.yaml.empty()) report += "  nothing to bring across: no added extensions or keywords, no changed comment tokens\n";
+    else
+    {
+        const fs::path data = userDataDir(host, query);
+        if (data.empty()) { report += "  no user data folder to write languages.yaml into\n"; return; }
+        const fs::path dest = data / "languages.yaml";
+        std::string text = readFile(dest);
+        if (text.empty()) text = wxnLanguagesYamlTemplate();
+        auto canonical = [](const std::string& written) {
+            size_t n;
+            const WxnLang* table = wxnLangTable(n);
+            for (size_t i = 0; i < n; ++i) if (wxnLangLower(table[i].name) == wxnLangLower(written)) return std::string(table[i].name);
+            return std::string();
+        };
+        auto lexerOf = [](const std::string& name) {
+            const WxnLang* l = wxnLangFindByName(name);
+            return l ? std::string(l->lexer) : std::string();
+        };
+        if (!wxnLangDefsMerge(text, t.yaml, &err, canonical, lexerOf))
+        {
+            report += "  languages.yaml has an error (" + err + "), so it was not changed\n";
+            return;
+        }
+        std::string names;
+        for (const std::string& l : t.languages) names += (names.empty() ? "" : ", ") + l;
+        switch (replaceFile(dest, text, report))
+        {
+            case Replaced::Written:   report += "  languages.yaml now has " + names + " - from the next document shown\n"; break;
+            case Replaced::Unchanged: report += "  languages.yaml already has these\n"; break;
+            case Replaced::Failed:    break;
+        }
+    }
+    for (const std::string& s : t.notTranslated) report += "  not imported: " + s + "\n";
+}
+
 void openSession(NibHost* host, NibQueryFn query, const std::string& xml, std::string& report)
 {
     std::vector<std::string> files;
@@ -435,6 +502,22 @@ void importCommand(NibHost* host, NibQueryFn query, void*)
     if (menu.empty()) report += "  none\n";
     else importContextMenu(host, query, menu, report);
 
+    // The active theme holds Notepad++'s "User-defined keywords"; config.xml names it (stylers.xml when not).
+    report += "\nlangs.xml\n";
+    fs::path themePath = dir / "stylers.xml";
+    const std::string named = activeThemeFromConfig(readFile(dir / "config.xml"));
+    if (!named.empty())
+    {
+        themePath = pathFromUtf8(named);
+        if (!fs::exists(themePath, ec)) themePath = dir / "themes" / pathFromUtf8(nppFileNameOf(named));   // a copied folder
+    }
+    const std::string langs = readFile(dir / "langs.xml"), theme = readFile(themePath);
+    if (!named.empty() && theme.empty())
+        report += "  the active theme, " + nppFileNameOf(named) + ", is not in " + utf8Of(dir / "themes")
+                + ", so its user-defined keywords were not imported\n";
+    if (langs.empty() && theme.empty()) report += "  none\n";
+    else importLanguages(host, query, langs, findLangsModel(dir), theme, report);
+
     if (fs::exists(dir / "session.xml", ec))
         report += "\nsession.xml\n  Notepad++'s last session is not opened here: open session.xml in wxNote and run\n"
                   "  Import the Open Notepad++ File to open its files.\n";
@@ -449,7 +532,7 @@ void importFileCommand(NibHost* host, NibQueryFn query, void*)
     if (path.empty())
     {
         presentReport(host, query, report + "Open a Notepad++ file - a theme, config.xml, shortcuts.xml, contextMenu.xml,\n"
-                                            "a session or a workspace - save it, and run this command again.\n");
+                                            "langs.xml, a session or a workspace - save it, and run this command again.\n");
         return;
     }
     const fs::path source = pathFromUtf8(path);
@@ -463,6 +546,7 @@ void importFileCommand(NibHost* host, NibQueryFn query, void*)
         case NppFileKind::ContextMenu: importContextMenu(host, query, xml, report); break;
         case NppFileKind::Session:     openSession(host, query, xml, report); break;
         case NppFileKind::Workspace:   importWorkspace(xml, source, report); break;
+        case NppFileKind::Languages:   importLanguages(host, query, xml, findLangsModel(source.parent_path()), std::string(), report); break;
         case NppFileKind::Shortcuts:
         {
             ImportTally tally;
@@ -474,7 +558,7 @@ void importFileCommand(NibHost* host, NibQueryFn query, void*)
         }
         case NppFileKind::Unknown:
             report += "Not a Notepad++ file this can import: expected a theme, config.xml, shortcuts.xml,\n"
-                      "contextMenu.xml, a session or a workspace.\n";
+                      "contextMenu.xml, langs.xml, a session or a workspace.\n";
             break;
     }
     presentReport(host, query, report);

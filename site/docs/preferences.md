@@ -204,5 +204,6 @@ languages:
 What wxNote merely remembers — window size and position, zoom, recent files, the last session — goes
 to a separate `state.yaml`, so a moved window never rewrites your settings. Keyboard shortcuts have
 their own `keybindings.yaml`; see [Customizing Shortcuts](custom-shortcuts.md). The same directory
-holds recovery backups, user-defined languages, `contextmenu.yaml`, `snippets.yaml` and your own themes. Your Notepad++ settings can be brought across with the optional `npp-compat` plugin
+holds recovery backups, user-defined languages, `languages.yaml` (your changes to each language's
+extensions, comments and keywords), `contextmenu.yaml`, `snippets.yaml` and your own themes. Your Notepad++ settings can be brought across with the optional `npp-compat` plugin
 (**Extensions&nbsp;&rsaquo; Import from Notepad++…**).

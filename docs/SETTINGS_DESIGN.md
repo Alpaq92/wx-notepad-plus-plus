@@ -72,6 +72,7 @@ next to the executable.
 | `keybindings.yaml` | you + Shortcut Mapper | key-binding rules and your schemes | `shortcuts.json` |
 | `themes/<name>.yaml` | you + Style Configurator | a colour theme | `themes/*.xml`, `stylers.model.xml` |
 | `contextmenu.yaml` | you | the editor's right-click menu | `contextMenu.xml` |
+| `languages.yaml` | you + Style Configurator | your changes to each language: file names, comment tokens, keyword lists | — (built in) |
 | `functionlist.yaml` | you | Function List rules for more languages | `functionList.conf` |
 | `snippets.yaml` | you | your snippets | `snippets.txt` |
 | `macros.yaml` | wxNote | saved macros | `macros.dat` |
@@ -85,8 +86,8 @@ The shipped defaults next to the executable: `themes/*.yaml` (with `Default.yaml
 
 - **A file that does not parse is not used, and not overwritten.** wxNote carries on without it — on
   the defaults for `settings.yaml` and `keybindings.yaml`, on the built-in menu for
-  `contextmenu.yaml`, on the built-in colours for a theme, without the user's additions for
-  `snippets.yaml` and `functionlist.yaml` — and
+  `contextmenu.yaml`, on the built-in colours for a theme, on the built-in language definitions for
+  `languages.yaml`, without the user's additions for `snippets.yaml` and `functionlist.yaml` — and
   the status bar says which file and where it broke
   (line and column): at startup for the files read then, otherwise when the file is next read.
   Saving to a broken `settings.yaml` or `keybindings.yaml` is refused until it is fixed (the
@@ -399,6 +400,80 @@ items:
 The Nib `nib.session/1` interface keeps its by-path calls; the file they read and write is now this
 session format.
 
+## `languages.yaml` — language definitions
+
+Notepad++ keeps what it knows about each language in `langs.xml`: its file extensions, its comment
+tokens and its keyword lists (and, per language, the indentation). The file starts as a copy of the
+shipped `langs.model.xml` and the user edits the copy; the Style Configurator's *User-defined keywords*
+are stored in the theme. wxNote keeps the same knowledge in the program - `lang_detect.h`,
+`comment_tokens.h`, `keywords.h` - and `languages.yaml` holds **only the user's changes** to it, so a
+later wxNote's new keywords and extensions still reach a user who changed something else. Indentation
+per language is a setting, so it is in `settings.yaml`'s `languages:` block, as in VS Code.
+
+```yaml
+languages:
+  C++:                                       # the Language menu's name, any case
+    extensions: {add: [ipp, tpp]}            # without the dot
+    filenames: [conanfile.txt]               # whole file names, any case
+    firstLine: '^//.*-\*-\s*c\+\+'           # a regular expression the first line can match
+    comments: {line: '//', block: ['/*', '*/']}   # '' / [] / a null takes a form away
+    keywords:
+      types: {add: [size_t, ssize_t]}
+      userKeywords1: [Q_OBJECT, emit]        # coloured by the theme's USER KEYWORDS 1
+  Python:
+    keywords: {add: [match, case]}           # short for the "keywords" list, else the first
+```
+
+**Why this shape.** The other editors studied agree on most of it, and wxNote takes what they agree on:
+
+| | file types | first line | comments | keyword lists | user's changes |
+| --- | --- | --- | --- | --- | --- |
+| VS Code | `extensions`, `filenames`, `filenamePatterns` | `firstLine` | `comments: {lineComment, blockComment: [o, c]}` | none (grammars) | `files.associations`, per-language settings |
+| Sublime Text | `file_extensions` | `first_line_match` | `TM_COMMENT_START`/`_END` preferences | none (regex syntax) | a syntax's `extensions` setting |
+| TextMate | `fileTypes` | `firstLineMatch` | `TM_COMMENT_*` preferences | none | deltas over a bundle item (`changed`, `deleted`) |
+| Pulsar | `fileTypes` | `firstLineMatch` | `commentDelimiters: {line, block: [o, c]}` | none | `core.customFileTypes`, scoped settings |
+| Notepad4 | `FileExtensions` | - | built in | built in, numbered | changed extensions in the INI |
+| Notepad++ | `ext` | - | `commentLine`, `commentStart`, `commentEnd` | `instre1`, `instre2`, `type1`-`type7`, `substyle1`-`8` | the copied `langs.xml`; theme keywords |
+
+- File names: `extensions` without the dot and `filenames` (Sublime, TextMate, Pulsar, VS Code), and
+  `firstLine` (VS Code; `firstLineMatch` elsewhere).
+- Comments: a `line` token and a `block: [open, close]` pair (Pulsar's spelling of VS Code's).
+- Changes: every list is either a **replacement** (a plain list, as in every editor's settings) or an
+  **edit** `{add, remove}` over wxNote's own list - TextMate's deltas over a bundle. A removal stays
+  removed when wxNote's own list grows, which Notepad++'s model merge cannot offer (it re-adds what
+  the user deleted).
+- Keyword lists: only Notepad++ and SciTE expose them, and both by number (`instre1`…, `keywords2`…).
+  wxNote names them by what they hold, from Lexilla's own description of each lexer's lists
+  (`DescribeWordListSets`), curated in `keyword_sets.h`: `keywords`, `types`, `docKeywords`,
+  `globalClasses`, `taskMarkers` for the C family, `functions1`-`3` for Lua (the themes' FUNC1-3)... The
+  Style Configurator shows each name with its description. Lexilla substyles of identifiers - the
+  themes' USER KEYWORDS 1-8, USER TAGS/ATTRIBUTES for HTML and XML, USER SCALAR for shell - are the
+  `userKeywordsN` (`userTagsN`, `userAttributesN`, `userScalarsN`) groups, allocated in Notepad++'s
+  order so the themes' style numbers line up.
+
+**How it is applied.**
+
+- *File names* - `extensions` and `filenames` rank below the user's own mappings (the Style
+  Configurator's *User ext.*, `files.associations`) and above the built-in tables; a name a language's
+  definition takes away decides nothing, so the file goes on to the theme's extensions and its first
+  line. `firstLine` patterns are tried before Scintillua's. The Style Configurator's *Default ext.*
+  shows the result.
+- *Comments* - the buffer's language (as the status bar names it) has its tokens replaced; Toggle
+  Comment, Block Comment and the toolbar button follow. A changed token is matched in its own case, and
+  needs a following space only when it ends in a letter or digit (`rem`).
+- *Keywords* - each list is wxNote's own with the edit applied, and goes to the lexer and to
+  completion; the user groups are allocated as substyles only when one has words.
+- The file is re-read when its time stamp or size changes - checked as a document is shown, before a
+  comment command and when the Style Configurator opens - so a saved edit applies to the next document
+  shown. An unknown language or list name, or a value of the wrong shape, is skipped and the status bar
+  names it; the rest of the file still counts.
+
+**Who writes it.** The user, by hand (**Settings ▸ Edit Language Definitions** starts it from a commented
+template), and the Style Configurator, whose *User-defined keywords* box sets one list's `add`. A write
+re-emits the file through rapidyaml: its opening comments are kept, comments further down are not, and
+other entries keep their content. A list the file replaces whole is not edited from the dialog. The
+Notepad++ import lays its entries over the file (`wxnLangDefsMerge`).
+
 ## Notepad++
 
 Reproducing Notepad++'s file formats is interoperability work, and wxNote confines it to optional,
@@ -412,6 +487,7 @@ Notepad++'s files and translates them into wxNote's:
 | `config.xml` | `settings.yaml` values (tab size, wrap, EOL, encoding, …) | `nib.settings/1`, new: set a setting by ID, validated against the schema |
 | themes / `stylers.xml` | `themes/<name>.yaml` | written into the user theme folder |
 | `contextMenu.xml` | `contextmenu.yaml` | command numbers are shared with Notepad++; items named by menu text, `FolderName` submenus, `ItemNameAs` labels and plugin commands come across too |
+| `langs.xml`, the theme's user-defined keywords | `languages.yaml` entries, laid over the user's file | the user's additions only, found by comparing with Notepad++'s `langs.model.xml` (beside `langs.xml` or in its program folder); Notepad++'s keyword classes mapped to wxNote's lists as its lexers wire them |
 | session `.xml` | opens its files, with positions and bookmarks | `nib.session`, through a scratch wxNote session |
 | workspace `.xml` | a `.yaml` workspace beside it | written, then opened in a Project panel |
 
@@ -420,7 +496,8 @@ Notepad++'s files and translates them into wxNote's:
 imports everything wxNote has a place for, and opens one report of what came across and what had
 nowhere to go. **Import the Open Notepad++ File** does the same for one file open in wxNote, which is
 how a session or a workspace comes in. The existing *Validate shortcuts.xml* entry stays, and
-forwards to the plugin's shortcuts-only import. A file an import replaces — `contextmenu.yaml`, an imported theme edited
+forwards to the plugin's shortcuts-only import. A file an import replaces — `contextmenu.yaml`,
+`languages.yaml` (laid over, not replaced: the user's other entries stay), an imported theme edited
 since, a translated workspace — is kept aside first as `.bak` (or `.bak2`, …,
 never over an earlier backup), and is not replaced if that copy fails; imported themes get names of
 their own — *&lt;name&gt; (Notepad++)*, and *Notepad++ (imported)* for `stylers.xml` — so none of wxNote's
@@ -440,8 +517,8 @@ any case, `MenuEntryName` choosing between same-named items of different menus.
 
 ## Later: new languages in YAML
 
-A language wxNote does not have is defined today by a Scintillua Lua lexer (`nib.langdef/1`), and
-`udl-compat` turns a Notepad++ UDL file into one. The
+`languages.yaml` changes the languages wxNote has. A language it does not have is defined today by a
+Scintillua Lua lexer (`nib.langdef/1`), and `udl-compat` turns a Notepad++ UDL file into one. The
 intended native format for those is `languages/<name>.yaml` — keywords, comment and string delimiters,
 number and operator rules, folding markers — compiled into a Scintillua lexer at load, with
 `udl-compat` becoming a UDL → YAML translator. Not part of this change.
