@@ -233,7 +233,10 @@ so code isn't a sea of red.
 ## Extensions
 
 - **Open Plugins Folder…**
-- Commands registered by loaded plugins are appended here at runtime.
+- Commands registered by loaded plugins are appended here at runtime. The optional **npp-compat**
+  plugin adds **Import from Notepad++…** (a whole Notepad++ setup: settings, shortcuts, themes, the
+  right-click menu and what was added to `langs.xml`), **Import the Open Notepad++ File** and
+  **Import Notepad++ shortcuts.xml…**.
 
 See [Plugins](plugins.md).
 

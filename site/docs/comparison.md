@@ -14,12 +14,14 @@ plain-English version.
 | Dark mode &amp; themes | Yes | Yes |
 | Syntax highlighting | Yes | Yes |
 | Define your own language | Yes | Yes |
+| Settings | Plain YAML files — only what you changed, your own comments kept | XML files |
 | Plugins | Its own (all platforms), plus Notepad++ plugins — unmodified `.dll`s on Windows, recompiled via the shim SDK on Linux/macOS | Notepad++ plugins |
 | Built-in terminal | Yes — a real PTY terminal (`vim`, `htop`, ANSI colour all work) | Add-on |
 | Interface languages | 8, and growing | Many |
 
 **The short version:** if you love Notepad++, you lose nothing by trying wxNote — and you gain your
 Mac and Linux machines, a more permissive open-source licence, and a fresh plugin system that can
-still load your existing Windows plugins. wxNote is the younger project, so its plugin library is
+still load your existing Windows plugins. An optional import brings your Notepad++ settings,
+shortcuts, themes and right-click menu along. wxNote is the younger project, so its plugin library is
 smaller today, but it's growing. Grab it from the **Download** tab on the
 [wxNote home page](../ ':ignore').

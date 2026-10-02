@@ -18,11 +18,29 @@ The menu also has:
 - **User Defined Language ▸** containing **Open User Defined Language folder…**,
 - **User-Defined** at the bottom.
 
-The language is normally chosen automatically from the file's extension; picking an entry from this
-menu **forces** that lexer on the active buffer for the rest of the session.
+Picking an entry from this menu **forces** that lexer on the active buffer. A saved session keeps the
+pick, and **File&nbsp;&rsaquo; Load Session** applies it again.
 
 Set the language new documents start in with
 **Preferences&nbsp;&rsaquo; New Document&nbsp;&rsaquo; Default language**.
+
+### How a file's language is chosen
+
+Unless you pick one, wxNote chooses a file's language itself, from its **name** and, when the name says
+nothing, its **first line** — in this order:
+
+1. **Your own mappings:** the Style Configurator's [**User ext.**](themes.md#file-extensions), a
+   `functionlist.yaml` `extensions` list, then the file names and extensions in
+   [`languages.yaml`](#your-own-language-definitions-languagesyaml).
+2. **The name:** some 340 extensions and whole file names such as `Makefile`, `CMakeLists.txt`,
+   `Dockerfile` or `PKGBUILD` (Scintillua's own detection table), plus wxNote's table for the languages
+   that one has no entry for (Kotlin, JSON5, Inno Setup…).
+3. **The first line:** a `languages.yaml` `firstLine` pattern, a shebang (`#!/usr/bin/env python3`),
+   an XML prolog, an HTML doctype, or the shape of JSON.
+
+Upper-case names count too (`FOO.CPP` is C++), and a backup copy (`.orig`, `.bak`, a trailing `~`)
+is judged by the name underneath it. An extension several languages claim (`.m`, `.inc`, `.cls`…)
+stays plain text rather than being guessed: map it with **User ext.** if you always mean one of them.
 
 ## Comments
 
@@ -65,6 +83,20 @@ interface has no way to hand their comment characters to the host yet, so those 
 their comment syntax is unknown instead of guessing.
 
 Any of these can be changed for a language in [`languages.yaml`](#your-own-language-definitions-languagesyaml).
+
+## Keyword lists
+
+Most Lexilla lexers colour keywords only from lists the editor hands them. wxNote hands lists to
+**98 languages**: SciTE's — Lexilla's companion editor, whose language files are written for exactly
+these lexers — for most of them, Lexilla's own for Dart, Nix, TOML and Zig, and for the ten SciTE has
+none for, lists from the languages' own projects and other editors: Clarion, Gui4Cli, ABL (OpenEdge),
+BibTeX, CoffeeScript, GDScript, Julia, MS SQL, MySQL and Stata. Each list goes into the lexer's slot
+for it — keywords, types, built-in functions… — so a theme can colour each kind its own way, and
+autocomplete offers the same words.
+
+The [Style Configurator](themes.md#keywords) shows each language's lists, and `languages.yaml` (below)
+changes them. Where every list comes from, and under what licence, is in
+[NOTICE](https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/NOTICE).
 
 ## Your own language definitions — `languages.yaml`
 

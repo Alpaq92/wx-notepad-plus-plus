@@ -122,7 +122,7 @@ rather than switching to an already-open tab.
 | --- | --- | --- |
 | `npp-bridge` | GPL-3.0-or-later | host Notepad++ plugins |
 | `udl-compat` | GPL-3.0-or-later | translate Notepad++ `userDefineLang.xml` into Scintillua lexers |
-| `npp-compat` | GPL-3.0-or-later | bring a Notepad++ setup across — `config.xml` into settings, `shortcuts.xml` into a keymap scheme (see [Customizing Shortcuts](custom-shortcuts.md#importing-notepad-shortcuts)), themes and `contextMenu.xml` into wxNote's own files, sessions and workspaces opened |
+| `npp-compat` | GPL-3.0-or-later | bring a Notepad++ setup across — `config.xml` into settings, `shortcuts.xml` into a keymap scheme (see [Customizing Shortcuts](custom-shortcuts.md#importing-notepad-shortcuts)), themes, `contextMenu.xml` and what was added to `langs.xml` into wxNote's own files, sessions and workspaces opened |
 
 All are optional. Removing any of them leaves the core fully functional — you lose only that module's
 interoperability feature.

@@ -25,7 +25,10 @@ Linux/macOS builds are structured and CI-wired but still being validated.
 
 **Implemented:** tabbed editor with per-tab Scintilla documents, a **split second view**
 (MAIN | SUB — Move/Clone to Other View, with the split collapsing when a pane empties), syntax
-highlighting (Lexilla), a **native custom-language engine** — **Scintillua** (Lua 5.4.7 + LPeg 1.1.0
+highlighting (Lexilla) with **keyword lists for 98 languages** (SciTE's, and the languages' own projects'
+where SciTE has none) and **language detection** from the file's name and first line, **your own
+language definitions** (`languages.yaml`: extensions, comment tokens and keyword lists, also edited in
+the Style Configurator), a **native custom-language engine** — **Scintillua** (Lua 5.4.7 + LPeg 1.1.0
 lexer grammars run through a Scintilla container lexer; see
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)), with legacy Notepad++ `userDefineLang.xml`
 files importable via the optional GPL `udl-compat` plugin (see [Plugins](#plugins)), find/replace and
@@ -39,8 +42,9 @@ so `vim`, `htop`, ANSI colour and the shell's own line editing all work; multi-t
 per-platform shell picker, and a redirected-pipe fallback on Windows older than 10 1809), a **Clipboard History** panel, a **Project Panel** (workspace tree of
 folders + files, saved as `.yaml`) and folder-as-workspace, pinned tabs, **Restore Recent Closed File**
 (Ctrl+Shift+T) + MRU Ctrl+Tab switching, an **interactive status bar** (double-click to go-to-line,
-convert EOL or encoding, or toggle INS/OVR), EOL detection, session restore, print + print preview,
-macro recording/playback (saved macros persist and are bindable in the Shortcut Mapper),
+convert EOL or encoding, or toggle INS/OVR), EOL detection, session restore, print + print preview, a
+**customizable right-click menu** (submenus, labels of your own, plugin commands), macro
+recording/playback (saved macros persist and are bindable in the Shortcut Mapper),
 **Monitoring** (tail -f: reload on external change), four selectable **toolbar icon sets** (Tabler,
 Solar, IconPark, Streamline — see Credits), full UI **localization** into 8
 languages (pl, de, fr, es, ru, ja, zh, ko), and a **plugin host** — see [Plugins](#plugins).
