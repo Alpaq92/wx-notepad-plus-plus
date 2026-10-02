@@ -15,7 +15,9 @@ That is exactly the kind of work wxNote confines to optional, separately license
 [`udl-compat`](../udl-compat/README.md) and [`npp-bridge`](../npp-bridge/README.md) this one is
 **GPL-3.0-or-later**. The wxNote **core depends on none of it** and is loaded without it; delete the
 plugin and you lose only the import. Keeping the format reproduction here is what lets the core stay
-Apache-2.0 (see [`LICENSING.md`](../../LICENSING.md)).
+Apache-2.0 (see [`LICENSING.md`](../../LICENSING.md)). For the same reason, the table of Notepad++'s
+English menu names that a `contextMenu.xml` can name its items by (`npp_menu_names.h`, from Notepad++'s
+own `localization/english.xml`) lives here and nowhere else.
 
 The translations write wxNote's files with the core's own wx-free headers — `src/yaml_io.h`,
 `src/theme_file.h`, `src/settings_schema.h` (Apache-2.0, which GPL code may use) — and rapidyaml, so
@@ -28,13 +30,13 @@ what this module writes is exactly what wxNote reads.
 | `shortcuts.xml` | a **"Notepad++ (imported)"** key-binding scheme | `nib.keymap/1`: `InternalCommands` → `bind_id` (Notepad++'s `IDM_*` numbers are wxNote's command numbers), `ScintillaKeys` → `bind_editor`, `PluginCommands` → `bind_name` (`npp.<module>.<internalID>`) |
 | `config.xml` | values in `settings.yaml` — tab size and tabs or spaces, word wrap, line numbers, whitespace, caret, auto-completion, new-document EOL / encoding / language, dark mode, the theme, recent-files count, … | `nib.settings/1`, each value checked by the host against its table of settings; the theme becomes the imported copy, else wxNote's theme of that name, and is refused when wxNote has neither |
 | `stylers.xml`, `themes/*.xml` | `themes/<name> (Notepad++).yaml` (`stylers.xml`: *Notepad++ (imported)*) in the user's theme folder | written directly; the theme's credits comment becomes its header |
-| `contextMenu.xml` | `contextmenu.yaml` | items by command number - shared with Notepad++ - or by the English names Notepad++'s own file uses for its edit items (Cut, Copy, Paste, Select all, the comment commands...) |
+| `contextMenu.xml` | `contextmenu.yaml` | items by command number (shared with Notepad++) or by menu name (`MenuEntryName`/`MenuItemName`, looked up in Notepad++'s English menu names, `npp_menu_names.h`, as Notepad++ looks them up); `FolderName` submenus become `{menu, items}` (with wxNote's names for the stock ones that carry a `TranslateID`), `ItemNameAs` becomes `{command, label}`, and a plugin's command (`PluginEntryName`/`PluginCommandItemName`) becomes `{plugin, command}`, which wxNote shows when that plugin is loaded |
 | a session `.xml` | its files, opened, with the active file's position and bookmarks | `nib.session`, through a scratch wxNote session (`nib.documents` on a host without it) |
 | a workspace `.xml` | a `.yaml` workspace beside it, ready for a Project panel | written directly |
 
-Whatever has nowhere to go — a Notepad++ preference wxNote has no equivalent for, a plugin command or an
-unknown name in the context menu, a key with no portable spelling — is listed in the report, not dropped
-silently. A file an import replaces (your `contextmenu.yaml`, a theme you edited after an earlier import, a
+Whatever has nowhere to go — a Notepad++ preference wxNote has no equivalent for, a context-menu item
+named by text no Notepad++ menu has, a key with no portable spelling — is listed in the report, not
+dropped silently. A file an import replaces (your `contextmenu.yaml`, a theme you edited after an earlier import, a
 translated workspace) is kept aside first as `.bak` — or `.bak2`, `.bak3`… — never over an earlier backup; an import
 that would write the same thing again changes nothing.
 

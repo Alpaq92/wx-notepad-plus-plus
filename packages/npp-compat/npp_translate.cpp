@@ -4,20 +4,19 @@
 // Copyright 2026 The wxNote Authors. See LICENSE (GPL-3.0-or-later).
 
 #include "npp_translate.h"
+#include "npp_menu_names.h"      // Notepad++'s English menu item names, which contextMenu.xml can name items by
 #include "npp_xml.h"
 
 #include "lang_detect.h"         // wxnLangForNppLexerType: Notepad++ lexer name -> Language-menu name
 #include "settings_schema.h"     // the settings a translation may set, and how each is spelled
 #include "yaml_io.h"
 
-// LangType - the language numbers config.xml stores - and the IDM_* command numbers contextMenu.xml's
-// named items stand for. Last, and without min/max: on Windows they bring in <windows.h>, whose macros
-// would otherwise rewrite std::min and friends in everything after it.
+// LangType - the language numbers config.xml stores. Last, and without min/max: on Windows it brings in
+// <windows.h>, whose macros would otherwise rewrite std::min and friends in everything after it.
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include "Notepad_plus_msgs.h"
-#include "menuCmdID.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -359,31 +358,44 @@ std::string menuName(const std::string& s)
     return out;
 }
 
-// The command an item named by its English menu entry and item names stands for - what Notepad++'s own
-// contextMenu.xml lists Cut, Copy, Paste and the rest by. Their numbers are wxNote's too. 0: not known.
+// The command an item names by its English menu entry and item names, found as Notepad++ finds it: the
+// first item of that name in menu order (npp_menu_names.h keeps that order) - within the named top-level
+// menu when the name occurs under more than one. Notepad++'s command numbers are wxNote's. 0: none.
 int namedMenuCommand(const std::string& entry, const std::string& item)
 {
-    static const struct { const char* entry; const char* item; int id; } kNamed[] = {
-        { "edit", "undo", IDM_EDIT_UNDO }, { "edit", "redo", IDM_EDIT_REDO },
-        { "edit", "cut", IDM_EDIT_CUT }, { "edit", "copy", IDM_EDIT_COPY }, { "edit", "paste", IDM_EDIT_PASTE },
-        { "edit", "delete", IDM_EDIT_DELETE }, { "edit", "select all", IDM_EDIT_SELECTALL },
-        { "edit", "begin/end select", IDM_EDIT_BEGINENDSELECT },
-        { "edit", "begin/end select in column mode", IDM_EDIT_BEGINENDSELECT_COLUMNMODE },
-        { "edit", "uppercase", IDM_EDIT_UPPERCASE }, { "edit", "lowercase", IDM_EDIT_LOWERCASE },
-        { "edit", "proper case", IDM_EDIT_PROPERCASE_FORCE }, { "edit", "sentence case", IDM_EDIT_SENTENCECASE_FORCE },
-        { "edit", "invert case", IDM_EDIT_INVERTCASE },
-        { "edit", "open file", IDM_EDIT_OPENSELECTEDFILETOEDIT },
-        { "edit", "open containing folder in explorer", IDM_EDIT_OPENSELECTEDFILEFOLDERINEXPLORER },
-        { "edit", "search on internet", IDM_EDIT_SEARCHONINTERNET },
-        { "edit", "toggle single line comment", IDM_EDIT_BLOCK_COMMENT },
-        { "edit", "single line comment", IDM_EDIT_BLOCK_COMMENT_SET },
-        { "edit", "single line uncomment", IDM_EDIT_BLOCK_UNCOMMENT },
-        { "edit", "block comment", IDM_EDIT_STREAM_COMMENT }, { "edit", "block uncomment", IDM_EDIT_STREAM_UNCOMMENT },
-        { "view", "hide lines", IDM_VIEW_HIDELINES },
+    const std::string want = menuName(item);
+    if (want.empty()) return 0;
+    static const struct { const char* entry; int lo, hi; } kEntries[] = {
+        { "file", 41000, 41999 }, { "edit", 42000, 42999 }, { "search", 43000, 43999 }, { "view", 44000, 44999 },
+        { "encoding", 45000, 45999 }, { "language", 46000, 46999 }, { "?", 47000, 47999 },
+        { "settings", 48000, 48499 }, { "tools", 48500, 48999 }, { "macro", 42000, 42999 }, { "run", 49000, 49999 },
     };
-    const std::string e = menuName(entry), i = menuName(item);
-    for (const auto& n : kNamed) if (e == n.entry && i == n.item) return n.id;
-    return 0;
+    const std::string e = menuName(entry);
+    int lo = 0, hi = 0x7FFFFFFF;                       // an entry name this does not know: any menu
+    for (const auto& r : kEntries) if (e == r.entry) { lo = r.lo; hi = r.hi; break; }
+    int elsewhere = 0;
+    for (const NppMenuName& n : kNppMenuNames)
+        if (menuName(n.name) == want)
+        {
+            if (n.id >= lo && n.id <= hi) return n.id;
+            if (!elsewhere) elsewhere = n.id;
+        }
+    return elsewhere;                                  // the name, under another menu than the one given
+}
+
+// A submenu's label. Notepad++'s own folders carry a TranslateID; where wxNote has the same submenu, its
+// label is used instead - which wxNote shows in the user's language. A folder the user renamed keeps its name.
+std::string folderLabel(const XmlElement& it)
+{
+    static const struct { const char* id; const char* english; const char* wxnote; } kFolders[] = {
+        { "contextMenu-styleAlloccurrencesOfToken", "style all occurrences of token", "Style &All Occurrences of Token" },
+        { "contextMenu-styleOneToken", "style one token", "Style &One Token" },
+        { "contextMenu-clearStyle", "clear style", "Clear Style" },
+    };
+    const std::string name = it.attr("FolderName");
+    for (const auto& f : kFolders)
+        if (it.attr("TranslateID") == f.id && menuName(name) == f.english) return f.wxnote;
+    return name;
 }
 
 }   // namespace
@@ -403,31 +415,57 @@ bool contextMenuFromNpp(const std::string& xml, std::string& yaml, std::vector<s
     ryml::Tree t;
     wxnyaml::MutNode r = wxnyaml::resetToMap(t);
     wxnyaml::MutNode items = wxnyaml::addSeq(r, "items");
-    bool folders = false, labels = false;
+    // Consecutive items with the same FolderName form one submenu, as in Notepad++; the list being filled
+    // is the current folder's while it lasts, the top level otherwise.
+    std::string folder;
+    wxnyaml::MutNode into = items;
     for (const XmlElement& it : menu->children)
     {
         if (it.name != "Item") continue;
-        if (!it.attr("FolderName").empty()) folders = true;
-        if (!it.attr("ItemNameAs").empty()) labels = true;
-        long id = -1;
-        if (lower(it.attr("type")) == "separator" || it.attr("id") == "0") { wxnyaml::setText(wxnyaml::addItem(items), "-"); continue; }
-        if (number(it.attr("id"), 1, 0x7FFFFFFF, id)) { wxnyaml::setInteger(wxnyaml::addItem(items), id); continue; }
-        if (const int named = namedMenuCommand(it.attr("MenuEntryName"), it.attr("MenuItemName")))
+        const std::string itemFolder = it.attr("FolderName");
+        if (itemFolder != folder)
         {
-            wxnyaml::setInteger(wxnyaml::addItem(items), named);
+            folder = itemFolder;
+            into = items;
+            if (!folder.empty())
+            {
+                wxnyaml::MutNode sub = wxnyaml::addMapItem(items);
+                wxnyaml::setText(wxnyaml::addKey(sub, "menu"), folderLabel(it));
+                into = wxnyaml::addSeq(sub, "items");
+            }
+        }
+        if (lower(it.attr("type")) == "separator" || it.attr("id") == "0") { wxnyaml::setText(wxnyaml::addItem(into), "-"); continue; }
+        const std::string label = it.attr("ItemNameAs");
+        long id = -1;
+        if (!number(it.attr("id"), 1, 0x7FFFFFFF, id))
+            id = namedMenuCommand(it.attr("MenuEntryName"), it.attr("MenuItemName"));
+        if (id > 0)
+        {
+            if (label.empty()) { wxnyaml::setInteger(wxnyaml::addItem(into), id); continue; }
+            wxnyaml::MutNode e = wxnyaml::addMapItem(into);
+            wxnyaml::setOneLine(e);
+            wxnyaml::setInteger(wxnyaml::addKey(e, "command"), id);
+            wxnyaml::setText(wxnyaml::addKey(e, "label"), label);
             continue;
         }
-        if (!it.attr("PluginCommandItemName").empty())
-            notTranslated.push_back("plugin command \"" + it.attr("PluginEntryName") + " > " + it.attr("PluginCommandItemName") + "\"");
-        else if (!it.attr("MenuItemName").empty())
-            notTranslated.push_back("\"" + it.attr("MenuEntryName") + " > " + it.attr("MenuItemName") + "\" (named, and not a name this knows)");
+        // A plugin's command: by the plugin's menu name and the command's, as Notepad++ lists it - which is
+        // how wxNote finds it too, among the commands its plugins (the npp-bridge's included) registered.
+        if (!it.attr("PluginEntryName").empty() && !it.attr("PluginCommandItemName").empty())
+        {
+            wxnyaml::MutNode e = wxnyaml::addMapItem(into);
+            wxnyaml::setOneLine(e);
+            wxnyaml::setText(wxnyaml::addKey(e, "plugin"), it.attr("PluginEntryName"));
+            wxnyaml::setText(wxnyaml::addKey(e, "command"), it.attr("PluginCommandItemName"));
+            if (!label.empty()) wxnyaml::setText(wxnyaml::addKey(e, "label"), label);
+            continue;
+        }
+        if (!it.attr("MenuItemName").empty())
+            notTranslated.push_back("\"" + it.attr("MenuEntryName") + " > " + it.attr("MenuItemName") + "\" (no Notepad++ menu item of that name)");
     }
-    if (folders) notTranslated.push_back("submenus (FolderName): their items are listed in place");
-    if (labels) notTranslated.push_back("own labels (ItemNameAs): wxNote labels each item as its menu does");
     std::string body;
     if (!wxnyaml::emit(t, body)) { if (err) *err = "could not write the menu"; return false; }
-    yaml = "# The editor's right-click menu, top to bottom: command IDs or numbers, '-' for a separator.\n"
-           "# Imported from Notepad++'s contextMenu.xml.\n" + body;
+    yaml = "# The editor's right-click menu, top to bottom (see the shipped contextmenu.yaml for the format).\n"
+           "# Imported from Notepad++'s contextMenu.xml: numbers are its command numbers, which are wxNote's.\n" + body;
     return true;
 }
 

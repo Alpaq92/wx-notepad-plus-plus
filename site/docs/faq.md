@@ -149,11 +149,16 @@ Items name commands the way [`keybindings.yaml`](custom-shortcuts.md#the-keybind
 items:
   - edit.undo
   - '-'
-  - edit.copy
+  - {command: edit.copy, label: Copy Text}            # your own label
+  - menu: Change Case                                 # a submenu
+    items: [edit.convertCaseTo.uppercase, edit.convertCaseTo.lowercase]
+  - {plugin: MIME Tools, command: Base64 Encode}     # a plugin's command
 ```
 
-Labels follow the interface language. An item wxNote doesn't know is simply left out.
-**Extensions&nbsp;&rsaquo; Import from Notepad++…** turns Notepad++'s `contextMenu.xml` into this file.
+Labels follow the interface language unless you give your own, and toggles such as `view.wordWrap`
+show their check mark. An item wxNote doesn't know, or a plugin that isn't installed, is simply left
+out. **Extensions&nbsp;&rsaquo; Import from Notepad++…** turns Notepad++'s `contextMenu.xml` into
+this file, submenus, renamed items and plugin commands included.
 
 ## Is this Notepad++?
 

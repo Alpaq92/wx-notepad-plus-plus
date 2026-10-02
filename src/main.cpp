@@ -8636,12 +8636,21 @@ private:
 
     // Popup (right-click) context menu, user-editable via Settings > Edit Popup ContextMenu ->
     // the per-user contextmenu.yaml (see contextMenuFilePath()/loadPopupContextMenu()/editContextMenu()).
-    // Items name commands the way key bindings do (edit.undo, search.bookmark.toggle) - or by number, the
-    // kCmd* id, which is how a translated Notepad++ contextMenu.xml arrives - so onCommand handles them
-    // unchanged; labels are pulled live from the real menu bar entry so they follow the current UI
-    // language, and enable state mirrors the editor for the handful of ids that need it
-    // (undo/redo/paste/selection-dependent).
-    struct PopupMenuEntry { int id = 0; bool separator = false; };
+    // Items name commands the way key bindings do (edit.undo, search.bookmark.toggle, macro.<id>,
+    // plugin.<id>) - or by number, the kCmd* id, which is how a translated Notepad++ contextMenu.xml
+    // arrives - so onCommand handles them unchanged. An item may carry its own label, a submenu holds more
+    // items, and a plugin's command can be named by its menu labels (readPopupEntries). Labels are pulled
+    // live from the real menu bar entry so they follow the current UI language, an own label is translated
+    // when wxNote has that text, check marks follow the menu bar, and enable state mirrors the editor for
+    // the handful of ids that need it (undo/redo/paste/selection-dependent).
+    struct PopupMenuEntry
+    {
+        int id = 0;
+        bool separator = false;
+        bool submenu = false;
+        wxString label;                      // a command's own label, or the submenu's
+        std::vector<PopupMenuEntry> items;   // a submenu's entries
+    };
     // The shipped, read-only default (co-located next to the exe by CMake) vs. the per-user override.
     // Loads prefer the per-user copy and fall back to the shipped default; edits/saves only ever touch
     // the per-user copy (see editContextMenu) - the install dir is read-only on an installed build.
@@ -8658,28 +8667,83 @@ private:
         // right-click; a file that does not parse says so in the status bar.
         const bool read = wxnReadFileBytes(path, text);
         if (read && !wxnyaml::parse(text, doc, "contextmenu.yaml")) reportFileError("contextmenu.yaml", doc.error);
-        else if (read)
-        {
-            const wxnyaml::Node items = wxnyaml::child(doc.root(), "items");
-            if (wxnyaml::isSeq(items))
-                for (wxnyaml::Node it : items.children())
-                {
-                    std::string name;
-                    long long number = 0;
-                    if (!wxnyaml::getText(it, name)) continue;
-                    if (name == "-") out.push_back({ 0, true });
-                    else if (wxnyaml::getInteger(it, number)) { if (number > 0 && number < INT_MAX) out.push_back({ (int)number, false }); }
-                    else if (const EffectiveBinding* b = m_keymap.effective(wxString::FromUTF8(name.c_str()))) out.push_back({ b->cmdId, false });
-                    // anything else is a command this build does not have: skipped, like a stale id below
-                }
-        }
+        else if (read) readPopupEntries(wxnyaml::child(doc.root(), "items"), out, 0);
         if (!out.empty()) return out;
         // contextmenu.yaml missing/unparsable - built-in fallback, kept in sync with the bundled
         // resources/contextmenu.yaml default, so a bad hand-edit can't leave the menu empty.
-        return { { kCmdEditUndo, false }, { kCmdEditRedo, false }, { 0, true },
-                 { kCmdEditCut, false }, { kCmdEditCopy, false }, { kCmdEditPaste, false }, { kCmdEditDelete, false }, { 0, true },
-                 { kCmdEditSelectall, false }, { 0, true },
-                 { kCmdSearchToggleBookmark, false } };
+        std::vector<PopupMenuEntry> fallback;
+        for (int id : { kCmdEditUndo, kCmdEditRedo, 0, kCmdEditCut, kCmdEditCopy, kCmdEditPaste, kCmdEditDelete, 0,
+                        kCmdEditSelectall, 0, kCmdSearchToggleBookmark })
+        {
+            PopupMenuEntry e;
+            e.id = id;
+            e.separator = id == 0;
+            fallback.push_back(e);
+        }
+        return fallback;
+    }
+    // The entries of one list: a command - its name as the Shortcut Mapper shows it, or its number - or
+    // '-' for a separator; {command, label} gives a command its own label; {menu, items} is a submenu;
+    // {plugin, command} is a plugin's command named by its menu labels (pluginCommandId), shown under the
+    // command's own name as Notepad++ shows it. What names nothing this build has is skipped, so a typo or
+    // an uninstalled plugin cannot break the menu.
+    void readPopupEntries(wxnyaml::Node list, std::vector<PopupMenuEntry>& out, int depth)
+    {
+        if (!wxnyaml::isSeq(list) || depth > 8) return;
+        for (wxnyaml::Node it : list.children())
+        {
+            PopupMenuEntry e;
+            std::string text;
+            if (wxnyaml::getText(it, text))
+            {
+                if (text == "-") e.separator = true;
+                else e.id = popupCommandId(text);
+            }
+            else if (wxnyaml::isMap(it))
+            {
+                e.label = wxString::FromUTF8(wxnyaml::textOr(wxnyaml::child(it, "label"), std::string()).c_str());
+                const wxnyaml::Node sub = wxnyaml::child(it, "menu");
+                if (sub.readable())
+                {
+                    e.submenu = true;
+                    e.label = wxString::FromUTF8(wxnyaml::textOr(sub, std::string()).c_str());
+                    readPopupEntries(wxnyaml::child(it, "items"), e.items, depth + 1);
+                    if (e.label.empty() || e.items.empty()) continue;
+                }
+                else
+                {
+                    const std::string command = wxnyaml::textOr(wxnyaml::child(it, "command"), std::string());
+                    const std::string plugin = wxnyaml::textOr(wxnyaml::child(it, "plugin"), std::string());
+                    e.id = plugin.empty() ? popupCommandId(command) : pluginCommandId(plugin, command);
+                    if (!plugin.empty() && e.label.empty()) e.label = wxString::FromUTF8(command.c_str());
+                }
+            }
+            if (e.separator || e.submenu || e.id > 0) out.push_back(std::move(e));
+        }
+    }
+    // A command by number, or by the name the Shortcut Mapper shows (edit.undo, macro.<id>, plugin.<id>).
+    // 0: no such command.
+    int popupCommandId(const std::string& name)
+    {
+        if (name.empty()) return 0;
+        if (name.find_first_not_of("0123456789") == std::string::npos) return name.size() <= 9 ? std::atoi(name.c_str()) : 0;
+        const EffectiveBinding* b = m_keymap.effective(wxString::FromUTF8(name.c_str()));
+        return b ? b->cmdId : 0;
+    }
+    // A plugin's command by its menu labels: plugins' commands are titled "<plugin>: <command>" - the
+    // npp-bridge titles Notepad++ plugins' that way, which is what a Notepad++ contextMenu.xml names them
+    // by - compared, as Notepad++ compares, without '&' marks and in any case. 0: not loaded.
+    static int pluginCommandId(const std::string& plugin, const std::string& command)
+    {
+        auto norm = [](const std::string& s) {
+            std::string o;
+            for (char c : s) if (c != '&') o += static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+            return o;
+        };
+        const std::string want = norm(plugin + ": " + command);
+        for (size_t i = 0; i < g_nibCommands.size(); ++i)
+            if (norm(g_nibCommands[i].title) == want) return NIB_CMD_BASE + static_cast<int>(i);
+        return 0;
     }
     // Settings > Edit Popup ContextMenu: open the PER-USER contextmenu.yaml in the editor to hand-edit.
     // The shipped default sits in the read-only install dir, so on first edit we seed the per-user copy
@@ -8706,13 +8770,38 @@ private:
         const int spellPos = (screenX == -1 && screenY == -1) ? (int)m_stc->GetCurrentPos()
                              : (int)m_stc->PositionFromPoint(m_stc->ScreenToClient(wxPoint(screenX, screenY)));
         addSpellContext(menu, spellPos);
-        for (const auto& entry : loadPopupContextMenu())
+        appendPopupEntries(menu, loadPopupContextMenu(), hasSel);
+        if (menu.GetMenuItemCount() == 0) return;
+        const wxPoint pos = (screenX == -1 && screenY == -1) ? wxDefaultPosition : ScreenToClient(wxPoint(screenX, screenY));
+        PopupMenu(&menu, pos);
+    }
+    // Append `entries` to `menu`, submenus recursively. A command shows its menu bar label (the current
+    // language, with the shortcut) unless it has its own - translated when wxNote has that text, the
+    // shortcut kept - and a check mark when its menu bar entry has one. Entries naming nothing are left
+    // out, an empty submenu with them, and separators never double up or end a menu.
+    void appendPopupEntries(wxMenu& menu, const std::vector<PopupMenuEntry>& entries, bool hasSel)
+    {
+        bool separatorDue = false;
+        for (const PopupMenuEntry& e : entries)
         {
-            if (entry.separator) { if (menu.GetMenuItemCount() > 0) menu.AppendSeparator(); continue; }
-            wxMenuItem* src = menuBar() ? menuBar()->FindItem(entry.id) : nullptr;
-            if (!src) continue;   // unknown/stale id from a hand-edit - skip rather than show a blank entry
+            if (e.separator) { separatorDue = menu.GetMenuItemCount() > 0; continue; }
+            wxMenu* sub = nullptr;
+            wxMenuItem* src = nullptr;
+            if (e.submenu)
+            {
+                sub = new wxMenu;
+                appendPopupEntries(*sub, e.items, hasSel);
+                if (sub->GetMenuItemCount() == 0) { delete sub; continue; }
+            }
+            else
+            {
+                src = menuBar() ? menuBar()->FindItem(e.id) : nullptr;
+                if (!src || src->IsSubMenu()) continue;   // unknown/stale id from a hand-edit - skip rather than show a blank entry
+            }
+            if (separatorDue) { menu.AppendSeparator(); separatorDue = false; }
+            if (sub) { menu.AppendSubMenu(sub, wxGetTranslation(e.label)); continue; }
             bool enabled = true;
-            switch (entry.id)
+            switch (e.id)
             {
                 case kCmdEditUndo: enabled = sci(SCI_CANUNDO) != 0; break;
                 case kCmdEditRedo: enabled = sci(SCI_CANREDO) != 0; break;
@@ -8720,11 +8809,17 @@ private:
                 case kCmdEditCut: case kCmdEditCopy: case kCmdEditDelete: enabled = hasSel; break;
                 default: break;
             }
-            menu.Append(entry.id, src->GetItemLabel())->Enable(enabled);
+            wxString label = src->GetItemLabel();
+            if (!e.label.empty())
+            {
+                const wxString shortcut = label.AfterFirst('\t');
+                label = wxGetTranslation(e.label);
+                if (!shortcut.empty()) label += "\t" + shortcut;
+            }
+            wxMenuItem* item = src->IsCheckable() ? menu.AppendCheckItem(e.id, label) : menu.Append(e.id, label);
+            if (src->IsCheckable()) item->Check(src->IsChecked());
+            item->Enable(enabled);
         }
-        if (menu.GetMenuItemCount() == 0) return;
-        const wxPoint pos = (screenX == -1 && screenY == -1) ? wxDefaultPosition : ScreenToClient(wxPoint(screenX, screenY));
-        PopupMenu(&menu, pos);
     }
 
     // ----- menu bar ------------------------------------------------------

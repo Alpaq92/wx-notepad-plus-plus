@@ -301,11 +301,23 @@ lexers:
 
 ```yaml
 # contextmenu.yaml - the editor's right-click menu, top to bottom; "-" is a separator.
-items: [edit.undo, edit.redo, '-', edit.cut, edit.copy, edit.paste, edit.delete, '-',
-        selection.selectAll, '-', search.bookmark.toggle]
+items:
+  - edit.undo
+  - '-'
+  - {command: edit.copy, label: Copy Text}            # a label of its own; the shortcut still shows
+  - menu: Change Case                                 # a submenu
+    items: [edit.convertCaseTo.uppercase, edit.convertCaseTo.lowercase]
+  - {plugin: MIME Tools, command: Base64 Encode}     # a plugin's command, by its menu labels
+  - view.wordWrap                                     # a toggle shows its check mark
 ```
 
-Items are command IDs, as in key bindings; an all-digits item is taken as a command number.
+Items are command IDs, as in key bindings; an all-digits item is taken as a command number. A label
+comes from the real menu, in the current language, unless the item gives its own (translated when
+wxNote has that text). A plugin's command is found by the plugin's menu name and the command's, any
+case, `&` ignored - how Notepad++'s `contextMenu.xml` names them. An item naming nothing this build or
+its loaded plugins have is left out, and so is a submenu left empty, so a typo or a missing plugin
+cannot break the menu. A file that does not parse is reported in the status bar and the built-in menu
+is used.
 
 ```yaml
 # functionlist.yaml - Function List rules for more languages
@@ -399,7 +411,7 @@ Notepad++'s files and translates them into wxNote's:
 | `shortcuts.xml` | a "Notepad++ (imported)" key-binding scheme | `nib.keymap` (unchanged) |
 | `config.xml` | `settings.yaml` values (tab size, wrap, EOL, encoding, …) | `nib.settings/1`, new: set a setting by ID, validated against the schema |
 | themes / `stylers.xml` | `themes/<name>.yaml` | written into the user theme folder |
-| `contextMenu.xml` | `contextmenu.yaml` | command numbers are shared with Notepad++ |
+| `contextMenu.xml` | `contextmenu.yaml` | command numbers are shared with Notepad++; items named by menu text, `FolderName` submenus, `ItemNameAs` labels and plugin commands come across too |
 | session `.xml` | opens its files, with positions and bookmarks | `nib.session`, through a scratch wxNote session |
 | workspace `.xml` | a `.yaml` workspace beside it | written, then opened in a Project panel |
 
@@ -420,9 +432,11 @@ own session files (`nib.session`, through a scratch file in the user data folder
 file's position and bookmarks and each view's active tab come across.
 
 What wxNote keeps from Notepad++ by design, not by format: the command numbers (`kCmd*` = `IDM_*`),
-which is what makes `shortcuts.xml` and `contextMenu.xml` translate without a table - apart from the
-handful of edit items Notepad++'s own `contextMenu.xml` names by their English menu text, which a
-small name table covers.
+which is what makes `shortcuts.xml` and `contextMenu.xml` translate without a table - apart from
+`contextMenu.xml` items named by their English menu text (Notepad++'s own file names Cut, Copy, Paste
+and a dozen more that way), which npp-compat looks up in Notepad++'s English menu names
+(`npp_menu_names.h`, from its `english.xml`) the way Notepad++ does: `&` and a trailing `...` ignored,
+any case, `MenuEntryName` choosing between same-named items of different menus.
 
 ## Later: new languages in YAML
 

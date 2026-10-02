@@ -117,6 +117,12 @@ Keyword lists for languages SciTE has none for — src/keywords_contrib.h
   Unlicense) and types from language-stata, Copyright (c) 2017 Kyle Barron,
   MIT License.
 
+Notepad++'s English menu names — packages/npp-compat/npp_menu_names.h
+  The <Commands> table of Notepad++ 8.9.6.4's localization/english.xml,
+  Copyright (C) Don HO, GPL-3.0-or-later. Only the GPL npp-compat plugin
+  carries it, to read a contextMenu.xml whose items are named by their menu
+  text; the Apache-2.0 core has no copy.
+
 Hunspell (spell-check engine)
   Copyright (c) László Németh and contributors.
   Tri-licensed MPL-1.1 / GPL-2.0-or-later / LGPL-2.1-or-later; wxNote uses it

@@ -14,6 +14,7 @@
 #include "settings_schema.h"
 
 #include <cstdio>
+#include <functional>
 #include <string>
 
 using namespace nppcompat;
@@ -221,28 +222,74 @@ static void testContextMenuTranslation()
     std::string yaml;
     std::vector<std::string> notTranslated;
     check(contextMenuFromNpp(xml, yaml, notTranslated), "context menu: translates");
-    auto itemsOf = [](const std::string& y) {
+    // An item as a line: a number, '-', or "menu:<label>[...]" / "plugin:<p>/<c>" / "<n>=<label>".
+    std::function<std::string(wxnyaml::Node)> show = [&](wxnyaml::Node n) -> std::string {
+        std::string s;
+        if (wxnyaml::getText(n, s)) return s;
+        if (!wxnyaml::isMap(n)) return "?";
+        std::string label = wxnyaml::textOr(wxnyaml::child(n, "label"), std::string());
+        std::string out;
+        if (wxnyaml::child(n, "menu").readable())
+        {
+            out = "menu:" + wxnyaml::textOr(wxnyaml::child(n, "menu"), std::string()) + "[";
+            for (wxnyaml::Node c : wxnyaml::child(n, "items").children()) out += show(c) + ",";
+            return out + "]";
+        }
+        if (wxnyaml::child(n, "plugin").readable())
+            out = "plugin:" + wxnyaml::textOr(wxnyaml::child(n, "plugin"), std::string()) + "/" + wxnyaml::textOr(wxnyaml::child(n, "command"), std::string());
+        else out = wxnyaml::textOr(wxnyaml::child(n, "command"), std::string());
+        return label.empty() ? out : out + "=" + label;
+    };
+    auto itemsOf = [&](const std::string& y) {
         wxnyaml::Doc d;
         std::vector<std::string> out;
         if (wxnyaml::parse(y, d) && wxnyaml::isSeq(wxnyaml::child(d.root(), "items")))
-            for (wxnyaml::Node n : wxnyaml::child(d.root(), "items").children()) out.push_back(wxnyaml::textOr(n, std::string()));
+            for (wxnyaml::Node n : wxnyaml::child(d.root(), "items").children()) out.push_back(show(n));
         return out;
     };
-    check(itemsOf(yaml) == std::vector<std::string>({ "42001", "-", "42003", "43022" }),
-          "context menu: numbered and named items and separators carry over in order");
-    check(notTranslated.size() == 4, "context menu: an unknown name, a plugin command, the submenus and an own label are reported");
+    check(itemsOf(yaml) == std::vector<std::string>({ "42001", "-", "42003", "menu:Style token[43022,]", "plugin:MIME Tools/Base64 Encode=Encode" }),
+          "context menu: numbers, names, separators, a folder and a plugin command with its own label carry over");
+    check(notTranslated.size() == 1, "context menu: only the name Notepad++ has no item for is reported");
 
-    // Notepad++'s own contextMenu.xml names its edit items rather than numbering them: they must survive.
+    // Notepad++'s own contextMenu.xml (as 8.9 ships it): named edit items, its three style folders with their
+    // TranslateIDs, a plugin folder with an own label - all of it must come across.
     const std::string stock =
         "<NotepadPlus><ScintillaContextMenu>"
         "<Item MenuEntryName=\"Edit\" MenuItemName=\"Cut\"/><Item MenuEntryName=\"Edit\" MenuItemName=\"Copy\"/>"
-        "<Item MenuEntryName=\"Edit\" MenuItemName=\"Paste\"/><Item MenuEntryName=\"edit\" MenuItemName=\"&amp;Select All\"/>"
-        "<Item id=\"0\"/><Item MenuEntryName=\"Edit\" MenuItemName=\"Block Comment\"/>"
-        "<Item MenuEntryName=\"Edit\" MenuItemName=\"Block Uncomment\"/><Item MenuEntryName=\"View\" MenuItemName=\"Hide lines\"/>"
+        "<Item MenuEntryName=\"Edit\" MenuItemName=\"Paste\"/><Item MenuEntryName=\"Edit\" MenuItemName=\"Delete\"/>"
+        "<Item MenuEntryName=\"Edit\" MenuItemName=\"Select all\"/><Item MenuEntryName=\"Edit\" MenuItemName=\"Begin/End Select\"/>"
+        "<Item MenuEntryName=\"Edit\" MenuItemName=\"Begin/End Select in Column Mode\"/><Item id=\"0\"/>"
+        "<Item FolderName=\"Style all occurrences of token\" TranslateID=\"contextMenu-styleAlloccurrencesOfToken\" id=\"43022\"/>"
+        "<Item FolderName=\"Style all occurrences of token\" TranslateID=\"contextMenu-styleAlloccurrencesOfToken\" id=\"43024\"/>"
+        "<Item FolderName=\"Style one token\" TranslateID=\"contextMenu-styleOneToken\" id=\"43062\"/>"
+        "<Item FolderName=\"Clear style\" TranslateID=\"contextMenu-clearStyle\" id=\"43023\"/>"
+        "<Item FolderName=\"Clear style\" TranslateID=\"contextMenu-clearStyle\" id=\"43032\"/><Item id=\"0\"/>"
+        "<Item FolderName=\"Plugin commands\" TranslateID=\"contextMenu-PluginCommands\" PluginEntryName=\"MIME Tools\" PluginCommandItemName=\"Base64 Encode\"/>"
+        "<Item FolderName=\"Plugin commands\" TranslateID=\"contextMenu-PluginCommands\" PluginEntryName=\"NppExport\" "
+        "PluginCommandItemName=\"Copy all formats to clipboard\" ItemNameAs=\"Copy Text with Syntax Highlighting\"/><Item id=\"0\"/>"
+        "<Item MenuEntryName=\"Edit\" MenuItemName=\"UPPERCASE\"/><Item MenuEntryName=\"Edit\" MenuItemName=\"lowercase\"/><Item id=\"0\"/>"
+        "<Item MenuEntryName=\"Edit\" MenuItemName=\"Open File\"/><Item MenuEntryName=\"Edit\" MenuItemName=\"Search on Internet\"/><Item id=\"0\"/>"
+        "<Item MenuEntryName=\"Edit\" MenuItemName=\"Toggle Single Line Comment\"/><Item MenuEntryName=\"Edit\" MenuItemName=\"Block Comment\"/>"
+        "<Item MenuEntryName=\"Edit\" MenuItemName=\"Block Uncomment\"/><Item id=\"0\"/>"
+        "<Item MenuEntryName=\"View\" MenuItemName=\"Hide lines\"/>"
         "</ScintillaContextMenu></NotepadPlus>";
-    check(contextMenuFromNpp(stock, yaml, notTranslated) && notTranslated.empty(), "stock context menu: every named item is known");
-    check(itemsOf(yaml) == std::vector<std::string>({ "42001", "42002", "42005", "42007", "-", "42023", "42047", "44042" }),
-          "stock context menu: Cut, Copy, Paste, Select All, the block comments and Hide Lines carry over");
+    check(contextMenuFromNpp(stock, yaml, notTranslated) && notTranslated.empty(), "stock context menu: nothing is left out");
+    check(itemsOf(yaml) == std::vector<std::string>({
+              "42001", "42002", "42005", "42006", "42007", "42020", "42089", "-",
+              "menu:Style &All Occurrences of Token[43022,43024,]", "menu:Style &One Token[43062,]", "menu:Clear Style[43023,43032,]", "-",
+              "menu:Plugin commands[plugin:MIME Tools/Base64 Encode,plugin:NppExport/Copy all formats to clipboard=Copy Text with Syntax Highlighting,]", "-",
+              "42016", "42017", "-", "42073", "42075", "-", "42022", "42023", "42047", "-", "44042" }),
+          "stock context menu: every item, folder, plugin command and label comes across, in order");
+
+    // A folder name the user changed is theirs, TranslateID or not; the same name in two menus resolves
+    // within the menu given.
+    check(contextMenuFromNpp("<NotepadPlus><ScintillaContextMenu>"
+                             "<Item FolderName=\"My styles\" TranslateID=\"contextMenu-clearStyle\" id=\"43023\"/>"
+                             "<Item MenuEntryName=\"View\" MenuItemName=\"Folder as Workspace\"/>"
+                             "<Item MenuEntryName=\"File\" MenuItemName=\"Folder as Workspace\"/>"
+                             "</ScintillaContextMenu></NotepadPlus>", yaml, notTranslated)
+          && itemsOf(yaml) == std::vector<std::string>({ "menu:My styles[43023,]", "44085", "41025" }),
+          "context menu: a renamed folder keeps its name; a name in two menus resolves within the one given");
 }
 
 static void testSessionAndWorkspace()

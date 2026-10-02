@@ -42,8 +42,10 @@ struct ConfigTranslation
 bool settingsFromConfig(const std::string& xml, ConfigTranslation& out, std::string* err = nullptr);
 
 // ---- contextMenu.xml -> contextmenu.yaml ---------------------------------------------------------
-// Notepad++ and wxNote share their command numbers, so items translate one for one. An item named only
-// by its menu text, a plugin command or a submenu has no number to carry: those are reported instead.
+// Notepad++ and wxNote share their command numbers, so numbered items translate one for one, and an item
+// named by its menu text is looked up in Notepad++'s English menu names (npp_menu_names.h) as Notepad++
+// looks it up. A FolderName run becomes a submenu, ItemNameAs the item's own label, and a plugin's
+// command a {plugin, command} item. Only names no Notepad++ menu has are reported in notTranslated.
 bool contextMenuFromNpp(const std::string& xml, std::string& yaml, std::vector<std::string>& notTranslated,
                         std::string* err = nullptr);
 

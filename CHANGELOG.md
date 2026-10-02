@@ -45,10 +45,16 @@ All notable changes to wxNote are documented here. Format loosely follows
   installed Notepad++'s settings folder and translates `config.xml` into wxNote settings (tab size,
   word wrap, line numbers, new-document EOL and encoding, dark mode, the theme and more), `shortcuts.xml`
   into a key-binding scheme, its themes into wxNote themes and `contextMenu.xml` into wxNote's right-click
-  menu, then reports what came across and what had nowhere to go. A file it replaces is kept aside as
-  `.bak`, never over an earlier backup. **Import the Open Notepad++ File** does the same for one file, and
-  opens a Notepad++ session or turns a Project-panel workspace into a wxNote one. The new `npp2wxnote`
-  command-line tool runs the same translations without wxNote.
+  menu (items named by their menu text such as Notepad++'s own Cut, Copy and Paste, submenus, renamed
+  items and plugin commands included), then reports what came across and what had nowhere to go. A file
+  it replaces is kept aside as `.bak`, never over an earlier backup. **Import the Open Notepad++ File**
+  does the same for one file, and opens a Notepad++ session or turns a Project-panel workspace into a
+  wxNote one. The new `npp2wxnote` command-line tool runs the same translations without wxNote.
+- **The right-click menu can have submenus, labels of your own and plugin commands.** In
+  `contextmenu.yaml` an item can be `{command: edit.copy, label: Copy Text}`, `{menu: ..., items: [...]}`
+  or `{plugin: MIME Tools, command: Base64 Encode}`, as Notepad++'s `contextMenu.xml` allows. Toggles
+  such as Word Wrap show their check mark, and an item naming something wxNote or its loaded plugins
+  don't have is left out rather than breaking the menu.
 - **`nib.settings/1`** (Nib ABI 1.8): a plugin can read and change a setting by its id; wxNote checks
   every value against its own table of settings, as it does for a hand-edited `settings.yaml`.
 
