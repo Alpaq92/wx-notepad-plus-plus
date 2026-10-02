@@ -35,6 +35,10 @@ mkdir -p %{buildroot}/usr/share/applications
 install -m 644 %{_srcdir}/installer/linux/wxnote.desktop %{buildroot}/usr/share/applications/wxnote.desktop
 mkdir -p %{buildroot}/usr/share/icons/hicolor/scalable/apps
 install -m 644 "%{_srcdir}/resources/wxnote.svg" %{buildroot}/usr/share/icons/hicolor/scalable/apps/wxnote.svg
+# The licence travels with the package (Apache-2.0 4(a)), and NOTICE with it: the third-party
+# attributions and the licence texts they ask for.
+mkdir -p %{buildroot}/usr/share/licenses/wxnote
+install -m 644 %{_srcdir}/LICENSE %{_srcdir}/NOTICE %{buildroot}/usr/share/licenses/wxnote/
 
 %post
 # Same reasoning as the .deb's postinst: refresh the desktop/MIME caches so the associations
@@ -51,6 +55,8 @@ command -v gtk-update-icon-cache   >/dev/null 2>&1 && gtk-update-icon-cache -qtf
 /usr/bin/wxnote
 /usr/share/applications/wxnote.desktop
 /usr/share/icons/hicolor/scalable/apps/wxnote.svg
+%license /usr/share/licenses/wxnote/LICENSE
+%license /usr/share/licenses/wxnote/NOTICE
 
 %changelog
 * Sun Jul 05 2026 wxNote Project <noreply@wx-notepad-plus-plus.invalid> - 0.2.0-1

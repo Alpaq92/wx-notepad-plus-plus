@@ -74,7 +74,8 @@ and Zig from the same source archive. `tools/scite_keywords.cpp` regenerates
 the file; its header reproduces the licence notice.
 
 Ten languages SciTE never had lists for take them from other projects
-(`src/keywords_contrib.h`, which carries each source and its terms):
+(`src/keywords_contrib.h`, which carries each source and its terms; `NOTICE`
+reproduces the licences):
 
 - **Clarion** — **Devuna**'s Kwik Source Search (`bin/clarion.properties`,
   MIT, © 2017 Devuna), written for Lexilla's case-insensitive Clarion lexer;

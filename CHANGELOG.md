@@ -130,6 +130,10 @@ All notable changes to wxNote are documented here. Format loosely follows
   tile in Streamline.
 - The build pins Scintillua's `lexer.lua` to one upstream commit and checks its SHA-256. It used to be
   taken from Scintillua's moving `default` branch, so a clean build could ship a different file.
+- The Linux and macOS packages now carry `LICENSE` and `NOTICE`, as the Windows installer and zip
+  already did: in the `.deb`'s `copyright` file, among the `.rpm`'s licence files, in the AppImage, in
+  the Flatpak's licence folder and inside the macOS app. `NOTICE` now also holds the full MIT and BSD
+  texts the bundled third-party code asks to travel with it.
 
 ## [0.20.0] - 2026-09-05
 

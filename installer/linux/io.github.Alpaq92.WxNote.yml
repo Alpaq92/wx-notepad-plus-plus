@@ -51,6 +51,9 @@ modules:
       - install -Dm644 wxnote.desktop /app/share/applications/io.github.Alpaq92.WxNote.desktop
       - install -Dm644 wxnote.png /app/share/icons/hicolor/256x256/apps/io.github.Alpaq92.WxNote.png
       - install -Dm644 wxnote.metainfo.xml /app/share/metainfo/io.github.Alpaq92.WxNote.metainfo.xml
+      # The licence travels with the app (Apache-2.0 4(a)), where Flatpak keeps licences, and NOTICE
+      # with it: the third-party attributions and the licence texts they ask for.
+      - install -Dm644 -t /app/share/licenses/io.github.Alpaq92.WxNote LICENSE NOTICE
     sources:
       - type: dir
         path: ../../build/bin
@@ -68,3 +71,7 @@ modules:
       - type: file
         path: io.github.Alpaq92.WxNote.metainfo.xml
         dest-filename: wxnote.metainfo.xml
+      - type: file
+        path: ../../LICENSE
+      - type: file
+        path: ../../NOTICE

@@ -28,6 +28,10 @@ cp -r build/bin/. "$APPDIR/usr/bin/"
 rm -rf "$APPDIR/usr/bin/nib/nib_test_plugin.so" "$APPDIR/usr/bin/nib/example" "$APPDIR/usr/bin/plugins"   # dev-only test artifacts
 cp installer/linux/wxnote.desktop "$APPDIR/wxnote.desktop"
 cp resources/wxnote.svg "$APPDIR/wxnote.svg"
+# The licence travels with the AppImage (Apache-2.0 4(a)), and NOTICE with it: the third-party
+# attributions and the licence texts they ask for.
+mkdir -p "$APPDIR/usr/share/doc/wxnote"
+cp LICENSE NOTICE "$APPDIR/usr/share/doc/wxnote/"
 
 if [ ! -x linuxdeploy.AppImage ]; then
     curl -fL -o linuxdeploy.AppImage "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${ARCH}.AppImage"
