@@ -4767,20 +4767,58 @@ private:
         sci(SCI_SETTEXT, 0, reinterpret_cast<sptr_t>(u.data()));
         sci(SCI_ENDUNDOACTION);
     }
+    // The main selection's text, as the document's own bytes (embedded NULs kept). Not SCI_GETSELTEXT:
+    // with several selections - multi-select, a rectangle - that copies all of them, more than this
+    // range holds, and it overran the buffer sized for it.
     std::string getSelUtf8()
     {
         const int a = static_cast<int>(sci(SCI_GETSELECTIONSTART)), b = static_cast<int>(sci(SCI_GETSELECTIONEND));
-        if (b <= a) return {};
-        std::string s(static_cast<size_t>(b - a) + 1, '\0');
-        sci(SCI_GETSELTEXT, 0, reinterpret_cast<sptr_t>(&s[0])); s.resize(b - a);
-        return s;
+        return textBytes(a, b);
     }
+    // [a, b) as the document's bytes - unlike rangeText, without moving the target.
+    std::string textBytes(int a, int b)
+    {
+        if (b <= a || !m_stc) return {};
+        const wxCharBuffer buf = m_stc->GetTextRangeRaw(a, b);
+        return std::string(buf.data(), buf.length());
+    }
+    // Rewrite each selection through `fn` - every one on its own, so several selections or a rectangle
+    // are each converted instead of all getting one merged copy - as one undo step, leaving them
+    // selected with the main one where it was.
     void transformSel(const std::function<void(std::string&)>& fn)
     {
-        std::string s = getSelUtf8();
-        if (s.empty()) return;
-        fn(s);
-        sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(s.c_str()));
+        struct Sel { int start, end, index; };
+        std::vector<Sel> sels;
+        const int n = static_cast<int>(sci(SCI_GETSELECTIONS));
+        for (int i = 0; i < n; ++i)
+        {
+            const int a = static_cast<int>(sci(SCI_GETSELECTIONNSTART, i)), b = static_cast<int>(sci(SCI_GETSELECTIONNEND, i));
+            if (b > a) sels.push_back({ a, b, i });
+        }
+        if (sels.empty()) return;
+        std::sort(sels.begin(), sels.end(), [](const Sel& x, const Sel& y) { return x.start < y.start; });
+        const int mainIndex = static_cast<int>(sci(SCI_GETMAINSELECTION));
+        sci(SCI_BEGINUNDOACTION);
+        int shift = 0;   // what the selections before this one grew or shrank by
+        for (Sel& s : sels)
+        {
+            s.start += shift;
+            s.end += shift;
+            std::string text = textBytes(s.start, s.end);
+            fn(text);
+            sci(SCI_SETTARGETRANGE, s.start, s.end);
+            sci(SCI_REPLACETARGET, text.size(), reinterpret_cast<sptr_t>(text.data()));
+            shift += static_cast<int>(text.size()) - (s.end - s.start);
+            s.end = s.start + static_cast<int>(text.size());
+        }
+        sci(SCI_ENDUNDOACTION);
+        int newMain = 0;
+        for (size_t k = 0; k < sels.size(); ++k)
+        {
+            sci(k == 0 ? SCI_SETSELECTION : SCI_ADDSELECTION, sels[k].end, sels[k].start);
+            if (sels[k].index == mainIndex) newMain = static_cast<int>(k);
+        }
+        sci(SCI_SETMAINSELECTION, newMain);
     }
 
     // ----- application icon ---------------------------------------------

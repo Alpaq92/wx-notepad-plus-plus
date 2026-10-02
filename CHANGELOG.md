@@ -93,6 +93,10 @@ All notable changes to wxNote are documented here. Format loosely follows
   their own theme sections, and JavaScript and PHP inside HTML are coloured too.
 - Toggle Comment now works in files whose language is only known from detection (scripts with no
   extension, `CMakeLists.txt`, `PKGBUILD`, systemd units), and comments `.inf` files with `;`.
+- Reading the selection with several selections active (multi-cursor, or a column selection) overran
+  a buffer - in Find and Replace's prefill, Mark, Find in Files, searching the web and Open File. They
+  now take the main selection. **Convert Case** and **Redact** convert each selection on its own and
+  keep them selected, instead of replacing them all with one merged copy.
 
 ### Changed
 - **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved

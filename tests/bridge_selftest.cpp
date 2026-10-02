@@ -95,6 +95,22 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         o.forward = fwd; o.wrap = false; return o;
     };
 
+    // ---- several selections: the main one is what reads; a conversion rewrites each ------------------
+    // Reading "the selection" sized its buffer for the main selection and then copied all of them into
+    // it (a heap overflow), and a case conversion replaced every selection with one merged copy.
+    {
+        load("one two three");
+        f->sci(SCI_SETSELECTION, 3, 0);    // "one"
+        f->sci(SCI_ADDSELECTION, 13, 8);   // "three", now the main selection
+        check(f->selText() == "three", "selection: several selections read as the main one");
+        f->transformSel([](std::string& s) { for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c))); });
+        check(text() == "ONE two THREE", "selection: a conversion rewrites each selection on its own");
+        check(f->sci(SCI_GETSELECTIONS) == 2 && f->selText() == "THREE", "selection: ...leaving both selected, the main one main");
+        f->sci(SCI_UNDO);
+        check(text() == "one two three", "selection: ...as one undo step");
+        f->sci(SCI_CLEARSELECTIONS);
+    }
+
     // ---- (1) a regex that CROSSES A LINE BREAK, through the real Find path ------------------------
     // The headline capability. Before PCRE2 this could not match at all, at any surface.
     {
