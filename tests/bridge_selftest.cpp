@@ -77,6 +77,13 @@ static void check(bool ok, const char* what)
 // backward search, replacement expansion, and the snippet session's absolute offsets as text is typed
 // into it. That layer is where both of the last two defects were.
 //
+// The sandbox (set in main() BEFORE wxEntry) and the file helpers, declared ahead of the editor tests
+// below, which use them too: GCC and Clang look a template's names up where it is written.
+static wxString g_sandboxRoot;       // <temp>/wxnote_bridge_selftest
+static wxString g_sandboxUserData;   // <root>/userdata - what the app believes its user-data dir is
+static bool writeWholeFile(const wxString& path, const char* content);
+static wxString readWholeFile(const wxString& path);
+
 // Defined here and declared in main.cpp as a friend of the frame, so the private seams stay private.
 template <class FB>
 void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
@@ -735,9 +742,7 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
     check(f->sci(SCI_GETMODIFY) == 0, "editor seams: the buffer is left clean for the phases that follow");
 }
 
-// ---- the sandbox (set in main() BEFORE wxEntry, read by the traits below) --------------------------
-static wxString g_sandboxRoot;       // <temp>/wxnote_bridge_selftest
-static wxString g_sandboxUserData;   // <root>/userdata - what the app believes its user-data dir is
+// ---- the sandbox (g_sandboxRoot / g_sandboxUserData, above; read by the traits below) ---------------
 
 // Headlessly answer the confirmClose "wxNote" save prompt (no OS input injection). The whole run has
 // AskBeforeClose armed (so the Phase-4 shutdown VETO path can be driven), but every close in Phases 1-3

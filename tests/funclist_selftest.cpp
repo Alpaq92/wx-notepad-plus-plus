@@ -437,6 +437,8 @@ int main(int argc, char** argv)
         check(wxnParseRuns(wxnSerializeRuns(in, 42), out, nextUid), "runs: current format version parses");
         check(out.size() == in.size(), "runs: every command survives the round trip");
         check(nextUid == 42, "runs: nextUid is carried through");
+        if (nextUid != 42)   // seen on Windows ARM64 only: show what was written and read back
+            std::printf("        nextUid %ld, read from:\n%s\n", nextUid, wxnSerializeRuns(in, 42).c_str());
         bool same = out.size() == in.size();
         for (size_t i = 0; same && i < in.size(); ++i)
             same = out[i].uid == in[i].uid && out[i].name == in[i].name && out[i].cmd == in[i].cmd;

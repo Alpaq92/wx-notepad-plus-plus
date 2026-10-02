@@ -1519,6 +1519,14 @@ static const std::regex* flCommentRe(const std::string& lang)
     return it == tbl.end() ? nullptr : &it->second;
 }
 
+// A user's pattern reads ^ and $ as the start and end of a line, as the '^\s*let\s+...' below does.
+// ECMAScript gives them that only under the multiline option (C++17), which newer standard libraries
+// have - MSVC's since 14.50, which also stopped reading ^ as a line start without it; older MSVC ones
+// lack the option but always did. Detected, so a user's rules match the same lines on both.
+template <class R, class = void> struct WxnRegexLines { static constexpr typename R::flag_type value{}; };
+template <class R> struct WxnRegexLines<R, std::void_t<decltype(R::multiline)>>
+{ static constexpr typename R::flag_type value = R::multiline; };
+
 // Load user Function List rules from functionlist.yaml (userDataDir), merged over the built-ins:
 //
 //   languages:
@@ -1561,7 +1569,8 @@ static std::string loadFunctionListRules(const wxString& path)
             }
         std::string comment;
         if (wxnyaml::getText(wxnyaml::child(l, "comment"), comment))
-            try { g_flUserComment[lang] = std::regex(comment, icase ? std::regex::icase : std::regex::flag_type{}); } catch (...) {}
+            try { g_flUserComment[lang] = std::regex(comment, std::regex::ECMAScript | WxnRegexLines<std::regex>::value
+                                                              | (icase ? std::regex::icase : std::regex::flag_type{})); } catch (...) {}
         const wxnyaml::Node rules = wxnyaml::child(l, "rules");
         if (!wxnyaml::isSeq(rules)) continue;
         for (wxnyaml::Node r : rules.children())
@@ -1570,7 +1579,8 @@ static std::string loadFunctionListRules(const wxString& path)
             if (!wxnyaml::getText(wxnyaml::child(r, "regex"), regex)) continue;
             const int kind = wxnyaml::textOr(wxnyaml::child(r, "kind"), "function") == "container" ? 1 : 0;
             const long long grp = wxnyaml::integerOr(wxnyaml::child(r, "group"), 1);
-            auto fl = std::regex::ECMAScript | std::regex::optimize | (icase ? std::regex::icase : std::regex::flag_type{});
+            auto fl = std::regex::ECMAScript | std::regex::optimize | WxnRegexLines<std::regex>::value
+                    | (icase ? std::regex::icase : std::regex::flag_type{});
             try { g_flUserRules[lang].push_back({ kind, std::regex(regex, fl), (int)(grp >= 0 && grp < 100 ? grp : 1) }); } catch (...) {}
         }
     }
