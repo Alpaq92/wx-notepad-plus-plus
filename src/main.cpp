@@ -655,15 +655,16 @@ struct WxnTheme
     std::map<std::string, std::string> extToLang;
 };
 // The generic token classes a Scintillua-lexed buffer uses. The style numbers are the ones
-// sciTagToStyle mints; cppDonor is the Notepad++ cpp WordsStyle whose colours the class borrows when a
-// theme carries no genericLangDef block of its own (see WxnFrame::synthesizeGenericStyles). cpp is the
-// donor because it is the one LexerType present, with fgColor set, in all 28 shipped themes and in
-// every Notepad++ theme in the wild - so this works for a theme the user drops in, not just ours.
+// sciTagToStyle mints; cppDonor is the cpp style whose colours the class borrows when a theme carries no
+// genericLangDef block of its own (see synthesizeDerivedSections). cpp is the donor because it is the one
+// block with colours set in all 28 shipped themes and in every theme imported from Notepad++ - so this
+// works for a theme the user brings, not just ours.
 // keyword2..8 (styles 6..12) are deliberately absent: no Scintillua lexer emits those tags. They are
 // the udl-compat convention for a UDL's own keyword groups, which Notepad++ stores in the UDL file and
 // not in the theme, so the language definition owns them - they keep the built-in palette.
 static constexpr const char* kGenericLexer = "genericLangDef";
-struct GenericStyle { int id; const char* name; int cppDonor; };
+// fontStyle: -1 takes the donor's bold/italic/underline bits, anything else replaces them.
+struct GenericStyle { int id; const char* name; int cppDonor; int fontStyle = -1; };
 static constexpr GenericStyle kGenericStyles[] = {
     {  0, "DEFAULT",      11 },   // cpp 11 is labelled DEFAULT but is SCE_C_IDENTIFIER, which is the
     {  1, "KEYWORD",       5 },   // right donor: style 0 also catches Scintillua's identifier tag
@@ -678,6 +679,44 @@ static constexpr GenericStyle kGenericStyles[] = {
                                   // in 28/28 themes and in two of them it equals INSTRUCTION WORD, so
                                   // constants would render as keywords. Left unspecified instead: it
                                   // keeps the built-in palette until the user gives it a colour.
+// Clarion's LexCLW styles. Notepad++ has no Clarion, so no theme has a block for it, and without one a
+// Clarion file drew in the base colour whatever its keyword lists said. Each style takes the nearest cpp
+// role: keywords, built-in procedures and runtime expressions the instruction-word colour; structures,
+// data types and attributes the type colour; compiler directives the preprocessor's; standard equates
+// (EVENT:, TRUE) the number colour, as named constants; and a label - the name a line declares - the
+// identifier colour in bold. Every donor here is set in all 28 shipped themes.
+static constexpr GenericStyle kClarionStyles[] = {
+    {  0, "DEFAULT",                   11 },
+    {  1, "LABEL",                     11, 1 },
+    {  2, "COMMENT",                    2 },
+    {  3, "STRING",                     6 },
+    {  4, "USER IDENTIFIER",           11 },
+    {  5, "INTEGER CONSTANT",           4 },
+    {  6, "REAL CONSTANT",              4 },
+    {  7, "PICTURE STRING",             7 },
+    {  8, "KEYWORD",                    5 },
+    {  9, "COMPILER DIRECTIVE",         9 },
+    { 10, "RUNTIME EXPRESSIONS",        5 },
+    { 11, "BUILT-IN PROCEDURES",        5 },
+    { 12, "STRUCTURES AND DATA TYPES", 16 },
+    { 13, "ATTRIBUTE",                 16 },
+    { 14, "STANDARD EQUATE",            4 },
+    { 15, "ERROR",                     18 },
+    { 16, "DEPRECATED",                17 },
+};
+// The theme blocks wxNote derives from a theme's own cpp colours when the theme has none: listed in the
+// Style Configurator like any other block, and written into the theme file the first time one of their
+// styles is edited (saveThemeFile).
+struct DerivedSection { const char* key; const char* description; const GenericStyle* styles; std::size_t count; };
+static constexpr DerivedSection kDerivedSections[] = {
+    { kGenericLexer, "Generic (custom languages)", kGenericStyles, sizeof(kGenericStyles) / sizeof(kGenericStyles[0]) },
+    { "clarion",     "Clarion",                    kClarionStyles, sizeof(kClarionStyles) / sizeof(kClarionStyles[0]) },
+};
+static const DerivedSection* wxnDerivedSection(const wxString& key)
+{
+    for (const DerivedSection& d : kDerivedSections) if (key == d.key) return &d;
+    return nullptr;
+}
 // Selected-text foreground. Scintilla leaves the selection FOREGROUND unset by default
 // (ViewStyle: selColours.fore.isSet == false), so a selected glyph keeps its own syntax colour painted
 // on top of the selection fill - and against a pale fill like the light theme's #ADD6FF a mid or light
@@ -9954,6 +9993,7 @@ private:
         static const struct { const char* lang; const char* key; } kAlias[] = {
             { "Fortran (fixed form)", "fortran77" }, { "PostScript", "postscript" }, { "AutoIt", "autoit" },
             { "BaanC", "baanc" }, { "COBOL", "cobol" }, { "Octave", "matlab" }, { "VBScript", "vb" },
+            { "Clarion", "clarion" },   // the clarionnocase lexer; the block is one of kDerivedSections
         };
         for (const auto& a : kAlias) if (langName == a.lang) return { a.key };
         return {};
@@ -14417,29 +14457,35 @@ private:
             m_theme.global[wxString::FromUTF8(g.name.c_str())] = { themeColor(g.fg), themeColor(g.bg) };
             if (g.name == "Default Style") { m_theme.defaultFont = g.font; m_theme.defaultSize = g.size; }
         }
-        synthesizeGenericStyles();
+        synthesizeDerivedSections();
         m_theme.loaded = true;
     }
-    // Scintillua-lexed buffers have no Notepad++ LexerType to draw from, so no theme could colour them
-    // and every theme rendered them with the same fixed palette. Give them one. The block behaves like
-    // any other LexerType from here on: it lists in the Style Configurator, edits like the rest, and
-    // saveThemeFile writes a real genericLangDef block into the file the first time one of its styles
-    // is changed. Derived values are defaults only - a theme that already carries the block wins.
-    void synthesizeGenericStyles()
+    // Scintillua-lexed buffers and languages Notepad++ does not have (Clarion) have no block in a theme
+    // that came from Notepad++, so no theme could colour them: every theme rendered them with one fixed
+    // palette, or none. Derive their blocks from the theme's own cpp colours (kDerivedSections). Each
+    // behaves like any other block from here on: it lists in the Style Configurator, edits like the rest, and
+    // saveThemeFile writes a real block into the file the first time one of its styles is changed.
+    // Derived values are defaults only - a theme that already carries the block wins.
+    void synthesizeDerivedSections()
     {
-        if (m_theme.lexers.count(kGenericLexer)) return;   // authored in the file: leave it alone
         auto cpp = m_theme.lexers.find("cpp");
-        if (cpp == m_theme.lexers.end()) return;           // no donor: applyScintilluaStyles' palette stands
-        std::vector<StyleDef> out;
-        for (const GenericStyle& g : kGenericStyles)
+        if (cpp == m_theme.lexers.end()) return;           // no donor: the built-in palettes stand
+        for (const DerivedSection& d : kDerivedSections)
         {
-            StyleDef s{ g.id, -1, -1, 0, g.name };
-            if (g.cppDonor >= 0)
-                for (const StyleDef& d : cpp->second)
-                    if (d.id == g.cppDonor) { s.fg = d.fg; s.bg = d.bg; s.fontStyle = d.fontStyle; break; }
-            out.push_back(s);
+            if (m_theme.lexers.count(d.key)) continue;     // authored in the file: leave it alone
+            std::vector<StyleDef> out;
+            for (std::size_t i = 0; i < d.count; ++i)
+            {
+                const GenericStyle& g = d.styles[i];
+                StyleDef s{ g.id, -1, -1, 0, g.name };
+                if (g.cppDonor >= 0)
+                    for (const StyleDef& c : cpp->second)
+                        if (c.id == g.cppDonor) { s.fg = c.fg; s.bg = c.bg; s.fontStyle = c.fontStyle; break; }
+                if (g.fontStyle >= 0) s.fontStyle = g.fontStyle;
+                out.push_back(s);
+            }
+            m_theme.lexers[d.key] = std::move(out);
         }
-        m_theme.lexers[kGenericLexer] = std::move(out);
     }
     void applyThemeSelection(const wxString& name)   // switch the editor theme live (Style Configurator)
     {
@@ -14515,10 +14561,11 @@ private:
             wxntheme::Lexer* lx = t.lexer(wxnUtf8(key.first));
             if (!lx)
             {
-                if (key.first != kGenericLexer) continue;   // only our own block is ever created
+                const DerivedSection* derived = wxnDerivedSection(key.first);
+                if (!derived) continue;   // only a block wxNote derives is ever created
                 wxntheme::Lexer g;
-                g.name = kGenericLexer;
-                g.description = "Generic (custom languages)";
+                g.name = derived->key;
+                g.description = derived->description;
                 t.lexers.push_back(g);
                 lx = &t.lexers.back();
             }

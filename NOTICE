@@ -85,6 +85,38 @@ rapidyaml (YAML and JSON reader and writer)
       MIT License.
     * debugbreak - Copyright (c) 2011-2021 Scott Tsai, BSD 2-Clause License.
 
+Keyword lists for languages SciTE has none for — src/keywords_contrib.h
+  The header carries each source and its terms, with the MIT and BSD notices
+  in full. Repeated words are dropped and one typo is corrected.
+  Clarion: from Devuna's Kwik Source Search (bin/clarion.properties),
+  Copyright (c) 2017 Devuna, MIT License.
+  Gui4Cli: from Gui4Cli's own SciEd editor (Languages/Gui4Cli.ini, Gui4Cli
+  20.06), by D. Keletsekis (www.gui4cli.org); SciEd "can be freely used,
+  redistributed, enhanced, altered, canibalized and deleted", and Gui4Cli is
+  released under the MIT licence.
+  ABL (OpenEdge): abl-tmlanguage's abl-keywords.txt, Copyright (c) 2016
+  ZaphyrVonGenevese, MIT License.
+  BibTeX: LaTeX Workshop's entry lists, Copyright (c) 2016 James Yu, MIT
+  License.
+  CoffeeScript: CoffeeScript 2.7.0's lexer, Copyright (c) 2009-2018 Jeremy
+  Ashkenas, MIT License; global classes from highlight.js 11.12.0, Copyright
+  (c) 2006, Ivan Sagalaev, BSD 3-Clause License.
+  GDScript: Godot 4.7.2, Copyright (c) 2014-present Godot Engine contributors,
+  Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur, MIT License.
+  Julia: JuliaSyntax.jl, Copyright (c) 2021 Julia Computing and contributors,
+  and Julia 1.13.1, Copyright (c) 2009-2025 Jeff Bezanson, Stefan Karpinski,
+  Viral B. Shah, and other contributors; both MIT License.
+  MS SQL, MySQL and Stata: Pygments 2.21.0, Copyright (c) 2006-2022 by the
+  respective authors (see the Pygments AUTHORS file), BSD 2-Clause License.
+  MS SQL also: system view, @@ function and system procedure names from
+  Microsoft's SQL Server documentation (github.com/MicrosoftDocs/sql-docs),
+  (c) Microsoft, Creative Commons Attribution 4.0 International.
+  MySQL also: system variable names from go-mysql-server, Copyright 2022
+  Dolthub, Inc., Apache License 2.0.
+  Stata also: newer commands from tree-sitter-stata (public domain, the
+  Unlicense) and types from language-stata, Copyright (c) 2017 Kyle Barron,
+  MIT License.
+
 Hunspell (spell-check engine)
   Copyright (c) László Németh and contributors.
   Tri-licensed MPL-1.1 / GPL-2.0-or-later / LGPL-2.1-or-later; wxNote uses it

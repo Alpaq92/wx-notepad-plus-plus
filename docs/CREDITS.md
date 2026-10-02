@@ -73,6 +73,46 @@ language files of SciTE 5.6.7, plus Lexilla's own lists for Dart, Nix, TOML
 and Zig from the same source archive. `tools/scite_keywords.cpp` regenerates
 the file; its header reproduces the licence notice.
 
+Ten languages SciTE never had lists for take them from other projects
+(`src/keywords_contrib.h`, which carries each source and its terms):
+
+- **Clarion** — **Devuna**'s Kwik Source Search (`bin/clarion.properties`,
+  MIT, © 2017 Devuna), written for Lexilla's case-insensitive Clarion lexer;
+  one typo corrected (`ELLISPE` → `ELLIPSE`). Copies also live in
+  mriffey/KSSOpen and RobertArtigas/DEVUNA__IDE__.
+- **Gui4Cli** — the language's own editor, **SciEd**, from the Gui4Cli 20.06
+  distribution (`Languages/Gui4Cli.ini`), by **D. Keletsekis**. SciEd's help
+  says it "can be freely used, redistributed, enhanced, altered, canibalized
+  and deleted", and gui4cli.org states Gui4Cli is released under the MIT
+  licence; the distribution itself has no licence file.
+- **ABL (OpenEdge)** — the keyword list OpenEdge 13.0 prints itself, as kept
+  in **abl-tmlanguage** (MIT, © 2016 ZaphyrVonGenevese).
+- **BibTeX** — the BibTeX and biblatex entry types of **LaTeX Workshop**
+  (MIT, © 2016 James Yu).
+- **CoffeeScript** — **CoffeeScript**'s own lexer (MIT, © 2009–2018 Jeremy
+  Ashkenas) and **highlight.js**'s global classes (BSD-3-Clause, © 2006 Ivan
+  Sagalaev).
+- **GDScript** — **Godot** 4.7's reserved words, types and global functions
+  (MIT, © 2014-present Godot Engine contributors, © 2007–2014 Juan Linietsky,
+  Ariel Manzur).
+- **Julia** — **JuliaSyntax.jl**'s keywords (MIT, © 2021 Julia Computing and
+  contributors) and what **Julia** 1.13's `base/exports.jl` exports (MIT,
+  © 2009–2025 Jeff Bezanson, Stefan Karpinski, Viral B. Shah and other
+  contributors).
+- **MS SQL** — **Pygments**' T-SQL lists (BSD-2-Clause, © the Pygments
+  authors) and the system views, `@@` functions and system procedures named
+  in **Microsoft**'s SQL Server documentation (CC BY 4.0).
+- **MySQL** — **Pygments**' MySQL lists and the system variables of
+  **go-mysql-server** (Apache-2.0, © 2022 Dolthub, Inc.).
+- **Stata** — **Pygments**' Stata commands, newer commands from
+  **tree-sitter-stata** (public domain, Unlicense) and the types of
+  **language-stata** (MIT, © 2017 Kyle Barron).
+
+Considered for these and not used: SynEdit's PSPad highlighter
+(MPL/LGPL), CudaText's and EditPlus's Clarion files (no licence), Editra's
+and dnGrep's Gui4Cli definitions (wxWindows / GPL), and Notepad++'s own
+Gui4Cli list (GPL; a copy of SciEd's).
+
 ## Scintillua, Lua & LPeg — the native language engine
 
 wxNote's own cross-platform custom-language engine (`src/scintillua_engine.{h,cpp}`,

@@ -46,7 +46,7 @@ inline const WxnLang* wxnLangTable(size_t& n)
         { kCmdLangCpp,           "C++",                   "cpp"          },
         { kCmdLangCaml,          "Caml",                  "caml"         },
         { kCmdLangCil,           "CIL",                   "cil"          },
-        { kCmdLangClarion,       "Clarion",               "clarion"      },
+        { kCmdLangClarion,       "Clarion",               "clarionnocase" },
         { kCmdLangCmake,         "CMake",                 "cmake"        },
         { kCmdLangCobol,         "COBOL",                 "COBOL"        },
         { kCmdLangCoffeeScript,  "CoffeeScript",          "coffeescript" },

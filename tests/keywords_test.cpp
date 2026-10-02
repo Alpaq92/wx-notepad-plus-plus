@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// keywords_test - the keyword lists wxNote hands its lexers (src/keywords.h, src/keywords_scite.h),
-// checked against the REAL Lexilla lexers and the real Language-menu table:
+// keywords_test - the keyword lists wxNote hands its lexers (src/keywords.h, src/keywords_scite.h,
+// src/keywords_contrib.h), checked against the REAL Lexilla lexers and the real Language-menu table:
 //   * every list names a menu language, and lands in a keyword slot that language's lexer takes;
 //   * every menu language whose lexer describes keyword slots gets lists - apart from the named gaps,
-//     the languages SciTE has none for, which this suite lists so a newly filled one is noticed;
-//   * spot checks that SciTE's lists landed where they should;
+//     the languages no list has been found for yet, which this suite lists so a newly filled one is noticed;
+//   * spot checks that the lists landed where they should, and that the upper-case ones go to lexers
+//     that upper-case what they look up;
 //   * the lookup helpers: the generated table first, the extra table only for slots it leaves empty.
 //
 //   cmake --build build --target keywords_test && build/bin/keywords_test
@@ -97,12 +98,10 @@ int main()
     }
 
     std::printf("\n-- coverage: languages whose lexer describes keyword slots --\n");
-    // Nothing found for these yet: neither SciTE nor Lexilla has lists for them (being filled from other
-    // sources). XML is not one: SciTE deliberately gives it no tag list, so every tag counts as known.
-    static const std::set<std::string> kGaps = {
-        "ABL (OpenEdge)", "BibTeX", "Clarion", "CoffeeScript", "GDScript", "Gui4Cli", "Julia",
-        "MS SQL", "MySQL", "Stata",
-    };
+    // Languages nothing has been found for: neither SciTE nor Lexilla has lists for them and no other
+    // source has been taken (keywords_contrib.h holds the ones that were). None are left. XML is not one:
+    // SciTE deliberately gives it no tag list, so every tag counts as known.
+    static const std::set<std::string> kGaps = {};
     int missing = 0, filledGap = 0, covered = 0;
     for (const auto& [language, lexer] : lexers)
     {
@@ -116,7 +115,7 @@ int main()
     check(missing == 0, "every keyword-taking language has lists, or is a named gap (" + std::to_string(covered) + " covered)");
     check(filledGap == 0, "the named gaps are all still gaps");
 
-    std::printf("\n-- SciTE's lists landed where they should --\n");
+    std::printf("\n-- the lists landed where they should --\n");
     const struct { const char* lang; int slot; const char* word; } spots[] = {
         { "C++", 0, "constexpr" }, { "C", 0, "struct" }, { "C#", 0, "namespace" }, { "Java", 0, "synchronized" },
         { "JavaScript", 0, "function" }, { "TypeScript", 0, "function" }, { "Go", 0, "func" }, { "Swift", 0, "func" },
@@ -129,9 +128,42 @@ int main()
         // Lexilla's own lists, for what SciTE's files leave out
         { "Dart", 0, "async" }, { "Dart", 2, "Future" }, { "Nix", 2, "builtins" }, { "TOML", 0, "inf" },
         { "Zig", 1, "usize" },
+        // other editors' lists (keywords_contrib.h); Clarion's slot 2 is runtime expressions, 3 built-ins
+        { "Clarion", 0, "PROCEDURE" }, { "Clarion", 2, "EVALUATE" }, { "Clarion", 3, "MESSAGE" },
+        { "Clarion", 4, "ELLIPSE" }, { "Clarion", 6, "EVENT:" }, { "Gui4Cli", 1, "XBUTTON" },
+        { "Gui4Cli", 3, "ENDIF" }, { "Gui4Cli", 4, "GUIOPEN" },
+        { "ABL (OpenEdge)", 0, "def(ine" }, { "ABL (OpenEdge)", 1, "proce(dure" }, { "ABL (OpenEdge)", 3, "TODO" },
+        { "BibTeX", 0, "article" }, { "CoffeeScript", 0, "unless" }, { "CoffeeScript", 3, "Promise" },
+        { "GDScript", 0, "func" }, { "GDScript", 1, "Vector2" }, { "Julia", 0, "function" },
+        { "Julia", 1, "Int64" }, { "Julia", 3, "println" }, { "MS SQL", 0, "select" }, { "MS SQL", 5, "sp_who" },
+        { "MySQL", 0, "select" }, { "MySQL", 3, "concat" }, { "Stata", 0, "regress" }, { "Stata", 0, "margins" },
+        { "Stata", 1, "strL" },
     };
     for (const auto& s : spots)
         check(hasWord(s.lang, s.slot, s.word), std::string(s.lang) + " slot " + std::to_string(s.slot) + " has \"" + s.word + "\"");
+    check(!hasWord("Clarion", 4, "ELLISPE"), "Clarion: the source's ELLISPE typo is corrected");
+
+    // clarionnocase and gui4cli upper-case the word they look up, so a list word with a lower-case letter
+    // could never match.
+    int lowerCase = 0;
+    for (const char* lang : { "Clarion", "Gui4Cli" })
+        wxnForEachKeywordList(lang, [&](const WxnKeywordList& k) {
+            for (const char* p = k.words; *p; ++p)
+                if (*p >= 'a' && *p <= 'z') { ++lowerCase; std::printf("        %s slot %d has lower case\n", lang, k.slot); break; }
+        });
+    check(lowerCase == 0, "Clarion and Gui4Cli lists are upper case, as their lexers look words up");
+    // ...and abl (bar its task markers), bib, mssql and mysql lower-case it, so an upper-case letter could
+    // never match there.
+    int upperCase = 0;
+    for (const char* lang : { "ABL (OpenEdge)", "BibTeX", "MS SQL", "MySQL" })
+        wxnForEachKeywordList(lang, [&](const WxnKeywordList& k) {
+            if (std::string(lang) == "ABL (OpenEdge)" && k.slot == 3) return;
+            for (const char* p = k.words; *p; ++p)
+                if (*p >= 'A' && *p <= 'Z') { ++upperCase; std::printf("        %s slot %d has upper case\n", lang, k.slot); break; }
+        });
+    check(upperCase == 0, "ABL, BibTeX, MS SQL and MySQL lists are lower case, as their lexers look words up");
+    check(lexers.count("Clarion") && lexers.at("Clarion") == "clarionnocase",
+          "Clarion uses the case-insensitive lexer its upper-case lists are written for");
 
     std::printf("\n-- lookups --\n");
     const char* cpp = wxnKeywordWords("C++");

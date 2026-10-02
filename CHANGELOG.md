@@ -26,11 +26,18 @@ All notable changes to wxNote are documented here. Format loosely follows
 - The Function List now follows a language picked from the Language menu, as Toggle Comment already
   did, and the detected language when its own extension table has no answer - an untitled buffer set to
   Python, a script with no extension, a `Rakefile`. MS SQL and MySQL use the SQL rules.
-- **Keyword lists for 89 languages, from SciTE.** Pascal, Fortran, Ada, VB, Haskell, Tcl, Verilog,
+- **Keyword lists for 98 languages, most from SciTE.** Pascal, Fortran, Ada, VB, Haskell, Tcl, Verilog,
   VHDL, NSIS, Inno Setup, AutoIt, COBOL, LaTeX and about 60 more languages had no keyword list, so their
   keywords looked like any other word; they now get SciTE's - Lexilla's companion editor, whose lists
   are written for exactly these lexers - in every keyword slot the lexer has (keywords, types, built-in
-  functions...). Dart, Nix, TOML and Zig, which SciTE's files leave out, get Lexilla's own lists.
+  functions...). Dart, Nix, TOML and Zig, which SciTE's files leave out, get Lexilla's own lists, and
+  the ten languages SciTE never had lists for get other projects': Devuna's Kwik Source Search for Clarion
+  (MIT), Gui4Cli's own SciEd editor for Gui4Cli, OpenEdge's own keyword list for ABL, LaTeX Workshop's
+  entry types for BibTeX, CoffeeScript's own lexer, Godot's reserved words, types and functions for
+  GDScript, Julia's own keywords and exports, and Pygments' lists for MS SQL, MySQL and Stata (with
+  Microsoft's documentation for SQL Server's system procedures). Clarion also switches to Lexilla's case-insensitive
+  lexer, so `loop` and `LOOP` colour alike, and - since no theme has a Clarion section - takes its colours
+  from each theme's C++ ones; the Style Configurator lists it like any other language.
   Autocomplete offers the same words. `tools/scite_keywords.cpp` regenerates the table from a newer
   SciTE.
 - **Import from Notepad++.** The optional GPL module that imported `shortcuts.xml` is now `npp-compat`

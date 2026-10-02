@@ -281,10 +281,11 @@ inline std::string wxnUserExtJoin(const std::vector<std::string>& exts)
     return s;
 }
 
-// Notepad++ LexerType name -> Language-menu name. A theme block is named for Notepad++'s language, so
-// this is what a block's `extensions`, or an extension typed under its Style Configurator entry, opens
-// files as. "" for the blocks that are not a language of their own: the search-results and error-list
-// panes, ANSI escapes, JavaScript embedded in HTML, DOS-style NFO art, and wxNote's genericLangDef.
+// Notepad++ LexerType name -> Language-menu name, plus the blocks wxNote derives for languages Notepad++
+// lacks (clarion). A theme block is named for Notepad++'s language, so this is what a block's
+// `extensions`, or an extension typed under its Style Configurator entry, opens files as. "" for the
+// blocks that are not a language of their own: the search-results and error-list panes, ANSI escapes,
+// JavaScript embedded in HTML, DOS-style NFO art, and wxNote's genericLangDef.
 struct WxnLangNppRow { const char* npp; const char* lang; };
 inline const WxnLangNppRow* wxnLangNppTable(std::size_t& n)
 {
@@ -292,8 +293,9 @@ inline const WxnLangNppRow* wxnLangNppTable(std::size_t& n)
         { "actionscript", "ActionScript" }, { "ada", "Ada" }, { "asm", "Assembly" }, { "asn1", "ASN.1" },
         { "asp", "ASP" }, { "autoit", "AutoIt" }, { "avs", "AviSynth" }, { "baanc", "BaanC" },
         { "bash", "Shell" }, { "batch", "Batch" }, { "blitzbasic", "BlitzBasic" }, { "c", "C" },
-        { "caml", "Caml" }, { "cmake", "CMake" }, { "cobol", "COBOL" }, { "coffeescript", "CoffeeScript" },
-        { "cpp", "C++" }, { "cs", "C#" }, { "csound", "Csound" }, { "css", "CSS" }, { "d", "D" },
+        { "caml", "Caml" }, { "clarion", "Clarion" }, { "cmake", "CMake" }, { "cobol", "COBOL" },
+        { "coffeescript", "CoffeeScript" }, { "cpp", "C++" }, { "cs", "C#" }, { "csound", "Csound" },
+        { "css", "CSS" }, { "d", "D" },
         { "diff", "Diff" }, { "erlang", "Erlang" }, { "escript", "ESCRIPT" }, { "forth", "Forth" },
         { "fortran", "Fortran (free form)" }, { "fortran77", "Fortran (fixed form)" },
         { "freebasic", "FreeBasic" }, { "gdscript", "GDScript" }, { "go", "Go" }, { "gui4cli", "Gui4Cli" },
