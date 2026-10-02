@@ -18,9 +18,6 @@ msgstr "已导入 %d 个插件。是否立即重启 wxNote 以加载它们？"
 msgid "%d+ matches"
 msgstr "%d+ 个匹配项"
 
-msgid "%s (Windows only)"
-msgstr "%s（仅限 Windows）"
-
 msgid "%s - generate from files"
 msgstr "%s - 从文件生成"
 
@@ -32,9 +29,6 @@ msgstr "%s 已复制到剪贴板"
 
 msgid "%s digest"
 msgstr "%s 摘要"
-
-msgid "&About"
-msgstr "关于(&A)"
 
 msgid "&Auto-Completion"
 msgstr "自动完成(&A)"
@@ -62,9 +56,6 @@ msgstr "复制(&C)"
 
 msgid "&Copy Styled Text"
 msgstr "复制带样式的文本(&C)"
-
-msgid "&Dark Mode"
-msgstr "深色模式(&D)"
 
 msgid "&Delete"
 msgstr "删除(&D)"
@@ -141,9 +132,6 @@ msgstr "选择性粘贴(&P)"
 msgid "&Playback"
 msgstr "回放(&P)"
 
-msgid "&Plugins"
-msgstr "插件(&P)"
-
 msgid "&Post-It"
 msgstr "便签模式(&P)"
 
@@ -182,9 +170,6 @@ msgstr "保存(&S)"
 
 msgid "&Save Current Recorded Macro..."
 msgstr "保存当前录制的宏(&S)..."
-
-msgid "&Search"
-msgstr "搜索(&S)"
 
 msgid "&Select All"
 msgstr "全选(&S)"
@@ -236,12 +221,6 @@ msgstr "随机大小写(&R)"
 
 msgid "(more items added incrementally)"
 msgstr "(更多项目将陆续添加)"
-
-msgid ", (comma)"
-msgstr ", (逗号)"
-
-msgid ". (dot)"
-msgstr ". (点)"
 
 msgid "1"
 msgstr "1"
@@ -330,14 +309,8 @@ msgstr "添加文件夹"
 msgid "All Styles"
 msgstr "所有样式"
 
-msgid "Allow folding of comments"
-msgstr "允许折叠注释"
-
 msgid "Always on &Top"
 msgstr "总在最前(&T)"
-
-msgid "Always on Top (Windows only)"
-msgstr "总在最前（仅限 Windows）"
 
 msgid "Always on Top: OFF"
 msgstr "总在最前：关"
@@ -396,20 +369,11 @@ msgstr "开始/结束选择：移动光标，然后再次执行以完成"
 msgid "Big5 (Traditional)"
 msgstr "Big5 (繁体)"
 
-msgid "Binary Clipboard (Windows only)"
-msgstr "二进制剪贴板（仅限 Windows）"
-
 msgid "Block Comment"
 msgstr "区块注释"
 
 msgid "Block Uncomment"
 msgstr "取消区块注释"
-
-msgid "Block comment close:"
-msgstr "块注释结束:"
-
-msgid "Block comment open:"
-msgstr "块注释起始:"
 
 msgid "Blue"
 msgstr "蓝色"
@@ -540,9 +504,6 @@ msgstr "关闭左侧所有文档"
 msgid "Close All to the Right"
 msgstr "关闭右侧所有文档"
 
-msgid "Close:"
-msgstr "关闭:"
-
 msgid "Co&mment/Uncomment"
 msgstr "注释/取消注释(&M)"
 
@@ -566,12 +527,6 @@ msgstr "命令行参数"
 
 msgid "Command Line Arguments..."
 msgstr "命令行参数..."
-
-msgid "Comment"
-msgstr "注释"
-
-msgid "Comment && Number"
-msgstr "注释与数字"
 
 msgid "Con&vert Case to"
 msgstr "转换大小写(&V)"
@@ -660,9 +615,6 @@ msgstr "专注模式(&I)"
 msgid "D&ocument List"
 msgstr "文档列表(&O)"
 
-msgid "Dark Mode"
-msgstr "深色模式"
-
 msgid "Date Time (customized)"
 msgstr "日期时间(自定义格式)"
 
@@ -678,44 +630,11 @@ msgstr "调试信息"
 msgid "Debug Info..."
 msgstr "调试信息..."
 
-msgid "Decimal separator"
-msgstr "小数分隔符"
-
 msgid "Decrease Line Indent"
 msgstr "减少行缩进"
 
 msgid "Default language:"
 msgstr "默认语言:"
-
-msgid "Define your language..."
-msgstr "自定义语言格式..."
-
-msgid "Delimiter1"
-msgstr "分隔符1"
-
-msgid "Delimiter2"
-msgstr "分隔符2"
-
-msgid "Delimiter3"
-msgstr "分隔符3"
-
-msgid "Delimiter4"
-msgstr "分隔符4"
-
-msgid "Delimiter5"
-msgstr "分隔符5"
-
-msgid "Delimiter6"
-msgstr "分隔符6"
-
-msgid "Delimiter7"
-msgstr "分隔符7"
-
-msgid "Delimiter8"
-msgstr "分隔符8"
-
-msgid "Delimiters (8 sets)"
-msgstr "分隔符(8组)"
 
 msgid "Directory :"
 msgstr "目录 :"
@@ -759,9 +678,6 @@ msgstr "编辑右键菜单"
 msgid "Editing"
 msgstr "编辑"
 
-msgid "Enable Dark Mode   (applied on restart)"
-msgstr "启用深色模式   (重启后生效)"
-
 msgid "Enable auto-completion on each input"
 msgstr "每次输入时启用自动完成"
 
@@ -795,23 +711,8 @@ msgstr "编码：%s（保存以应用）"
 msgid "Enter valid character codes."
 msgstr "请输入有效的字符编码。"
 
-msgid "Escape"
-msgstr "转义符"
-
-msgid "Existing:"
-msgstr "现有:"
-
 msgid "Explorer"
 msgstr "Explorer"
-
-msgid "Ext:"
-msgstr "扩展名:"
-
-msgid "Extras 1:"
-msgstr "附加1:"
-
-msgid "Extras 2:"
-msgstr "附加2:"
 
 msgid "Failed to run:\n"
 msgstr "运行失败:\n"
@@ -903,29 +804,11 @@ msgstr "折叠当前层级"
 msgid "Fold Level"
 msgstr "折叠层级"
 
-msgid "Fold compact"
-msgstr "紧凑折叠"
-
-msgid "Folder && Default"
-msgstr "折叠与默认"
-
 msgid "Folder as Wor&kspace"
 msgstr "文件夹作为工作区(&K)"
 
 msgid "Folder as Workspace"
 msgstr "文件夹作为工作区"
-
-msgid "Folder as Workspace (save the file first)"
-msgstr "文件夹作为工作区（请先保存文件）"
-
-msgid "Folder in code1:"
-msgstr "代码1中的折叠:"
-
-msgid "Folder in code2:"
-msgstr "代码2中的折叠:"
-
-msgid "Folder in comment:"
-msgstr "注释中的折叠:"
 
 msgid "Font name (blank = inherit):"
 msgstr "字体名称(留空=继承):"
@@ -938,15 +821,6 @@ msgstr "字体粗细(0=继承):"
 
 msgid "Footer:"
 msgstr "页脚:"
-
-msgid "Force lowercase before matching"
-msgstr "匹配前强制小写"
-
-msgid "Force lowercase in keyword lists too"
-msgstr "关键字列表中也强制小写"
-
-msgid "Force pure LC"
-msgstr "强制纯小写"
 
 msgid "Foreground colour:"
 msgstr "前景色:"
@@ -1080,9 +954,6 @@ msgstr "Streamline 图标（绿色/青绿）"
 msgid "Ignore Case && Whole Word"
 msgstr "忽略大小写 && 全词匹配"
 
-msgid "Ignore case"
-msgstr "忽略大小写"
-
 msgid "Import"
 msgstr "导入"
 
@@ -1152,36 +1023,6 @@ msgstr "KOI8-R"
 msgid "KOI8-U"
 msgstr "KOI8-U"
 
-msgid "Keyword1"
-msgstr "关键字1"
-
-msgid "Keyword2"
-msgstr "关键字2"
-
-msgid "Keyword3"
-msgstr "关键字3"
-
-msgid "Keyword4"
-msgstr "关键字4"
-
-msgid "Keyword5"
-msgstr "关键字5"
-
-msgid "Keyword6"
-msgstr "关键字6"
-
-msgid "Keyword7"
-msgstr "关键字7"
-
-msgid "Keyword8"
-msgstr "关键字8"
-
-msgid "Keywords"
-msgstr "关键字"
-
-msgid "Keywords %d:"
-msgstr "关键字%d:"
-
 msgid "Korean"
 msgstr "韩语"
 
@@ -1190,12 +1031,6 @@ msgstr "最后一个标签"
 
 msgid "Leading zeros"
 msgstr "前导零"
-
-msgid "Line comment"
-msgstr "行注释"
-
-msgid "Line comment open:"
-msgstr "行注释起始:"
 
 msgid "Line number (1 - %d):"
 msgstr "行号 (1 - %d):"
@@ -1281,9 +1116,6 @@ msgstr "区分大小写"
 msgid "Max number of entries (applied on restart):"
 msgstr "最大条目数 (重启后生效):"
 
-msgid "Middle:"
-msgstr "中间:"
-
 msgid "Mo&ve to New Instance"
 msgstr "移动到新实例(&V)"
 
@@ -1359,9 +1191,6 @@ msgstr "名称 Z 到 A"
 msgid "Name:"
 msgstr "名称:"
 
-msgid "Nesting: also colour these inside this style"
-msgstr "嵌套:在此样式内也为这些项目着色"
-
 msgid "New"
 msgstr "新建"
 
@@ -1398,9 +1227,6 @@ msgstr "无匹配项"
 msgid "No search results yet - run Find in Files or Find All first"
 msgstr "尚无搜索结果 - 请先运行“在文件中查找”或“查找全部”"
 
-msgid "No session data in this file."
-msgstr "此文件中没有会话数据。"
-
 msgid "None"
 msgstr "无"
 
@@ -1412,9 +1238,6 @@ msgstr "普通文本文件"
 
 msgid "North European"
 msgstr "北欧"
-
-msgid "Number"
-msgstr "数字"
 
 msgid "Number to Insert"
 msgstr "要插入的数字"
@@ -1470,17 +1293,11 @@ msgstr "OEM-US"
 msgid "OK"
 msgstr "确定"
 
-msgid "Off"
-msgstr "关闭"
-
 msgid "Open"
 msgstr "打开"
 
 msgid "Open Containing &Folder"
 msgstr "打开所在文件夹(&F)"
-
-msgid "Open Containing Folder (save the file first)"
-msgstr "打开所在文件夹（请先保存文件）"
 
 msgid "Open Containing Folder in Explorer"
 msgstr "在资源管理器中打开所在文件夹"
@@ -1512,41 +1329,14 @@ msgstr "用默认查看器打开(&D)"
 msgid "Open in Default Viewer (save the file first)"
 msgstr "在默认查看器中打开（请先保存文件）"
 
-msgid "Open:"
-msgstr "打开:"
-
-msgid "Operator && Delimiter"
-msgstr "运算符与分隔符"
-
-msgid "Operator1"
-msgstr "运算符1"
-
-msgid "Operator2"
-msgstr "运算符2"
-
-msgid "Operators"
-msgstr "运算符"
-
-msgid "Operators 1:"
-msgstr "运算符1:"
-
-msgid "Operators 2:"
-msgstr "运算符2:"
-
 msgid "Orange"
 msgstr "橙色"
 
 msgid "Paste"
 msgstr "粘贴"
 
-msgid "Paste %s (Windows only)"
-msgstr "粘贴 %s（仅限 Windows）"
-
 msgid "Paste Binary Content"
 msgstr "粘贴二进制内容"
-
-msgid "Paste Binary Content (Windows only)"
-msgstr "粘贴二进制内容（仅限 Windows）"
 
 msgid "Paste Binary Content (clipboard has no matching content)"
 msgstr "粘贴二进制内容（剪贴板中没有匹配的内容）"
@@ -1572,9 +1362,6 @@ msgstr "路径 Z 到 A"
 msgid "Playback"
 msgstr "回放"
 
-msgid "Please give the language a name."
-msgstr "请为该语言命名。"
-
 msgid "Plugin files (*.dll)|*.dll"
 msgstr "插件文件 (*.dll)|*.dll"
 
@@ -1592,15 +1379,6 @@ msgstr "首选项"
 
 msgid "Preferences..."
 msgstr "首选项..."
-
-msgid "Prefix 1:"
-msgstr "前缀1:"
-
-msgid "Prefix 2:"
-msgstr "前缀2:"
-
-msgid "Prefix mode"
-msgstr "前缀模式"
 
 msgid "Previous Bookmark"
 msgstr "上一个书签"
@@ -1644,9 +1422,6 @@ msgstr "紫色"
 msgid "Randomize Line Order"
 msgstr "随机打乱行顺序"
 
-msgid "Range:"
-msgstr "范围:"
-
 msgid "Re&load from Disk"
 msgstr "从磁盘重新载入(&L)"
 
@@ -1658,9 +1433,6 @@ msgstr "只读(&O)"
 
 msgid "Read-Only"
 msgstr "只读"
-
-msgid "Read-Only Attribute (Windows only)"
-msgstr "只读属性（仅限 Windows）"
 
 msgid "Read-Only Attribute (save the file first)"
 msgstr "只读属性（请先保存文件）"
@@ -1724,9 +1496,6 @@ msgstr "删除空行(含空白字符)"
 
 msgid "Remove Non-Bookmarked Lines"
 msgstr "删除非书签行"
-
-msgid "Remove user-defined language \"%s\"?"
-msgstr "要删除用户自定义语言“%s”吗?"
 
 msgid "Rename"
 msgstr "重命名"
@@ -1866,12 +1635,6 @@ msgstr "会话已加载 - %d 个文件"
 msgid "Session saved - %d file(s)"
 msgstr "会话已保存 - %d 个文件"
 
-msgid "Set"
-msgstr "组"
-
-msgid "Set Updater Proxy..."
-msgstr "设置更新代理..."
-
 msgid "Shift-JIS"
 msgstr "Shift-JIS"
 
@@ -1910,9 +1673,6 @@ msgstr "显示缩进参考线"
 
 msgid "Show integrated top bar"
 msgstr "显示集成顶栏"
-
-msgid "System-native window buttons"
-msgstr "系统原生窗口按钮"
 
 msgid "Ignore platform decoration (sharp corners)"
 msgstr "忽略平台装饰（直角）"
@@ -2010,62 +1770,8 @@ msgstr "标记所有匹配字词(&A)"
 msgid "Style &One Token"
 msgstr "标记单个字词(&O)"
 
-msgid "Style Comment..."
-msgstr "注释样式..."
-
 msgid "Style Configurator..."
 msgstr "语言格式设置..."
-
-msgid "Style Default..."
-msgstr "默认样式..."
-
-msgid "Style Line Comment..."
-msgstr "行注释样式..."
-
-msgid "Style Number..."
-msgstr "数字样式..."
-
-msgid "Style Operators..."
-msgstr "运算符样式..."
-
-msgid "Style..."
-msgstr "样式..."
-
-msgid "Style: Comment"
-msgstr "样式:注释"
-
-msgid "Style: Default"
-msgstr "样式:默认"
-
-msgid "Style: Delimiter %d"
-msgstr "样式:分隔符%d"
-
-msgid "Style: Folder in code1"
-msgstr "样式:代码1中的折叠"
-
-msgid "Style: Folder in code2"
-msgstr "样式:代码2中的折叠"
-
-msgid "Style: Folder in comment"
-msgstr "样式:注释中的折叠"
-
-msgid "Style: Keywords %d"
-msgstr "样式:关键字%d"
-
-msgid "Style: Line Comment"
-msgstr "样式:行注释"
-
-msgid "Style: Number"
-msgstr "样式:数字"
-
-msgid "Style: Operators"
-msgstr "样式:运算符"
-
-msgid "Suffix 1:"
-msgstr "后缀1:"
-
-msgid "Suffix 2:"
-msgstr "后缀2:"
 
 msgid "Summary"
 msgstr "摘要"
@@ -2075,9 +1781,6 @@ msgstr "系统默认"
 
 msgid "T&ext Direction RTL"
 msgstr "文字方向从右到左(&E)"
-
-msgid "T&ools"
-msgstr "工具(&O)"
 
 msgid "TAB to Space"
 msgstr "TAB 转为空格"
@@ -2202,15 +1905,6 @@ msgstr "用户自定义语言"
 msgid "User-Defined"
 msgstr "用户自定义"
 
-msgid "User-Defined Language \"%s\" saved"
-msgstr "已保存用户自定义语言“%s”"
-
-msgid "User-Defined Language Dialogue"
-msgstr "用户自定义语言对话框"
-
-msgid "User-Defined Language dialog"
-msgstr "用户自定义语言对话框"
-
 msgid "Using 1st Style"
 msgstr "使用第 1 种样式"
 
@@ -2309,9 +2003,6 @@ msgstr "放大"
 
 msgid "Zoom Out"
 msgstr "缩小"
-
-msgid "both"
-msgstr "两者"
 
 msgid "cmd"
 msgstr "cmd"
@@ -2433,9 +2124,6 @@ msgstr "重用一个已在运行的窗口"
 msgid "Recovered"
 msgstr "已恢复"
 
-msgid "NewLanguage"
-msgstr "新语言"
-
 msgid "file-or-folder"
 msgstr "文件或文件夹"
 
@@ -2460,17 +2148,17 @@ msgstr "选择要运行的程序"
 msgid "Programs (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|All files (*.*)|*.*"
 msgstr "程序 (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|所有文件 (*.*)|*.*"
 
-msgid "Workspace (*.xml)|*.xml"
-msgstr "工作区 (*.xml)|*.xml"
+msgid "Workspace (*.yaml)|*.yaml"
+msgstr "工作区 (*.yaml)|*.yaml"
 
-msgid "Session files (*.xml)|*.xml|All files (*.*)|*.*"
-msgstr "会话文件 (*.xml)|*.xml|所有文件 (*.*)|*.*"
+msgid "Session files (*.yaml)|*.yaml|All files (*.*)|*.*"
+msgstr "会话文件 (*.yaml)|*.yaml|所有文件 (*.*)|*.*"
 
 msgid "All files (*.*)|*.*"
 msgstr "所有文件 (*.*)|*.*"
 
-msgid "Theme files (*.xml)|*.xml"
-msgstr "主题文件 (*.xml)|*.xml"
+msgid "wxNote themes (*.yaml)|*.yaml"
+msgstr "wxNote 主题 (*.yaml)|*.yaml"
 
 msgid "Style Configurator"
 msgstr "样式配置器"
@@ -2610,8 +2298,8 @@ msgstr "C++ 源文件"
 msgid "CSS file"
 msgstr "CSS 文件"
 
-msgid "Could not create a writable contextMenu.xml to edit."
-msgstr "无法创建可写入的 contextMenu.xml 以供编辑。"
+msgid "Could not create a writable contextmenu.yaml to edit."
+msgstr "无法创建可写入的 contextmenu.yaml 以供编辑。"
 
 msgid "Go source file"
 msgstr "Go 源文件"
@@ -3066,12 +2754,6 @@ msgstr "选择要下载的语言："
 msgid "Download dictionary"
 msgstr "下载词典"
 
-msgid "This dictionary is provided under the following license:\n\n"
-msgstr "此词典依据以下许可证提供：\n\n"
-
-msgid "\n\nDownload and install it?"
-msgstr "\n\n是否下载并安装？"
-
 msgid "Download failed. Check your internet connection and try again."
 msgstr "下载失败。请检查您的网络连接后重试。"
 
@@ -3147,8 +2829,8 @@ msgstr "已更新保存的宏"
 msgid "No saved macros yet. Record one, then use Save Current Recorded Macro."
 msgstr "尚无保存的宏。请先录制，然后使用“保存当前录制的宏”。"
 
-msgid "Saved macros are read-only: macros.dat was written by a newer version of wxNote."
-msgstr "保存的宏为只读：macros.dat 由更新版本的 wxNote 写入。"
+msgid "Saved macros are read-only: macros.yaml cannot be read, or was written by a newer version of wxNote."
+msgstr "保存的宏为只读：macros.yaml 无法读取，或由更新版本的 wxNote 写入。"
 
 msgid "Order here is the order in the Macro menu. Shortcuts follow a macro when it moves."
 msgstr "此处的顺序即宏菜单中的顺序。移动时快捷键会跟随宏。"
@@ -3158,9 +2840,6 @@ msgstr "(大文件 - 已关闭符号扫描)"
 
 msgid "Large-file mode above (MiB, 0 = never):"
 msgstr "大文件模式阈值 (MiB，0 = 从不):"
-
-msgid "or any line longer than (chars):"
-msgstr "或任意行长度超过 (字符):"
 
 msgid "%s  (%d steps)"
 msgstr "%s  (%d 步)"
@@ -3265,8 +2944,8 @@ msgstr "输入片段名称"
 msgid "any language"
 msgstr "任意语言"
 
-msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.txt in the user data folder."
-msgstr "没有适用于此文件语言的代码片段。\n\n请在用户数据文件夹的 snippets.txt 中添加。"
+msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.yaml in the user data folder."
+msgstr "没有适用于此文件语言的代码片段。\n\n请在用户数据文件夹的 snippets.yaml 中添加。"
 
 msgid "Regular expressions use PCRE2: a pattern can span line breaks, and lookbehind, named groups and case conversion in replacements all work."
 msgstr "正则表达式使用 PCRE2：模式可以跨越换行，并支持后行断言、命名组以及替换中的大小写转换。"
@@ -3340,8 +3019,8 @@ msgstr "已保存的运行命令列表已满 (%d)。"
 msgid "No saved Run commands yet. Use Run... and press Save to name one."
 msgstr "尚无已保存的运行命令。请使用“运行...”并点击“保存”为其命名。"
 
-msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
-msgstr "runcommands.dat 由更新版本的 wxNote 写入，因此在此为只读。"
+msgid "runcommands.yaml cannot be read, or was written by a newer version of wxNote, so it is read-only here."
+msgstr "runcommands.yaml 无法读取，或由更新版本的 wxNote 写入，因此在此为只读。"
 
 msgid "Plugins"
 msgstr "插件"
@@ -3424,9 +3103,6 @@ msgstr "要应用待处理的插件更改并立即重启 wxNote 吗?"
 msgid "Plugin changes will take effect when wxNote restarts"
 msgstr "插件更改将在 wxNote 重启后生效"
 
-msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
-msgstr "plugins.dat 由更新版本的 wxNote 写入，因此在此为只读。"
-
 msgid "Delete user copy"
 msgstr "删除我的副本"
 
@@ -3474,3 +3150,22 @@ msgstr ".%s 现在以 %s 打开 (原为 %s)"
 
 msgid "File extensions saved"
 msgstr "文件扩展名已保存"
+
+msgid "settings.yaml has an error (%s) - using the defaults until it is fixed"
+msgstr "settings.yaml 有错误 (%s) - 在修正之前使用默认值"
+
+msgid "Not saved: settings.yaml has an error (%s)"
+msgstr "未保存：settings.yaml 有错误 (%s)"
+
+msgid "keybindings.yaml has an error (%s) - using the default keys until it is fixed"
+msgstr "keybindings.yaml 有错误 (%s) - 在修正之前使用默认快捷键"
+
+msgid "%s has an error (%s) and is not used until it is fixed"
+msgstr "%s 有错误 (%s) - 在修正之前不会使用"
+
+msgid "Could not read the workspace file."
+msgstr "无法读取工作区文件。"
+
+msgid "These files are not wxNote themes and were not imported:"
+msgstr "这些文件不是 wxNote 主题，未导入："
+

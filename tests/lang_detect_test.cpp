@@ -20,6 +20,7 @@
 //
 #include "lang_detect.h"
 #include "scintillua_engine.h"
+#include "theme_file.h"         // the shipped themes, read the way the editor reads them
 
 #include <algorithm>
 #include <cctype>
@@ -193,7 +194,7 @@ static void testFirstLine()
 
 static void testUserMapping()
 {
-    std::printf("\n-- the user's functionList.conf `ext` mapping --\n");
+    std::printf("\n-- the user's functionlist.yaml `extensions` mapping --\n");
     const std::map<std::string, std::string> keys = {
         { "foo", "python" }, { "cfg", "ini" }, { "tmpl", "html" }, { "h", "cpp" }, { "zz", "no-such-key" },
     };
@@ -216,12 +217,12 @@ static void testStyleConfiguratorExtensions()
     // Twilight's real stray values (bash ext="po", xml ext="wpl"), plus one for an ambiguous extension.
     const std::map<std::string, std::string> theme = { { "po", "Shell" }, { "wpl", "XML" }, { "m", "MATLAB" }, { "inc", "Perl" } };
     WxnUserExtMaps all; all.toLang = &mine; all.toKey = &keys; all.themeToLang = &theme;
-    expectEq(detect("defs.inc", "", all), "PHP", "User ext. beats functionList.conf and the theme");
+    expectEq(detect("defs.inc", "", all), "PHP", "User ext. beats functionlist.yaml and the theme");
     expectEq(detect("notes.txt", "", all), "Python", "User ext. on an extension no table knows");
     expectEq(detect("api.h", "", all), "C++", "User ext. beats wxNote's own .h override");
     expectEq(detect("NOTES.TXT", "", all), "Python", "case-blind, like every other rule");
     expectEq(detect("x.zz", "", all), "", "a mapping to a language the menu lacks falls through");
-    expectEq(detect("page.tpl", "", all), "HTML", "functionList.conf still applies under it");
+    expectEq(detect("page.tpl", "", all), "HTML", "functionlist.yaml still applies under it");
     expectEq(detect("main.cpp.bak", "", all), "XML", "a mapped \"bak\" wins over looking under the suffix");
     expectEq(detect("main.cpp.orig", "", all), "C++", "an unmapped backup suffix is still looked under");
 
@@ -265,27 +266,24 @@ static void testNppLexerTypes()
     check(bad == 0, "the table names only menu languages, each LexerType once");
 
     namespace fs = std::filesystem;
-    std::vector<fs::path> themes = { fs::u8path(std::string(RESOURCES_DIR) + "/stylers.model.xml") };
+    std::vector<fs::path> themes;
     std::error_code ec;
     for (fs::directory_iterator it(fs::u8path(std::string(RESOURCES_DIR) + "/themes"), ec), end; !ec && it != end; it.increment(ec))
-        if (it->path().extension() == ".xml") themes.push_back(it->path());
+        if (it->path().extension() == ".yaml") themes.push_back(it->path());
     int files = 0, missing = 0;
     std::set<std::string> reported;
     for (const fs::path& f : themes)
     {
-        const std::string xml = readFile(f.u8string());
-        if (xml.empty()) continue;
+        wxntheme::Theme theme;                     // read exactly as the editor reads it
+        if (!wxntheme::parse(readFile(f.u8string()), theme)) continue;
         ++files;
-        for (std::size_t i = xml.find("<LexerType name=\""); i != std::string::npos; i = xml.find("<LexerType name=\"", i + 1))
-        {
-            const std::size_t a = i + 17, b = xml.find('"', a);
-            const std::string name = xml.substr(a, b - a);
-            if (!rows.count(name) && reported.insert(name).second)
-            { ++missing; std::printf("        %s: LexerType [%s] has no row\n", f.filename().u8string().c_str(), name.c_str()); }
-        }
+        for (const wxntheme::Lexer& lx : theme.lexers)
+            if (!rows.count(lx.name) && reported.insert(lx.name).second)
+            { ++missing; std::printf("        %s: lexer [%s] has no row\n", f.filename().u8string().c_str(), lx.name.c_str()); }
     }
     check(files > 20, "read " + std::to_string(files) + " shipped theme files");
-    check(missing == 0, "every LexerType they declare has a row");
+    check(files == (int)themes.size(), "every shipped theme file reads as a theme");
+    check(missing == 0, "every lexer they style has a row");
     expectEq(wxnLangForNppLexerType("cpp"), "C++", "cpp -> C++");
     expectEq(wxnLangForNppLexerType("javascript.js"), "JavaScript", "javascript.js -> JavaScript");
     expectEq(wxnLangForNppLexerType("javascript"), "", "javascript (embedded in HTML) -> not a language");

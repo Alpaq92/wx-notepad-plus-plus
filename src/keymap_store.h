@@ -9,16 +9,15 @@
 //                              preset ("wxnote.default") lands in Phase 2
 //                              (src/keymap_schemes.h); this header already resolves whatever schemes
 //                              are registered / present in the file, so Phase 2 only has to register them.
-//   Tier 3  user layer       - userKeybindings from shortcuts.json, applied last, highest precedence,
+//   Tier 3  user layer       - the bindings list of keybindings.yaml, applied last, highest precedence,
 //                              surviving scheme switches (VS Code semantics).
 //
 // The result is keyed by each command's stable symbolicName (src/menu_model.h). It is applied to the
 // frame's one wxAcceleratorTable and to the menu labels by WxnShellFrame::refreshAccelerators().
 //
-// Phase 1 scope: model + load/resolve/save + hand-editable shortcuts.json. No UI (the mapper dialog is
-// Phase 3); no bundled schemes yet (Phase 2). save() is implemented but NOT called at runtime in Phase 1
-// - the file is load-only / hand-edited, per the "written immediately on mapper OK, never on
-// exit" rule.
+// The model, keybindings.yaml's load/resolve/save, and the schemes. The file is the user's to edit by
+// hand too; wxNote writes it only when the Shortcut Mapper (shortcut_mapper_dialog.h) is closed with OK
+// or a plugin commits a scheme (nib.keymap) - never on exit.
 // =====================================================================
 #include <wx/string.h>
 #include <wx/accel.h>
@@ -26,16 +25,12 @@
 #include <wx/filefn.h>
 #include <wx/filename.h>
 #include <wx/log.h>
-#include <wx/stdpaths.h>
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
 #include <functional>
-#include <cstdio>
-#include <cctype>
-#include <cstdlib>
-#include "json_value.h"
+#include "yaml_io.h"
 
 // std::unordered_map with a wxString key: hash via the UTF-8 bytes so we don't depend on whether this
 // wx build ships a usable std::hash<wxString> / WxnKeyHash for the unordered_map Hash slot. Equality
@@ -85,7 +80,7 @@ struct EffectiveAccel
                                         // For a Tier-0 default this is the authored spelling verbatim
                                         // ("Ctrl+S", "Del") so the rewritten menu label is byte-identical
                                         // to the pre-refactor label; for a scheme/user override it is the
-                                        // ToRawString() normalization of the shortcuts.json key.
+                                        // ToRawString() normalization of the keybindings.yaml key.
     KeyScope scope   = KeyScope::Global;
     bool     isChord = false;
 };
@@ -133,7 +128,7 @@ struct EffectiveBinding
     }
 };
 
-// A single override row (a userKeybindings entry, or a scheme delta). A leading '-' on the command marks
+// A single override row (a rule of the user layer, or a scheme delta). A leading '-' on the command marks
 // an unbind; an empty key on an unbind drops ALL inherited accels, otherwise only the matching one.
 struct KeymapDelta
 {
@@ -153,7 +148,7 @@ struct KeymapScheme
     // EDITOR-tier deltas (the curated "editor.*" commands), scheme-scoped like `deltas` is for the
     // menu tier: inert while the scheme is inactive, applied by resolveEditor() when the scheme is in
     // the active chain, persisted with the scheme (a nib.keymap commit with activate=0 - e.g. the
-    // npp-shortcuts-compat import - stores its ScintillaKeys here so a later activation applies them).
+    // npp-compat import - stores its ScintillaKeys here so a later activation applies them).
     // Appended LAST so any positional KeymapScheme initializer that stops earlier stays valid.
     std::vector<KeymapDelta> editorDeltas;
 };
@@ -161,7 +156,7 @@ struct KeymapScheme
 // ----- the Scintilla editor tier (Phase 4) -------------------------------------------------
 // Editor commands are a SEPARATE space from menu commands: they are keyed by a stable ascii name
 // ("editor.lineCut"), carry a Scintilla SCI_* id instead of a menu command id, live only in KeyScope
-// Editor, and persist under shortcuts.json's own "editor" section (never mixed into userKeybindings). The
+// Editor, and persist in keybindings.yaml's one bindings list, told apart by their "editor." prefix. The
 // store resolves them like the menu tiers - a compiled default (seeded from src/shortcut_labels.h) that a
 // user override replaces - but keeps them apart so a menu delta can never touch an editor row and vice
 // versa, and so the app can apply them through Scintilla's CmdKeyAssign rather than the frame accel table.
@@ -214,7 +209,7 @@ public:
 
     // Drop a Tier-0 row entirely, plus any user override keyed to it - for a macro the user deleted, whose
     // "macro.<uid>" can never be seeded again (uids are monotonic and never reused). Without this the row
-    // would linger in shortcuts.json and in the Shortcut Mapper as a binding for a macro that is gone.
+    // would linger in keybindings.yaml and in the Shortcut Mapper as a binding for a macro that is gone.
     void removeDefault(const wxString& sym)
     {
         auto it = m_rootIndex.find(sym);
@@ -254,7 +249,7 @@ public:
     // the replace would swap the compiled preset's curated deltas for the caller's data while the
     // sticky bundled flag kept it read-only and un-serialized - silent, unrepairable corruption. This
     // is the same hazard duplicateScheme guards, centralized here so BOTH untrusted writers (a
-    // hand-edited shortcuts.json via parseInto, and a plugin via the nib.keymap commit) are covered.
+    // hand-edited keybindings.yaml via parseInto, and a plugin via the nib.keymap commit) are covered.
     bool registerScheme(const KeymapScheme& s)
     {
         if (!s.bundled && schemeIsBundled(s.id)) return false;   // reserved preset id (also rejects "")
@@ -266,11 +261,11 @@ public:
 
     // ---- load / save ------------------------------------------------------------------------------
     // Best-effort, wxLogNull-wrapped (a bad hand-edit or unreadable file must never pop a dialog at
-    // startup - mirrors the contextMenu.xml load pattern). Populates the active-scheme pointer, the user
-    // layer, and any user schemes, then resolves. Does NOT write anything (load-only in Phase 1).
+    // startup - mirrors the contextmenu.yaml load pattern). Populates the active-scheme pointer, the user
+    // layer, and any user schemes, then resolves. Writes nothing.
     void load(const wxString& userDataDir)
     {
-        m_filePath = userDataDir + wxFILE_SEP_PATH + "shortcuts.json";
+        m_filePath = userDataDir + wxFILE_SEP_PATH + "keybindings.yaml";
         m_userLayer.clear();
         m_editorUser.clear();
         // drop previously-loaded NON-bundled schemes so a reload is clean; keep bundled presets
@@ -278,6 +273,11 @@ public:
                                        [](const KeymapScheme& s){ return !s.bundled; }), m_schemes.end());
         m_activeScheme = "wxnote.default";
         m_readOnly = false;
+        m_loadError.clear();
+        m_file = wxnyaml::Doc();
+        m_keptTop.clear();
+        m_keptRules.clear();
+        m_keptSchemes.clear();
 
         wxLogNull noLog;
         if (wxFileExists(m_filePath))
@@ -291,19 +291,20 @@ public:
             }
         }
         // A DANGLING activeScheme - one naming a scheme neither registered (bundled/plugin) nor defined
-        // in the file itself, e.g. the removed bundled "notepad++" preset in a pre-existing
-        // shortcuts.json - must not stick: resolution would already fall back to the default chain
-        // (activeSchemeChain() stops at an unknown id), but the id would be re-serialized by every
-        // save() and dangle forever, and the mapper's picker could never show the real selection. Snap
-        // it back to the root HERE, after parseInto has registered the file's own schemes, so an id
-        // defined later in the same file still resolves and only a truly unknown one migrates.
+        // in the file itself, such as a plugin's scheme once the plugin is gone - must not stick:
+        // resolution would already fall back to the default chain (activeSchemeChain() stops at an unknown
+        // id), but the id would be re-serialized by every save() and dangle forever, and the mapper's
+        // picker could never show the real selection. Snap it back to the root HERE, after parseInto has
+        // registered the file's own schemes, so an id defined later in the same file still resolves and
+        // only a truly unknown one is dropped.
         if (m_activeScheme != "wxnote.default" && !schemeById(m_activeScheme))
             m_activeScheme = "wxnote.default";
         resolveAll();   // also rebuilds the editor tier (resolveAll ends in resolveEditor)
     }
 
-    // Write shortcuts.json (immediately on a mapper OK in later phases - never on exit). Refuses to write
-    // a file a newer wxNote wrote (version > current) so unknown fields aren't clobbered.
+    // Write keybindings.yaml (on the Shortcut Mapper's OK, or a plugin's scheme commit - never on exit). Refuses to write
+    // over a file that does not parse, or one a newer wxNote wrote (version > current), so neither the
+    // user's text nor unknown fields are clobbered.
     bool save() const
     {
         if (m_readOnly || m_filePath.empty()) return false;
@@ -311,7 +312,7 @@ public:
         wxFileName::Mkdir(wxFileName(m_filePath).GetPath(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
         std::string out = serialize();
         // Atomic replace: fully write a sibling temp, flush it, then rename over the target. A plain
-        // wxFile::write on m_filePath O_TRUNCs the existing shortcuts.json BEFORE writing, so a crash /
+        // wxFile::write on m_filePath O_TRUNCs the existing keybindings.yaml BEFORE writing, so a crash /
         // power loss / full disk mid-write leaves a truncated or empty file; callers ignore save()'s
         // bool, so on next launch parseInto() fails on the corrupt file and the user's entire custom
         // keymap silently reverts to Tier-0 defaults. Writing a complete temp and renaming means any
@@ -451,6 +452,9 @@ public:
     void setActiveScheme(const wxString& id) { m_activeScheme = id.empty() ? wxString("wxnote.default") : id; resolveAll(); }
     const wxString& activeScheme() const     { return m_activeScheme; }
     bool isReadOnly() const                  { return m_readOnly; }
+    // Why keybindings.yaml could not be used ("" when it could, or does not exist). Such a file is left
+    // alone - read-only, like a newer version's - and the defaults apply until it is fixed.
+    const wxString& loadError() const        { return m_loadError; }
 
     // ---- scheme picker support (Phase 2 entry point; the full mapper UI is Phase 3) ---------------
     // Every registered scheme in registration order: bundled read-only presets first (wxnote.default -
@@ -472,7 +476,6 @@ public:
         const KeymapScheme* s = schemeById(id);
         return s ? s->bundled : false;
     }
-    bool activeSchemeIsBundled() const { return schemeIsBundled(m_activeScheme); }
 
     // Copy-on-write ("Duplicate scheme..."): clone `sourceId` into a NEW user scheme whose parent
     // is sourceId, so the clone inherits every effective binding through the parent chain but stores only
@@ -651,17 +654,22 @@ private:
         return e.ToRawString();
     }
 
-    // ================= minimal JSON =================
-    // The reader (Json + JsonParser) lived here as a private nested pair until it was lifted out to
-    // src/json_value.h (namespace wxnjson) - wx-free, so the next JSON-reading store reuses it
-    // instead of growing a copy that drifts. Same parser, same contract: untrusted input degrades to
-    // "ignore and keep resolving", never a throw/crash (a bad hand-edit must not brick startup).
-    // Only the hand WRITER below still lives in this header (it is schema-specific). Aliased back so
-    // the parsing code reads as before; the old Json::wxstr() convenience is gone - each call site
-    // (every one already behind a type == Json::Str check, so semantics are unchanged) converts with
-    // wxString::FromUTF8(x.str.c_str()).
-    using Json = wxnjson::Json;
-    using JsonParser = wxnjson::JsonParser;
+    // ================= keybindings.yaml =================
+    // Read and written through src/yaml_io.h (rapidyaml): untrusted input degrades to "ignore and keep
+    // resolving", never a throw or a crash - a bad hand edit must not brick startup.
+    //
+    //   version: 1
+    //   scheme: wxnote.default
+    //   bindings:                                   # the user layer, applied last; a later rule wins
+    //     - {key: ctrl+shift+a, command: file.saveAll}
+    //     - {command: -view.tab.tab9}               # '-': remove the key (or, without one, every key)
+    //     - {key: ctrl+shift+x, command: editor.lineCut}
+    //   schemes:
+    //     - {id: my.keys, name: My keys, parent: wxnote.default, bindings: [...]}
+    //
+    // One list holds both tiers: an "editor.*" command is a Scintilla editor command (resolveEditor), any
+    // other a menu command - no menu command's name starts with "editor.", so the prefix cannot misroute.
+    static bool isEditorCommand(const wxString& name) { return name.StartsWith("editor."); }
 
     static KeyScope scopeFromStr(const wxString& w)
     {
@@ -673,168 +681,175 @@ private:
     {
         return s == KeyScope::Editor ? "editor" : s == KeyScope::Terminal ? "terminal" : "global";
     }
+    static wxString fromUtf8(const std::string& s) { return wxString::FromUTF8(s.c_str()); }
 
-    // Parse one binding-entry object into a KeymapDelta. A leading '-' on "command" is an unbind.
-    static bool deltaFromJson(const Json& e, KeymapDelta& out)
+    // One rule: {key, command, when}. A leading '-' on the command removes keys instead of adding one.
+    // False for a rule this build cannot read - no command, an adding rule with no key, a `when` it does
+    // not know (a condition from a newer build must not quietly turn global): parseInto keeps those as
+    // they are written, so a save puts them back.
+    static bool deltaFromYaml(wxnyaml::Node e, KeymapDelta& out)
     {
-        if (e.type != Json::Obj) return false;
-        const Json* cmd = e.member("command");
-        if (!cmd || cmd->type != Json::Str || cmd->str.empty()) return false;
-        wxString command = wxString::FromUTF8(cmd->str.c_str());
-        out.unbind = command.StartsWith("-");
-        if (out.unbind) command = command.Mid(1);
-        if (command.empty()) return false;
-        out.symbolicName = command;
-        const Json* key = e.member("key");
-        out.key = (key && key->type == Json::Str) ? wxString::FromUTF8(key->str.c_str()) : wxString();
-        const Json* when = e.member("when");
-        out.scope = when && when->type == Json::Str ? scopeFromStr(wxString::FromUTF8(when->str.c_str())) : KeyScope::Global;
-        return !(out.unbind == false && out.key.empty());   // a non-unbind must carry a key
+        std::string command;
+        if (!wxnyaml::isMap(e) || !wxnyaml::getText(wxnyaml::child(e, "command"), command)) return false;
+        wxString c = fromUtf8(command);
+        out.unbind = c.StartsWith("-");
+        if (out.unbind) c = c.Mid(1);
+        if (c.empty()) return false;
+        out.symbolicName = c;
+        out.key = fromUtf8(wxnyaml::textOr(wxnyaml::child(e, "key"), std::string()));
+        out.scope = KeyScope::Global;
+        const wxnyaml::Node when = wxnyaml::child(e, "when");
+        if (when.readable())
+        {
+            std::string w;
+            if (!wxnyaml::getText(when, w)) return false;
+            const wxString ws = fromUtf8(w);
+            if (!ws.IsSameAs("global", false) && !ws.IsSameAs("editor", false) && !ws.IsSameAs("terminal", false)) return false;
+            out.scope = scopeFromStr(ws);
+        }
+        return !(out.unbind == false && out.key.empty());   // a rule that adds must name the key
     }
 
     void parseInto(const std::string& text)
     {
-        JsonParser p(text);
-        Json root;
-        if (!p.parse(root) || root.type != Json::Obj) return;   // unparsable => defaults only
-
-        if (const Json* v = root.member("version"))
-            if (v->type == Json::Num && (int)v->num > kCurrentVersion) m_readOnly = true;  // newer file: don't clobber
-
-        if (const Json* a = root.member("activeScheme"))
-            if (a->type == Json::Str && !a->str.empty()) m_activeScheme = wxString::FromUTF8(a->str.c_str());
-
-        if (const Json* uk = root.member("userKeybindings"))
-            if (uk->type == Json::Arr)
-                for (const Json& e : uk->arr)
-                { KeymapDelta d; if (deltaFromJson(e, d)) m_userLayer.push_back(std::move(d)); }
-
-        if (const Json* sc = root.member("schemes"))
-            if (sc->type == Json::Arr)
-                for (const Json& e : sc->arr)
-                {
-                    if (e.type != Json::Obj) continue;
-                    const Json* id = e.member("id");
-                    if (!id || id->type != Json::Str || id->str.empty()) continue;
-                    KeymapScheme s; s.id = wxString::FromUTF8(id->str.c_str()); s.bundled = false;
-                    if (const Json* nm = e.member("name"))   if (nm->type == Json::Str) s.name = wxString::FromUTF8(nm->str.c_str());
-                    if (s.name.empty()) s.name = s.id;
-                    if (const Json* pr = e.member("parent")) if (pr->type == Json::Str) s.parent = wxString::FromUTF8(pr->str.c_str());
-                    if (const Json* kb = e.member("keybindings"))
-                        if (kb->type == Json::Arr)
-                            for (const Json& be : kb->arr)
-                            { KeymapDelta d; if (deltaFromJson(be, d)) s.deltas.push_back(std::move(d)); }
-                    // the scheme's EDITOR-tier deltas (same entry shape, "editor.*" names) - see
-                    // KeymapScheme::editorDeltas; applied by resolveEditor() when the scheme is active
-                    if (const Json* ed = e.member("editor"))
-                        if (ed->type == Json::Arr)
-                            for (const Json& be : ed->arr)
-                            { KeymapDelta d; if (deltaFromJson(be, d)) s.editorDeltas.push_back(std::move(d)); }
-                    // refused (false) when the id shadows a bundled preset: the foreign block is
-                    // ignored rather than corrupting the compiled preset - see registerScheme
-                    registerScheme(s);
-                }
-
-        // The editor tier: { "command": "editor.lineCut", "key": "ctrl+k" } rebinds; a leading
-        // '-' ("-editor.lineCut", key optional) is an explicit CLEAR. Kept in its own map, applied to the
-        // curated editor roots by resolveEditor(); a name this build doesn't define is retained but ignored.
-        if (const Json* ed = root.member("editor"))
-            if (ed->type == Json::Arr)
-                for (const Json& e : ed->arr)
-                {
-                    KeymapDelta d;
-                    if (!deltaFromJson(e, d)) continue;
-                    m_editorUser[d.symbolicName] = d.unbind ? wxString() : keySpell::canonical(d.key);
-                }
-    }
-
-    static void jsonEscape(std::string& out, const wxString& w)
-    {
-        const std::string s(w.utf8_str());
-        for (char c : s)
+        wxnyaml::Doc& doc = m_file;   // kept: the entries this build cannot read are written back from it
+        const bool parsed = wxnyaml::parse(text, doc, "keybindings.yaml");
+        const wxnyaml::Node root = doc.root();
+        if (parsed && !root.readable()) return;   // empty, or only comments: no changes to apply
+        if (!parsed || !wxnyaml::isMap(root))
         {
-            switch (c)
-            {
-                case '"':  out += "\\\""; break; case '\\': out += "\\\\"; break;
-                case '\n': out += "\\n";  break; case '\r': out += "\\r";  break; case '\t': out += "\\t"; break;
-                default:
-                    if ((unsigned char)c < 0x20) { char buf[8]; snprintf(buf, sizeof buf, "\\u%04x", c); out += buf; }
-                    else out += c;
-            }
+            // Not usable: the defaults apply, and nothing is saved until the file is fixed - writing this
+            // session's changes would throw away everything the user had written in it.
+            m_readOnly = true;
+            m_loadError = parsed ? wxString("expected version:, scheme: and bindings: at the top level")
+                                 : fromUtf8(doc.error);
+            return;
         }
+
+        long long version = 0;
+        if (wxnyaml::getInteger(wxnyaml::child(root, "version"), version) && version > kCurrentVersion)
+            m_readOnly = true;   // a newer wxNote wrote it: don't clobber what this build cannot represent
+
+        std::string scheme;
+        if (wxnyaml::getText(wxnyaml::child(root, "scheme"), scheme) && !scheme.empty()) m_activeScheme = fromUtf8(scheme);
+
+        for (wxnyaml::Node c : root.children())   // a top-level entry this build does not know: kept
+        {
+            const std::string k = wxnyaml::keyOf(c);
+            if (k != "version" && k != "scheme" && k != "bindings" && k != "schemes") m_keptTop.push_back(c.id());
+        }
+
+        const wxnyaml::Node bindings = wxnyaml::child(root, "bindings");
+        if (wxnyaml::isSeq(bindings))
+            for (wxnyaml::Node e : bindings.children())
+            {
+                KeymapDelta d;
+                if (!deltaFromYaml(e, d)) { m_keptRules.push_back({ wxString(), e.id() }); continue; }
+                // The editor tier: {key: ctrl+k, command: editor.lineCut} rebinds; "-editor.lineCut" (key
+                // optional) is an explicit CLEAR. Kept in its own map, applied to the curated editor roots by
+                // resolveEditor(); a name this build doesn't define is retained but ignored.
+                if (isEditorCommand(d.symbolicName)) m_editorUser[d.symbolicName] = d.unbind ? wxString() : keySpell::canonical(d.key);
+                else m_userLayer.push_back(std::move(d));
+            }
+
+        const wxnyaml::Node schemes = wxnyaml::child(root, "schemes");
+        if (wxnyaml::isSeq(schemes))
+            for (wxnyaml::Node e : schemes.children())
+            {
+                std::string id;
+                if (!wxnyaml::getText(wxnyaml::child(e, "id"), id) || id.empty()) { m_keptSchemes.push_back(e.id()); continue; }
+                KeymapScheme s;
+                s.id = fromUtf8(id);
+                s.bundled = false;
+                s.name = fromUtf8(wxnyaml::textOr(wxnyaml::child(e, "name"), std::string()));
+                if (s.name.empty()) s.name = s.id;
+                s.parent = fromUtf8(wxnyaml::textOr(wxnyaml::child(e, "parent"), std::string()));
+                const wxnyaml::Node kb = wxnyaml::child(e, "bindings");
+                if (wxnyaml::isSeq(kb))
+                    for (wxnyaml::Node be : kb.children())
+                    {
+                        KeymapDelta d;
+                        if (!deltaFromYaml(be, d)) { m_keptRules.push_back({ s.id, be.id() }); continue; }
+                        // editor-tier rules are the scheme's editorDeltas (see KeymapScheme::editorDeltas),
+                        // applied by resolveEditor() while the scheme is active
+                        (isEditorCommand(d.symbolicName) ? s.editorDeltas : s.deltas).push_back(std::move(d));
+                    }
+                // refused (false) when the id shadows a bundled preset: the foreign block is ignored
+                // rather than corrupting the compiled preset - see registerScheme
+                registerScheme(s);
+            }
     }
-    static void writeDelta(std::string& out, const KeymapDelta& d, const char* indent)
+
+    // The rules of `list` ("" = the top-level bindings, else a user scheme's id) that the file held but this
+    // build could not read, back at the end of the list as the file wrote them.
+    void keepRules(ryml::Tree& t, wxnyaml::MutNode list, const wxString& listId) const
     {
-        out += indent; out += "{ \"command\": \"";
-        if (d.unbind) out += "-";
-        jsonEscape(out, d.symbolicName); out += "\"";
-        if (!d.key.empty()) { out += ", \"key\": \""; jsonEscape(out, d.key); out += "\""; }
-        if (d.scope != KeyScope::Global) { out += ", \"when\": \""; out += scopeToStr(d.scope); out += "\""; }
-        out += " }";
+        for (const auto& kept : m_keptRules)
+            if (kept.first == listId) t.duplicate(&m_file.tree, kept.second, list.id(), t.last_child(list.id()));
+    }
+
+    // A rule on one line, key first as VS Code writes them. Keys are stored lower-case - how VS Code,
+    // Sublime and Pulsar spell them; wx reads any case.
+    static void addDelta(wxnyaml::MutNode list, const KeymapDelta& d)
+    {
+        wxnyaml::MutNode e = wxnyaml::addMapItem(list);
+        wxnyaml::setOneLine(e);
+        if (!d.key.empty()) wxnyaml::setText(wxnyaml::addKey(e, "key"), std::string(d.key.Lower().utf8_str()));
+        wxnyaml::setText(wxnyaml::addKey(e, "command"), (d.unbind ? "-" : "") + std::string(d.symbolicName.utf8_str()));
+        if (d.scope != KeyScope::Global) wxnyaml::setText(wxnyaml::addKey(e, "when"), scopeToStr(d.scope));
     }
     std::string serialize() const
     {
-        std::string out;
-        out += "{\n  \"version\": " + std::to_string(kCurrentVersion) + ",\n";
-        out += "  \"activeScheme\": \""; jsonEscape(out, m_activeScheme); out += "\",\n";
-        out += "  \"userKeybindings\": [";
-        for (size_t k = 0; k < m_userLayer.size(); ++k)
-        { out += (k ? ",\n" : "\n"); writeDelta(out, m_userLayer[k], "    "); }
-        out += m_userLayer.empty() ? "]" : "\n  ]";
-        // user (non-bundled) schemes only
-        std::vector<const KeymapScheme*> userSchemes;
-        for (const KeymapScheme& s : m_schemes) if (!s.bundled) userSchemes.push_back(&s);
-        if (!userSchemes.empty())
-        {
-            out += ",\n  \"schemes\": [\n";
-            for (size_t si = 0; si < userSchemes.size(); ++si)
-            {
-                const KeymapScheme& s = *userSchemes[si];
-                out += "    { \"id\": \""; jsonEscape(out, s.id); out += "\", \"name\": \""; jsonEscape(out, s.name); out += "\"";
-                if (!s.parent.empty()) { out += ", \"parent\": \""; jsonEscape(out, s.parent); out += "\""; }
-                out += ", \"keybindings\": [";
-                for (size_t k = 0; k < s.deltas.size(); ++k)
-                { out += (k ? ",\n" : "\n"); writeDelta(out, s.deltas[k], "      "); }
-                out += s.deltas.empty() ? "]" : "\n    ]";
-                if (!s.editorDeltas.empty())    // the scheme's editor-tier deltas, round-tripped with it
-                {
-                    out += ", \"editor\": [";
-                    for (size_t k = 0; k < s.editorDeltas.size(); ++k)
-                    { out += (k ? ",\n" : "\n"); writeDelta(out, s.editorDeltas[k], "      "); }
-                    out += "\n    ]";
-                }
-                out += " }";
-                out += (si + 1 < userSchemes.size()) ? ",\n" : "\n";
-            }
-            out += "  ]";
-        }
-        // the editor tier's user overrides. Emitted in the curated seed order for a stable,
-        // diff-friendly file; an empty stored value is an explicit clear -> "-<name>" (no key). Any name
-        // not in this build's curated set (a newer build's editor command) is retained verbatim after the
-        // known rows so an older build re-saving can't silently drop it (forward-compat).
+        ryml::Tree t;
+        wxnyaml::MutNode root = wxnyaml::resetToMap(t);
+        wxnyaml::setInteger(wxnyaml::addKey(root, "version"), kCurrentVersion);
+        wxnyaml::setText(wxnyaml::addKey(root, "scheme"), std::string(m_activeScheme.utf8_str()));
+        wxnyaml::MutNode bindings = wxnyaml::addSeq(root, "bindings");
+        for (const KeymapDelta& d : m_userLayer) addDelta(bindings, d);
+        // The editor tier's user overrides, in the curated seed order for a stable, diff-friendly file; an
+        // empty stored value is an explicit clear ("-<name>", no key). A name not in this build's curated
+        // set (a newer build's editor command) is kept, after the known rows, so an older build re-saving
+        // cannot silently drop it.
         std::vector<wxString> editorNames;
         for (const EditorRootEntry& r : m_editorRoot)
             if (m_editorUser.find(r.name) != m_editorUser.end()) editorNames.push_back(r.name);
         for (const auto& kv : m_editorUser)
             if (m_editorIndex.find(kv.first) == m_editorIndex.end()) editorNames.push_back(kv.first);
-        if (!editorNames.empty())
+        for (const wxString& name : editorNames)
         {
-            out += ",\n  \"editor\": [";
-            for (size_t k = 0; k < editorNames.size(); ++k)
-            {
-                const wxString& name = editorNames[k];
-                const wxString& key  = m_editorUser.at(name);
-                KeymapDelta d;
-                d.symbolicName = name;
-                d.key          = key;
-                d.unbind       = key.empty();     // stored empty => an explicit clear
-                out += (k ? ",\n" : "\n");
-                writeDelta(out, d, "    ");
-            }
-            out += "\n  ]";
+            KeymapDelta d;
+            d.symbolicName = name;
+            d.key = m_editorUser.at(name);
+            d.unbind = d.key.empty();
+            addDelta(bindings, d);
         }
-        out += "\n}\n";
-        return out;
+        keepRules(t, bindings, wxString());
+        // user (non-bundled) schemes only
+        bool anyScheme = !m_keptSchemes.empty();
+        for (const KeymapScheme& s : m_schemes) anyScheme = anyScheme || !s.bundled;
+        if (anyScheme)
+        {
+            wxnyaml::MutNode schemes = wxnyaml::addSeq(root, "schemes");
+            for (const KeymapScheme& s : m_schemes)
+            {
+                if (s.bundled) continue;
+                wxnyaml::MutNode e = wxnyaml::addMapItem(schemes);
+                wxnyaml::setText(wxnyaml::addKey(e, "id"), std::string(s.id.utf8_str()));
+                wxnyaml::setText(wxnyaml::addKey(e, "name"), std::string(s.name.utf8_str()));
+                if (!s.parent.empty()) wxnyaml::setText(wxnyaml::addKey(e, "parent"), std::string(s.parent.utf8_str()));
+                wxnyaml::MutNode sb = wxnyaml::addSeq(e, "bindings");
+                for (const KeymapDelta& d : s.deltas) addDelta(sb, d);
+                for (const KeymapDelta& d : s.editorDeltas) addDelta(sb, d);   // the scheme's editor tier, round-tripped with it
+                keepRules(t, sb, s.id);
+            }
+            for (ryml::id_type id : m_keptSchemes) t.duplicate(&m_file.tree, id, schemes.id(), t.last_child(schemes.id()));
+        }
+        for (ryml::id_type id : m_keptTop) t.duplicate(&m_file.tree, id, root.id(), t.last_child(root.id()));
+        std::string out;
+        if (!wxnyaml::emit(t, out)) return std::string();
+        return "# wxNote key bindings: your changes to the built-in keys, applied over the active scheme.\n"
+               "# A later rule wins. 'command: -name' removes the key given (or, with no key, every key).\n"
+               + out;
     }
 
     // ---- state ------------------------------------------------------------------------------------
@@ -845,6 +860,14 @@ private:
     wxString                                     m_activeScheme = "wxnote.default";
     wxString                                     m_filePath;
     bool                                         m_readOnly = false;
+    wxString                                     m_loadError;    // see loadError()
+    // What the file holds that this build cannot read, written back on save so a typo or a newer build's
+    // field survives (docs/SETTINGS_DESIGN.md, "Unknown keys are kept"): node ids in m_file, the parsed
+    // file, whose arena the duplicated entries point into - so it lives as long as they do.
+    wxnyaml::Doc                                 m_file;
+    std::vector<ryml::id_type>                   m_keptTop;      // top-level entries it does not know
+    std::vector<std::pair<wxString, ryml::id_type>> m_keptRules; // (list: "" or a scheme id, rule)
+    std::vector<ryml::id_type>                   m_keptSchemes;  // `schemes` entries with no id
 
     std::unordered_map<wxString, EffectiveBinding, WxnKeyHash> m_eff;
     std::vector<wxString>                        m_effOrder;     // stable menu order for all()

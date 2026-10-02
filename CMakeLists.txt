@@ -15,6 +15,36 @@ project(wxNote VERSION 0.20.0 LANGUAGES CXX C)
 
 include(FetchContent)
 
+# Download one file pinned by SHA-256 into the build tree (Scintillua's lexer.lua, rapidyaml's single
+# header). A file already there is kept only when it has the pinned content: a zero-byte file from an
+# interrupted configure, or another revision, would otherwise pass as "already downloaded". The fetch
+# is retried because CI runners intermittently hit transient TLS/network errors against GitHub (curl 35
+# "SSL connect error"), which would otherwise fail a whole release configure.
+function(wxn_fetch_pinned_file url dest sha256 label)
+    if(EXISTS "${dest}")
+        file(SHA256 "${dest}" _have)
+        if(_have STREQUAL sha256)
+            return()
+        endif()
+        file(REMOVE "${dest}")
+    endif()
+    foreach(_try RANGE 1 5)
+        file(DOWNLOAD "${url}" "${dest}"
+             EXPECTED_HASH SHA256=${sha256}
+             STATUS _status
+             TLS_VERIFY ON
+             INACTIVITY_TIMEOUT 30
+             TIMEOUT 120)
+        list(GET _status 0 _code)
+        if(_code EQUAL 0)
+            return()
+        endif()
+        message(STATUS "[wxnote] ${label} download attempt ${_try}/5 failed (${_status}); retrying...")
+        file(REMOVE "${dest}")   # drop any partial/empty file before the next try
+    endforeach()
+    message(FATAL_ERROR "failed to download ${label} after 5 attempts: ${_status}")
+endfunction()
+
 if(MSVC)
     string(APPEND CMAKE_CXX_FLAGS " /EHsc")          # wxWidgets requires /EHsc
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")   # /MT - match wx's static CRT (CMP0091 NEW @ cmake 3.20)
@@ -88,40 +118,25 @@ endif()
 set(SCINTILLUA_COMMIT 73b9f0a7fe70e307e71d8b3607ed1b2697ebfd14)   # "Added support for Odin", 2026-06-19
 set(SCINTILLUA_LEXER_SHA256 c604a9800557bafe51c8ed8d0538e035e0bd2523b43138999b95a5e83eea3ee1)
 set(SCINTILLUA_LEXER_LUA "${CMAKE_BINARY_DIR}/scintillua/lexer.lua")
-# A zero-byte file from a previously interrupted configure would otherwise be treated as "already
-# downloaded" and ship an empty lexer, so require the pinned content, not just a file.
-set(_sl_have 0)
-if(EXISTS "${SCINTILLUA_LEXER_LUA}")
-    file(SHA256 "${SCINTILLUA_LEXER_LUA}" _sl_hash)
-    if(_sl_hash STREQUAL SCINTILLUA_LEXER_SHA256)
-        set(_sl_have 1)
-    else()
-        file(REMOVE "${SCINTILLUA_LEXER_LUA}")   # empty, partial, or another revision: fetch the pinned one
-    endif()
-endif()
-if(NOT _sl_have)
-    # Retry the fetch: CI runners intermittently hit transient TLS/network errors against
-    # raw.githubusercontent.com (curl 35 "SSL connect error"), which would otherwise fail a whole
-    # release configure. Try a handful of times with timeouts before giving up.
-    set(_sl_code 1)
-    foreach(_sl_try RANGE 1 5)
-        file(DOWNLOAD "https://raw.githubusercontent.com/orbitalquark/scintillua/${SCINTILLUA_COMMIT}/lexers/lexer.lua"
-             "${SCINTILLUA_LEXER_LUA}"
-             EXPECTED_HASH SHA256=${SCINTILLUA_LEXER_SHA256}
-             STATUS _sl_status
-             TLS_VERIFY ON
-             INACTIVITY_TIMEOUT 30
-             TIMEOUT 120)
-        list(GET _sl_status 0 _sl_code)
-        if(_sl_code EQUAL 0)
-            break()
-        endif()
-        message(STATUS "[wxnote] Scintillua lexer.lua download attempt ${_sl_try}/5 failed (${_sl_status}); retrying...")
-        file(REMOVE "${SCINTILLUA_LEXER_LUA}")   # drop any partial/empty file before the next try
-    endforeach()
-    if(NOT _sl_code EQUAL 0)
-        message(FATAL_ERROR "failed to download Scintillua lexer.lua after 5 attempts: ${_sl_status}")
-    endif()
+wxn_fetch_pinned_file("https://raw.githubusercontent.com/orbitalquark/scintillua/${SCINTILLUA_COMMIT}/lexers/lexer.lua"
+    "${SCINTILLUA_LEXER_LUA}" ${SCINTILLUA_LEXER_SHA256} "Scintillua lexer.lua")
+
+# ---- rapidyaml (YAML + JSON reader and emitter; MIT) ------------------------------------------------
+# Every file wxNote writes for itself is YAML (docs/SETTINGS_DESIGN.md) and the Plugins Admin catalog is
+# JSON; rapidyaml reads both, and src/yaml_io.h is the one place the code talks to it. The release's
+# single-header build, pinned like lexer.lua above: src/ryml_impl.cpp compiles the implementation once,
+# everything else includes the header. RYML_DEFAULT_CALLBACK_USES_EXCEPTIONS makes a parse error throw
+# (for yaml_io.h to catch) instead of abort(); it is PUBLIC so every translation unit agrees on it.
+set(RYML_VERSION 0.16.0)
+set(RYML_SHA256 0d0b8076174cf62f034406b03529fda542ebc9a17506d3bd6d949aedc4bfa6ab)
+wxn_fetch_pinned_file("https://github.com/biojppm/rapidyaml/releases/download/v${RYML_VERSION}/rapidyaml.v${RYML_VERSION}.singlehdr.hpp"
+    "${CMAKE_BINARY_DIR}/rapidyaml/ryml_all.hpp" ${RYML_SHA256} "rapidyaml ${RYML_VERSION}")
+add_library(ryml STATIC src/ryml_impl.cpp)
+target_include_directories(ryml SYSTEM PUBLIC "${CMAKE_BINARY_DIR}/rapidyaml")   # SYSTEM: its own warnings are not ours
+target_compile_definitions(ryml PUBLIC RYML_DEFAULT_CALLBACK_USES_EXCEPTIONS)
+set_target_properties(ryml PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(ryml PRIVATE /utf-8)
 endif()
 
 # ---- libvterm (VT520/xterm terminal-emulation core; MIT) -------------------------------------------
@@ -295,11 +310,11 @@ target_include_directories(wxnote PRIVATE
     "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"     # Scintilla.h, ILexer.h (SCI_* + SCNotification)
     "${CMAKE_SOURCE_DIR}/third_party/lexilla/include"       # Lexilla.h (CreateLexer), SciLexer.h (SCE_*)
     "${CMAKE_SOURCE_DIR}/include/nib"                       # nib.h - our own permissive, cross-platform plugin API
-    "${CMAKE_SOURCE_DIR}/src")                              # command_ids.h, app_icon_svg.h, menu_*.h - the core includes nothing from include/npp-compat (that ABI belongs to packages/npp-bridge alone)
+    "${CMAKE_SOURCE_DIR}/src")                              # command_ids.h, app_icon_svg.h, menu_*.h - the core includes nothing from include/npp-compat (that ABI is for the GPL packages: npp-bridge, npp-compat)
 
 target_link_libraries(wxnote PRIVATE
-    wx::core wx::aui wx::base wx::xml wx::stc wx::net
-    lexilla lua_lpeg
+    wx::core wx::aui wx::base wx::stc wx::net
+    lexilla lua_lpeg ryml
     vterm   # terminal-emulation core behind src/term_view.cpp (its include dir propagates from the vterm target)
     hunspell   # spell-check engine behind src/spell_engine.h (its <hunspell/*> include dir propagates too)
     pcre2-8-static)   # regex backend behind src/regex_engine.h (propagates PCRE2_STATIC + its include dir)
@@ -363,7 +378,7 @@ endif()
 # ---- keymap_selftest: headless self-test for the shortcut store + conflict engine (Phase 3) --------
 # No GUI (no frame, no display): seeds a KeymapStore and drives the ConflictEngine over the static
 # Scintilla-default mirror, asserting the conflict classes. Links only
-# wx core/base for wxAcceleratorEntry/wxString; the keymap/conflict code is header-only.
+# wx core/base for wxAcceleratorEntry/wxString and rapidyaml for keybindings.yaml; the keymap/conflict code is header-only.
 #   cmake --build build --target keymap_selftest && build/bin/keymap_selftest
 add_executable(keymap_selftest tests/keymap_selftest.cpp)
 set_target_properties(keymap_selftest PROPERTIES
@@ -373,7 +388,7 @@ set_target_properties(keymap_selftest PROPERTIES
 target_include_directories(keymap_selftest PRIVATE
     "${CMAKE_SOURCE_DIR}/third_party/scintilla/include"
     "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(keymap_selftest PRIVATE wx::core wx::base)
+target_link_libraries(keymap_selftest PRIVATE wx::core wx::base ryml)
 if(MSVC)
     target_compile_options(keymap_selftest PRIVATE /utf-8)
 endif()
@@ -419,8 +434,8 @@ set_target_properties(monocypher PROPERTIES
     C_STANDARD 99 C_STANDARD_REQUIRED ON POSITION_INDEPENDENT_CODE ON)
 
 # ---- plugin_catalog_test: catalog parser/validator + minisign verify (Plugins Admin, Phase A) -------
-# NOT catalog_selftest - that name is taken by the i18n .po catalog gate. Pure STL + monocypher, no
-# wx, no display, so it runs on every CI arch including the cross-compiled riscv64 leg.
+# NOT catalog_selftest - that name is taken by the i18n .po catalog gate. STL, monocypher and rapidyaml
+# (the catalog is JSON), no wx, no display, so it runs on every CI arch including the cross-compiled riscv64 leg.
 #   cmake --build build --target plugin_catalog_test && build/bin/plugin_catalog_test
 add_executable(plugin_catalog_test tests/plugin_catalog_test.cpp)
 set_target_properties(plugin_catalog_test PROPERTIES
@@ -428,9 +443,39 @@ set_target_properties(plugin_catalog_test PROPERTIES
     CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_include_directories(plugin_catalog_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(plugin_catalog_test PRIVATE monocypher)
+target_link_libraries(plugin_catalog_test PRIVATE monocypher ryml)
 if(MSVC)
     target_compile_options(plugin_catalog_test PRIVATE /utf-8)
+endif()
+
+# ---- yaml_io_test: headless self-test for src/yaml_io.h, the layer every file store goes through ----
+# Pure: strings in, strings out, no wx. Pins the rules the stores rely on - errors are reported, never
+# thrown; aliases are never expanded; text written reads back unchanged; JSON keeps "1" and 1 apart.
+#   cmake --build build --target yaml_io_test && build/bin/yaml_io_test
+add_executable(yaml_io_test tests/yaml_io_test.cpp)
+set_target_properties(yaml_io_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(yaml_io_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(yaml_io_test PRIVATE ryml)
+if(MSVC)
+    target_compile_options(yaml_io_test PRIVATE /utf-8)
+endif()
+
+# ---- settings_store_test: settings.yaml line edits, the settings schema, state.yaml merges ------------
+# Pure, like yaml_io_test. Pins what makes settings.yaml safe to hand-edit: comments and layout survive
+# wxNote's writes, a file that does not parse is never written over, two processes' state saves merge.
+#   cmake --build build --target settings_store_test && build/bin/settings_store_test
+add_executable(settings_store_test tests/settings_store_test.cpp)
+set_target_properties(settings_store_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(settings_store_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(settings_store_test PRIVATE ryml)
+if(MSVC)
+    target_compile_options(settings_store_test PRIVATE /utf-8)
 endif()
 
 # ---- fuzzy_test: headless self-test for the fuzzy matcher (src/fuzzy_match.h) -----------------------
@@ -508,10 +553,10 @@ set_target_properties(lang_detect_test PROPERTIES
     CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_include_directories(lang_detect_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(lang_detect_test PRIVATE lua_lpeg)
+target_link_libraries(lang_detect_test PRIVATE lua_lpeg ryml)   # ryml: it reads the shipped themes' lexer names
 target_compile_definitions(lang_detect_test PRIVATE
     SRC_DIR="${CMAKE_SOURCE_DIR}/src"
-    RESOURCES_DIR="${CMAKE_SOURCE_DIR}/resources"   # the shipped themes, whose LexerType names it checks
+    RESOURCES_DIR="${CMAKE_SOURCE_DIR}/resources"   # the shipped themes, whose lexer names it checks
     SCINTILLUA_LEXER_DIR="${CMAKE_BINARY_DIR}/scintillua"
     BUILD_DIR="${CMAKE_BINARY_DIR}")     # the engine's writable dir; detection never writes to it
 if(MSVC)
@@ -536,7 +581,7 @@ if(MSVC)
 endif()
 
 # ---- snippets_test: self-test for the snippet grammar (src/snippets.h) -----------------------------
-# Pure STL like hash_test - no wx. The grammar is where a snippet body silently loses a placeholder or
+# STL and rapidyaml (snippets.yaml) - no wx. The grammar is where a snippet body silently loses a placeholder or
 # a field offset drifts off the text it marks, and both are visible from the parse result alone.
 add_executable(snippets_test tests/snippets_test.cpp)
 set_target_properties(snippets_test PROPERTIES
@@ -544,6 +589,7 @@ set_target_properties(snippets_test PROPERTIES
     CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_include_directories(snippets_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(snippets_test PRIVATE ryml)   # the snippet store is YAML
 if(MSVC)
     target_compile_options(snippets_test PRIVATE /utf-8)
 endif()
@@ -649,7 +695,8 @@ set_target_properties(po2mo PROPERTIES
 # npp_bridge, which loads the PROBE plugin (packages/npp-bridge/example). The harness then drives
 # open/edit/save/undo-to-savepoint/save-all/close through DIRECT host calls (no OS input injection)
 # and asserts the Phase-1 acceptance points against the probe's notification log. User data is fully
-# sandboxed (custom wxAppTraits + wxFileConfig), so it never touches a real installation's state.
+# sandboxed (a custom wxAppTraits points the user-data folder, with its settings.yaml and state.yaml,
+# at a scratch folder), so it never touches a real installation's state.
 # Needs a display (it creates the real frame), so - like terminal_selftest - it is a developer /
 # CI-with-display tool, not part of a headless test run. Mirrors the wxnote target's build setup
 # because it compiles the same sources.
@@ -681,8 +728,8 @@ function(wxn_add_app_selftest name)
         "${CMAKE_SOURCE_DIR}/include/nib"
         "${CMAKE_SOURCE_DIR}/src")              # main.cpp itself (textually included) + its headers
     target_link_libraries(${name} PRIVATE
-        wx::core wx::aui wx::base wx::xml wx::stc wx::net
-        lexilla lua_lpeg
+        wx::core wx::aui wx::base wx::stc wx::net
+        lexilla lua_lpeg ryml
         vterm
         hunspell   # main.cpp -> src/spell_engine.h -> <hunspell/hunspell.hxx>; wx::net -> wxWebRequest
         pcre2-8-static)   # main.cpp -> src/regex_engine.h -> <pcre2.h>
@@ -718,7 +765,7 @@ endif()
 #   cmake --build build --target funclist_selftest && build/bin/funclist_selftest
 wxn_add_app_selftest(funclist_selftest)
 
-# ---- deploy runtime resources (toolbar icons, themes, default styler) next to the exe --------------
+# ---- deploy runtime resources (toolbar icons, themes, default context menu) next to the exe --------
 add_custom_command(TARGET wxnote POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/icons"  "$<TARGET_FILE_DIR:wxnote>/icons"
@@ -733,9 +780,7 @@ add_custom_command(TARGET wxnote POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/fonts" "$<TARGET_FILE_DIR:wxnote>/fonts"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/resources/stylers.model.xml" "$<TARGET_FILE_DIR:wxnote>/stylers.model.xml"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/resources/contextMenu.xml" "$<TARGET_FILE_DIR:wxnote>/contextMenu.xml"
+        "${CMAKE_SOURCE_DIR}/resources/contextmenu.yaml" "$<TARGET_FILE_DIR:wxnote>/contextmenu.yaml"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/locale" "$<TARGET_FILE_DIR:wxnote>/locale"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -761,11 +806,12 @@ add_dependencies(wxnote nib_test_plugin)
 add_subdirectory(packages/udl-compat)
 add_dependencies(wxnote udl_compat_plugin)
 
-# ---- optional GPL npp-shortcuts-compat plugin: imports a Notepad++ shortcuts.xml keybinding file ----
-# Reproduces the N++ shortcuts.xml format and feeds bindings into the core via nib.keymap/1, so (like
-# udl-compat / npp-bridge) it stays GPL and out of the Apache core.
-add_subdirectory(packages/npp-shortcuts-compat)
-add_dependencies(wxnote npp_shortcuts_compat_plugin)
+# ---- optional GPL npp-compat plugin: imports Notepad++'s own files ---------------------------------
+# shortcuts.xml, config.xml, themes, contextMenu.xml, sessions and workspaces, translated into wxNote's
+# YAML. Reproduces those Notepad++ formats, so (like udl-compat / npp-bridge) it stays GPL and out of the
+# Apache core, which reads and writes only its own files.
+add_subdirectory(packages/npp-compat)
+add_dependencies(wxnote npp_compat_plugin)
 
 # ---- optional GPL Notepad++ binary-plugin bridge (every OS now; itself a Nib plugin) ---------------
 # Phase 1 of docs/ARCHITECTURE.md: the bridge builds on Linux/macOS too (its Win32-only
@@ -799,7 +845,7 @@ enable_testing()
 
 add_custom_target(selftests DEPENDS
     keymap_selftest diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test
-    plugin_catalog_test
+    plugin_catalog_test yaml_io_test settings_store_test npp_compat_selftest
     charset_selftest
     hunspell_selftest funclist_selftest comment_tokens_test lang_detect_test keywords_test catalog_selftest bridge_selftest
     desktop_entry_test
@@ -808,7 +854,8 @@ add_custom_target(selftests DEPENDS
 # "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed. file_index_test
 # does call wxInitializer, but it links wx::base only, so it gets console traits and never opens a display.
 foreach(t diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test hunspell_selftest
-          funclist_selftest comment_tokens_test lang_detect_test keywords_test catalog_selftest plugin_catalog_test desktop_entry_test)
+          funclist_selftest comment_tokens_test lang_detect_test keywords_test catalog_selftest plugin_catalog_test desktop_entry_test
+          yaml_io_test settings_store_test npp_compat_selftest)
     add_test(NAME ${t} COMMAND ${t})
     set_tests_properties(${t} PROPERTIES LABELS pure)
 endforeach()

@@ -47,8 +47,7 @@ modules:
       - mkdir -p /app/bin/nib
       - cp -r build-bin/nib/. /app/bin/nib/
       - rm -rf /app/bin/nib/nib_test_plugin.so /app/bin/nib/example
-      - install -Dm644 build-bin/stylers.model.xml /app/bin/stylers.model.xml
-      - install -Dm644 build-bin/contextMenu.xml /app/bin/contextMenu.xml
+      - install -Dm644 build-bin/contextmenu.yaml /app/bin/contextmenu.yaml
       - install -Dm644 wxnote.desktop /app/share/applications/io.github.Alpaq92.WxNote.desktop
       - install -Dm644 wxnote.png /app/share/icons/hicolor/256x256/apps/io.github.Alpaq92.WxNote.png
       - install -Dm644 wxnote.metainfo.xml /app/share/metainfo/io.github.Alpaq92.WxNote.metainfo.xml

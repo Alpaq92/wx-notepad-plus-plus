@@ -2,7 +2,7 @@
 #pragma once
 // =====================================================================
 // plugin_catalog.h - Plugins-Admin catalog parsing + validation (docs/PLUGINS_ADMIN_DESIGN.md,
-// "Catalog"). Pure <cstdint>/<string>/<vector> + json_value.h - NO wx - so it is one code path on
+// "Catalog"). Pure <cstdint>/<string>/<vector> + yaml_io.h (rapidyaml) - NO wx - so it is one code path on
 // every platform and links into a headless test with nothing else.
 //
 // Two documents, both static JSON files behind the Ed25519 signed-catalog trust gate
@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-#include "json_value.h"
+#include "yaml_io.h"
 
 namespace wxnplug {
 
@@ -180,19 +180,25 @@ inline bool parseAbi(const std::string& s, uint32_t& out)
     return true;
 }
 
+// JSON types as the catalog checks them: a string is a quoted scalar, a number a plain one that
+// reads as a number (see wxnyaml::jsonType). An absent member is not readable().
+inline bool isStr(wxnyaml::Node n) { return wxnyaml::jsonType(n) == wxnyaml::JsonType::String; }
+inline std::string str(wxnyaml::Node n) { return wxnyaml::textOr(n, std::string()); }
+inline bool num(wxnyaml::Node n, double& v) { return wxnyaml::jsonType(n) == wxnyaml::JsonType::Number && wxnyaml::getNumber(n, v); }
+
 // Optional string member: absent is fine, present-with-wrong-type is an error (signed catalog =
 // publishing bug, see the header comment). Returns false only on the type error.
-inline bool takeStr(const wxnjson::Json& o, const char* key, std::string& dst, bool& present,
+inline bool takeStr(wxnyaml::Node o, const char* key, std::string& dst, bool& present,
                     std::string& err)
 {
-    const wxnjson::Json* m = o.member(key);
-    if (!m) { present = false; return true; }
-    if (m->type != wxnjson::Json::Str) {
+    const wxnyaml::Node m = wxnyaml::child(o, key);
+    if (!m.readable()) { present = false; return true; }
+    if (!isStr(m)) {
         err = std::string("\"") + key + "\" must be a string";
         return false;
     }
     present = true;
-    dst = m->str;
+    dst = str(m);
     return true;
 }
 
@@ -205,42 +211,42 @@ inline ParseResult parseIndex(const std::string& jsonText, Index& out)
     ParseResult r;
     out = Index();
 
-    wxnjson::Json root;
-    if (!wxnjson::JsonParser(jsonText).parse(root)) { r.error = "index: not valid JSON";         return r; }
-    if (root.type != wxnjson::Json::Obj)            { r.error = "index: root is not an object";  return r; }
+    wxnyaml::Doc doc;
+    if (!wxnyaml::parseJson(jsonText, doc, "index.json")) { r.error = "index: not valid JSON";        return r; }
+    const wxnyaml::Node root = doc.root();
+    if (!wxnyaml::isMap(root))                              { r.error = "index: root is not an object"; return r; }
 
     // Range-check BEFORE the integer casts, the same order parseTargetList already uses for
     // install.size: converting an out-of-range double (JSON "1e400" arrives here as inf) to an
     // integer type is undefined behavior, not merely a wrong value.
-    const wxnjson::Json* m = root.member("schema");
-    if (!m || m->type != wxnjson::Json::Num || !(m->num >= 0 && m->num <= 1e6)) {
+    double v = 0;
+    if (!detail::num(wxnyaml::child(root, "schema"), v) || !(v >= 0 && v <= 1e6)) {
         r.error = "index: missing numeric \"schema\"";
         return r;
     }
-    out.schema = static_cast<int>(m->num);
+    out.schema = static_cast<int>(v);
     if (out.schema != 1) { r.error = "index: unsupported \"schema\" version"; return r; }
 
-    m = root.member("serial");
     // 2^53: the largest integer a double carries exactly - and more catalog publishes than can
     // ever happen under a monotonic serial.
-    if (!m || m->type != wxnjson::Json::Num || !(m->num >= 0 && m->num <= 9007199254740992.0)) {
+    if (!detail::num(wxnyaml::child(root, "serial"), v) || !(v >= 0 && v <= 9007199254740992.0)) {
         r.error = "index: missing numeric \"serial\"";
         return r;
     }
-    out.serial = static_cast<unsigned long long>(m->num);
+    out.serial = static_cast<unsigned long long>(v);
 
-    m = root.member("generated");
-    if (m) {
-        if (m->type != wxnjson::Json::Str) { r.error = "index: \"generated\" must be a string"; return r; }
-        out.generated = m->str;
+    wxnyaml::Node m = wxnyaml::child(root, "generated");
+    if (m.readable()) {
+        if (!detail::isStr(m)) { r.error = "index: \"generated\" must be a string"; return r; }
+        out.generated = detail::str(m);
     }
 
-    m = root.member("targets");
-    if (m) {
-        if (m->type != wxnjson::Json::Arr) { r.error = "index: \"targets\" must be an array"; return r; }
-        for (const wxnjson::Json& t : m->arr) {
-            if (t.type != wxnjson::Json::Str) { r.error = "index: \"targets\" must contain only strings"; return r; }
-            out.targets.push_back(t.str);
+    m = wxnyaml::child(root, "targets");
+    if (m.readable()) {
+        if (!wxnyaml::isSeq(m)) { r.error = "index: \"targets\" must be an array"; return r; }
+        for (wxnyaml::Node t : m.children()) {
+            if (!detail::isStr(t)) { r.error = "index: \"targets\" must contain only strings"; return r; }
+            out.targets.push_back(detail::str(t));
         }
     }
 
@@ -255,35 +261,36 @@ inline ParseResult parseTargetList(const std::string& jsonText, std::vector<Entr
     ParseResult r;
     out.clear();
 
-    wxnjson::Json root;
-    if (!wxnjson::JsonParser(jsonText).parse(root)) { r.error = "target list: not valid JSON";        return r; }
-    if (root.type != wxnjson::Json::Obj)            { r.error = "target list: root is not an object"; return r; }
+    wxnyaml::Doc doc;
+    if (!wxnyaml::parseJson(jsonText, doc, "target list")) { r.error = "target list: not valid JSON";        return r; }
+    const wxnyaml::Node root = doc.root();
+    if (!wxnyaml::isMap(root))                              { r.error = "target list: root is not an object"; return r; }
 
-    const wxnjson::Json* schema = root.member("schema");
-    if (!schema || schema->type != wxnjson::Json::Num || static_cast<int>(schema->num) != 1) {
+    double schema = 0;
+    if (!detail::num(wxnyaml::child(root, "schema"), schema) || schema != 1) {
         r.error = "target list: missing or unsupported \"schema\"";
         return r;
     }
 
-    const wxnjson::Json* entries = root.member("entries");
-    if (!entries || entries->type != wxnjson::Json::Arr) {
+    const wxnyaml::Node entries = wxnyaml::child(root, "entries");
+    if (!wxnyaml::isSeq(entries)) {
         r.error = "target list: missing \"entries\" array";
         return r;
     }
 
     std::vector<Entry> parsed;
-    parsed.reserve(entries->arr.size());
+    parsed.reserve(entries.num_children());
 
-    for (size_t i = 0; i < entries->arr.size(); ++i) {
-        const wxnjson::Json& je = entries->arr[i];
-
+    size_t i = 0;
+    for (wxnyaml::Node je : entries.children()) {
+        ++i;
         // Every error below names the entry: by id when one is present (the useful case for the
         // catalog maintainer), by 1-based position when the id itself is missing or unusable.
-        std::string label = "#" + std::to_string(i + 1);
+        std::string label = "#" + std::to_string(i);
         {
-            const wxnjson::Json* jid = je.member("id");
-            if (jid && jid->type == wxnjson::Json::Str && !jid->str.empty())
-                label = "'" + jid->str + "'";
+            const wxnyaml::Node jid = wxnyaml::child(je, "id");
+            if (detail::isStr(jid) && !detail::str(jid).empty())
+                label = "'" + detail::str(jid) + "'";
         }
         auto bad = [&](const std::string& what) {
             ParseResult f;
@@ -291,27 +298,28 @@ inline ParseResult parseTargetList(const std::string& jsonText, std::vector<Entr
             return f;
         };
 
-        if (je.type != wxnjson::Json::Obj) return bad("not an object");
+        if (!wxnyaml::isMap(je)) return bad("not an object");
 
         Entry e;
         std::string ferr;
         bool present = false;
 
         // id / version / kind - required identity fields
-        const wxnjson::Json* m = je.member("id");
-        if (!m || m->type != wxnjson::Json::Str) return bad("missing \"id\"");
-        e.id = m->str;
+        wxnyaml::Node m = wxnyaml::child(je, "id");
+        if (!detail::isStr(m)) return bad("missing \"id\"");
+        e.id = detail::str(m);
         if (!detail::validId(e.id)) return bad("\"id\" must be 1..128 chars of [a-z0-9.-]");
 
-        m = je.member("version");
-        if (!m || m->type != wxnjson::Json::Str) return bad("missing \"version\"");
-        e.version = m->str;
+        m = wxnyaml::child(je, "version");
+        if (!detail::isStr(m)) return bad("missing \"version\"");
+        e.version = detail::str(m);
         if (e.version.empty() || e.version.size() > 32) return bad("\"version\" must be 1..32 chars");
 
-        m = je.member("kind");
-        if (!m || m->type != wxnjson::Json::Str) return bad("missing \"kind\"");
-        if      (m->str == "nib")        e.kind = Kind::Nib;
-        else if (m->str == "npp-bridge") e.kind = Kind::NppBridge;
+        m = wxnyaml::child(je, "kind");
+        if (!detail::isStr(m)) return bad("missing \"kind\"");
+        const std::string kind = detail::str(m);
+        if      (kind == "nib")        e.kind = Kind::Nib;
+        else if (kind == "npp-bridge") e.kind = Kind::NppBridge;
         else return bad("\"kind\" must be \"nib\" or \"npp-bridge\"");
 
         // display-only metadata - optional, but if present it must at least be the right type
@@ -339,24 +347,24 @@ inline ParseResult parseTargetList(const std::string& jsonText, std::vector<Entr
         // install block - the part that touches the network and the filesystem, so every field is
         // required and every field is validated (see the validators' comments for the threat each
         // one closes).
-        const wxnjson::Json* ji = je.member("install");
-        if (!ji || ji->type != wxnjson::Json::Obj) return bad("missing \"install\" object");
+        const wxnyaml::Node ji = wxnyaml::child(je, "install");
+        if (!wxnyaml::isMap(ji)) return bad("missing \"install\" object");
 
-        if (!detail::takeStr(*ji, "folder-name", e.install.folderName, present, ferr)) return bad(ferr);
+        if (!detail::takeStr(ji, "folder-name", e.install.folderName, present, ferr)) return bad(ferr);
         if (!present) return bad("missing \"install.folder-name\"");
-        if (!detail::takeStr(*ji, "binary", e.install.binary, present, ferr)) return bad(ferr);
+        if (!detail::takeStr(ji, "binary", e.install.binary, present, ferr)) return bad(ferr);
         if (!present) return bad("missing \"install.binary\"");
-        if (!detail::takeStr(*ji, "package", e.install.packageUrl, present, ferr)) return bad(ferr);
+        if (!detail::takeStr(ji, "package", e.install.packageUrl, present, ferr)) return bad(ferr);
         if (!present) return bad("missing \"install.package\"");
-        if (!detail::takeStr(*ji, "sha256", e.install.sha256, present, ferr)) return bad(ferr);
+        if (!detail::takeStr(ji, "sha256", e.install.sha256, present, ferr)) return bad(ferr);
         if (!present) return bad("missing \"install.sha256\"");
 
-        m = ji->member("size");
-        if (!m || m->type != wxnjson::Json::Num) return bad("missing numeric \"install.size\"");
-        if (m->num < 1 || m->num > static_cast<double>(kMaxPackageSize))
+        double size = 0;
+        if (!detail::num(wxnyaml::child(ji, "size"), size)) return bad("missing numeric \"install.size\"");
+        if (size < 1 || size > static_cast<double>(kMaxPackageSize))
             return bad("\"install.size\" out of range (1..209715200)");
-        e.install.size = static_cast<unsigned long long>(m->num);
-        if (static_cast<double>(e.install.size) != m->num)
+        e.install.size = static_cast<unsigned long long>(size);
+        if (static_cast<double>(e.install.size) != size)
             return bad("\"install.size\" must be an integer");
 
         if (!detail::validPathComponent(e.install.folderName))

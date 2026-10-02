@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-#define NIB_ABI_VERSION 0x00010007u   // (major << 16) | minor  ->  1.7 (additive: NibPluginApi name/version, for the Plugins Admin Installed list)
+#define NIB_ABI_VERSION 0x00010008u   // (major << 16) | minor  ->  1.8 (additive: nib.settings/1 - read and change settings by ID)
 
 #if defined(_WIN32)
   #define NIB_API __declspec(dllexport)
@@ -334,7 +334,7 @@ typedef struct NibLangDefApi {
 // ---- nib.keymap/1 : contribute keyboard bindings and named schemes -------------------------------
 // Lets a plugin push keybinding overrides into the host's keymap store as a named, switchable SCHEME
 // (a bundled default plus user/plugin schemes, each storing only deltas against a parent scheme). This
-// is how the optional GPL npp-shortcuts-compat plugin re-adds Notepad++ shortcuts after parsing a
+// is how the optional GPL npp-compat plugin re-adds Notepad++ shortcuts after parsing a
 // shortcuts.xml: it translates each entry into a portable accelerator string and registers them here as
 // a "Notepad++ (imported)" scheme. Nothing here is Notepad++-shaped - it is a generic "here is a key and
 // what it should do" surface. Three binding namespaces mirror the host's three keymap tiers:
@@ -581,12 +581,13 @@ typedef struct NibAllocApi {
 } NibAllocApi;
 
 // ---- nib.session/1 : save / load / enumerate session files -----------------------------------------
-// A session is a set of open documents persisted as an XML file. This surface saves the host's open
-// documents (or an explicit file list) to a session file, opens a session file's documents, and reads a
-// session file's contents back - all BY PATH, so a plugin (or the GPL npp-bridge serving the Notepad++
-// *SESSION* messages) drives it with no host dialog. The written XML is the host's session format: plain
-// UTF-8 XML with a portable <Session>/<mainView>/<subView><File filename=...> shape that other tools
-// that read that layout can parse.
+// A session is a set of open documents persisted as a file. This surface saves the host's open documents
+// (or an explicit file list) to a session file, opens a session file's documents, and reads a session
+// file's contents back - all BY PATH, so a plugin drives it with no host dialog. The file is the host's
+// own session format: YAML, with main:/sub: views listing files: entries (docs/SETTINGS_DESIGN.md). A
+// plugin that must speak another editor's format - the GPL npp-bridge answering Notepad++ plugins'
+// *SESSION* messages - translates between that format and this one, saving and loading through scratch
+// files here, so the active file's position and bookmarks and each view's active tab come across.
 #define NIB_IFACE_SESSION "nib.session/1"
 typedef struct NibSessionApi {
     uint32_t version;
@@ -602,7 +603,7 @@ typedef struct NibSessionApi {
     // read or is not a session file.
     int (*load)(NibHost*, const char* utf8_path);
     // Number of files listed in the session file at utf8_path (across all its views), or 0 if it cannot
-    // be parsed. When out_valid is non-NULL it receives 1 if the file is a well-formed session XML, else 0.
+    // be parsed. When out_valid is non-NULL it receives 1 if the file is a well-formed session, else 0.
     int (*file_count)(NibHost*, const char* utf8_path, int* out_valid);
     // Copy the UTF-8 path of the session's file at flat `index` (0-based, in document order across the
     // views) into buf (NUL-terminated if it fits); returns the byte length excluding the NUL, or 0 if
@@ -627,6 +628,25 @@ typedef struct NibLexerApi {
     // The number of plugin/user-registered custom languages (Scintillua lexers added via nib.langdef).
     int (*user_lang_count)(NibHost*);
 } NibLexerApi;
+
+// ---- nib.settings/1 : read and change the host's settings by ID ------------------------------------
+// The IDs are settings.yaml's ("editor.tabSize", "ui.themeMode", ...; docs/SETTINGS_DESIGN.md lists them)
+// and a value is passed as settings.yaml spells it: "4", "true", "dark", "'#RRGGBB'" without the quotes.
+// The host checks every value against its own table - type, range, allowed names - and refuses
+// anything else, so a plugin cannot put a value in the file that the host would not have written itself.
+// An accepted change is written to settings.yaml at once, keeping the user's comments and layout, and
+// takes effect at the next start. Map-valued settings (files.associations) are not reachable here.
+#define NIB_IFACE_SETTINGS "nib.settings/1"
+typedef struct NibSettingsApi {
+    uint32_t version;
+    uint32_t struct_size;
+    // Set `id` to `value`. Returns 1 when stored, 0 for an unknown ID, a value the setting does not accept,
+    // or a settings.yaml the host cannot write (one that does not parse is never written over).
+    int (*set)(NibHost*, const char* id, const char* value);
+    // Copy the current value of `id` (its default when unset) into buf, NUL-terminated if it fits; returns
+    // the byte length excluding the NUL, or -1 for an unknown ID.
+    int (*get)(NibHost*, const char* id, char* buf, int cap);
+} NibSettingsApi;
 
 // ---- the plugin's lifecycle vtable ---------------------------------------------------------------
 typedef struct NibPluginApi {

@@ -17,6 +17,7 @@ flowchart TB
         native("<b>native Nib plugins</b><br/>&lt;exe&gt;/nib/*.dll · *.so · *.dylib · speak the Nib API directly<br/><i>author's own licence</i>")
         bridge("<b>npp-bridge</b><br/>hosts Notepad++ plugins — real DLLs on Windows,<br/>recompiled against <code>libnpp_shim</code> on Linux/macOS ·<br/>translates NPPM_* ⇄ Nib<br/><i>all platforms · GPL-3.0-or-later</i>")
         udl("<b>udl-compat</b><br/>translates legacy userDefineLang.xml<br/>into Scintillua lexers<br/><i>all platforms · GPL-3.0-or-later</i>")
+        npc("<b>npp-compat</b><br/>translates a Notepad++ setup — settings, shortcuts,<br/>themes, sessions, workspaces — into wxNote's YAML<br/><i>all platforms · GPL-3.0-or-later</i>")
     end
 
     core -->|"loads · dlopen"| nibplugins
@@ -29,17 +30,21 @@ flowchart TB
     class native cNative;
     class bridge cBridge;
     class udl cUdl;
+    class npc cUdl;
     style nibplugins fill:#141726,stroke:#4dabf7,stroke-width:2px,color:#dbe4ff;
     linkStyle 0 stroke:#4dabf7,stroke-width:2px;
 ```
 
-One portable core and one portable plugin API on every OS. The two
+One portable core and one portable plugin API on every OS. The three
 Notepad++-compat modules are **themselves just Nib plugins**, loaded like any
 other: **`npp-bridge`** hosts Notepad++ plugins — real compiled DLLs on Windows,
 plugins recompiled against `libnpp_shim` on Linux/macOS — and translates
 `NPPM_*` ⇄ Nib; **`udl-compat`** translates legacy `userDefineLang.xml` into the
-core's Scintillua engine (see *Custom languages* below). Both are optional and
-GPL-3.0-or-later, so the Apache-2.0 core never depends on either.
+core's Scintillua engine (see *Custom languages* below); **`npp-compat`**
+translates a user's Notepad++ settings, shortcuts, themes, context menu,
+sessions and workspaces into wxNote's own YAML files (see *Persistence*). All
+three are optional and GPL-3.0-or-later, so the Apache-2.0 core never depends
+on any of them.
 
 ## How wxNote differs from Notepad++
 
@@ -68,7 +73,7 @@ Architecturally, the two programs diverge on nearly every axis:
 | Plugin ABI | Win32 DLLs speaking `NPPM_*` window messages over real `HWND`s | **Nib** — an original, portable C ABI; N++ plugins via an optional GPL bridge (real DLLs on Windows, recompiled against a shim on Linux/macOS) |
 | Custom languages | UDL: flat keyword lists + delimiter pairs | **Scintillua** (Lua LPeg grammars) as the native engine; UDL demoted to an optional GPL compat plugin |
 | Licence | GPL v3 | Apache-2.0 core; GPL confined to the optional interop modules |
-| Build / config | MSBuild + Visual Studio solution; `config.xml` | CMake + Ninja; `wxConfig` (registry / dotfile) |
+| Build / config | MSBuild + Visual Studio solution; `config.xml` | CMake + Ninja; YAML files holding only what the user changed — defaults live in code (see [`SETTINGS_DESIGN.md`](SETTINGS_DESIGN.md)) |
 
 The rest of this section is the deep dive behind that table.
 
@@ -152,19 +157,21 @@ from research across five editors — not Notepad++'s 13-menu layout. The numeri
 Notepad++, and only because a bridged N++ plugin's `NPPM_MENUCOMMAND` carries
 one of those numbers; the id *names*, table formatting, top-level grouping, and
 the *within-menu* item ordering (an original frequency/affinity scheme) are all
-wxNote's own (see "Command dispatch" and "The menu system"). The same
-principle governs data files: wxNote *reads* Notepad++'s theme, session, and
-workspace formats so real N++ files load unmodified, but *writes* its own
-`<wxNote>` root element — compatibility inbound, its own identity outbound.
-(Legacy `userDefineLang.xml` files are the one exception the core no longer
-parses at all: that format now lives solely in the optional GPL
-`packages/udl-compat/` plugin, which translates them to Scintillua lexers.)
+wxNote's own (see "Command dispatch" and "The menu system"). Data files go
+further: the core reads and writes only its own YAML files — settings, key
+bindings, themes, sessions, workspaces — laid out after VS Code, Sublime Text,
+JetBrains and the other editors studied in
+[`SETTINGS_DESIGN.md`](SETTINGS_DESIGN.md), not after Notepad++'s XML. A user's
+Notepad++ files come across only through the optional GPL plugins that
+translate them: `packages/npp-compat/` (`config.xml`, `shortcuts.xml`, themes,
+`contextMenu.xml`, sessions, workspaces) and `packages/udl-compat/`
+(`userDefineLang.xml`, into Scintillua lexers).
 
 ### Licensing and provenance
 
 Notepad++ is GPL v3. wxNote's **core is Apache-2.0**; the *only* GPL parts are
-the optional interop modules — `packages/npp-bridge/` and
-`packages/udl-compat/` — precisely because those are the pieces that
+the optional interop modules — `packages/npp-bridge/`, `packages/udl-compat/`
+and `packages/npp-compat/` — precisely because those are the pieces that
 deliberately reproduce a Notepad++ ABI or file format. The project was itself
 GPL v3 through v0.6.2 and relicensed only after every Notepad++-derived file
 had been replaced or clean-room reimplemented and the ABI reproduction isolated
@@ -181,22 +188,24 @@ in [`LICENSING.md`](../LICENSING.md).
 | `src/terminal_panel.h` | The integrated multi-tab terminal panel and the per-platform shell/terminal-app detection. |
 | `src/gtk_native.cpp`, `src/macos_native.mm` | Small per-platform native shims for things wxWidgets doesn't expose (GTK scrollbar theming; macOS title-bar/traffic-light work). Compiled only on their platform, gated in CMake. |
 | `src/app_icon_svg.h` | The app icon as an embedded SVG string, rendered at runtime via `wxBitmapBundle::FromSVG`. |
+| `src/yaml_io.h`, `src/settings_store.h`, `src/settings_schema.h`, `src/theme_file.h`, `src/keymap_store.h` | wxNote's own files: the one wrapper around rapidyaml, the `settings.yaml` / `state.yaml` stores, the table of every setting with its default, the theme model, and the key-binding store (see [`SETTINGS_DESIGN.md`](SETTINGS_DESIGN.md)). |
 | `src/command_ids.h` | The core's own, authoritative command-id table. Values are frozen (static_asserts) so they stay identical to the plugin ABI's ids and npp-bridge's command passthrough dispatches correctly. |
 | `include/nib/nib.h` | The Nib plugin API — an original, stable C ABI (below). |
-| `include/npp-compat/` | Clean-room redeclarations of the Notepad++ plugin-ABI facts (ids, struct layouts). Consumed only by `packages/npp-bridge/` and `packages/test_plugin/` — the core includes nothing from here. |
+| `include/npp-compat/` | Clean-room redeclarations of the Notepad++ plugin-ABI facts (ids, struct layouts). Consumed only by `packages/npp-bridge/`, `packages/npp-compat/` (Notepad++'s language numbers) and `packages/test_plugin/` — the core includes nothing from here. |
 | `packages/npp-bridge/` | The optional GPL Notepad++ binary-plugin bridge (itself a Nib plugin; builds on every OS — loads real plugin DLLs on Windows, shim-recompiled `.so`/`.dylib` plugins on Linux/macOS). |
 | `packages/udl-compat/` | The optional GPL Notepad++ UDL compatibility plugin: reads legacy `userDefineLang.xml`, translates each into a Scintillua Lua lexer, and registers it via `nib.langdef`. Ships `bin/nib/udl_compat.dll`, a standalone `udl2scintillua` converter CLI, and unit + roundtrip tests. Scoped to move to its own repository. |
+| `packages/npp-compat/` | The optional GPL Notepad++ settings importer: translates `config.xml`, `shortcuts.xml`, themes, `contextMenu.xml`, sessions and Project-panel workspaces into wxNote's YAML through `nib.settings`, `nib.keymap` and wxNote's own file formats. Ships `bin/nib/npp_compat.dll`, the `npp2wxnote` converter CLI (and the maintainer's `npp2accel`), and a self-test. Its session writer is also what npp-bridge answers Notepad++ plugins' session messages with. |
 | `packages/test_plugin/` | A minimal real-ABI Notepad++ plugin used as the bridge's regression fixture (Windows-only, GPL). |
 | `src/plugins/nib_test_plugin/` | A cross-platform reference/smoke-test Nib plugin (Apache-2.0). |
 | `third_party/` | Vendored: Lexilla (lexers, HPND), Scintilla headers (HPND), wxBorderlessFrame (wxWindows Licence). |
-| `resources/` | Icons (3 sets), themes, default styler, fonts, locale catalogs, app icon, `app.rc`. |
+| `resources/` | Icons (4 sets), themes (`themes/Default.yaml` is the light default), the default right-click menu (`contextmenu.yaml`), fonts, locale catalogs, app icon, `app.rc`. |
 | `installer/`, `.github/workflows/` | Per-platform packaging (NSIS / AppImage+deb+rpm+flatpak / dmg) and the CI/release pipelines. |
 | `site/` | The project website (GitHub Pages). |
 
 ## Application core
 
-`WxnApp : wxApp` owns startup: the one-time settings migration from the legacy config key into
-`"wxNote"`, command-line parsing (`-g/--goto`, `-e/--encoding`,
+`WxnApp : wxApp` owns startup: opening `settings.yaml` and `state.yaml` (a settings file that
+does not parse is reported and left untouched, and wxNote runs on the defaults), command-line parsing (`-g/--goto`, `-e/--encoding`,
 `-n/--new-instance`, `-r/--reuse-instance`, files), the single-instance
 handoff, font/locale setup, and frame construction.
 
@@ -240,8 +249,8 @@ Everything dockable is a `wxAuiManager` pane around the central splitter:
 Document Map (a second Scintilla sharing the active document), Function List
 (regex-derived symbol tree for C/C++, Python, JS/TS, Java, C#, Go, Rust,
 Lua), Document List, Clipboard History, Character Panel, Project Panel
-(N++-compatible workspace XML — writes a `<wxNote>` root, reads either
-`<wxNote>` or N++'s own `<NotepadPlus>` root), Folder as Workspace, the
+(workspaces saved as `.yaml`; a Notepad++ workspace comes in through
+`packages/npp-compat/`), Folder as Workspace, the
 incremental-search bar, Find-in-Files results, the integrated Terminal
 (lazy-created, multi-tab, per-platform shell detection), and — in integrated
 mode — the title bar and toolbar rows themselves. Nib plugins can register
@@ -280,27 +289,44 @@ command-id values and the shared command labels coincide.
 
 ## Theming
 
-`WxnTheme` parses the `<NotepadPlus>` theme-XML *format* — Notepad++'s own
-schema, kept so real N++ theme files load unmodified. Of the 27 themes
-shipped, 14 are wxNote's own regenerated data (Apache-2.0, including both
-defaults) and 13 are kept third-party themes under their original authors'
-licenses (see [`docs/CREDITS.md`](CREDITS.md)). Light default is
-`stylers.model.xml`; dark default is `themes/DarkModeDefault.xml`. App-wide dark/light follows the OS by default (System /
+A theme is a `themes/<name>.yaml` file (the model is `src/theme_file.h`): a
+`global:` block of named UI styles and a `lexers:` block holding each
+language's style list, colours written `'#RRGGBB'`, anything left out
+inherited. Of the 28 themes shipped, 15 are wxNote's own regenerated data
+(Apache-2.0, including both defaults) and 13 are kept third-party themes under
+their original authors' licenses (see [`docs/CREDITS.md`](CREDITS.md)). Light
+default is `themes/Default.yaml`; dark default is `themes/DarkModeDefault.yaml`.
+Themes the user adds or imports live in `<user-data-dir>/themes/`, which wins
+over a shipped theme of the same name; a Notepad++ theme comes in through
+`packages/npp-compat/`. App-wide dark/light follows the OS by default (System /
 Dark / Light, restart-to-apply, relaunching through a session save). The
-Style Configurator edits the active theme XML in place.
+Style Configurator writes its edits back to the active theme's file.
 
 ## Persistence
 
-- **Settings** — `wxConfig` under app name `"wxNote"` (registry on Windows,
-  dotfile elsewhere).
-- **Session** — reopened automatically from config on launch; File > Save/
-  Load Session additionally reads/writes Notepad++-style `<Session>` XML
-  (caret, scroll, bookmarks included) — wxNote writes a `<wxNote>` root and
-  reads either `<wxNote>` or N++'s own `<NotepadPlus>` root.
+Everything is a YAML file in the per-user data directory, read and written
+through `src/yaml_io.h`; [`SETTINGS_DESIGN.md`](SETTINGS_DESIGN.md) has the
+full design and the editors it follows.
+
+- **Settings** — `settings.yaml` holds only what the user changed, as flat
+  dotted ids (`editor.tabSize: 2`) plus a per-language `languages:` block;
+  every default lives in code (`src/settings_schema.h`). wxNote edits the file
+  a line at a time, so the user's comments and order survive, and never writes
+  over a file that does not parse.
+- **State** — what wxNote merely remembers (window, zoom, recent files, the
+  last session, the recovery index, plugin state) goes to `state.yaml`,
+  rewritten whole; a save merges only the parts this instance changed into
+  what is on disk, so two instances do not undo each other.
+- **Key bindings, snippets, macros, Run commands, the right-click menu,
+  Function List rules** — `keybindings.yaml`, `snippets.yaml`, `macros.yaml`,
+  `runcommands.yaml`, `contextmenu.yaml`, `functionlist.yaml`.
+- **Session** — reopened automatically from `state.yaml` on launch; File >
+  Save/Load Session reads/writes a session `.yaml` (caret, scroll, bookmarks
+  included). A Notepad++ session comes in through `packages/npp-compat/`.
 - **Recovery** — unsaved changes discarded at exit are backed up to
   `<user-data-dir>/RecoveryBackups/` and offered back on next launch.
-- **User data vs. install dir** — everything the app *writes* (recovery,
-  UDLs, edited `contextMenu.xml`) goes to `wxStandardPaths::GetUserDataDir()`;
+- **User data vs. install dir** — everything the app *writes* (the files
+  above, recovery, UDLs, user themes) goes to `wxStandardPaths::GetUserDataDir()`;
   the install dir (Program Files, `/opt/wxnote`, the `.app` bundle) is
   treated as read-only and holds only shipped resources.
 

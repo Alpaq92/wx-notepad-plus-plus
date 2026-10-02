@@ -168,9 +168,41 @@ settings intact.
 
 ## Where settings are stored
 
-Settings go through `wxConfig` under the application name **wxNote** — the registry on Windows, a
-config file under the user's config directory elsewhere. User-writable data (recovery backups,
-user-defined languages, `contextMenu.xml`, `shortcuts.json`) lives in the per-user data directory,
-**not** next to the executable, so installed builds work without write access to their install
-directory. Keyboard-shortcut overrides are the one exception to the `wxConfig` rule — they persist in
-`shortcuts.json`; see [Customizing Shortcuts](custom-shortcuts.md).
+Every preference on these pages lives in **`settings.yaml`**, a plain-text file in the per-user data
+directory (`%APPDATA%\wxNote` on Windows, `~/.wxNote` on Linux, `~/Library/Application Support/wxNote`
+on macOS) — **not** next to the executable, so installed builds work without write access to their
+install directory. Nothing goes to the registry.
+
+The file holds only what you changed; the defaults are built into wxNote, so an empty or missing file
+means "all defaults", and setting something back to its default removes its line. Each setting is one
+line with a dotted name, the style VS&nbsp;Code uses:
+
+```yaml
+# My wxNote settings. Only what differs from the defaults is here.
+editor.fontFamily: JetBrains Mono
+editor.tabSize: 2        # the projects I work on
+editor.useTabs: false
+ui.themeMode: dark
+languages:
+  Python:
+    editor.tabSize: 4
+  Makefile:
+    editor.useTabs: true
+```
+
+- The file is **yours to edit** by hand. When you change a preference in the dialog, wxNote changes
+  only that setting's line, so your comments and your order stay as you left them. Hand edits take
+  effect the next time wxNote starts; a preference changed in the dialog meanwhile is written into the
+  file as it is on disk, so neither change is lost.
+- **`languages:`** gives a language its own values, by its Language-menu name (`Python`, `C++`,
+  `Shell`); today the tab size and tabs-or-spaces pair can be set per language, and a per-language
+  value beats the general one.
+- A value of the wrong type falls back to the default for that one setting. A file that does not
+  parse at all is not used — wxNote runs on the defaults, the status bar says where the file broke,
+  and nothing is written to it until you fix it, so a typo can never cost you the rest of the file.
+
+What wxNote merely remembers — window size and position, zoom, recent files, the last session — goes
+to a separate `state.yaml`, so a moved window never rewrites your settings. Keyboard shortcuts have
+their own `keybindings.yaml`; see [Customizing Shortcuts](custom-shortcuts.md). The same directory
+holds recovery backups, user-defined languages, `contextmenu.yaml`, `snippets.yaml` and your own themes. Your Notepad++ settings can be brought across with the optional `npp-compat` plugin
+(**Extensions&nbsp;&rsaquo; Import from Notepad++…**).

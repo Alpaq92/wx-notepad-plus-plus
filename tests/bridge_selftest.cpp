@@ -24,9 +24,9 @@
 //   (e) NPPM_ISDARKMODEENABLED == the host's real dark state.
 //
 // Everything user-visible is sandboxed: a custom wxAppTraits redirects GetUserDataDir() into a
-// scratch dir and a wxFileConfig replaces the registry config BEFORE WxnApp::OnInit runs, so the
+// scratch dir, where settings.yaml and state.yaml are seeded BEFORE WxnApp::OnInit opens them, so the
 // test can never read or clobber the real installation's session/recovery/preferences (nor hand off
-// to a running wxnote via the reuse-instance IPC, which is config-gated off in the sandbox).
+// to a running wxnote via the reuse-instance IPC, which is off in the sandbox's settings).
 //
 //   cmake --build build --target bridge_selftest && build/bin/bridge_selftest
 
@@ -34,7 +34,6 @@
 #include <wx/init.h>
 #include <wx/apptrait.h>
 #include <wx/stdpaths.h>
-#include <wx/fileconf.h>
 #include <wx/modalhook.h>   // headlessly auto-answer the confirmClose save prompt (Phase-4 shutdown-veto test)
 
 // Pull the whole application into this TU with its app-entry macro neutralized: every wx header
@@ -502,12 +501,12 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
     }
     {
         // The user file is re-read when it changes, and overrides a built-in of the same name.
-        const wxString sp = f->userDataDir() + wxFILE_SEP_PATH + "snippets.txt";
+        const wxString sp = f->userDataDir() + wxFILE_SEP_PATH + "snippets.yaml";
         const bool had = wxFileExists(sp);
         wxString saved;
         if (had) { wxFile r(sp); r.ReadAll(&saved); }
 
-        { wxFile w(sp, wxFile::write); w.Write("[*:todo]\nUSERTODO $0\n"); }
+        { wxFile w(sp, wxFile::write); w.Write("'*':\n  todo: |-\n    USERTODO $0\n"); }
         load("");
         f->sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>("todo"));
         f->snippetExpandTrigger();
@@ -664,7 +663,7 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
 
             f->saveUserExt();
             f->m_userExt.clear();
-            f->loadUserExt(wxConfigBase::Get());
+            f->loadUserExt();
             check(f->m_userExt.size() == 2 && f->m_userExt["sh"] == "Python" && f->m_userExt["inc"] == "PHP",
                   "user ext: the mapping round-trips through the settings");
 
@@ -673,6 +672,25 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
             retype("defs.inc");
             check(p->sciLang.empty() && p->autoLang == "PHP", "user ext: beats a plugin language's own extension list");
             f->m_sciLangs.pop_back();
+
+            // Per-language tab settings (settings.yaml languages:) follow the page's language: written to
+            // the file as a user would, picked up on the next settings edit, applied on the next re-type.
+            {
+                const wxString sp = g_sandboxUserData + wxFILE_SEP_PATH + "settings.yaml";
+                const wxString before = readWholeFile(sp);
+                const std::string withLanguages = std::string(before.utf8_str()) + "languages:\n  Python:\n    editor.tabSize: 7\n    editor.useTabs: false\n";
+                writeWholeFile(sp, withLanguages.c_str());
+                wxnRefreshSettings();
+                f->m_userExt.clear();
+                retype("tool.py");
+                check(p->autoLang == "Python" && f->sci(SCI_GETTABWIDTH) == 7 && f->sci(SCI_GETUSETABS) == 0,
+                      "per-language: a Python file gets languages: Python: editor.tabSize/useTabs");
+                retype("notes.txt");
+                check(f->sci(SCI_GETTABWIDTH) == f->m_tabWidth && (f->sci(SCI_GETUSETABS) != 0) == f->m_useTabs,
+                      "per-language: any other file keeps the general tab settings");
+                writeWholeFile(sp, std::string(before.utf8_str()).c_str());
+                wxnRefreshSettings();
+            }
 
             // The Function List takes a Language-menu pick as the answer, as Toggle Comment does - and a
             // plugin-language pick, which leaves forcedName at the previous pick, gets no list at all.
@@ -992,18 +1010,16 @@ class BridgeSelfTestApp : public WxnApp
 public:
     bool OnInit() override
     {
-        // Sandbox the config BEFORE the base OnInit's first wxConfigBase::Get() touch (readUiLang):
-        // with an explicit object Set(), wx never auto-creates the registry/user config, so
-        // ReuseInstance/IntegratedBar/theme/session state all resolve from this scratch file - and
-        // the reuse-instance IPC handoff to a genuinely running wxnote can never trigger.
+        // Seed the sandbox's settings.yaml and state.yaml BEFORE the base OnInit opens them: SandboxTraits
+        // (below) points GetUserDataDir() at this scratch dir, so reuse-instance, the integrated bar, the
+        // theme and the session all resolve from these files - and the reuse-instance IPC handoff to a
+        // genuinely running wxnote can never trigger.
         wxFileName::Mkdir(g_sandboxUserData, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-        wxConfigBase::Set(new wxFileConfig("wxNoteBridgeSelftest", wxEmptyString,
-                                           g_sandboxUserData + wxFILE_SEP_PATH + "selftest.ini",
-                                           wxEmptyString, wxCONFIG_USE_LOCAL_FILE));
         // Arm "Ask before closing unsaved changes" so the Phase-4 shutdown-VETO path (confirmClose ->
         // Cancel) can be driven headlessly; the CloseDialogHook auto-answers the resulting prompt (Don't
         // Save by default), so no close in Phases 1-3 hangs. Written before OnInit reads it (loadSettings).
-        wxConfigBase::Get()->Write("AskBeforeClose", true);
+        writeWholeFile(g_sandboxUserData + wxFILE_SEP_PATH + "settings.yaml",
+                       "# bridge_selftest\nfiles.confirmCloseUnsaved: true\n");
         // Phase 6: seed one dirty-recovery backup BEFORE WxnApp::OnInit() runs restoreSession() ->
         // restoreRecoveryBackups() (main.cpp), so the SNAPSHOTDIRTYFILELOADED assertion in runAll()
         // observes a REAL startup recovery restore - same manifest-entry + ".bak" file shape
@@ -1015,9 +1031,9 @@ public:
             wxFile bak(recDir + wxFILE_SEP_PATH + "seed1.bak", wxFile::write);
             if (bak.IsOpened())
             { const char content[] = "phase-6 seeded dirty recovery content\n"; bak.Write(content, sizeof(content) - 1); }
-            wxConfigBase::Get()->Write("Recovery/seed1/Title", wxString("P6 Recovered"));
+            writeWholeFile(g_sandboxUserData + wxFILE_SEP_PATH + "state.yaml",
+                           "recovery:\n  entries:\n    seed1:\n      title: P6 Recovered\n");
         }
-        wxConfigBase::Get()->Flush();
         m_closeHook.Register();
         if (!WxnApp::OnInit()) return false;   // the REAL boot: frame + nib surface + loadNibPlugins()
         CallAfter([this] { runAll(); });       // run once the loop is live (CallAfter/event paths behave as in the app)
@@ -1288,7 +1304,7 @@ private:
 
             // ---- the search + snippet WIRING, driven through the real frame ---------------------------
             // dynamic_cast, not static_cast: the app builds WxnShellFrame or WxnIntegratedFrame depending
-            // on the IntegratedBar preference, and only the former is nameable here. A null result means
+            // on window.integratedTitleBar, and only the former is nameable here. A null result means
             // this run used the borderless chrome, which is a skip rather than a failure.
             if (auto* fr = dynamic_cast<WxnShellFrame*>(wxTheApp->GetTopWindow()))
                 wxnDriveEditorSelfTests(fr);
@@ -1375,7 +1391,7 @@ private:
 
         // ---- close the boot-time recovery-restored tab before it can interfere with later doc-count
         // assumptions ---------------------------------------------------------------------------------
-        // main() seeded a Recovery/seed1 entry BEFORE wxEntry() (see BridgeSelfTestApp::OnInit), so
+        // OnInit seeded a recovery/entries/seed1 entry in state.yaml before WxnApp::OnInit ran, so
         // WxnApp::OnInit()'s restoreSession() -> restoreRecoveryBackups() already restored it as the
         // sole open document (replacing the startup "new 1") before runAll() ever ran. It's dirty and
         // untitled by design - that's exactly what NPPN_SNAPSHOTDIRTYFILELOADED (asserted purely from
@@ -1854,31 +1870,24 @@ private:
             check(g_nibSessSaveCurrent && g_nibSessSaveCurrent(sessPathU.c_str()) == 1,
                   "nib.session save_current wrote a session of the open files");
             {
-                wxXmlDocument doc;
-                bool okLoad; { wxLogNull nl; okLoad = doc.Load(sessPath) && doc.GetRoot() != nullptr; }
-                check(okLoad, "the written session file is well-formed XML");
+                std::string text;
+                wxnyaml::Doc doc;
+                const bool okLoad = wxnReadFileBytes(sessPath, text) && wxnyaml::parse(text, doc);
+                check(okLoad, "the written session file is well-formed YAML");
                 bool shapeOk = false, sawFileA = false;
-                if (okLoad) {
-                    check(doc.GetRoot()->GetName() == "NotepadPlus",
-                          "session root is <NotepadPlus> (Notepad++-session-parseable, not just round-trippable)");
-                    for (wxXmlNode* s = doc.GetRoot()->GetChildren(); s; s = s->GetNext()) {
-                        if (s->GetName() != "Session") continue;
-                        for (wxXmlNode* v = s->GetChildren(); v; v = v->GetNext()) {
-                            if (v->GetName() != "mainView" && v->GetName() != "subView") continue;
-                            for (wxXmlNode* f = v->GetChildren(); f; f = f->GetNext()) {
-                                if (f->GetName() != "File") continue;
-                                shapeOk = true;
-                                if (f->GetAttribute("filename") == fileA) sawFileA = true;
-                            }
-                        }
-                    }
+                for (const char* view : { "main", "sub" }) {
+                    const wxnyaml::Node files = wxnyaml::child(wxnyaml::child(doc.root(), view), "files");
+                    if (!wxnyaml::isSeq(files)) continue;
+                    shapeOk = true;
+                    for (wxnyaml::Node f : files.children())
+                        if (wxString::FromUTF8(wxnyaml::textOr(wxnyaml::child(f, "path"), std::string()).c_str()) == fileA) sawFileA = true;
                 }
-                check(shapeOk, "session has <Session>/<mainView|subView>/<File> nodes (the N++ schema shape)");
-                check(sawFileA, "a saved <File> carries the open file's path in its filename attribute");
+                check(shapeOk, "session has main:/sub: views with files: lists (wxNote's session shape)");
+                check(sawFileA, "a saved file entry carries the open file's path");
             }
             int valid = 0;
             check(g_nibSessFileCount && g_nibSessFileCount(sessPathU.c_str(), &valid) == 1 && valid == 1,
-                  "nib.session file_count == 1 and reports a valid session XML");
+                  "nib.session file_count == 1 and reports a valid session");
             {
                 char fbuf[2048] = {0};
                 const int fl = g_nibSessFileAt ? g_nibSessFileAt(sessPathU.c_str(), 0, fbuf, (int)sizeof(fbuf)) : 0;
@@ -1937,9 +1946,16 @@ private:
                   "bridge GETSESSIONFILES filled the caller's array with non-empty paths");
             check(p5val(P, "sess.load") == 1, "bridge LOADSESSION opened the session's files");
             {
-                wxXmlDocument doc; bool okLoad; { wxLogNull nl; okLoad = doc.Load(probeSessionPathStr()) && doc.GetRoot() != nullptr; }
-                check(okLoad && doc.GetRoot()->GetName() == "NotepadPlus",
-                      "the bridge-written session file parses as a <NotepadPlus> session (N++-parseable)");
+                // Notepad++ plugins get Notepad++'s own session XML from the bridge, not wxNote's YAML:
+                // the shape they parse, checked as text (the test needs no XML library for it).
+                const wxString xml = readWholeFile(probeSessionPathStr());
+                check(xml.StartsWith("<?xml") && xml.Contains("<NotepadPlus>") && xml.Contains("<Session ")
+                          && xml.Contains("<mainView ") && xml.Contains("<File ") && xml.Contains("filename=\""),
+                      "the bridge-written session file is Notepad++ session XML (<NotepadPlus><Session><mainView><File filename=...>)");
+                // It went through the host's own session file (so positions and bookmarks come along), by
+                // way of a scratch file in the user data folder that must not be left behind.
+                check(!wxFileExists(g_sandboxUserData + wxFILE_SEP_PATH + "npp-session.scratch.yaml"),
+                      "the bridge's scratch session file is cleaned up after save and load");
             }
             // the toggles restored the frame; the host state getters agree with the frame members
             check(g_nibUiChromeGet && g_nibUiChromeGet(0) == 1 && g_nibUiChromeGet(2) == 1,
@@ -1963,8 +1979,8 @@ private:
             check(writeWholeFile(p6a, "rename me\n") && writeWholeFile(p6b, "second\n"),
                   "Phase-6 fixtures created");
 
-            // -- SNAPSHOTDIRTYFILELOADED: main() seeded a Recovery/seed1 manifest entry + .bak file into
-            // the sandbox BEFORE wxEntry(), so WxnApp::OnInit()'s restoreSession() -> restoreRecoveryBackups()
+            // -- SNAPSHOTDIRTYFILELOADED: OnInit seeded a recovery/entries/seed1 entry in state.yaml + .bak
+            // file into the sandbox before WxnApp::OnInit ran, so WxnApp::OnInit()'s restoreSession() -> restoreRecoveryBackups()
             // already restored it (and fired the event) before runAll() ever started - search from index 0,
             // id-agnostic (the fresh recovered page's id was never captured by this harness).
             check(findFrom(readLogLines(), 0, notifNeedlePrefix(NPPN_SNAPSHOTDIRTYFILELOADED)) >= 0,
@@ -2448,6 +2464,68 @@ private:
             check(g_nibDocCount && g_nibDocCount() == 1, "hardening fixtures closed - back to a single document");
         }
 
+        // ---- Phase 8: npp-compat brings Notepad++ files into wxNote's YAML ------------------------
+        // The GPL npp-compat plugin (bin/nib/npp_compat.*) loaded with the others. Drive its "Import the
+        // Open Notepad++ File" command the way a user would - open the file, run the command - and check
+        // what landed: a theme in the user theme folder, settings in settings.yaml through nib.settings/1
+        // (the file's own comment kept), and a session's files opened.
+        {
+            int importFileCmd = -1;
+            for (size_t i = 0; i < g_nibCommands.size(); ++i)
+                if (g_nibCommands[i].id == "npp.import.file") importFileCmd = NIB_CMD_BASE + static_cast<int>(i);
+            check(importFileCmd >= 0, "npp-compat registered \"Import the Open Notepad++ File\"");
+            auto importOpen = [&](const wxString& path, const char* content) {
+                writeWholeFile(path, content);
+                g_nibDocOpen(std::string(path.utf8_str()).c_str()); pump();
+                g_nibInvokeCommand(importFileCmd); pump();
+            };
+            if (importFileCmd >= 0)
+            {
+                importOpen(work + wxFILE_SEP_PATH + "P8 Theme.xml",
+                    "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!-- P8 credits -->\n"
+                    "<NotepadPlus><LexerStyles><LexerType name=\"cpp\" desc=\"C++\" ext=\"\">"
+                    "<WordsStyle name=\"DEFAULT\" styleID=\"11\" fgColor=\"112233\" bgColor=\"FFFFFF\" fontStyle=\"2\" />"
+                    "</LexerType></LexerStyles><GlobalStyles>"
+                    "<WidgetStyle name=\"Default Style\" styleID=\"32\" fgColor=\"000000\" bgColor=\"FFFFFF\" fontName=\"\" fontSize=\"10\" />"
+                    "</GlobalStyles></NotepadPlus>\n");
+                const wxString imported = g_sandboxUserData + wxFILE_SEP_PATH + "themes" + wxFILE_SEP_PATH + "P8 Theme (Notepad++).yaml";
+                check(wxFileExists(imported), "npp-compat: a Notepad++ theme lands in the user theme folder as YAML");
+                std::string text;
+                wxntheme::Theme theme;
+                const bool readBack = wxnReadFileBytes(imported, text) && wxntheme::parse(text, theme) && theme.lexer("cpp")
+                                   && !theme.lexer("cpp")->styles.empty();
+                check(readBack && theme.lexer("cpp")->styles[0].fg == 0x112233 && theme.lexer("cpp")->styles[0].fontStyle == 2
+                          && theme.header.find("P8 credits") != std::string::npos,
+                      "npp-compat: ...and reads back as the same theme, credits header included");
+
+                importOpen(work + wxFILE_SEP_PATH + "config.xml",
+                    "<NotepadPlus><GUIConfigs><GUIConfig name=\"TabSetting\" replaceBySpace=\"yes\" size=\"3\" /></GUIConfigs></NotepadPlus>\n");
+                check(g_settings.getInt("editor.tabSize") == 3 && !g_settings.getBool("editor.useTabs"),
+                      "npp-compat: config.xml's tab settings land in the settings (nib.settings/1)");
+                const wxString settingsText = readWholeFile(g_sandboxUserData + wxFILE_SEP_PATH + "settings.yaml");
+                check(settingsText.Contains("editor.tabSize: 3") && settingsText.Contains("editor.useTabs: false")
+                          && settingsText.Contains("# bridge_selftest") && settingsText.Contains("files.confirmCloseUnsaved: true"),
+                      "npp-compat: ...written to settings.yaml line by line, its comment and other settings kept");
+
+                const wxString sessFile = work + wxFILE_SEP_PATH + "p8b.txt";
+                writeWholeFile(sessFile, "from a Notepad++ session\n");
+                const std::string sessXml = "<NotepadPlus><Session activeView=\"0\"><mainView activeIndex=\"0\"><File filename=\""
+                                          + std::string(sessFile.utf8_str()) + "\" /></mainView><subView activeIndex=\"0\" /></Session></NotepadPlus>\n";
+                importOpen(work + wxFILE_SEP_PATH + "p8.session.xml", sessXml.c_str());
+                bool opened = false;
+                char buf[2048];
+                for (int view = 0; view < 2; ++view)
+                    for (int i = 0, nn = g_nibDocViewCount(view); i < nn; ++i)
+                    {
+                        const int len = g_nibDocPathFromId(g_nibDocIdAt(view, i), buf, (int)sizeof(buf));
+                        if (len > 0 && wxString::FromUTF8(buf, len) == sessFile) opened = true;
+                    }
+                check(opened, "npp-compat: a Notepad++ session's files open");
+            }
+            for (int guard = 0; g_nibDocCount && g_nibDocCount() > 1 && guard < 20; ++guard) { g_nibInvokeCommand(kCmdFileClose); pump(); }
+            check(g_nibDocCount && g_nibDocCount() == 1, "Phase-8 buffers closed - back to a single document");
+        }
+
         // ---- (d) allocated command ids round-trip through the wx dispatcher ------------------------
         check(cFirst > 32767,
               "(d) allocated ids sit above 32767 (WM_COMMAND sign-wraps them; wrapped dispatch driven below)");
@@ -2616,6 +2694,9 @@ int main(int argc, char** argv)
           "nib.documents v5 host hooks are all nulled after real shutdown (no dangling `this` capture survives)");
     std::printf(g_failCount ? "\nFAILED  (%d passed, %d failed)\n"
                             : "\nPASSED  (%d passed, %d failed)\n", g_pass, g_failCount);
+    // A passing run leaves nothing behind; a failing one keeps its sandbox to look into.
+    if (rc == 0 && !g_failCount) fs::remove_all(root, ec);
+    else std::printf("sandbox kept for inspection: %s\n", root.u8string().c_str());
     std::fflush(stdout);
     return rc != 0 ? rc : (g_failCount ? 1 : 0);
 }

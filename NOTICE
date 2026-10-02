@@ -6,7 +6,8 @@ LICENSE), with a few exceptions among the optional plugins that ship, each of
 which remains GPL-3.0-or-later because it reproduces a Notepad++
 interoperability surface: packages/npp-bridge/ (the plugin ABI),
 packages/udl-compat/ (the userDefineLang.xml UDL format), and
-packages/npp-shortcuts-compat/ (the shortcuts.xml keybinding format). Each has
+packages/npp-compat/ (Notepad++'s settings, shortcuts, theme, context-menu, session and
+workspace file formats). Each has
 its own LICENSE. npp-bridge's never-shipped, Windows-only test fixture
 packages/test_plugin/ tracks the same GPL license for the same reason. The
 Apache-2.0 core links against none of them. This NOTICE records the project's
@@ -72,6 +73,18 @@ libvterm
   third_party/libvterm-tables/ (same MIT license and copyright - mechanical
   transformations of upstream's .tbl data; see that directory's README.md).
 
+rapidyaml (YAML and JSON reader and writer)
+  Copyright (c) 2018 Joao Paulo Magalhaes <dev@jpmag.me>. MIT License.
+  Reads and writes every file wxNote keeps for itself (settings, key bindings,
+  themes, sessions...) and the Plugins Admin catalog. Its single-header release
+  v0.16.0, pinned by SHA256, is fetched at build time and compiled into the
+  executable and the npp-compat and npp-bridge plugins; not vendored in this
+  repository. That header carries, under their own notices:
+    * c4core - Copyright (c) 2018 Joao Paulo Magalhaes, MIT License.
+    * fast_float (number parsing) - Copyright (c) 2021 The fast_float authors,
+      MIT License.
+    * debugbreak - Copyright (c) 2011-2021 Scott Tsai, BSD 2-Clause License.
+
 Hunspell (spell-check engine)
   Copyright (c) László Németh and contributors.
   Tri-licensed MPL-1.1 / GPL-2.0-or-later / LGPL-2.1-or-later; wxNote uses it
@@ -103,7 +116,7 @@ Color themes — resources/themes/
   original author header. The formerly-kept DansLeRuSH-Dark theme was removed
   2026-07-11: its upstream license is CC BY-NC-SA 3.0 (NonCommercial), which we
   do not redistribute — see LICENSING.md.
-  Regenerated themes + stylers.model.xml are our own data
+  Regenerated themes (Default.yaml among them) are our own data
   (Apache-2.0): the factual Lexilla style structure recoloured from permissive
   palettes - GitHub Primer, Atom One Dark/Light, Nord, Dracula and VS Code (all
   MIT) plus the canonical Zenburn / Obsidian palettes (colour values are facts).

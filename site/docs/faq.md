@@ -13,7 +13,7 @@ Items that currently behave this way:
   Scintilla 5.3.0, and wxWidgets vendors its own Scintilla fork that is still at 5.0.0 — so there is
   presently no wxWidgets release to upgrade *to*.
 - **Automation&nbsp;&rsaquo; Run&nbsp;&rsaquo; Validate shortcuts.xml** — only when the optional
-  `npp-shortcuts-compat` plugin is not installed; the item forwards to that plugin's Notepad++
+  `npp-compat` plugin is not installed; the item forwards to that plugin's Notepad++
   shortcut importer. See [Customizing Shortcuts](custom-shortcuts.md#importing-notepad-shortcuts).
 
 The same "not yet implemented in this build" wording is also reused for a command whose precondition is
@@ -24,7 +24,7 @@ text in the parentheses — it tells you which case you hit.
 
 Yes — **Settings&nbsp;&rsaquo; Shortcut Mapper…** remaps, clears or resets every menu accelerator and
 a curated set of the editor's own keys, with live conflict detection. Overrides persist in a
-hand-editable `shortcuts.json`, and named keymap schemes (including a **"Notepad++ (imported)"**
+hand-editable `keybindings.yaml`, and named keymap schemes (including a **"Notepad++ (imported)"**
 scheme created by the optional `shortcuts.xml` import) can be switched in the same dialog. Full detail in
 [Customizing Shortcuts](custom-shortcuts.md); the defaults are listed in
 [Keyboard Shortcuts](shortcuts.md).
@@ -117,10 +117,20 @@ not only after a clean exit — precisely so that the start after a crash restor
 
 ## Where does it keep my settings?
 
-Settings go through `wxConfig` under the application name **wxNote**: the registry on Windows, a config
-file under the user's config directory elsewhere. User-writable data — recovery backups, user-defined
-languages, `contextMenu.xml`, `shortcuts.json` — lives in the per-user data directory, deliberately
-*not* beside the executable, so installed builds work without write access to their install directory.
+Everything lives in plain YAML files in the per-user data directory — `%APPDATA%\wxNote` on Windows,
+`~/.wxNote` on Linux, `~/Library/Application Support/wxNote` on macOS — deliberately *not* beside the
+executable, so installed builds work without write access to their install directory:
+
+- `settings.yaml` — your preferences, holding only what differs from the defaults. It is yours to
+  edit: wxNote changes single lines in it and keeps your comments. A file that does not parse is left
+  alone, and the status bar says where it broke.
+- `state.yaml` — what wxNote remembers by itself: window, zoom, recent files, the last session.
+- `keybindings.yaml`, `snippets.yaml`, `contextmenu.yaml`, `functionlist.yaml`,
+  `macros.yaml`, `runcommands.yaml`, and your own themes in `themes/` — plus recovery backups and
+  user-defined languages.
+
+Nothing goes to the registry. Settings from Notepad++ can be brought across with the optional
+`npp-compat` plugin (**Extensions&nbsp;&rsaquo; Import from Notepad++…**).
 
 ## What languages is the interface available in?
 
@@ -130,8 +140,20 @@ Pick one in **Settings&nbsp;&rsaquo; Localization** or
 
 ## Can I customise the editor's right-click menu?
 
-Yes — **Settings&nbsp;&rsaquo; Edit Popup ContextMenu** opens `contextMenu.xml` in a tab, seeding your
-per-user copy from the shipped one the first time. Edit it and restart.
+Yes — **Settings&nbsp;&rsaquo; Edit Popup ContextMenu** opens `contextmenu.yaml` in a tab, seeding your
+per-user copy from the shipped one the first time. Save your edit and the next right-click uses it.
+Items name commands the way [`keybindings.yaml`](custom-shortcuts.md#the-keybindingsyaml-file) does
+(`edit.undo`, `search.bookmark.toggle`), and `'-'` is a separator line:
+
+```yaml
+items:
+  - edit.undo
+  - '-'
+  - edit.copy
+```
+
+Labels follow the interface language. An item wxNote doesn't know is simply left out.
+**Extensions&nbsp;&rsaquo; Import from Notepad++…** turns Notepad++'s `contextMenu.xml` into this file.
 
 ## Is this Notepad++?
 

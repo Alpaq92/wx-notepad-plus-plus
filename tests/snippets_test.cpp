@@ -291,31 +291,35 @@ int main()
         eq(p.text, "Hello  Hello", "transform: the plain mirror repeats the text, the transform starts empty");
     }
 
-    // ---- (n) the store format --------------------------------------------------------------------
+    // ---- (n) the store format (snippets.yaml) ------------------------------------------------------
     {
         const std::string store =
             "# a comment outside a body\n"
             "\n"
-            "[cpp:for]\n"
-            "for (int ${1:i} = 0; $1 < ${2:n}; ++$1)\n"
-            "{\n"
-            "\t$0\n"
-            "}\n"
-            "[python:def]\n"
-            "def ${1:name}(${2:args}):\n"
-            "    # not a store comment - this is body text\n"
-            "    $0\n"
-            "[*:todo]\n"
-            "TODO(${1:who}): $0\n";
+            "cpp:\n"
+            "  for: |-\n"
+            "    for (int ${1:i} = 0; $1 < ${2:n}; ++$1)\n"
+            "    {\n"
+            "    \t$0\n"
+            "    }\n"
+            "python:\n"
+            "  def: |\n"
+            "    def ${1:name}(${2:args}):\n"
+            "        # not a store comment - this is body text\n"
+            "        $0\n"
+            "'*':\n"
+            "  todo: 'TODO(${1:who}): $0'\n";
         const std::vector<SnippetDef> all = wxnParseSnippetStore(store);
         check(all.size() == 3, "store: three entries parsed");
-        eq(all[0].lang + "/" + all[0].trigger, "cpp/for", "store: language and trigger split");
-        check(all[0].body.find('\n') != std::string::npos, "store: a body keeps its real newlines");
-        check(all[0].body.find('\t') != std::string::npos, "store: a body keeps its real tabs");
-        eq(all[0].body.substr(all[0].body.size() - 1), "}", "store: the trailing newline before the next header is dropped");
-        check(all[1].body.find("# not a store comment") != std::string::npos,
+        eq(all.empty() ? std::string() : all[0].lang + "/" + all[0].trigger, "cpp/for", "store: language and trigger split");
+        check(all.size() == 3 && all[0].body.find('\n') != std::string::npos, "store: a body keeps its real newlines");
+        check(all.size() == 3 && all[0].body.find('\t') != std::string::npos, "store: a body keeps its real tabs");
+        eq(all.size() == 3 ? all[0].body.substr(all[0].body.size() - 1) : std::string(), "}", "store: |- keeps no trailing newline");
+        check(all.size() == 3 && all[1].body.back() == '0', "store: | has its one trailing newline dropped too");
+        check(all.size() == 3 && all[1].body.find("# not a store comment") != std::string::npos,
               "store: '#' INSIDE a body is text, not a comment");
-        eq(all[2].lang, "*", "store: '*' is a valid language");
+        eq(all.size() == 3 ? all[2].lang : std::string(), "*", "store: '*' is a valid language");
+        eq(all.size() == 3 ? all[2].body : std::string(), "TODO(${1:who}): $0", "store: a one-line body in quotes");
 
         // resolution
         const std::vector<SnippetDef> forCpp = wxnSnippetsFor(all, "cpp");
@@ -327,51 +331,66 @@ int main()
               "resolve: an unknown language still gets the wildcard entries");
     }
     {
-        // A later definition of the same trigger wins - this is how a user file overrides a built-in.
-        const std::vector<SnippetDef> all = wxnParseSnippetStore(
-            "[cpp:for]\nBUILTIN\n[cpp:for]\nUSER\n");
+        // A later definition of the same trigger wins - this is how the user's file overrides a built-in:
+        // the editor appends the user's entries after the built-ins.
+        std::vector<SnippetDef> all = wxnParseSnippetStore("cpp:\n  for: BUILTIN\n");
+        const std::vector<SnippetDef> user = wxnParseSnippetStore("cpp:\n  for: USER\n");
+        all.insert(all.end(), user.begin(), user.end());
         const std::vector<SnippetDef> r = wxnSnippetsFor(all, "cpp");
         check(r.size() == 1, "override: the same trigger does not appear twice");
-        eq(r[0].body, "USER", "override: the later definition wins");
+        eq(r.empty() ? std::string() : r[0].body, "USER", "override: the later definition wins");
     }
     {
         // A language-specific entry must beat a wildcard with the same trigger.
-        const std::vector<SnippetDef> all = wxnParseSnippetStore("[*:x]\nWILD\n[cpp:x]\nCPP\n");
-        eq(wxnSnippetsFor(all, "cpp")[0].body, "CPP", "override: language beats wildcard");
-        eq(wxnSnippetsFor(all, "python")[0].body, "WILD", "override: wildcard still applies elsewhere");
+        const std::vector<SnippetDef> all = wxnParseSnippetStore("'*':\n  x: WILD\ncpp:\n  x: CPP\n");
+        eq(wxnSnippetsFor(all, "cpp").empty() ? std::string() : wxnSnippetsFor(all, "cpp")[0].body, "CPP", "override: language beats wildcard");
+        eq(wxnSnippetsFor(all, "python").empty() ? std::string() : wxnSnippetsFor(all, "python")[0].body, "WILD", "override: wildcard still applies elsewhere");
     }
     {
         // Malformed stores must not produce half-entries.
-        check(wxnParseSnippetStore("[cpp:empty]\n").empty(), "store: a header with no body is dropped");
-        check(wxnParseSnippetStore("no headers at all\n").empty(), "store: body text with no header is ignored");
-        check(wxnParseSnippetStore("[nocolon]\nx\n").empty(), "store: a header without ':' is not a header");
-        check(wxnParseSnippetStore("[cpp:]\nx\n").empty(), "store: an empty trigger is rejected");
+        check(wxnParseSnippetStore("cpp:\n  empty:\n").empty(), "store: a trigger with no body is dropped");
+        check(wxnParseSnippetStore("cpp:\n  blank: ''\n").empty(), "store: an empty body is dropped");
+        check(wxnParseSnippetStore("just text\n").empty(), "store: a document that is no map holds no snippets");
+        check(wxnParseSnippetStore("cpp: not a map\n").empty(), "store: a language whose value is no map is skipped");
+        check(wxnParseSnippetStore("cpp:\n  two words: x\n").empty(), "store: a trigger with a space is rejected");
+        check(wxnParseSnippetStore("cpp:\n  for: [unclosed\n").empty(), "store: a file that does not parse adds nothing");
         check(wxnParseSnippetStore("").empty(), "store: empty input");
     }
     {
+        // Why a store is unusable, for the status bar: where it broke, or that it has no languages.
+        std::string err;
+        wxnParseSnippetStore("cpp:\n  for: [unclosed\n", &err);
+        check(err.find("line") != std::string::npos, "store error: a file that does not parse names the line");
+        wxnParseSnippetStore("just text\n", &err);
+        check(!err.empty(), "store error: a document that is no map says so");
+        wxnParseSnippetStore("# only a comment\n", &err);
+        check(err.empty(), "store error: a file of only comments is no error");
+        wxnParseSnippetStore("cpp:\n  x: y\n", &err);
+        check(err.empty(), "store error: none for a good store");
+    }
+    {
         // CRLF stores are common on Windows and must parse identically.
-        const std::vector<SnippetDef> lf   = wxnParseSnippetStore("[cpp:a]\nline1\nline2\n");
-        const std::vector<SnippetDef> crlf = wxnParseSnippetStore("[cpp:a]\r\nline1\r\nline2\r\n");
-        check(lf.size() == 1 && crlf.size() == 1 && lf[0].body == crlf[0].body,
+        const std::vector<SnippetDef> lf   = wxnParseSnippetStore("cpp:\n  a: |-\n    line1\n    line2\n");
+        const std::vector<SnippetDef> crlf = wxnParseSnippetStore("cpp:\r\n  a: |-\r\n    line1\r\n    line2\r\n");
+        check(lf.size() == 1 && crlf.size() == 1 && lf[0].body == crlf[0].body && lf[0].body == "line1\nline2",
               "store: a CRLF store parses identically to an LF one");
     }
 
     // ---- (o) the shipped built-ins actually parse -------------------------------------------------
-    // It is one long concatenated string literal; a missing "\n" silently glues two entries together
-    // and the store then contains a snippet nobody wrote.
+    // It is one long concatenated string literal; a missing "\n" or a short indent silently glues two
+    // entries together, and the store then contains a snippet nobody wrote.
     {
         const std::vector<SnippetDef> built = wxnParseSnippetStore(wxnBuiltinSnippets());
         check(built.size() >= 15, "builtins: the shipped set parses to a plausible number of entries");
 
-        bool badLang = false, badTrigger = false, badBody = false, unparsable = false, strayHeader = false;
+        bool badLang = false, badTrigger = false, badBody = false, unparsable = false, swallowed = false;
         for (const SnippetDef& d : built)
         {
             if (d.lang.empty() || d.lang.find(' ') != std::string::npos) badLang = true;
             if (d.trigger.empty() || d.trigger.find(' ') != std::string::npos) badTrigger = true;
             if (d.body.empty()) badBody = true;
-            // A '[' at the start of a body line means a header did not terminate the previous body.
-            if (d.body.size() > 1 && d.body[0] == '[') strayHeader = true;
-            if (d.body.find("\n[") != std::string::npos) strayHeader = true;
+            // A body holding the next entry's "name: |-" means its literal block swallowed that entry.
+            if (d.body.find(": |-") != std::string::npos) swallowed = true;
             const SnippetParse p = wxnParseSnippet(d.body);
             for (const SnippetField& f : p.fields)
                 if (f.start + f.len > p.text.size()) unparsable = true;
@@ -379,7 +398,7 @@ int main()
         check(!badLang,     "builtins: every entry has a single-token language");
         check(!badTrigger,  "builtins: every entry has a single-token trigger");
         check(!badBody,     "builtins: no entry has an empty body");
-        check(!strayHeader, "builtins: no body swallowed a following header (a missing newline)");
+        check(!swallowed, "builtins: no body swallowed the entry after it");
         check(!unparsable,  "builtins: every body parses with in-range field offsets");
 
         // Spot-check that resolution reaches a real language and the wildcard.

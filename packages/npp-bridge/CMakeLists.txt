@@ -29,6 +29,10 @@ if(WIN32)
 else()
     target_link_libraries(npp_bridge PRIVATE ${CMAKE_DL_LIBS})
 endif()
+# npp-compat's session reader and writer: Notepad++ plugins' NPPM_*SESSION* messages are answered in
+# Notepad++'s own session XML (wxNote's own sessions are YAML). Defined before this in the top-level
+# CMakeLists (add_subdirectory(packages/npp-compat) comes first).
+target_link_libraries(npp_bridge PRIVATE npp_compat_core)
 
 if(MSVC)
     target_compile_options(npp_bridge PRIVATE /EHsc /utf-8)

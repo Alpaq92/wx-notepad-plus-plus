@@ -151,10 +151,11 @@ possible strings attached — including in places copyleft makes awkward,
 like other permissively-licensed projects. The relicense changed what
 *others* are allowed to do with the code; it changed nothing about what the
 project itself is: free, open source, and non-commercial in spirit either
-way. The exceptions in what ships are the two optional interoperability
+way. The exceptions in what ships are the three optional interoperability
 modules — the Notepad++ plugin bridge (`packages/npp-bridge/`, plus its
-never-shipped test fixture) and the Notepad++ UDL compatibility plugin
-(`packages/udl-compat/`) — which stay GPL because of the Notepad++ formats
+never-shipped test fixture), the Notepad++ UDL compatibility plugin
+(`packages/udl-compat/`) and the Notepad++ settings importer
+(`packages/npp-compat/`) — which stay GPL because of the Notepad++ formats
 and ABIs they reproduce; see "The plugin system" below and
 [`LICENSING.md`](../LICENSING.md) for the precise per-component record.
 
@@ -207,7 +208,7 @@ optional, and honestly labeled.
   command labels coincide with Notepad++.
 - **Permissive by default.** Apache-2.0 core; in everything that ships, GPL
   is confined to the optional interoperability modules (the Notepad++
-  plugin bridge and the UDL-compatibility plugin).
+  plugin bridge, the UDL-compatibility plugin and the settings importer).
 - **Plugins everywhere.** A first-class, cross-platform plugin API, with
   legacy Notepad++ plugin support as an optional, cross-platform bridge
   (real compiled plugin binaries on Windows; recompiled plugins loaded via

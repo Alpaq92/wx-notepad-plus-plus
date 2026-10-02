@@ -245,7 +245,7 @@ See [Plugins](plugins.md).
 - **Style Configurator…** · **Shortcut Mapper…** — the latter remaps keyboard shortcuts and switches
   keymap schemes; see [Customizing Shortcuts](custom-shortcuts.md)
 - **Import ▸** — Import plugin(s)… · Import style theme(s)…
-- **Edit Popup ContextMenu** — opens `contextMenu.xml` for editing, so the editor's right-click menu can
+- **Edit Popup ContextMenu** — opens `contextmenu.yaml` for editing, so the editor's right-click menu can
   be customised
 - **Localization** *(dynamic)* — the UI-language picker, the same list as
   **Preferences&nbsp;&rsaquo; General&nbsp;&rsaquo; Localization**

@@ -23,7 +23,7 @@
 #include <wx/listbook.h>       // wxListbook - the Preferences dialog's left-side page selector
 #include <wx/webrequest.h>     // wxWebRequestSync - download Hunspell dictionaries (Preferences > Spell Check)
 #include <wx/wfstream.h>       // wxFileOutputStream - stream a downloaded dictionary to disk
-#include <wx/base64.h>         // wxBase64Encode/Decode - lossless macro name/text payloads in macros.dat
+#include <wx/base64.h>         // wxBase64Encode/Decode - a macro step's text that is not UTF-8, in macros.yaml
 #include <wx/graphics.h>       // wxGraphicsContext - antialiased rounded hover on the Windows caption buttons
 #include <wx/display.h>        // wxDisplay::GetClientArea/GetFromPoint - clamp the initial window to the usable screen (macOS)
 #include <wx/listctrl.h>       // wxListView - wxListbook's page list (we widen it so labels don't truncate)
@@ -47,11 +47,7 @@
 #include <wx/bmpbuttn.h>
 #include <wx/combobox.h>
 #include <wx/radiobox.h>
-#include <wx/config.h>
-#include <wx/fileconf.h>       // wxFileConfig - --sandbox builds one over an empty stream (no backing file)
-#include <wx/sstream.h>        // wxStringInputStream - the empty stream that config is constructed from
 #include <wx/filehistory.h>     // wxFileHistory - Recent Files (MRU)
-#include <wx/xml/xml.h>         // wxXmlDocument - load theme XML
 #include <wx/datetime.h>        // wxDateTime - insert date/time
 #include <wx/dnd.h>             // wxFileDropTarget - drag & drop files to open
 #include <wx/dcgraph.h>         // wxGCDC - antialiased drawing (symmetric spinner triangles)
@@ -189,6 +185,175 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 #include "scintillua_engine.h" // embedded Lua+LPeg+Scintillua engine (the native language-definition engine)
 #include "command_palette.h"   // Ctrl+Shift+P: harvests the live menu bar into the shared filter list
 #include "file_index.h"        // Ctrl+Shift+O: the time-sliced workspace crawler behind Quick Open
+#include "settings_schema.h"   // settings.yaml + state.yaml: the stores and the table of every setting
+#include "theme_file.h"         // themes/<name>.yaml: the colour-theme model, read and written by the Style Configurator
+
+// ---- settings.yaml + state.yaml -------------------------------------------------------------------------
+// Every preference goes through g_settings (settings.yaml - the user's file, edited a line at a time so
+// their comments survive) and everything wxNote merely remembers - window, zoom, recent files, the last
+// session, the recovery index - through g_state (state.yaml, rewritten whole). docs/SETTINGS_DESIGN.md
+// describes both. OnInit opens them right after the --sandbox pre-scan, before anything reads a setting
+// (until then reads see the defaults and nothing is written); under --sandbox both live in the throwaway
+// sandbox directory.
+static wxnsettings::SettingsFile g_settingsFile;
+static wxnsettings::Settings     g_settings(g_settingsFile);
+static wxnsettings::StateFile    g_state;
+static wxString                  g_settingsPath, g_statePath;
+static wxLongLong                g_settingsStampMs = -1;   // settings.yaml when last read or written: a change
+static wxULongLong               g_settingsStampSize = 0;  // from outside (a hand edit) is re-read before a write
+static wxString                  g_settingsLoadError;      // why settings.yaml could not be read at startup ("" if it could)
+
+static bool wxnWriteFileAtomic(const wxString& path, const void* data, size_t len);
+
+static bool wxnReadFileBytes(const wxString& path, std::string& out)
+{
+    out.clear();
+    wxLogNull noLog;
+    if (path.empty() || !wxFileExists(path)) return false;
+    wxFile f(path);
+    const wxFileOffset len = f.IsOpened() ? f.Length() : -1;
+    if (len < 0) return false;
+    out.resize(static_cast<size_t>(len));
+    return len == 0 || f.Read(&out[0], static_cast<size_t>(len)) == static_cast<ssize_t>(len);
+}
+
+// Read `path` whole, as no writer left it half-done: the size and time stamp must match before and after
+// the read, and the bytes read must be that size. A reader that catches another process between the
+// truncation and the write of an in-place save (an editor saving settings.yaml, say) would otherwise see
+// an empty or cut-off file - and the next save would write that back over the user's. Retried briefly.
+// `stampMs`/`stampSize`, when given, get the time stamp and size the bytes were read at (-1/0: missing).
+enum class WxnRead { Missing, Ok, Failed };
+static WxnRead wxnReadSettled(const wxString& path, std::string& out, wxLongLong* stampMs = nullptr,
+                              wxULongLong* stampSize = nullptr)
+{
+    out.clear();
+    if (stampMs) *stampMs = -1;
+    if (stampSize) *stampSize = 0;
+    if (path.empty()) return WxnRead::Missing;
+    wxLogNull noLog;
+    for (int attempt = 0; attempt < 5; ++attempt)
+    {
+        if (attempt) wxMilliSleep(30);
+        if (!wxFileExists(path)) return WxnRead::Missing;
+        const wxFileName before(path);
+        const wxLongLong ms = before.GetModificationTime().GetValue();
+        const wxULongLong size = before.GetSize();
+        if (size == wxInvalidSize || !wxnReadFileBytes(path, out)) continue;
+        const wxFileName after(path);
+        if (after.GetModificationTime().GetValue() == ms && after.GetSize() == size && size.GetValue() == out.size())
+        {
+            if (stampMs) *stampMs = ms;
+            if (stampSize) *stampSize = size;
+            return WxnRead::Ok;
+        }
+    }
+    out.clear();
+    return WxnRead::Failed;
+}
+
+static void wxnSettingsFileStamp(wxLongLong& ms, wxULongLong& size)
+{
+    wxLogNull noLog;
+    ms = -1;
+    size = 0;
+    if (g_settingsPath.empty() || !wxFileExists(g_settingsPath)) return;
+    const wxFileName fn(g_settingsPath);
+    ms = fn.GetModificationTime().GetValue();
+    size = fn.GetSize();
+}
+
+// wxNote 0.20 and earlier kept their settings, on Linux, in a FILE at the very path the user-data folder
+// takes (~/.wxNote - wxFileConfig's default there), so the folder could not be made and nothing in it was
+// ever written. Such a file is moved aside - not read, not deleted - so the folder can exist.
+static void wxnMoveAsideOldSettingsFile(const wxString& dir)
+{
+    wxLogNull noLog;
+    if (dir.empty() || !wxFileExists(dir) || wxDirExists(dir)) return;
+    wxString aside = dir + ".old-settings";
+    for (int i = 2; wxFileExists(aside) || wxDirExists(aside); ++i) aside = wxString::Format("%s.old-settings-%d", dir, i);
+    wxRenameFile(dir, aside, false);
+}
+
+// Point both stores at their files in `dir` and read them; an empty `dir` leaves them without files (reads
+// see the defaults and nothing is written). Returns why settings.yaml could not be read ("" when it could,
+// or does not exist yet).
+static wxString wxnOpenStores(const wxString& dir)
+{
+    wxnMoveAsideOldSettingsFile(dir);
+    g_settingsPath = dir.empty() ? wxString() : dir + wxFILE_SEP_PATH + "settings.yaml";
+    g_statePath    = dir.empty() ? wxString() : dir + wxFILE_SEP_PATH + "state.yaml";
+    std::string bytes;
+    bool ok = true;
+    if (wxnReadSettled(g_settingsPath, bytes, &g_settingsStampMs, &g_settingsStampSize) == WxnRead::Failed)
+    {
+        g_settingsFile.loadUnreadable("the file could not be read");
+        ok = false;
+        g_settingsStampMs = -1;   // stamped as missing, so the next edit tries the file again
+        g_settingsStampSize = 1;
+    }
+    else ok = g_settingsFile.load(bytes);
+    wxnReadSettled(g_statePath, bytes);   // unreadable: start empty - a save only lays this run's changes over the file
+    g_state.load(bytes);
+    return ok ? wxString() : wxString::FromUTF8(g_settingsFile.error().c_str());
+}
+
+// Re-read settings.yaml if it changed since wxNote last read or wrote it, so the next edit lands on what
+// the file says now instead of putting back what it said at startup. A file that cannot be read whole
+// right now is not taken for an empty one: the store keeps what it had, and the next edit tries again.
+static void wxnRefreshSettings()
+{
+    wxLongLong ms;
+    wxULongLong size;
+    wxnSettingsFileStamp(ms, size);
+    if (ms == g_settingsStampMs && size == g_settingsStampSize) return;
+    std::string bytes;
+    wxLongLong readMs;
+    wxULongLong readSize;
+    if (wxnReadSettled(g_settingsPath, bytes, &readMs, &readSize) == WxnRead::Failed) return;
+    g_settingsFile.load(bytes);
+    g_settingsStampMs = readMs;
+    g_settingsStampSize = readSize;
+}
+
+static void wxnFlushSettings()
+{
+    if (g_settingsPath.empty() || !g_settingsFile.dirty()) return;
+    wxLogNull noLog;
+    wxFileName::Mkdir(wxPathOnly(g_settingsPath), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+    const std::string& t = g_settingsFile.text();
+    if (!wxnWriteFileAtomic(g_settingsPath, t.data(), t.size())) return;
+    g_settingsFile.markSaved();
+    wxnSettingsFileStamp(g_settingsStampMs, g_settingsStampSize);
+}
+
+// state.yaml: what is on disk now, with this process's changes laid over it (see StateFile::mergeForSave).
+// When the file cannot be read whole, nothing is written - merging over "nothing" would drop everything
+// else in it - and the changes stay pending for the next save, as they do when the write itself fails.
+static void wxnFlushState()
+{
+    if (g_statePath.empty() || !g_state.dirty()) return;
+    wxLogNull noLog;
+    wxFileName::Mkdir(wxPathOnly(g_statePath), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+    std::string disk;
+    if (wxnReadSettled(g_statePath, disk) == WxnRead::Failed) return;
+    const std::string t = g_state.mergeForSave(disk);
+    if (!t.empty() && wxnWriteFileAtomic(g_statePath, t.data(), t.size())) g_state.markSaved();
+}
+
+// A batch of settings changes, made to settings.yaml as it is on disk now and written once when the batch
+// ends:   { WxnSettingsEdit s; s->setBool("editor.wordWrap", m_wrap); s->setInt("editor.tabSize", 2); }
+class WxnSettingsEdit
+{
+public:
+    WxnSettingsEdit() { wxnRefreshSettings(); }
+    ~WxnSettingsEdit() { wxnFlushSettings(); }
+    WxnSettingsEdit(const WxnSettingsEdit&) = delete;
+    WxnSettingsEdit& operator=(const WxnSettingsEdit&) = delete;
+    wxnsettings::Settings* operator->() { return &g_settings; }
+};
+
+static wxString wxnSettingText(const char* id) { return wxString::FromUTF8(g_settings.getText(id).c_str()); }
+static std::string wxnUtf8(const wxString& s) { return std::string(s.utf8_str()); }
 
 static const int  MARK_BOOKMARK = 2;      // a free Scintilla marker number for bookmarks
 static const int  MARK_INDIC    = 9;      // indicator number for "Mark All" highlights (Find dialog)
@@ -219,28 +384,32 @@ static const int UI_LANG_IDS[] = { wxLANGUAGE_DEFAULT, wxLANGUAGE_ENGLISH, wxLAN
     wxLANGUAGE_CHINESE_SIMPLIFIED, wxLANGUAGE_KOREAN };
 static const char* const UI_LANG_ENDONYMS[] = { nullptr /*index 0 = "System default", localized at build time*/,
     "English", "Polski", "Deutsch", "Français", "Español", "Русский", "日本語", "简体中文", "한국어" };
-static long readUiLang() { long v = wxLANGUAGE_DEFAULT; wxConfigBase::Get()->Read("UILanguage", &v, (long)wxLANGUAGE_DEFAULT); return v; }
+// ui.language holds a language code ("pl_PL", or just "pl") or "system". A wxLanguage number would not
+// do: wx renumbers that enum between versions. Only a language we ship a catalog for counts. Read from
+// the file as it is now: its callers compare a pick against it to decide whether to write, and another
+// wxNote window may have changed it since this one read the file.
+static long readUiLang()
+{
+    wxnRefreshSettings();
+    const wxString code = wxnSettingText("ui.language");
+    if (code.empty() || code.CmpNoCase("system") == 0) return wxLANGUAGE_DEFAULT;
+    if (const wxLanguageInfo* li = wxLocale::FindLanguageInfo(code))
+        for (int k = 1; k < (int)WXSIZEOF(UI_LANG_IDS); ++k)
+            if (UI_LANG_IDS[k] == li->Language) return li->Language;
+    return wxLANGUAGE_DEFAULT;
+}
+static std::string uiLangCode(long lang)
+{
+    const wxLanguageInfo* li = lang == wxLANGUAGE_DEFAULT ? nullptr : wxLocale::GetLanguageInfo((int)lang);
+    return li ? wxnUtf8(li->CanonicalName) : std::string("system");
+}
 static int  uiLangIndex(long lang) { for (int i = 0; i < (int)WXSIZEOF(UI_LANG_IDS); ++i) if (UI_LANG_IDS[i] == lang) return i; return 0; }
 static wxString uiLangName(int i) { return i == 0 ? wxString(_("System default")) : wxString::FromUTF8(UI_LANG_ENDONYMS[i]); }
 // One source of truth for the EOL-mode display names (status bar, EOL popup, Preferences > New Document).
 // Deliberately untranslated in the status bar; menu items wrap them in _() as literals.
 static const char* eolName(int mode) { return mode == SC_EOL_LF ? "Unix (LF)" : mode == SC_EOL_CR ? "Macintosh (CR)" : "Windows (CR LF)"; }
-// Theme mode (Preferences > General): 0 = follow OS, 1 = Dark, 2 = Light - replaces the old plain
-// "DarkMode" bool. Falls back to that legacy key only when it actually EXISTS (users who explicitly
-// chose a theme keep that choice). When NEITHER key exists the app follows the OS - that covers fresh
-// installs but DELIBERATELY also upgrades that never touched a restart-required preference (ThemeMode
-// is only ever written by restartWithTheme): those users never chose Dark, they sat on the old
-// accidental default - the previous fallback defaulted the missing legacy key to true, hard-locking
-// such installs into Dark and making "system theme detection" look broken on a light OS.
-static long readThemeMode()
-{
-    auto* c = wxConfigBase::Get();
-    long mode;
-    if (c->Read("ThemeMode", &mode)) return mode;
-    bool legacyDark;
-    if (c->Read("DarkMode", &legacyDark)) return legacyDark ? 1 : 2;
-    return 0;
-}
+// Theme mode (Preferences > General, ui.themeMode): 0 = follow the OS (the default), 1 = Dark, 2 = Light.
+static long readThemeMode() { return g_settings.getChoice("ui.themeMode"); }
 // "System" (themeMode anything but 1/2) must read the OS's app-theme preference directly:
 // wxSystemAppearance::IsDark() deliberately does NOT check that (its own docs/source say so) - it
 // only reports whether THIS process has already turned dark mode on, which is exactly what we're
@@ -279,60 +448,154 @@ static int encodingFromName(const wxString& name)
 
 // One recorded Scintilla command in a macro (Macro menu: record / playback / run multiple).
 struct MacroStep { int msg; uptr_t wparam; sptr_t lparam; bool hasText = false; std::string text; };
-struct SavedMacro { long uid = 0; wxString name; std::vector<MacroStep> steps; };   // persisted to macros.dat
+struct SavedMacro { long uid = 0; wxString name; std::vector<MacroStep> steps; };   // persisted to macros.yaml
 
 // A user-defined Run command: a name for the Run menu, and the command line it launches with the same
-// $(...) variables the Run dialog documents. Persisted to runcommands.dat beside macros.dat, and keyed
+// $(...) variables the Run dialog documents. Persisted to runcommands.yaml beside macros.yaml, and keyed
 // by a monotonic uid so a keyboard binding survives the list being reordered (see runSym()).
 struct SavedRun { long uid = 0; wxString name; wxString cmd; };
 
-// The on-disk format, split out as free functions so it round-trips in a test with no frame. Name and
-// command are base64'd for the reason macros.dat base64s its name: the format is line-oriented and
-// either field may legitimately contain spaces, quotes, or a newline.
-static wxString wxnSerializeRuns(const std::vector<SavedRun>& runs, long nextUid)
+// macros.yaml and runcommands.yaml, which wxNote writes - split out as free functions so they round-trip
+// in a test with no frame:
+//
+//   version: 1                                version: 1
+//   nextId: 3                                 nextId: 2
+//   macros:                                   commands:
+//     - id: 2                                   - {id: 1, name: Open in browser, command: 'firefox "$(FULL_CURRENT_PATH)"'}
+//       name: Trim and save
+//       steps:
+//         - {msg: 2327, w: 0, l: 0}
+//         - {msg: 2170, w: 0, l: 0, text: hello}
+//
+// Names, command lines and a step's text may hold spaces, quotes or line breaks: YAML quotes them as it
+// must. A step's text that is not valid UTF-8 (typed into a document in a legacy code page) is kept as
+// textBase64 instead, so it still replays byte for byte. Parsing answers false for a file a NEWER wxNote
+// wrote (version above 1), and for one that does not parse: the caller must then treat the set as
+// read-only rather than rewrite it, or saving would silently drop whatever it could not read.
+static const long long kWxnListFileVersion = 1;
+
+static std::string wxnSerializeMacros(const std::vector<SavedMacro>& macros, long nextUid)
 {
-    wxString out; out << "wxn-runs 1\n" << "next " << nextUid << "\n";
-    for (const SavedRun& r : runs)
+    ryml::Tree t;
+    wxnyaml::MutNode root = wxnyaml::resetToMap(t);
+    wxnyaml::setInteger(wxnyaml::addKey(root, "version"), kWxnListFileVersion);
+    wxnyaml::setInteger(wxnyaml::addKey(root, "nextId"), nextUid);
+    wxnyaml::MutNode list = wxnyaml::addSeq(root, "macros");
+    for (const SavedMacro& m : macros)
     {
-        const wxScopedCharBuffer nu = r.name.utf8_str();
-        const wxScopedCharBuffer cu = r.cmd.utf8_str();
-        out += wxString::Format("R %ld %s %s\n", r.uid,
-                                wxBase64Encode(nu.data(), nu.length()),
-                                wxBase64Encode(cu.data(), cu.length()));
+        wxnyaml::MutNode e = wxnyaml::addMapItem(list);
+        wxnyaml::setInteger(wxnyaml::addKey(e, "id"), m.uid);
+        wxnyaml::setText(wxnyaml::addKey(e, "name"), std::string(m.name.utf8_str()));
+        wxnyaml::MutNode steps = wxnyaml::addSeq(e, "steps");
+        for (const MacroStep& st : m.steps)
+        {
+            wxnyaml::MutNode s = wxnyaml::addMapItem(steps);
+            wxnyaml::setOneLine(s);
+            wxnyaml::setInteger(wxnyaml::addKey(s, "msg"), st.msg);
+            wxnyaml::setInteger(wxnyaml::addKey(s, "w"), static_cast<long long>(st.wparam));
+            wxnyaml::setInteger(wxnyaml::addKey(s, "l"), static_cast<long long>(st.lparam));
+            if (!st.hasText) continue;
+            const bool plain = st.text.find('\0') == std::string::npos
+                            && (st.text.empty() || !wxString::FromUTF8(st.text.data(), st.text.size()).empty());
+            if (plain) wxnyaml::setText(wxnyaml::addKey(s, "text"), st.text);
+            else wxnyaml::setText(wxnyaml::addKey(s, "textBase64"), std::string(wxBase64Encode(st.text.data(), st.text.size()).utf8_str()));
+        }
     }
-    return out;
+    std::string out;
+    if (!wxnyaml::emit(t, out)) return std::string();
+    return "# wxNote's saved macros (Macro > Save Current Recorded Macro), written by wxNote.\n" + out;
 }
-// False means the file was written by a NEWER format version: the caller must then treat the set as
-// read-only rather than rewrite it, or saving would silently drop whatever it could not represent.
-// That is the same rule macros.dat follows.
-static bool wxnParseRuns(const wxString& text, std::vector<SavedRun>& out, long& nextUid)
+
+static bool wxnParseMacros(const std::string& text, std::vector<SavedMacro>& out, long& nextUid)
 {
     out.clear(); nextUid = 1;
-    wxStringTokenizer lines(text, "\n", wxTOKEN_STRTOK);
-    while (lines.HasMoreTokens())
+    wxnyaml::Doc doc;
+    if (!wxnyaml::parse(text, doc, "macros.yaml")) return false;
+    const wxnyaml::Node root = doc.root();
+    if (!root.readable()) return true;                                   // empty file: no macros yet
+    if (wxnyaml::integerOr(wxnyaml::child(root, "version"), 1) > kWxnListFileVersion) return false;
+    nextUid = (long)wxnyaml::integerOr(wxnyaml::child(root, "nextId"), 1);
+    const wxnyaml::Node list = wxnyaml::child(root, "macros");
+    if (!wxnyaml::isSeq(list)) return true;
+    for (wxnyaml::Node e : list.children())
     {
-        wxString line = lines.GetNextToken(); line.Trim(true);   // drop any trailing \r
-        wxStringTokenizer tk(line, " ", wxTOKEN_STRTOK);
-        if (!tk.HasMoreTokens()) continue;
-        const wxString tag = tk.GetNextToken();
-        if (tag == "wxn-runs") { long v = 0; tk.GetNextToken().ToLong(&v); if (v > 1) { out.clear(); return false; } }
-        else if (tag == "next") { long n = 1; if (tk.GetNextToken().ToLong(&n)) nextUid = n; }
-        else if (tag == "R")
-        {
-            long uid = 0; if (!tk.GetNextToken().ToLong(&uid)) continue;
-            const wxMemoryBuffer nb = wxBase64Decode(tk.GetNextToken());
-            const wxMemoryBuffer cb = wxBase64Decode(tk.GetNextToken());
-            SavedRun r;
-            r.uid  = uid;
-            r.name = wxString::FromUTF8((const char*)nb.GetData(), nb.GetDataLen());
-            r.cmd  = wxString::FromUTF8((const char*)cb.GetData(), cb.GetDataLen());
-            if (r.name.empty() || r.cmd.empty()) continue;   // a half-written row is dropped, not shown blank
-            if (uid >= nextUid) nextUid = uid + 1;           // keep nextUid ahead of any uid on disk
-            out.push_back(r);
-        }
+        long long uid = 0;
+        if (!wxnyaml::getInteger(wxnyaml::child(e, "id"), uid) || uid <= 0 || uid > LONG_MAX - 1) continue;
+        SavedMacro m;
+        m.uid = (long)uid;
+        m.name = wxString::FromUTF8(wxnyaml::textOr(wxnyaml::child(e, "name"), std::string()).c_str());
+        const wxnyaml::Node steps = wxnyaml::child(e, "steps");
+        if (wxnyaml::isSeq(steps))
+            for (wxnyaml::Node s : steps.children())
+            {
+                long long msg = 0;
+                if (!wxnyaml::getInteger(wxnyaml::child(s, "msg"), msg)) continue;
+                MacroStep st{};
+                st.msg = (int)msg;
+                st.wparam = (uptr_t)wxnyaml::integerOr(wxnyaml::child(s, "w"), 0);
+                st.lparam = (sptr_t)wxnyaml::integerOr(wxnyaml::child(s, "l"), 0);
+                std::string payload;
+                if (wxnyaml::getText(wxnyaml::child(s, "text"), payload)) { st.hasText = true; st.text = payload; }
+                else if (wxnyaml::getText(wxnyaml::child(s, "textBase64"), payload))
+                {
+                    const wxMemoryBuffer b = wxBase64Decode(wxString::FromUTF8(payload.c_str()));
+                    st.hasText = true;
+                    st.text.assign(static_cast<const char*>(b.GetData()), b.GetDataLen());
+                }
+                m.steps.push_back(st);
+            }
+        if (uid >= nextUid) nextUid = (long)uid + 1;                      // keep nextUid ahead of any uid on disk
+        out.push_back(m);
     }
     return true;
 }
+
+static std::string wxnSerializeRuns(const std::vector<SavedRun>& runs, long nextUid)
+{
+    ryml::Tree t;
+    wxnyaml::MutNode root = wxnyaml::resetToMap(t);
+    wxnyaml::setInteger(wxnyaml::addKey(root, "version"), kWxnListFileVersion);
+    wxnyaml::setInteger(wxnyaml::addKey(root, "nextId"), nextUid);
+    wxnyaml::MutNode list = wxnyaml::addSeq(root, "commands");
+    for (const SavedRun& r : runs)
+    {
+        wxnyaml::MutNode e = wxnyaml::addMapItem(list);
+        wxnyaml::setOneLine(e);
+        wxnyaml::setInteger(wxnyaml::addKey(e, "id"), r.uid);
+        wxnyaml::setText(wxnyaml::addKey(e, "name"), std::string(r.name.utf8_str()));
+        wxnyaml::setText(wxnyaml::addKey(e, "command"), std::string(r.cmd.utf8_str()));
+    }
+    std::string out;
+    if (!wxnyaml::emit(t, out)) return std::string();
+    return "# wxNote's saved Run commands (Run > Run... > Save), written by wxNote.\n" + out;
+}
+
+static bool wxnParseRuns(const std::string& text, std::vector<SavedRun>& out, long& nextUid)
+{
+    out.clear(); nextUid = 1;
+    wxnyaml::Doc doc;
+    if (!wxnyaml::parse(text, doc, "runcommands.yaml")) return false;
+    const wxnyaml::Node root = doc.root();
+    if (!root.readable()) return true;                                   // empty file: no commands yet
+    if (wxnyaml::integerOr(wxnyaml::child(root, "version"), 1) > kWxnListFileVersion) return false;
+    nextUid = (long)wxnyaml::integerOr(wxnyaml::child(root, "nextId"), 1);
+    const wxnyaml::Node list = wxnyaml::child(root, "commands");
+    if (!wxnyaml::isSeq(list)) return true;
+    for (wxnyaml::Node e : list.children())
+    {
+        long long uid = 0;
+        if (!wxnyaml::getInteger(wxnyaml::child(e, "id"), uid) || uid <= 0 || uid > LONG_MAX - 1) continue;
+        SavedRun r;
+        r.uid  = (long)uid;
+        r.name = wxString::FromUTF8(wxnyaml::textOr(wxnyaml::child(e, "name"), std::string()).c_str());
+        r.cmd  = wxString::FromUTF8(wxnyaml::textOr(wxnyaml::child(e, "command"), std::string()).c_str());
+        if (r.name.empty() || r.cmd.empty()) continue;   // a half-written row is dropped, not shown blank
+        if (uid >= nextUid) nextUid = (long)uid + 1;     // keep nextUid ahead of any uid on disk
+        out.push_back(r);
+    }
+    return true;
+}
+
 
 class EditorPage : public wxPanel
 {
@@ -374,12 +637,9 @@ struct ViewPane {
 #endif
 };
 
-// A parsed colour theme (stylers.model.xml / themes/*.xml).
+// A parsed colour theme (themes/*.yaml - read through src/theme_file.h).
 // fg/bg = -1 when unspecified; an empty fontName, a 0 fontSize and a 0 fontWeight likewise mean
-// "inherit". fontName and fontSize are Notepad++ WordsStyle attributes of its own and round-trip to it
-// exactly. fontWeight is a wxNote extension - Notepad++ has no such attribute, so it ignores the value
-// on read and drops it on write: a theme round-tripped through Notepad++ keeps the bold flag (what the
-// weight degrades to there) but loses the exact weight. Deliberate, per the design decision.
+// "inherit". fontWeight is wxNote's own: a theme imported from Notepad++ has none, and keeps its bold flag.
 struct StyleDef {
     int id; int fg; int bg; int fontStyle; wxString name;
     wxString fontName; int fontSize = 0; int fontWeight = 0;
@@ -387,11 +647,11 @@ struct StyleDef {
 struct WxnTheme
 {
     bool loaded = false;
-    std::map<wxString, std::pair<int,int>>   global;   // WidgetStyle name -> (fg,bg)
-    std::map<wxString, std::vector<StyleDef>> lexers;   // LexerType name  -> WordsStyles
+    std::map<wxString, std::pair<int,int>>   global;   // `global:` style name -> (fg,bg)
+    std::map<wxString, std::vector<StyleDef>> lexers;   // `lexers:` block name -> its styles
     std::string defaultFont; int defaultSize = 0;
-    // The LexerType ext attributes - Notepad++'s user extensions - as extension -> Language-menu name.
-    // Read only, and below the built-in tables in detection (see WxnUserExtMaps in lang_detect.h).
+    // The blocks' `extensions` lists (which a theme imported from Notepad++ brings along) as extension ->
+    // Language-menu name. Read only, and below the built-in tables in detection (WxnUserExtMaps).
     std::map<std::string, std::string> extToLang;
 };
 // The generic token classes a Scintillua-lexed buffer uses. The style numbers are the ones
@@ -418,19 +678,11 @@ static constexpr GenericStyle kGenericStyles[] = {
                                   // in 28/28 themes and in two of them it equals INSTRUCTION WORD, so
                                   // constants would render as keywords. Left unspecified instead: it
                                   // keeps the built-in palette until the user gives it a colour.
-// "RRGGBB" (theme XML) -> Scintilla 0xBBGGRR int, or -1 if empty/invalid.
-static int npp_bgr(const wxString& rrggbb)
-{
-    long v = 0;
-    if (rrggbb.empty() || !rrggbb.ToLong(&v, 16)) return -1;
-    const int r = (int)((v >> 16) & 0xFF), g = (int)((v >> 8) & 0xFF), b = (int)(v & 0xFF);
-    return (b << 16) | (g << 8) | r;
-}
 // Selected-text foreground. Scintilla leaves the selection FOREGROUND unset by default
 // (ViewStyle: selColours.fore.isSet == false), so a selected glyph keeps its own syntax colour painted
 // on top of the selection fill - and against a pale fill like the light theme's #ADD6FF a mid or light
 // token (comment grey, a number) simply disappears. Themes nominally carry a "Selected text colour"
-// foreground, but nearly every N++ XML we ship stores an inert sentinel ("000004") or a flat "000000"
+// foreground, but nearly every theme we ship stores an inert sentinel ('#000004') or a flat '#000000'
 // that would paint BLACK on a dark-blue dark-mode selection - so an explicit value is honoured only when
 // it genuinely contrasts with the fill, and otherwise black/white is derived from the fill's luminance.
 // Gamma-2.0 approximation on purpose: close enough for a pick-one-of-two decision, and needs no <cmath>.
@@ -687,21 +939,17 @@ static void wxnAppImageUnintegrate()
 static void wxnMaybeIntegrateAppImage(wxWindow* parent)
 {
     if (!wxnRunningAsAppImage()) return;
-    wxConfigBase* cfg = wxConfigBase::Get();
-    bool integrated = false;
-    cfg->Read("AppImageIntegrated", &integrated, false);
-    if (integrated)
+    if (g_state.getBool("appImage/integrated", false))
     {
         if (!wxnAppImageIsIntegrated()) { wxString e; wxnAppImageIntegrate(&e); }
         return;
     }
-    bool asked = false;
-    cfg->Read("AppImageIntegrationAsked", &asked, false);
-    if (asked) return;
+    if (g_state.getBool("appImage/asked", false)) return;
     // Recorded BEFORE the dialog, so a prompt that is dismissed by closing the window - or one that
     // never returns because the session ends - still counts as asked. A prompt that reappears every
     // launch is worse than one the user never sees again.
-    cfg->Write("AppImageIntegrationAsked", true);
+    g_state.setBool("appImage/asked", true);
+    wxnFlushState();
     const int r = wxMessageBox(
         _("Add wxNote to your applications menu?\n\n"
           "An AppImage is not installed, so your desktop does not know wxNote exists - which is why it "
@@ -711,7 +959,7 @@ static void wxnMaybeIntegrateAppImage(wxWindow* parent)
         "wxNote", wxYES_NO | wxICON_QUESTION, parent);
     if (r != wxYES) return;
     wxString err;
-    if (wxnAppImageIntegrate(&err)) cfg->Write("AppImageIntegrated", true);
+    if (wxnAppImageIntegrate(&err)) { g_state.setBool("appImage/integrated", true); wxnFlushState(); }
     else wxMessageBox(err, "wxNote", wxOK | wxICON_EXCLAMATION, parent);
 }
 
@@ -729,14 +977,13 @@ static bool          g_safeMode = false;
 // start from a blank slate. --clean implies --safe, so g_safeMode is also set when this is (see OnInit).
 static bool          g_cleanMode = false;
 // ---- --sandbox: a throwaway instance that neither reads nor writes ANY of the user's state ----------
-// Stronger than --clean, and orthogonal to --safe. --clean still runs against the real settings store,
-// so anything it changes (and every preference it writes back on exit) lands in the user's config;
-// --sandbox swaps the global wxConfig for an in-memory one, so reads return built-in defaults and
-// writes go nowhere. It also refuses to take part in window reuse in EITHER direction and writes no
-// crash-recovery backups, so nothing it does can reach a normal window or survive the process.
-// Set from a raw-argv pre-scan (see OnInit) rather than the parser, because the very first
-// wxConfigBase::Get() happens earlier than that - readUiLang() during locale setup - and the swap has
-// to be in place before it. Plugins still load: this isolates state, not code (combine with --safe).
+// Stronger than --clean, and orthogonal to --safe. --clean still runs against the real settings.yaml and
+// state.yaml, so anything it changes lands in the user's files; --sandbox opens both in a throwaway
+// directory instead, so reads return built-in defaults and writes go away with it. It also refuses to take
+// part in window reuse in EITHER direction and writes no crash-recovery backups, so nothing it does can
+// reach a normal window or survive the process. Set from a raw-argv pre-scan (see OnInit) rather than the
+// parser, because the first setting is read earlier than that - readUiLang() during locale setup - and
+// the stores must be open before it. Plugins still load: this isolates state, not code (combine with --safe).
 static bool          g_sandboxMode = false;
 // Help > Command Line Arguments' option list, captured from the parser itself in OnInit.
 // It used to be a second, hand-written copy of every option description inside one ~1.5 KB _() string.
@@ -770,7 +1017,7 @@ static const wxString& sandboxDataDir()
     return g_sandboxDataDir;
 }
 // ---- --locale <lang>: UI language for THIS RUN only -----------------------------------------------
-// Deliberately NOT written back to the "UILanguage" config key: Preferences > Localization and the
+// Deliberately NOT written back to the ui.language setting: Preferences > Localization and the
 // Localization radio menu must keep reflecting the user's persisted choice, so that a one-shot
 // `wxnote --locale ja README.md` (screenshotting/QA'ing a catalog) doesn't silently repoint the editor.
 // -1 = not given / not a language we ship a catalog for; see the raw-argv pre-scan in WxnApp::OnInit.
@@ -986,7 +1233,7 @@ class FLItemData : public wxTreeItemData { public: int line; explicit FLItemData
 // Project Panel tree node: a folder (isFile=false) or a file reference (isFile=true, path = full path).
 class ProjItemData : public wxTreeItemData { public: bool isFile; wxString path; ProjItemData(bool f, const wxString& p = "") : isFile(f), path(p) {} };
 
-// User-supplied Function List rules (functionList.conf under userDataDir), overlaid on the built-ins below:
+// User-supplied Function List rules (functionlist.yaml under userDataDir), overlaid on the built-ins below:
 // a language present here REPLACES (or, with "extend", adds to) the compiled-in rules. Loaded once at startup.
 static std::map<std::string, std::vector<FLRule>> g_flUserRules;
 static std::map<std::string, std::regex>          g_flUserComment;
@@ -1239,50 +1486,62 @@ static const std::regex* flCommentRe(const std::string& lang)
     return it == tbl.end() ? nullptr : &it->second;
 }
 
-// Load user Function List rules from functionList.conf (userDataDir), merged over the built-ins. Line format
-// (# starts a comment): a block "[lang <key>]" (or "[lang <key> extend]" to add to the built-in instead of
-// replacing it), then any of:  ext <e1> <e2>...  |  ignorecase  |  comment <regex>  |
-// func <group> <regex>  |  container <group> <regex>   (the regex is the rest of the line). Bad patterns are
-// dropped individually (try/catch), like the built-in table.
-static void loadFunctionListRules(const wxString& path)
+// Load user Function List rules from functionlist.yaml (userDataDir), merged over the built-ins:
+//
+//   languages:
+//     ocaml:                          <- the Function List key (flLangKey)
+//       extensions: [ml, mli]
+//       extend: false                 <- true: add to the built-in rules instead of replacing them
+//       ignoreCase: false
+//       comment: '\(\*[\s\S]*?\*\)'   <- what to mask before matching (single quotes: \ stays \)
+//       rules:
+//         - {kind: function, group: 1, regex: '^\s*let\s+(?:rec\s+)?(\w+)'}
+//         - {kind: container, group: 1, regex: '^\s*module\s+(\w+)'}
+//
+// Bad patterns are dropped individually (try/catch), like the built-in table. Returns why the file could
+// not be used at all ("" when it could, or does not exist).
+static std::string loadFunctionListRules(const wxString& path)
 {
     g_flUserRules.clear(); g_flUserComment.clear(); g_flUserExtToLang.clear();
-    wxLogNull noLog;
-    if (!wxFileExists(path)) return;
-    wxFile f(path); wxString raw;
-    if (!f.IsOpened() || !f.ReadAll(&raw, wxConvUTF8)) return;
-    std::string curLang; bool icase = false;
-    wxStringTokenizer lines(raw, "\n", wxTOKEN_STRTOK);
-    while (lines.HasMoreTokens())
+    std::string text;
+    wxnyaml::Doc doc;
+    if (!wxnReadFileBytes(path, text)) return std::string();
+    if (!wxnyaml::parse(text, doc, "functionlist.yaml")) return doc.error;
+    if (!doc.root().readable()) return std::string();   // empty, or only comments
+    const wxnyaml::Node langs = wxnyaml::child(doc.root(), "languages");
+    if (!wxnyaml::isMap(langs)) return "expected languages: at the top level";
+    for (wxnyaml::Node l : langs.children())
     {
-        wxString line = lines.GetNextToken(); line.Trim(true).Trim(false);
-        if (line.empty() || line[0] == '#') continue;
-        if (line.StartsWith("[") && line.EndsWith("]"))
+        const std::string lang = wxnyaml::keyOf(l);
+        if (lang.empty() || !wxnyaml::isMap(l)) continue;
+        const bool icase = wxnyaml::boolOr(wxnyaml::child(l, "ignoreCase"), false);
+        std::vector<FLRule> seed;
+        if (wxnyaml::boolOr(wxnyaml::child(l, "extend"), false))
+            if (const auto* b = flRules(lang)) seed = *b;   // start from the built-in (no overlay for this language yet)
+        g_flUserRules[lang] = std::move(seed);
+        const wxnyaml::Node exts = wxnyaml::child(l, "extensions");
+        if (wxnyaml::isSeq(exts))
+            for (wxnyaml::Node e : exts.children())
+            {
+                std::string ext;
+                if (wxnyaml::getText(e, ext)) g_flUserExtToLang[std::string(wxString::FromUTF8(ext.c_str()).Lower().utf8_str())] = lang;
+            }
+        std::string comment;
+        if (wxnyaml::getText(wxnyaml::child(l, "comment"), comment))
+            try { g_flUserComment[lang] = std::regex(comment, icase ? std::regex::icase : std::regex::flag_type{}); } catch (...) {}
+        const wxnyaml::Node rules = wxnyaml::child(l, "rules");
+        if (!wxnyaml::isSeq(rules)) continue;
+        for (wxnyaml::Node r : rules.children())
         {
-            wxStringTokenizer h(line.Mid(1, line.length() - 2), " ", wxTOKEN_STRTOK);
-            if (h.GetNextToken() != "lang") { curLang.clear(); continue; }
-            curLang = std::string(h.GetNextToken().utf8_str()); icase = false;
-            const bool extend = (h.GetNextToken() == "extend");
-            std::vector<FLRule> seed;
-            if (extend) { if (const auto* b = flRules(curLang)) seed = *b; }   // start from the built-in (no overlay for curLang yet)
-            g_flUserRules[curLang] = std::move(seed);
-            continue;
-        }
-        if (curLang.empty()) continue;
-        wxStringTokenizer tk(line, " ", wxTOKEN_STRTOK);
-        const wxString kw = tk.GetNextToken();
-        if (kw == "ignorecase") icase = true;
-        else if (kw == "ext") { while (tk.HasMoreTokens()) g_flUserExtToLang[std::string(tk.GetNextToken().Lower().utf8_str())] = curLang; }
-        else if (kw == "comment") { wxString rx = tk.GetString(); rx.Trim(false);
-            try { g_flUserComment[curLang] = std::regex(std::string(rx.utf8_str()), icase ? std::regex::icase : std::regex::flag_type{}); } catch (...) {} }
-        else if (kw == "func" || kw == "container") {
-            long grp = 1; tk.GetNextToken().ToLong(&grp);
-            wxString rest = tk.GetString(); rest.Trim(false);
-            const int kind = (kw == "container") ? 1 : 0;
+            std::string regex;
+            if (!wxnyaml::getText(wxnyaml::child(r, "regex"), regex)) continue;
+            const int kind = wxnyaml::textOr(wxnyaml::child(r, "kind"), "function") == "container" ? 1 : 0;
+            const long long grp = wxnyaml::integerOr(wxnyaml::child(r, "group"), 1);
             auto fl = std::regex::ECMAScript | std::regex::optimize | (icase ? std::regex::icase : std::regex::flag_type{});
-            try { g_flUserRules[curLang].push_back({ kind, std::regex(std::string(rest.utf8_str()), fl), (int)grp }); } catch (...) {}
+            try { g_flUserRules[lang].push_back({ kind, std::regex(regex, fl), (int)(grp >= 0 && grp < 100 ? grp : 1) }); } catch (...) {}
         }
     }
+    return std::string();
 }
 
 // How a language delimits a container's body, and what ends a declaration that has none. This is a
@@ -1457,7 +1716,7 @@ static long long wxnBackupThrottleMs(long long docBytes)
     if (docBytes <= kUnit) return 0;
     return std::min(kCapMs, kTickMs * (docBytes / kUnit));
 }
-// Write-to-temp + rename: the ONE atomic-replace idiom (crash backups, macros.dat). Truncate-in-place
+// Write-to-temp + rename: the ONE atomic-replace idiom (crash backups, every YAML file). Truncate-in-place
 // meant a crash mid-write destroyed the previous good copy at exactly the moment it mattered; here a
 // short write (disk full) or failed rename cleans up the temp and leaves the old file intact.
 static bool wxnWriteFileAtomic(const wxString& path, const void* data, size_t len)
@@ -1649,20 +1908,6 @@ static BOOL CALLBACK themeChildProc(HWND h, LPARAM dark)
     return TRUE;
 }
 #endif
-
-// Themed monochrome glyph bitmap (light on dark, dark on light) for small flat buttons.
-static wxBitmapBundle glyphIcon(const char* pathData, bool dark, int w = 16, int h = 16, bool filled = false)
-{
-    const char* col = dark ? "#dcdcdc" : "#404040";
-    const wxString svg = filled
-        ? wxString::Format("<svg xmlns='http://www.w3.org/2000/svg' width='%d' height='%d' viewBox='0 0 %d %d'>"
-                           "<path d='%s' fill='%s'/></svg>", w, h, w, h, pathData, col)
-        : wxString::Format("<svg xmlns='http://www.w3.org/2000/svg' width='%d' height='%d' viewBox='0 0 %d %d'>"
-                           "<path d='%s' fill='none' stroke='%s' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>",
-                           w, h, w, h, pathData, col);
-    const wxScopedCharBuffer u = svg.utf8_str();
-    return wxBitmapBundle::FromSVG(u.data(), wxSize(w, h));
-}
 
 // "Go to line" with a spinner whose up/down arrows are integrated INTO the field (borderless), like a
 // styled NumericUpDown. The native wxSpinCtrl up/down (msctls_updown32) can't be dark-themed, so the
@@ -2458,7 +2703,7 @@ static int nibLangRegister(NibHost*, const char* name, const char* exts, const c
 static const NibLangDefApi g_nibLangDefApi = { 1, sizeof(NibLangDefApi), nibLangRegister };
 
 // nib.keymap/1 - a plugin contributes keybinding overrides as a named, switchable SCHEME (the optional
-// GPL npp-shortcuts-compat plugin uses it to re-add Notepad++ shortcuts after parsing a shortcuts.xml).
+// GPL npp-compat plugin uses it to re-add Notepad++ shortcuts after parsing a shortcuts.xml).
 // The opaque NibKeymapScheme handed to the plugin IS a host-owned builder that accumulates COPIED strings
 // only - never a plugin-side pointer or callback. That is the categorical safety difference from
 // nib.events (whose retained raw fn pointers caused the unload UAF/crash - the nib-event-subscriber-uaf +
@@ -2599,6 +2844,90 @@ static int nibSessFileAt(NibHost*, const char* p, int i, char* b, int c) { retur
 static const NibSessionApi g_nibSessionApi = { 1, sizeof(NibSessionApi),
     nibSessSaveCurrent, nibSessSaveFiles, nibSessLoad, nibSessFileCount, nibSessFileAt };
 
+// A name ui.colorTheme may hold: "Default", or a theme with a file in the user's or the shipped theme
+// folder - the choices the Style Configurator offers.
+static bool wxnThemeNameExists(const std::string& name)
+{
+    if (name.empty() || name == "Default") return true;
+    if (name.find_first_of("\\/:*?\"<>|") != std::string::npos) return false;
+    const wxString file = wxString::FromUTF8(name.c_str()) + ".yaml";
+    const wxString data = g_sandboxMode ? sandboxDataDir() : wxStandardPaths::Get().GetUserDataDir();
+    const wxString exeDir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath());
+    wxLogNull noLog;
+    return wxFileExists(data + wxFILE_SEP_PATH + "themes" + wxFILE_SEP_PATH + file)
+        || wxFileExists(exeDir + wxFILE_SEP_PATH + "themes" + wxFILE_SEP_PATH + file);
+}
+
+// nib.settings/1 - read and change settings by ID. settings_schema.h decides what a value may be: a plugin
+// gets exactly the checks the Preferences dialog's writes go through, and nothing it could not write
+// itself - a theme name, for one, must name a theme there is. Each set is one edit to settings.yaml as it
+// is on disk now (comments kept), written at once.
+static int nibSettingsSet(NibHost*, const char* id, const char* value)
+{
+    const wxnsettings::Def* d = (id && value) ? wxnsettings::findDef(id) : nullptr;
+    if (!d) return 0;
+    const std::string v = value;
+    std::string l = v;
+    for (char& c : l) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+    WxnSettingsEdit s;
+    switch (d->kind)
+    {
+        case wxnsettings::Kind::Bool:
+            if (l != "true" && l != "false") return 0;
+            return s->setBool(d->id, l == "true") ? 1 : 0;
+        case wxnsettings::Kind::Int:
+        {
+            size_t i = (!v.empty() && (v[0] == '-' || v[0] == '+')) ? 1 : 0;
+            if (i == v.size() || v.size() - i > 9 || v.find_first_not_of("0123456789", i) != std::string::npos) return 0;
+            const long long n = std::stoll(v);
+            if (n < d->lo || n > d->hi) return 0;
+            return s->setInt(d->id, n) ? 1 : 0;
+        }
+        case wxnsettings::Kind::Text:
+            if (std::string(d->id) == "ui.colorTheme" && !wxnThemeNameExists(v)) return 0;
+            return s->setText(d->id, v) ? 1 : 0;
+        case wxnsettings::Kind::Choice:
+        {
+            const std::vector<std::string> names = wxnsettings::choiceNames(*d);
+            for (size_t i = 0; i < names.size(); ++i)
+                if (names[i] == l) return s->setChoice(d->id, (int)i) ? 1 : 0;
+            return 0;
+        }
+        case wxnsettings::Kind::Color:
+        {
+            unsigned rgb = 0;
+            return wxnyaml::parseColor(v, rgb) && s->setColor(d->id, rgb) ? 1 : 0;
+        }
+        case wxnsettings::Kind::Map:
+            return 0;
+    }
+    return 0;
+}
+static int nibSettingsGet(NibHost*, const char* id, char* buf, int cap)
+{
+    const wxnsettings::Def* d = id ? wxnsettings::findDef(id) : nullptr;
+    if (!d) return -1;
+    std::string v;
+    unsigned rgb = 0;
+    switch (d->kind)
+    {
+        case wxnsettings::Kind::Bool:   v = g_settings.getBool(d->id) ? "true" : "false"; break;
+        case wxnsettings::Kind::Int:    v = std::to_string(g_settings.getInt(d->id)); break;
+        case wxnsettings::Kind::Text:   v = g_settings.getText(d->id); break;
+        case wxnsettings::Kind::Choice: v = g_settings.getChoiceName(d->id); break;
+        case wxnsettings::Kind::Color:  if (g_settings.getColor(d->id, rgb)) v = wxnyaml::colorText(rgb); break;
+        case wxnsettings::Kind::Map:    break;
+    }
+    if (buf && cap > 0)
+    {
+        const size_t n = std::min(v.size(), static_cast<size_t>(cap - 1));
+        std::memcpy(buf, v.data(), n);
+        buf[n] = '\0';
+    }
+    return static_cast<int>(v.size());
+}
+static const NibSettingsApi g_nibSettingsApi = { 1, sizeof(NibSettingsApi), nibSettingsSet, nibSettingsGet };
+
 // nib.lexer/1 - create a Lexilla ILexer by name + count user-registered languages (portable: Lexilla is
 // built into the host on every OS, so the GPL bridge can serve NPPM_CREATELEXER for a recompiled plugin).
 static std::function<intptr_t(const char*)> g_nibLexerCreate;
@@ -2726,6 +3055,7 @@ static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_ALLOC)    == 0) return &g_nibAllocApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_SESSION)  == 0) return &g_nibSessionApi;
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_LEXER)    == 0) return &g_nibLexerApi;
+    if (minv <= 1 && std::strcmp(iface, NIB_IFACE_SETTINGS) == 0) return &g_nibSettingsApi;
 #ifdef __WXMSW__
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_WIN32)    == 0) return &g_nibWin32Api;
 #endif
@@ -2746,91 +3076,46 @@ static int nibCopyUtf8(const std::string& s, char* b, int c)
 // plugins and Import plugin(s) land here instead. Free-function shape because loadNibPlugins() is
 // one too; the path comes through g_nibUserDataDir - the same sandbox-aware seam every plugin
 // already reads - so --sandbox (and the selftest) cover this dir with no extra plumbing.
-// The user data dir as the free functions here see it - through the same sandbox-aware g_nibUserDataDir
-// hook every plugin reads, so --sandbox covers these files with no extra plumbing. Free-function shape
-// because loadNibPlugins() and the plugin-state file below both run before/outside the frame.
-static wxString nibUserDataRoot()
+static wxString nibUserPluginDir()
 {
     char b[2048];
     const int n = g_nibUserDataDir ? g_nibUserDataDir(b, static_cast<int>(sizeof(b))) : 0;
     if (n <= 0 || n >= static_cast<int>(sizeof(b))) return wxString();
-    return wxString::FromUTF8(b);
-}
-static wxString nibUserPluginDir()
-{
-    const wxString root = nibUserDataRoot();
-    return root.empty() ? wxString() : root + wxFILE_SEP_PATH + "nib";
+    return wxString::FromUTF8(b) + wxFILE_SEP_PATH + "nib";
 }
 
 // ---- plugin state: which plugins the user switched off, and which are queued for removal ----------
-// Two lists, both keyed by lowercased file name (see g_nibDisabledFiles for why not by plugin id):
-//   D <file>  disabled - found, listed, deliberately not loaded
-//   U <file>  queued for uninstall - deleted at the NEXT startup, before anything is loaded
+// Two lists in state.yaml, both keyed by lowercased file name (see g_nibDisabledFiles for why not by
+// plugin id):
+//   plugins/disabled          found, listed, deliberately not loaded
+//   plugins/pendingUninstall  deleted at the NEXT startup, before anything is loaded
 // Uninstall is queued rather than immediate because the file is mapped into this process the moment it
 // loaded: Windows refuses to delete it outright, and POSIX would unlink a library still in use. This is
 // the same "scheduled operations, applied on restart" model Visual Studio uses, and the reason the
 // dialog talks about pending changes rather than pretending the work happened.
 static std::set<std::string> g_nibPendingUninstall;
 
-static wxString wxnSerializePluginState(const std::set<std::string>& disabled,
-                                        const std::set<std::string>& uninstall)
-{
-    wxString out; out << "wxn-plugins 1\n";
-    for (const std::string& f : disabled)  out << "D " << wxString::FromUTF8(f) << "\n";
-    for (const std::string& f : uninstall) out << "U " << wxString::FromUTF8(f) << "\n";
-    return out;
-}
-// False for a newer format version: the caller must then leave the file alone rather than rewrite it,
-// the same rule macros.dat and runcommands.dat follow. File names may contain spaces, so the payload is
-// the rest of the line, not the next whitespace-delimited token.
-static bool wxnParsePluginState(const wxString& text, std::set<std::string>& disabled,
-                                std::set<std::string>& uninstall)
+// Over a StateFile rather than g_state directly, so the round trip is tested without a frame
+// (funclist_selftest). Names come back lowercased whatever the file says: every lookup lowercases first.
+static void wxnReadPluginState(const wxnsettings::StateFile& s, std::set<std::string>& disabled,
+                               std::set<std::string>& uninstall)
 {
     disabled.clear(); uninstall.clear();
-    wxStringTokenizer lines(text, "\n", wxTOKEN_STRTOK);
-    while (lines.HasMoreTokens())
-    {
-        wxString line = lines.GetNextToken(); line.Trim(true);
-        if (line.StartsWith("wxn-plugins"))
-        {
-            long v = 0;
-            if (line.Mid(11).Trim(false).ToLong(&v) && v > 1) { disabled.clear(); uninstall.clear(); return false; }
-            continue;
-        }
-        if (line.length() < 3) continue;
-        const wxString payload = line.Mid(2).Trim(false).Lower();
-        if (payload.empty()) continue;
-        if      (line[0] == 'D') disabled.insert(std::string(payload.utf8_str()));
-        else if (line[0] == 'U') uninstall.insert(std::string(payload.utf8_str()));
-    }
-    return true;
+    auto lower = [](const std::string& f) { return std::string(wxString::FromUTF8(f.c_str()).Lower().utf8_str()); };
+    for (const std::string& f : s.getList("plugins/disabled"))         if (!f.empty()) disabled.insert(lower(f));
+    for (const std::string& f : s.getList("plugins/pendingUninstall")) if (!f.empty()) uninstall.insert(lower(f));
 }
-
-static bool g_nibStateReadOnly = false;   // plugins.dat is a newer format version -> never overwrite it
-static wxString nibPluginStatePath()
+static void wxnWritePluginState(wxnsettings::StateFile& s, const std::set<std::string>& disabled,
+                                const std::set<std::string>& uninstall)
 {
-    const wxString root = nibUserDataRoot();
-    return root.empty() ? wxString() : root + wxFILE_SEP_PATH + "plugins.dat";
+    s.setList("plugins/disabled", std::vector<std::string>(disabled.begin(), disabled.end()));
+    s.setList("plugins/pendingUninstall", std::vector<std::string>(uninstall.begin(), uninstall.end()));
 }
-static void loadNibPluginState()
-{
-    g_nibDisabledFiles.clear(); g_nibPendingUninstall.clear(); g_nibStateReadOnly = false;
-    wxLogNull noLog;
-    const wxString p = nibPluginStatePath();
-    if (p.empty() || !wxFileExists(p)) return;
-    wxFile f(p); wxString raw;
-    if (!f.IsOpened() || !f.ReadAll(&raw, wxConvUTF8)) return;
-    if (!wxnParsePluginState(raw, g_nibDisabledFiles, g_nibPendingUninstall)) g_nibStateReadOnly = true;
-}
+static void loadNibPluginState() { wxnReadPluginState(g_state, g_nibDisabledFiles, g_nibPendingUninstall); }
 static void saveNibPluginState()
 {
-    if (g_nibStateReadOnly) return;
-    wxLogNull noLog;
-    const wxString root = nibUserDataRoot();
-    if (root.empty()) return;
-    if (!wxDirExists(root)) wxFileName::Mkdir(root, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-    const wxScopedCharBuffer u = wxnSerializePluginState(g_nibDisabledFiles, g_nibPendingUninstall).utf8_str();
-    wxnWriteFileAtomic(nibPluginStatePath(), u.data(), u.length());
+    wxnWritePluginState(g_state, g_nibDisabledFiles, g_nibPendingUninstall);
+    wxnFlushState();
 }
 // Delete anything queued for removal, BEFORE the loader maps any of it - that ordering is the whole
 // point of queueing. Only the user's own plugin dir is touched: <exe>/nib is not user-writable on an
@@ -2964,7 +3249,7 @@ static void unloadNibPlugins()
     // it - e.g. it aborted on a parse error, or is being unloaded mid-import). Unlike g_nibSubs/g_nibCommands
     // above these hold NO plugin-side pointers (only copied strings), so this is a leak-guard, not a UAF fix -
     // but it keeps "nothing referencing a DLL we're about to unmap" total. COMMITTED schemes are deliberately
-    // NOT torn down here: they were copied into the KeymapStore + persisted to shortcuts.json, so they are
+    // NOT torn down here: they were copied into the KeymapStore + persisted to keybindings.yaml, so they are
     // host-owned data that OUTLIVES the plugin - the exact property nib.events lacked.
     g_nibKmPendingBuilders.clear();
     for (auto it = g_nibLibs.rbegin(); it != g_nibLibs.rend(); ++it)
@@ -3490,8 +3775,8 @@ public:
         // real "restore to this" rect on hand even if the user closes while maximized.
         this->Bind(wxEVT_SIZE, [this](wxSizeEvent& e){ if (!IsMaximized()) m_normalRect.SetSize(GetSize()); e.Skip(); });
         this->Bind(wxEVT_MOVE, [this](wxMoveEvent& e){ if (!IsMaximized()) m_normalRect.SetPosition(GetPosition()); e.Skip(); });
-        loadTheme();            // parse the active theme XML for exact colours
-        { long z = 0; wxConfigBase::Get()->Read("Zoom", &z, 0L); m_zoom = static_cast<int>(z); }   // restore zoom
+        loadTheme();            // parse the active theme file for exact colours
+        m_zoom = static_cast<int>(g_state.getInt("zoom", 0));   // restore zoom
         // Seed a concrete paper size/orientation so File > Print's page geometry is never (0,0) before the
         // user has ever opened the print dialog - a fresh wxPrintData's paper id doesn't resolve to a size
         // on its own (see wxWidgets samples/stc's identical g_printData setup).
@@ -3609,8 +3894,11 @@ public:
         g_nibKmCommit = [this](NibKeymapScheme* h, int activate) -> int {
             NibKeymapBuilder* b = reinterpret_cast<NibKeymapBuilder*>(h);
             if (!b) return 0;
+            // keybindings.yaml cannot be written (it does not parse, or a newer wxNote wrote it): a scheme
+            // that would not persist is refused, as the commit contract promises persistence.
+            if (m_keymap.isReadOnly()) { dropNibKmBuilder(b); return 0; }
             // Menu tier: build a delta-only KeymapScheme. bundled=false so save() serializes it into
-            // shortcuts.json and it OUTLIVES the plugin (reloads as a plain user scheme even with the plugin
+            // keybindings.yaml and it OUTLIVES the plugin (reloads as a plain user scheme even with the plugin
             // gone). registerScheme replaces any same-id scheme, so a re-import is idempotent.
             KeymapScheme s;
             s.id      = b->id;
@@ -3890,7 +4178,7 @@ public:
         g_nibUiIsDark = [this]() -> int { return m_dark ? 1 : 0; };
         g_nibUiDarkColors = [this](NibUiDarkColors* c) -> int {
             if (!c || c->struct_size < sizeof(NibUiDarkColors)) return 0;
-            // Scintilla-style 0xBBGGRR (theme XML ints) -> the portable 0xRRGGBB the ABI speaks.
+            // Scintilla-style 0xBBGGRR (how WxnTheme keeps colours) -> the portable 0xRRGGBB the ABI speaks.
             auto bgrToRgb = [](int bgr, uint32_t fallback) -> uint32_t {
                 if (bgr < 0) return fallback;
                 return ((static_cast<uint32_t>(bgr) & 0xFF) << 16) | (static_cast<uint32_t>(bgr) & 0xFF00)
@@ -4146,7 +4434,7 @@ public:
     // some wx ports, so it has to run after Show() has realized the window.
     void applySavedWindowState() { if (m_wasMaximized) Maximize(true); }
     // -w/--wait: the paths the launching process is blocked on. Also force the save prompt ON for this run
-    // only (not persisted - saveSettings() skips the AskBeforeClose write in wait mode): m_askBeforeClose
+    // only (not persisted - saveSettings() skips files.confirmCloseUnsaved in wait mode): m_askBeforeClose
     // defaults to OFF, i.e. a modified buffer is discarded silently - which for a commit message would hand
     // git back an unedited COMMIT_EDITMSG with no warning.
     void enterWaitMode(const wxArrayString& paths)
@@ -4290,33 +4578,64 @@ public:
         flush();
     }
 
-    // Reopen the previous instance's files (Session/File*, gated on Session/Pending) plus any pending
-    // recovery backups. The recovery pass deliberately runs even when Pending is false: Pending is only
-    // re-set by a CLEAN exit, so gating recovery on it meant the launch right after a CRASH - the one
+    // settings.yaml or keybindings.yaml did not parse at startup: its defaults apply, and the file stays as
+    // the user left it (nothing is written to it until it parses again). Say so, where it will be seen -
+    // together with any other file of the user's that the constructor could not use (reportFileError).
+    void reportSettingsError(const wxString& error)
+    {
+        wxString msg;
+        if (!error.empty())
+            msg = wxString::Format(_("settings.yaml has an error (%s) - using the defaults until it is fixed"), error);
+        if (!m_keymap.loadError().empty())
+            msg += (msg.empty() ? "" : "   ")
+                 + wxString::Format(_("keybindings.yaml has an error (%s) - using the default keys until it is fixed"),
+                                    m_keymap.loadError());
+        if (!m_pendingFileErrors.empty()) msg += (msg.empty() ? "" : "   ") + m_pendingFileErrors;
+        m_pendingFileErrors.clear();
+        m_fileErrorsLive = true;
+        if (msg.empty()) return;
+        setStatus(0, msg);
+        m_hint = true;
+    }
+    // A file of the user's that does not parse (snippets.yaml, functionlist.yaml, contextmenu.yaml, a theme)
+    // is not used - wxNote carries on without it and never writes over it - and the user is told which file
+    // and where it broke, instead of being left to wonder why an edit changed nothing. During construction
+    // the frame is not on screen yet, so those wait for reportSettingsError; afterwards they show at once.
+    wxString m_pendingFileErrors;
+    bool     m_fileErrorsLive = false;
+    void reportFileError(const wxString& file, const std::string& error)
+    {
+        if (error.empty()) return;
+        const wxString msg = wxString::Format(_("%s has an error (%s) and is not used until it is fixed"),
+                                              file, wxString::FromUTF8(error.c_str()));
+        if (!m_fileErrorsLive) { m_pendingFileErrors += (m_pendingFileErrors.empty() ? "" : "   ") + msg; return; }
+        setStatus(0, msg);
+        m_hint = true;
+    }
+    // Reopen the previous instance's files (state.yaml session/files, gated on session/pending) plus any
+    // pending recovery backups. The recovery pass deliberately runs even when pending is false: pending is
+    // only re-set by a CLEAN exit, so gating recovery on it meant the launch right after a CRASH - the one
     // scenario the backups exist for - silently skipped the recovery manifest (the backed-up tabs then
     // "resurrected" a launch later). restoreRecoveryBackups self-guards (empty manifest = no-op), so
     // running it unconditionally costs nothing.
     void restoreSession()
     {
-        auto* cfg = wxConfigBase::Get();
-        bool pending = false;
-        cfg->Read("Session/Pending", &pending, false);
         EditorPage* initial = activePage();        // the startup "new 1"
         EditorPage* activePg = nullptr;
         std::map<wxString, EditorPage*> openedByPath;   // so the recovery pass below can overlay onto these instead of reopening
-        if (pending)
+        if (g_state.getBool("session/pending", false))
         {
-            cfg->Write("Session/Pending", false); cfg->Flush();
-            long count = 0, active = -1;
-            cfg->Read("Session/Count", &count, 0L);
-            cfg->Read("Session/Active", &active, -1L);
-            for (int i = 0; i < (int)count; ++i)
+            g_state.setBool("session/pending", false);
+            wxnFlushState();
+            const long long active = g_state.getInt("session/active", -1);
+            const std::vector<std::string> files = g_state.getList("session/files");
+            for (size_t i = 0; i < files.size(); ++i)
             {
-                wxString path;
-                if (!cfg->Read(wxString::Format("Session/File%d", i), &path) || path.empty() || !wxFileExists(path)) continue;
+                const wxString path = wxString::FromUTF8(files[i].c_str());
+                if (path.empty() || !wxFileExists(path)) continue;
                 EditorPage* pg = addDocument(path, wxFileNameFromPath(path));
                 openedByPath[path] = pg;
-                if (i == (int)active) activePg = pg;
+                if ((long long)i == active) activePg = pg;
             }
         }
         restoreRecoveryBackups(openedByPath);
@@ -4335,9 +4654,9 @@ public:
             });
         if (activePg) { const int idx = m_tabs->GetPageIndex(activePg); if (idx != wxNOT_FOUND) m_tabs->SetSelection(idx); }
     }
-    // Reopens anything left in the Recovery/* manifest (see backupUnsavedChanges): unsaved edits that
+    // Reopens anything left in state.yaml's recovery entries (see backupUnsavedChanges): unsaved edits that
     // were discarded without prompting (or a crash) and never got explicitly saved since. Runs after
-    // the normal Session/File* pass above - alreadyOpen lets it overlay onto a page that pass already
+    // the normal session/files pass above - alreadyOpen lets it overlay onto a page that pass already
     // reopened instead of opening the same path twice.
     void restoreRecoveryBackups(const std::map<wxString, EditorPage*>& alreadyOpen)
     {
@@ -4346,7 +4665,7 @@ public:
         // behind, and nothing else ever deletes it (clearRecovery removes only the .bak) - each such
         // crash would otherwise leak a full document copy in the user's data dir forever. Age-gated
         // rather than assuming "no write is in flight at startup": a SECOND wxnote process shares this
-        // dir (ReuseInstance defaults off), and its snapshot mid-write must not be swept. Anything older
+        // dir (window.reuseInstance defaults off), and its snapshot mid-write must not be swept. Anything older
         // than the longest backup cadence is an orphan under any process topology.
         {
             wxArrayString tmps;
@@ -4355,19 +4674,15 @@ public:
             for (const wxString& t : tmps)
                 if (const time_t mt = wxFileModificationTime(t); mt > 0 && now - mt > 600) wxRemoveFile(t);
         }
-        auto* cfg = wxConfigBase::Get();
-        const wxString prevPath = cfg->GetPath();
-        cfg->SetPath("/Recovery");
-        wxArrayString ids; wxString grp; long grpIdx;
-        for (bool more = cfg->GetFirstGroup(grp, grpIdx); more; more = cfg->GetNextGroup(grp, grpIdx)) ids.Add(grp);
-        cfg->SetPath(prevPath);
-        for (const wxString& id : ids)
+        bool dropped = false;
+        for (const std::string& idUtf8 : g_state.children("recovery/entries"))
         {
+            const wxString id = wxString::FromUTF8(idUtf8.c_str());
+            const std::string entry = "recovery/entries/" + idUtf8;
             const wxString bak = recoveryDir() + wxFILE_SEP_PATH + id + ".bak";
-            if (!wxFileExists(bak)) { cfg->DeleteGroup("Recovery/" + id); continue; }   // stale entry (backup file gone) - drop it
-            wxString path, title;
-            cfg->Read("Recovery/" + id + "/Path", &path);
-            cfg->Read("Recovery/" + id + "/Title", &title);
+            if (!wxFileExists(bak)) { g_state.remove(entry); dropped = true; continue; }   // stale entry (backup file gone) - drop it
+            const wxString path  = wxString::FromUTF8(g_state.getText(entry + "/path").c_str());
+            const wxString title = wxString::FromUTF8(g_state.getText(entry + "/title").c_str());
             wxFile f(bak); wxString content;
             if (f.IsOpened())
             {
@@ -4388,6 +4703,7 @@ public:
             refreshTab(pg);
             nibFireDocEvent(NIB_EV_SNAPSHOT_DIRTY_LOADED, pg);   // -> NPPN_SNAPSHOTDIRTYFILELOADED (restored dirty backup)
         }
+        if (dropped) wxnFlushState();
     }
 
 private:
@@ -4743,12 +5059,12 @@ private:
     //
     // This runs on EVERY plain Tab keypress (snippetExpandTrigger), before the trigger word is even
     // compared - so nothing here may touch the disk unconditionally. It used to re-parse the built-in
-    // store (a compile-time string literal) AND stat, open, read and parse snippets.txt every time,
+    // store (a compile-time string literal) AND stat, open, read and parse snippets.yaml every time,
     // which on Windows put a CreateFile - and therefore the whole filesystem-filter stack, Defender
     // included - on the path of the most common keystroke in code editing.
     //
     // The built-ins parse once. The user file is re-read only when its timestamp or size changes,
-    // which keeps the property the old comment was defending: save snippets.txt and the very next
+    // which keeps the property the old comment was defending: save snippets.yaml and the very next
     // expansion uses it, no restart.
     std::vector<SnippetDef> m_snipUser;                    // parsed user entries
     wxDateTime             m_snipUserStamp;                // mtime it was parsed at
@@ -4760,7 +5076,7 @@ private:
         static const std::vector<SnippetDef> kBuiltin = wxnParseSnippetStore(wxnBuiltinSnippets());
 
         wxLogNull noPopup;
-        const wxFileName f(userDataDir(), "snippets.txt");
+        const wxFileName f(userDataDir(), "snippets.yaml");
         if (f.FileExists())
         {
             const wxDateTime  stamp = f.GetModificationTime();
@@ -4770,8 +5086,10 @@ private:
                 m_snipUser.clear();
                 wxFile   fh(f.GetFullPath());
                 wxString text;
+                std::string err;
                 if (fh.IsOpened() && fh.ReadAll(&text))
-                    m_snipUser = wxnParseSnippetStore(std::string(text.utf8_str()));
+                    m_snipUser = wxnParseSnippetStore(std::string(text.utf8_str()), &err);
+                reportFileError("snippets.yaml", err);
                 m_snipUserStamp = stamp;
                 m_snipUserSize  = size;
                 m_snipUserSeen  = true;
@@ -4798,7 +5116,7 @@ private:
         const std::vector<SnippetDef> avail = snippetsForActiveBuffer();
         if (avail.empty())
         {
-            themedInfo(_("No snippets apply to this file's language.\n\nAdd your own in snippets.txt "
+            themedInfo(_("No snippets apply to this file's language.\n\nAdd your own in snippets.yaml "
                          "in the user data folder."), _("Insert Snippet"));
             return;
         }
@@ -5623,7 +5941,7 @@ private:
         togglePane(m_charPanel);
     }
 
-    // ---- Project Panels 1/2/3 (workspace tree: named folders + file refs, saved as .xml) -------
+    // ---- Project Panels 1/2/3 (workspace tree: named folders + file refs, saved as .yaml) -------
     // Three INDEPENDENT workspaces, matching the three menu entries. They previously shared one
     // backing tree, so "Project Panel 2" toggled the same pane as 1 and 3, and opening a workspace in
     // one silently replaced whatever the others showed - which defeats the only reason to have three:
@@ -5723,71 +6041,94 @@ private:
     }
     void projOpen(int i)
     {
-        wxFileDialog dlg(this, _("Open Workspace"), "", "", _("Workspace (*.xml)|*.xml"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
-        if (dlg.ShowModal() == wxID_OK) loadProjectXml(i, dlg.GetPath());
+        wxFileDialog dlg(this, _("Open Workspace"), "", "", _("Workspace (*.yaml)|*.yaml"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (dlg.ShowModal() == wxID_OK && !loadProjectFile(i, dlg.GetPath()))
+            wxMessageBox(_("Could not read the workspace file."), _("Open Workspace"), wxOK | wxICON_ERROR, this);
     }
     void projSave(int i)
     {
         wxString path = m_proj[i].workspace;
         if (path.empty())
         {
-            wxFileDialog dlg(this, _("Save Workspace As"), "", "workspace.xml", _("Workspace (*.xml)|*.xml"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+            wxFileDialog dlg(this, _("Save Workspace As"), "", "workspace.yaml", _("Workspace (*.yaml)|*.yaml"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
             if (dlg.ShowModal() != wxID_OK) return;
             path = dlg.GetPath();
         }
-        saveProjectXml(i, path);
+        if (!saveProjectFile(i, path)) { setStatus(0, wxString::Format(_("Could not write %s"), path)); m_hint = true; return; }
         m_proj[i].workspace = path;
         setStatus(0, _("Workspace saved")); m_hint = true;
     }
-    void loadProjectXml(int i, const wxString& path)
+    // A workspace is a .yaml file (docs/SETTINGS_DESIGN.md):
+    //   name: My project
+    //   items:
+    //     - folder: src
+    //       items:
+    //         - file: C:\work\src\main.cpp
+    //     - file: C:\work\README.md
+    // A Notepad++ workspace (XML) is the optional npp-compat plugin's to translate.
+    bool loadProjectFile(int i, const wxString& path)
     {
+        std::string text;
+        wxnyaml::Doc doc;
+        if (!wxnReadFileBytes(path, text) || !wxnyaml::parse(text, doc) || !wxnyaml::isMap(doc.root())) return false;
         if (!m_proj[i].tree) buildProjectPanel(i);   // loadable before the pane has ever been shown
         wxTreeCtrl* t = m_proj[i].tree;
-        wxXmlDocument doc;
-        if (!doc.Load(path) || !doc.GetRoot()) return;
-        wxXmlNode* proj = nullptr;
-        for (wxXmlNode* n = doc.GetRoot()->GetChildren(); n; n = n->GetNext()) if (n->GetName() == "Project") { proj = n; break; }
         t->DeleteAllItems();
-        const wxTreeItemId root = t->AddRoot(proj ? proj->GetAttribute("name", "Workspace") : "Workspace", -1, -1, new ProjItemData(false));
-        if (proj) projLoadChildren(i, proj, root);
+        const wxString name = wxString::FromUTF8(wxnyaml::textOr(wxnyaml::child(doc.root(), "name"), "Workspace").c_str());
+        const wxTreeItemId root = t->AddRoot(name, -1, -1, new ProjItemData(false));
+        projLoadChildren(i, wxnyaml::child(doc.root(), "items"), root, 0);
         t->ExpandAll();
         m_proj[i].workspace = path;
+        return true;
     }
-    void projLoadChildren(int i, wxXmlNode* xparent, const wxTreeItemId& tparent)
+    void projLoadChildren(int i, wxnyaml::Node items, const wxTreeItemId& tparent, int depth)
     {
+        if (!wxnyaml::isSeq(items) || depth > 64) return;   // a hostile file nests deeper than any project does
         wxTreeCtrl* t = m_proj[i].tree;
-        for (wxXmlNode* n = xparent->GetChildren(); n; n = n->GetNext())
+        for (wxnyaml::Node it : items.children())
         {
-            if (n->GetName() == "Folder")
-            { const wxTreeItemId f = t->AppendItem(tparent, n->GetAttribute("name", "Folder"), -1, -1, new ProjItemData(false)); projLoadChildren(i, n, f); }
-            else if (n->GetName() == "File")
-            { const wxString p = n->GetAttribute("name"); t->AppendItem(tparent, wxFileNameFromPath(p), -1, -1, new ProjItemData(true, p)); }
+            std::string s;
+            if (wxnyaml::getText(wxnyaml::child(it, "folder"), s))
+            {
+                const wxTreeItemId f = t->AppendItem(tparent, wxString::FromUTF8(s.c_str()), -1, -1, new ProjItemData(false));
+                projLoadChildren(i, wxnyaml::child(it, "items"), f, depth + 1);
+            }
+            else if (wxnyaml::getText(wxnyaml::child(it, "file"), s))
+            {
+                const wxString p = wxString::FromUTF8(s.c_str());
+                t->AppendItem(tparent, wxFileNameFromPath(p), -1, -1, new ProjItemData(true, p));
+            }
         }
     }
-    void saveProjectXml(int i, const wxString& path)
+    bool saveProjectFile(int i, const wxString& path)
     {
         wxTreeCtrl* t = m_proj[i].tree;
-        if (!t) return;
-        wxXmlDocument doc;
-        auto* npp = new wxXmlNode(wxXML_ELEMENT_NODE, "wxNote");   // loadProjectXml never checks the root's own name, so old <NotepadPlus>-rooted workspace files still load
-        doc.SetRoot(npp);
-        auto* proj = new wxXmlNode(wxXML_ELEMENT_NODE, "Project");
-        proj->AddAttribute("name", t->GetItemText(t->GetRootItem()));
-        npp->AddChild(proj);
-        projSaveChildren(i, t->GetRootItem(), proj);
-        doc.Save(path);
+        if (!t) return false;
+        ryml::Tree tree;
+        wxnyaml::MutNode root = wxnyaml::resetToMap(tree);
+        wxnyaml::setText(wxnyaml::addKey(root, "name"), wxnUtf8(t->GetItemText(t->GetRootItem())));
+        projSaveChildren(i, t->GetRootItem(), wxnyaml::addSeq(root, "items"));
+        std::string out;
+        if (!wxnyaml::emit(tree, out)) return false;
+        out = "# wxNote workspace\n" + out;
+        wxLogNull noLog;
+        return wxnWriteFileAtomic(path, out.data(), out.size());
     }
-    void projSaveChildren(int i, const wxTreeItemId& tparent, wxXmlNode* xparent)
+    void projSaveChildren(int i, const wxTreeItemId& tparent, wxnyaml::MutNode items)
     {
         wxTreeCtrl* t = m_proj[i].tree;
         wxTreeItemIdValue cookie;
         for (wxTreeItemId c = t->GetFirstChild(tparent, cookie); c.IsOk(); c = t->GetNextChild(tparent, cookie))
         {
             auto* d = dynamic_cast<ProjItemData*>(t->GetItemData(c));
+            wxnyaml::MutNode e = wxnyaml::addMapItem(items);
             if (d && d->isFile)
-            { auto* f = new wxXmlNode(wxXML_ELEMENT_NODE, "File"); f->AddAttribute("name", d->path); xparent->AddChild(f); }
+                wxnyaml::setText(wxnyaml::addKey(e, "file"), wxnUtf8(d->path));
             else
-            { auto* fo = new wxXmlNode(wxXML_ELEMENT_NODE, "Folder"); fo->AddAttribute("name", t->GetItemText(c)); xparent->AddChild(fo); projSaveChildren(i, c, fo); }
+            {
+                wxnyaml::setText(wxnyaml::addKey(e, "folder"), wxnUtf8(t->GetItemText(c)));
+                projSaveChildren(i, c, wxnyaml::addSeq(e, "items"));
+            }
         }
     }
 
@@ -6498,7 +6839,7 @@ private:
     }
     void onRun()   // Run dialog (F5): enter a command with $(...) variables and launch it
     {
-        wxString cmd; wxConfigBase::Get()->Read("RunCommand", &cmd, "");
+        wxString cmd = wxString::FromUTF8(g_state.getText("run/lastCommand").c_str());
         wxDialog dlg(this, wxID_ANY, _("Run..."));
         auto* tc = new wxTextCtrl(&dlg, wxID_ANY, cmd, wxDefaultPosition, wxSize(520, -1));
         auto* browse = new wxButton(&dlg, wxID_ANY, "...", wxDefaultPosition, wxSize(32, -1));
@@ -6525,7 +6866,7 @@ private:
         themeDialog(&dlg);
         if (dlg.ShowModal() != wxID_OK) return;
         cmd = tc->GetValue().Trim().Trim(false); if (cmd.empty()) return;
-        wxConfigBase::Get()->Write("RunCommand", cmd); wxConfigBase::Get()->Flush();
+        g_state.setText("run/lastCommand", wxnUtf8(cmd)); wxnFlushState();
         if (saveRequested) { saveRunCommandAs(cmd); return; }
         const wxString full = substituteRunVars(cmd);
         if (wxExecute(full, wxEXEC_ASYNC) == 0) wxMessageBox(_("Failed to run:\n") + full, _("Run"), wxOK | wxICON_ERROR, this);
@@ -6536,7 +6877,7 @@ private:
     {
         if (m_runsReadOnly)
         {
-            wxMessageBox(_("runcommands.dat was written by a newer version of wxNote, so it is read-only here."),
+            wxMessageBox(_("runcommands.yaml cannot be read, or was written by a newer version of wxNote, so it is read-only here."),
                          _("Saved Run commands"), wxOK | wxICON_INFORMATION, this);
             return;
         }
@@ -6557,114 +6898,156 @@ private:
     }
 
     // ----- sessions (File > Save / Load Session + the nib.session/1 by-path surface) ------------------
-    // Session XML is written in the portable Notepad++ session shape - root <NotepadPlus>, then
-    // <Session activeView><mainView activeIndex><File filename lang position startPos endPos
-    // firstVisibleLine><Mark line/></File>...</mainView><subView.../></Session> - so the file both
-    // round-trips in wxNote AND parses as a Notepad++ session (loadSessionFromPath never checks the
-    // root's own tag name, so older <wxNote>-rooted files still load). Beyond the file list, the active
-    // tab persists its editing position: caret, first-visible line (scroll), and bookmark lines.
-    // The interactive File > Save/Load Session commands and the by-path nib.session hooks (which the GPL
-    // npp-bridge serves the Notepad++ *SESSION* messages from) share the three by-path helpers below.
+    // A session is a .yaml file (docs/SETTINGS_DESIGN.md has the format):
+    //   activeView: 0
+    //   main:
+    //     active: 1
+    //     files:
+    //       - {path: C:\work\a.cpp, caret: 120, firstLine: 3, bookmarks: [4, 10]}
+    //       - {path: C:\work\notes.txt, language: Python}
+    //   sub: {active: 0, files: []}
+    // A file's language is there only when it was picked from the Language menu (its menu name, or Normal
+    // Text), and is picked again on load; a detected one is detected again. Beyond the file list, the active tab persists
+    // its editing position: caret, first-visible line (scroll), and bookmark lines. The interactive File >
+    // Save/Load Session commands and the by-path nib.session hooks share the helpers below. A Notepad++ session (XML) is not read here: the optional
+    // npp-compat plugin opens one, and the npp-bridge answers Notepad++ plugins' session messages in
+    // Notepad++'s own format.
+    struct SessionFile { wxString path, lang; int caret = 0, firstLine = 0; std::vector<int> bookmarks; };
+    struct SessionData { int activeView = 0; std::vector<SessionFile> files[2]; int active[2] = { 0, 0 }; };   // [0] main, [1] sub
 
-    // Build a <File> node in the session shape. `pos`/`firstVisibleLine` capture the editing position
-    // (0 for a non-active/plain entry); the caller adds any <Mark> children.
-    static wxXmlNode* makeSessionFileNode(const wxString& filename, const wxString& lang, int pos, int firstVisibleLine)
+    bool writeSessionFile(const wxString& path, const SessionData& s)
     {
-        auto* f = new wxXmlNode(wxXML_ELEMENT_NODE, "File");
-        f->AddAttribute("firstVisibleLine", wxString::Format("%d", firstVisibleLine));
-        f->AddAttribute("startPos", wxString::Format("%d", pos));   // Notepad++'s caret attributes
-        f->AddAttribute("endPos",   wxString::Format("%d", pos));
-        f->AddAttribute("position", wxString::Format("%d", pos));   // wxNote's own round-trip attribute
-        f->AddAttribute("lang",     lang.empty() ? wxString("Normal Text") : lang);
-        f->AddAttribute("filename", filename);
-        return f;
+        ryml::Tree t;
+        wxnyaml::MutNode root = wxnyaml::resetToMap(t);
+        wxnyaml::setInteger(wxnyaml::addKey(root, "activeView"), s.activeView);
+        static const char* const names[2] = { "main", "sub" };
+        for (int v = 0; v < 2; ++v)
+        {
+            wxnyaml::MutNode view = wxnyaml::addMap(root, names[v]);
+            wxnyaml::setInteger(wxnyaml::addKey(view, "active"), s.active[v]);
+            wxnyaml::MutNode files = wxnyaml::addSeq(view, "files");
+            for (const SessionFile& f : s.files[v])
+            {
+                wxnyaml::MutNode e = wxnyaml::addMapItem(files);
+                wxnyaml::setOneLine(e);
+                wxnyaml::setText(wxnyaml::addKey(e, "path"), wxnUtf8(f.path));
+                if (!f.lang.empty()) wxnyaml::setText(wxnyaml::addKey(e, "language"), wxnUtf8(f.lang));
+                if (f.caret > 0) wxnyaml::setInteger(wxnyaml::addKey(e, "caret"), f.caret);
+                if (f.firstLine > 0) wxnyaml::setInteger(wxnyaml::addKey(e, "firstLine"), f.firstLine);
+                if (!f.bookmarks.empty())
+                {
+                    wxnyaml::MutNode b = wxnyaml::addSeq(e, "bookmarks");
+                    wxnyaml::setOneLine(b);
+                    for (int line : f.bookmarks) wxnyaml::setInteger(wxnyaml::addItem(b), line);
+                }
+            }
+        }
+        std::string out;
+        if (!wxnyaml::emit(t, out)) return false;
+        out = "# wxNote session\n" + out;
+        wxLogNull noLog;
+        return wxnWriteFileAtomic(path, out.data(), out.size());
     }
+    // False when the file cannot be read or is no session (neither a main: nor a sub: view). A file entry
+    // may also be just its path, for a session written by hand.
+    static bool readSessionFile(const wxString& path, SessionData& s)
+    {
+        s = SessionData();
+        std::string text;
+        wxnyaml::Doc doc;
+        if (!wxnReadFileBytes(path, text) || !wxnyaml::parse(text, doc)) return false;
+        const wxnyaml::Node root = doc.root();
+        static const char* const names[2] = { "main", "sub" };
+        bool anyView = false;
+        for (int v = 0; v < 2; ++v)
+        {
+            const wxnyaml::Node view = wxnyaml::child(root, names[v]);
+            if (!wxnyaml::isMap(view)) continue;
+            anyView = true;
+            s.active[v] = (int)wxnyaml::integerOr(wxnyaml::child(view, "active"), -1);
+            const wxnyaml::Node files = wxnyaml::child(view, "files");
+            if (!wxnyaml::isSeq(files)) continue;
+            for (wxnyaml::Node e : files.children())
+            {
+                SessionFile f;
+                std::string text1;
+                if (wxnyaml::getText(e, text1)) f.path = wxString::FromUTF8(text1.c_str());
+                else if (wxnyaml::isMap(e))
+                {
+                    f.path = wxString::FromUTF8(wxnyaml::textOr(wxnyaml::child(e, "path"), std::string()).c_str());
+                    f.lang = wxString::FromUTF8(wxnyaml::textOr(wxnyaml::child(e, "language"), std::string()).c_str());
+                    f.caret = (int)wxnyaml::integerOr(wxnyaml::child(e, "caret"), 0);
+                    f.firstLine = (int)wxnyaml::integerOr(wxnyaml::child(e, "firstLine"), 0);
+                    const wxnyaml::Node marks = wxnyaml::child(e, "bookmarks");
+                    if (wxnyaml::isSeq(marks))
+                        for (wxnyaml::Node m : marks.children())
+                        {
+                            long long line = 0;
+                            if (wxnyaml::getInteger(m, line) && line >= 0 && line < INT_MAX) f.bookmarks.push_back((int)line);
+                        }
+                }
+                if (!f.path.empty()) s.files[v].push_back(f);
+            }
+        }
+        s.activeView = (int)wxnyaml::integerOr(wxnyaml::child(root, "activeView"), 0);
+        return anyView;
+    }
+
     // Save the currently-open on-disk documents (both views) as a session file. Returns the number of
     // files written (>= 0), or -1 on write failure. Only the globally-active page carries caret/marks.
     int saveSessionToPath(const wxString& path)
     {
-        wxXmlDocument doc;
-        auto* root = new wxXmlNode(wxXML_ELEMENT_NODE, "NotepadPlus");
-        auto* sess = new wxXmlNode(wxXML_ELEMENT_NODE, "Session");
-        sess->AddAttribute("activeView", paneIndex(m_active) ? "1" : "0");
-        root->AddChild(sess); doc.SetRoot(root);
+        SessionData s;
+        s.activeView = paneIndex(m_active) ? 1 : 0;
         EditorPage* activeP = activePage();
-        struct ViewSpec { wxAuiNotebook* tabs; const char* tag; };
-        const ViewSpec views[2] = { { m_main.tabs, "mainView" }, { m_sub.tabs, "subView" } };
+        const wxAuiNotebook* views[2] = { m_main.tabs, m_sub.tabs };
         int total = 0;
-        for (const auto& vs : views)
+        for (int v = 0; v < 2; ++v)
         {
-            auto* viewNode = new wxXmlNode(wxXML_ELEMENT_NODE, vs.tag);
-            int saved = 0, sessActive = 0;
-            if (vs.tabs) for (size_t i = 0; i < vs.tabs->GetPageCount(); ++i)
+            if (!views[v]) continue;
+            for (size_t i = 0; i < views[v]->GetPageCount(); ++i)
             {
-                auto* p = static_cast<EditorPage*>(vs.tabs->GetPage(i));
+                auto* p = static_cast<EditorPage*>(views[v]->GetPage(i));
                 if (!p || p->path.empty()) continue;              // only real (saved) files go in a session
-                wxXmlNode* f;
-                if (p == activeP) {                               // the live editor holds this page's caret/scroll/marks
-                    f = makeSessionFileNode(p->path, p->lang, (int)sci(SCI_GETCURRENTPOS), (int)sci(SCI_GETFIRSTVISIBLELINE));
-                    int ln = -1; const int lc = (int)sci(SCI_GETLINECOUNT);
-                    while ((ln = (int)sci(SCI_MARKERNEXT, ln + 1, 1 << MARK_BOOKMARK)) >= 0 && ln < lc)
-                    { auto* mk = new wxXmlNode(wxXML_ELEMENT_NODE, "Mark"); mk->AddAttribute("line", wxString::Format("%d", ln)); f->AddChild(mk); }
-                    sessActive = saved;
-                } else {
-                    f = makeSessionFileNode(p->path, p->lang, 0, 0);
+                SessionFile f;
+                f.path = p->path;
+                if (p->langForced && p->sciLang.empty())   // a Language-menu pick; Normal Text by a name no translation changes
+                    f.lang = p->forcedLexer.empty() ? wxString("Normal Text") : p->forcedName;
+                if (p == activeP)                                 // the live editor holds this page's caret/scroll/marks
+                {
+                    f.caret = (int)sci(SCI_GETCURRENTPOS);
+                    f.firstLine = (int)sci(SCI_GETFIRSTVISIBLELINE);
+                    int ln = -1;
+                    const int lc = (int)sci(SCI_GETLINECOUNT);
+                    while ((ln = (int)sci(SCI_MARKERNEXT, ln + 1, 1 << MARK_BOOKMARK)) >= 0 && ln < lc) f.bookmarks.push_back(ln);
+                    s.active[v] = (int)s.files[v].size();
                 }
-                viewNode->AddChild(f); ++saved; ++total;
+                s.files[v].push_back(f);
+                ++total;
             }
-            viewNode->AddAttribute("activeIndex", wxString::Format("%d", sessActive));
-            sess->AddChild(viewNode);
         }
-        wxLogNull noLog;
-        return doc.Save(path) ? total : -1;
+        return writeSessionFile(path, s) ? total : -1;
     }
     // Save an explicit list of file paths as a session file (no editor state). Returns true on success.
     bool saveSessionFilesToPath(const wxString& path, const std::vector<wxString>& files)
     {
-        wxXmlDocument doc;
-        auto* root = new wxXmlNode(wxXML_ELEMENT_NODE, "NotepadPlus");
-        auto* sess = new wxXmlNode(wxXML_ELEMENT_NODE, "Session"); sess->AddAttribute("activeView", "0");
-        root->AddChild(sess); doc.SetRoot(root);
-        auto* mainView = new wxXmlNode(wxXML_ELEMENT_NODE, "mainView"); mainView->AddAttribute("activeIndex", "0");
-        for (const auto& fp : files) if (!fp.empty()) mainView->AddChild(makeSessionFileNode(fp, wxString(), 0, 0));
-        sess->AddChild(mainView);
-        auto* subView = new wxXmlNode(wxXML_ELEMENT_NODE, "subView"); subView->AddAttribute("activeIndex", "0");
-        sess->AddChild(subView);                                  // Notepad++ always writes both views
-        wxLogNull noLog;
-        return doc.Save(path);
-    }
-    // Locate the <Session> node's view children under a session document's root (tolerant of the root
-    // tag name, and of a bare <mainView> root). Returns the first view node to iterate from, or nullptr.
-    static wxXmlNode* sessionViewScan(wxXmlDocument& doc)
-    {
-        if (!doc.GetRoot()) return nullptr;
-        for (wxXmlNode* a = doc.GetRoot()->GetChildren(); a; a = a->GetNext())
-            if (a->GetName() == "Session") return a->GetChildren();
-        return doc.GetRoot()->GetChildren();                      // no <Session> wrapper: scan the root directly
+        SessionData s;
+        for (const auto& fp : files)
+            if (!fp.empty()) { SessionFile f; f.path = fp; s.files[0].push_back(f); }
+        return writeSessionFile(path, s);
     }
     // Enumerate the files a session file lists (across both views, in document order). Returns the count;
     // when `out` is non-null it is filled with the paths; when `valid` is non-null it is set true iff the
-    // file parsed as a well-formed session (has at least one <mainView>/<subView> node).
+    // file parsed as a session (has at least one view).
     int sessionFileList(const wxString& path, std::vector<wxString>* out, bool* valid)
     {
-        if (valid) *valid = false;
-        wxXmlDocument doc;
-        { wxLogNull noLog; if (!doc.Load(path) || !doc.GetRoot()) return 0; }
-        int count = 0; bool anyView = false;
-        for (wxXmlNode* v = sessionViewScan(doc); v; v = v->GetNext())
-        {
-            if (v->GetName() != "mainView" && v->GetName() != "subView") continue;
-            anyView = true;
-            for (wxXmlNode* f = v->GetChildren(); f; f = f->GetNext())
-            {
-                if (f->GetName() != "File") continue;
-                const wxString fp = f->GetAttribute("filename");
-                if (fp.empty()) continue;
-                if (out) out->push_back(fp);
-                ++count;
-            }
-        }
-        if (valid) *valid = anyView;
+        SessionData s;
+        const bool ok = readSessionFile(path, s);
+        if (valid) *valid = ok;
+        if (!ok) return 0;
+        int count = 0;
+        for (const auto& view : s.files)
+            for (const SessionFile& f : view) { if (out) out->push_back(f.path); ++count; }
         return count;
     }
     // Open every file listed in a session file (both views open into the active view). Returns the number
@@ -6672,33 +7055,25 @@ private:
     // session. Restores each opened file's caret/scroll/bookmarks.
     int loadSessionFromPath(const wxString& path)
     {
-        wxXmlDocument doc;
-        { wxLogNull noLog; if (!doc.Load(path) || !doc.GetRoot()) return -1; }
+        SessionData s;
+        if (!readSessionFile(path, s)) return -1;
         std::vector<EditorPage*> opened;
-        int mainActiveIndex = -1; bool anyView = false;
-        for (wxXmlNode* v = sessionViewScan(doc); v; v = v->GetNext())
-        {
-            if (v->GetName() != "mainView" && v->GetName() != "subView") continue;
-            anyView = true;
-            const bool isMain = v->GetName() == "mainView";
-            const int ai = wxAtoi(v->GetAttribute("activeIndex", "-1"));
-            int localIdx = 0;
-            for (wxXmlNode* f = v->GetChildren(); f; f = f->GetNext())
+        int mainActiveIndex = -1;
+        for (int v = 0; v < 2; ++v)
+            for (size_t i = 0; i < s.files[v].size(); ++i)
             {
-                if (f->GetName() != "File") continue;
-                const int idxHere = localIdx++;
-                const wxString fp = f->GetAttribute("filename");
-                if (fp.empty() || !wxFileExists(fp)) continue;
-                openPath(fp);                                     // opens it in a new tab and makes it active
-                sci(SCI_GOTOPOS, wxAtoi(f->GetAttribute("position", f->GetAttribute("startPos", "0"))));
-                sci(SCI_SETFIRSTVISIBLELINE, wxAtoi(f->GetAttribute("firstVisibleLine", "0")));
-                for (wxXmlNode* mk = f->GetChildren(); mk; mk = mk->GetNext())
-                    if (mk->GetName() == "Mark") sci(SCI_MARKERADD, wxAtoi(mk->GetAttribute("line", "0")), MARK_BOOKMARK);
-                if (isMain && idxHere == ai && mainActiveIndex < 0) mainActiveIndex = (int)opened.size();
+                const SessionFile& f = s.files[v][i];
+                if (!wxFileExists(f.path)) continue;
+                openPath(f.path);                                 // opens it in a new tab and makes it active
+                if (f.lang.CmpNoCase("Normal Text") == 0) setForcedLang("", _("Normal text file"));
+                else if (const WxnLang* L = f.lang.empty() ? nullptr : wxnLangFindByName(wxnUtf8(f.lang)))
+                    setForcedLang(wxString::FromUTF8(L->lexer), wxString::FromUTF8(L->name));
+                sci(SCI_GOTOPOS, f.caret);
+                sci(SCI_SETFIRSTVISIBLELINE, f.firstLine);
+                for (int line : f.bookmarks) sci(SCI_MARKERADD, line, MARK_BOOKMARK);
+                if (v == 0 && (int)i == s.active[0] && mainActiveIndex < 0) mainActiveIndex = (int)opened.size();
                 opened.push_back(activePage());
             }
-        }
-        if (!anyView) return -1;
         if (mainActiveIndex >= 0 && mainActiveIndex < (int)opened.size() && opened[mainActiveIndex] && m_tabs)
         { const int idx = m_tabs->GetPageIndex(opened[mainActiveIndex]); if (idx != wxNOT_FOUND) m_tabs->SetSelection(idx); }
         return (int)opened.size();
@@ -6706,14 +7081,14 @@ private:
     void saveSession()
     {
         if (!m_tabs) return;
-        wxFileDialog d(this, _("Save Session"), "", "session.xml", _("Session files (*.xml)|*.xml|All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        wxFileDialog d(this, _("Save Session"), "", "session.yaml", _("Session files (*.yaml)|*.yaml|All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
         if (d.ShowModal() != wxID_OK) return;
         const int saved = saveSessionToPath(d.GetPath());
         if (saved >= 0) { setStatus(0, wxString::Format(_("Session saved - %d file(s)"), saved)); m_hint = true; }
     }
     void loadSession()
     {
-        wxFileDialog d(this, _("Load Session"), "", "", _("Session files (*.xml)|*.xml|All files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        wxFileDialog d(this, _("Load Session"), "", "", _("Session files (*.yaml)|*.yaml|All files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
         if (d.ShowModal() != wxID_OK) return;
         const int opened = loadSessionFromPath(d.GetPath());
         if (opened < 0) { wxMessageBox(_("Could not read the session file."), _("Load Session"), wxOK | wxICON_ERROR, this); return; }
@@ -7338,9 +7713,9 @@ private:
         sci(SCI_SETMARGINMASKN, 2, SC_MASK_FOLDERS);
         sci(SCI_SETMARGINWIDTHN, 2, 14);
         sci(SCI_SETMARGINSENSITIVEN, 2, 1);
-        // Fold colour mapping (theme XML files define their "Fold" entries expecting exactly this):
+        // Fold colour mapping (theme files define their "Fold" entries expecting exactly this):
         //   fold-margin background = "Fold margin" bg / fg
-        //   marker FORE = "Fold" *bgColor*, marker BACK = "Fold" *fgColor*  (deliberately SWAPPED)
+        //   marker FORE = "Fold" *bg*, marker BACK = "Fold" *fg*  (deliberately SWAPPED)
         //   marker BACKSELECTED = "Fold active" fg, plus SCI_MARKERENABLEHIGHLIGHT.
         auto G = [&](const char* n) -> std::pair<int,int> {
             auto it = m_theme.global.find(n); return it == m_theme.global.end() ? std::make_pair(-1,-1) : it->second; };
@@ -7733,18 +8108,18 @@ private:
         ev.as.document.id = reinterpret_cast<intptr_t>(p); nibFireEvent(ev);
     }
     // ----- user-writable app data ------------------------------------------------------------
-    // Per-user, WRITABLE app-data root - per-user User-Defined Languages (userDefineLangs/) and an
-    // edited contextMenu.xml live here, NOT next to the exe, which is read-only on an installed build
-    // (/opt/wxnote on Linux, Program Files on Windows, inside the .app bundle on macOS). This is the
-    // same identity wxConfig persists settings/theme under. Kept a pure path getter (it's called on
-    // hot paths like every right-click); callers that WRITE create it first (Mkdir with FULL).
+    // Per-user, WRITABLE app-data root - settings.yaml, state.yaml, keybindings.yaml, an edited
+    // contextmenu.yaml, user themes and User-Defined Languages (userDefineLangs/) live here, NOT next to
+    // the exe, which is read-only on an installed build (/opt/wxnote on Linux, Program Files on Windows,
+    // inside the .app bundle on macOS). Kept a pure path getter (it's called on hot paths like every
+    // right-click); callers that WRITE create it first (Mkdir with FULL).
     // --sandbox redirects here rather than at each writer. Everything user-writable funnels through
-    // this one function - recovery backups, shortcuts.json, macros.dat, registered Scintillua lexers,
-    // contextMenu.xml, downloaded dictionaries - and so does g_nibUserDataDir, which hands the path to
-    // every plugin. Sealing the seam covers all of them, including plugin writes that no per-call-site
-    // guard could reach. Without this, quitting a sandbox with unsaved text left an orphaned .bak in
-    // the REAL recovery dir: the file was written, while its manifest entry went to the discarded
-    // in-memory config, so nothing would ever clean it up.
+    // this one function - the YAML files above, recovery backups, macros.yaml, registered Scintillua
+    // lexers, downloaded dictionaries - and so does g_nibUserDataDir, which hands the path to every
+    // plugin. Sealing the seam covers all of them, including plugin writes that no per-call-site guard
+    // could reach. Without this, quitting a sandbox with unsaved text left an orphaned .bak in the REAL
+    // recovery dir: the file was written, while its manifest entry went to the discarded sandbox store,
+    // so nothing would ever clean it up.
     wxString userDataDir()
     {
         return g_sandboxMode ? sandboxDataDir() : wxStandardPaths::Get().GetUserDataDir();
@@ -7753,8 +8128,8 @@ private:
     // ----- unsaved-changes recovery (Preferences > General "Ask before closing unsaved changes", off
     // by default) - when a modified document is discarded WITHOUT prompting, its content is backed up
     // to <userDataDir>/RecoveryBackups/<id>.bak first, so it survives that close (or a later crash/relaunch)
-    // instead of being silently lost. The manifest is a set of wxConfig groups keyed by that same id
-    // (Recovery/<id>/Path, Recovery/<id>/Title) - independent of Session/File* (which only tracks
+    // instead of being silently lost. The manifest is state.yaml's recovery/entries, keyed by that same id
+    // (recovery/entries/<id>/path and /title) - independent of session/files (which only tracks
     // "what's currently open" and is fully rewritten on every exit); an id is only removed once its
     // content is safely saved to disk for real (see writeFile()). Backups live under userDataDir() (NOT
     // <exe>/): the install dir isn't user-writable, so a write there used to fail with ENOENT (its parent
@@ -7763,18 +8138,22 @@ private:
     // The user-writable Nib plugin dir, scanned by loadNibPlugins() after <exe>/nib. Member twin of
     // the free nibUserPluginDir() (which reads the same path through g_nibUserDataDir).
     wxString userPluginDir() { return userDataDir() + wxFILE_SEP_PATH + "nib"; }
+    // A backup's id names its .bak file and its state.yaml entry, so no two wxNote processes may ever hand
+    // out the same one - and each holds its own copy of state.yaml, so a counter kept there cannot promise
+    // that (two windows took the same id, and one's backup overwrote the other's). This process's start
+    // time and id, plus a count, can: no two running processes share an id, and a later one that reuses it
+    // started at a later second.
     wxString generateRecoveryId()
     {
-        auto* cfg = wxConfigBase::Get();
-        long next = 1; cfg->Read("Recovery/NextId", &next, 1L);
-        cfg->Write("Recovery/NextId", next + 1);
-        return wxString::Format("r%ld", next);
+        static const long long started = static_cast<long long>(wxGetUTCTime());
+        static int count = 0;
+        return wxString::Format("r%llx-%lx-%d", started, static_cast<unsigned long>(wxGetProcessId()), ++count);
     }
     void backupUnsavedChanges(EditorPage* p)
     {
         if (!p) return;
         // An empty untitled buffer holds no work to recover: backing it up would resurrect an empty "new 1"
-        // ghost tab on the next launch (and leak an empty .bak + a stale Recovery/ config group every quit).
+        // ghost tab on the next launch (and leak an empty .bak + a stale recovery entry in state.yaml every quit).
         // confirmClose has already activated p, so the active length reflects it. Clear any stale backup and bail.
         if (p->path.empty() && sci(SCI_GETLENGTH) == 0) { clearRecovery(p); return; }
         // Skip when nothing changed since the last snapshot: dirty stays true until a SAVE, so without
@@ -7802,15 +8181,16 @@ private:
         if (!wxnWriteFileAtomic(dir + wxFILE_SEP_PATH + p->recoveryId + ".bak", docBytes, (size_t)docLen)) return;
         p->backupSerial = p->editSerial;
         p->lastBackupMs = wxnMonoMs();
-        auto* cfg = wxConfigBase::Get();
-        cfg->Write("Recovery/" + p->recoveryId + "/Path", p->path);
-        cfg->Write("Recovery/" + p->recoveryId + "/Title", p->title);
-        cfg->Flush();
+        const std::string entry = "recovery/entries/" + wxnUtf8(p->recoveryId);
+        g_state.setText(entry + "/path", wxnUtf8(p->path));
+        g_state.setText(entry + "/title", wxnUtf8(p->title));
+        wxnFlushState();
     }
     void clearRecovery(EditorPage* p)
     {
         if (!p || p->recoveryId.empty()) return;
-        wxConfigBase::Get()->DeleteGroup("Recovery/" + p->recoveryId);
+        g_state.remove("recovery/entries/" + wxnUtf8(p->recoveryId));
+        wxnFlushState();
         { wxLogNull noLog; wxRemoveFile(recoveryDir() + wxFILE_SEP_PATH + p->recoveryId + ".bak"); }   // best-effort: the .bak may already be gone
         p->recoveryId.clear();
         // The cadence/serial stamps live and die with the recovery epoch: keeping them meant the FIRST
@@ -8010,8 +8390,7 @@ private:
         if (!g_waitMode)   // a --wait window is ephemeral (a commit message is not a session): without this every
                            // `git commit` would overwrite the user's saved tabs with .git/COMMIT_EDITMSG and the
                            // next normal launch would reopen it
-            saveSession(wxConfigBase::Get());   // remember the open (saved) files so the next launch reopens them
-        wxConfigBase::Get()->Flush();
+            saveExitSession();   // remember the open (saved) files so the next launch reopens them
         if (m_terminal) m_terminal->shutdownAll();   // kill child shells + stop their poll timers before AUI teardown
         // stop + free the owned timers so no WM_TIMER can Notify() into the frame while teardown pumps messages
         for (wxTimer** t : { &m_monTimer, &m_flTimer, &m_backupTimer }) if (*t) { (*t)->Stop(); delete *t; *t = nullptr; }
@@ -8217,46 +8596,53 @@ private:
     }
 
     // Popup (right-click) context menu, user-editable via Settings > Edit Popup ContextMenu ->
-    // the per-user contextMenu.xml (see contextMenuFilePath()/loadPopupContextMenu()/editContextMenu()).
-    // Item ids are the same kCmd* the main menu uses, so onCommand handles them unchanged; labels are pulled
-    // live from the real menu bar entry so they follow the current UI language, and enable state
-    // mirrors the editor for the handful of ids that need it (undo/redo/paste/selection-dependent).
+    // the per-user contextmenu.yaml (see contextMenuFilePath()/loadPopupContextMenu()/editContextMenu()).
+    // Items name commands the way key bindings do (edit.undo, search.bookmark.toggle) - or by number, the
+    // kCmd* id, which is how a translated Notepad++ contextMenu.xml arrives - so onCommand handles them
+    // unchanged; labels are pulled live from the real menu bar entry so they follow the current UI
+    // language, and enable state mirrors the editor for the handful of ids that need it
+    // (undo/redo/paste/selection-dependent).
     struct PopupMenuEntry { int id = 0; bool separator = false; };
     // The shipped, read-only default (co-located next to the exe by CMake) vs. the per-user override.
     // Loads prefer the per-user copy and fall back to the shipped default; edits/saves only ever touch
     // the per-user copy (see editContextMenu) - the install dir is read-only on an installed build.
-    wxString shippedContextMenuFilePath() { return wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "contextMenu.xml"; }
-    wxString contextMenuFilePath()        { return userDataDir() + wxFILE_SEP_PATH + "contextMenu.xml"; }
+    wxString shippedContextMenuFilePath() { return wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "contextmenu.yaml"; }
+    wxString contextMenuFilePath()        { return userDataDir() + wxFILE_SEP_PATH + "contextmenu.yaml"; }
     std::vector<PopupMenuEntry> loadPopupContextMenu()
     {
         std::vector<PopupMenuEntry> out;
-        wxXmlDocument doc;
-        wxLogNull noLog;   // a bad hand-edit / unreadable file must not pop an error dialog on right-click
         wxString path = contextMenuFilePath();          // prefer the per-user copy...
         if (!wxFileExists(path)) path = shippedContextMenuFilePath();   // ...else the shipped default
-        if (doc.Load(path) && doc.GetRoot())
+        std::string text;
+        wxnyaml::Doc doc;
+        // A bad hand edit or unreadable file falls through to the built-in menu below - never a dialog on
+        // right-click; a file that does not parse says so in the status bar.
+        const bool read = wxnReadFileBytes(path, text);
+        if (read && !wxnyaml::parse(text, doc, "contextmenu.yaml")) reportFileError("contextmenu.yaml", doc.error);
+        else if (read)
         {
-            for (wxXmlNode* sec = doc.GetRoot()->GetChildren(); sec; sec = sec->GetNext())
-            {
-                if (sec->GetName() != "ScintillaContextMenu") continue;
-                for (wxXmlNode* it = sec->GetChildren(); it; it = it->GetNext())
+            const wxnyaml::Node items = wxnyaml::child(doc.root(), "items");
+            if (wxnyaml::isSeq(items))
+                for (wxnyaml::Node it : items.children())
                 {
-                    if (it->GetName() != "Item") continue;
-                    if (it->GetAttribute("type") == "Separator") { out.push_back({ 0, true }); continue; }
-                    long id = 0;
-                    if (it->GetAttribute("id", "0").ToLong(&id) && id != 0) out.push_back({ (int)id, false });
+                    std::string name;
+                    long long number = 0;
+                    if (!wxnyaml::getText(it, name)) continue;
+                    if (name == "-") out.push_back({ 0, true });
+                    else if (wxnyaml::getInteger(it, number)) { if (number > 0 && number < INT_MAX) out.push_back({ (int)number, false }); }
+                    else if (const EffectiveBinding* b = m_keymap.effective(wxString::FromUTF8(name.c_str()))) out.push_back({ b->cmdId, false });
+                    // anything else is a command this build does not have: skipped, like a stale id below
                 }
-            }
         }
         if (!out.empty()) return out;
-        // contextMenu.xml missing/unparsable - built-in fallback, kept in sync with the bundled
-        // resources/contextMenu.xml default, so a bad hand-edit can't leave the menu empty.
+        // contextmenu.yaml missing/unparsable - built-in fallback, kept in sync with the bundled
+        // resources/contextmenu.yaml default, so a bad hand-edit can't leave the menu empty.
         return { { kCmdEditUndo, false }, { kCmdEditRedo, false }, { 0, true },
                  { kCmdEditCut, false }, { kCmdEditCopy, false }, { kCmdEditPaste, false }, { kCmdEditDelete, false }, { 0, true },
                  { kCmdEditSelectall, false }, { 0, true },
                  { kCmdSearchToggleBookmark, false } };
     }
-    // Settings > Edit Popup ContextMenu: open the PER-USER contextMenu.xml in the editor to hand-edit.
+    // Settings > Edit Popup ContextMenu: open the PER-USER contextmenu.yaml in the editor to hand-edit.
     // The shipped default sits in the read-only install dir, so on first edit we seed the per-user copy
     // from it - giving the user a working, commented starting point that saves back to a writable path.
     void editContextMenu()
@@ -8270,7 +8656,7 @@ private:
             if (wxFileExists(shipped)) wxCopyFile(shipped, userPath, false);
         }
         if (wxFileExists(userPath)) openPath(userPath);
-        else setStatus(0, _("Could not create a writable contextMenu.xml to edit."));   // degenerate: seed failed
+        else setStatus(0, _("Could not create a writable contextmenu.yaml to edit."));   // degenerate: seed failed
     }
     void showEditorContext(int screenX, int screenY)
     {
@@ -8339,7 +8725,7 @@ private:
     }
 
     // Rewrite every store-managed menu item's "\t<accel>" suffix from the KeymapStore's effective set,
-    // preserving the mnemonic. This is how a shortcuts.json override (and, later, a scheme switch) shows
+    // preserving the mnemonic. This is how a keybindings.yaml override (and, later, a scheme switch) shows
     // up in the menu, and how the accel is re-attached from locale-independent DATA after a UI-language
     // switch instead of from the (translated) .po label. Items with no store entry (the runtime Language
     // submenu, Recent Files, plugin/macro commands) are left untouched. Idempotent; runs on every
@@ -8596,7 +8982,7 @@ private:
                 auto* recent = new wxMenu;
                 fileMenu->Insert(insertAt, wxID_ANY, _("Recent &Files"), recent);
                 m_fileHistory.UseMenu(recent);
-                auto* c = wxConfigBase::Get(); c->SetPath("/RecentFiles"); m_fileHistory.Load(*c); c->SetPath("/");
+                loadRecentFiles();
             }
         }
         // File > Open Containing Folder's tool cluster (see terminal_panel.h), inserted at the
@@ -8620,7 +9006,7 @@ private:
         }
         // Shortcut store: seed Tier 0 from the menu data's defaultAccel, register the bundled read-only
         // preset (Tier 1: the "wxNote" identity; Notepad++ keys come only via the optional
-        // npp-shortcuts-compat import), then layer shortcuts.json's active-scheme selection + user
+        // npp-compat import), then layer keybindings.yaml's active-scheme selection + user
         // deltas on top (best-effort/hand-editable). Ordering is load-bearing: schemes must be
         // registered BEFORE load() so a saved activeScheme resolves at startup (an id that no longer
         // exists snaps back to the default inside load()) and load()'s reload cleanup (keep bundled,
@@ -8629,7 +9015,7 @@ private:
         // now build the accel table + rewrite the menu labels from this store.
         seedKeymapDefaults(m_keymap);
         seedEditorKeymapDefaults(m_keymap);   // Tier 0 for the curated Scintilla "Editor commands"
-        loadSavedMacros();                    // restore saved macros from macros.dat...
+        loadSavedMacros();                    // restore saved macros from macros.yaml...
         appendMacroMenuItems();               // ...list them on the (already-built) Macro menu...
         seedMacroKeymapDefaults();            // ...and register "macro.<uid>" so a stored binding resolves + the mapper shows them
         loadSavedRuns();                      // same three steps for the saved Run commands
@@ -8637,7 +9023,8 @@ private:
         seedRunKeymapDefaults();
         registerKeymapSchemes(m_keymap);
         m_keymap.load(userDataDir());
-        loadFunctionListRules(userDataDir() + wxFILE_SEP_PATH + "functionList.conf");   // user-defined Function List languages
+        reportFileError("functionlist.yaml",                   // user-defined Function List languages
+                        loadFunctionListRules(userDataDir() + wxFILE_SEP_PATH + "functionlist.yaml"));
         m_keymapReady = true;
         // Apply any editor-command overrides to the two persistent STCs now the store is loaded. buildEditor()
         // created them before this point (store empty then), so the setupScintilla-time apply was a no-op;
@@ -9018,7 +9405,20 @@ private:
     void addToMRU(const wxString& path)
     {
         m_fileHistory.AddFileToHistory(path);
-        auto* c = wxConfigBase::Get(); c->SetPath("/RecentFiles"); m_fileHistory.Save(*c); c->SetPath("/"); c->Flush();
+        saveRecentFiles();
+    }
+    // state.yaml recentFiles, most recent first - the order File > Recent Files lists them in.
+    void loadRecentFiles()
+    {
+        const std::vector<std::string> files = g_state.getList("recentFiles");
+        for (size_t i = files.size(); i-- > 0;) m_fileHistory.AddFileToHistory(wxString::FromUTF8(files[i].c_str()));
+    }
+    void saveRecentFiles()
+    {
+        std::vector<std::string> files;
+        for (size_t i = 0; i < m_fileHistory.GetCount(); ++i) files.push_back(wxnUtf8(m_fileHistory.GetHistoryFile(i)));
+        g_state.setList("recentFiles", files);
+        wxnFlushState();
     }
 
     // ----- toolbar (default icon set, fixed button order) -------------------
@@ -9106,7 +9506,7 @@ private:
         // m_iconStyle: 0 = line icons (default), 1 = Solar (green), 2 = IconPark (teal/lime), 3 = Streamline (green/teal)
         if (m_iconStyle == 1) { wxBitmapBundle c = iconColored(name, "icons-solar", px); if (c.IsOk()) return c; }
         else if (m_iconStyle == 2) { wxBitmapBundle c = iconColored(name, "icons-iconpark", px); if (c.IsOk()) return c; }
-        else if (m_iconStyle >= 3) { wxBitmapBundle c = iconColored(name, "icons-streamline", px); if (c.IsOk()) return c; }   // 3 also absorbs a stale ToolbarIconStyle=3 ("IconPark Bold", removed) from an older config - it lands on a colored pack either way (loadSettings clamps anything past 3)
+        else if (m_iconStyle == 3) { wxBitmapBundle c = iconColored(name, "icons-streamline", px); if (c.IsOk()) return c; }
         static const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "icons" + wxFILE_SEP_PATH;
         // Permissive toolbar icons (Tabler x Open Color, MIT) - monochrome by default, with a meaning-accent
         // on 8 of the 32 (gold New "+", blue Save/Save-All, red Record/Stop, green Playback/-multiple). Neutral
@@ -9167,7 +9567,7 @@ private:
         const wxString col =
             m_iconStyle == 1 ? (m_dark ? "#69db7c" : "#2f9e44") :   // Solar
             m_iconStyle == 2 ? (m_dark ? "#38d9a9" : "#0ca678") :   // IconPark (teal)
-            m_iconStyle >= 3 ? (m_dark ? "#69db7c" : "#099268") :   // Streamline
+            m_iconStyle == 3 ? (m_dark ? "#69db7c" : "#099268") :   // Streamline
             (m_dark ? "#dee2e6" : "#343a40");                       // Tabler / line: themed grey
         wxString paths;   // separate <path>/<circle> elements (one multi-subpath 'd' can confuse the SVG parser)
         if      (!strcmp(kind, "prev"))    paths = "<path d='M15 6l-6 6l6 6'/>";
@@ -9392,7 +9792,7 @@ private:
         });
         sb->Bind(wxEVT_LEFT_DCLICK, &WxnShellFrameT::onStatusDClick, this);   // interactive status bar: double-click a field to act
         // Editable zoom combo, parked over field 6 (INS/OVR moved to 7). m_zoom is already restored from
-        // config at this point (the ctor reads it before building any chrome), so seed the field directly
+        // state.yaml at this point (the ctor reads it before building any chrome), so seed the field directly
         // rather than waiting for a zoom event that only fires when the user changes something.
         m_zoomField = new ZoomField(sb, m_dark);
         m_zoomField->SetToolTip(_("Zoom level"));
@@ -9455,7 +9855,7 @@ private:
     }
     static bool isMenuLanguage(const std::string& n) { return wxnLangFindByName(n) != nullptr; }
     // Which Language-menu language a document opens as; nullptr = Normal Text. lang_detect.h has the
-    // order (the user's own extensions - Style Configurator, then functionList.conf -, Scintillua's
+    // order (the user's own extensions - Style Configurator, then functionlist.yaml -, Scintillua's
     // lexer.detect() on the name, wxNote's overrides and comment table, the theme's ext attributes, then
     // the first line). Reads the buffer head for the first-line checks, so it must run once the text is
     // loaded - setLexerForFile's callers already guarantee that.
@@ -9513,7 +9913,7 @@ private:
     // languages the bar has always described keep their long labels ("C++ source file"); every other one
     // shows its Language-menu name, which is also what a manual pick shows. Translated at the point of
     // construction: this string's only consumer is EditorPage::lang, which updateStatus() paints into
-    // status field 0 (the session XML's "lang" attribute is written but never read back).
+    // status field 0 (a session file's `language` field is written but never applied on load).
     static wxString langDisplayName(const wxString& n)
     {
         if (n.empty())         return _("Normal text file");
@@ -9558,7 +9958,19 @@ private:
         for (const auto& a : kAlias) if (langName == a.lang) return { a.key };
         return {};
     }
+    // Every path that settles a page's language comes through here - opening, activating, Save As, a
+    // Language-menu pick, a theme reload - so the per-language tab settings follow it from here too: when
+    // the language changed. A plain save passes here as well, and re-applying them then would undo
+    // indentation a plugin set on this one document (an EditorConfig plugin, say).
     void setLexerForFile(const wxString& path)
+    {
+        const EditorPage* p = activePage();
+        auto langOf = [](const EditorPage* pg) { return pg ? (pg->langForced ? pg->forcedName : pg->autoLang) : wxString(); };
+        const wxString before = langOf(p);
+        setLexerForFileImpl(path);
+        if (langOf(p) != before) applyDocSettings(m_stc);
+    }
+    void setLexerForFileImpl(const wxString& path)
     {
         applyEditorTheme(m_dark);          // reset every style to the theme base (incl. line numbers)
         auto* page = activePage();
@@ -9640,20 +10052,15 @@ private:
                         if (s.bg >= 0) sci(SCI_STYLESETBACK, s.id, s.bg);
                         sci(SCI_STYLESETBOLD,   s.id, (s.fontStyle & 1) ? 1 : 0);
                         sci(SCI_STYLESETITALIC, s.id, (s.fontStyle & 2) ? 1 : 0);
-                        // Bit 4 is Notepad++'s underline flag. It was parsed and written back all along but
-                        // never rendered, so 167 styles across the 28 shipped themes (baanc, toml ERROR,
-                        // nsis) have been authored underlined and drawn plain. Bits above this are left
-                        // alone deliberately - 357 perl styles carry a bit 8 whose meaning is documented
-                        // nowhere in Notepad++ or here, so it is preserved and never interpreted.
-                        sci(SCI_STYLESETUNDERLINE, s.id, (s.fontStyle & 4) ? 1 : 0);
+                        sci(SCI_STYLESETUNDERLINE, s.id, (s.fontStyle & 4) ? 1 : 0);   // `underline` (167 shipped styles)
                         applyStyleFont(m_stc, s);
                     }
                     themed = true;
                 }
             }
             // The fallback palettes are written in their own lexer's style numbers, so they only fit that
-            // lexer: on any other (Markdown, Dart, Zig... - no stylers block in a Notepad++ theme) they
-            // would colour arbitrary tokens. Those keep the theme's base style, as plain text does.
+            // lexer: on any other (Markdown, Dart, Zig... - a block no theme has) they would colour
+            // arbitrary tokens. Those keep the theme's base style, as plain text does.
             if (!themed) { if (lx == "python") stylePythonFallback(); else if (lx == "cpp") styleCppFallback(); }
             // Keyword lists by LANGUAGE, slot by slot (keywords.h): SciTE's wherever it has them, so the
             // languages sharing a lexer (C, C#, Java, Go... on cpp; HTML, PHP, ASP, JSP on hypertext, with
@@ -9668,7 +10075,7 @@ private:
         }
         sci(SCI_COLOURISE, 0, -1);
     }
-    // Built-in colour fallback, used only if the theme XML can't be loaded.
+    // Built-in colour fallback, used only if the theme file can't be loaded.
     void styleCppFallback()
     {
         const int cm=m_dark?0x55996A:0x008000, kw=m_dark?0xD69C56:0xFF0000, st=m_dark?0x7891CE:0x1515A3,
@@ -11504,7 +11911,7 @@ private:
     //   2. an explicit Language-menu pick (langForced). A pick is the ANSWER, not a hint: forcing
     //      Normal Text means "no comments here", so this branch never falls through to the
     //      extension guess it was deliberately chosen to override.
-    //   3. the user's own extensions: the Style Configurator's "User ext.", then a functionList.conf
+    //   3. the user's own extensions: the Style Configurator's "User ext.", then a functionlist.yaml
     //      `ext` line (the keys are the same vocabulary) - the order detection uses.
     //   4. the built-in extension/filename table.
     //   5. the language detection gave the buffer (EditorPage::autoLang) - for what the table has no
@@ -12694,176 +13101,203 @@ private:
     {
         flag = !flag;
         setToggleUi(id, flag);
-        auto* c = wxConfigBase::Get(); c->Write(key, flag); c->Flush();
+        { WxnSettingsEdit s; s->setBool(key, flag); }
+        m_prefsLoaded[key] = flag ? "true" : "false";
+        noteIfSettingsUnsaved();
     }
-    void toggleWrap()  { syncToggle(kCmdViewWrap, m_wrap, "Editing/Wrap"); sci(SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE); }
-    void toggleWs()    { syncToggle(kCmdViewAllCharacters, m_ws, "Editing/Whitespace"); if (menuBar()) menuBar()->Check(kCmdViewNpc, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
-    void toggleGuides(){ syncToggle(kCmdViewIndentGuide, m_guides, "Editing/IndentGuides"); sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE); }
+    void toggleWrap()  { syncToggle(kCmdViewWrap, m_wrap, "editor.wordWrap"); sci(SCI_SETWRAPMODE, m_wrap ? SC_WRAP_WORD : SC_WRAP_NONE); }
+    void toggleWs()    { syncToggle(kCmdViewAllCharacters, m_ws, "editor.showWhitespace"); if (menuBar()) menuBar()->Check(kCmdViewNpc, m_ws); sci(SCI_SETVIEWWS, m_ws ? SCWS_VISIBLEALWAYS : SCWS_INVISIBLE); sci(SCI_SETVIEWEOL, m_ws ? 1 : 0); }
+    void toggleGuides(){ syncToggle(kCmdViewIndentGuide, m_guides, "editor.indentGuides"); sci(SCI_SETINDENTATIONGUIDES, m_guides ? SC_IV_LOOKBOTH : SC_IV_NONE); }
+    // settings.yaml is refused while it does not parse (writing would throw away what the user is in the
+    // middle of fixing), so a change made then lives for this session only - and the user is told why.
+    void noteIfSettingsUnsaved()
+    {
+        if (g_settingsFile.ok()) return;
+        setStatus(0, wxString::Format(_("Not saved: settings.yaml has an error (%s)"), wxString::FromUTF8(g_settingsFile.error().c_str())));
+        m_hint = true;
+    }
 
     // ----- persisted preferences (Settings > Preferences) ---------------
-    static size_t recentMaxFromConfig()   // Recent Files max, read straight from config so the m_fileHistory member init can use it
+    static size_t recentMaxSetting()   // Recent Files max, read straight from the settings so the m_fileHistory member init can use it
     {
-        long m = 10; wxConfigBase::Get()->Read("RecentFiles/Max", &m, 10L);
-        return (size_t)(m < 1 ? 1 : (m > 50 ? 50 : m));
+        return (size_t)g_settings.getInt("files.maxRecentFiles");   // 1..50, held to that by the schema
     }
     void loadSettings()
     {
-        auto* c = wxConfigBase::Get();
-        c->Read("IntegratedBar", &m_integratedBar, false);
+        const wxnsettings::Settings& s = g_settings;
+        m_integratedBar = s.getBool("window.integratedTitleBar");
         // "Native window buttons" is a user choice only on Linux, where the two modes look visibly
         // different (our own flat buttons vs. hosting the bar in GTK's real header bar). On Windows it's
         // always on - the native-buttons path (OS hit-testing: snap layouts, native drag, Fluent glyphs)
         // is strictly the better one and the alternative differs only in subtle glyph rendering, so there's
         // no meaningful toggle to offer. On macOS the integrated bar always uses the native traffic lights.
 #if defined(WXN_HAS_BORDERLESS)
-        // Top-bar window-button style (Preferences > General): 0 = system-native (Win snap-layouts / GTK
-        // header bar), 1 = wxNote's flat buttons, 2 = minimal (inset circle). Default: native on
-        // Windows, our own buttons on Linux. Migrates the old boolean "NativeWinButtons" if the new key is
-        // absent. 2 used to mean an Opera-style rounded pill; the value is reused rather than retired, so a
-        // config that already selected it lands on the style that replaced it instead of silently resetting.
-        long btnStyle =
-#ifdef __WXMSW__
-            0;
-#else
-            1;
-#endif
-        if (!c->HasEntry("TopBarButtonStyle") && c->HasEntry("NativeWinButtons"))
-        { bool oldNative = (btnStyle == 0); c->Read("NativeWinButtons", &oldNative, oldNative); btnStyle = oldNative ? 0 : 1; }
-        else c->Read("TopBarButtonStyle", &btnStyle, btnStyle);
-        m_topBarBtnStyle = (btnStyle < 0 || btnStyle > 2) ? 1 : (int)btnStyle;   // clamp a hand-edited/stale value onto a real style
+        // Top-bar window-button style (Preferences > General, window.buttonStyle): 0 = system-native (Win
+        // snap-layouts / GTK header bar), 1 = wxNote's flat buttons, 2 = minimal (inset circle). The
+        // schema's default is native on Windows and our own buttons on Linux.
+        m_topBarBtnStyle = s.getChoice("window.buttonStyle");
 #ifdef __WXGTK__
-        c->Read("IgnorePlatformDeco", &m_ignorePlatformDeco, false);
+        m_ignorePlatformDeco = s.getBool("window.ignorePlatformDecorations");
 #endif
 #endif
-        m_themeMode = (int)readThemeMode();   // also resolved in OnInit (before the frame/config exist as members here)
-        c->Read("AskBeforeClose", &m_askBeforeClose, false);
-        c->Read("FullscreenAutohideToolbar", &m_fsAutohideToolbar, false);
-        c->Read("ReuseInstance", &m_reuseInstance, false);
-        c->Read("Editing/CustomGutterColour", &m_customGutterColor, false);
+        m_themeMode = (int)readThemeMode();   // also resolved in OnInit (before the frame exists)
+        m_askBeforeClose = s.getBool("files.confirmCloseUnsaved");
+        m_fsAutohideToolbar = s.getBool("ui.fullScreen.hideToolbar");
+        m_reuseInstance = s.getBool("window.reuseInstance");
+        m_customGutterColor = s.getBool("editor.customGutterColor");
         // Default swatch (only shown/used before the user has ever picked a colour themselves) matches
         // the current theme's tone instead of a fixed light gray - a bright swatch read as a jarring
         // full inversion against a dark theme rather than a subtle "this margin stands out" accent.
-        const long gcDefault = m_dark ? 0x3E3A3AL : 0xE8E8E8L;
-        long gc = gcDefault; c->Read("Editing/GutterColourValue", &gc, gcDefault); m_gutterColorValue = gc;
-        long is = 1; c->Read("ToolbarIconStyle", &is, 1L);   // default 1 = Solar (green)
-        m_iconStyle = (is < 0 || is > 3) ? 2 : (int)is;   // 0 = line icons, 1 = Solar (default), 2 = IconPark, 3 = Streamline; clamp anything out of range into IconPark so the Preferences combo's SetSelection stays valid (a stale "3 = IconPark Bold" (removed) value now lands on Streamline - still a colored pack)
-        long tis = 16; c->Read("ToolbarIconSize", &tis, 16L);
-        m_toolbarIconSize = (tis < 12 || tis > 64) ? 16 : (int)tis;   // px; clamp garbage/out-of-range back to the 16 default
-        long mr = 10; c->Read("RecentFiles/Max", &mr, 10L); m_maxRecent = (int)mr;
-        c->Read("TabBar/CloseButton", &m_tabCloseBtn, true);   // integrated top bar on/off (also read in OnInit; here for the Preferences checkbox)
-        long tw = 4; c->Read("Editing/TabWidth", &tw, 4L); m_tabWidth = (int)tw;
-        c->Read("Editing/UseTabs", &m_useTabs, true);
-        c->Read("Editing/LineNumbers", &m_lineNumbers, true);
-        c->Read("Editing/Wrap", &m_wrap, false);
-        { long v = 16;    c->Read("Editing/LargeFileMiB",  &v, 16L);    m_largeFileMiB  = (v < 0 || v > 4096) ? 16 : (int)v; }
-        { long v = 50000; c->Read("Editing/LongLineChars", &v, 50000L); m_longLineChars = (v < 0 || v > 1000000) ? 50000 : (int)v; }
-        c->Read("Editing/Whitespace", &m_ws, false);
-        c->Read("Editing/IndentGuides", &m_guides, true);
-        c->Read("Editing/WrapSymbol", &m_wrapSymbol, false);
-        c->Read("View/Toolbar", &m_showToolbar, true);
-        c->Read("View/StatusBar", &m_showStatusbar, true);
-        c->Read("View/ZoomField", &m_showZoomField, false);
-        c->Read("Editing/AutoComplete", &m_autocomplete, true);
-        c->Read("Editing/CaretLine", &m_caretLine, true);
-        c->Read("Editing/AutoIndent", &m_autoindent, true);
-        c->Read("Editing/DirectWrite", &m_directWrite, true);
-        long cw = 1; c->Read("Editing/CaretWidth", &cw, 1L); m_caretWidth = (int)cw;
-        long ec = 0; c->Read("Editing/EdgeColumn", &ec, 0L); m_edgeColumn = (int)ec;
-        long de = SC_EOL_CRLF; c->Read("NewDoc/Eol", &de, (long)SC_EOL_CRLF); m_defaultEol = (int)de;
-        long dl = -1; c->Read("NewDoc/Lang", &dl, -1L); m_defaultLangId = (int)dl;
-        long den = ENC_UTF8; c->Read("NewDoc/Encoding", &den, (long)ENC_UTF8); m_defaultEncoding = (int)den;
-        long cbk = 500; c->Read("Editing/CaretBlink", &cbk, 500L); m_caretBlink = (int)cbk;
-        c->Read("Editing/ScrollBeyond", &m_scrollBeyond, false);
-        c->Read("Editing/MultiEdit", &m_multiEdit, true);
-        long acf = 3; c->Read("AutoComplete/FromChar", &acf, 3L); m_autoCompFrom = (int)acf;
-        c->Read("AutoComplete/InsertPairs", &m_autoInsertPairs, false);
-        c->Read("Theme", &m_themeName, wxEmptyString);
-        loadUserExt(c);
-        c->Read("Print/Header", &m_printHeader, wxEmptyString);
-        c->Read("Print/Footer", &m_printFooter, wxEmptyString);
-        long se = 0; c->Read("Editing/SearchEngine", &se, 0L); m_searchEngine = (int)se;
-        long sb = 1; c->Read("Editing/SpellBackend", &sb, 1L); m_spellBackend = (sb < 0 || sb > 2) ? 1 : (int)sb;  // 0=Native 1=Native+Hunspell 2=Hunspell
-        { wxString sd; c->Read("Editing/SpellDict", &sd, "en_US"); if (!sd.empty()) m_spellDict = std::string(sd.utf8_str()); }
-        c->Read("Editing/SpellCommentsOnly", &m_spellCommentsOnly, true);
-        c->Read("Editing/FontFace", &m_fontFace, "Cascadia Mono");
-        long wx_ = wxDefaultCoord, wy_ = wxDefaultCoord, ww = 1100, wh = 720;
-        c->Read("Window/X", &wx_, (long)wxDefaultCoord); c->Read("Window/Y", &wy_, (long)wxDefaultCoord);
-        c->Read("Window/W", &ww, 1100L);                 c->Read("Window/H", &wh, 720L);
-        m_normalRect = wxRect(wxPoint((int)wx_, (int)wy_), wxSize((int)ww, (int)wh));
-        c->Read("Window/Maximized", &m_wasMaximized, false);
+        unsigned gutterRgb = 0;
+        m_gutterColorValue = s.getColor("editor.gutterColor", gutterRgb) ? (long)rgbToBgr(gutterRgb) : (m_dark ? 0x3E3A3AL : 0xE8E8E8L);
+        m_iconStyle = s.getChoice("ui.toolbar.iconStyle");   // 0 = line icons, 1 = Solar (default), 2 = IconPark, 3 = Streamline
+        m_toolbarIconSize = (int)s.getInt("ui.toolbar.iconSize");   // px
+        m_maxRecent = (int)s.getInt("files.maxRecentFiles");
+        m_tabCloseBtn = s.getBool("ui.tabs.closeButton");   // integrated top bar on/off (also read in OnInit; here for the Preferences checkbox)
+        m_tabWidth = (int)s.getInt("editor.tabSize");
+        m_useTabs = s.getBool("editor.useTabs");
+        m_lineNumbers = s.getBool("editor.lineNumbers");
+        m_wrap = s.getBool("editor.wordWrap");
+        m_largeFileMiB = (int)s.getInt("files.largeFileThresholdMiB");
+        m_longLineChars = (int)s.getInt("editor.longLineThreshold");
+        m_ws = s.getBool("editor.showWhitespace");
+        m_guides = s.getBool("editor.indentGuides");
+        m_wrapSymbol = s.getBool("editor.wrapSymbol");
+        m_showToolbar = s.getBool("ui.toolbar.visible");
+        m_showStatusbar = s.getBool("ui.statusBar.visible");
+        m_showZoomField = s.getBool("ui.statusBar.zoomField");
+        m_autocomplete = s.getBool("editor.autoComplete.enabled");
+        m_caretLine = s.getBool("editor.highlightCurrentLine");
+        m_autoindent = s.getBool("editor.autoIndent");
+        m_directWrite = s.getBool("editor.directWrite");
+        m_caretWidth = (int)s.getInt("editor.caretWidth");
+        m_edgeColumn = (int)s.getInt("editor.edgeColumn");
+        m_defaultEol = s.getChoice("files.newDocument.eol");             // its names are in SC_EOL_* order
+        { const WxnLang* L = wxnLangFindByName(s.getText("files.newDocument.language")); m_defaultLangId = L ? L->id : -1; }
+        m_defaultEncoding = s.getChoice("files.newDocument.encoding");   // its names are in ENC_* order
+        m_caretBlink = (int)s.getInt("editor.caretBlinkMs");
+        m_scrollBeyond = s.getBool("editor.scrollBeyondLastLine");
+        m_multiEdit = s.getBool("editor.multiCursor");
+        m_autoCompFrom = (int)s.getInt("editor.autoComplete.minChars");
+        m_autoInsertPairs = s.getBool("editor.autoClosePairs");
+        m_themeName = wxnSettingText("ui.colorTheme");
+        loadUserExt();
+        m_printHeader = wxnSettingText("print.header");
+        m_printFooter = wxnSettingText("print.footer");
+        m_searchEngine = s.getChoice("search.webEngine");
+        m_spellBackend = s.getChoice("spelling.backend");   // 0=Native 1=Native+Hunspell 2=Hunspell
+        { const std::string d = s.getText("spelling.dictionary"); if (!d.empty()) m_spellDict = d; }
+        m_spellCommentsOnly = s.getBool("spelling.commentsOnly");
+        m_fontFace = wxnSettingText("editor.fontFamily");
+        m_normalRect = wxRect(wxPoint((int)g_state.getInt("window/x", wxDefaultCoord), (int)g_state.getInt("window/y", wxDefaultCoord)),
+                              wxSize((int)g_state.getInt("window/width", 1100), (int)g_state.getInt("window/height", 720)));
+        m_wasMaximized = g_state.getBool("window/maximized", false);
+        m_prefsLoaded = prefValues();
     }
-    // /UserExt: one entry per extension, e.g. inc=PHP. Read back through the normaliser the field uses,
-    // so a hand-edited ".INC" still counts; an entry naming no menu language is dropped. Not part of
-    // saveSettings(): only the Style Configurator's Save & Close and Save As... write it, so Cancel
-    // there can still take an edit back.
-    void loadUserExt(wxConfigBase* c)
+    // Scintilla colours are 0xBBGGRR; settings.yaml spells colours '#RRGGBB'. The swap is its own inverse.
+    static unsigned rgbToBgr(unsigned c) { return ((c & 0xFF) << 16) | (c & 0xFF00) | ((c >> 16) & 0xFF); }
+    // files.associations: extension -> Language-menu name, e.g. inc: PHP. Read back through the normaliser
+    // the field uses, so a hand-edited ".INC" still counts; an entry naming no menu language is dropped.
+    // Not part of saveSettings(): only the Style Configurator's Save & Close and Save As... write it, so
+    // Cancel there can still take an edit back.
+    void loadUserExt()
     {
         m_userExt.clear();
-        const wxString old = c->GetPath();
-        c->SetPath("/UserExt");
-        wxString key; long idx = 0;
-        for (bool more = c->GetFirstEntry(key, idx); more; more = c->GetNextEntry(key, idx))
+        for (const auto& kv : g_settings.getMap("files.associations"))
         {
-            wxString lang; c->Read(key, &lang);
-            const std::string e = wxnUserExtNormalize(std::string(key.utf8_str()));
-            const std::string l(lang.utf8_str());
-            if (!e.empty() && isMenuLanguage(l)) m_userExt[e] = l;
+            const std::string e = wxnUserExtNormalize(kv.first);
+            if (!e.empty() && isMenuLanguage(kv.second)) m_userExt[e] = kv.second;
         }
-        c->SetPath(old);
     }
     void saveUserExt()
     {
-        auto* c = wxConfigBase::Get();
-        c->DeleteGroup("/UserExt");
-        for (const auto& kv : m_userExt) c->Write("/UserExt/" + wxString::FromUTF8(kv.first), wxString::FromUTF8(kv.second));
-        c->Flush();
+        { WxnSettingsEdit s; s->setMap("files.associations", std::vector<std::pair<std::string, std::string>>(m_userExt.begin(), m_userExt.end())); }
+        noteIfSettingsUnsaved();
+    }
+    // Every preference saveSettings() persists, as settings.yaml spells it (a Choice by its index). What
+    // loadSettings() read is kept, and only what differs from it is written: writing a window's whole
+    // startup copy back reverted whatever another window had changed since (see the close handler).
+    std::map<std::string, std::string> prefValues() const
+    {
+        std::map<std::string, std::string> v;
+        auto b = [&v](const char* id, bool x) { v[id] = x ? "true" : "false"; };
+        auto n = [&v](const char* id, long long x) { v[id] = std::to_string(x); };
+        auto t = [&v](const char* id, const wxString& x) { v[id] = wxnUtf8(x); };
+        n("editor.tabSize", m_tabWidth);                b("editor.useTabs", m_useTabs);
+        b("editor.lineNumbers", m_lineNumbers);         b("editor.wordWrap", m_wrap);
+        n("files.largeFileThresholdMiB", m_largeFileMiB); n("editor.longLineThreshold", m_longLineChars);
+        b("editor.showWhitespace", m_ws);               b("editor.indentGuides", m_guides);
+        b("editor.wrapSymbol", m_wrapSymbol);           b("ui.toolbar.visible", m_showToolbar);
+        b("ui.statusBar.visible", m_showStatusbar);     b("editor.autoComplete.enabled", m_autocomplete);
+        b("ui.statusBar.zoomField", m_showZoomField);
+        b("editor.highlightCurrentLine", m_caretLine);  b("editor.autoIndent", m_autoindent);
+        b("editor.directWrite", m_directWrite);
+        n("editor.caretWidth", m_caretWidth);           n("editor.edgeColumn", m_edgeColumn);
+        n("files.newDocument.eol", m_defaultEol);
+        { const WxnLang* L = m_defaultLangId >= 0 ? wxnLangFind(m_defaultLangId) : nullptr; v["files.newDocument.language"] = L ? L->name : ""; }
+        n("files.newDocument.encoding", m_defaultEncoding);
+        n("files.maxRecentFiles", m_maxRecent);         b("ui.tabs.closeButton", m_tabCloseBtn);
+        n("editor.caretBlinkMs", m_caretBlink);         b("editor.scrollBeyondLastLine", m_scrollBeyond);
+        b("editor.multiCursor", m_multiEdit);
+        n("editor.autoComplete.minChars", m_autoCompFrom); b("editor.autoClosePairs", m_autoInsertPairs);
+        t("ui.colorTheme", m_themeName);
+        t("print.header", m_printHeader);               t("print.footer", m_printFooter);
+        n("search.webEngine", m_searchEngine);
+        if (!g_waitMode)   // -w/--wait force-enables the prompt for that run only (enterWaitMode): never written
+            b("files.confirmCloseUnsaved", m_askBeforeClose);
+        b("ui.fullScreen.hideToolbar", m_fsAutohideToolbar);
+        b("editor.customGutterColor", m_customGutterColor);
+        v["editor.gutterColor"] = wxnyaml::colorText(rgbToBgr((unsigned)m_gutterColorValue));
+        t("editor.fontFamily", m_fontFace);
+        n("spelling.backend", m_spellBackend);
+        v["spelling.dictionary"] = m_spellDict;
+        b("spelling.commentsOnly", m_spellCommentsOnly);
+        return v;
     }
     void saveSettings()
     {
-        auto* c = wxConfigBase::Get();
-        c->Write("Editing/TabWidth", (long)m_tabWidth);   c->Write("Editing/UseTabs", m_useTabs);
-        c->Write("Editing/LineNumbers", m_lineNumbers);   c->Write("Editing/Wrap", m_wrap);
-        c->Write("Editing/LargeFileMiB", (long)m_largeFileMiB);  c->Write("Editing/LongLineChars", (long)m_longLineChars);
-        c->Write("Editing/Whitespace", m_ws);             c->Write("Editing/IndentGuides", m_guides);
-        c->Write("Editing/WrapSymbol", m_wrapSymbol);     c->Write("View/Toolbar", m_showToolbar);
-        c->Write("View/StatusBar", m_showStatusbar);      c->Write("Editing/AutoComplete", m_autocomplete);
-        c->Write("View/ZoomField", m_showZoomField);
-        c->Write("Editing/CaretLine", m_caretLine);       c->Write("Editing/AutoIndent", m_autoindent);
-        c->Write("Editing/DirectWrite", m_directWrite);
-        c->Write("Editing/CaretWidth", (long)m_caretWidth); c->Write("Editing/EdgeColumn", (long)m_edgeColumn);
-        c->Write("NewDoc/Eol", (long)m_defaultEol);         c->Write("NewDoc/Lang", (long)m_defaultLangId);
-        c->Write("NewDoc/Encoding", (long)m_defaultEncoding);
-        c->Write("RecentFiles/Max", (long)m_maxRecent);     c->Write("TabBar/CloseButton", m_tabCloseBtn);
-        c->Write("Editing/CaretBlink", (long)m_caretBlink); c->Write("Editing/ScrollBeyond", m_scrollBeyond);
-        c->Write("Editing/MultiEdit", m_multiEdit);
-        c->Write("AutoComplete/FromChar", (long)m_autoCompFrom); c->Write("AutoComplete/InsertPairs", m_autoInsertPairs);
-        c->Write("Theme", m_themeName);
-        c->Write("Print/Header", m_printHeader); c->Write("Print/Footer", m_printFooter);
-        c->Write("Editing/SearchEngine", (long)m_searchEngine);
-        if (!g_waitMode)   // -w/--wait force-enables the prompt for that run only (enterWaitMode); saveSettings()
-                           // runs on every close, so writing it here would silently turn the user's preference on
-            c->Write("AskBeforeClose", m_askBeforeClose);
-        c->Write("FullscreenAutohideToolbar", m_fsAutohideToolbar);
-        c->Write("Editing/CustomGutterColour", m_customGutterColor);
-        c->Write("Editing/GutterColourValue", m_gutterColorValue);
-        c->Write("Editing/FontFace", m_fontFace);
-        c->Write("Editing/SpellBackend", (long)m_spellBackend);
-        c->Write("Editing/SpellDict", wxString::FromUTF8(m_spellDict.c_str()));
-        c->Write("Editing/SpellCommentsOnly", m_spellCommentsOnly);
-        saveWindowGeometry();   // also flushes
+        const std::map<std::string, std::string> now = prefValues();
+        {
+            WxnSettingsEdit s;
+            for (const auto& kv : now)
+            {
+                const auto was = m_prefsLoaded.find(kv.first);
+                if (was != m_prefsLoaded.end() && was->second == kv.second) continue;
+                const wxnsettings::Def* d = wxnsettings::findDef(kv.first);
+                if (!d) continue;
+                switch (d->kind)
+                {
+                    case wxnsettings::Kind::Bool:   s->setBool(d->id, kv.second == "true"); break;
+                    case wxnsettings::Kind::Int:    s->setInt(d->id, std::stoll(kv.second)); break;
+                    case wxnsettings::Kind::Choice: s->setChoice(d->id, std::stoi(kv.second)); break;
+                    case wxnsettings::Kind::Text:   s->setText(d->id, kv.second); break;
+                    case wxnsettings::Kind::Color:
+                    {
+                        unsigned rgb = 0;
+                        if (wxnyaml::parseColor(kv.second, rgb)) s->setColor(d->id, rgb);
+                        break;
+                    }
+                    case wxnsettings::Kind::Map:    break;
+                }
+            }
+        }
+        m_prefsLoaded = now;
+        noteIfSettingsUnsaved();
+        saveWindowGeometry();
     }
     // Split out of saveSettings() so a closing window can persist ONLY its own geometry. The reason
     // that matters is spelled out at the close handler, which is where the surprise lives.
     void saveWindowGeometry()
     {
-        auto* c = wxConfigBase::Get();
         // m_normalRect is kept live by the wxEVT_SIZE/MOVE binds in the constructor rather than read here
         // via GetSize()/GetPosition(): while the window IS currently maximized, those report the
         // maximized bounds, not what a later un-maximize should restore to.
-        c->Write("Window/X", (long)m_normalRect.x);      c->Write("Window/Y", (long)m_normalRect.y);
-        c->Write("Window/W", (long)m_normalRect.width);  c->Write("Window/H", (long)m_normalRect.height);
-        c->Write("Window/Maximized", IsMaximized());
-        c->Flush();
+        g_state.setInt("window/x", m_normalRect.x);
+        g_state.setInt("window/y", m_normalRect.y);
+        g_state.setInt("window/width", m_normalRect.width);
+        g_state.setInt("window/height", m_normalRect.height);
+        g_state.setBool("window/maximized", IsMaximized());
+        wxnFlushState();
     }
     // Scintilla keeps these on the VIEW (ViewStyle / Editor members), so each wxStyledTextCtrl needs
     // its own copy - a split's two halves do not share them.
@@ -12896,11 +13330,19 @@ private:
     // (tab width 8, real tabs) whatever the user configured, and a document that was not mounted when
     // the preference changed never heard about it. Driven from applySettings for whatever is mounted
     // now, and again from activateBuffer so every other tab picks it up when it is next shown.
+    // Per language when settings.yaml says so (languages: Python: editor.tabSize: 4): the page's language
+    // decides, which is why setLexerForFile - where that is settled - applies these again.
     void applyDocSettings(wxStyledTextCtrl* v)
     {
         if (!v) return;
-        sciSend(v, SCI_SETTABWIDTH, m_tabWidth);
-        sciSend(v, SCI_SETUSETABS, m_useTabs ? 1 : 0);
+        const EditorPage* p = dynamic_cast<const EditorPage*>(v->GetParent());   // the view sits on the page it shows
+        const std::string lang = p ? wxnUtf8(p->langForced ? p->forcedName : p->autoLang) : std::string();
+        long long tab = m_tabWidth;
+        bool useTabs = m_useTabs;
+        g_settings.languageInt("editor.tabSize", lang, tab);     // each leaves the general value when the
+        g_settings.languageBool("editor.useTabs", lang, useTabs);   // language has none of its own
+        sciSend(v, SCI_SETTABWIDTH, (int)tab);
+        sciSend(v, SCI_SETUSETABS, useTabs ? 1 : 0);
     }
 
     void applySettings()   // push the current preferences onto the editor view + chrome
@@ -12924,7 +13366,7 @@ private:
     }
     // Shortcut Mapper (kCmdSettingShortcutMapper == 48009): a searchable grid over every menu command's
     // effective binding, with rebind/clear/reset, a scheme picker, and the live conflict engine. A pure
-    // view over m_keymap: edits write shortcuts.json immediately and re-apply through refreshAccelerators()
+    // view over m_keymap: edits write keybindings.yaml immediately and re-apply through refreshAccelerators()
     // (via the apply callback) so a rebind shows on the menu and fires without a restart. The dialog owns no
     // persistent state, so a fresh instance per invocation is fine (mirrors onPreferences()).
     void showShortcutMapper()
@@ -13360,8 +13802,9 @@ private:
                 wxString err;
                 if (!want)                              wxnAppImageUnintegrate();
                 else if (!wxnAppImageIntegrate(&err))   wxMessageBox(err, "wxNote", wxOK | wxICON_EXCLAMATION, this);
-                wxConfigBase::Get()->Write("AppImageIntegrated", want && err.empty());
-                wxConfigBase::Get()->Write("AppImageIntegrationAsked", true);   // an explicit choice: never prompt
+                g_state.setBool("appImage/integrated", want && err.empty());
+                g_state.setBool("appImage/asked", true);   // an explicit choice: never prompt
+                wxnFlushState();
             }
         }
         m_fsAutohideToolbar = cbFsToolbar->GetValue();
@@ -13418,7 +13861,7 @@ private:
         }
 #endif
         // Chrome settings fixed per process (locale/toolbar-toggle/icon-set all need a relaunch to take effect).
-        // The config writes ride restartWithTheme's commit callback, which only runs once the save-prompt loop
+        // The settings.yaml writes ride restartWithTheme's commit callback, which only runs once the save-prompt loop
         // has actually confirmed the restart - writing them here unconditionally would apply the new value
         // even if the user then cancels a "save changes?" prompt during the attempted restart.
         const int newUi = UI_LANG_IDS[chUiLang->GetSelection()];
@@ -13449,7 +13892,7 @@ private:
             // commit lambda below is otherwise this setting's ONLY write path, and a restart the user
             // backs out of (Cancel on a save prompt) would silently discard the choice.
             if (newIntBar || m_integratedBar) needRestart = true;
-            else { wxConfigBase::Get()->Write("TopBarButtonStyle", (long)newBtnStyle); m_topBarBtnStyle = newBtnStyle; }
+            else { { WxnSettingsEdit s; s->setChoice("window.buttonStyle", newBtnStyle); } m_topBarBtnStyle = newBtnStyle; }
         }
 #endif
 #ifdef __WXGTK__
@@ -13459,26 +13902,26 @@ private:
             // header-bar window's corners at build time), so restart to apply when the bar is/will be on;
             // otherwise persist directly rather than force a pointless restart.
             if (newIntBar || m_integratedBar) needRestart = true;
-            else { wxConfigBase::Get()->Write("IgnorePlatformDeco", newIgnoreDeco); m_ignorePlatformDeco = newIgnoreDeco; }
+            else { { WxnSettingsEdit s; s->setBool("window.ignorePlatformDecorations", newIgnoreDeco); } m_ignorePlatformDeco = newIgnoreDeco; }
         }
 #endif
         if (needRestart)
             restartWithTheme([=] {
                 m_themeMode = newThemeMode;
-                auto* cfg = wxConfigBase::Get();
-                if (newUi != curUi) cfg->Write("UILanguage", (long)newUi);
+                WxnSettingsEdit s;
+                if (newUi != curUi) s->setText("ui.language", uiLangCode(newUi));
 #if defined(WXN_HAS_BORDERLESS) || defined(__WXMAC__)
-                if (newIntBar != m_integratedBar) cfg->Write("IntegratedBar", newIntBar);
+                if (newIntBar != m_integratedBar) s->setBool("window.integratedTitleBar", newIntBar);
 #endif
 #if defined(WXN_HAS_BORDERLESS)
-                if (newBtnStyle != m_topBarBtnStyle) cfg->Write("TopBarButtonStyle", (long)newBtnStyle);
+                if (newBtnStyle != m_topBarBtnStyle) s->setChoice("window.buttonStyle", newBtnStyle);
 #endif
 #ifdef __WXGTK__
-                if (newIgnoreDeco != m_ignorePlatformDeco) cfg->Write("IgnorePlatformDeco", newIgnoreDeco);
+                if (newIgnoreDeco != m_ignorePlatformDeco) s->setBool("window.ignorePlatformDecorations", newIgnoreDeco);
 #endif
-                if (newIconStyle != m_iconStyle) cfg->Write("ToolbarIconStyle", (long)newIconStyle);
-                if (newIconSize != m_toolbarIconSize) cfg->Write("ToolbarIconSize", (long)newIconSize);
-                if (newReuseInstance != m_reuseInstance) cfg->Write("ReuseInstance", newReuseInstance);
+                if (newIconStyle != m_iconStyle) s->setChoice("ui.toolbar.iconStyle", newIconStyle);
+                if (newIconSize != m_toolbarIconSize) s->setInt("ui.toolbar.iconSize", newIconSize);
+                if (newReuseInstance != m_reuseInstance) s->setBool("window.reuseInstance", newReuseInstance);
             });
     }
 
@@ -13596,13 +14039,13 @@ private:
         setStatus(0, wxString::Format(_("Macro saved: %s"), name)); m_hint = true;
     }
     // Macro ▸ Manage Saved Macros...: rename / delete / reorder the persisted list. Edits are applied to a
-    // WORKING COPY and only committed on OK, so Cancel is a true no-op - the keymap and macros.dat are
+    // WORKING COPY and only committed on OK, so Cancel is a true no-op - the keymap and macros.yaml are
     // untouched until then. Reordering is what the Shortcut Mapper cares about: it renumbers the positional
     // command ids, which refreshMacroRegistrations re-points the uid-keyed bindings at.
     void manageMacros()
     {
         if (m_macrosReadOnly)
-        { themedInfo(_("Saved macros are read-only: macros.dat was written by a newer version of wxNote."),
+        { themedInfo(_("Saved macros are read-only: macros.yaml cannot be read, or was written by a newer version of wxNote."),
                      _("Manage Saved Macros")); return; }
         if (m_savedMacros.empty())
         { themedInfo(_("No saved macros yet. Record one, then use Save Current Recorded Macro."),
@@ -13688,13 +14131,12 @@ private:
         setStatus(0, _("Saved macros updated")); m_hint = true;
     }
 
-    // ---- saved-macro persistence (macros.dat under userDataDir) + keymap registration ----
+    // ---- saved-macro persistence (macros.yaml under userDataDir) + keymap registration ----
     // Each macro carries a monotonic uid; symbolicName "macro.<uid>" is the stable shortcut-binding key in
-    // shortcuts.json (survives rename/reorder), while the menu/cmd id is positional per session. macros.dat
-    // is a simple line format (base64 for the name + any text step, so arbitrary bytes round-trip losslessly):
-    //   wxn-macros 1 / next <uid> / M <uid> <b64name> / S <msg> <w> <l> / T <msg> <w> <l> <b64text>
+    // keybindings.yaml (survives rename/reorder), while the menu/cmd id is positional per session. The
+    // file format is wxnSerializeMacros' (near the top of this file).
     static wxString macroSym(long uid) { return wxString::Format("macro.%ld", uid); }
-    wxString macrosFilePath() { return userDataDir() + wxFILE_SEP_PATH + "macros.dat"; }
+    wxString macrosFilePath() { return userDataDir() + wxFILE_SEP_PATH + "macros.yaml"; }
     void seedMacroKeymapDefaults()   // Tier-0 rows so a stored "macro.<uid>" binding resolves at m_keymap.load()
     {
         for (size_t i = 0; i < m_savedMacros.size() && i < (size_t)kMaxMacroItems; ++i)
@@ -13739,7 +14181,7 @@ private:
         // callback): resolveAll() only updates the model. Without refreshAccelerators the frame accel
         // table still maps the OLD positional ids, so after a reorder a bound key runs whichever macro
         // slid into that id - a different, document-mutating macro. And without save() a deleted macro's
-        // binding is dropped in memory only, so shortcuts.json keeps resurrecting the orphan row.
+        // binding is dropped in memory only, so keybindings.yaml keeps resurrecting the orphan row.
         refreshAccelerators(m_accelScope);
         m_keymap.save();
         saveSavedMacros();
@@ -13747,37 +14189,9 @@ private:
     void loadSavedMacros()
     {
         m_savedMacros.clear(); m_macroNextUid = 1; m_macrosReadOnly = false;
-        wxLogNull noLog;
-        const wxString path = macrosFilePath();
-        if (!wxFileExists(path)) return;
-        wxFile f(path); wxString raw;
-        if (!f.IsOpened() || !f.ReadAll(&raw, wxConvUTF8)) return;
-        wxStringTokenizer lines(raw, "\n", wxTOKEN_STRTOK);
-        while (lines.HasMoreTokens())
-        {
-            wxString line = lines.GetNextToken(); line.Trim(true);   // drop any trailing \r
-            wxStringTokenizer tk(line, " ", wxTOKEN_STRTOK);
-            if (!tk.HasMoreTokens()) continue;
-            const wxString tag = tk.GetNextToken();
-            if (tag == "wxn-macros") { long v = 0; tk.GetNextToken().ToLong(&v); if (v > 1) { m_macrosReadOnly = true; m_savedMacros.clear(); return; } }
-            else if (tag == "next") { long n = 1; if (tk.GetNextToken().ToLong(&n)) m_macroNextUid = n; }
-            else if (tag == "M")
-            {
-                long uid = 0; tk.GetNextToken().ToLong(&uid);
-                wxMemoryBuffer nb = wxBase64Decode(tk.GetNextToken());
-                m_savedMacros.push_back({ uid, wxString::FromUTF8((const char*)nb.GetData(), nb.GetDataLen()), {} });
-                if (uid >= m_macroNextUid) m_macroNextUid = uid + 1;   // keep nextUid ahead of any uid on disk
-            }
-            else if ((tag == "S" || tag == "T") && !m_savedMacros.empty())
-            {
-                MacroStep st{}; long msg = 0; unsigned long long w = 0; long long l = 0;
-                tk.GetNextToken().ToLong(&msg); tk.GetNextToken().ToULongLong(&w); tk.GetNextToken().ToLongLong(&l);
-                st.msg = (int)msg; st.wparam = (uptr_t)w; st.lparam = (sptr_t)l;
-                if (tag == "T") { wxMemoryBuffer tb = wxBase64Decode(tk.GetNextToken());
-                                  st.hasText = true; st.text.assign((const char*)tb.GetData(), tb.GetDataLen()); }
-                m_savedMacros.back().steps.push_back(st);
-            }
-        }
+        std::string text;
+        if (!wxnReadFileBytes(macrosFilePath(), text)) return;   // no file yet: no macros
+        if (!wxnParseMacros(text, m_savedMacros, m_macroNextUid)) { m_macrosReadOnly = true; m_savedMacros.clear(); }
     }
     void saveSavedMacros()
     {
@@ -13785,21 +14199,8 @@ private:
         wxLogNull noLog;
         const wxString dir = userDataDir();
         if (!wxDirExists(dir)) wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-        wxString out; out << "wxn-macros 1\n" << "next " << m_macroNextUid << "\n";
-        for (const SavedMacro& sm : m_savedMacros)
-        {
-            const wxScopedCharBuffer nu = sm.name.utf8_str();
-            out += wxString::Format("M %ld %s\n", sm.uid, wxBase64Encode(nu.data(), nu.length()));
-            for (const MacroStep& st : sm.steps)
-            {
-                if (st.hasText) out += wxString::Format("T %d %llu %lld %s\n", st.msg,
-                        (unsigned long long)st.wparam, (long long)st.lparam, wxBase64Encode(st.text.data(), st.text.size()));
-                else            out += wxString::Format("S %d %llu %lld\n", st.msg,
-                        (unsigned long long)st.wparam, (long long)st.lparam);
-            }
-        }
-        const wxScopedCharBuffer u = out.utf8_str();
-        wxnWriteFileAtomic(macrosFilePath(), u.data(), u.length());   // atomic replace; short write keeps the old file
+        const std::string out = wxnSerializeMacros(m_savedMacros, m_macroNextUid);
+        if (!out.empty()) wxnWriteFileAtomic(macrosFilePath(), out.data(), out.size());   // atomic replace; short write keeps the old file
     }
 
     // ----- saved Run commands ------------------------------------------------------------------------
@@ -13808,17 +14209,14 @@ private:
     // the Shortcut Mapper can bind it. Menu ids are positional (myID_RUN_ITEM + index) while bindings
     // are keyed by uid, so anything that REORDERS the list has to move the command ids with it -
     // refreshRunRegistrations() below, exactly as refreshMacroRegistrations() does for macros.
-    wxString runsFilePath() { return userDataDir() + wxFILE_SEP_PATH + "runcommands.dat"; }
+    wxString runsFilePath() { return userDataDir() + wxFILE_SEP_PATH + "runcommands.yaml"; }
     static wxString runSym(long uid) { return wxString::Format("run.%ld", uid); }
     void loadSavedRuns()
     {
         m_savedRuns.clear(); m_runNextUid = 1; m_runsReadOnly = false;
-        wxLogNull noLog;
-        const wxString path = runsFilePath();
-        if (!wxFileExists(path)) return;
-        wxFile f(path); wxString raw;
-        if (!f.IsOpened() || !f.ReadAll(&raw, wxConvUTF8)) return;
-        if (!wxnParseRuns(raw, m_savedRuns, m_runNextUid)) m_runsReadOnly = true;
+        std::string text;
+        if (!wxnReadFileBytes(runsFilePath(), text)) return;     // no file yet: no commands
+        if (!wxnParseRuns(text, m_savedRuns, m_runNextUid)) m_runsReadOnly = true;
     }
     void saveSavedRuns()
     {
@@ -13826,8 +14224,8 @@ private:
         wxLogNull noLog;
         const wxString dir = userDataDir();
         if (!wxDirExists(dir)) wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-        const wxScopedCharBuffer u = wxnSerializeRuns(m_savedRuns, m_runNextUid).utf8_str();
-        wxnWriteFileAtomic(runsFilePath(), u.data(), u.length());
+        const std::string out = wxnSerializeRuns(m_savedRuns, m_runNextUid);
+        if (!out.empty()) wxnWriteFileAtomic(runsFilePath(), out.data(), out.size());
     }
     void appendRunMenuItems()   // (re)list the saved commands at the bottom of the Run menu
     {
@@ -13878,7 +14276,7 @@ private:
     {
         if (m_runsReadOnly)
         {
-            wxMessageBox(_("runcommands.dat was written by a newer version of wxNote, so it is read-only here."),
+            wxMessageBox(_("runcommands.yaml cannot be read, or was written by a newer version of wxNote, so it is read-only here."),
                          _("Saved Run commands"), wxOK | wxICON_INFORMATION, this);
             return;
         }
@@ -13928,7 +14326,7 @@ private:
         dlg.SetSizerAndFit(top); dlg.CentreOnParent();
         themeDialog(&dlg);
         if (dlg.ShowModal() != wxID_OK) return;
-        // Whatever is no longer in `work` has been deleted: drop its binding too, or shortcuts.json
+        // Whatever is no longer in `work` has been deleted: drop its binding too, or keybindings.yaml
         // keeps resurrecting an orphan row for a command that can never come back.
         std::vector<long> gone;
         for (const SavedRun& before : m_savedRuns)
@@ -13942,43 +14340,43 @@ private:
     }
 
     // ----- dark / light theme -------------------------------------------
-    // Parse the theme XML (dark = themes/DarkModeDefault.xml, light = stylers.model.xml)
-    // deployed next to the exe. The schema is a Notepad++-compatible format, so a third-party
-    // theme file in that format works here unmodified - but the two shipped-by-default files are
-    // wxNote's own regenerated, permissively-licensed replacements, not copied theme data (see
-    // resources/themes/DarkModeDefault.xml's header and NOTICE for the license/provenance detail).
+    // A theme is a themes/<name>.yaml (src/theme_file.h has the format): light = Default.yaml, dark =
+    // DarkModeDefault.yaml, both deployed next to the exe. The shipped-by-default files are wxNote's own
+    // regenerated, permissively-licensed palettes, not copied theme data (see their headers and NOTICE for
+    // the license/provenance detail). A Notepad++ theme (XML) is not read here: the optional npp-compat
+    // plugin translates one into this format.
     // Themes live in two folders: the read-only set deployed next to the exe, and a user-writable one
     // under userDataDir(). The user folder WINS on a name clash, and it is the only one an installed
     // build can write at all (<exeDir> is not user-writable - same reason recoveryDir() lives here), so
-    // it is where "Save As..." in the Style Configurator puts a new theme.
+    // it is where "Save As..." in the Style Configurator puts a new theme. "Default" is the one name that
+    // always means the shipped file - Save As refuses it, so a user copy could never be reached anyway.
     wxString userThemeDir() { return userDataDir() + wxFILE_SEP_PATH + "themes"; }
-    wxString themeFilePath(const wxString& name)   // resolve a theme name to its XML on disk
+    wxString shippedThemeDir() { return wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "themes"; }
+    wxString themeFilePath(const wxString& name)   // resolve a theme name to its file on disk
     {
-        const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath());
-        if (name.empty() || name == "Default") return dir + wxFILE_SEP_PATH + "stylers.model.xml";
-        const wxString user = userThemeDir() + wxFILE_SEP_PATH + name + ".xml";
+        if (name.empty() || name == "Default") return shippedThemeDir() + wxFILE_SEP_PATH + "Default.yaml";
+        const wxString user = userThemeDir() + wxFILE_SEP_PATH + name + ".yaml";
         if (wxFileExists(user)) return user;
-        return dir + wxFILE_SEP_PATH + "themes" + wxFILE_SEP_PATH + name + ".xml";
+        return shippedThemeDir() + wxFILE_SEP_PATH + name + ".yaml";
     }
     // The concrete theme currently in effect, never empty. m_themeName is empty when the user has made
     // no explicit choice and the theme follows dark/light mode, and that empty case resolves DIFFERENTLY
-    // from the literal name "Default": empty + dark mode means themes/DarkModeDefault.xml, while "Default"
-    // means stylers.model.xml. The Style Configurator used to show "Default" in its combo while editing
-    // and saving DarkModeDefault.xml - with "DarkModeDefault" also listed separately, so two entries wrote
-    // the same file and stylers.model.xml was unreachable in dark mode. Resolve once, here.
+    // from the literal name "Default": empty + dark mode means themes/DarkModeDefault.yaml, while "Default"
+    // means themes/Default.yaml. The Style Configurator used to show "Default" in its combo while editing
+    // and saving DarkModeDefault - with "DarkModeDefault" also listed separately, so two entries wrote
+    // the same file and the light Default was unreachable in dark mode. Resolve once, here.
     wxString resolvedThemeName() const { return m_themeName.empty() ? wxString(m_dark ? "DarkModeDefault" : "Default") : m_themeName; }
     // The per-user folder where the optional GPL udl-compat plugin reads Notepad++
     // userDefineLang.xml files (see packages/udl-compat); kCmdLangOpenudldir opens it.
     wxString udlDir() { return userDataDir() + wxFILE_SEP_PATH + "userDefineLangs"; }
-    wxArrayString availableThemes()   // "Default" + every themes/*.xml, bundled ones then the user's own
+    wxArrayString availableThemes()   // "Default" + every themes/*.yaml, bundled ones then the user's own
     {
         wxArrayString out; out.Add("Default");
-        const wxString shipped = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "themes";
-        for (const wxString& dir : { shipped, userThemeDir() })
+        for (const wxString& dir : { shippedThemeDir(), userThemeDir() })
         {
             wxDir d(dir);
             if (!d.IsOpened()) continue;
-            wxString f; bool more = d.GetFirst(&f, "*.xml", wxDIR_FILES);
+            wxString f; bool more = d.GetFirst(&f, "*.yaml", wxDIR_FILES);
             // A user theme that shadows a bundled name is one entry, not two: themeFilePath() resolves
             // the pair to the user copy, so listing both would give two entries editing the same file.
             while (more) { const wxString n = f.BeforeLast('.'); if (out.Index(n) == wxNOT_FOUND) out.Add(n); more = d.GetNext(&f); }
@@ -13987,55 +14385,37 @@ private:
     }
     void loadTheme()   // load the active theme: an explicit Style-Configurator choice, else the dark/light default
     {
-        loadThemeFile(themeFilePath(resolvedThemeName()));
+        wxString path = themeFilePath(resolvedThemeName());
+        // A chosen theme whose file is gone (deleted, or named by an import that did not bring it along)
+        // falls back to the dark/light default, not to the bare built-in palette.
+        if (!wxFileExists(path)) path = themeFilePath(m_dark ? "DarkModeDefault" : "Default");
+        loadThemeFile(path);
     }
+    // A theme file's '#RRGGBB' (-1 = unset) as the 0xBBGGRR Scintilla takes (-1 kept).
+    static int themeColor(int rgb) { return rgb < 0 ? -1 : (int)rgbToBgr((unsigned)rgb); }
     void loadThemeFile(const wxString& path)
     {
         m_theme = WxnTheme{};   // reset so switching themes fully replaces the previous palette
-        wxXmlDocument doc;
-        if (!wxFileExists(path) || !doc.Load(path) || !doc.GetRoot()) return;   // fall back to built-in palette
-        for (wxXmlNode* sec = doc.GetRoot()->GetChildren(); sec; sec = sec->GetNext())
+        std::string text, err;
+        wxntheme::Theme t;
+        if (!wxnReadFileBytes(path, text)) return;   // fall back to built-in palette
+        if (!wxntheme::parse(text, t, &err)) { reportFileError(wxFileName(path).GetFullName(), err); return; }
+        for (const wxntheme::Lexer& lx : t.lexers)
         {
-            if (sec->GetName() == "LexerStyles")
-            {
-                for (wxXmlNode* lt = sec->GetChildren(); lt; lt = lt->GetNext())
-                {
-                    if (lt->GetName() != "LexerType") continue;
-                    std::vector<StyleDef> styles;
-                    for (wxXmlNode* w = lt->GetChildren(); w; w = w->GetNext())
-                    {
-                        if (w->GetName() != "WordsStyle") continue;
-                        long id = -1, fs = 0, fsz = 0, fw = 0;   // ToLong leaves these at 0 for an empty
-                        w->GetAttribute("styleID", "-1").ToLong(&id);       // attribute, which is exactly how
-                        w->GetAttribute("fontStyle", "0").ToLong(&fs);      // the corpus spells "unset":
-                        w->GetAttribute("fontSize", "0").ToLong(&fsz);      // 49,483 of 49,507 WordsStyle
-                        w->GetAttribute("fontWeight", "0").ToLong(&fw);     // carry fontSize, none a value
-                        styles.push_back({ (int)id, npp_bgr(w->GetAttribute("fgColor")),
-                                           npp_bgr(w->GetAttribute("bgColor")), (int)fs, w->GetAttribute("name"),
-                                           w->GetAttribute("fontName"), (int)fsz, (int)fw });
-                    }
-                    // An extension two LexerTypes both list stays with the first.
-                    const std::string extLang = wxnLangForNppLexerType(std::string(lt->GetAttribute("name").utf8_str()));
-                    if (!extLang.empty() && wxnLangFindByName(extLang))
-                        for (const std::string& e : wxnUserExtParse(std::string(lt->GetAttribute("ext").utf8_str())))
-                            m_theme.extToLang.emplace(e, extLang);
-                    m_theme.lexers[lt->GetAttribute("name")] = std::move(styles);
-                }
-            }
-            else if (sec->GetName() == "GlobalStyles")
-            {
-                for (wxXmlNode* w = sec->GetChildren(); w; w = w->GetNext())
-                {
-                    if (w->GetName() != "WidgetStyle") continue;
-                    const wxString nm = w->GetAttribute("name");
-                    m_theme.global[nm] = { npp_bgr(w->GetAttribute("fgColor")), npp_bgr(w->GetAttribute("bgColor")) };
-                    if (nm == "Default Style")
-                    {
-                        m_theme.defaultFont = w->GetAttribute("fontName").ToStdString();
-                        long sz = 0; if (w->GetAttribute("fontSize", "0").ToLong(&sz)) m_theme.defaultSize = (int)sz;
-                    }
-                }
-            }
+            std::vector<StyleDef> styles;
+            for (const wxntheme::Style& s : lx.styles)
+                styles.push_back({ s.id, themeColor(s.fg), themeColor(s.bg), s.fontStyle, wxString::FromUTF8(s.name.c_str()),
+                                   wxString::FromUTF8(s.font.c_str()), s.size, s.weight });
+            // An extension two lexers both list stays with the first.
+            const std::string extLang = wxnLangForNppLexerType(lx.name);
+            if (!extLang.empty() && wxnLangFindByName(extLang))
+                for (const std::string& e : wxnUserExtParse(lx.extensions)) m_theme.extToLang.emplace(e, extLang);
+            m_theme.lexers[wxString::FromUTF8(lx.name.c_str())] = std::move(styles);
+        }
+        for (const wxntheme::Style& g : t.globals)
+        {
+            m_theme.global[wxString::FromUTF8(g.name.c_str())] = { themeColor(g.fg), themeColor(g.bg) };
+            if (g.name == "Default Style") { m_theme.defaultFont = g.font; m_theme.defaultSize = g.size; }
         }
         synthesizeGenericStyles();
         m_theme.loaded = true;
@@ -14043,7 +14423,7 @@ private:
     // Scintillua-lexed buffers have no Notepad++ LexerType to draw from, so no theme could colour them
     // and every theme rendered them with the same fixed palette. Give them one. The block behaves like
     // any other LexerType from here on: it lists in the Style Configurator, edits like the rest, and
-    // saveThemeToXml writes a real genericLangDef block into the file the first time one of its styles
+    // saveThemeFile writes a real genericLangDef block into the file the first time one of its styles
     // is changed. Derived values are defaults only - a theme that already carries the block wins.
     void synthesizeGenericStyles()
     {
@@ -14081,7 +14461,7 @@ private:
         if (m_stc) m_stc->Refresh();
         nibFireDocEvent(NIB_EV_STYLE_UPDATED, activePage());   // -> NPPN_WORDSTYLESUPDATED (editor styles re-applied)
     }
-    // ---- Style Configurator colour helpers + write-back to the theme XML ----
+    // ---- Style Configurator colour helpers + write-back to the theme file ----
     static wxColour bgrToColour(int bgr) { return bgr < 0 ? wxColour(*wxBLACK) : wxColour(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF); }
     static int colourToBgr(const wxColour& c) { return (c.Blue() << 16) | (c.Green() << 8) | c.Red(); }
     // Per-style font face/size/weight, shared by the Lexilla and Scintillua paths so the two cannot
@@ -14109,78 +14489,69 @@ private:
         for (const wxString& f : sys) if (bundled.Index(f) == wxNOT_FOUND) out.Add(f);
         return out;
     }
-    static wxString bgrToHex(int bgr) { return wxString::Format("%02X%02X%02X", bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF); }
-    static void setAttr(wxXmlNode* n, const wxString& a, const wxString& v) { n->DeleteAttribute(a); n->AddAttribute(a, v); }
-    static wxXmlNode* childNamed(wxXmlNode* parent, const wxString& tag)
-    { for (wxXmlNode* n = parent->GetChildren(); n; n = n->GetNext()) if (n->GetName() == tag) return n; return nullptr; }
-    static wxXmlNode* childWith(wxXmlNode* parent, const wxString& tag, const wxString& attr, const wxString& val)
-    { for (wxXmlNode* n = parent->GetChildren(); n; n = n->GetNext()) if (n->GetName() == tag && n->GetAttribute(attr) == val) return n; return nullptr; }
-    // What the Style Configurator actually edited this session: (LexerType name, styleID) pairs and
-    // GlobalStyles WidgetStyle names. saveThemeToXml writes ONLY these. It used to write every style it
-    // had loaded, so one colour change rewrote all 49,507 WordsStyle elements in the file - turning the
-    // 11,189 empty fontStyle attributes into "0", adding the attribute to the 24 nodes that lacked it,
-    // and moving every touched attribute to the end of its element (setAttr deletes then re-adds). A
-    // no-edit "Save & Close" produced the same whole-file diff.
+    // What the Style Configurator actually edited this session: (lexer name, style id) pairs and global
+    // style names. saveThemeFile writes ONLY these, onto the theme as it is on disk. It used to write
+    // every style it had loaded, so one colour change rewrote every style in the file - and a no-edit
+    // "Save & Close" produced the same whole-file diff.
     std::set<std::pair<wxString,int>> m_styleEdited;
     std::set<wxString>                m_globalEdited;
     // Driven off the dirty sets rather than off the document, because one of the blocks the user can now
     // edit may not exist in the file at all: genericLangDef is synthesized at load time from the theme's
-    // own cpp colours, and only becomes real XML here, the first time one of its styles is changed.
-    // Everything else is found, never created - an unedited node is not touched, and a WidgetStyle the
-    // file does not declare is skipped rather than invented.
-    bool saveThemeToXml(const wxString& path)   // persist the edited styles back into their theme XML
+    // own cpp colours, and only becomes part of the file here, the first time one of its styles is
+    // changed. Everything else is found, never created - an unedited style is not touched, and a global
+    // style the file does not declare is skipped rather than invented. The file's header (licence,
+    // credits) is kept: src/theme_file.h carries it through.
+    bool saveThemeFile(const wxString& path)   // persist the edited styles back into their theme file
     {
-        wxXmlDocument doc;
-        if (!wxFileExists(path) || !doc.Load(path) || !doc.GetRoot()) return false;
-        wxXmlNode* lexSec = childNamed(doc.GetRoot(), "LexerStyles");
-        wxXmlNode* gloSec = childNamed(doc.GetRoot(), "GlobalStyles");
-        for (const auto& key : m_styleEdited)   // key = (LexerType name, styleID)
+        std::string text;
+        wxntheme::Theme t;
+        if (!wxnReadFileBytes(path, text) || !wxntheme::parse(text, t)) return false;
+        for (const auto& key : m_styleEdited)   // key = (lexer name, style id)
         {
-            if (!lexSec) break;
             auto it = m_theme.lexers.find(key.first); if (it == m_theme.lexers.end()) continue;
             const StyleDef* sd = nullptr;
             for (const StyleDef& s : it->second) if (s.id == key.second) { sd = &s; break; }
             if (!sd) continue;
-            wxXmlNode* lt = childWith(lexSec, "LexerType", "name", key.first);
-            if (!lt)
+            wxntheme::Lexer* lx = t.lexer(wxnUtf8(key.first));
+            if (!lx)
             {
                 if (key.first != kGenericLexer) continue;   // only our own block is ever created
-                lt = new wxXmlNode(lexSec, wxXML_ELEMENT_NODE, "LexerType");
-                lt->AddAttribute("name", kGenericLexer);
-                lt->AddAttribute("desc", "Generic (custom languages)");
-                lt->AddAttribute("ext", "");
+                wxntheme::Lexer g;
+                g.name = kGenericLexer;
+                g.description = "Generic (custom languages)";
+                t.lexers.push_back(g);
+                lx = &t.lexers.back();
             }
-            const wxString sid = wxString::Format("%d", key.second);
-            wxXmlNode* w = childWith(lt, "WordsStyle", "styleID", sid);
-            if (!w)
+            wxntheme::Style* st = nullptr;
+            for (wxntheme::Style& s : lx->styles) if (s.id == key.second) { st = &s; break; }
+            if (!st)
             {
-                w = new wxXmlNode(lt, wxXML_ELEMENT_NODE, "WordsStyle");
-                w->AddAttribute("name", sd->name);
-                w->AddAttribute("styleID", sid);
+                wxntheme::Style s;
+                s.id = key.second;
+                s.name = wxnUtf8(sd->name);
+                lx->styles.push_back(s);
+                st = &lx->styles.back();
             }
-            if (sd->fg >= 0) setAttr(w, "fgColor", bgrToHex(sd->fg));
-            if (sd->bg >= 0) setAttr(w, "bgColor", bgrToHex(sd->bg));
-            setAttr(w, "fontStyle", wxString::Format("%d", sd->fontStyle));
-            // Written even when unset, spelled as the empty attribute the corpus already uses, so that
-            // CLEARING a face or size persists instead of silently leaving the old value in the file.
-            setAttr(w, "fontName", sd->fontName);
-            setAttr(w, "fontSize", sd->fontSize > 0 ? wxString::Format("%d", sd->fontSize) : wxString());
-            // fontWeight is ours alone, so it is added only where it is actually used - never as an empty
-            // attribute on the other 49,506 nodes, which would be noise in every diff against Notepad++.
-            if (sd->fontWeight > 0) setAttr(w, "fontWeight", wxString::Format("%d", sd->fontWeight));
-            else                    w->DeleteAttribute("fontWeight");
+            if (sd->fg >= 0) st->fg = themeColor(sd->fg);   // the swap is its own inverse: BGR -> RGB
+            if (sd->bg >= 0) st->bg = themeColor(sd->bg);
+            st->fontStyle = sd->fontStyle;
+            // Written even when cleared, so that CLEARING a face, size or weight persists instead of
+            // silently leaving the old value in the file.
+            st->font   = wxnUtf8(sd->fontName);
+            st->size   = sd->fontSize > 0 ? sd->fontSize : 0;
+            st->weight = sd->fontWeight > 0 ? sd->fontWeight : 0;
         }
         for (const wxString& nm : m_globalEdited)
         {
-            if (!gloSec) break;
             auto it = m_theme.global.find(nm); if (it == m_theme.global.end()) continue;
-            wxXmlNode* w = childWith(gloSec, "WidgetStyle", "name", nm); if (!w) continue;
-            if (it->second.first  >= 0) setAttr(w, "fgColor", bgrToHex(it->second.first));
-            if (it->second.second >= 0) setAttr(w, "bgColor", bgrToHex(it->second.second));
+            wxntheme::Style* g = t.global(wxnUtf8(nm)); if (!g) continue;
+            if (it->second.first  >= 0) g->fg = themeColor(it->second.first);
+            if (it->second.second >= 0) g->bg = themeColor(it->second.second);
         }
-        // The return matters: for the light-mode Default the target is <exeDir>/stylers.model.xml, which is
+        // The return matters: for the light-mode Default the target is <exeDir>/themes/Default.yaml, which is
         // not writable on an installed build. This used to be discarded and the caller reported success.
-        return doc.Save(path);
+        const std::string out = wxntheme::emit(t);
+        return !out.empty() && wxnWriteFileAtomic(path, out.data(), out.size());
     }
     void onStyleConfig()   // Settings > Style Configurator: theme picker + per-language token style editor
     {
@@ -14263,7 +14634,7 @@ private:
         auto* btnDelete = new wxButton(&dlg, wxID_ANY, _("Delete user copy"));
         // Defined here, above every Bind, so the theme-combo handler further down can call it too.
         // Only a USER copy can be deleted; a bundled theme lives next to the exe and is not ours to remove.
-        auto userCopyPath = [this]{ return userThemeDir() + wxFILE_SEP_PATH + resolvedThemeName() + ".xml"; };
+        auto userCopyPath = [this]{ return userThemeDir() + wxFILE_SEP_PATH + resolvedThemeName() + ".yaml"; };
         auto syncDeleteButton = [&]{ btnDelete->Enable(wxFileExists(userCopyPath())); };
         auto* btn = new wxBoxSizer(wxHORIZONTAL);
         btn->Add(btnSaveAs, 0, wxRIGHT, 6); btn->Add(btnDelete, 0, wxRIGHT, 6); btn->Add(btnRevert, 0); btn->AddStretchSpacer();
@@ -14283,7 +14654,7 @@ private:
         };
         // ---- File extensions ----
         // extLang: the Language-menu language the selected entry's files open as ("" for Global Styles
-        // and the blocks that are not a language). userExtSaved: what /UserExt holds on disk - where
+        // and the blocks that are not a language). userExtSaved: what files.associations holds on disk - where
         // Cancel and Revert go back to, and what Save & Close compares against.
         wxString extLang;
         std::map<std::string, std::string> userExtSaved = m_userExt;
@@ -14368,14 +14739,10 @@ private:
             chSize->SetSelection(szi == wxNOT_FOUND ? 0 : szi);
             chWeight->SetSelection((s.fontWeight > 0 && s.fontWeight <= 900 && s.fontWeight % 100 == 0) ? s.fontWeight / 100 : 0);
         };
-        // Each control writes ONLY the field it owns. The previous spelling recomputed every field from
-        // the widgets on every change, which silently destroyed two things it never displayed:
-        //   - the -1 "unspecified" colour sentinel. The pickers substitute black (fg) and white (bg) for
-        //     it, so merely ticking Bold wrote those placeholders out as real fgColor/bgColor attributes,
-        //     onto nodes that never carried them.
-        //   - every fontStyle bit above bold|italic. 167 shipped styles carry the underline bit (4) and
-        //     357 perl styles carry an undocumented bit 8; one edit zeroed them and Save & Close wrote the
-        //     loss to disk, corrupting the theme for Notepad++ as well.
+        // Each control writes ONLY the field it owns. Recomputing every field from the widgets on every
+        // change would destroy two things the dialog never displays: the -1 "unspecified" colour (the
+        // pickers show black for fg and white for bg, so ticking Bold would write those out as real
+        // colours) and the underline flag 167 shipped styles carry.
         enum class SF { Fg, Bg, Bold, Italic, Underline, Face, Size, Weight };
         auto applyEdit = [&](SF f) {
             const wxString lang = langList->GetStringSelection(); const int si = styleList->GetSelection(); if (si < 0) return;
@@ -14458,26 +14825,26 @@ private:
             const wxString name = te.GetValue().Trim(true).Trim(false);
             // The name becomes a file name, so reject anything that would escape the folder or that the
             // filesystem would refuse, instead of silently rewriting what the user typed. "Default" is
-            // reserved: themeFilePath maps it to stylers.model.xml, so a copy under that name would be
+            // reserved: themeFilePath maps it to the shipped Default.yaml, so a copy under that name would be
             // listed but never loaded.
             if (name.empty() || name == "Default" || name.find_first_of("\\/:*?\"<>|") != wxString::npos)
             {
                 wxMessageBox(wxString::Format(_("\"%s\" is not a valid theme name."), name), kTitle, wxOK | wxICON_WARNING, &dlg);
                 return;
             }
-            const wxString dest = userThemeDir() + wxFILE_SEP_PATH + name + ".xml";
+            const wxString dest = userThemeDir() + wxFILE_SEP_PATH + name + ".yaml";
             if (wxFileExists(dest)
                 && wxMessageBox(wxString::Format(_("A theme named \"%s\" already exists. Overwrite it?"), name),
                                 kTitle, wxYES_NO | wxICON_QUESTION, &dlg) != wxYES) return;
             // Copy the whole source theme first, then fold this session's edits into the copy. Both steps
-            // are needed: the result has to be a complete theme file, and saveThemeToXml only ever writes
+            // are needed: the result has to be a complete theme file, and saveThemeFile only ever writes
             // the styles in the dirty set - on its own it would produce a file with nothing else in it.
             wxFileName::Mkdir(userThemeDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
             const wxString src = themeFilePath(resolvedThemeName());
             // Re-saving a user theme under its own name resolves src and dest to the SAME file, and a
             // copy onto itself either fails outright or truncates. Skip the copy; the edits still fold in.
             const bool selfSave = wxFileName(src).SameAs(wxFileName(dest));
-            if (!wxFileExists(src) || (!selfSave && !wxCopyFile(src, dest)) || !saveThemeToXml(dest))
+            if (!wxFileExists(src) || (!selfSave && !wxCopyFile(src, dest)) || !saveThemeFile(dest))
             {
                 wxMessageBox(wxString::Format(_("Could not write %s"), dest), kTitle, wxOK | wxICON_ERROR, &dlg);
                 return;
@@ -14498,8 +14865,7 @@ private:
             if (!wxFileExists(path)) return;
             // Whether a bundled theme of the same name is waiting underneath decides what this DOES:
             // reveal it again, or remove the theme outright. Say which, because they are different acts.
-            const wxString shipped = wxPathOnly(wxStandardPaths::Get().GetExecutablePath())
-                                   + wxFILE_SEP_PATH + "themes" + wxFILE_SEP_PATH + name + ".xml";
+            const wxString shipped = shippedThemeDir() + wxFILE_SEP_PATH + name + ".yaml";
             const bool revealsBundled = wxFileExists(shipped);
             if (wxMessageBox(wxString::Format(revealsBundled
                                  ? _("Delete your copy of \"%s\" and go back to the built-in theme?")
@@ -14529,13 +14895,13 @@ private:
             commitExt();
             if (m_userExt != userExtSaved) { saveUserExt(); setStatus(0, _("File extensions saved")); m_hint = true; }
             // Only touch the file if something actually changed, and only claim success if the write
-            // happened: for the light-mode Default the target is <exeDir>/stylers.model.xml, which an
+            // happened: for the light-mode Default the target is <exeDir>/themes/Default.yaml, which an
             // installed build cannot write. That failure used to be discarded and reported as saved.
             if (!m_styleEdited.empty() || !m_globalEdited.empty())
             {
-                if (saveThemeToXml(themeFilePath(resolvedThemeName()))) { setStatus(0, _("Theme styles saved")); m_hint = true; }
+                if (saveThemeFile(themeFilePath(resolvedThemeName()))) { setStatus(0, _("Theme styles saved")); m_hint = true; }
                 // A failed write is almost always the light-mode Default on an installed build: its
-                // target is <exeDir>/stylers.model.xml, which is not user-writable. Reporting the failure
+                // target is <exeDir>/themes/Default.yaml, which is not user-writable. Reporting the failure
                 // honestly was the previous fix; saying NOTHING still threw the user's edits away with no
                 // explanation and no way forward. Name the escape hatch - Save As... writes to the user
                 // data dir, which is always writable.
@@ -14552,13 +14918,30 @@ private:
         }
         m_styleEdited.clear(); m_globalEdited.clear();
     }
+    // Settings > Import > Import style theme(s)...: copy wxNote themes (.yaml) into the user theme folder -
+    // the one an installed build can write (the shipped folder next to the exe is read-only there). A file
+    // that does not read as a theme is not copied: it would only fail later, as a theme that shows nothing.
+    // A Notepad++ theme (.xml) is the optional npp-compat plugin's to translate.
     void importStyleTheme()
     {
-        wxFileDialog d(this, _("Import style theme(s)"), "", "", _("Theme files (*.xml)|*.xml"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
+        wxFileDialog d(this, _("Import style theme(s)"), "", "", _("wxNote themes (*.yaml)|*.yaml"), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
         if (d.ShowModal() != wxID_OK) return;
         wxArrayString paths; d.GetPaths(paths);
-        const wxString dir = wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "themes";
-        int n = 0; for (const auto& p : paths) if (wxCopyFile(p, dir + wxFILE_SEP_PATH + wxFileNameFromPath(p))) ++n;
+        const wxString dir = userThemeDir();
+        { wxLogNull noLog; wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL); }
+        int n = 0;
+        wxString rejected;
+        for (const auto& p : paths)
+        {
+            std::string text;
+            wxntheme::Theme t;
+            if (!wxnReadFileBytes(p, text) || !wxntheme::parse(text, t)) { rejected += "\n" + wxFileNameFromPath(p); continue; }
+            wxLogNull noLog;
+            if (wxCopyFile(p, dir + wxFILE_SEP_PATH + wxFileNameFromPath(p))) ++n;
+        }
+        if (!rejected.empty())
+            wxMessageBox(_("These files are not wxNote themes and were not imported:") + rejected, _("Import style theme(s)"),
+                         wxOK | wxICON_WARNING, this);
         setStatus(0, wxString::Format(_("Imported %d theme(s) - choose them in Style Configurator"), n)); m_hint = true;
     }
     // Settings > Import > Import plugin(s)...: on Windows, .dll can be EITHER a real Notepad++-ABI plugin
@@ -14786,12 +15169,6 @@ private:
 #endif
         if (dlg.ShowModal() != wxID_OK || pend.empty()) return;
 
-        if (g_nibStateReadOnly)
-        {
-            wxMessageBox(_("plugins.dat was written by a newer version of wxNote, so it is read-only here."),
-                         _("Plugins"), wxOK | wxICON_INFORMATION, this);
-            return;
-        }
         for (const auto& kv : pend)
         {
             switch (kv.second)
@@ -14824,7 +15201,7 @@ private:
             sci(SCI_STYLESETBACK, STYLE_DEFAULT, def.second >= 0 ? def.second : (dark ? 0x1E1E1E : 0xFFFFFF));
             sci(SCI_STYLESETFORE, STYLE_DEFAULT, def.first  >= 0 ? def.first  : (dark ? 0xDCDCDC : 0x000000));
             // The user's Preferences > Editing "Font" choice always wins over whatever font a loaded
-            // theme XML declares - a theme should only ever affect colours here, not silently override
+            // theme file declares - a theme should only ever affect colours here, not silently override
             // an explicit font preference.
             // See setupScintilla()'s identical call for why this stays a single expression (ToUTF8()'s
             // buffer can be a non-owned view into the temporary wxString - splitting across statements
@@ -14869,7 +15246,7 @@ private:
             applyBraceStyles(dark);
             return;
         }
-        // fallback: built-in palette when no theme XML is present
+        // fallback: built-in palette when no theme file is present
         const int bg = dark ? 0x1E1E1E : 0xFFFFFF, fg = dark ? 0xDCDCDC : 0x000000;
         sci(SCI_STYLESETBACK, STYLE_DEFAULT, bg);
         sci(SCI_STYLESETFORE, STYLE_DEFAULT, fg);
@@ -15069,15 +15446,13 @@ private:
         // is about to exit (to relaunch), same as onCloseWindow, so any silent discard here is backed up too.
         for (EditorPage* p : allPages())
             if (!confirmClose(p, /*exiting=*/true)) return;
-        if (commit) commit();   // config writes that must NOT land when the user cancels above (e.g. the new UI language)
-        auto* cfg = wxConfigBase::Get();
-        cfg->Write("ThemeMode", (long)m_themeMode);   // m_themeMode is updated inside commit() when it actually changed
-        saveSession(cfg);                     // remember open files so the relaunch restores them
-        cfg->Flush();
+        if (commit) commit();   // settings writes that must NOT land when the user cancels above (e.g. the new UI language)
+        { WxnSettingsEdit s; s->setChoice("ui.themeMode", m_themeMode); }   // m_themeMode is updated inside commit() when it actually changed
+        saveExitSession();         // remember open files so the relaunch restores them
         this->Hide();   // hide the current window before relaunching so the two processes' windows don't briefly overlap on screen
         // Carry the run-scoped modes across the relaunch. Without this a restart-to-apply preference
         // change silently DROPS OUT of --sandbox: the replacement process reads and writes the real
-        // config, restores the real session, uses the real user-data dir and loses the [Sandbox] marker
+        // settings, restores the real session, uses the real user-data dir and loses the [Sandbox] marker
         // - and "try a theme without committing to it" is exactly what the flag is advertised for, so
         // the one action most likely to be taken inside a sandbox was the one that escaped it.
         // --safe/--clean/--locale are forwarded for the same reason: the user asked for this run to be
@@ -15092,20 +15467,22 @@ private:
         wxExecute(cmd, wxEXEC_ASYNC);
         Close(true);
     }
-    void saveSession(wxConfigBase* cfg)
+    // The files open at exit, for restoreSession() to reopen next launch (state.yaml session/*).
+    void saveExitSession()
     {
-        int count = 0, active = -1;
+        std::vector<std::string> files;
+        long long active = -1;
         EditorPage* activeP = activePage();
         for (EditorPage* p : allPages())                       // BOTH views, so the sub view's files aren't dropped at exit
         {
             if (!p || p->path.empty()) continue;               // only saved files can be restored
-            if (p == activeP) active = count;
-            cfg->Write(wxString::Format("Session/File%d", count), p->path);
-            ++count;
+            if (p == activeP) active = (long long)files.size();
+            files.push_back(wxnUtf8(p->path));
         }
-        cfg->Write("Session/Count", (long)count);
-        cfg->Write("Session/Active", (long)active);
-        cfg->Write("Session/Pending", true);
+        g_state.setList("session/files", files);
+        g_state.setInt("session/active", active);
+        g_state.setBool("session/pending", true);
+        wxnFlushState();
     }
 
     // wxMessageBox uses a native dialog that ignores the app theme; child dialogs also need
@@ -15517,9 +15894,8 @@ private:
     // Help > Debug Info: everything a bug report needs beyond what About already shows - resolved
     // (not just configured) settings, since "Theme: System" alone doesn't say whether that resolved to
     // dark or light on this machine. Icon style names are the exact Preferences combo strings (same
-    // _() call sites, so no new catalog entries), and the settings-storage line is the one thing that
-    // genuinely differs by platform: the registry on Windows, a file under the user's config directory
-    // everywhere else (userDataDir()/preferences.md's own wording).
+    // _() call sites, so no new catalog entries), and the Settings line names the settings.yaml in use
+    // (the sandbox's under --sandbox) - with why it is not being used, when it does not parse.
     void showDebugInfo()
     {
         wxLocale* loc = wxGetLocale();
@@ -15531,11 +15907,8 @@ private:
         };
         const wxString themeMode = kThemeModes[(m_themeMode >= 0 && m_themeMode < 3) ? m_themeMode : 0];
         const wxString iconStyle = kIconStyles[(m_iconStyle >= 0 && m_iconStyle < 4) ? m_iconStyle : 0];
-#ifdef __WXMSW__
-        const wxString settingsLoc = "Windows Registry (HKCU\\Software\\wxNote)";
-#else
-        const wxString settingsLoc = wxStandardPaths::Get().GetUserConfigDir();
-#endif
+        wxString settingsLoc = g_settingsPath;
+        if (!g_settingsFile.ok()) settingsLoc += "\n" + wxString::FromUTF8(g_settingsFile.error().c_str());
         themedInfo(wxString::Format(
             _("wxNote %s (experimental)\n\n"
               "wxWidgets %d.%d.%d\n%s\n\n"
@@ -15649,7 +16022,7 @@ private:
             const int i = e.GetId() - m_fileHistory.GetBaseId();
             const wxString f = m_fileHistory.GetHistoryFile(i);
             if (wxFileExists(f)) openPath(f);
-            else { m_fileHistory.RemoveFileFromHistory(i); auto* c = wxConfigBase::Get(); c->SetPath("/RecentFiles"); m_fileHistory.Save(*c); c->SetPath("/"); }
+            else { m_fileHistory.RemoveFileFromHistory(i); saveRecentFiles(); }
             return;
         }
         if (!g_nibCommands.empty() && cmd >= NIB_CMD_BASE && cmd < NIB_CMD_BASE + static_cast<int>(g_nibCommands.size()))
@@ -15670,8 +16043,8 @@ private:
         if (cmd >= myID_UILANG_FIRST && cmd < myID_UILANG_FIRST + (int)WXSIZEOF(UI_LANG_IDS))   // Localization menu: switch the UI language (restart-to-apply)
         {
             const long newUi = UI_LANG_IDS[cmd - myID_UILANG_FIRST];
-            if (newUi != readUiLang())   // the language write rides the commit callback: a cancelled restart must not switch the config
-                restartWithTheme([newUi] { wxConfigBase::Get()->Write("UILanguage", newUi); });
+            if (newUi != readUiLang())   // the language write rides the commit callback: a cancelled restart must not switch the setting
+                restartWithTheme([newUi] { WxnSettingsEdit s; s->setText("ui.language", uiLangCode(newUi)); });
             return;
         }
         if (cmd >= myID_DOCLIST_ITEM && cmd < myID_DOCLIST_ITEM + 1000)   // document-list dropdown entry
@@ -16098,7 +16471,7 @@ private:
             case kCmdExecuteValidateShortcutsXml: {   // 49001: "Validate shortcuts.xml"
                 // Stay N++-agnostic: the core knows only that SOME plugin may offer a well-known
                 // "import shortcuts" command. If one registered "host.shortcuts.import", forward to it;
-                // otherwise fall through to notImpl. The optional GPL npp-shortcuts-compat plugin
+                // otherwise fall through to notImpl. The optional GPL npp-compat plugin
                 // registers that id and does the whole parse+report+import - the core learns nothing
                 // about the shortcuts.xml format (generic-indirection option).
                 const NibCmd* imp = nullptr;
@@ -16169,7 +16542,7 @@ private:
         {
             m_zoom = z;
             updateLineMargin();
-            wxConfigBase::Get()->Write("Zoom", static_cast<long>(z)); wxConfigBase::Get()->Flush();
+            g_state.setInt("zoom", z); wxnFlushState();
         }
         // Outside the early-out on purpose: typing "103%" at base 10 rounds to the zoom the editor is
         // already at, so no SCN_ZOOM ever fires - without this the field would keep showing a percentage
@@ -16359,14 +16732,14 @@ private:
     FindReplaceDialog* m_findDlg = nullptr;   // modeless Find/Replace dialog
     TerminalPanel*     m_terminal = nullptr;  // View > Show Terminal - bottom multi-tab shell panel (lazy)
     Scope              m_accelScope = Scope::Editor;   // current frame accel-table scope (see refreshAccelerators/onChildFocus)
-    KeymapStore        m_keymap;          // effective shortcut set (defaults + shortcuts.json); drives refreshAccelerators (keymap_store.h)
+    KeymapStore        m_keymap;          // effective shortcut set (defaults + keybindings.yaml); drives refreshAccelerators (keymap_store.h)
     bool               m_keymapReady = false;   // true once seeded+loaded in buildMenuBar; gates every store read (label rewrite, editor ops)
     std::vector<EditorOp> m_editorLive;   // editor-command overrides currently applied to the persistent STCs; diffed on re-apply so reset restores stock keys
     std::vector<OpenHereTool> m_openFolderTools;   // File > Open Containing Folder's dynamically-detected entries (see terminal_panel.h)
     wxStyledTextCtrl*  m_findResults = nullptr;   // Find-in-Files results panel (docked, bottom)
     wxStyledTextCtrl*  m_fifScratch  = nullptr;   // hidden scratch buffer for searching file contents
     std::vector<std::pair<wxString, int>> m_fifJump;   // results panel line -> (file, 0-based editor line)
-    wxFileHistory      m_fileHistory{ recentMaxFromConfig() };   // Recent Files (MRU); max read from config at construction (restart-to-apply)
+    wxFileHistory      m_fileHistory{ recentMaxSetting() };   // Recent Files (MRU); max read from settings.yaml at construction (restart-to-apply)
     // wxFileHistory hands out GetBaseId() + i for i in [0, GetMaxFiles()). The stock wxID_FILE1..wxID_FILE9
     // constants cover only NINE of those, but the max defaults to 10 and the user can raise it to 50 -
     // so testing against wxID_FILE9 silently misses every entry past the ninth.
@@ -16379,7 +16752,7 @@ private:
     wxStyledTextCtrl* m_stc = nullptr;   // the cross-platform editor view; its native HWND on Windows == m_sci
     wxStyledTextCtrl* m_docMap = nullptr;   // Document Map (minimap): a second view sharing the active document
     wxTreeCtrl* m_funcList = nullptr;       // Function List: per-file symbol tree (regex-parsed)
-    // Project Panels 1/2/3: three independent workspaces (tree + its own .xml path), built lazily.
+    // Project Panels 1/2/3: three independent workspaces (tree + its own .yaml path), built lazily.
     struct ProjectPanelState { wxTreeCtrl* tree = nullptr; wxString workspace; };
     ProjectPanelState m_proj[kProjectPanels];
     wxTreeCtrl* m_fifPanel = nullptr;       // Find result: docked Find-in-Files results tree
@@ -16420,7 +16793,7 @@ private:
     int          m_macToolbarRowH = 0;            // integrated bar: toolbar row height = the re-centred traffic lights' band height
 #endif
     bool        m_integratedBar = false;         // setting: show the integrated top bar (restart-to-apply; read in OnInit)
-    // Integrated-bar window-button style (TopBarButtonStyle in Preferences, restart-to-apply): 0 = system-
+    // Integrated-bar window-button style (window.buttonStyle, restart-to-apply): 0 = system-
     // native (Win snap-layouts / GTK header bar), 1 = wxNote's flat buttons, 2 = minimal (inset circle).
     // Stored as the one value that is read and written; the two modes callers actually branch on are
     // derived below rather than mirrored into members, so "native" and "minimal" cannot go out of sync.
@@ -16447,7 +16820,7 @@ private:
     int         m_largeFileMiB   = 16;
     int         m_longLineChars  = 50000;
     bool        m_wrap = false, m_ws = false, m_guides = true, m_dark = true;   // guides default ON
-    // Window/X,Y,W,H,Maximized: the last known NON-maximized frame geometry (kept live by the
+    // state.yaml's window/x, y, width, height and maximized: the last known NON-maximized frame geometry (kept live by the
     // wxEVT_SIZE/MOVE binds in the constructor - GetSize()/GetPosition() while actually maximized report
     // the maximized bounds, not what to restore to) plus whether the window was maximized at last close.
     // wxDefaultCoord X/Y means "never saved a position" (first run) - the constructor falls back to
@@ -16477,7 +16850,7 @@ private:
     int         m_caretWidth = 1, m_edgeColumn = 0;               // caret thickness (px); long-line marker column (0 = off)
     int         m_defaultEol = SC_EOL_CRLF, m_defaultLangId = -1; // New Document: default line-ending + language (kCmdLang*; -1 = Normal Text)
     int         m_defaultEncoding = ENC_UTF8;                     // New Document: default on-disk encoding (Enc enum)
-    int         m_maxRecent = 10;                                // Recent Files: max entries (restart-to-apply; see recentMaxFromConfig)
+    int         m_maxRecent = 10;                                // Recent Files: max entries (restart-to-apply; see recentMaxSetting)
     bool        m_tabCloseBtn = true;                            // Tab Bar: a close button on each tab (restart-to-apply)
     int         m_caretBlink = 500;                              // caret blink rate (ms; 0 = steady)
     bool        m_scrollBeyond = false, m_multiEdit = true;      // scroll past the last line; multi-selection / multi-caret editing
@@ -16485,9 +16858,10 @@ private:
     bool        m_autoInsertPairs = false;                       // auto-insert matching brackets/quotes while typing
     wxString    m_themeName;                                      // active editor theme (empty = dark/light default); Style Configurator
     // Style Configurator "User ext.": lower-case extension -> Language-menu name, beating every other
-    // rule in detection, Toggle Comment and the Function List. Settings group /UserExt, one entry per
-    // extension - so an extension belongs to one language at a time by construction.
+    // rule in detection, Toggle Comment and the Function List. The files.associations setting, one entry
+    // per extension - so an extension belongs to one language at a time by construction.
     std::map<std::string, std::string>         m_userExt;
+    std::map<std::string, std::string>         m_prefsLoaded;   // prefValues() as last read or written (see saveSettings)
     std::map<std::string, std::vector<std::string>> m_defaultExt;   // defaultExtensionsFor's cache
     bool                                       m_defaultExtReady = false;
     std::unique_ptr<scintillua::Engine>        m_scintillua;     // native language engine (embedded Lua+LPeg+Scintillua), lazy-created
@@ -16498,13 +16872,13 @@ private:
     wxString    m_printHeader, m_printFooter;                     // Preferences > Print: optional header/footer text (macros resolved at print time)
     std::vector<MacroStep> m_macro;                               // the current recorded macro
     bool        m_recording = false;
-    std::vector<SavedMacro> m_savedMacros;    // named macros; persisted to macros.dat under userDataDir()
+    std::vector<SavedMacro> m_savedMacros;    // named macros; persisted to macros.yaml under userDataDir()
     long                    m_macroNextUid = 1;      // monotonic; never reused, so a shortcut binding never leaks to another macro
-    bool                    m_macrosReadOnly = false; // true if macros.dat is a newer format version -> never overwrite it
+    bool                    m_macrosReadOnly = false; // true if macros.yaml is unreadable or a newer format version -> never overwrite it
     bool        m_macroSepAdded = false;
-    std::vector<SavedRun>   m_savedRuns;      // named Run commands; persisted to runcommands.dat under userDataDir()
+    std::vector<SavedRun>   m_savedRuns;      // named Run commands; persisted to runcommands.yaml under userDataDir()
     long                    m_runNextUid = 1;        // monotonic, same contract as m_macroNextUid
-    bool                    m_runsReadOnly = false;  // true if runcommands.dat is a newer format version -> never overwrite it
+    bool                    m_runsReadOnly = false;  // true if runcommands.yaml is unreadable or a newer format version -> never overwrite it
     bool                    m_runSepAdded = false;
     bool        m_hint = false;   // a "needs full app" message is showing in status field 0
     // cached toolbar/menu enable states (start enabled, matching the freshly-built toolbar)
@@ -16516,7 +16890,7 @@ private:
     const void* m_stCommentLang = nullptr;
     int         m_newCount = 0;   // counter for "new N" tab titles
     int         m_zoom = 0;       // shared zoom level across all tabs (Ctrl+wheel), persisted
-    WxnTheme    m_theme;          // theme colours (loaded from theme XML)
+    WxnTheme    m_theme;          // theme colours (loaded from the theme file)
     int         m_searchEngine = 0;                               // Edit > Change Search Engine: 0=DuckDuckGo 1=Google 2=Bing 3=Yahoo
     bool        m_beginEndSelectActive = false, m_beginEndSelectColumnMode = false, m_selExtendGuard = false;
     int         m_beginEndSelectAnchor = -1;                      // Edit > Begin/End Select: the sticky selection anchor
@@ -16657,23 +17031,17 @@ public:
         // privileged copy through COM IFileOperation instead - see the comment there. Do not re-add an
         // argv-driven elevated file operation.)
 #endif
-        SetAppName("wxNote");             // the identity wxConfig + GetUserDataDir() key everything under
+        SetAppName("wxNote");             // the identity GetUserDataDir() keys everything under
 
-        // ---- --sandbox pre-scan: raw argv, and it MUST come first ---------------------------------------
-        // Everything below this point may touch wxConfigBase::Get() - readUiLang() in the locale block
-        // immediately following is the very first such call in the process - and the first Get() is what
-        // creates and installs the real (registry on Windows, file elsewhere) config object. Once that
-        // exists the user's store is already in play, so the swap has to happen before it, which rules out
-        // asking the parser. Constructing wxFileConfig from an empty stream gives a config with no backing
-        // file at all: every Read() falls through to the caller's default and every Write()/Flush() is
-        // discarded when the process exits, which is exactly the semantics --sandbox promises.
+        // ---- --sandbox pre-scan, then settings.yaml and state.yaml: raw argv, and it MUST come first -------
+        // Everything below this point may read a setting - readUiLang() in the locale block immediately
+        // following is the first - so the stores are opened here, which rules out asking the parser. Under
+        // --sandbox they open in the throwaway data directory like every other file (sandboxDataDir(),
+        // removed on exit): nothing is there, so every read falls through to its default and every write is
+        // discarded with the directory - exactly the semantics --sandbox promises.
         for (int i = 1; i < argc; ++i)
             if (wxString(argv[i]) == "--sandbox") { g_sandboxMode = true; break; }
-        if (g_sandboxMode)
-        {
-            wxStringInputStream emptyCfg((wxString()));          // wxFileConfig's ctor reads the stream
-            wxConfigBase::Set(new wxFileConfig(emptyCfg));           // fully, and keeps no reference to it
-        }
+        g_settingsLoadError = wxnOpenStores(g_sandboxMode ? sandboxDataDir() : wxStandardPaths::Get().GetUserDataDir());
 
         // ---- --locale pre-scan: raw argv, before the parser exists -------------------------------------
         //
@@ -16753,8 +17121,8 @@ public:
         // the OS); if no catalog exists for it (e.g. English, which has none), AddCatalog finds nothing and
         // _() falls back to returning its English argument.
         //
-        // Must stay ABOVE the parser: see the pre-scan comment. Note this also makes readUiLang() the first
-        // wxConfigBase::Get() touch in the process, which used to be the "ReuseInstance" read further down.
+        // Must stay ABOVE the parser: see the pre-scan comment. readUiLang() is the first settings read in the
+        // process, which is why the stores are opened just above.
         { wxLogNull noWarn;                                     // a chosen language whose OS locale isn't installed still loads our catalog; hush the C-locale warning
           m_locale.Init(g_localeOverride >= 0 ? g_localeOverride : (int)readUiLang()); }   // ignore failure: wx installs the chosen wxTranslations even then, and a second Init() would assert (wx forbids re-Init)
         m_locale.AddCatalogLookupPathPrefix(wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "locale");
@@ -16784,7 +17152,7 @@ public:
         // bug-repro / catalog screenshots. Distinct from --safe; gates g_cleanMode alongside g_safeMode below.
         parser.AddLongSwitch("clean", _("like --safe, plus skip session and recovery restore"));
         // Parsed here only so it appears in --help and is not rejected as unknown; the flag itself was
-        // already acted on by the raw-argv pre-scan at the top of OnInit (it has to precede the config).
+        // already acted on by the raw-argv pre-scan at the top of OnInit (it has to precede opening settings.yaml).
         parser.AddLongSwitch("sandbox", _("independent instance using no saved settings; changes are discarded"));
         // Registered so it shows up in --help and doesn't trip "unknown option"; the VALUE is read by the
         // raw-argv pre-scan far above, because the catalog has to be installed before this parser is built.
@@ -16892,8 +17260,7 @@ public:
         const bool forceReuse = parser.Found("r") && !wait && !req.hasStdin && !g_safeMode && !g_sandboxMode && !parser.Found("d");
 
         // ---- single-instance "reuse window" handoff (Preferences > General; off by default) -----------
-        bool reuseSetting = false;
-        wxConfigBase::Get()->Read("ReuseInstance", &reuseSetting, false);
+        const bool reuseSetting = g_settings.getBool("window.reuseInstance");
         bool startIpcServer = false;
         if (forceReuse || (reuseSetting && !forceNew))
         {
@@ -16993,7 +17360,7 @@ public:
         // (Preferences > Integrated bar decides which, so a miss is invisible on the developer's own setup).
         // One predicate, used by both frame-construction twins below. --clean and --sandbox each skip
         // session AND recovery restore (restoreSession drives both); -w is a dedicated one-file window.
-        // Worth stating why --sandbox is here even though its config is empty and the session read
+        // Worth stating why --sandbox is here even though its settings are empty and the session read
         // would find nothing: restoreSession() also runs the orphaned-.tmp sweep, which DELETES files
         // in the real recovery dir. That is the part a sandbox must not do.
         const bool restoreOnStart = !wait && !g_cleanMode && !g_sandboxMode;
@@ -17031,13 +17398,12 @@ public:
 #ifdef WXN_HAS_BORDERLESS
         // Integrated top bar (Settings > Preferences, restart-to-apply): a borderless frame whose chrome is
         // our own title bar. Only available where the wxBorderlessFrame backend exists (Windows + Linux/GTK).
-        bool integrated = false;
-        wxConfigBase::Get()->Read("IntegratedBar", &integrated, false);
-        if (integrated)
+        if (g_settings.getBool("window.integratedTitleBar"))
         {
             auto* frame = new WxnIntegratedFrame(dark);
             frame->Show(true);
             frame->applySavedWindowState();   // Maximize() before Show() is a no-op on some ports
+            frame->reportSettingsError(g_settingsLoadError);
             if (restoreOnStart) frame->restoreSession();   // --clean: no session AND no recovery restore (restoreSession does both)
             if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(kIpcServiceName); }
             applyRequest(frame);
@@ -17047,8 +17413,9 @@ public:
         auto* frame = new WxnShellFrame(dark);
         frame->Show(true);
         frame->applySavedWindowState();   // Maximize() before Show() is a no-op on some ports
+        frame->reportSettingsError(g_settingsLoadError);
         if (restoreOnStart) frame->restoreSession();   // reopen files from a theme-restart. -w: a dedicated
-                                                // one-file window; leave Session/Pending set so the next real launch
+                                                // one-file window; leave session/pending set so the next real launch
                                                 // still restores the user's tabs. --clean: skip session AND recovery
                                                 // restore entirely (restoreSession drives both) for a pristine launch
         if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(kIpcServiceName); }
@@ -17060,7 +17427,7 @@ public:
         // --sandbox promises nothing survives the process, and recovery backups of unsaved buffers are
         // written into this directory (the backup path is deliberately NOT gated on sandbox mode - it
         // is redirected instead), so leaving it behind would strand document text in %TEMP% forever.
-        // Its manifest went to the discarded in-memory config, so no later run could ever reclaim it.
+        // Its manifest is the state.yaml in this same directory, so no later run could ever reclaim it.
         if (g_sandboxMode && !g_sandboxDataDir.empty())
         {
             wxLogNull noPopup;   // best-effort: a file still open must not raise a dialog during teardown

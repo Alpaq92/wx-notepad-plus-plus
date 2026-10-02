@@ -46,18 +46,27 @@ static void check(bool ok, const char* what)
 }
 
 // ---- hermetic temp-file helpers for the save/reload round-trip tests --------------------------------
-// Each round-trip test needs its own throwaway userDataDir holding a shortcuts.json. Use a uniquely-named
+// Each round-trip test needs its own throwaway userDataDir holding a keybindings.yaml. Use a uniquely-named
 // subdir of the OS temp dir and delete any leftover file first, so a re-run never resolves stale bindings
-// (the store's load() reads "<dir>/shortcuts.json"). All I/O is wxLogNull-wrapped: a temp-dir hiccup must
-// fail the assertion under test, never pop a dialog in a headless run.
+// (the store's load() reads "<dir>/keybindings.yaml"). removeTempSubdirs() deletes them all again once the
+// run is over. All I/O is wxLogNull-wrapped: a temp-dir hiccup must fail the assertion under test, never
+// pop a dialog in a headless run.
+static std::vector<wxString> g_tempSubdirs;
 static wxString makeTempSubdir(const char* leaf)
 {
     const wxString dir = wxFileName::GetTempDir() + wxFILE_SEP_PATH + wxString::FromAscii(leaf);
     wxLogNull noLog;
     wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-    const wxString f = dir + wxFILE_SEP_PATH + "shortcuts.json";
+    const wxString f = dir + wxFILE_SEP_PATH + "keybindings.yaml";
     if (wxFileExists(f)) wxRemoveFile(f);
+    g_tempSubdirs.push_back(dir);
     return dir;
+}
+static void removeTempSubdirs()
+{
+    wxLogNull noLog;
+    for (const wxString& dir : g_tempSubdirs) wxFileName::Rmdir(dir, wxPATH_RMDIR_RECURSIVE);
+    g_tempSubdirs.clear();
 }
 static void writeTextFile(const wxString& path, const std::string& data)
 {
@@ -111,7 +120,7 @@ static const char* SYM_PRINT   = "file.print";
 
 // ---- a SYNTHETIC bundled preset for the scheme-mechanics tests --------------------------------------
 // The app ships only the "wxnote.default" identity preset (the compiled-in "Notepad++" preset was
-// removed - N++ keys arrive solely via the npp-shortcuts-compat shortcuts.xml import). The scheme
+// removed - N++ keys arrive solely via the npp-compat shortcuts.xml import). The scheme
 // MECHANICS the removed preset used to exercise (a delta-table bind + unbind, live scheme switching,
 // the read-only bundled guard) are provider-independent, so a synthetic preset with an equivalent shape
 // drives them: it BINDS single-line comment to Ctrl+K and UNBINDS the Ctrl+1 tab-switch.
@@ -481,7 +490,7 @@ public:
         // The user-facing contract: the Shortcut Mapper's details report must be literally empty ("Brak
         // konfliktow." / "No conflicts.") on a fresh install. Seed the store EXACTLY as
         // WxnShellFrameT::buildMenuBar does (menu Tier 0 + curated editor tier + bundled schemes; a fresh
-        // install has no shortcuts.json, so no load()), build the ConflictEngine the same way the mapper
+        // install has no keybindings.yaml, so no load()), build the ConflictEngine the same way the mapper
         // does, and require allIssues() empty - printing every offending row so a regression names itself.
         {
             KeymapStore fresh;
@@ -540,7 +549,7 @@ public:
             if (!allStatic) std::printf("        missing vacate op for: %s\n", badRow);
         }
 
-        // ---- rebind round-trips through shortcuts.json ----------------------
+        // ---- rebind round-trips through keybindings.yaml --------------------
         // A rebind must survive save() -> a fresh load(): the store persists the portable ToRawString
         // spelling and re-resolves it, so a real FromString/ToRawString file round-trip is what proves it
         // (a source trace of serialize() cannot show the reparse succeeds).
@@ -553,12 +562,13 @@ public:
             w.load(dir);                       // no file yet -> Tier-0 defaults; also sets the save path
             w.rebind(SYM_SAVE, "Ctrl+Alt+S");  // -> user layer (unbind-then-bind)
             w.unbind(SYM_PRINT);               // -> full unbind (serialized as "-file.print")
-            check(w.save(), "save() writes shortcuts.json");
+            check(w.save(), "save() writes keybindings.yaml");
 
             // On disk: the canonical lowercase spelling and the '-' unbind syntax.
-            const wxString disk = readTextFile(dir + wxFILE_SEP_PATH + "shortcuts.json");
-            check(disk.Lower().Contains("ctrl+alt+s"), "shortcuts.json stores the rebind in canonical lowercase");
-            check(disk.Contains("\"-file.print\""),   "shortcuts.json stores the unbind as \"-file.print\"");
+            const wxString disk = readTextFile(dir + wxFILE_SEP_PATH + "keybindings.yaml");
+            check(disk.Contains("ctrl+alt+s"), "keybindings.yaml stores the rebind in lower case");
+            check(disk.Contains("command: -file.print") || disk.Contains("command: '-file.print'"),
+                  "keybindings.yaml stores the unbind as -file.print");
 
             // A fresh store with the SAME Tier-0 defaults must resolve to the persisted bindings.
             KeymapStore r;
@@ -574,19 +584,17 @@ public:
         }
 
         // ---- the "-command" unbind syntax removes an inherited accel ---------------------
-        // Independent of save()'s exact output: hand-author a shortcuts.json (the file a user edits) and
-        // prove the LEADING '-' on "command" is what drops the inherited Tier-0 default, while a sibling
+        // Independent of save()'s exact output: hand-author a keybindings.yaml (the file a user edits) and
+        // prove the LEADING '-' on the command is what drops the inherited Tier-0 default, while a sibling
         // rebind entry still applies.
         {
             const wxString dir = makeTempSubdir("wxnote_km_unbind");
-            writeTextFile(dir + wxFILE_SEP_PATH + "shortcuts.json",
-                "{\n"
-                "  \"version\": 1,\n"
-                "  \"userKeybindings\": [\n"
-                "    { \"command\": \"-file.print\" },\n"
-                "    { \"command\": \"file.save\", \"key\": \"ctrl+alt+s\" }\n"
-                "  ]\n"
-                "}\n");
+            writeTextFile(dir + wxFILE_SEP_PATH + "keybindings.yaml",
+                "# hand-written\n"
+                "version: 1\n"
+                "bindings:\n"
+                "  - command: -file.print\n"
+                "  - {command: file.save, key: ctrl+alt+s}   # block or flow, either reads\n");
             KeymapStore h;
             h.addDefault(SYM_SAVE,  kCmdFileSave,  "Ctrl+S");
             h.addDefault(SYM_PRINT, kCmdFilePrint, "Ctrl+P");
@@ -657,7 +665,7 @@ public:
         }
 
         // ---- scheme-scoped EDITOR deltas: commit-inactive -> persist -> activate applies ------------
-        // The nib.keymap commit path (npp-shortcuts-compat import) registers a scheme WITHOUT
+        // The nib.keymap commit path (npp-compat import) registers a scheme WITHOUT
         // activating it. Its editor (ScintillaKeys) binds now live IN the scheme (editorDeltas), so
         // they must (a) stay inert while the scheme is inactive, (b) survive save() -> a fresh load(),
         // and (c) apply when the scheme is later activated in the mapper - the import report's
@@ -681,9 +689,9 @@ public:
             check(lc && !lc->overridden && lc->effectiveRaw == "Ctrl+L",
                   "an INACTIVE scheme's editor delta leaves the live editor tier untouched");
             check(w.save(), "save() persists the scheme");
-            const wxString disk = readTextFile(dir + wxFILE_SEP_PATH + "shortcuts.json");
-            check(disk.Contains("\"editor\"") && disk.Lower().Contains("ctrl+k"),
-                  "shortcuts.json carries the scheme's editor delta");
+            const wxString disk = readTextFile(dir + wxFILE_SEP_PATH + "keybindings.yaml");
+            check(disk.Contains("command: editor.lineCut") && disk.Contains("ctrl+k"),
+                  "keybindings.yaml carries the scheme's editor delta in its bindings");
 
             KeymapStore r;                     // a fresh app run
             seedEditorKeymapDefaults(r);
@@ -711,7 +719,7 @@ public:
 
         // ---- a non-bundled scheme must NEVER shadow a bundled preset's id ---------------------------
         // registerScheme's replace semantics + sticky bundled flag would otherwise let a plugin or a
-        // hand-edited shortcuts.json swap a compiled preset's curated deltas for foreign data that can
+        // hand-edited keybindings.yaml swap a compiled preset's curated deltas for foreign data that can
         // neither be repaired nor re-serialized (the corruption duplicateScheme already guards against).
         {
             KeymapStore gs;
@@ -738,18 +746,18 @@ public:
             const EffectiveBinding* svb = gs.effective(SYM_SAVE);
             check(svb && svb->primaryRaw() == "Ctrl+S", "the rogue binding was NOT merged into the preset");
 
-            // Same guard via the parseInto writer: a hand-edited shortcuts.json shadowing the bundled id
-            // is ignored wholesale; the compiled preset keeps resolving. The file's activeScheme naming
+            // Same guard via the parseInto writer: a hand-edited keybindings.yaml shadowing the bundled id
+            // is ignored wholesale; the compiled preset keeps resolving. The file's scheme: naming
             // the (registered) preset must still apply - proving load()'s dangling-id fallback fires
             // only for a scheme that truly does not exist.
             const wxString dir = makeTempSubdir("wxnote_km_shadow");
-            writeTextFile(dir + wxFILE_SEP_PATH + "shortcuts.json",
-                "{\n"
-                "  \"version\": 1,\n"
-                "  \"activeScheme\": \"test.preset\",\n"
-                "  \"schemes\": [ { \"id\": \"test.preset\", \"keybindings\": [\n"
-                "    { \"command\": \"file.save\", \"key\": \"ctrl+alt+s\" } ] } ]\n"
-                "}\n");
+            writeTextFile(dir + wxFILE_SEP_PATH + "keybindings.yaml",
+                "version: 1\n"
+                "scheme: test.preset\n"
+                "schemes:\n"
+                "  - id: test.preset\n"
+                "    bindings:\n"
+                "      - {command: file.save, key: ctrl+alt+s}\n");
             KeymapStore hs;
             hs.addDefault("view.tab.tab1",                   kCmdViewTab1,            "Ctrl+1");
             hs.addDefault("edit.commentUncomment.setSingle", kCmdEditBlockCommentSet, wxString());
@@ -757,27 +765,25 @@ public:
             registerKeymapSchemes(hs);
             registerTestPreset(hs);
             hs.load(dir);
-            check(hs.activeScheme() == TEST_PRESET_ID, "the file's activeScheme selection still applies");
+            check(hs.activeScheme() == TEST_PRESET_ID, "the file's scheme selection still applies");
             const EffectiveBinding* t1 = hs.effective("view.tab.tab1");
             check(t1 && t1->accels.empty(), "preset delta intact after the shadowing file: Ctrl+1 unbound");
             const EffectiveBinding* sv2 = hs.effective(SYM_SAVE);
             check(sv2 && sv2->primaryRaw() == "Ctrl+S", "the file's shadowing scheme block is ignored (Save stays Ctrl+S)");
         }
 
-        // ---- a STALE activeScheme (a scheme this build does not ship) falls back cleanly ------------
-        // The migration case for the REMOVED bundled "Notepad++" preset: a live shortcuts.json can still
-        // carry "activeScheme": "notepad++". load() must resolve the default chain (no crash, no empty
-        // bindings), snap the dangling pointer back to wxnote.default, and a subsequent save() must
-        // write a resolvable state instead of re-persisting the dangling id forever. A user-layer
-        // override in the same file must keep applying (only the scheme pointer migrates).
+        // ---- a STALE activeScheme (a scheme this build does not have) falls back cleanly ------------
+        // A keybindings.yaml can name a scheme that is not registered - a removed plugin's, say.
+        // load() must resolve the default chain (no crash, no empty bindings), snap the dangling pointer
+        // back to wxnote.default, and a subsequent save() must write a resolvable state instead of
+        // re-persisting the dangling id forever. A user-layer override in the same file must keep
+        // applying (only the scheme pointer changes).
         {
             const wxString dir = makeTempSubdir("wxnote_km_stalescheme");
-            writeTextFile(dir + wxFILE_SEP_PATH + "shortcuts.json",
-                "{\n"
-                "  \"version\": 1,\n"
-                "  \"activeScheme\": \"notepad++\",\n"
-                "  \"userKeybindings\": [ { \"command\": \"-file.print\" } ]\n"
-                "}\n");
+            writeTextFile(dir + wxFILE_SEP_PATH + "keybindings.yaml",
+                "version: 1\n"
+                "scheme: notepad++\n"
+                "bindings: [ {command: -file.print} ]\n");
             KeymapStore ms;
             ms.addDefault("view.tab.tab1", kCmdViewTab1,  "Ctrl+1");
             ms.addDefault(SYM_SAVE,        kCmdFileSave,  "Ctrl+S");
@@ -793,7 +799,7 @@ public:
             check(pr && pr->accels.empty(), "the file's user-layer unbind still applies alongside the fallback");
             check(ms.activeScheme() == "wxnote.default", "the dangling scheme id snaps back to wxnote.default at load");
             check(ms.save(), "save() succeeds after the fallback");
-            const wxString disk = readTextFile(dir + wxFILE_SEP_PATH + "shortcuts.json");
+            const wxString disk = readTextFile(dir + wxFILE_SEP_PATH + "keybindings.yaml");
             check(!disk.Contains("notepad++") && disk.Contains("wxnote.default"),
                   "the re-saved file carries wxnote.default, not the dangling id");
 
@@ -810,32 +816,31 @@ public:
                   "the re-saved state reloads resolvable (defaults + the preserved user unbind)");
         }
 
-        // ---- a deeply-nested shortcuts.json must FAIL CLEANLY, not overflow the stack ---------------
-        // The JSON reader's object/array/value recursion is depth-capped; past the cap the parse fails
-        // and load() degrades to defaults - the "a bad hand-edit must not brick startup" contract.
-        // (Without the cap, the first two loads below would crash this test with a stack overflow.)
+        // ---- a deeply-nested keybindings.yaml must FAIL CLEANLY, not overflow the stack ---------------
+        // A hostile or mangled file nesting flow lists 100k deep must leave load() on the defaults - the
+        // "a bad hand-edit must not brick startup" contract - and never recurse the stack away.
         {
-            const wxString dir = makeTempSubdir("wxnote_km_deepjson");
+            const wxString dir = makeTempSubdir("wxnote_km_deepyaml");
 
-            writeTextFile(dir + wxFILE_SEP_PATH + "shortcuts.json", std::string(100000, '['));
+            writeTextFile(dir + wxFILE_SEP_PATH + "keybindings.yaml", std::string(100000, '['));
             KeymapStore ds;
             ds.addDefault(SYM_SAVE, kCmdFileSave, "Ctrl+S");
             ds.load(dir);
             const EffectiveBinding* db = ds.effective(SYM_SAVE);
             check(db && db->primaryRaw() == "Ctrl+S", "a 100k-deep nested file degrades to defaults (no crash)");
 
-            // deep nesting INSIDE a member value (exercises the object -> value -> array path too)
-            writeTextFile(dir + wxFILE_SEP_PATH + "shortcuts.json",
-                          "{ \"version\": 1, \"userKeybindings\": " + std::string(50000, '['));
+            // deep nesting INSIDE a member value
+            writeTextFile(dir + wxFILE_SEP_PATH + "keybindings.yaml",
+                          "version: 1\nbindings: " + std::string(50000, '['));
             KeymapStore ds2;
             ds2.addDefault(SYM_SAVE, kCmdFileSave, "Ctrl+S");
             ds2.load(dir);
             const EffectiveBinding* db2 = ds2.effective(SYM_SAVE);
             check(db2 && db2->primaryRaw() == "Ctrl+S", "deep nesting inside a member also fails cleanly to defaults");
 
-            // sanity: the cap must not reject legitimately-shallow files
-            writeTextFile(dir + wxFILE_SEP_PATH + "shortcuts.json",
-                "{ \"version\": 1, \"userKeybindings\": [ { \"command\": \"file.save\", \"key\": \"ctrl+alt+s\" } ] }");
+            // sanity: a legitimately-shallow file still parses
+            writeTextFile(dir + wxFILE_SEP_PATH + "keybindings.yaml",
+                "version: 1\nbindings:\n  - {command: file.save, key: ctrl+alt+s}\n");
             KeymapStore ds3;
             ds3.addDefault(SYM_SAVE, kCmdFileSave, "Ctrl+S");
             ds3.load(dir);
@@ -844,7 +849,7 @@ public:
             if (db3)
                 for (const EffectiveAccel& a : db3->accels)
                     if (keySpell::canonical(a.raw) == "ctrl+alt+s") parsedBind = true;
-            check(parsedBind, "the depth cap leaves a normal shortcuts.json parsing");
+            check(parsedBind, "deep-nesting handling leaves a normal keybindings.yaml parsing");
         }
 
         // ---- refreshAccelerators produces a table for both frame configurations ------
@@ -910,8 +915,8 @@ public:
         // hand-authored bare bind, then steal only its Ctrl+P for Save.
         {
             const wxString dir = makeTempSubdir("wxnote_km_reassign");
-            writeTextFile(dir + wxFILE_SEP_PATH + "shortcuts.json",
-                "{ \"version\": 1, \"userKeybindings\": [ { \"command\": \"file.print\", \"key\": \"ctrl+r\" } ] }");
+            writeTextFile(dir + wxFILE_SEP_PATH + "keybindings.yaml",
+                "version: 1\nbindings:\n  - {command: file.print, key: ctrl+r}\n");
             KeymapStore rs;
             rs.addDefault(SYM_SAVE,  kCmdFileSave,  "Ctrl+S");
             rs.addDefault(SYM_PRINT, kCmdFilePrint, "Ctrl+P");
@@ -944,7 +949,7 @@ public:
             const EffectiveBinding* p2 = rr.effective(SYM_PRINT);
             const EffectiveBinding* s2 = rr.effective(SYM_SAVE);
             check(p2 && !hasKey(p2, "ctrl+p") && hasKey(p2, "ctrl+r") && s2 && hasKey(s2, "ctrl+p"),
-                  "the steal round-trips through shortcuts.json intact");
+                  "the steal round-trips through keybindings.yaml intact");
         }
 
         // ---- editor-tier HARD conflict keeps BOTH bindings (no steal on the editor tier) ------------
@@ -977,22 +982,111 @@ public:
         }
 
         // ---- a read-only (newer-version) store refuses save() ---------------------------------------
-        // shortcuts.json with version > kCurrentVersion marks the store read-only; save() must refuse so
+        // keybindings.yaml with version > kCurrentVersion marks the store read-only; save() must refuse so
         // the newer file's unknown fields are never clobbered. The mapper freezes its mutating UI off
         // isReadOnly() for the same state (edits must not apply live and then silently fail to persist).
         {
             const wxString dir = makeTempSubdir("wxnote_km_readonly");
             const std::string newer =
-                "{ \"version\": 2, \"userKeybindings\": [ { \"command\": \"file.save\", \"key\": \"ctrl+alt+s\" } ] }";
-            writeTextFile(dir + wxFILE_SEP_PATH + "shortcuts.json", newer);
+                "version: 2\nbindings:\n  - {command: file.save, key: ctrl+alt+s}\n";
+            writeTextFile(dir + wxFILE_SEP_PATH + "keybindings.yaml", newer);
             KeymapStore ro;
             ro.addDefault(SYM_SAVE, kCmdFileSave, "Ctrl+S");
             ro.load(dir);
-            check(ro.isReadOnly(), "a version-2 shortcuts.json marks the store read-only");
+            check(ro.isReadOnly(), "a version-2 keybindings.yaml marks the store read-only");
             ro.rebind(SYM_SAVE, "Ctrl+B");            // an in-memory edit (the mapper blocks these)...
             check(!ro.save(), "...and save() refuses to write over the newer file");
-            check(std::string(readTextFile(dir + wxFILE_SEP_PATH + "shortcuts.json").utf8_str()) == newer,
+            check(std::string(readTextFile(dir + wxFILE_SEP_PATH + "keybindings.yaml").utf8_str()) == newer,
                   "the newer file's content is byte-identical after the refused save");
+        }
+
+        // ---- what this build cannot read survives a save -----------------------------------------------
+        // A rule with a typo'd field, one with a `when` this build does not know, one that adds no key, an
+        // unknown top-level entry and a scheme with no id are all kept, as written, through a Mapper save -
+        // and the unknown `when` is not applied as if it were global.
+        {
+            const wxString dir = makeTempSubdir("wxnote_km_kept");
+            const wxString path = dir + wxFILE_SEP_PATH + "keybindings.yaml";
+            writeTextFile(path,
+                "version: 1\n"
+                "scheme: wxnote.default\n"
+                "bindings:\n"
+                "  - {key: ctrl+alt+s, command: file.save}\n"
+                "  - {key: ctrl+k, comand: file.print}\n"
+                "  - {key: ctrl+j, command: file.print, when: someday}\n"
+                "  - {command: file.print}\n"
+                "futureSetting: {a: 1}\n"
+                "schemes:\n"
+                "  - {name: no id}\n"
+                "  - id: my.keys\n"
+                "    name: Mine\n"
+                "    bindings:\n"
+                "      - {key: ctrl+q, command: file.print}\n"
+                "      - {kye: ctrl+w, command: file.close}\n");
+            KeymapStore ks;
+            ks.addDefault(SYM_SAVE, kCmdFileSave, "Ctrl+S");
+            ks.addDefault(SYM_PRINT, kCmdFilePrint, "Ctrl+P");
+            ks.load(dir);
+            check(!ks.isReadOnly(), "a file with entries this build cannot read is still writable");
+            bool printOnJ = false;
+            if (const EffectiveBinding* p = ks.effective(SYM_PRINT))
+                for (const EffectiveAccel& a : p->accels) if (keySpell::canonical(a.raw) == "ctrl+j") printOnJ = true;
+            check(!printOnJ, "a rule with an unknown `when` is not applied");
+            ks.rebind(SYM_SAVE, "Ctrl+B");
+            check(ks.save(), "...and a Mapper edit saves");
+            const std::string saved(readTextFile(path).utf8_str());
+            check(saved.find("comand: file.print") != std::string::npos, "...keeping the rule with a typo'd field");
+            check(saved.find("when: someday") != std::string::npos, "...the rule with an unknown `when`");
+            check(saved.find("{command: file.print}") != std::string::npos, "...the rule that adds no key");
+            check(saved.find("futureSetting") != std::string::npos, "...the unknown top-level entry");
+            check(saved.find("name: no id") != std::string::npos, "...the scheme with no id");
+            check(saved.find("kye: ctrl+w") != std::string::npos, "...and the scheme's unreadable rule");
+            check(saved.find("ctrl+b") != std::string::npos, "...alongside the edit itself");
+            KeymapStore again;
+            again.addDefault(SYM_SAVE, kCmdFileSave, "Ctrl+S");
+            again.addDefault(SYM_PRINT, kCmdFilePrint, "Ctrl+P");
+            again.load(dir);
+            again.rebind(SYM_SAVE, "Ctrl+B");
+            check(again.save() && std::string(readTextFile(path).utf8_str()) == saved, "a second save writes the same file");
+        }
+
+        // ---- a keybindings.yaml that does not parse is reported and never overwritten ----------------
+        // The defaults apply, the store is read-only (as for a newer version), loadError() says where the
+        // file broke, and save() leaves the user's text as it was until they fix it - a Mapper edit must not
+        // replace a whole hand-written file. A file of only comments is no error: it has nothing to apply.
+        {
+            const wxString dir = makeTempSubdir("wxnote_km_broken");
+            const wxString path = dir + wxFILE_SEP_PATH + "keybindings.yaml";
+            const std::string broken = "version: 1\nbindings:\n  - {command: file.save, key: ctrl+alt+s\n";
+            writeTextFile(path, broken);
+            KeymapStore bs;
+            bs.addDefault(SYM_SAVE, kCmdFileSave, "Ctrl+S");
+            bs.load(dir);
+            const EffectiveBinding* b = bs.effective(SYM_SAVE);
+            check(b && b->primaryRaw() == "Ctrl+S" && b->accels.size() == 1,
+                  "a keybindings.yaml that does not parse leaves the defaults");
+            check(bs.isReadOnly() && bs.loadError().Contains("line"), "...marks the store read-only and names the line");
+            bs.rebind(SYM_SAVE, "Ctrl+B");
+            check(!bs.save(), "...refuses to save over it");
+            check(std::string(readTextFile(path).utf8_str()) == broken, "...and leaves the user's text as it was");
+
+            writeTextFile(path, "- {command: file.save, key: ctrl+alt+s}\n");
+            bs.load(dir);
+            check(bs.isReadOnly() && !bs.loadError().empty(), "a top-level list is no keybindings file: read-only too");
+
+            writeTextFile(path, "# nothing yet\n");
+            bs.load(dir);
+            check(!bs.isReadOnly() && bs.loadError().empty() && bs.save(), "a file of only comments is no error, and saves");
+
+            writeTextFile(path, "version: 1\nbindings:\n  - {command: file.save, key: ctrl+alt+s}\n");
+            bs.load(dir);
+            check(!bs.isReadOnly() && bs.loadError().empty(), "fixing the file clears the error on the next load");
+            b = bs.effective(SYM_SAVE);
+            bool fixedBind = false;
+            if (b)
+                for (const EffectiveAccel& a : b->accels)
+                    if (keySpell::canonical(a.raw) == "ctrl+alt+s") fixedBind = true;
+            check(fixedBind, "...and its bindings apply");
         }
 
         // ---- menu conflict labels resolve LAZILY through the rebuild callback -----------------------
@@ -1062,6 +1156,7 @@ public:
             check(true, "removeDefault ignores an unknown symbolicName");
         }
 
+        removeTempSubdirs();
         std::printf(g_fail ? "\nFAILED  (%d passed, %d failed)\n" : "\nPASSED  (%d passed, %d failed)\n",
                     g_pass, g_fail);
         std::fflush(stdout);

@@ -615,9 +615,6 @@ msgstr "ブックマーク(&B)"
 msgid "Find characters in rang&e..."
 msgstr "範囲内の文字を検索(&E)..."
 
-msgid "&Search"
-msgstr "検索(&S)"
-
 msgid "Always on &Top"
 msgstr "常に手前に表示(&T)"
 
@@ -1080,9 +1077,6 @@ msgstr "エンコード(&N)"
 msgid "None (Normal Text)"
 msgstr "なし (通常のテキスト)"
 
-msgid "Define your language..."
-msgstr "ユーザー定義言語の作成..."
-
 msgid "Open User Defined Language folder..."
 msgstr "ユーザー定義言語フォルダーを開く..."
 
@@ -1116,9 +1110,6 @@ msgstr "インポート"
 msgid "Edit Popup ContextMenu"
 msgstr "コンテキストメニューの編集"
 
-msgid "&Dark Mode"
-msgstr "ダークモード(&D)"
-
 msgid "Se&ttings"
 msgstr "設定(&T)"
 
@@ -1142,9 +1133,6 @@ msgstr "SHA-256"
 
 msgid "SHA-512"
 msgstr "SHA-512"
-
-msgid "T&ools"
-msgstr "ツール(&O)"
 
 msgid "Start Re&cording"
 msgstr "記録開始(&C)"
@@ -1175,9 +1163,6 @@ msgstr "実行(&R)"
 
 msgid "Open Plugins Folder..."
 msgstr "プラグインフォルダーを開く..."
-
-msgid "&Plugins"
-msgstr "プラグイン(&P)"
 
 msgid "Name A to Z"
 msgstr "名前 A から Z"
@@ -1227,17 +1212,11 @@ msgstr "コマンドライン引数..."
 msgid "Check for Updates"
 msgstr "更新の確認"
 
-msgid "Set Updater Proxy..."
-msgstr "アップデーターのプロキシ設定..."
-
 msgid "Debug Info..."
 msgstr "デバッグ情報..."
 
 msgid "About wxNote"
 msgstr "wxNote について"
-
-msgid "&About"
-msgstr "ヘルプ(&A)"
 
 msgid "Go to line"
 msgstr "指定行へ移動"
@@ -1434,9 +1413,6 @@ msgstr "セッションファイルを読み込めませんでした。"
 msgid "Load Session"
 msgstr "セッションの読み込み"
 
-msgid "No session data in this file."
-msgstr "このファイルにはセッションデータがありません。"
-
 msgid "new %d"
 msgstr "新規 %d"
 
@@ -1521,9 +1497,6 @@ msgstr "縮小"
 msgid "Word Wrap"
 msgstr "折り返し"
 
-msgid "User-Defined Language Dialogue"
-msgstr "ユーザー定義言語ダイアログ"
-
 msgid "Monitoring (tail -f)"
 msgstr "監視 (tail -f)"
 
@@ -1589,9 +1562,6 @@ msgstr "ステータスバーを表示"
 
 msgid "Show integrated top bar"
 msgstr "統合トップバーを表示"
-
-msgid "System-native window buttons"
-msgstr "システムネイティブのウィンドウボタン"
 
 msgid "Ignore platform decoration (sharp corners)"
 msgstr "プラットフォームの装飾を無視（角を四角に）"
@@ -1661,12 +1631,6 @@ msgstr "文字目"
 
 msgid "Auto-insert matching brackets and quotes"
 msgstr "対応する括弧と引用符を自動挿入"
-
-msgid "Dark Mode"
-msgstr "ダークモード"
-
-msgid "Enable Dark Mode   (applied on restart)"
-msgstr "ダークモードを有効化   (再起動後に適用)"
 
 msgid "New Document"
 msgstr "新規ドキュメント"
@@ -1794,9 +1758,6 @@ msgstr "ワークスペース: %s"
 msgid "Select Folder as Workspace"
 msgstr "フォルダーをワークスペースとして選択"
 
-msgid "Folder as Workspace (save the file first)"
-msgstr "フォルダーをワークスペースとして使用（先にファイルを保存してください）"
-
 msgid "Save Session"
 msgstr "セッションを保存"
 
@@ -1809,29 +1770,14 @@ msgstr "セッションを読み込みました - %d 個のファイル"
 msgid "Tabs sorted"
 msgstr "タブを並べ替えました"
 
-msgid "%s (Windows only)"
-msgstr "%s（Windows のみ）"
-
 msgid "Encoding: %s (save to apply)"
 msgstr "エンコード: %s（適用するには保存してください）"
 
 msgid "Save As"
 msgstr "名前を付けて保存"
 
-msgid "Binary Clipboard (Windows only)"
-msgstr "バイナリクリップボード（Windows のみ）"
-
 msgid "Paste Binary Content (clipboard has no matching content)"
 msgstr "バイナリコンテンツを貼り付け（クリップボードに一致する内容がありません）"
-
-msgid "Paste Binary Content (Windows only)"
-msgstr "バイナリコンテンツを貼り付け（Windows のみ）"
-
-msgid "Paste %s (Windows only)"
-msgstr "%s を貼り付け（Windows のみ）"
-
-msgid "Open Containing Folder (save the file first)"
-msgstr "格納フォルダーを開く（先にファイルを保存してください）"
 
 msgid "Open in Default Viewer (save the file first)"
 msgstr "既定のビューアーで開く（先にファイルを保存してください）"
@@ -1863,9 +1809,6 @@ msgstr "ファイル属性: 読み取り専用"
 msgid "File attribute: Read/Write"
 msgstr "ファイル属性: 読み書き可能"
 
-msgid "Read-Only Attribute (Windows only)"
-msgstr "読み取り専用属性（Windows のみ）"
-
 msgid "Read/Write for All Documents"
 msgstr "すべてのドキュメントを読み書き可能に"
 
@@ -1892,9 +1835,6 @@ msgstr "常に最前面に表示: オン"
 
 msgid "Always on Top: OFF"
 msgstr "常に最前面に表示: オフ"
-
-msgid "Always on Top (Windows only)"
-msgstr "常に最前面に表示（Windows のみ）"
 
 msgid "File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d"
 msgstr "ファイル: %s\n\n文字数: %ld\n単語数: %ld\n行数: %d"
@@ -2010,9 +1950,6 @@ msgstr "%s を印刷しました"
 msgid "Change History (needs a newer Scintilla than this wx build carries)"
 msgstr "変更履歴（この wx ビルドが持つものより新しい Scintilla が必要です）"
 
-msgid "User-Defined Language dialog"
-msgstr "ユーザー定義言語ダイアログ"
-
 msgid "Marked %d - style 1"
 msgstr "%d 件マーク - スタイル1"
 
@@ -2085,257 +2022,11 @@ msgstr "フォントの太さ(0=継承):"
 msgid "Underline"
 msgstr "下線"
 
-msgid "Nesting: also colour these inside this style"
-msgstr "ネスト: このスタイル内でもこれらを色付けする"
-
 msgid "OK"
 msgstr "OK"
 
-msgid "Existing:"
-msgstr "既存:"
-
 msgid "Name:"
 msgstr "名前:"
-
-msgid "Ext:"
-msgstr "拡張子:"
-
-msgid "Folder && Default"
-msgstr "折りたたみとデフォルト"
-
-msgid "Comment && Number"
-msgstr "コメントと数値"
-
-msgid "Operator && Delimiter"
-msgstr "演算子と区切り記号"
-
-msgid "Keywords"
-msgstr "キーワード"
-
-msgid "Ignore case"
-msgstr "大文字小文字を無視"
-
-msgid "Allow folding of comments"
-msgstr "コメントの折りたたみを許可"
-
-msgid "Fold compact"
-msgstr "コンパクトな折りたたみ"
-
-msgid "Style Default..."
-msgstr "デフォルトのスタイル..."
-
-msgid "Folder in code1:"
-msgstr "フォルダ(コード1):"
-
-msgid "Folder in code2:"
-msgstr "フォルダ(コード2):"
-
-msgid "Folder in comment:"
-msgstr "フォルダ(コメント内):"
-
-msgid "Open:"
-msgstr "開始:"
-
-msgid "Middle:"
-msgstr "中間:"
-
-msgid "Close:"
-msgstr "終了:"
-
-msgid "Style..."
-msgstr "スタイル..."
-
-msgid "Line comment open:"
-msgstr "行コメント開始:"
-
-msgid "Block comment open:"
-msgstr "ブロックコメント開始:"
-
-msgid "Block comment close:"
-msgstr "ブロックコメント終了:"
-
-msgid "Style Line Comment..."
-msgstr "行コメントのスタイル..."
-
-msgid "Style Comment..."
-msgstr "コメントのスタイル..."
-
-msgid "Prefix 1:"
-msgstr "接頭辞1:"
-
-msgid "Prefix 2:"
-msgstr "接頭辞2:"
-
-msgid "Extras 1:"
-msgstr "追加1:"
-
-msgid "Extras 2:"
-msgstr "追加2:"
-
-msgid "Suffix 1:"
-msgstr "接尾辞1:"
-
-msgid "Suffix 2:"
-msgstr "接尾辞2:"
-
-msgid "Range:"
-msgstr "範囲:"
-
-msgid "Style Number..."
-msgstr "数値のスタイル..."
-
-msgid ". (dot)"
-msgstr ". (ピリオド)"
-
-msgid ", (comma)"
-msgstr ", (カンマ)"
-
-msgid "both"
-msgstr "両方"
-
-msgid "Decimal separator"
-msgstr "小数点区切り"
-
-msgid "Off"
-msgstr "オフ"
-
-msgid "Force lowercase before matching"
-msgstr "照合前に小文字化"
-
-msgid "Force lowercase in keyword lists too"
-msgstr "キーワードリストでも小文字化"
-
-msgid "Force pure LC"
-msgstr "強制小文字化"
-
-msgid "Operators 1:"
-msgstr "演算子1:"
-
-msgid "Operators 2:"
-msgstr "演算子2:"
-
-msgid "Style Operators..."
-msgstr "演算子のスタイル..."
-
-msgid "Delimiters (8 sets)"
-msgstr "区切り記号(8セット)"
-
-msgid "Set"
-msgstr "セット"
-
-msgid "Escape"
-msgstr "エスケープ"
-
-msgid "Keywords %d:"
-msgstr "キーワード%d:"
-
-msgid "Prefix mode"
-msgstr "接頭辞モード"
-
-msgid "Please give the language a name."
-msgstr "言語に名前を付けてください。"
-
-msgid "Remove user-defined language \"%s\"?"
-msgstr "ユーザー定義言語「%s」を削除しますか?"
-
-msgid "User-Defined Language \"%s\" saved"
-msgstr "ユーザー定義言語「%s」を保存しました"
-
-msgid "Keyword1"
-msgstr "キーワード1"
-
-msgid "Delimiter1"
-msgstr "デリミタ1"
-
-msgid "Keyword2"
-msgstr "キーワード2"
-
-msgid "Delimiter2"
-msgstr "デリミタ2"
-
-msgid "Keyword3"
-msgstr "キーワード3"
-
-msgid "Delimiter3"
-msgstr "デリミタ3"
-
-msgid "Keyword4"
-msgstr "キーワード4"
-
-msgid "Delimiter4"
-msgstr "デリミタ4"
-
-msgid "Keyword5"
-msgstr "キーワード5"
-
-msgid "Delimiter5"
-msgstr "デリミタ5"
-
-msgid "Keyword6"
-msgstr "キーワード6"
-
-msgid "Delimiter6"
-msgstr "デリミタ6"
-
-msgid "Keyword7"
-msgstr "キーワード7"
-
-msgid "Delimiter7"
-msgstr "デリミタ7"
-
-msgid "Keyword8"
-msgstr "キーワード8"
-
-msgid "Delimiter8"
-msgstr "デリミタ8"
-
-msgid "Operator1"
-msgstr "演算子1"
-
-msgid "Operator2"
-msgstr "演算子2"
-
-msgid "Comment"
-msgstr "コメント"
-
-msgid "Line comment"
-msgstr "行コメント"
-
-msgid "Number"
-msgstr "数値"
-
-msgid "Style: Default"
-msgstr "スタイル: デフォルト"
-
-msgid "Style: Folder in code1"
-msgstr "スタイル: フォルダ(コード1)"
-
-msgid "Style: Folder in code2"
-msgstr "スタイル: フォルダ(コード2)"
-
-msgid "Style: Folder in comment"
-msgstr "スタイル: フォルダ(コメント内)"
-
-msgid "Style: Line Comment"
-msgstr "スタイル: 行コメント"
-
-msgid "Style: Comment"
-msgstr "スタイル: コメント"
-
-msgid "Style: Number"
-msgstr "スタイル: 数値"
-
-msgid "Style: Operators"
-msgstr "スタイル: 演算子"
-
-msgid "Style: Delimiter %d"
-msgstr "スタイル: 区切り記号%d"
-
-msgid "Style: Keywords %d"
-msgstr "スタイル: キーワード%d"
-
-msgid "Operators"
-msgstr "演算子"
 
 msgid "Theme:"
 msgstr "テーマ:"
@@ -2433,9 +2124,6 @@ msgstr "既に実行中のウィンドウを再利用する"
 msgid "Recovered"
 msgstr "復元済み"
 
-msgid "NewLanguage"
-msgstr "新しい言語"
-
 msgid "file-or-folder"
 msgstr "ファイルまたはフォルダー"
 
@@ -2460,17 +2148,17 @@ msgstr "実行するプログラムを選択"
 msgid "Programs (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|All files (*.*)|*.*"
 msgstr "プログラム (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|すべてのファイル (*.*)|*.*"
 
-msgid "Workspace (*.xml)|*.xml"
-msgstr "ワークスペース (*.xml)|*.xml"
+msgid "Workspace (*.yaml)|*.yaml"
+msgstr "ワークスペース (*.yaml)|*.yaml"
 
-msgid "Session files (*.xml)|*.xml|All files (*.*)|*.*"
-msgstr "セッションファイル (*.xml)|*.xml|すべてのファイル (*.*)|*.*"
+msgid "Session files (*.yaml)|*.yaml|All files (*.*)|*.*"
+msgstr "セッションファイル (*.yaml)|*.yaml|すべてのファイル (*.*)|*.*"
 
 msgid "All files (*.*)|*.*"
 msgstr "すべてのファイル (*.*)|*.*"
 
-msgid "Theme files (*.xml)|*.xml"
-msgstr "テーマファイル (*.xml)|*.xml"
+msgid "wxNote themes (*.yaml)|*.yaml"
+msgstr "wxNote テーマ (*.yaml)|*.yaml"
 
 msgid "Style Configurator"
 msgstr "スタイル設定"
@@ -2610,8 +2298,8 @@ msgstr "C++ ソースファイル"
 msgid "CSS file"
 msgstr "CSS ファイル"
 
-msgid "Could not create a writable contextMenu.xml to edit."
-msgstr "編集可能な contextMenu.xml を作成できませんでした。"
+msgid "Could not create a writable contextmenu.yaml to edit."
+msgstr "編集可能な contextmenu.yaml を作成できませんでした。"
 
 msgid "Go source file"
 msgstr "Go ソースファイル"
@@ -3066,12 +2754,6 @@ msgstr "ダウンロードする言語を選択:"
 msgid "Download dictionary"
 msgstr "辞書のダウンロード"
 
-msgid "This dictionary is provided under the following license:\n\n"
-msgstr "この辞書は次のライセンスで提供されています:\n\n"
-
-msgid "\n\nDownload and install it?"
-msgstr "\n\nダウンロードしてインストールしますか？"
-
 msgid "Download failed. Check your internet connection and try again."
 msgstr "ダウンロードに失敗しました。インターネット接続を確認して再試行してください。"
 
@@ -3147,8 +2829,8 @@ msgstr "保存したマクロを更新しました"
 msgid "No saved macros yet. Record one, then use Save Current Recorded Macro."
 msgstr "保存されたマクロがありません。マクロを記録してから「現在の記録済みマクロを保存」を使用してください。"
 
-msgid "Saved macros are read-only: macros.dat was written by a newer version of wxNote."
-msgstr "保存されたマクロは読み取り専用です: macros.dat はより新しいバージョンの wxNote で書き込まれました。"
+msgid "Saved macros are read-only: macros.yaml cannot be read, or was written by a newer version of wxNote."
+msgstr "保存されたマクロは読み取り専用です: macros.yaml を読み込めないか、より新しいバージョンの wxNote で書き込まれました。"
 
 msgid "Order here is the order in the Macro menu. Shortcuts follow a macro when it moves."
 msgstr "ここでの並び順はマクロメニューの順序です。移動してもショートカットはマクロに追従します。"
@@ -3158,9 +2840,6 @@ msgstr "(大きなファイル - シンボル走査オフ)"
 
 msgid "Large-file mode above (MiB, 0 = never):"
 msgstr "大きなファイルモードのしきい値 (MiB、0 = 無効):"
-
-msgid "or any line longer than (chars):"
-msgstr "または次の文字数を超える行:"
 
 msgid "%s  (%d steps)"
 msgstr "%s  (%d ステップ)"
@@ -3265,8 +2944,8 @@ msgstr "スニペット名を入力"
 msgid "any language"
 msgstr "すべての言語"
 
-msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.txt in the user data folder."
-msgstr "このファイルの言語に合うスニペットはありません。\n\nユーザーデータフォルダーの snippets.txt に追加してください。"
+msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.yaml in the user data folder."
+msgstr "このファイルの言語に合うスニペットはありません。\n\nユーザーデータフォルダーの snippets.yaml に追加してください。"
 
 msgid "Regular expressions use PCRE2: a pattern can span line breaks, and lookbehind, named groups and case conversion in replacements all work."
 msgstr "正規表現は PCRE2 を使用します。パターンは改行をまたぐことができ、後方探索、名前付きグループ、置換での大文字小文字変換が利用できます。"
@@ -3340,8 +3019,8 @@ msgstr "保存した実行コマンドの一覧が一杯です (%d)。"
 msgid "No saved Run commands yet. Use Run... and press Save to name one."
 msgstr "保存した実行コマンドはまだありません。「実行...」から「保存」を押して名前を付けてください。"
 
-msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
-msgstr "runcommands.dat はより新しいバージョンの wxNote で作成されているため、ここでは読み取り専用です。"
+msgid "runcommands.yaml cannot be read, or was written by a newer version of wxNote, so it is read-only here."
+msgstr "runcommands.yaml を読み込めないか、より新しいバージョンの wxNote で作成されているため、ここでは読み取り専用です。"
 
 msgid "Plugins"
 msgstr "プラグイン"
@@ -3424,9 +3103,6 @@ msgstr "保留中のプラグインの変更を適用して、wxNote を今す�
 msgid "Plugin changes will take effect when wxNote restarts"
 msgstr "プラグインの変更は wxNote の再起動時に適用されます"
 
-msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
-msgstr "plugins.dat はより新しいバージョンの wxNote で作成されているため、ここでは読み取り専用です。"
-
 msgid "Delete user copy"
 msgstr "自分のコピーを削除"
 
@@ -3474,3 +3150,22 @@ msgstr ".%s は %s として開くようになりました (以前: %s)"
 
 msgid "File extensions saved"
 msgstr "ファイル拡張子を保存しました"
+
+msgid "settings.yaml has an error (%s) - using the defaults until it is fixed"
+msgstr "settings.yaml にエラーがあります (%s) - 修正されるまで既定値を使用します"
+
+msgid "Not saved: settings.yaml has an error (%s)"
+msgstr "保存されませんでした: settings.yaml にエラーがあります (%s)"
+
+msgid "keybindings.yaml has an error (%s) - using the default keys until it is fixed"
+msgstr "keybindings.yaml にエラーがあります (%s) - 修正されるまで既定のキー割り当てを使用します"
+
+msgid "%s has an error (%s) and is not used until it is fixed"
+msgstr "%s にエラーがあります (%s) - 修正されるまで使用されません"
+
+msgid "Could not read the workspace file."
+msgstr "ワークスペースファイルを読み込めませんでした。"
+
+msgid "These files are not wxNote themes and were not imported:"
+msgstr "次のファイルは wxNote のテーマではないため、インポートされませんでした:"
+

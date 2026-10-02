@@ -5,7 +5,7 @@
 // keymap (arrows, word/paragraph navigation, line operations, ...), entirely separate from the menu
 // accelerators the rest of the shortcut system manages. This header exposes a hand-picked subset of those
 // SCI_* editor commands as remappable rows so a user can rebind them in the Shortcut Mapper, and the
-// KeymapStore persists the overrides in shortcuts.json's "editor:" section keyed by the stable ascii
+// KeymapStore persists the overrides in keybindings.yaml, in its one bindings list, keyed by the stable ascii
 // `name` here ("editor.lineCut" -> SCI_LINECUT).
 //
 // The set is deliberately CURATED, not the whole ~65-row Scintilla default table:
@@ -42,7 +42,7 @@
 // One remappable editor command. `wxKey`/`wxMods` are the wx-space mirror of the command's STOCK
 // Scintilla default (WXK_*/ascii char + wxACCEL_* flags) - the key Scintilla's own MapDefault binds,
 // which main.cpp's computeEditorOps vacates whenever the effective binding diverges; `sciCmd` is the
-// SCI_* it fires; `name` is the stable shortcuts.json key; `displayName` is the wxTRANSLATE-marked
+// SCI_* it fires; `name` is the stable keybindings.yaml command name; `displayName` is the wxTRANSLATE-marked
 // English label shown (translated) in the mapper.
 //
 // `defWxKey`/`defWxMods` are wxNote's CURATED DEFAULT for the row, which - since the 6-editor consensus
@@ -125,7 +125,7 @@ inline wxString editorDefaultAccelRaw(const EditorCommandDef& d)
 }
 
 // Translated display name for a stable editor-command name, or the name verbatim if unknown (defensive -
-// a name from a newer shortcuts.json that this build doesn't define).
+// a name from a newer keybindings.yaml that this build doesn't define).
 inline wxString editorCommandDisplayName(const wxString& name)
 {
     for (size_t i = 0; i < kEditorCommandCount; ++i)

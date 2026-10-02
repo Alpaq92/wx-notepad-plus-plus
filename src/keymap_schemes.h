@@ -15,16 +15,16 @@
 // defaults wholesale (kCmd* ids ARE the frozen IDM_* values, src/command_ids.h), so the two keymaps
 // already agree on the headline bindings - and the remaining divergences could only be guessed at from
 // out-of-tree N++ sources. Instead of shipping a guess, Notepad++ keys arrive through the optional
-// npp-shortcuts-compat plugin, which imports the user's ACTUAL shortcuts.xml as a "Notepad++ (imported)"
-// user scheme via nib.keymap/1 - authoritative, per-user, and persisted in shortcuts.json. The
+// npp-compat plugin, which imports the user's ACTUAL shortcuts.xml as a "Notepad++ (imported)"
+// user scheme via nib.keymap/1 - authoritative, per-user, and persisted in keybindings.yaml. The
 // registration machinery below (registerBundledScheme + the delta-table shape) stays: user/plugin
 // schemes resolve through the same store paths, and tests drive it with synthetic tables.
 //
 // Registration ordering matters - see registerKeymapSchemes() below: call it AFTER seedKeymapDefaults()
 // and BEFORE KeymapStore::load(), so the file's activeScheme can resolve at startup and load()'s reload
-// cleanup (which keeps bundled schemes, drops user ones) preserves the preset. A shortcuts.json whose
-// activeScheme names a scheme that no longer exists (e.g. the removed "notepad++" preset) snaps back to
-// "wxnote.default" inside load() - the file migrates itself on the next save.
+// cleanup (which keeps bundled schemes, drops user ones) preserves the preset. A keybindings.yaml whose
+// activeScheme names a scheme that does not exist (a removed plugin's, say) snaps back to
+// "wxnote.default" inside load(), and the next save writes that.
 // =====================================================================
 #include "keymap_store.h"
 
@@ -63,7 +63,7 @@ inline void registerBundledScheme(KeymapStore& store, const wxString& id, const 
 }
 
 // Register every bundled read-only preset into the store. Call ONCE at startup, after seedKeymapDefaults()
-// (so Tier 0 exists) and before KeymapStore::load() (so an activeScheme pointer in shortcuts.json resolves,
+// (so Tier 0 exists) and before KeymapStore::load() (so an activeScheme pointer in keybindings.yaml resolves,
 // and so load()'s "keep bundled, drop user" cleanup preserves these on a reload).
 inline void registerKeymapSchemes(KeymapStore& store)
 {

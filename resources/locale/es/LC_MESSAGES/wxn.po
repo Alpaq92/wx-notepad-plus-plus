@@ -615,9 +615,6 @@ msgstr "Marcad&ores"
 msgid "Find characters in rang&e..."
 msgstr "Buscar caracteres en el rang&o..."
 
-msgid "&Search"
-msgstr "&Buscar"
-
 msgid "Always on &Top"
 msgstr "&Siempre visible"
 
@@ -1080,9 +1077,6 @@ msgstr "Co&dificación"
 msgid "None (Normal Text)"
 msgstr "Ninguno (texto normal)"
 
-msgid "Define your language..."
-msgstr "Defina su lenguaje..."
-
 msgid "Open User Defined Language folder..."
 msgstr "Abrir carpeta de lenguaje definido por el usuario..."
 
@@ -1116,9 +1110,6 @@ msgstr "Importar"
 msgid "Edit Popup ContextMenu"
 msgstr "Editar menú contextual emergente"
 
-msgid "&Dark Mode"
-msgstr "Modo &oscuro"
-
 msgid "Se&ttings"
 msgstr "C&onfiguración"
 
@@ -1142,9 +1133,6 @@ msgstr "SHA-256"
 
 msgid "SHA-512"
 msgstr "SHA-512"
-
-msgid "T&ools"
-msgstr "He&rramientas"
 
 msgid "Start Re&cording"
 msgstr "&Inicio de grabación"
@@ -1175,9 +1163,6 @@ msgstr "E&jecutar"
 
 msgid "Open Plugins Folder..."
 msgstr "Abrir carpeta de complementos..."
-
-msgid "&Plugins"
-msgstr "Complemen&tos"
 
 msgid "Name A to Z"
 msgstr "Nombre A a Z"
@@ -1227,17 +1212,11 @@ msgstr "Argumentos de línea de comandos..."
 msgid "Check for Updates"
 msgstr "Buscar actualizaciones"
 
-msgid "Set Updater Proxy..."
-msgstr "Establecer proxy del actualizador..."
-
 msgid "Debug Info..."
 msgstr "Información de depuración..."
 
 msgid "About wxNote"
 msgstr "Acerca de wxNote"
-
-msgid "&About"
-msgstr "Acerca &de"
 
 msgid "Go to line"
 msgstr "Ir a la línea"
@@ -1434,9 +1413,6 @@ msgstr "No se pudo leer el archivo de sesión."
 msgid "Load Session"
 msgstr "Cargar sesión"
 
-msgid "No session data in this file."
-msgstr "Este archivo no contiene datos de sesión."
-
 msgid "new %d"
 msgstr "nuevo %d"
 
@@ -1521,9 +1497,6 @@ msgstr "Alejar"
 msgid "Word Wrap"
 msgstr "Ajuste de línea"
 
-msgid "User-Defined Language Dialogue"
-msgstr "Diálogo de lenguaje definido por el usuario"
-
 msgid "Monitoring (tail -f)"
 msgstr "Supervisión (tail -f)"
 
@@ -1589,9 +1562,6 @@ msgstr "Mostrar barra de estado"
 
 msgid "Show integrated top bar"
 msgstr "Mostrar barra superior integrada"
-
-msgid "System-native window buttons"
-msgstr "Botones de ventana nativos del sistema"
 
 msgid "Ignore platform decoration (sharp corners)"
 msgstr "Ignorar la decoración de la plataforma (esquinas rectas)"
@@ -1661,12 +1631,6 @@ msgstr "º carácter"
 
 msgid "Auto-insert matching brackets and quotes"
 msgstr "Insertar automáticamente paréntesis y comillas de cierre"
-
-msgid "Dark Mode"
-msgstr "Modo oscuro"
-
-msgid "Enable Dark Mode   (applied on restart)"
-msgstr "Habilitar modo oscuro   (se aplica al reiniciar)"
 
 msgid "New Document"
 msgstr "Nuevo documento"
@@ -1794,9 +1758,6 @@ msgstr "Espacio de trabajo: %s"
 msgid "Select Folder as Workspace"
 msgstr "Seleccionar carpeta como espacio de trabajo"
 
-msgid "Folder as Workspace (save the file first)"
-msgstr "Carpeta como espacio de trabajo (guarde primero el archivo)"
-
 msgid "Save Session"
 msgstr "Guardar sesión"
 
@@ -1809,29 +1770,14 @@ msgstr "Sesión cargada - %d archivo(s)"
 msgid "Tabs sorted"
 msgstr "Pestañas ordenadas"
 
-msgid "%s (Windows only)"
-msgstr "%s (solo Windows)"
-
 msgid "Encoding: %s (save to apply)"
 msgstr "Codificación: %s (guarde para aplicar)"
 
 msgid "Save As"
 msgstr "Guardar como"
 
-msgid "Binary Clipboard (Windows only)"
-msgstr "Portapapeles binario (solo Windows)"
-
 msgid "Paste Binary Content (clipboard has no matching content)"
 msgstr "Pegar contenido binario (el portapapeles no tiene contenido coincidente)"
-
-msgid "Paste Binary Content (Windows only)"
-msgstr "Pegar contenido binario (solo Windows)"
-
-msgid "Paste %s (Windows only)"
-msgstr "Pegar %s (solo Windows)"
-
-msgid "Open Containing Folder (save the file first)"
-msgstr "Abrir carpeta contenedora (guarde primero el archivo)"
 
 msgid "Open in Default Viewer (save the file first)"
 msgstr "Abrir en el visor predeterminado (guarde primero el archivo)"
@@ -1863,9 +1809,6 @@ msgstr "Atributo de archivo: solo lectura"
 msgid "File attribute: Read/Write"
 msgstr "Atributo de archivo: lectura/escritura"
 
-msgid "Read-Only Attribute (Windows only)"
-msgstr "Atributo de solo lectura (solo Windows)"
-
 msgid "Read/Write for All Documents"
 msgstr "Lectura/escritura para todos los documentos"
 
@@ -1892,9 +1835,6 @@ msgstr "Siempre visible: ACTIVADO"
 
 msgid "Always on Top: OFF"
 msgstr "Siempre visible: DESACTIVADO"
-
-msgid "Always on Top (Windows only)"
-msgstr "Siempre visible (solo Windows)"
 
 msgid "File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d"
 msgstr "Archivo: %s\n\nCaracteres: %ld\nPalabras: %ld\nLíneas: %d"
@@ -2010,9 +1950,6 @@ msgstr "%s impreso"
 msgid "Change History (needs a newer Scintilla than this wx build carries)"
 msgstr "Historial de cambios (necesita una Scintilla más reciente que la de esta versión de wx)"
 
-msgid "User-Defined Language dialog"
-msgstr "Cuadro de diálogo de lenguaje definido por el usuario"
-
 msgid "Marked %d - style 1"
 msgstr "%d marcado(s) - estilo 1"
 
@@ -2085,257 +2022,11 @@ msgstr "Grosor de fuente (0 = heredado):"
 msgid "Underline"
 msgstr "Subrayado"
 
-msgid "Nesting: also colour these inside this style"
-msgstr "Anidamiento: colorear también estos elementos dentro de este estilo"
-
 msgid "OK"
 msgstr "Aceptar"
 
-msgid "Existing:"
-msgstr "Existente:"
-
 msgid "Name:"
 msgstr "Nombre:"
-
-msgid "Ext:"
-msgstr "Ext.:"
-
-msgid "Folder && Default"
-msgstr "Plegado y Predeterminado"
-
-msgid "Comment && Number"
-msgstr "Comentario y Número"
-
-msgid "Operator && Delimiter"
-msgstr "Operador y Delimitador"
-
-msgid "Keywords"
-msgstr "Palabras clave"
-
-msgid "Ignore case"
-msgstr "Ignorar mayúsculas/minúsculas"
-
-msgid "Allow folding of comments"
-msgstr "Permitir plegado de comentarios"
-
-msgid "Fold compact"
-msgstr "Plegado compacto"
-
-msgid "Style Default..."
-msgstr "Estilo predeterminado..."
-
-msgid "Folder in code1:"
-msgstr "Plegado en código1:"
-
-msgid "Folder in code2:"
-msgstr "Plegado en código2:"
-
-msgid "Folder in comment:"
-msgstr "Plegado en comentario:"
-
-msgid "Open:"
-msgstr "Abrir:"
-
-msgid "Middle:"
-msgstr "Medio:"
-
-msgid "Close:"
-msgstr "Cerrar:"
-
-msgid "Style..."
-msgstr "Estilo..."
-
-msgid "Line comment open:"
-msgstr "Inicio de comentario de línea:"
-
-msgid "Block comment open:"
-msgstr "Inicio de comentario de bloque:"
-
-msgid "Block comment close:"
-msgstr "Fin de comentario de bloque:"
-
-msgid "Style Line Comment..."
-msgstr "Estilo de comentario de línea..."
-
-msgid "Style Comment..."
-msgstr "Estilo de comentario..."
-
-msgid "Prefix 1:"
-msgstr "Prefijo 1:"
-
-msgid "Prefix 2:"
-msgstr "Prefijo 2:"
-
-msgid "Extras 1:"
-msgstr "Adicional 1:"
-
-msgid "Extras 2:"
-msgstr "Adicional 2:"
-
-msgid "Suffix 1:"
-msgstr "Sufijo 1:"
-
-msgid "Suffix 2:"
-msgstr "Sufijo 2:"
-
-msgid "Range:"
-msgstr "Rango:"
-
-msgid "Style Number..."
-msgstr "Estilo de número..."
-
-msgid ". (dot)"
-msgstr ". (punto)"
-
-msgid ", (comma)"
-msgstr ", (coma)"
-
-msgid "both"
-msgstr "ambos"
-
-msgid "Decimal separator"
-msgstr "Separador decimal"
-
-msgid "Off"
-msgstr "Desactivado"
-
-msgid "Force lowercase before matching"
-msgstr "Forzar minúsculas antes de comparar"
-
-msgid "Force lowercase in keyword lists too"
-msgstr "Forzar minúsculas también en las listas de palabras clave"
-
-msgid "Force pure LC"
-msgstr "Forzar minúsculas puras"
-
-msgid "Operators 1:"
-msgstr "Operadores 1:"
-
-msgid "Operators 2:"
-msgstr "Operadores 2:"
-
-msgid "Style Operators..."
-msgstr "Estilo de operadores..."
-
-msgid "Delimiters (8 sets)"
-msgstr "Delimitadores (8 conjuntos)"
-
-msgid "Set"
-msgstr "Conjunto"
-
-msgid "Escape"
-msgstr "Escape"
-
-msgid "Keywords %d:"
-msgstr "Palabras clave %d:"
-
-msgid "Prefix mode"
-msgstr "Modo prefijo"
-
-msgid "Please give the language a name."
-msgstr "Indique un nombre para el lenguaje."
-
-msgid "Remove user-defined language \"%s\"?"
-msgstr "¿Eliminar el lenguaje definido por el usuario \"%s\"?"
-
-msgid "User-Defined Language \"%s\" saved"
-msgstr "Lenguaje definido por el usuario \"%s\" guardado"
-
-msgid "Keyword1"
-msgstr "Palabra clave 1"
-
-msgid "Delimiter1"
-msgstr "Delimitador 1"
-
-msgid "Keyword2"
-msgstr "Palabra clave 2"
-
-msgid "Delimiter2"
-msgstr "Delimitador 2"
-
-msgid "Keyword3"
-msgstr "Palabra clave 3"
-
-msgid "Delimiter3"
-msgstr "Delimitador 3"
-
-msgid "Keyword4"
-msgstr "Palabra clave 4"
-
-msgid "Delimiter4"
-msgstr "Delimitador 4"
-
-msgid "Keyword5"
-msgstr "Palabra clave 5"
-
-msgid "Delimiter5"
-msgstr "Delimitador 5"
-
-msgid "Keyword6"
-msgstr "Palabra clave 6"
-
-msgid "Delimiter6"
-msgstr "Delimitador 6"
-
-msgid "Keyword7"
-msgstr "Palabra clave 7"
-
-msgid "Delimiter7"
-msgstr "Delimitador 7"
-
-msgid "Keyword8"
-msgstr "Palabra clave 8"
-
-msgid "Delimiter8"
-msgstr "Delimitador 8"
-
-msgid "Operator1"
-msgstr "Operador 1"
-
-msgid "Operator2"
-msgstr "Operador 2"
-
-msgid "Comment"
-msgstr "Comentario"
-
-msgid "Line comment"
-msgstr "Comentario de línea"
-
-msgid "Number"
-msgstr "Número"
-
-msgid "Style: Default"
-msgstr "Estilo: Predeterminado"
-
-msgid "Style: Folder in code1"
-msgstr "Estilo: Plegado en código1"
-
-msgid "Style: Folder in code2"
-msgstr "Estilo: Plegado en código2"
-
-msgid "Style: Folder in comment"
-msgstr "Estilo: Plegado en comentario"
-
-msgid "Style: Line Comment"
-msgstr "Estilo: Comentario de línea"
-
-msgid "Style: Comment"
-msgstr "Estilo: Comentario"
-
-msgid "Style: Number"
-msgstr "Estilo: Número"
-
-msgid "Style: Operators"
-msgstr "Estilo: Operadores"
-
-msgid "Style: Delimiter %d"
-msgstr "Estilo: Delimitador %d"
-
-msgid "Style: Keywords %d"
-msgstr "Estilo: Palabras clave %d"
-
-msgid "Operators"
-msgstr "Operadores"
 
 msgid "Theme:"
 msgstr "Tema:"
@@ -2433,9 +2124,6 @@ msgstr "reutilizar una ventana ya abierta"
 msgid "Recovered"
 msgstr "Recuperado"
 
-msgid "NewLanguage"
-msgstr "NuevoIdioma"
-
 msgid "file-or-folder"
 msgstr "archivo-o-carpeta"
 
@@ -2460,17 +2148,17 @@ msgstr "Seleccionar un programa para ejecutar"
 msgid "Programs (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|All files (*.*)|*.*"
 msgstr "Programas (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|Todos los archivos (*.*)|*.*"
 
-msgid "Workspace (*.xml)|*.xml"
-msgstr "Espacio de trabajo (*.xml)|*.xml"
+msgid "Workspace (*.yaml)|*.yaml"
+msgstr "Espacio de trabajo (*.yaml)|*.yaml"
 
-msgid "Session files (*.xml)|*.xml|All files (*.*)|*.*"
-msgstr "Archivos de sesión (*.xml)|*.xml|Todos los archivos (*.*)|*.*"
+msgid "Session files (*.yaml)|*.yaml|All files (*.*)|*.*"
+msgstr "Archivos de sesión (*.yaml)|*.yaml|Todos los archivos (*.*)|*.*"
 
 msgid "All files (*.*)|*.*"
 msgstr "Todos los archivos (*.*)|*.*"
 
-msgid "Theme files (*.xml)|*.xml"
-msgstr "Archivos de tema (*.xml)|*.xml"
+msgid "wxNote themes (*.yaml)|*.yaml"
+msgstr "Temas de wxNote (*.yaml)|*.yaml"
 
 msgid "Style Configurator"
 msgstr "Configurador de estilos"
@@ -2610,8 +2298,8 @@ msgstr "Archivo fuente C++"
 msgid "CSS file"
 msgstr "Archivo CSS"
 
-msgid "Could not create a writable contextMenu.xml to edit."
-msgstr "No se pudo crear un archivo contextMenu.xml editable."
+msgid "Could not create a writable contextmenu.yaml to edit."
+msgstr "No se pudo crear un archivo contextmenu.yaml editable."
 
 msgid "Go source file"
 msgstr "Archivo fuente Go"
@@ -3066,12 +2754,6 @@ msgstr "Elija un idioma para descargar:"
 msgid "Download dictionary"
 msgstr "Descargar diccionario"
 
-msgid "This dictionary is provided under the following license:\n\n"
-msgstr "Este diccionario se ofrece bajo la siguiente licencia:\n\n"
-
-msgid "\n\nDownload and install it?"
-msgstr "\n\n¿Descargarlo e instalarlo?"
-
 msgid "Download failed. Check your internet connection and try again."
 msgstr "Error al descargar. Compruebe su conexión a Internet e inténtelo de nuevo."
 
@@ -3147,8 +2829,8 @@ msgstr "Macros guardadas actualizadas"
 msgid "No saved macros yet. Record one, then use Save Current Recorded Macro."
 msgstr "Aún no hay macros guardadas. Grabe una y luego use \"Guardar macro grabada actual\"."
 
-msgid "Saved macros are read-only: macros.dat was written by a newer version of wxNote."
-msgstr "Las macros guardadas son de solo lectura: macros.dat fue escrito por una versión más reciente de wxNote."
+msgid "Saved macros are read-only: macros.yaml cannot be read, or was written by a newer version of wxNote."
+msgstr "Las macros guardadas son de solo lectura: macros.yaml no se puede leer o fue escrito por una versión más reciente de wxNote."
 
 msgid "Order here is the order in the Macro menu. Shortcuts follow a macro when it moves."
 msgstr "El orden aquí es el del menú Macro. Los atajos siguen a la macro cuando se mueve."
@@ -3158,9 +2840,6 @@ msgstr "(archivo grande: análisis de símbolos desactivado)"
 
 msgid "Large-file mode above (MiB, 0 = never):"
 msgstr "Modo de archivo grande por encima de (MiB, 0 = nunca):"
-
-msgid "or any line longer than (chars):"
-msgstr "o cualquier línea más larga que (caracteres):"
 
 msgid "%s  (%d steps)"
 msgstr "%s  (%d pasos)"
@@ -3265,8 +2944,8 @@ msgstr "Escriba un nombre de fragmento"
 msgid "any language"
 msgstr "cualquier idioma"
 
-msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.txt in the user data folder."
-msgstr "Ningún fragmento corresponde al lenguaje de este archivo.\n\nAñada los suyos en snippets.txt de la carpeta de datos de usuario."
+msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.yaml in the user data folder."
+msgstr "Ningún fragmento corresponde al lenguaje de este archivo.\n\nAñada los suyos en snippets.yaml de la carpeta de datos de usuario."
 
 msgid "Regular expressions use PCRE2: a pattern can span line breaks, and lookbehind, named groups and case conversion in replacements all work."
 msgstr "Las expresiones regulares usan PCRE2: un patrón puede abarcar saltos de línea, y funcionan lookbehind, grupos con nombre y conversión de mayúsculas en los reemplazos."
@@ -3340,8 +3019,8 @@ msgstr "La lista de comandos de ejecución guardados está llena (%d)."
 msgid "No saved Run commands yet. Use Run... and press Save to name one."
 msgstr "Aún no hay comandos de ejecución guardados. Use Ejecutar... y pulse Guardar para dar nombre a uno."
 
-msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
-msgstr "runcommands.dat fue escrito por una versión más reciente de wxNote, por lo que aquí es de sólo lectura."
+msgid "runcommands.yaml cannot be read, or was written by a newer version of wxNote, so it is read-only here."
+msgstr "runcommands.yaml no se puede leer o fue escrito por una versión más reciente de wxNote, por lo que aquí es de sólo lectura."
 
 msgid "Plugins"
 msgstr "Complementos"
@@ -3424,9 +3103,6 @@ msgstr "¿Aplicar los cambios de complementos pendientes y reiniciar wxNote ahor
 msgid "Plugin changes will take effect when wxNote restarts"
 msgstr "Los cambios de complementos se aplicarán al reiniciar wxNote"
 
-msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
-msgstr "plugins.dat fue escrito por una versión más reciente de wxNote, por lo que aquí es de sólo lectura."
-
 msgid "Delete user copy"
 msgstr "Eliminar mi copia"
 
@@ -3474,3 +3150,22 @@ msgstr ".%s ahora se abre como %s en lugar de %s"
 
 msgid "File extensions saved"
 msgstr "Extensiones de archivo guardadas"
+
+msgid "settings.yaml has an error (%s) - using the defaults until it is fixed"
+msgstr "settings.yaml tiene un error (%s): se usan los valores predeterminados hasta que se corrija"
+
+msgid "Not saved: settings.yaml has an error (%s)"
+msgstr "No guardado: settings.yaml tiene un error (%s)"
+
+msgid "keybindings.yaml has an error (%s) - using the default keys until it is fixed"
+msgstr "keybindings.yaml tiene un error (%s): se usan los atajos predeterminados hasta que se corrija"
+
+msgid "%s has an error (%s) and is not used until it is fixed"
+msgstr "%s tiene un error (%s) y no se usa hasta que se corrija"
+
+msgid "Could not read the workspace file."
+msgstr "No se pudo leer el archivo del espacio de trabajo."
+
+msgid "These files are not wxNote themes and were not imported:"
+msgstr "Estos archivos no son temas de wxNote y no se importaron:"
+

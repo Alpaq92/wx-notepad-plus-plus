@@ -15,7 +15,7 @@
 // the behaviour the commands actually get.
 //
 // Keys are lowercase and deliberately share the vocabulary flLangKey() (main.cpp) already uses for
-// the Function List - "cpp", "python", "js", "sh", "ini", ... - so a user's functionList.conf
+// the Function List - "cpp", "python", "js", "sh", "ini", ... - so a user's functionlist.yaml
 // `ext` override names a language here too, for free.
 //
 // NOT covered: languages registered at runtime through nib.langdef (the udl-compat plugin's

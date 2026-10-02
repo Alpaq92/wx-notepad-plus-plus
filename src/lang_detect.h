@@ -14,7 +14,7 @@
 //   wxnDetectLanguage     the whole resolution order:
 //
 //   1. the user's own mappings (WxnUserExtMaps): the Style Configurator's "User ext.", then a
-//      functionList.conf `ext` line. The Function List and the comment commands honour both, so
+//      functionlist.yaml `extensions` list. The Function List and the comment commands honour both, so
 //      one entry re-types a file for all three;
 //   2. wxnLangExtOverride;
 //   3. Scintillua, on the file name as typed, then lower-cased ("FOO.CPP" is C++ too);
@@ -49,7 +49,7 @@ inline std::string wxnLangLower(std::string s)
 }
 
 // Everything after the last dot of a bare file name, or "" when there is none or it ends the name.
-// The same rule as main.cpp's wxnExtOfName - the one functionList.conf's `ext` keys are matched
+// The same rule as main.cpp's wxnExtOfName - the one functionlist.yaml's `extensions` are matched
 // against - so ".bashrc" yields "bashrc".
 inline std::string wxnLangExtOf(const std::string& name)
 {
@@ -222,9 +222,9 @@ inline std::string wxnSniffExtFromContent(const std::string& head)
 //   toLang       the Style Configurator's "User ext." field. Kept in wxNote's settings, not in the
 //                theme as Notepad++ does: here the theme follows dark/light mode by itself, and the
 //                light default is read-only once installed, so a per-theme list would come and go;
-//   toKey        functionList.conf `ext` lines, in its comment/Function List key vocabulary;
-//   themeToLang  the active theme's <LexerType ext="..."> attributes - where Notepad++ keeps them, so
-//                a stylers.xml brought over from Notepad++ keeps working. Used only for an extension
+//   toKey        functionlist.yaml `extensions` lists, in its comment/Function List key vocabulary;
+//   themeToLang  the active theme's per-lexer `extensions` lists - where Notepad++ keeps them, so a
+//                theme imported from Notepad++ brings them along. Used only for an extension
 //                the built-in tables leave open: a theme is about colours, and stock ones carry stray
 //                values (Twilight files .po under bash and .wpl under XML).
 // All keys are lower-case extensions without the dot, as wxnUserExtNormalize makes them.
@@ -281,11 +281,10 @@ inline std::string wxnUserExtJoin(const std::vector<std::string>& exts)
     return s;
 }
 
-// Notepad++ LexerType name -> Language-menu name. A theme's <LexerType name="..."> is Notepad++'s
-// language name, so this is what a theme `ext` attribute, or the Style Configurator entry it is typed
-// under, opens files as. "" for the blocks that are not a language of their own: the search-results
-// and error-list panes, ANSI escapes, JavaScript embedded in HTML, DOS-style NFO art, and wxNote's
-// genericLangDef.
+// Notepad++ LexerType name -> Language-menu name. A theme block is named for Notepad++'s language, so
+// this is what a block's `extensions`, or an extension typed under its Style Configurator entry, opens
+// files as. "" for the blocks that are not a language of their own: the search-results and error-list
+// panes, ANSI escapes, JavaScript embedded in HTML, DOS-style NFO art, and wxNote's genericLangDef.
 struct WxnLangNppRow { const char* npp; const char* lang; };
 inline const WxnLangNppRow* wxnLangNppTable(std::size_t& n)
 {

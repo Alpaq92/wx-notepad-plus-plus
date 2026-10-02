@@ -12,14 +12,16 @@
 // is why the loop variable above only has to be typed once.
 //
 // Deliberately a standalone header over plain std::string - no wx, no Scintilla - so the grammar is
-// unit-testable without an editor (tests/snippets_test.cpp links nothing). The editor side in
-// main.cpp consumes SnippetParse and never re-derives the rules.
+// unit-testable without an editor (tests/snippets_test.cpp links only rapidyaml, for the store). The
+// editor side in main.cpp consumes SnippetParse and never re-derives the rules.
 //
 // NOT supported, and rejected rather than half-parsed: nested stops inside a placeholder
 // (${1:${2:x}}) and shell/variable interpolation. Anything unrecognised parses as literal text rather
 // than silently dropping characters.
 
 #pragma once
+
+#include "yaml_io.h"   // the snippet store is YAML (snippets.yaml), read through the one YAML layer
 
 #include <algorithm>
 #include <cstddef>
@@ -351,22 +353,21 @@ inline SnippetParse wxnParseSnippet(const std::string& body)
 
 // ---- the snippet store -------------------------------------------------------------------------
 //
-// One entry per snippet, in a line-oriented format chosen so a body can contain literal newlines and
-// tabs without escaping - the thing a "\n"-in-one-line format gets wrong, and the reason snippets are
-// miserable to hand-edit in most editors:
+// snippets.yaml - and the built-ins below, in the same format so there is exactly one parser: the
+// language key from comment_tokens.h (or '*' for every language), then the trigger word, then the
+// body. A literal block (|-) keeps newlines and tabs as typed, with no escaping - the thing a
+// "\n"-in-one-line format gets wrong, and the reason snippets are miserable to hand-edit in most editors:
 //
-//     [cpp:for]              <- language key from comment_tokens.h, then the trigger word
-//     for (int ${1:i} = 0; $1 < ${2:n}; ++$1)
-//     {
-//         $0
-//     }
-//     [cpp:if]
-//     ...
+//     cpp:
+//       for: |-
+//         for (int ${1:i} = 0; $1 < ${2:n}; ++$1)
+//         {
+//         	$0
+//         }
 //
-// A header line is "[lang:trigger]" with no leading space. Everything up to the next header is the
-// body verbatim, minus the single trailing newline before the next header. Lines starting with '#'
-// at column 0 are comments ONLY outside a body - inside one, '#' is just text, because '#' is a
-// comment marker in half the languages a snippet might be written for.
+// A body's single trailing newline is dropped ("|" keeps one, "|-" does not - either reads the same),
+// and so is every CR of a CRLF file. Entries keep their order, so a later definition of a trigger still
+// wins in wxnSnippetsFor. A '#' line inside a body is body text: the literal block holds it, not YAML.
 struct SnippetDef
 {
     std::string lang;      // "cpp", "python", ... or "*" for every language
@@ -374,139 +375,126 @@ struct SnippetDef
     std::string body;
 };
 
-inline std::vector<SnippetDef> wxnParseSnippetStore(const std::string& text)
+// `err`, when given, gets why a text holds no usable store ("" when it does, or is empty).
+inline std::vector<SnippetDef> wxnParseSnippetStore(const std::string& text, std::string* err = nullptr)
 {
     std::vector<SnippetDef> out;
-    std::string line;
-    bool inBody = false;
-
-    auto flushTrailingNewline = [&out] {
-        if (!out.empty() && !out.back().body.empty() && out.back().body.back() == '\n')
-            out.back().body.pop_back();
-    };
-
-    for (size_t i = 0; i <= text.size(); ++i)
+    if (err) err->clear();
+    wxnyaml::Doc doc;
+    if (!wxnyaml::parse(text, doc, "snippets.yaml"))
     {
-        const bool eof = (i == text.size());
-        // A store almost always ends WITH a newline, which has already terminated the last line.
-        // Running the end-of-input pass anyway appended a second, empty body line, and the single
-        // trailing newline the flush removes then only got the store back to where it should already
-        // have been - so every final entry kept one.
-        if (eof && line.empty()) break;
-        const char c = eof ? '\n' : text[i];
-        if (c == '\r') continue;                       // tolerate CRLF stores
-        if (c != '\n') { line.push_back(c); continue; }
-
-        // A header must be "[...:...]" occupying the whole line.
-        const bool header = line.size() >= 4 && line.front() == '[' && line.back() == ']' &&
-                            line.find(':') != std::string::npos;
-        if (header)
-        {
-            flushTrailingNewline();
-            const std::string inner = line.substr(1, line.size() - 2);
-            const size_t colon = inner.find(':');
-            SnippetDef d;
-            d.lang    = inner.substr(0, colon);
-            d.trigger = inner.substr(colon + 1);
-            if (!d.trigger.empty()) out.push_back(d);
-            inBody = !d.trigger.empty();
-        }
-        else if (inBody)
-        {
-            out.back().body += line;
-            out.back().body += '\n';
-        }
-        // outside a body, a non-header line (blank or '#' comment) is ignored
-        line.clear();
+        if (err) *err = doc.error;
+        return out;
     }
-    flushTrailingNewline();
-
-    // Drop entries whose body is entirely empty - a header with nothing under it is a typo, and
-    // expanding it would silently delete the trigger word the user typed.
-    std::vector<SnippetDef> kept;
-    for (SnippetDef& d : out) if (!d.body.empty()) kept.push_back(std::move(d));
-    return kept;
+    if (!wxnyaml::isMap(doc.root()))
+    {
+        if (err && doc.root().readable()) *err = "expected languages at the top level, each holding its snippets";
+        return out;
+    }
+    for (wxnyaml::Node lang : doc.root().children())
+    {
+        const std::string l = wxnyaml::keyOf(lang);
+        if (l.empty() || l.find(' ') != std::string::npos || !wxnyaml::isMap(lang)) continue;
+        for (wxnyaml::Node trig : lang.children())
+        {
+            SnippetDef d;
+            d.lang = l;
+            d.trigger = wxnyaml::keyOf(trig);
+            if (d.trigger.empty() || d.trigger.find(' ') != std::string::npos || !wxnyaml::getText(trig, d.body)) continue;
+            d.body.erase(std::remove(d.body.begin(), d.body.end(), '\r'), d.body.end());
+            if (!d.body.empty() && d.body.back() == '\n') d.body.pop_back();
+            // An empty body is a typo, and expanding it would silently delete the trigger word typed.
+            if (!d.body.empty()) out.push_back(std::move(d));
+        }
+    }
+    return out;
 }
 
 // The snippets that ship with the editor, in the store format above so there is exactly one parser.
 // Deliberately a short, boring set - the loops and guards people actually retype - rather than an
-// attempt at a library. Users extend it through <user-data>/snippets.txt, which is read after these
+// attempt at a library. Users extend it through <user-data>/snippets.yaml, which is read after these
 // and so overrides any trigger it repeats.
 inline const char* wxnBuiltinSnippets()
 {
     return
-        "[*:todo]\n"
-        "TODO(${1:who}): ${2:what}$0\n"
+        "'*':\n"
+        "  todo: |-\n"
+        "    TODO(${1:who}): ${2:what}$0\n"
 
-        "[cpp:for]\n"
-        "for (int ${1:i} = 0; $1 < ${2:n}; ++$1)\n"
-        "{\n"
-        "\t$0\n"
-        "}\n"
-        "[cpp:forr]\n"
-        "for (const auto& ${1:it} : ${2:container})\n"
-        "{\n"
-        "\t$0\n"
-        "}\n"
-        "[cpp:if]\n"
-        "if (${1:cond})\n"
-        "{\n"
-        "\t$0\n"
-        "}\n"
-        "[cpp:sw]\n"
-        "switch (${1:value})\n"
-        "{\n"
-        "\tcase ${2:x}: $0 break;\n"
-        "\tdefault: break;\n"
-        "}\n"
-        "[cpp:cls]\n"
-        "class ${1:Name}\n"
-        "{\n"
-        "public:\n"
-        "\t$1();\n"
-        "\t$0\n"
-        "};\n"
+        "cpp:\n"
+        "  for: |-\n"
+        "    for (int ${1:i} = 0; $1 < ${2:n}; ++$1)\n"
+        "    {\n"
+        "    \t$0\n"
+        "    }\n"
+        "  forr: |-\n"
+        "    for (const auto& ${1:it} : ${2:container})\n"
+        "    {\n"
+        "    \t$0\n"
+        "    }\n"
+        "  if: |-\n"
+        "    if (${1:cond})\n"
+        "    {\n"
+        "    \t$0\n"
+        "    }\n"
+        "  sw: |-\n"
+        "    switch (${1:value})\n"
+        "    {\n"
+        "    \tcase ${2:x}: $0 break;\n"
+        "    \tdefault: break;\n"
+        "    }\n"
+        "  cls: |-\n"
+        "    class ${1:Name}\n"
+        "    {\n"
+        "    public:\n"
+        "    \t$1();\n"
+        "    \t$0\n"
+        "    };\n"
 
-        "[python:def]\n"
-        "def ${1:name}(${2:args}):\n"
-        "\t$0\n"
-        "[python:cls]\n"
-        "class ${1:Name}:\n"
-        "\tdef __init__(self${2:}):\n"
-        "\t\t$0\n"
-        "[python:for]\n"
-        "for ${1:item} in ${2:iterable}:\n"
-        "\t$0\n"
-        "[python:main]\n"
-        "if __name__ == \"__main__\":\n"
-        "\t$0\n"
+        "python:\n"
+        "  def: |-\n"
+        "    def ${1:name}(${2:args}):\n"
+        "    \t$0\n"
+        "  cls: |-\n"
+        "    class ${1:Name}:\n"
+        "    \tdef __init__(self${2:}):\n"
+        "    \t\t$0\n"
+        "  for: |-\n"
+        "    for ${1:item} in ${2:iterable}:\n"
+        "    \t$0\n"
+        "  main: |-\n"
+        "    if __name__ == \"__main__\":\n"
+        "    \t$0\n"
 
-        "[js:fn]\n"
-        "function ${1:name}(${2:args}) {\n"
-        "\t$0\n"
-        "}\n"
-        "[js:for]\n"
-        "for (const ${1:item} of ${2:items}) {\n"
-        "\t$0\n"
-        "}\n"
-        "[js:log]\n"
-        "console.log($0);\n"
+        "js:\n"
+        "  fn: |-\n"
+        "    function ${1:name}(${2:args}) {\n"
+        "    \t$0\n"
+        "    }\n"
+        "  for: |-\n"
+        "    for (const ${1:item} of ${2:items}) {\n"
+        "    \t$0\n"
+        "    }\n"
+        "  log: |-\n"
+        "    console.log($0);\n"
 
-        "[sh:for]\n"
-        "for ${1:x} in ${2:list}; do\n"
-        "\t$0\n"
-        "done\n"
-        "[sh:if]\n"
-        "if [ ${1:cond} ]; then\n"
-        "\t$0\n"
-        "fi\n"
+        "sh:\n"
+        "  for: |-\n"
+        "    for ${1:x} in ${2:list}; do\n"
+        "    \t$0\n"
+        "    done\n"
+        "  if: |-\n"
+        "    if [ ${1:cond} ]; then\n"
+        "    \t$0\n"
+        "    fi\n"
 
-        "[html:a]\n"
-        "<a href=\"${1:#}\">$0</a>\n"
-        "[html:div]\n"
-        "<div class=\"${1:name}\">\n"
-        "\t$0\n"
-        "</div>\n";
+        "html:\n"
+        "  a: |-\n"
+        "    <a href=\"${1:#}\">$0</a>\n"
+        "  div: |-\n"
+        "    <div class=\"${1:name}\">\n"
+        "    \t$0\n"
+        "    </div>\n";
 }
 
 // The snippets applicable to `lang`, most specific first: exact-language entries before the "*" ones,

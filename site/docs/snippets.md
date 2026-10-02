@@ -28,24 +28,33 @@ endings, so inserting into a CRLF file will not mix in stray LFs.
 
 ## Writing your own
 
-Put them in **`snippets.txt`** in the user data folder. The format is deliberately plain, so bodies
-keep their real newlines and tabs instead of being crammed onto one line:
+Put them in **`snippets.yaml`** in the user data folder: each language, then each trigger, then its
+body. A `|` block keeps the body's real newlines and tabs instead of cramming it onto one line:
 
+```yaml
+# My snippets.
+cpp:
+  guard: |
+    #ifndef ${1:HEADER_H}
+    #define $1
+
+    $0
+
+    #endif  // $1
+'*':
+  sig: '-- ${1:name}'
 ```
-[cpp:guard]
-#ifndef ${1:HEADER_H}
-#define $1
 
-$0
-
-#endif  // $1
-```
-
-- The header is `[language:trigger]`. Everything until the next header is the body.
 - The language is the same key the editor uses elsewhere — `cpp`, `python`, `js`, `sh`, `html`, and so
-  on. Use `*` for a snippet that applies everywhere.
-- Lines starting with `#` are comments **only between snippets**. Inside a body, `#` is ordinary text
-  — it has to be, since it is a comment marker in half the languages you might write a snippet for.
+  on. Use `'*'` (in quotes, which YAML needs for it) for a snippet that applies everywhere.
+- Under the `|`, the body is indented with spaces; wxNote removes that indentation and the final line
+  break, so the body ends where its last line does. A tab *after* the indentation is part of the body.
+- A one-line body can sit right after the trigger. Put it in single quotes when it starts with a
+  symbol or contains `: ` or ` #`; a quote inside is then written twice (`''`).
+- Lines starting with `#` are comments **only between snippets**. Inside a `|` body, `#` is ordinary
+  text — it has to be, since it is a comment marker in half the languages you might write a snippet for.
+- Save the file and the next <kbd>Tab</kbd> uses it. If it does not parse, none of your snippets are
+  used until it does, and the status bar says where it broke.
 
 ### Fields
 
@@ -81,13 +90,14 @@ It is a starting point, not a library — the intent is that you add the ones yo
 
 A field can show a **derived** version of another one:
 
-```text
-[cpp:cls]
-class ${1:my_thing}
-{
-public:
-    ${1/^(\w)|_(\w)/\U$1$2/g}();
-};
+```yaml
+cpp:
+  cls: |
+    class ${1:my_thing}
+    {
+    public:
+        ${1/^(\w)|_(\w)/\U$1$2/g}();
+    };
 ```
 
 Type `my_thing` once and the constructor reads `MyThing()`. The syntax is

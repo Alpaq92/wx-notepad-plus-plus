@@ -1,0 +1,20 @@
+# wxNote's editor right-click menu, top to bottom.
+#
+# Each item is a command, named as the Shortcut Mapper names it (edit.undo, search.bookmark.toggle), or
+# '-' for a separator line. A command number (e.g. 42003 for Undo - the same numbers Notepad++ uses)
+# works too. A name this build does not have is skipped, so a typo cannot break the menu - it
+# just won't show that entry. Labels come from the real menu, in the current language.
+#
+# Settings > Edit Popup ContextMenu opens your own copy of this file.
+items:
+  - edit.undo
+  - edit.redo
+  - '-'
+  - edit.cut
+  - edit.copy
+  - edit.paste
+  - edit.delete
+  - '-'
+  - selection.selectAll
+  - '-'
+  - search.bookmark.toggle
