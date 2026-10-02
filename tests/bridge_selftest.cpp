@@ -129,6 +129,24 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         wxRemoveFile(path);
     }
 
+    // ---- the call tip survives the completion list ----------------------------------------------
+    // Scintilla closes a call tip when the completion list opens; the tip used to be dropped for good.
+    {
+        load("int addem(int a, int b) { return a + b; }\naddem(");
+        f->sci(SCI_GOTOPOS, f->sci(SCI_GETLENGTH));
+        f->funcCallTip();
+        check(f->sci(SCI_CALLTIPACTIVE) != 0, "call tip: shown for the call being typed");
+        f->sci(SCI_AUTOCSHOW, 0, reinterpret_cast<sptr_t>("alpha beta"));
+        f->callTipCaretMoved();   // as the next caret update does while the list is up
+        check(f->sci(SCI_AUTOCACTIVE) != 0 && !f->m_ctSigs.empty(), "call tip: kept while the completion list hides it");
+        f->sci(SCI_AUTOCCANCEL);
+        f->resumeCallTip();       // what the list's closing schedules
+        check(f->sci(SCI_CALLTIPACTIVE) != 0, "call tip: back once the list has closed");
+        f->sci(SCI_CALLTIPCANCEL);
+        f->callTipCaretMoved();
+        check(f->m_ctSigs.empty(), "call tip: ...while one closed by the user stays closed");
+    }
+
     // ---- (1) a regex that CROSSES A LINE BREAK, through the real Find path ------------------------
     // The headline capability. Before PCRE2 this could not match at all, at any surface.
     {

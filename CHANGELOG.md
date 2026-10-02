@@ -100,6 +100,8 @@ All notable changes to wxNote are documented here. Format loosely follows
 - Opening a file that is already open - File > Open, drag and drop, a second launch with *Reuse an
   existing window*, Recent Files, Load Session, a plugin - opened it in a second tab. It now switches to
   the open one, and a plugin's request to reload a file reloads that tab.
+- The function parameter hint vanished for good once the completion list opened over it. It now comes
+  back when the list closes, while the caret is still in the call.
 
 ### Changed
 - **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved

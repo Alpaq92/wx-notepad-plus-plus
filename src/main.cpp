@@ -4956,6 +4956,9 @@ private:
         // never with the menu.
         v.stc->Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& k) { onStcKeyDown(k); });
         v.stc->Bind(wxEVT_STC_CALLTIP_CLICK,    &WxnShellFrameT::onCallTipClick,   this);
+        // Once the completion list has gone - taken or dismissed - the call tip it hid comes back.
+        v.stc->Bind(wxEVT_STC_AUTOCOMP_COMPLETED, [this](wxStyledTextEvent& e) { CallAfter([this] { resumeCallTip(); }); e.Skip(); });
+        v.stc->Bind(wxEVT_STC_AUTOCOMP_CANCELLED, [this](wxStyledTextEvent& e) { CallAfter([this] { resumeCallTip(); }); e.Skip(); });
         v.stc->Bind(wxEVT_STC_INDICATOR_CLICK,  &WxnShellFrameT::onUrlClick,       this);
         v.stc->Bind(wxEVT_STC_UPDATEUI,         &WxnShellFrameT::onStcUpdateUI,    this);
         v.stc->Bind(wxEVT_STC_DOUBLECLICK,      &WxnShellFrameT::onStcDoubleClick, this);
@@ -7398,6 +7401,7 @@ private:
     // No API database is loaded, so signatures are harvested from the open document: each distinct
     // "name(...)" (plus any preceding return-type / def token) becomes an overload.
     std::vector<std::string> m_ctSigs; int m_ctIdx = 0; int m_ctOpen = -1;
+    const EditorPage* m_ctPage = nullptr;   // the page the call tip belongs to
     std::vector<std::string> callTipSigs(const std::string& name)
     {
         std::vector<std::string> out; std::set<std::string> seen;
@@ -7470,17 +7474,36 @@ private:
         m_ctSigs = callTipSigs(callName);
         appendProjectSigs(callName, m_ctSigs);   // then anything the workspace index knows
         if (m_ctSigs.empty()) { sci(SCI_CALLTIPCANCEL); return; }
-        m_ctIdx = 0; m_ctOpen = open; renderCallTip();
+        m_ctIdx = 0; m_ctOpen = open; m_ctPage = activePage(); renderCallTip();
+    }
+    // Is the caret still between the call's '(' and the ')' that closes it?
+    bool caretInCall()
+    {
+        const int caret = (int)sci(SCI_GETCURRENTPOS);
+        if (caret <= m_ctOpen) return false;
+        int d = 0;
+        for (int p = m_ctOpen + 1; p < caret; ++p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == '(') ++d; else if (c == ')') { if (d == 0) return false; --d; } }
+        return true;
     }
     void callTipCaretMoved()   // keep the highlight in sync, dismiss once the caret leaves the call
     {
         if (m_ctSigs.empty() || !m_stc) return;
-        if (!sci(SCI_CALLTIPACTIVE)) { m_ctSigs.clear(); return; }
-        const int caret = (int)sci(SCI_GETCURRENTPOS);
-        if (caret <= m_ctOpen) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; }
-        int d = 0;
-        for (int p = m_ctOpen + 1; p < caret; ++p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == '(') ++d; else if (c == ')') { if (d == 0) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; } --d; } }
+        if (!sci(SCI_CALLTIPACTIVE))
+        {
+            // Hidden by the completion list (Scintilla closes the tip when the list opens): kept, and
+            // resumeCallTip shows it again. Closed any other way (Esc, a click): stays closed.
+            if (!sci(SCI_AUTOCACTIVE)) m_ctSigs.clear();
+            return;
+        }
+        if (!caretInCall()) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; }
         ctHighlight();
+    }
+    // The completion list has closed: bring back the call tip it hid, if the caret is still in the call.
+    void resumeCallTip()
+    {
+        if (m_ctSigs.empty() || !m_stc || sci(SCI_CALLTIPACTIVE) || sci(SCI_AUTOCACTIVE)) return;
+        if (activePage() != m_ctPage || !caretInCall()) { m_ctSigs.clear(); return; }
+        renderCallTip();
     }
     void onCallTipClick(wxStyledTextEvent& e) { const int p = (int)e.GetPosition(); if (p == 1) { --m_ctIdx; renderCallTip(); } else if (p == 2) { ++m_ctIdx; renderCallTip(); } }
     // ----- clickable URLs -----------------------------------------------------------------------------
