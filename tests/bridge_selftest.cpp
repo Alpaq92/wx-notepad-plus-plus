@@ -147,6 +147,19 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         check(f->m_ctSigs.empty(), "call tip: ...while one closed by the user stays closed");
     }
 
+    // ---- JSON5 comments --------------------------------------------------------------------------
+    {
+        f->addDocument(wxString(), "untitled-json5-test");
+        EditorPage* p = f->activePage();
+        auto comments = [f] { return f->sci(SCI_GETPROPERTYINT, reinterpret_cast<uptr_t>("lexer.json.allow.comments"), 0); };
+        p->path = "settings.json5"; p->langForced = false; f->setLexerForFile(p->path);
+        check(p->autoLang == "JSON5" && comments() == 1, "JSON5: the JSON lexer colours its comments");
+        p->path = "data.json"; f->setLexerForFile(p->path);
+        check(p->autoLang == "JSON" && comments() == 0, "JSON5: ...and plain JSON still marks them");
+        p->path.clear();
+        f->closeActive();
+    }
+
     // ---- (1) a regex that CROSSES A LINE BREAK, through the real Find path ------------------------
     // The headline capability. Before PCRE2 this could not match at all, at any surface.
     {

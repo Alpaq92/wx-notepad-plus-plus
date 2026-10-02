@@ -10357,6 +10357,9 @@ private:
         {
             sci(SCI_SETPROPERTY, reinterpret_cast<uptr_t>("fold"), reinterpret_cast<sptr_t>("1"));
             sci(SCI_SETPROPERTY, reinterpret_cast<uptr_t>("fold.compact"), reinterpret_cast<sptr_t>("0"));
+            // JSON5 rides the JSON lexer, which colours // and /* */ comments only when told to (a new
+            // lexer each time, so plain JSON still marks them).
+            if (langName == "JSON5") sci(SCI_SETPROPERTY, reinterpret_cast<uptr_t>("lexer.json.allow.comments"), reinterpret_cast<sptr_t>("1"));
             bool themed = false;
             if (m_theme.loaded)
             {

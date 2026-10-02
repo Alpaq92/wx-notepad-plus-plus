@@ -102,6 +102,7 @@ All notable changes to wxNote are documented here. Format loosely follows
   the open one, and a plugin's request to reload a file reloads that tab.
 - The function parameter hint vanished for good once the completion list opened over it. It now comes
   back when the list closes, while the caret is still in the call.
+- JSON5 files (and `.jsonc`) showed `//` and `/* */` comments as errors; they are coloured as comments.
 
 ### Changed
 - **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved
