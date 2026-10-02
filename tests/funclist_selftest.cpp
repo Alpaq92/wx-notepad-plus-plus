@@ -431,16 +431,23 @@ int main(int argc, char** argv)
             { 1, "Build",              "cmake --build build" },
             { 7, "Open in \"Notepad\"", "notepad \"$(FULL_CURRENT_PATH)\"" },
             { 9, "Multi\nline name",   "echo a\nb" },
-            { 11, "Ąę #not: a comment", "- dash first" },
+            // UTF-8 spelled out: a plain char* literal goes through the C library's locale (C on CI's Linux,
+            // which turns it into nothing), not UTF-8
+            { 11, wxString::FromUTF8("\xC4\x84\xC4\x99 #not: a comment"), "- dash first" },
         };
         std::vector<SavedRun> out; long nextUid = 0;
-        check(wxnParseRuns(wxnSerializeRuns(in, 42), out, nextUid), "runs: current format version parses");
+        const std::string written = wxnSerializeRuns(in, 42);
+        check(wxnParseRuns(written, out, nextUid), "runs: current format version parses");
         check(out.size() == in.size(), "runs: every command survives the round trip");
         check(nextUid == 42, "runs: nextUid is carried through");
-        if (nextUid != 42)   // seen on Windows ARM64 only: show what was written and read back
+        if (nextUid != 42)   // seen on Windows ARM64 only: show what was written and how it reads back
         {
-            const std::string text = wxnSerializeRuns(in, 42);
-            std::printf("        nextUid %ld, read from:\n%s\n", nextUid, text.c_str());
+            const std::string& text = written;
+            std::vector<SavedRun> again;
+            long nextAgain = 0;
+            const bool parsedAgain = wxnParseRuns(text, again, nextAgain);
+            std::printf("        nextUid %ld (the same text parsed again: %d, %ld), read from:\n%s\n", nextUid,
+                        parsedAgain, nextAgain, text.c_str());
             wxnyaml::Doc d;
             const bool parsed = wxnyaml::parse(text, d);
             std::printf("        parsed %d (%s), root map %d\n", parsed, d.error.c_str(), wxnyaml::isMap(d.root()));
