@@ -97,6 +97,9 @@ All notable changes to wxNote are documented here. Format loosely follows
   a buffer - in Find and Replace's prefill, Mark, Find in Files, searching the web and Open File. They
   now take the main selection. **Convert Case** and **Redact** convert each selection on its own and
   keep them selected, instead of replacing them all with one merged copy.
+- Opening a file that is already open - File > Open, drag and drop, a second launch with *Reuse an
+  existing window*, Recent Files, Load Session, a plugin - opened it in a second tab. It now switches to
+  the open one, and a plugin's request to reload a file reloads that tab.
 
 ### Changed
 - **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved
@@ -138,6 +141,7 @@ All notable changes to wxNote are documented here. Format loosely follows
   already did: in the `.deb`'s `copyright` file, among the `.rpm`'s licence files, in the AppImage, in
   the Flatpak's licence folder and inside the macOS app. `NOTICE` now also holds the full MIT and BSD
   texts the bundled third-party code asks to travel with it.
+- **File > Open** starts in the active document's folder and opens several files at once.
 
 ## [0.20.0] - 2026-09-05
 

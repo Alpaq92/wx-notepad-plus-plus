@@ -111,6 +111,24 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         f->sci(SCI_CLEARSELECTIONS);
     }
 
+    // ---- a file already open is switched to, not opened twice ---------------------------------------
+    {
+        const wxString path = wxFileName::CreateTempFileName("wxndup");
+        check(writeWholeFile(path, "dup\n"), "open: fixture written");
+        EditorPage* first = f->openPath(path);
+        const size_t pages = f->allPages().size();
+        f->addDocument(wxString(), "untitled-dup-test");     // somewhere else in front
+        EditorPage* scratch = f->activePage();
+        EditorPage* again = f->openPath(path);
+        check(first && again == first && f->allPages().size() == pages + 1,
+              "open: opening an open file again gives its tab, not a second one");
+        check(f->activePage() == first, "open: ...and brings that tab to the front");
+        f->closeActive();                                     // the file's tab
+        f->activatePage(scratch);
+        f->closeActive();
+        wxRemoveFile(path);
+    }
+
     // ---- (1) a regex that CROSSES A LINE BREAK, through the real Find path ------------------------
     // The headline capability. Before PCRE2 this could not match at all, at any surface.
     {

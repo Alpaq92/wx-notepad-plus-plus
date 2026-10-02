@@ -4462,7 +4462,14 @@ public:
     // lambda above) to openFolderPath() instead. Teaching openPath() to swallow directories would put them
     // into the `opened` array that feeds enterWaitMode(), and `wxnote -w somedir` would then block forever
     // on a "tab" that can never be closed because it never was one.
-    EditorPage* openPath(const wxString& p) { return wxFileExists(p) ? addDocument(p, wxFileNameFromPath(p)) : nullptr; }
+    // Open `p` in a new tab - or, when a tab already holds it, bring that one forward: a file is never
+    // open twice. Every way in comes through here - File > Open, drag and drop, a second launch, Recent
+    // Files, a session, a plugin's NPPM_DOOPEN - and NPPM_RELOADFILE reloads the tab it switches to.
+    EditorPage* openPath(const wxString& p)
+    {
+        if (EditorPage* open = pageForPath(p)) { activatePage(open); return open; }
+        return wxFileExists(p) ? addDocument(p, wxFileNameFromPath(p)) : nullptr;
+    }
     // A positional directory (`wxnote .`, `wxnote C:\src\proj`) roots the workspace browser rather than
     // opening a tab. Public wrapper: showFileBrowserRooted() itself lives in the private section below.
     void openFolderPath(const wxString& p) { showFileBrowserRooted(p); }
@@ -10663,7 +10670,18 @@ private:
         setLexerForFile(path);
         updateEncodingMenuChecks();
     }
-    void onOpen() { wxFileDialog d(this, _("Open"), "", "", _("All files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST); if (d.ShowModal() == wxID_OK) addDocument(d.GetPath(), wxFileNameFromPath(d.GetPath())); }
+    // File > Open starts in the active document's folder, takes several files at once, and switches to
+    // a file that is already open rather than opening it again (openPath).
+    void onOpen()
+    {
+        const EditorPage* p = activePage();
+        wxFileDialog d(this, _("Open"), (p && !p->path.empty()) ? wxPathOnly(p->path) : wxString(), "", _("All files (*.*)|*.*"),
+                       wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
+        if (d.ShowModal() != wxID_OK) return;
+        wxArrayString paths;
+        d.GetPaths(paths);
+        for (const wxString& f : paths) openPath(f);
+    }
     void onReload() { if (!m_path.empty()) loadFile(m_path); }
 
     // ---- External-change watch: warn when an open file is modified/replaced by another program ----
