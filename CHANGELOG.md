@@ -72,6 +72,14 @@ All notable changes to wxNote are documented here. Format loosely follows
   every value against its own table of settings, as it does for a hand-edited `settings.yaml`.
 
 ### Fixed
+- **File > Close All crashed** with any file open, and so did **Close All But This** with the view
+  split and **Close All But Pinned**: deleting one tab moved the editor onto the next, which was then
+  deleted with it. Exiting with the view split crashed too, as did splitting again after the views had
+  folded back together.
+- **Close All to the Left / Right** closed tabs with unsaved changes without the save prompt, even with
+  *Ask before closing unsaved changes* on. They now ask, as Close All does, and a Cancel closes nothing.
+  Like **Close All Unchanged**, they now also let **Restore Recent Closed File** reopen what they
+  closed, and tell a waiting `wxnote -w` when its file goes.
 - A saved session wrote each file's status-bar label (translated, "C++ source file") as its language and
   never read it back. It now keeps a language picked from the Language menu, Normal Text included, and
   **Load Session** picks it again; a detected language is detected again.

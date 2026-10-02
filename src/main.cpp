@@ -4694,8 +4694,7 @@ public:
         // this early - before the event loop starts - crashes.
         if (initial && initial->path.empty() && (int)m_tabs->GetPageCount() > 1)
             this->CallAfter([this, initial]() {
-                const int idx = m_tabs->GetPageIndex(initial);
-                if (idx != wxNOT_FOUND && m_tabs->GetPageCount() > 1) m_tabs->DeletePage(idx);
+                if (m_tabs->GetPageCount() > 1) deletePage(m_active, m_tabs->GetPageIndex(initial));
             });
         if (activePg) { const int idx = m_tabs->GetPageIndex(activePg); if (idx != wxNOT_FOUND) m_tabs->SetSelection(idx); }
     }
@@ -4832,7 +4831,11 @@ private:
 #ifdef __WXMSW__
         m_sci = m_main.sci;
 #endif
-        g_view = m_main.stc;                // EditorPage::~EditorPage releases its Document through an always-valid view
+        g_view = m_main.stc;                // EditorPage::~EditorPage releases its Document through MAIN's view...
+        // ...while it lives. At teardown MAIN's editor goes with MAIN's pages, and SUB's pages are destroyed
+        // after them, so those must not reach it (exiting with a split view crashed): their Documents go with
+        // the process instead.
+        m_main.stc->Bind(wxEVT_DESTROY, [](wxWindowDestroyEvent& e) { if (e.GetEventObject() == g_view) g_view = nullptr; e.Skip(); });
         m_sub.tabs->Hide();
         m_split->Initialize(m_main.tabs);   // unsplit: only MAIN shows - identical to the old single-view layout
         addDocument("", nextNewName());     // initial "new 1" buffer (lands in the active = MAIN view)
@@ -7935,6 +7938,16 @@ private:
     // (wxAui has no sibling page to re-home it onto). activateBuffer re-mounts it on the next activation.
     void detachViewEditor(ViewPane* v, EditorPage* p)
     { if (v && v->stc && v->stc->GetParent() == p) { v->stc->Hide(); v->stc->Reparent(v->tabs); } }
+    // Delete tab `i` of view `v`, with the view's editor lifted off it first - every time, not once per
+    // loop: each deletion makes the notebook select a page again, and that selection (onPageChanged ->
+    // activateBuffer) moves the editor onto it, so a loop deleting several pages took the editor down with
+    // the next one it landed on (File > Close All did, with any file open). -1 deletes nothing.
+    void deletePage(ViewPane* v, int i)
+    {
+        if (!v || !v->tabs || i < 0 || i >= (int)v->tabs->GetPageCount()) return;
+        detachViewEditor(v, static_cast<EditorPage*>(v->tabs->GetPage(i)));
+        v->tabs->DeletePage(i);
+    }
     // A view's editor gained focus: make it active and sync the chrome (status bar + minimap) to its doc.
     void onViewFocus(ViewPane* v)
     {
@@ -8310,13 +8323,7 @@ private:
         // deferred to the CallAfter). Every close path fires this with the same guarantee - see nib.h.
         nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);
         this->CallAfter([this, p]{
-            if (ViewPane* v = viewOf(p)) {
-                const int i = v->tabs->GetPageIndex(p);
-                if (i != wxNOT_FOUND) {
-                    detachViewEditor(v, p);   // lift the editor off the page so its deletion can't take it (last-page case)
-                    v->tabs->DeletePage(i);
-                }
-            }
+            if (ViewPane* v = viewOf(p)) deletePage(v, v->tabs->GetPageIndex(p));
             collapseIfEmpty();
         });
     }
@@ -8332,8 +8339,7 @@ private:
             return;
         }
         nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, activePage());   // before teardown: path/id still resolvable (see nib.h)
-        detachViewEditor(m_active, activePage());   // lift the editor off the page before deleting it
-        m_tabs->DeletePage(m_tabs->GetSelection());
+        deletePage(m_active, m_tabs->GetSelection());
         collapseIfEmpty();
     }
     void closeAll()
@@ -8342,13 +8348,8 @@ private:
             if (!confirmClose(p)) return;                  // prompt across BOTH views; cancel aborts
         for (EditorPage* p : allPages()) recordClosed(p);  // all become restorable via Ctrl+Shift+T
         for (EditorPage* p : allPages()) nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);   // before any teardown: path/id still resolvable
-        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
-            if (nb)
-            {
-                ViewPane* v = (nb == m_sub.tabs) ? &m_sub : &m_main;
-                if (nb->GetSelection() != wxNOT_FOUND) detachViewEditor(v, static_cast<EditorPage*>(nb->GetPage(nb->GetSelection())));
-                while (nb->GetPageCount() > 0) nb->DeletePage(0);
-            }
+        for (ViewPane* v : { &m_main, &m_sub })
+            if (v->tabs) while (v->tabs->GetPageCount() > 0) deletePage(v, 0);
         setActiveView(&m_main);
         addDocument("", nextNewName());                    // leave one empty doc in MAIN (never zero documents)
         collapseIfEmpty();                                 // unsplit the now-empty SUB
@@ -8377,15 +8378,10 @@ private:
             if (p != keep && !confirmClose(p)) return;     // prompt across BOTH views; cancel aborts
         for (EditorPage* p : allPages()) if (p != keep) recordClosed(p);
         for (EditorPage* p : allPages()) if (p != keep) nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);   // before teardown
-        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
-            if (nb)
-            {
-                ViewPane* v = (nb == m_sub.tabs) ? &m_sub : &m_main;
-                if (nb->GetSelection() != wxNOT_FOUND)     // protect a view's editor if its active page is being deleted
-                { auto* ap = static_cast<EditorPage*>(nb->GetPage(nb->GetSelection())); if (ap != keep) detachViewEditor(v, ap); }
-                for (int i = (int)nb->GetPageCount() - 1; i >= 0; --i)
-                    if (nb->GetPage(i) != keep) nb->DeletePage(i);
-            }
+        for (ViewPane* v : { &m_main, &m_sub })
+            if (v->tabs)
+                for (int i = (int)v->tabs->GetPageCount() - 1; i >= 0; --i)
+                    if (v->tabs->GetPage(i) != keep) deletePage(v, i);
         setActiveView(viewOf(keep));
         collapseIfEmpty();                                 // unsplit whichever view is now empty
     }
@@ -8404,15 +8400,10 @@ private:
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })   // before teardown: path/id still resolvable
             if (nb) for (int i = 0; i < (int)nb->GetPageCount(); ++i)
                 if (unpinned(nb, i)) nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, nb->GetPage(i));
-        for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
-            if (nb)
-            {
-                ViewPane* v = (nb == m_sub.tabs) ? &m_sub : &m_main;
-                if (nb->GetSelection() != wxNOT_FOUND && unpinned(nb, nb->GetSelection()))   // protect the view's editor if its active page is being deleted
-                    detachViewEditor(v, static_cast<EditorPage*>(nb->GetPage(nb->GetSelection())));
-                for (int i = (int)nb->GetPageCount() - 1; i >= 0; --i)
-                    if (unpinned(nb, i)) nb->DeletePage(i);
-            }
+        for (ViewPane* v : { &m_main, &m_sub })
+            if (v->tabs)
+                for (int i = (int)v->tabs->GetPageCount() - 1; i >= 0; --i)
+                    if (unpinned(v->tabs, i)) deletePage(v, i);
         if (totalDocs() == 0) { setActiveView(&m_main); addDocument("", nextNewName()); }   // leave one empty doc (never zero documents)
         collapseIfEmpty();
     }
@@ -8622,11 +8613,13 @@ private:
         {
             const int ssel = m_sub.tabs->GetSelection();
             EditorPage* keep = static_cast<EditorPage*>(m_sub.tabs->GetPage(ssel == wxNOT_FOUND ? 0 : ssel));
-            detachViewEditor(&m_sub, keep);                  // lift SUB's editor off its page before the pages migrate to MAIN
             while (m_sub.tabs->GetPageCount() > 0)            // consolidate the sub view's pages into main
             {
                 auto* pg = static_cast<EditorPage*>(m_sub.tabs->GetPage(0));
                 const wxString t = m_sub.tabs->GetPageText(0);
+                // SUB's editor off each page before it migrates to MAIN - a removal re-selects a page, which
+                // puts the editor back on one (see deletePage), and a page closed later in MAIN would take it.
+                detachViewEditor(&m_sub, pg);
                 m_sub.tabs->RemovePage(0);
                 pg->Reparent(m_main.tabs);
                 m_main.tabs->AddPage(pg, t, false);          // don't churn the selection per page
@@ -12097,15 +12090,21 @@ private:
         if (wxMessageBox(wxString::Format(_("Move \"%s\" to the Recycle Bin?"), wxFileNameFromPath(p)), "wxNote", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
         recycleActive();
     }
+    // Close All to the Left / Right: closeAllBut's three passes over the tabs on that side of the active one
+    // - confirm them all first, so a Cancel aborts before anything closes, then record and delete - and the
+    // active tab in front again, whichever tab the prompts last showed.
     void closeAllSide(bool toRight)
     {
-        const int cur = m_tabs->GetSelection();
-        for (int i = (int)m_tabs->GetPageCount() - 1; i >= 0; --i)
-            if ((toRight && i > cur) || (!toRight && i < cur))
-            {
-                nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, m_tabs->GetPage(i));   // before teardown: path/id still resolvable
-                m_tabs->DeletePage(i);
-            }
+        EditorPage* cur = activePage();
+        const int at = m_tabs->GetSelection();
+        std::vector<EditorPage*> gone;
+        for (int i = 0; i < (int)m_tabs->GetPageCount(); ++i)
+            if ((toRight && i > at) || (!toRight && i < at)) gone.push_back(static_cast<EditorPage*>(m_tabs->GetPage(i)));
+        for (EditorPage* p : gone) if (!confirmClose(p)) return;
+        for (EditorPage* p : gone) recordClosed(p);                                  // restorable via Ctrl+Shift+T
+        for (EditorPage* p : gone) nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);   // before teardown: path/id still resolvable
+        for (EditorPage* p : gone) deletePage(m_active, m_tabs->GetPageIndex(p));
+        if (const int i = cur ? m_tabs->GetPageIndex(cur) : wxNOT_FOUND; i != wxNOT_FOUND) m_tabs->SetSelection(i);
     }
     void closeAllUnchanged()
     {
@@ -12114,8 +12113,9 @@ private:
         {
             auto* p = static_cast<EditorPage*>(m_tabs->GetPage(i));
             if (p == keep || p->dirty) continue;
+            recordClosed(p);                              // restorable via Ctrl+Shift+T
             nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);   // before teardown: path/id still resolvable
-            m_tabs->DeletePage(i);
+            deletePage(m_active, i);
         }
     }
 
