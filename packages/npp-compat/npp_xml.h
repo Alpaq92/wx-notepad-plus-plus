@@ -34,8 +34,8 @@ struct XmlElement
 };
 
 // Parse a whole document into its root element. False (with *err set) on anything not well-formed
-// enough to trust: unbalanced or mismatched tags, nesting deeper than 64 levels, more than two million
-// elements, or no root element at all.
+// enough to trust: unbalanced or mismatched tags, nesting deeper than 64 levels, more than 500,000
+// elements or a million attributes, over 64 MiB of input, or no root element at all.
 bool parseXml(const std::string& text, XmlElement& root, std::string* err = nullptr);
 
 // The text of the first comment ahead of the root element - a theme's credits block - or "".

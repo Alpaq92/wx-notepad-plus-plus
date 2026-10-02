@@ -202,7 +202,6 @@ static wxnsettings::StateFile    g_state;
 static wxString                  g_settingsPath, g_statePath;
 static wxLongLong                g_settingsStampMs = -1;   // settings.yaml when last read or written: a change
 static wxULongLong               g_settingsStampSize = 0;  // from outside (a hand edit) is re-read before a write
-static wxString                  g_settingsLoadError;      // why settings.yaml could not be read at startup ("" if it could)
 
 static bool wxnWriteFileAtomic(const wxString& path, const void* data, size_t len);
 
@@ -614,6 +613,8 @@ public:
     wxString forcedName;                   // that pick's display label for the status bar, e.g. "C++"
     wxString sciLang;                      // name of a registered Scintillua language when active ("" = none); container-lexed via m_scintillua
     wxString autoLang;                     // the wxnLangTable name detection chose (lang_detect.h); "" = Normal Text, a manual pick, or not detected yet
+    // The language this page is in, by its Language-menu name: the user's pick, else what detection chose.
+    wxString language() const { return langForced ? forcedName : autoLang; }
     std::shared_ptr<const std::string> lexKeywords;   // every word of the keyword lists handed to this page's lexer (autocomplete reads THIS, not a second table keyed on extension); null for none. Shared with keywordWordsFor, so a later change of the user's lists cannot pull it from under the page
     int      encoding = ENC_UTF8;          // on-disk encoding (detected on load, written on save)
     int      codepage = 0;                 // when encoding == ENC_CHARSET: the Windows code page
@@ -889,18 +890,10 @@ static wxString wxnXdgDataHome()
 static wxString wxnDesktopEntryPath()   { return wxnXdgDataHome() + "/applications/wxnote.desktop"; }
 static wxString wxnIntegratedIconPath() { return wxnXdgDataHome() + "/icons/hicolor/scalable/apps/wxnote.svg"; }
 
-// Raw bytes both ways: a .desktop is UTF-8 by specification, and the rewriting in desktop_entry.h is
-// byte-preserving by design (that is what keeps the MIME list identical to the shipped file), so
-// decoding and re-encoding it through wxString would be a lossy round trip for no gain.
-static bool wxnReadWholeFile(const wxString& path, std::string& out)
-{
-    wxFile f(path, wxFile::read);
-    if (!f.IsOpened()) return false;
-    const wxFileOffset len = f.Length();
-    if (len < 0) return false;
-    out.assign(static_cast<size_t>(len), '\0');
-    return len == 0 || f.Read(&out[0], out.size()) == static_cast<ssize_t>(out.size());
-}
+// Raw bytes both ways (wxnReadFileBytes reads them): a .desktop is UTF-8 by specification, and the
+// rewriting in desktop_entry.h is byte-preserving by design (that is what keeps the MIME list identical
+// to the shipped file), so decoding and re-encoding it through wxString would be a lossy round trip for
+// no gain.
 static bool wxnWriteWholeFile(const wxString& path, const std::string& data)
 {
     wxFile f(path, wxFile::write);
@@ -922,7 +915,7 @@ static void wxnRefreshDesktopDatabase()
 static bool wxnAppImageIsIntegrated()
 {
     std::string cur;
-    if (!wxnReadWholeFile(wxnDesktopEntryPath(), cur)) return false;
+    if (!wxnReadFileBytes(wxnDesktopEntryPath(), cur)) return false;
     return wxnDesktopValue(cur, "TryExec") == std::string(wxnAppImagePath().utf8_str());
 }
 
@@ -945,7 +938,7 @@ static bool wxnAppImageIntegrate(wxString* err)
     // installer/linux/wxnote.desktop, MIME list and all, so this cannot drift away from what the .deb
     // and .rpm register. See desktop_entry.h.
     std::string bundled;
-    if (!wxnReadWholeFile(dir + "/wxnote.desktop", bundled))
+    if (!wxnReadFileBytes(dir + "/wxnote.desktop", bundled))
     {
         if (err) *err = _("This AppImage does not contain wxnote.desktop, so it cannot register itself.");
         return false;
@@ -2898,6 +2891,14 @@ static bool wxnThemeNameExists(const std::string& name)
         || wxFileExists(exeDir + wxFILE_SEP_PATH + "themes" + wxFILE_SEP_PATH + file);
 }
 
+// Copy a UTF-8 string into a (buf, cap) out-param (NUL-terminated if it fits); returns the byte
+// length excluding the NUL. The shared shape of the nib.* "give me a path/dir" callbacks.
+static int nibCopyUtf8(const std::string& s, char* b, int c)
+{
+    if (b && c > 0) { int n = static_cast<int>(s.size()); if (n > c - 1) n = c - 1; std::memcpy(b, s.data(), static_cast<size_t>(n)); b[n] = 0; }
+    return static_cast<int>(s.size());
+}
+
 // nib.settings/1 - read and change settings by ID. settings_schema.h decides what a value may be: a plugin
 // gets exactly the checks the Preferences dialog's writes go through, and nothing it could not write
 // itself - a theme name, for one, must name a theme there is. Each set is one edit to settings.yaml as it
@@ -2958,13 +2959,7 @@ static int nibSettingsGet(NibHost*, const char* id, char* buf, int cap)
         case wxnsettings::Kind::Color:  if (g_settings.getColor(d->id, rgb)) v = wxnyaml::colorText(rgb); break;
         case wxnsettings::Kind::Map:    break;
     }
-    if (buf && cap > 0)
-    {
-        const size_t n = std::min(v.size(), static_cast<size_t>(cap - 1));
-        std::memcpy(buf, v.data(), n);
-        buf[n] = '\0';
-    }
-    return static_cast<int>(v.size());
+    return nibCopyUtf8(v, buf, cap);
 }
 static const NibSettingsApi g_nibSettingsApi = { 1, sizeof(NibSettingsApi), nibSettingsSet, nibSettingsGet };
 
@@ -3102,14 +3097,6 @@ static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
     return nullptr;
 }
 static void nibLog(NibHost*, int, const char* msg) { if (msg) wxLogDebug("[nib] %s", msg); }
-
-// Copy a UTF-8 string into a (buf, cap) out-param (NUL-terminated if it fits); returns the byte
-// length excluding the NUL. The shared shape of the nib.* "give me a path/dir" callbacks.
-static int nibCopyUtf8(const std::string& s, char* b, int c)
-{
-    if (b && c > 0) { int n = static_cast<int>(s.size()); if (n > c - 1) n = c - 1; std::memcpy(b, s.data(), static_cast<size_t>(n)); b[n] = 0; }
-    return static_cast<int>(s.size());
-}
 
 // The USER-writable Nib plugin dir: <userDataDir>/nib. The bundled sibling (<exe>/nib) is not
 // writable on installed builds (Program Files, /opt/wxnote, inside the .app bundle), so drop-in
@@ -7158,7 +7145,7 @@ private:
     std::shared_ptr<const std::string> keywordsForActiveLang()
     {
         auto* p = activePage();
-        return p ? keywordWordsFor(std::string((p->langForced ? p->forcedName : p->autoLang).utf8_str())) : nullptr;
+        return p ? keywordWordsFor(wxnUtf8(p->language())) : nullptr;
     }
     // Which styles carry PROSE - comments and string literals - for the active document. Two consumers
     // want exactly this set from opposite directions: completion drops these words, spell-check checks
@@ -8775,9 +8762,8 @@ private:
         {
             wxLogNull noLog;   // best-effort seed, as for contextmenu.yaml
             wxFileName::Mkdir(userDataDir(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-            wxFile f;
             const std::string t = wxnLanguagesYamlTemplate();
-            if (f.Create(path, false) && f.Write(t.data(), t.size()) != t.size()) { f.Close(); wxRemoveFile(path); }
+            wxnWriteFileAtomic(path, t.data(), t.size());
         }
         if (wxFileExists(path)) openPath(path);
         else setStatus(0, _("Could not create a writable languages.yaml to edit."));
@@ -10010,6 +9996,13 @@ private:
         return (eng && eng->ok()) ? eng->detect(file, line) : std::string();
     }
     static bool isMenuLanguage(const std::string& n) { return wxnLangFindByName(n) != nullptr; }
+    // Scintillua's detection, in the shape lang_detect.h's resolvers call it.
+    auto scintilluaDetector() { return [this](const std::string& file, const std::string& line) { return scintilluaDetect(file, line); }; }
+    // The user's extension maps, in detection's order; without `withTheme`, the theme's lists are left out.
+    WxnUserExtMaps userExtMaps(bool withTheme = true) const
+    {
+        return { &m_userExt, &g_flUserExtToLang, withTheme ? &m_theme.extToLang : nullptr, &m_langRules };
+    }
     // Which Language-menu language a document opens as; nullptr = Normal Text. lang_detect.h has the
     // order (the user's own extensions - Style Configurator, then functionlist.yaml -, Scintillua's
     // lexer.detect() on the name, wxNote's overrides and comment table, the theme's ext attributes, then
@@ -10026,9 +10019,7 @@ private:
             const wxCharBuffer b = m_stc->GetTextRangeRaw(0, wxMin((int)m_stc->GetLength(), 512));
             head.assign(b.data(), b.length());
         }
-        auto scDetect = [this](const std::string& file, const std::string& line) { return scintilluaDetect(file, line); };
-        const WxnUserExtMaps user{ &m_userExt, &g_flUserExtToLang, &m_theme.extToLang, &m_langRules };
-        return wxnLangFindByName(wxnDetectLanguage(base, head, user, scDetect, isMenuLanguage));
+        return wxnLangFindByName(wxnDetectLanguage(base, head, userExtMaps(), scintilluaDetector(), isMenuLanguage));
     }
 
     // ----- languages.yaml: the user's language definitions (language_defs.h) -------------------------
@@ -10046,13 +10037,6 @@ private:
     // them however the file changes meanwhile; empty whenever the Style Configurator is not open.
     std::map<std::pair<std::string, std::string>, std::vector<std::string>> m_langKwPending;
     wxString languagesFilePath() { return userDataDir() + wxFILE_SEP_PATH + "languages.yaml"; }
-    // The Language-menu name `written` stands for, matched without regard to case; "" for none.
-    static std::string canonicalLanguage(const std::string& written)
-    {
-        size_t n; const WxnLang* t = wxnLangTable(n);
-        for (size_t i = 0; i < n; ++i) if (wxnLangLower(t[i].name) == wxnLangLower(written)) return std::string(t[i].name);
-        return std::string();
-    }
     // Re-read languages.yaml if it changed; true when the definitions did.
     bool refreshLangDefs()
     {
@@ -10077,14 +10061,7 @@ private:
         }
         m_langDefsMs = ms;
         m_langDefsSize = size;
-        if (got == WxnRead::Ok)
-        {
-            auto lexerOf = [](const std::string& name) {
-                const WxnLang* L = wxnLangFindByName(name);
-                return L ? std::string(L->lexer) : std::string();
-            };
-            if (!wxnParseLangDefs(text, defs, &err, canonicalLanguage, lexerOf)) defs = WxnLangDefs();
-        }
+        if (got == WxnRead::Ok && !wxnParseLangDefs(text, defs, &err, wxnLangCanonicalName, wxnLangLexerOf)) defs = WxnLangDefs();
         reportFileError("languages.yaml", err);
         if (err.empty() && !defs.warnings.empty())
         {
@@ -10110,15 +10087,10 @@ private:
         if (it == m_langWords.end())
         {
             std::string all;
-            const WxnLangDef* def = m_langDefs.find(lang);
-            if (!def || def->keywords.empty()) { if (const char* w = wxnKeywordWords(lang)) all = w; }
-            else
-            {
-                const WxnLang* L = wxnLangFindByName(lang);
-                const std::string lexer = L ? L->lexer : "";
-                for (const auto& kv : wxnEffectiveKeywordLists(lang, lexer, def)) if (!kv.second.empty()) all += (all.empty() ? "" : " ") + kv.second;
-                for (const auto& g : wxnUserKeywordGroups(lang, lexer, def)) all += (all.empty() ? "" : " ") + g.second;
-            }
+            const WxnLangDef* def = m_langDefs.find(lang);   // null: wxNote's own lists, as they are
+            const std::string lexer = wxnLangLexerOf(lang);
+            for (const auto& kv : wxnEffectiveKeywordLists(lang, lexer, def)) if (!kv.second.empty()) all += (all.empty() ? "" : " ") + kv.second;
+            for (const auto& g : wxnUserKeywordGroups(lang, lexer, def)) all += (all.empty() ? "" : " ") + g.second;
             it = m_langWords.emplace(lang, all.empty() ? nullptr : std::make_shared<const std::string>(std::move(all))).first;
         }
         return it->second;
@@ -10151,8 +10123,7 @@ private:
             m_defaultExtReady = true;
             scintillua::Engine* eng = scintilluaEngine();
             const std::vector<std::string> keys = (eng && eng->ok()) ? eng->detectionKeys() : std::vector<std::string>();
-            auto scDetect = [this](const std::string& file, const std::string& line) { return scintilluaDetect(file, line); };
-            m_defaultExt = wxnDefaultExtensions(wxnLangCandidateExts(keys), scDetect, isMenuLanguage, &m_langRules);
+            m_defaultExt = wxnDefaultExtensions(wxnLangCandidateExts(keys), scintilluaDetector(), isMenuLanguage, &m_langRules);
         }
         static const std::vector<std::string> kNone;
         const auto it = m_defaultExt.find(lang);
@@ -10163,9 +10134,8 @@ private:
     // and asp, which detection places anyway, and an extension the user has mapped is the user's.
     std::vector<std::string> themeOnlyExtensionsFor(const std::string& lang)
     {
-        auto scDetect = [this](const std::string& file, const std::string& line) { return scintilluaDetect(file, line); };
-        const WxnUserExtMaps with{ &m_userExt, &g_flUserExtToLang, &m_theme.extToLang, &m_langRules };
-        const WxnUserExtMaps without{ &m_userExt, &g_flUserExtToLang, nullptr, &m_langRules };
+        const auto scDetect = scintilluaDetector();
+        const WxnUserExtMaps with = userExtMaps(), without = userExtMaps(false);
         std::vector<std::string> out;
         for (const auto& kv : m_theme.extToLang)
         {
@@ -10181,7 +10151,7 @@ private:
     // languages the bar has always described keep their long labels ("C++ source file"); every other one
     // shows its Language-menu name, which is also what a manual pick shows. Translated at the point of
     // construction: this string's only consumer is EditorPage::lang, which updateStatus() paints into
-    // status field 0 (a session file's `language` field is written but never applied on load).
+    // status field 0. (A session file records the Language-menu name, never this label.)
     static wxString langDisplayName(const wxString& n)
     {
         if (n.empty())         return _("Normal text file");
@@ -10234,7 +10204,7 @@ private:
     void setLexerForFile(const wxString& path)
     {
         const EditorPage* p = activePage();
-        auto langOf = [](const EditorPage* pg) { return pg ? (pg->langForced ? pg->forcedName : pg->autoLang) : wxString(); };
+        auto langOf = [](const EditorPage* pg) { return pg ? pg->language() : wxString(); };
         const wxString before = langOf(p);
         setLexerForFileImpl(path);
         if (langOf(p) != before) applyDocSettings(m_stc);
@@ -12189,8 +12159,8 @@ private:
     //      Normal Text means "no comments here", so this branch never falls through to the
     //      extension guess it was deliberately chosen to override.
     //   3. the user's own extensions: the Style Configurator's "User ext.", then a functionlist.yaml
-    //      `ext` line (the keys are the same vocabulary), then languages.yaml's file names and extensions -
-    //      the order detection uses.
+    //      `extensions` list (the keys are the same vocabulary), then languages.yaml's file names and
+    //      extensions - the order detection uses.
     //   4. the built-in extension/filename table, unless languages.yaml took the name or extension away
     //      from the language the table gives (detection then looks further, and so does this).
     //   5. the language detection gave the buffer (EditorPage::autoLang) - for what the table has no
@@ -12244,7 +12214,7 @@ private:
     {
         auto* p = activePage();
         const std::string lang = (p && p->sciLang.empty())
-            ? std::string((p->langForced ? p->forcedName : p->autoLang).utf8_str()) : std::string();
+            ? wxnUtf8(p->language()) : std::string();
         return wxnApplyCommentDef(l ? l->style : WxnCommentStyle{}, lang.empty() ? nullptr : m_langDefs.find(lang));
     }
     WxnCommentStyle activeCommentStyle() { return commentStyleOf(activeCommentLang()); }
@@ -13638,7 +13608,7 @@ private:
     {
         if (!v) return;
         const EditorPage* p = dynamic_cast<const EditorPage*>(v->GetParent());   // the view sits on the page it shows
-        const std::string lang = p ? wxnUtf8(p->langForced ? p->forcedName : p->autoLang) : std::string();
+        const std::string lang = p ? wxnUtf8(p->language()) : std::string();
         long long tab = m_tabWidth;
         bool useTabs = m_useTabs;
         g_settings.languageInt("editor.tabSize", lang, tab);     // each leaves the general value when the
@@ -15144,7 +15114,7 @@ private:
                 const std::string& list = key.second;
                 const WxnLang* L = wxnLangFindByName(lang);
                 std::string err;
-                if (!wxnLangDefsSetAdded(text, lang, list, wxnMainKeywordList(L ? L->lexer : ""), words, &err, canonicalLanguage,
+                if (!wxnLangDefsSetAdded(text, lang, list, wxnMainKeywordList(L ? L->lexer : ""), words, &err, wxnLangCanonicalName,
                                          kwIsGroup(lang, list)))
                 {
                     wxMessageBox(wxString::Format(_("languages.yaml could not be changed (%s)."), wxString::FromUTF8(err.c_str())),
@@ -17515,7 +17485,7 @@ public:
         // discarded with the directory - exactly the semantics --sandbox promises.
         for (int i = 1; i < argc; ++i)
             if (wxString(argv[i]) == "--sandbox") { g_sandboxMode = true; break; }
-        g_settingsLoadError = wxnOpenStores(g_sandboxMode ? sandboxDataDir() : wxStandardPaths::Get().GetUserDataDir());
+        const wxString settingsError = wxnOpenStores(g_sandboxMode ? sandboxDataDir() : wxStandardPaths::Get().GetUserDataDir());
 
         // ---- --locale pre-scan: raw argv, before the parser exists -------------------------------------
         //
@@ -17877,7 +17847,7 @@ public:
             auto* frame = new WxnIntegratedFrame(dark);
             frame->Show(true);
             frame->applySavedWindowState();   // Maximize() before Show() is a no-op on some ports
-            frame->reportSettingsError(g_settingsLoadError);
+            frame->reportSettingsError(settingsError);
             if (restoreOnStart) frame->restoreSession();   // --clean: no session AND no recovery restore (restoreSession does both)
             if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(kIpcServiceName); }
             applyRequest(frame);
@@ -17887,7 +17857,7 @@ public:
         auto* frame = new WxnShellFrame(dark);
         frame->Show(true);
         frame->applySavedWindowState();   // Maximize() before Show() is a no-op on some ports
-        frame->reportSettingsError(g_settingsLoadError);
+        frame->reportSettingsError(settingsError);
         if (restoreOnStart) frame->restoreSession();   // reopen files from a theme-restart. -w: a dedicated
                                                 // one-file window; leave session/pending set so the next real launch
                                                 // still restores the user's tabs. --clean: skip session AND recovery

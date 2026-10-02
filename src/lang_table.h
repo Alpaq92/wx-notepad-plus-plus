@@ -154,3 +154,19 @@ inline const WxnLang* wxnLangFindByName(const std::string& name)
     for (size_t i = 0; i < n; ++i) if (name == t[i].name) return &t[i];
     return nullptr;
 }
+// The name `written` stands for, matched without regard to case (as a hand-written languages.yaml
+// spells it); "" for none.
+inline std::string wxnLangCanonicalName(const std::string& written)
+{
+    auto lower = [](std::string s) { for (char& c : s) if (c >= 'A' && c <= 'Z') c = char(c - 'A' + 'a'); return s; };
+    const std::string w = lower(written);
+    size_t n; const WxnLang* t = wxnLangTable(n);
+    for (size_t i = 0; i < n; ++i) if (lower(t[i].name) == w) return std::string(t[i].name);
+    return std::string();
+}
+// The Lexilla lexer of the language called `name`; "" for none.
+inline std::string wxnLangLexerOf(const std::string& name)
+{
+    const WxnLang* l = wxnLangFindByName(name);
+    return l ? std::string(l->lexer) : std::string();
+}

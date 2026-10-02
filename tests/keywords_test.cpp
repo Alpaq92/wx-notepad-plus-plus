@@ -222,10 +222,12 @@ int main()
     }
 
     std::printf("\n-- lookups --\n");
-    const char* cpp = wxnKeywordWords("C++");
-    check(cpp && cpp == wxnKeywordWords("C++"), "wxnKeywordWords: built once, the same pointer every time");
-    check(cpp && std::string(cpp).find("constexpr") != std::string::npos, "...holding the language's words");
-    check(wxnKeywordWords("") == nullptr && wxnKeywordWords("Normal Text") == nullptr, "...and nullptr for no language");
+    std::string cpp;
+    wxnForEachKeywordList("C++", [&](const WxnKeywordList& k) { cpp += std::string(k.words) + " "; });
+    check(cpp.find("constexpr") != std::string::npos, "C++'s lists hold its words");
+    int noLists = 0;
+    for (const char* none : { "", "Normal Text" }) wxnForEachKeywordList(none, [&](const WxnKeywordList&) { ++noLists; });
+    check(noLists == 0, "...and no language, or Normal Text, has none");
     int ktRows = 0;
     wxnForEachKeywordList("Kotlin", [&](const WxnKeywordList&) { ++ktRows; });
     check(ktRows == 1, "a language SciTE lacks takes the extra table's list");

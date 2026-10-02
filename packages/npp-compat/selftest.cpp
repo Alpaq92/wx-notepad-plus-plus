@@ -368,13 +368,8 @@ static void testSessionAndWorkspace()
 // the way wxNote reads it.
 static void testLanguagesTranslation()
 {
-    auto canonical = [](const std::string& w) {
-        size_t n;
-        const WxnLang* t = wxnLangTable(n);
-        for (size_t i = 0; i < n; ++i) if (wxnLangLower(t[i].name) == wxnLangLower(w)) return std::string(t[i].name);
-        return std::string();
-    };
-    auto lexerOf = [](const std::string& name) { const WxnLang* l = wxnLangFindByName(name); return l ? std::string(l->lexer) : std::string(); };
+    const auto canonical = wxnLangCanonicalName;
+    const auto lexerOf = wxnLangLexerOf;
     auto words = [](const WxnLangDefs& d, const std::string& lang, const std::string& list) {
         const WxnLangDef* def = d.find(lang);
         if (!def || !def->keywords.count(list)) return std::string("(none)");

@@ -607,12 +607,6 @@ const char* const kCFamily[] = { "c", "cpp", "cs", "objc", "java", "rc", "javasc
                                  "typescript", "go" };
 const char* const kHtmlFamily[] = { "HTML", "PHP", "ASP", "JSP" };
 
-std::string lexerOfLanguage(const std::string& lang)
-{
-    const WxnLang* l = wxnLangFindByName(lang);
-    return l ? std::string(l->lexer) : std::string();
-}
-
 // The wxNote language a Notepad++ <Language> is: "" for the panes and overlays that are none, and for the
 // embedded-script and markup blocks the HTML family shares (they have no file extensions of their own).
 std::string wxnoteLanguage(const std::string& npp)
@@ -632,11 +626,11 @@ std::vector<std::pair<std::string, std::string>> wxnoteListsFor(const std::strin
     const bool group = idx >= 100;
     const int n = group ? idx - 100 : idx;
     auto slot = [&](const std::string& lang, int s) {
-        for (const WxnKeywordSetName* k : wxnKeywordSetsOf(lexerOfLanguage(lang)))
+        for (const WxnKeywordSetName* k : wxnKeywordSetsOf(wxnLangLexerOf(lang)))
             if (k->slot == s) out.emplace_back(lang, k->name);
     };
     auto nthGroup = [&](const std::string& lang, int i) {
-        const std::vector<WxnSubstyleGroup> g = wxnSubstyleGroupsOf(lexerOfLanguage(lang), lang);
+        const std::vector<WxnSubstyleGroup> g = wxnSubstyleGroupsOf(wxnLangLexerOf(lang), lang);
         if (i >= 0 && i < static_cast<int>(g.size())) out.emplace_back(lang, g[i].name);
     };
     if (npp == "html" || npp == "javascript" || npp == "php" || npp == "asp")
@@ -845,7 +839,7 @@ bool languagesFromNpp(const std::string& langsXml, const std::string& modelXml, 
                         {
                             // Words wxNote's own list already has would only repeat it.
                             std::vector<std::string> builtIn;
-                            for (const WxnKeywordSetName* k : wxnKeywordSetsOf(lexerOfLanguage(t.first)))
+                            for (const WxnKeywordSetName* k : wxnKeywordSetsOf(wxnLangLexerOf(t.first)))
                                 if (t.second == k->name)
                                 {
                                     const auto lists = wxnBuiltinKeywordLists(t.first);

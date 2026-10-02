@@ -349,17 +349,7 @@ void importLanguages(NibHost* host, NibQueryFn query, const std::string& langs, 
         const fs::path dest = data / "languages.yaml";
         std::string text = readFile(dest);
         if (text.empty()) text = wxnLanguagesYamlTemplate();
-        auto canonical = [](const std::string& written) {
-            size_t n;
-            const WxnLang* table = wxnLangTable(n);
-            for (size_t i = 0; i < n; ++i) if (wxnLangLower(table[i].name) == wxnLangLower(written)) return std::string(table[i].name);
-            return std::string();
-        };
-        auto lexerOf = [](const std::string& name) {
-            const WxnLang* l = wxnLangFindByName(name);
-            return l ? std::string(l->lexer) : std::string();
-        };
-        if (!wxnLangDefsMerge(text, t.yaml, &err, canonical, lexerOf))
+        if (!wxnLangDefsMerge(text, t.yaml, &err, wxnLangCanonicalName, wxnLangLexerOf))
         {
             report += "  languages.yaml has an error (" + err + "), so it was not changed\n";
             return;

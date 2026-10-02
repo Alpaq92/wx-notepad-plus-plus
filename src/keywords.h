@@ -14,7 +14,6 @@
 // Standalone - std only, no wx - so tests/keywords_test.cpp checks every list against the real lexers.
 
 #include <cstddef>
-#include <map>
 #include <string>
 
 struct WxnKeywordList
@@ -90,17 +89,3 @@ void wxnForEachKeywordList(const std::string& language, Fn&& fn)
     for (std::size_t i = 0; i < n; ++i) if (language == t[i].language && !(filled & (1u << t[i].slot))) fn(t[i]);
 }
 
-// Every word `language`'s lists hold, all slots, space-separated - what autocomplete offers. Built once
-// per language and kept, so the pointer stays valid for the program's life; nullptr when there are none.
-inline const char* wxnKeywordWords(const std::string& language)
-{
-    static std::map<std::string, std::string> cache;
-    auto it = cache.find(language);
-    if (it == cache.end())
-    {
-        std::string all;
-        wxnForEachKeywordList(language, [&](const WxnKeywordList& k) { if (!all.empty()) all += ' '; all += k.words; });
-        it = cache.emplace(language, std::move(all)).first;
-    }
-    return it->second.empty() ? nullptr : it->second.c_str();
-}
