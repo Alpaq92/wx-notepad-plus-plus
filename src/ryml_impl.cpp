@@ -10,31 +10,14 @@
 
 #define RYML_SINGLE_HDR_DEFINE_NOW
 #include "ryml_all.hpp"
+#include "yaml_io.h"
 
 namespace {
 
-// rapidyaml's default error handlers print the error and its context to stderr before throwing.
-// src/yaml_io.h catches every one of these and reports it to its caller (file, line, column), so the
-// print is only noise - in a test log, or in the terminal a Linux user started wxNote from. These throw
-// the same exception types without it. Installed once, before main(): this object file is always
-// linked, because it holds the library itself.
-[[noreturn]] void quietBasic(ryml::csubstr msg, ryml::ErrorDataBasic const& data, void*)
-{
-    throw ryml::ExceptionBasic(msg, data);
-}
-[[noreturn]] void quietParse(ryml::csubstr msg, ryml::ErrorDataParse const& data, void*)
-{
-    throw ryml::ExceptionParse(msg, data);
-}
-[[noreturn]] void quietVisit(ryml::csubstr msg, ryml::ErrorDataVisit const& data, void*)
-{
-    throw ryml::ExceptionVisit(msg, data);
-}
-
+// Trees made where they are used take rapidyaml's global callbacks: make those wxNote's quiet ones,
+// the ones a Doc's tree has from the start (yaml_io.h).
 [[maybe_unused]] const bool s_quietErrors = [] {
-    ryml::Callbacks cb = ryml::get_callbacks();
-    cb.set_error_basic(&quietBasic).set_error_parse(&quietParse).set_error_visit(&quietVisit);
-    ryml::set_callbacks(cb);
+    ryml::set_callbacks(wxnyaml::detail::callbacks());
     return true;
 }();
 

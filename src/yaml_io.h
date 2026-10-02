@@ -38,9 +38,42 @@ inline ryml::csubstr view(const std::string& s) { return ryml::csubstr(s.data(),
 
 // ---- parsing ---------------------------------------------------------------------------------------
 
+namespace detail {
+
+// rapidyaml's errors as exceptions, without its own message on stderr: the caller reports a file that
+// does not parse, naming the file and where it broke.
+[[noreturn]] inline void quietBasic(ryml::csubstr msg, ryml::ErrorDataBasic const& data, void*)
+{
+    throw ryml::ExceptionBasic(msg, data);
+}
+[[noreturn]] inline void quietParse(ryml::csubstr msg, ryml::ErrorDataParse const& data, void*)
+{
+    throw ryml::ExceptionParse(msg, data);
+}
+[[noreturn]] inline void quietVisit(ryml::csubstr msg, ryml::ErrorDataVisit const& data, void*)
+{
+    throw ryml::ExceptionVisit(msg, data);
+}
+
+// The callbacks a Doc's tree uses, made on first use. Not rapidyaml's global ones: those are set up
+// while statics are initialised, in rapidyaml's own file, and a Doc can be a static itself (the
+// settings file's is) that is built before them - on Linux it was, and its tree called a null
+// allocator before main(). ryml_impl.cpp installs these as the global ones too.
+inline const ryml::Callbacks& callbacks()
+{
+    static const ryml::Callbacks cb = [] {
+        ryml::Callbacks c;
+        c.set_error_basic(&quietBasic).set_error_parse(&quietParse).set_error_visit(&quietVisit);
+        return c;
+    }();
+    return cb;
+}
+
+}   // namespace detail
+
 struct Doc
 {
-    ryml::Tree  tree;
+    ryml::Tree  tree{ detail::callbacks() };
     std::string error;                  // empty when the text parsed
 
     bool ok() const { return error.empty(); }
