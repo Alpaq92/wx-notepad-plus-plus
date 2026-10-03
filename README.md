@@ -1,11 +1,11 @@
 # wxNote
 
-**An experimental, cross-platform (Windows / Linux / macOS) text editor built on [wxWidgets](https://www.wxwidgets.org/).**
+**An experimental, cross-platform (Windows / Linux / macOS / FreeBSD) text editor built on [wxWidgets](https://www.wxwidgets.org/).**
 
 > ⚠️ Experimental software, under active development.
 
 wxNote is built on wxWidgets' `wxStyledTextCtrl` (**Scintilla + Lexilla**) and runs natively on
-Windows, Linux, and macOS from one codebase: tabbed editing, split views, theming, a native
+Windows, Linux, macOS, and FreeBSD from one codebase: tabbed editing, split views, theming, a native
 custom-language engine (Scintillua), macros, an integrated terminal, session restore, and full UI
 localization. Plugins are
 first-class via the project's own permissive, cross-platform **Nib API**; legacy Win32 Notepad++-ABI
@@ -21,7 +21,7 @@ Why the project exists, and why it's a from-scratch editor rather than a port, i
 ## Status
 
 Experimental, under active development. The Windows build is the most mature and feature-rich; the
-Linux/macOS builds are structured and CI-wired but still being validated.
+Linux, macOS and FreeBSD builds are structured and CI-wired but still being validated.
 
 **Implemented:** tabbed editor with per-tab Scintilla documents, a **split second view**
 (MAIN | SUB — Move/Clone to Other View, with the split collapsing when a pane empties), syntax
@@ -99,6 +99,8 @@ cmake --build build --target wxnote
 - **Windows** — the MSVC compiler from Visual Studio 2022 Build Tools (the build itself is CMake + Ninja; MSBuild and solution files are not used); the native dark-mode code and the optional `packages/npp-bridge` (Notepad++-ABI plugin bridge) compile in here.
 - **Linux** — needs GTK3 dev headers: `sudo apt-get install build-essential cmake ninja-build pkg-config libgtk-3-dev`
 - **macOS** — needs the Xcode command-line tools.
+- **FreeBSD** — the base system's Clang, plus `pkg install cmake-core ninja pkgconf gtk3` (packages
+  carry their headers; there are no separate dev packages).
 
 Plugins:
 
@@ -127,7 +129,7 @@ resources/           toolbar icons (icons/ = Tabler default, icons-solar/, icons
                      icons-streamline/), themes/ (Default.yaml is the light default), contextmenu.yaml, fonts,
                      locale/ (8-language i18n catalogs)
 third_party/         scintilla + lexilla (both permissive, HPND), lua + lpeg + scintillua (the custom-language engine, all MIT), libvterm-tables (generated DEC tables for the fetched libvterm terminal core, MIT), wxbf (wxBorderlessFrame, wxWindows Licence)
-installer/           packaging scripts: windows/ (NSIS), linux/ (AppImage, .deb, .rpm, Flatpak), macos/ (.dmg)
+installer/           packaging scripts: windows/ (NSIS), linux/ (AppImage, .deb, .rpm, Flatpak), macos/ (.dmg), freebsd/ (.pkg)
 docs/                GOALS.md (why the project exists), ARCHITECTURE.md (how the editor is put
                      together), CREDITS.md (everything used or consulted during development)
 ```
@@ -144,9 +146,12 @@ Grab the latest build from the [project site's Download page](https://alpaq92.gi
   each available for x86_64 and ARM (aarch64/arm64-suffixed assets), plus a `.deb` for `riscv64`
 - **macOS** — a `.dmg`, built separately for Apple Silicon (`wxNote-<version>-arm64.dmg`) and
   Intel (`wxNote-<version>-x86_64.dmg`) — pick the one matching your Mac's chip
+- **FreeBSD** — a package for FreeBSD 15 or 14 on amd64 (`wxnote-<version>-freebsd15-amd64.pkg`).
+  `pkg add` looks for dependencies only beside the file, so install them from the repository first:
+  `pkg install $(pkg query -F <file> %dn)`, then `pkg add <file>`
 
 CI builds all of these as artifacts for every PR and for source-affecting pushes to master (see
-`.github/workflows/build.yml` and `installer/{windows,linux,macos}/`); pushing a version tag (`v*`)
+`.github/workflows/build.yml` and `installer/{windows,linux,macos,freebsd}/`); pushing a version tag (`v*`)
 runs `.github/workflows/release.yml`, which rebuilds everything and attaches it to a new GitHub
 Release. See [`CHANGELOG.md`](CHANGELOG.md) for release history.
 
