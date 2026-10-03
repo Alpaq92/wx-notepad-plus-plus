@@ -4462,7 +4462,14 @@ public:
     // lambda above) to openFolderPath() instead. Teaching openPath() to swallow directories would put them
     // into the `opened` array that feeds enterWaitMode(), and `wxnote -w somedir` would then block forever
     // on a "tab" that can never be closed because it never was one.
-    EditorPage* openPath(const wxString& p) { return wxFileExists(p) ? addDocument(p, wxFileNameFromPath(p)) : nullptr; }
+    // Open `p` in a new tab - or, when a tab already holds it, bring that one forward: a file is never
+    // open twice. Every way in comes through here - File > Open, drag and drop, a second launch, Recent
+    // Files, a session, a plugin's NPPM_DOOPEN - and NPPM_RELOADFILE reloads the tab it switches to.
+    EditorPage* openPath(const wxString& p)
+    {
+        if (EditorPage* open = pageForPath(p)) { activatePage(open); return open; }
+        return wxFileExists(p) ? addDocument(p, wxFileNameFromPath(p)) : nullptr;
+    }
     // A positional directory (`wxnote .`, `wxnote C:\src\proj`) roots the workspace browser rather than
     // opening a tab. Public wrapper: showFileBrowserRooted() itself lives in the private section below.
     void openFolderPath(const wxString& p) { showFileBrowserRooted(p); }
@@ -4767,20 +4774,58 @@ private:
         sci(SCI_SETTEXT, 0, reinterpret_cast<sptr_t>(u.data()));
         sci(SCI_ENDUNDOACTION);
     }
+    // The main selection's text, as the document's own bytes (embedded NULs kept). Not SCI_GETSELTEXT:
+    // with several selections - multi-select, a rectangle - that copies all of them, more than this
+    // range holds, and it overran the buffer sized for it.
     std::string getSelUtf8()
     {
         const int a = static_cast<int>(sci(SCI_GETSELECTIONSTART)), b = static_cast<int>(sci(SCI_GETSELECTIONEND));
-        if (b <= a) return {};
-        std::string s(static_cast<size_t>(b - a) + 1, '\0');
-        sci(SCI_GETSELTEXT, 0, reinterpret_cast<sptr_t>(&s[0])); s.resize(b - a);
-        return s;
+        return textBytes(a, b);
     }
+    // [a, b) as the document's bytes - unlike rangeText, without moving the target.
+    std::string textBytes(int a, int b)
+    {
+        if (b <= a || !m_stc) return {};
+        const wxCharBuffer buf = m_stc->GetTextRangeRaw(a, b);
+        return std::string(buf.data(), buf.length());
+    }
+    // Rewrite each selection through `fn` - every one on its own, so several selections or a rectangle
+    // are each converted instead of all getting one merged copy - as one undo step, leaving them
+    // selected with the main one where it was.
     void transformSel(const std::function<void(std::string&)>& fn)
     {
-        std::string s = getSelUtf8();
-        if (s.empty()) return;
-        fn(s);
-        sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(s.c_str()));
+        struct Sel { int start, end, index; };
+        std::vector<Sel> sels;
+        const int n = static_cast<int>(sci(SCI_GETSELECTIONS));
+        for (int i = 0; i < n; ++i)
+        {
+            const int a = static_cast<int>(sci(SCI_GETSELECTIONNSTART, i)), b = static_cast<int>(sci(SCI_GETSELECTIONNEND, i));
+            if (b > a) sels.push_back({ a, b, i });
+        }
+        if (sels.empty()) return;
+        std::sort(sels.begin(), sels.end(), [](const Sel& x, const Sel& y) { return x.start < y.start; });
+        const int mainIndex = static_cast<int>(sci(SCI_GETMAINSELECTION));
+        sci(SCI_BEGINUNDOACTION);
+        int shift = 0;   // what the selections before this one grew or shrank by
+        for (Sel& s : sels)
+        {
+            s.start += shift;
+            s.end += shift;
+            std::string text = textBytes(s.start, s.end);
+            fn(text);
+            sci(SCI_SETTARGETRANGE, s.start, s.end);
+            sci(SCI_REPLACETARGET, text.size(), reinterpret_cast<sptr_t>(text.data()));
+            shift += static_cast<int>(text.size()) - (s.end - s.start);
+            s.end = s.start + static_cast<int>(text.size());
+        }
+        sci(SCI_ENDUNDOACTION);
+        int newMain = 0;
+        for (size_t k = 0; k < sels.size(); ++k)
+        {
+            sci(k == 0 ? SCI_SETSELECTION : SCI_ADDSELECTION, sels[k].end, sels[k].start);
+            if (sels[k].index == mainIndex) newMain = static_cast<int>(k);
+        }
+        sci(SCI_SETMAINSELECTION, newMain);
     }
 
     // ----- application icon ---------------------------------------------
@@ -4911,6 +4956,9 @@ private:
         // never with the menu.
         v.stc->Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& k) { onStcKeyDown(k); });
         v.stc->Bind(wxEVT_STC_CALLTIP_CLICK,    &WxnShellFrameT::onCallTipClick,   this);
+        // Once the completion list has gone - taken or dismissed - the call tip it hid comes back.
+        v.stc->Bind(wxEVT_STC_AUTOCOMP_COMPLETED, [this](wxStyledTextEvent& e) { CallAfter([this] { resumeCallTip(); }); e.Skip(); });
+        v.stc->Bind(wxEVT_STC_AUTOCOMP_CANCELLED, [this](wxStyledTextEvent& e) { CallAfter([this] { resumeCallTip(); }); e.Skip(); });
         v.stc->Bind(wxEVT_STC_INDICATOR_CLICK,  &WxnShellFrameT::onUrlClick,       this);
         v.stc->Bind(wxEVT_STC_UPDATEUI,         &WxnShellFrameT::onStcUpdateUI,    this);
         v.stc->Bind(wxEVT_STC_DOUBLECLICK,      &WxnShellFrameT::onStcDoubleClick, this);
@@ -7353,6 +7401,7 @@ private:
     // No API database is loaded, so signatures are harvested from the open document: each distinct
     // "name(...)" (plus any preceding return-type / def token) becomes an overload.
     std::vector<std::string> m_ctSigs; int m_ctIdx = 0; int m_ctOpen = -1;
+    const EditorPage* m_ctPage = nullptr;   // the page the call tip belongs to
     std::vector<std::string> callTipSigs(const std::string& name)
     {
         std::vector<std::string> out; std::set<std::string> seen;
@@ -7425,17 +7474,36 @@ private:
         m_ctSigs = callTipSigs(callName);
         appendProjectSigs(callName, m_ctSigs);   // then anything the workspace index knows
         if (m_ctSigs.empty()) { sci(SCI_CALLTIPCANCEL); return; }
-        m_ctIdx = 0; m_ctOpen = open; renderCallTip();
+        m_ctIdx = 0; m_ctOpen = open; m_ctPage = activePage(); renderCallTip();
+    }
+    // Is the caret still between the call's '(' and the ')' that closes it?
+    bool caretInCall()
+    {
+        const int caret = (int)sci(SCI_GETCURRENTPOS);
+        if (caret <= m_ctOpen) return false;
+        int d = 0;
+        for (int p = m_ctOpen + 1; p < caret; ++p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == '(') ++d; else if (c == ')') { if (d == 0) return false; --d; } }
+        return true;
     }
     void callTipCaretMoved()   // keep the highlight in sync, dismiss once the caret leaves the call
     {
         if (m_ctSigs.empty() || !m_stc) return;
-        if (!sci(SCI_CALLTIPACTIVE)) { m_ctSigs.clear(); return; }
-        const int caret = (int)sci(SCI_GETCURRENTPOS);
-        if (caret <= m_ctOpen) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; }
-        int d = 0;
-        for (int p = m_ctOpen + 1; p < caret; ++p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == '(') ++d; else if (c == ')') { if (d == 0) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; } --d; } }
+        if (!sci(SCI_CALLTIPACTIVE))
+        {
+            // Hidden by the completion list (Scintilla closes the tip when the list opens): kept, and
+            // resumeCallTip shows it again. Closed any other way (Esc, a click): stays closed.
+            if (!sci(SCI_AUTOCACTIVE)) m_ctSigs.clear();
+            return;
+        }
+        if (!caretInCall()) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; }
         ctHighlight();
+    }
+    // The completion list has closed: bring back the call tip it hid, if the caret is still in the call.
+    void resumeCallTip()
+    {
+        if (m_ctSigs.empty() || !m_stc || sci(SCI_CALLTIPACTIVE) || sci(SCI_AUTOCACTIVE)) return;
+        if (activePage() != m_ctPage || !caretInCall()) { m_ctSigs.clear(); return; }
+        renderCallTip();
     }
     void onCallTipClick(wxStyledTextEvent& e) { const int p = (int)e.GetPosition(); if (p == 1) { --m_ctIdx; renderCallTip(); } else if (p == 2) { ++m_ctIdx; renderCallTip(); } }
     // ----- clickable URLs -----------------------------------------------------------------------------
@@ -10289,6 +10357,9 @@ private:
         {
             sci(SCI_SETPROPERTY, reinterpret_cast<uptr_t>("fold"), reinterpret_cast<sptr_t>("1"));
             sci(SCI_SETPROPERTY, reinterpret_cast<uptr_t>("fold.compact"), reinterpret_cast<sptr_t>("0"));
+            // JSON5 rides the JSON lexer, which colours // and /* */ comments only when told to (a new
+            // lexer each time, so plain JSON still marks them).
+            if (langName == "JSON5") sci(SCI_SETPROPERTY, reinterpret_cast<uptr_t>("lexer.json.allow.comments"), reinterpret_cast<sptr_t>("1"));
             bool themed = false;
             if (m_theme.loaded)
             {
@@ -10625,7 +10696,18 @@ private:
         setLexerForFile(path);
         updateEncodingMenuChecks();
     }
-    void onOpen() { wxFileDialog d(this, _("Open"), "", "", _("All files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST); if (d.ShowModal() == wxID_OK) addDocument(d.GetPath(), wxFileNameFromPath(d.GetPath())); }
+    // File > Open starts in the active document's folder, takes several files at once, and switches to
+    // a file that is already open rather than opening it again (openPath).
+    void onOpen()
+    {
+        const EditorPage* p = activePage();
+        wxFileDialog d(this, _("Open"), (p && !p->path.empty()) ? wxPathOnly(p->path) : wxString(), "", _("All files (*.*)|*.*"),
+                       wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
+        if (d.ShowModal() != wxID_OK) return;
+        wxArrayString paths;
+        d.GetPaths(paths);
+        for (const wxString& f : paths) openPath(f);
+    }
     void onReload() { if (!m_path.empty()) loadFile(m_path); }
 
     // ---- External-change watch: warn when an open file is modified/replaced by another program ----
@@ -10902,7 +10984,18 @@ private:
         return true;
     }
     void onSave() { if (m_path.empty()) onSaveAs(); else writeFile(m_path); }
-    void onSaveAs() { wxFileDialog d(this, _("Save As"), "", "new 1.txt", _("All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT); if (d.ShowModal() == wxID_OK) writeFile(d.GetPath()); }
+    // Save As starts where the document lives, under its own name; an untitled one under its tab's
+    // name (new 2.txt for "new 2" - it used to propose "new 1.txt" for everything).
+    void onSaveAs()
+    {
+        const EditorPage* p = activePage();
+        const bool named = p && !p->path.empty();
+        wxString name = named ? wxFileNameFromPath(p->path) : (p && !p->title.empty() ? p->title : wxString("new 1"));
+        if (!named && wxFileName(name).GetExt().empty()) name += ".txt";
+        wxFileDialog d(this, _("Save As"), named ? wxPathOnly(p->path) : wxString(), name, _("All files (*.*)|*.*"),
+                       wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        if (d.ShowModal() == wxID_OK) writeFile(d.GetPath());
+    }
     // Repaint page p's tab label (add/remove the unsaved "*") on ITS OWN notebook - works for a page in
     // EITHER split view, unlike refreshTab() which only touches the active view's strip.
     void refreshTabLabel(EditorPage* p)

@@ -95,6 +95,71 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         o.forward = fwd; o.wrap = false; return o;
     };
 
+    // ---- several selections: the main one is what reads; a conversion rewrites each ------------------
+    // Reading "the selection" sized its buffer for the main selection and then copied all of them into
+    // it (a heap overflow), and a case conversion replaced every selection with one merged copy.
+    {
+        load("one two three");
+        f->sci(SCI_SETSELECTION, 3, 0);    // "one"
+        f->sci(SCI_ADDSELECTION, 13, 8);   // "three", now the main selection
+        check(f->selText() == "three", "selection: several selections read as the main one");
+        f->transformSel([](std::string& s) { for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c))); });
+        check(text() == "ONE two THREE", "selection: a conversion rewrites each selection on its own");
+        check(f->sci(SCI_GETSELECTIONS) == 2 && f->selText() == "THREE", "selection: ...leaving both selected, the main one main");
+        f->sci(SCI_UNDO);
+        check(text() == "one two three", "selection: ...as one undo step");
+        f->sci(SCI_CLEARSELECTIONS);
+    }
+
+    // ---- a file already open is switched to, not opened twice ---------------------------------------
+    {
+        const wxString path = wxFileName::CreateTempFileName("wxndup");
+        check(writeWholeFile(path, "dup\n"), "open: fixture written");
+        EditorPage* first = f->openPath(path);
+        const size_t pages = f->allPages().size();
+        f->addDocument(wxString(), "untitled-dup-test");     // somewhere else in front
+        EditorPage* scratch = f->activePage();
+        EditorPage* again = f->openPath(path);
+        check(first && again == first && f->allPages().size() == pages + 1,
+              "open: opening an open file again gives its tab, not a second one");
+        check(f->activePage() == first, "open: ...and brings that tab to the front");
+        f->closeActive();                                     // the file's tab
+        f->activatePage(scratch);
+        f->closeActive();
+        wxRemoveFile(path);
+    }
+
+    // ---- the call tip survives the completion list ----------------------------------------------
+    // Scintilla closes a call tip when the completion list opens; the tip used to be dropped for good.
+    {
+        load("int addem(int a, int b) { return a + b; }\naddem(");
+        f->sci(SCI_GOTOPOS, f->sci(SCI_GETLENGTH));
+        f->funcCallTip();
+        check(f->sci(SCI_CALLTIPACTIVE) != 0, "call tip: shown for the call being typed");
+        f->sci(SCI_AUTOCSHOW, 0, reinterpret_cast<sptr_t>("alpha beta"));
+        f->callTipCaretMoved();   // as the next caret update does while the list is up
+        check(f->sci(SCI_AUTOCACTIVE) != 0 && !f->m_ctSigs.empty(), "call tip: kept while the completion list hides it");
+        f->sci(SCI_AUTOCCANCEL);
+        f->resumeCallTip();       // what the list's closing schedules
+        check(f->sci(SCI_CALLTIPACTIVE) != 0, "call tip: back once the list has closed");
+        f->sci(SCI_CALLTIPCANCEL);
+        f->callTipCaretMoved();
+        check(f->m_ctSigs.empty(), "call tip: ...while one closed by the user stays closed");
+    }
+
+    // ---- JSON5 comments --------------------------------------------------------------------------
+    {
+        f->addDocument(wxString(), "untitled-json5-test");
+        EditorPage* p = f->activePage();
+        auto comments = [f] { return f->sci(SCI_GETPROPERTYINT, reinterpret_cast<uptr_t>("lexer.json.allow.comments"), 0); };
+        p->path = "settings.json5"; p->langForced = false; f->setLexerForFile(p->path);
+        check(p->autoLang == "JSON5" && comments() == 1, "JSON5: the JSON lexer colours its comments");
+        p->path = "data.json"; f->setLexerForFile(p->path);
+        check(p->autoLang == "JSON" && comments() == 0, "JSON5: ...and plain JSON still marks them");
+        p->path.clear();
+        f->closeActive();
+    }
+
     // ---- (1) a regex that CROSSES A LINE BREAK, through the real Find path ------------------------
     // The headline capability. Before PCRE2 this could not match at all, at any surface.
     {
