@@ -109,9 +109,10 @@ on CI), cap parallelism: `cmake --build build --target wxnote --parallel 2`.
   strings fall back to English, so a missing translation degrades
   gracefully — but please don't ship new UI strings without at least the
   `.pot` entry.
-- **Files the app writes at runtime** (settings, recovery, session) go through
-  `wxConfig` or the user-data directory — never next to the executable,
-  which is read-only on installed builds.
+- **Files the app writes at runtime** (settings, recovery, session) go to the
+  user-data directory, as the YAML files of
+  [`docs/SETTINGS_DESIGN.md`](docs/SETTINGS_DESIGN.md) — never next to the
+  executable, which is read-only on installed builds.
 
 ## Translations
 
@@ -125,17 +126,20 @@ compile the same way — wxWidgets picks it up by directory name.
 
 ## Themes
 
-wxNote reads Notepad++'s theme-XML format, so an existing N++ theme file
-generally works as-is. To ship a theme *with* wxNote it must be permissively
-licensed (MIT/similar or your own original work) with license and author
-stated in the file header — see the existing files in `resources/themes/`
-for both header styles (kept third-party and first-party regenerated).
+Themes are YAML files (`resources/themes/<name>.yaml`; the format is in
+[`docs/SETTINGS_DESIGN.md`](docs/SETTINGS_DESIGN.md)). A Notepad++ theme is
+translated into one by the optional `npp-compat` plugin, or by
+`build/bin/npp2wxnote theme`. To ship a theme *with* wxNote it must be
+permissively licensed (MIT/similar or your own original work) with license
+and author stated in the file's opening comment — see the existing files in
+`resources/themes/` for both header styles (kept third-party and first-party
+regenerated).
 
 ## Licensing of contributions
 
 wxNote's core is **Apache-2.0**; the optional `packages/npp-bridge/`,
-`packages/test_plugin/`, and `packages/udl-compat/` modules are
-**GPL-3.0-or-later** (see [`LICENSING.md`](LICENSING.md) for why). Contributions are accepted under
+`packages/npp-compat/`, `packages/test_plugin/`, and `packages/udl-compat/`
+modules are **GPL-3.0-or-later** (see [`LICENSING.md`](LICENSING.md) for why). Contributions are accepted under
 the license of the component they touch — inbound = outbound. By submitting
 a PR you agree your contribution is licensed accordingly; no CLA, no
 copyright assignment.

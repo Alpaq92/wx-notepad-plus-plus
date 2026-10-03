@@ -615,9 +615,6 @@ msgstr "&Закладки"
 msgid "Find characters in rang&e..."
 msgstr "Найти символы в &диапазоне..."
 
-msgid "&Search"
-msgstr "&Поиск"
-
 msgid "Always on &Top"
 msgstr "Поверх &всех окон"
 
@@ -1080,9 +1077,6 @@ msgstr "&Кодировки"
 msgid "None (Normal Text)"
 msgstr "Нет (обычный текст)"
 
-msgid "Define your language..."
-msgstr "Задать свой язык..."
-
 msgid "Open User Defined Language folder..."
 msgstr "Открыть папку пользовательских языков..."
 
@@ -1116,9 +1110,6 @@ msgstr "Импорт"
 msgid "Edit Popup ContextMenu"
 msgstr "Правка контекстного меню"
 
-msgid "&Dark Mode"
-msgstr "&Тёмный режим"
-
 msgid "Se&ttings"
 msgstr "О&пции"
 
@@ -1142,9 +1133,6 @@ msgstr "SHA-256"
 
 msgid "SHA-512"
 msgstr "SHA-512"
-
-msgid "T&ools"
-msgstr "&Инструменты"
 
 msgid "Start Re&cording"
 msgstr "Начать &запись"
@@ -1175,9 +1163,6 @@ msgstr "&Запуск"
 
 msgid "Open Plugins Folder..."
 msgstr "Открыть папку плагинов..."
-
-msgid "&Plugins"
-msgstr "&Плагины"
 
 msgid "Name A to Z"
 msgstr "Имя от A до Z"
@@ -1227,17 +1212,11 @@ msgstr "Аргументы командной строки..."
 msgid "Check for Updates"
 msgstr "Проверить обновления"
 
-msgid "Set Updater Proxy..."
-msgstr "Настроить прокси для обновлений..."
-
 msgid "Debug Info..."
 msgstr "Отладочная информация..."
 
 msgid "About wxNote"
 msgstr "О программе wxNote"
-
-msgid "&About"
-msgstr "&Справка"
 
 msgid "Go to line"
 msgstr "Переход к строке"
@@ -1434,9 +1413,6 @@ msgstr "Не удалось прочитать файл сессии."
 msgid "Load Session"
 msgstr "Загрузка сессии"
 
-msgid "No session data in this file."
-msgstr "В этом файле нет данных сессии."
-
 msgid "new %d"
 msgstr "новый %d"
 
@@ -1521,9 +1497,6 @@ msgstr "Уменьшить"
 msgid "Word Wrap"
 msgstr "Перенос строк"
 
-msgid "User-Defined Language Dialogue"
-msgstr "Диалог пользовательского языка"
-
 msgid "Monitoring (tail -f)"
 msgstr "Мониторинг (tail -f)"
 
@@ -1589,9 +1562,6 @@ msgstr "Показывать строку состояния"
 
 msgid "Show integrated top bar"
 msgstr "Показывать встроенную верхнюю панель"
-
-msgid "System-native window buttons"
-msgstr "Системные кнопки окна"
 
 msgid "Ignore platform decoration (sharp corners)"
 msgstr "Игнорировать системное оформление (острые углы)"
@@ -1661,12 +1631,6 @@ msgstr "-го символа"
 
 msgid "Auto-insert matching brackets and quotes"
 msgstr "Автовставка парных скобок и кавычек"
-
-msgid "Dark Mode"
-msgstr "Тёмная тема"
-
-msgid "Enable Dark Mode   (applied on restart)"
-msgstr "Включить тёмный режим   (применяется после перезапуска)"
 
 msgid "New Document"
 msgstr "Новый документ"
@@ -1794,9 +1758,6 @@ msgstr "Рабочая область: %s"
 msgid "Select Folder as Workspace"
 msgstr "Выбрать папку как рабочую область"
 
-msgid "Folder as Workspace (save the file first)"
-msgstr "Папка как рабочая область (сначала сохраните файл)"
-
 msgid "Save Session"
 msgstr "Сохранить сессию"
 
@@ -1809,29 +1770,14 @@ msgstr "Сессия загружена - %d файл(ов)"
 msgid "Tabs sorted"
 msgstr "Вкладки отсортированы"
 
-msgid "%s (Windows only)"
-msgstr "%s (только Windows)"
-
 msgid "Encoding: %s (save to apply)"
 msgstr "Кодировка: %s (сохраните, чтобы применить)"
 
 msgid "Save As"
 msgstr "Сохранить как"
 
-msgid "Binary Clipboard (Windows only)"
-msgstr "Двоичный буфер обмена (только Windows)"
-
 msgid "Paste Binary Content (clipboard has no matching content)"
 msgstr "Вставить двоичное содержимое (в буфере обмена нет подходящего содержимого)"
-
-msgid "Paste Binary Content (Windows only)"
-msgstr "Вставить двоичное содержимое (только Windows)"
-
-msgid "Paste %s (Windows only)"
-msgstr "Вставить %s (только Windows)"
-
-msgid "Open Containing Folder (save the file first)"
-msgstr "Открыть содержащую папку (сначала сохраните файл)"
 
 msgid "Open in Default Viewer (save the file first)"
 msgstr "Открыть в программе просмотра по умолчанию (сначала сохраните файл)"
@@ -1863,9 +1809,6 @@ msgstr "Атрибут файла: только для чтения"
 msgid "File attribute: Read/Write"
 msgstr "Атрибут файла: чтение/запись"
 
-msgid "Read-Only Attribute (Windows only)"
-msgstr "Атрибут «только для чтения» (только Windows)"
-
 msgid "Read/Write for All Documents"
 msgstr "Чтение/запись для всех документов"
 
@@ -1892,9 +1835,6 @@ msgstr "Поверх всех окон: ВКЛ"
 
 msgid "Always on Top: OFF"
 msgstr "Поверх всех окон: ВЫКЛ"
-
-msgid "Always on Top (Windows only)"
-msgstr "Поверх всех окон (только Windows)"
 
 msgid "File: %s\n\nCharacters: %ld\nWords: %ld\nLines: %d"
 msgstr "Файл: %s\n\nСимволы: %ld\nСлова: %ld\nСтроки: %d"
@@ -2010,9 +1950,6 @@ msgstr "Напечатано: %s"
 msgid "Change History (needs a newer Scintilla than this wx build carries)"
 msgstr "История изменений (требуется более новая Scintilla, чем в этой сборке wx)"
 
-msgid "User-Defined Language dialog"
-msgstr "Диалог языка, определённого пользователем"
-
 msgid "Marked %d - style 1"
 msgstr "Отмечено %d - стиль 1"
 
@@ -2085,257 +2022,14 @@ msgstr "Насыщенность шрифта (0 = наследуется):"
 msgid "Underline"
 msgstr "Подчёркнутый"
 
-msgid "Nesting: also colour these inside this style"
-msgstr "Вложенность: также раскрашивать эти категории внутри этого стиля"
-
 msgid "OK"
 msgstr "ОК"
-
-msgid "Existing:"
-msgstr "Существующий:"
 
 msgid "Name:"
 msgstr "Имя:"
 
-msgid "Ext:"
-msgstr "Расш.:"
-
-msgid "Folder && Default"
-msgstr "Свёртывание и по умолчанию"
-
-msgid "Comment && Number"
-msgstr "Комментарий и число"
-
-msgid "Operator && Delimiter"
-msgstr "Оператор и разделитель"
-
 msgid "Keywords"
 msgstr "Ключевые слова"
-
-msgid "Ignore case"
-msgstr "Игнорировать регистр"
-
-msgid "Allow folding of comments"
-msgstr "Разрешить свёртывание комментариев"
-
-msgid "Fold compact"
-msgstr "Компактное свёртывание"
-
-msgid "Style Default..."
-msgstr "Стиль по умолчанию..."
-
-msgid "Folder in code1:"
-msgstr "Свёртывание в коде1:"
-
-msgid "Folder in code2:"
-msgstr "Свёртывание в коде2:"
-
-msgid "Folder in comment:"
-msgstr "Свёртывание в комментарии:"
-
-msgid "Open:"
-msgstr "Открыть:"
-
-msgid "Middle:"
-msgstr "Средний:"
-
-msgid "Close:"
-msgstr "Закрыть:"
-
-msgid "Style..."
-msgstr "Стиль..."
-
-msgid "Line comment open:"
-msgstr "Начало строчного комментария:"
-
-msgid "Block comment open:"
-msgstr "Начало блочного комментария:"
-
-msgid "Block comment close:"
-msgstr "Конец блочного комментария:"
-
-msgid "Style Line Comment..."
-msgstr "Стиль строчного комментария..."
-
-msgid "Style Comment..."
-msgstr "Стиль комментария..."
-
-msgid "Prefix 1:"
-msgstr "Префикс 1:"
-
-msgid "Prefix 2:"
-msgstr "Префикс 2:"
-
-msgid "Extras 1:"
-msgstr "Доп. символы 1:"
-
-msgid "Extras 2:"
-msgstr "Доп. символы 2:"
-
-msgid "Suffix 1:"
-msgstr "Суффикс 1:"
-
-msgid "Suffix 2:"
-msgstr "Суффикс 2:"
-
-msgid "Range:"
-msgstr "Диапазон:"
-
-msgid "Style Number..."
-msgstr "Стиль чисел..."
-
-msgid ". (dot)"
-msgstr ". (точка)"
-
-msgid ", (comma)"
-msgstr ", (запятая)"
-
-msgid "both"
-msgstr "оба"
-
-msgid "Decimal separator"
-msgstr "Десятичный разделитель"
-
-msgid "Off"
-msgstr "Выкл."
-
-msgid "Force lowercase before matching"
-msgstr "Приводить к нижнему регистру перед сравнением"
-
-msgid "Force lowercase in keyword lists too"
-msgstr "Приводить к нижнему регистру также в списках ключевых слов"
-
-msgid "Force pure LC"
-msgstr "Принудительный нижний регистр"
-
-msgid "Operators 1:"
-msgstr "Операторы 1:"
-
-msgid "Operators 2:"
-msgstr "Операторы 2:"
-
-msgid "Style Operators..."
-msgstr "Стиль операторов..."
-
-msgid "Delimiters (8 sets)"
-msgstr "Разделители (8 наборов)"
-
-msgid "Set"
-msgstr "Набор"
-
-msgid "Escape"
-msgstr "Экранирование"
-
-msgid "Keywords %d:"
-msgstr "Ключевые слова %d:"
-
-msgid "Prefix mode"
-msgstr "Режим префикса"
-
-msgid "Please give the language a name."
-msgstr "Укажите имя языка."
-
-msgid "Remove user-defined language \"%s\"?"
-msgstr "Удалить пользовательский язык \"%s\"?"
-
-msgid "User-Defined Language \"%s\" saved"
-msgstr "Пользовательский язык \"%s\" сохранён"
-
-msgid "Keyword1"
-msgstr "Ключевое слово 1"
-
-msgid "Delimiter1"
-msgstr "Разделитель 1"
-
-msgid "Keyword2"
-msgstr "Ключевое слово 2"
-
-msgid "Delimiter2"
-msgstr "Разделитель 2"
-
-msgid "Keyword3"
-msgstr "Ключевое слово 3"
-
-msgid "Delimiter3"
-msgstr "Разделитель 3"
-
-msgid "Keyword4"
-msgstr "Ключевое слово 4"
-
-msgid "Delimiter4"
-msgstr "Разделитель 4"
-
-msgid "Keyword5"
-msgstr "Ключевое слово 5"
-
-msgid "Delimiter5"
-msgstr "Разделитель 5"
-
-msgid "Keyword6"
-msgstr "Ключевое слово 6"
-
-msgid "Delimiter6"
-msgstr "Разделитель 6"
-
-msgid "Keyword7"
-msgstr "Ключевое слово 7"
-
-msgid "Delimiter7"
-msgstr "Разделитель 7"
-
-msgid "Keyword8"
-msgstr "Ключевое слово 8"
-
-msgid "Delimiter8"
-msgstr "Разделитель 8"
-
-msgid "Operator1"
-msgstr "Оператор 1"
-
-msgid "Operator2"
-msgstr "Оператор 2"
-
-msgid "Comment"
-msgstr "Комментарий"
-
-msgid "Line comment"
-msgstr "Строчный комментарий"
-
-msgid "Number"
-msgstr "Число"
-
-msgid "Style: Default"
-msgstr "Стиль: По умолчанию"
-
-msgid "Style: Folder in code1"
-msgstr "Стиль: Свёртывание в коде1"
-
-msgid "Style: Folder in code2"
-msgstr "Стиль: Свёртывание в коде2"
-
-msgid "Style: Folder in comment"
-msgstr "Стиль: Свёртывание в комментарии"
-
-msgid "Style: Line Comment"
-msgstr "Стиль: Строчный комментарий"
-
-msgid "Style: Comment"
-msgstr "Стиль: Комментарий"
-
-msgid "Style: Number"
-msgstr "Стиль: Число"
-
-msgid "Style: Operators"
-msgstr "Стиль: Операторы"
-
-msgid "Style: Delimiter %d"
-msgstr "Стиль: Разделитель %d"
-
-msgid "Style: Keywords %d"
-msgstr "Стиль: Ключевые слова %d"
-
-msgid "Operators"
-msgstr "Операторы"
 
 msgid "Theme:"
 msgstr "Тема:"
@@ -2433,9 +2127,6 @@ msgstr "использовать уже открытое окно"
 msgid "Recovered"
 msgstr "Восстановлено"
 
-msgid "NewLanguage"
-msgstr "НовыйЯзык"
-
 msgid "file-or-folder"
 msgstr "файл-или-папка"
 
@@ -2460,17 +2151,17 @@ msgstr "Выберите программу для запуска"
 msgid "Programs (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|All files (*.*)|*.*"
 msgstr "Программы (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|Все файлы (*.*)|*.*"
 
-msgid "Workspace (*.xml)|*.xml"
-msgstr "Рабочая область (*.xml)|*.xml"
+msgid "Workspace (*.yaml)|*.yaml"
+msgstr "Рабочая область (*.yaml)|*.yaml"
 
-msgid "Session files (*.xml)|*.xml|All files (*.*)|*.*"
-msgstr "Файлы сеанса (*.xml)|*.xml|Все файлы (*.*)|*.*"
+msgid "Session files (*.yaml)|*.yaml|All files (*.*)|*.*"
+msgstr "Файлы сеанса (*.yaml)|*.yaml|Все файлы (*.*)|*.*"
 
 msgid "All files (*.*)|*.*"
 msgstr "Все файлы (*.*)|*.*"
 
-msgid "Theme files (*.xml)|*.xml"
-msgstr "Файлы тем (*.xml)|*.xml"
+msgid "wxNote themes (*.yaml)|*.yaml"
+msgstr "Темы wxNote (*.yaml)|*.yaml"
 
 msgid "Style Configurator"
 msgstr "Настройка стилей"
@@ -2610,8 +2301,8 @@ msgstr "Исходный файл C++"
 msgid "CSS file"
 msgstr "Файл CSS"
 
-msgid "Could not create a writable contextMenu.xml to edit."
-msgstr "Не удалось создать доступный для записи файл contextMenu.xml для редактирования."
+msgid "Could not create a writable contextmenu.yaml to edit."
+msgstr "Не удалось создать доступный для записи файл contextmenu.yaml для редактирования."
 
 msgid "Go source file"
 msgstr "Исходный файл Go"
@@ -3066,12 +2757,6 @@ msgstr "Выберите язык для загрузки:"
 msgid "Download dictionary"
 msgstr "Загрузка словаря"
 
-msgid "This dictionary is provided under the following license:\n\n"
-msgstr "Этот словарь распространяется по следующей лицензии:\n\n"
-
-msgid "\n\nDownload and install it?"
-msgstr "\n\nЗагрузить и установить?"
-
 msgid "Download failed. Check your internet connection and try again."
 msgstr "Не удалось загрузить. Проверьте подключение к Интернету и повторите попытку."
 
@@ -3147,8 +2832,8 @@ msgstr "Сохранённые макросы обновлены"
 msgid "No saved macros yet. Record one, then use Save Current Recorded Macro."
 msgstr "Сохранённых макросов пока нет. Запишите макрос, затем выберите \"Сохранить текущий записанный макрос\"."
 
-msgid "Saved macros are read-only: macros.dat was written by a newer version of wxNote."
-msgstr "Сохранённые макросы доступны только для чтения: файл macros.dat записан более новой версией wxNote."
+msgid "Saved macros are read-only: macros.yaml cannot be read, or was written by a newer version of wxNote."
+msgstr "Сохранённые макросы доступны только для чтения: файл macros.yaml не читается или записан более новой версией wxNote."
 
 msgid "Order here is the order in the Macro menu. Shortcuts follow a macro when it moves."
 msgstr "Порядок здесь — это порядок в меню «Макрос». Сочетания клавиш следуют за макросом при перемещении."
@@ -3158,9 +2843,6 @@ msgstr "(большой файл — поиск символов отключё�
 
 msgid "Large-file mode above (MiB, 0 = never):"
 msgstr "Режим большого файла свыше (МиБ, 0 = никогда):"
-
-msgid "or any line longer than (chars):"
-msgstr "или любая строка длиннее (символов):"
 
 msgid "%s  (%d steps)"
 msgstr "%s  (шагов: %d)"
@@ -3265,8 +2947,8 @@ msgstr "Введите имя фрагмента"
 msgid "any language"
 msgstr "любой язык"
 
-msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.txt in the user data folder."
-msgstr "Нет фрагментов для языка этого файла.\n\nДобавьте свои в snippets.txt в папке данных пользователя."
+msgid "No snippets apply to this file's language.\n\nAdd your own in snippets.yaml in the user data folder."
+msgstr "Нет фрагментов для языка этого файла.\n\nДобавьте свои в snippets.yaml в папке данных пользователя."
 
 msgid "Regular expressions use PCRE2: a pattern can span line breaks, and lookbehind, named groups and case conversion in replacements all work."
 msgstr "Регулярные выражения используют PCRE2: шаблон может охватывать переносы строк; работают ретроспективная проверка, именованные группы и смена регистра в заменах."
@@ -3340,8 +3022,8 @@ msgstr "Список сохранённых команд запуска запо
 msgid "No saved Run commands yet. Use Run... and press Save to name one."
 msgstr "Сохранённых команд запуска пока нет. Откройте «Запустить...» и нажмите «Сохранить», чтобы задать имя."
 
-msgid "runcommands.dat was written by a newer version of wxNote, so it is read-only here."
-msgstr "Файл runcommands.dat записан более новой версией wxNote, поэтому здесь он только для чтения."
+msgid "runcommands.yaml cannot be read, or was written by a newer version of wxNote, so it is read-only here."
+msgstr "Файл runcommands.yaml не читается или записан более новой версией wxNote, поэтому здесь он только для чтения."
 
 msgid "Plugins"
 msgstr "Плагины"
@@ -3424,9 +3106,6 @@ msgstr "Применить ожидающие изменения плагино�
 msgid "Plugin changes will take effect when wxNote restarts"
 msgstr "Изменения плагинов вступят в силу после перезапуска wxNote"
 
-msgid "plugins.dat was written by a newer version of wxNote, so it is read-only here."
-msgstr "Файл plugins.dat записан более новой версией wxNote, поэтому здесь он только для чтения."
-
 msgid "Delete user copy"
 msgstr "Удалить свою копию"
 
@@ -3453,3 +3132,81 @@ msgstr "Не удалось записать %s."
 
 msgid "Add wxNote to your applications menu?\n\nAn AppImage is not installed, so your desktop does not know wxNote exists - which is why it does not appear under \"Open With\", and cannot be chosen as the default editor for a file type. This adds a launcher in your home folder, and changes nothing outside it.\n\nYou can undo this later in Preferences."
 msgstr "Добавить wxNote в меню приложений?\n\nAppImage не устанавливается, поэтому рабочий стол не знает о существовании wxNote - именно поэтому программа не появляется в «Открыть с помощью» и её нельзя выбрать редактором по умолчанию для типа файлов. Будет добавлен ярлык в вашем домашнем каталоге; за его пределами ничего не изменится.\n\nОтменить это можно позже в настройках."
+
+msgid "Default ext.:"
+msgstr "Расширения по умолчанию:"
+
+msgid "User ext.:"
+msgstr "Свои расширения:"
+
+msgid "File extensions"
+msgstr "Расширения файлов"
+
+msgid "Files with these extensions open as %s. Separate them with spaces."
+msgstr "Файлы с этими расширениями открываются как %s. Разделяйте расширения пробелами."
+
+msgid "This theme adds: %s"
+msgstr "Эта тема добавляет: %s"
+
+msgid ".%s now opens as %s instead of %s"
+msgstr ".%s теперь открывается как %s, а не как %s"
+
+msgid "File extensions saved"
+msgstr "Расширения файлов сохранены"
+
+msgid "settings.yaml has an error (%s) - using the defaults until it is fixed"
+msgstr "В settings.yaml ошибка (%s) - до её исправления используются значения по умолчанию"
+
+msgid "Not saved: settings.yaml has an error (%s)"
+msgstr "Не сохранено: в settings.yaml ошибка (%s)"
+
+msgid "keybindings.yaml has an error (%s) - using the default keys until it is fixed"
+msgstr "В keybindings.yaml ошибка (%s) - до её исправления используются сочетания клавиш по умолчанию"
+
+msgid "%s has an error (%s) and is not used until it is fixed"
+msgstr "В %s ошибка (%s) - файл не используется до её исправления"
+
+msgid "Could not read the workspace file."
+msgstr "Не удалось прочитать файл рабочей области."
+
+msgid "These files are not wxNote themes and were not imported:"
+msgstr "Эти файлы не являются темами wxNote и не были импортированы:"
+
+msgid "Edit Language Definitions"
+msgstr "Правка определений языков"
+
+msgid "Could not create a writable languages.yaml to edit."
+msgstr "Не удалось создать доступный для записи файл languages.yaml для редактирования."
+
+msgid "languages.yaml: %s - the rest of the file is used"
+msgstr "languages.yaml: %s - остальная часть файла используется"
+
+msgid "languages.yaml: %s, and %d more like it - the rest of the file is used"
+msgstr "languages.yaml: %s и ещё %d - остальная часть файла используется"
+
+msgid "Keyword list:"
+msgstr "Список ключевых слов:"
+
+msgid "Default keywords:"
+msgstr "Ключевые слова по умолчанию:"
+
+msgid "User-defined keywords:"
+msgstr "Свои ключевые слова:"
+
+msgid "languages.yaml replaces this whole list - change it there (Settings > Edit Language Definitions)."
+msgstr "languages.yaml заменяет весь этот список - меняйте его там (Опции > Правка определений языков)."
+
+msgid "Saved in languages.yaml, which also takes these away: %s"
+msgstr "Сохраняется в languages.yaml, где также убраны: %s"
+
+msgid "The words you add are saved in languages.yaml. Separate them with spaces."
+msgstr "Добавленные слова сохраняются в languages.yaml. Разделяйте их пробелами."
+
+msgid "Could not read %s"
+msgstr "Не удалось прочитать %s"
+
+msgid "languages.yaml could not be changed (%s)."
+msgstr "Не удалось изменить languages.yaml (%s)."
+
+msgid "Keywords saved"
+msgstr "Ключевые слова сохранены"

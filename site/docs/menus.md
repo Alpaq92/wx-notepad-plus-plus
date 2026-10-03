@@ -233,7 +233,10 @@ so code isn't a sea of red.
 ## Extensions
 
 - **Open Plugins Folder…**
-- Commands registered by loaded plugins are appended here at runtime.
+- Commands registered by loaded plugins are appended here at runtime. The optional **npp-compat**
+  plugin adds **Import from Notepad++…** (a whole Notepad++ setup: settings, shortcuts, themes, the
+  right-click menu and what was added to `langs.xml`), **Import the Open Notepad++ File** and
+  **Import Notepad++ shortcuts.xml…**.
 
 See [Plugins](plugins.md).
 
@@ -245,8 +248,12 @@ See [Plugins](plugins.md).
 - **Style Configurator…** · **Shortcut Mapper…** — the latter remaps keyboard shortcuts and switches
   keymap schemes; see [Customizing Shortcuts](custom-shortcuts.md)
 - **Import ▸** — Import plugin(s)… · Import style theme(s)…
-- **Edit Popup ContextMenu** — opens `contextMenu.xml` for editing, so the editor's right-click menu can
-  be customised
+- **Edit Popup ContextMenu** — opens `contextmenu.yaml` for editing, so the editor's right-click menu can
+  be customised: commands, separators, submenus, labels of your own and plugin commands (see the
+  [FAQ](faq.md#can-i-customise-the-editors-right-click-menu))
+- **Edit Language Definitions** — opens `languages.yaml`, your changes to each language's file
+  extensions, comment tokens and keyword lists (see
+  [Languages](languages.md#your-own-language-definitions-languagesyaml))
 - **Localization** *(dynamic)* — the UI-language picker, the same list as
   **Preferences&nbsp;&rsaquo; General&nbsp;&rsaquo; Localization**
 

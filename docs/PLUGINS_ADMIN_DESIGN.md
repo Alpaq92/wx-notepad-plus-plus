@@ -13,14 +13,15 @@ user-visible surface.
 | Phase | State | What landed |
 | --- | --- | --- |
 | **0 — loader groundwork** | **DONE** (PR #110) | `loadNibPlugins` scans `<exe>/nib` then `<userDataDir>/nib` (bundled wins on name collision); `importPluginFiles()` targets the user dir and *reports* a failed copy; macOS import accepts `.so` (what CMake MODULE actually emits) as well as `.dylib`; **Open Plugins Folder** opens the writable dir; the loader also refuses a plugin whose declared Nib ABI *minor* exceeds the host's. |
-| **A — catalog core** | **DONE** (PR #111) | `third_party/monocypher` (4.0.3, CC0 arm) + `src/sig_verify.h` (minisign verify) + `src/plugin_catalog.h` (parse + adversarial validation) + `src/json_value.h` (the JSON reader lifted out of `keymap_store.h`) + `tests/plugin_catalog_test.cpp` (83 checks, `pure` ctest, runs on all 8 CI legs). |
+| **A — catalog core** | **DONE** (PR #111) | `third_party/monocypher` (4.0.3, CC0 arm) + `src/sig_verify.h` (minisign verify) + `src/plugin_catalog.h` (parse + adversarial validation) + the JSON reader (since replaced by `src/yaml_io.h`'s `parseJson`, over rapidyaml) + `tests/plugin_catalog_test.cpp` (83 checks, `pure` ctest, runs on all 8 CI legs). |
 | **B — browse dialog** | not built | Gated on D10 below, and carries the i18n cost noted under *Phased plan*. |
 | **C — install / uninstall** | not built | Needs Phase E's signing tooling to exist first (see the sequencing note). |
 | **D — update detection** | not built | |
 | **E — catalog repo + signing tooling** | not built | Needs the maintainer's real minisign key and decision D1. |
 
-`installed.json` (named in the original Phase 0 scope) is **not** written yet — nothing installs
-programmatically, so there is nothing to record. It belongs with Phase C, and so does the persisted
+The installed-plugins record (`installed.json` in the original Phase 0 scope; now meant for
+`state.yaml`, beside the `plugins:` disabled and pending-uninstall lists already kept there) is **not**
+written yet — nothing installs programmatically, so there is nothing to record. It belongs with Phase C, and so does the persisted
 `serial` watermark that makes the anti-rollback check (already written and tested) actually bite across
 restarts — see Trust.
 
@@ -203,9 +204,10 @@ code" notice.
   greyed rows for wrong kind/arch/ABI, install button disabled. Menu id in the Extensions range next to
   `kCmdSettingOpenPluginsDir`.
 - **Phase C — install / uninstall / restart** (~400 LOC): the download→verify→extract pipeline, scheduled
-  uninstall (a mapped `.dll`/`.so` cannot be deleted in place), `installed.json`, restart-to-apply via
+  uninstall (a mapped `.dll`/`.so` cannot be deleted in place), the installed-plugins record in
+  `state.yaml`, restart-to-apply via
   `restartWithTheme()`.
-- **Phase D — update detection** (~200 LOC): `installed.json` vs catalog version, Updates badge.
+- **Phase D — update detection** (~200 LOC): the installed-plugins record vs catalog version, Updates badge.
 - **Phase E — catalog repo + signing tooling**: the `v1/index.json` + `v1/pl.*.json` tree, JSON-schema and
   hash-reachability CI, a `minisign`-driven signing step, Pages publish.
 
@@ -229,7 +231,7 @@ UI phase; "leave it blank for now" is not an option the gate permits.
 - Signing: **`docs/SIGNING.md` is a different mechanism** — a GPG signature over `SHA256SUMS`, gated on
   repo secrets, and not yet operational. It shares no machinery with the plugin catalog's compiled-in
   Ed25519/minisign key, which has its own lifecycle. Don't expect to reuse it.
-- Crypto + catalog: `src/sig_verify.h`, `src/plugin_catalog.h`, `src/json_value.h`,
+- Crypto + catalog: `src/sig_verify.h`, `src/plugin_catalog.h`, `src/yaml_io.h`,
   `third_party/monocypher/`, `tests/plugin_catalog_test.cpp`.
 - Tracking: `docs/MISSING_FUNCTIONALITY.md` (Plugins Admin row), user docs `site/docs/plugins.md` / `site/docs/menus.md`.
 

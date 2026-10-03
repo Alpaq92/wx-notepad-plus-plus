@@ -1,0 +1,2143 @@
+# //
+# File Name:           MossyLawn.xml
+# Style Name:          MossyLawn
+# Description:         MossyLawn theme for Notepad++.
+#                      A "natural" theme for NP++
+#                      The hues are taken from photographs of mosses and grasses, with a few
+#                      hues from tree trunks, autumn leaves and flowers added for contrast.
+#                      The name is a tip of the hat to Terry Pratchett.
+# Supported languages: All the languages supported by release 6.7.4
+# Created by:          Paul Neubauer (PaulRNeubauer at gmail dot com)
+# Last Modified:       1/14/2015
+#                      Added support for CoffeeScript.\
+# 					 Improved contrast for readbility.
+# 					 2023-09-30: update Perl support.
+# Released:            4/17/2012
+# License:             Feel free to modify this theme.
+#                      This theme is available under the terms of the Creative Commons
+#                      Attribution 3.0 Unported License. You are free to to copy,
+#                      distribute and transmit the work, to adapt the work, or to make
+#                      commercial use of the work under the condition that you must
+#                      attribute the work in the manner specified by the author or
+#                      licensor (but not in any way that suggests that they endorse you
+#                      or your use of the work). See
+#                      http://creativecommons.org/licenses/by/3.0/
+#                      for a legal description of the license terms. Briefly, this
+#                      means: please note in derivatives of this theme, that they are
+#                      based on my work. Of course, if you are using this file as no
+#                      more than a framework for an entirely different color scheme, you
+#                      may, and should, omit such attribution.
+#
+# Installation:
+#     Copy this file to C:\Program Files (x86)\Notepad++\themes  OR
+#     For WindowsXP:
+#     Copy this file to C:\Documents and Settings\%%USERNAME%%\Application Data\Notepad++\themes
+#     For Windows Vista or 7:
+#     Copy this file to C:\Users\%%USERNAME%%\AppData\Roaming\Notepad++\themes
+#
+# //
+global:
+  Default Style: {fg: '#F0C478', bg: '#58683C', font: Consolas, size: 10}
+  Indent guideline style: {fg: '#003808', bg: '#58683C'}
+  Brace highlight style: {fg: '#582010', bg: '#A0D03C'}
+  Bad brace colour: {fg: '#982010', bg: '#58683C'}
+  Current line background colour: {bg: '#707838'}
+  Selected text colour: {fg: '#000004', bg: '#8C6834'}
+  Multi-selected text color: {bg: '#8C6834'}
+  Caret colour: {fg: '#FCC874'}
+  Multi-edit carets color: {fg: '#FCC874'}
+  Edge colour: {fg: '#003808'}
+  Line number margin: {fg: '#603C14', bg: '#808828'}
+  Bookmark margin: {bg: '#808828'}
+  Change History margin: {bg: '#808828'}
+  Change History modified: {fg: '#FC8000', bg: '#FC8000'}
+  Change History revert modified: {fg: '#A0C004', bg: '#A0C004'}
+  Change History revert origin: {fg: '#40A0C0', bg: '#40A0C0'}
+  Change History saved: {fg: '#00A004', bg: '#00A004'}
+  Fold: {fg: '#603C14', bg: '#808828'}
+  Fold active: {fg: '#FC0000'}
+  Fold margin: {fg: '#808828', bg: '#808828'}
+  White space symbol: {fg: '#FCC874'}
+  Smart Highlighting: {bg: '#C08830'}
+  Find Mark Style: {bg: '#681800'}
+  'Find status: Not found': {fg: '#FC0000'}
+  'Find status: Message': {fg: '#0000FC'}
+  'Find status: Search end reached': {fg: '#008004'}
+  Mark Style 1: {bg: '#FCD848'}
+  Mark Style 2: {bg: '#B0D090'}
+  Mark Style 3: {bg: '#FCDC88'}
+  Mark Style 4: {bg: '#CCE048'}
+  Mark Style 5: {bg: '#88BCE4'}
+  Incremental highlight all: {bg: '#681800'}
+  Tags match highlighting: {bg: '#909840'}
+  Tags attribute: {bg: '#D8B480'}
+  Active tab focused indicator: {fg: '#58683C'}
+  Active tab unfocused indicator: {fg: '#58683C'}
+  Active tab text: {fg: '#002000'}
+  Inactive tabs: {fg: '#182404', bg: '#BCD060'}
+  Tab color 1: {bg: '#F4F0CC'}
+  Tab color 2: {bg: '#DCF4CC'}
+  Tab color 3: {bg: '#CCDCF4'}
+  Tab color 4: {bg: '#F4DCCC'}
+  Tab color 5: {bg: '#F4CCF0'}
+  Tab color dark mode 1: {bg: '#80784C'}
+  Tab color dark mode 2: {bg: '#588048'}
+  Tab color dark mode 3: {bg: '#507098'}
+  Tab color dark mode 4: {bg: '#804848'}
+  Tab color dark mode 5: {bg: '#744880'}
+  URL hovered: {fg: '#FCFCFC'}
+  Document map: {fg: '#F0C478', bg: '#58683C'}
+  EOL custom color: {fg: '#808084'}
+  Global override: {fg: '#F0C478', bg: '#58683C', font: Consolas}
+  Non-printing characters custom color: {fg: '#FCC874'}
+lexers:
+  actionscript:
+    description: ActionScript
+    styles:
+      - {id: 11, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 20, name: FUNCTION, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 9, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 16, name: TYPE WORD, fg: '#CCC458', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: VERBATIM, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: REGEX, fg: '#B0D090', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#CCE048', bg: '#58683C', fontStyle: bold italic}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#982010', bg: '#FCD848', fontStyle: bold italic}
+      - {id: 128, name: USER KEYWORDS 1, fg: '#CCE048', bg: '#58683C'}
+      - {id: 129, name: USER KEYWORDS 2, fg: '#CCE048', bg: '#58683C'}
+      - {id: 130, name: USER KEYWORDS 3, fg: '#CCE048', bg: '#58683C'}
+      - {id: 131, name: USER KEYWORDS 4, fg: '#CCE048', bg: '#58683C'}
+      - {id: 132, name: USER KEYWORDS 5, fg: '#CCE048', bg: '#58683C'}
+      - {id: 133, name: USER KEYWORDS 6, fg: '#CCE048', bg: '#58683C'}
+      - {id: 134, name: USER KEYWORDS 7, fg: '#CCE048', bg: '#58683C'}
+      - {id: 135, name: USER KEYWORDS 8, fg: '#CCE048', bg: '#58683C'}
+      - {id: 23, name: PREPROCESSOR COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 24, name: PREPROCESSOR COMMENT DOC, fg: '#F0C478', bg: '#58683C'}
+  ada:
+    description: ADA
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 2, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 3, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: DELIMITER, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 5, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: CHARACTER EOL, fg: '#FCF088', bg: '#58683C'}
+      - {id: 7, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 8, name: STRING EOL, fg: '#FCF088', bg: '#58683C'}
+      - {id: 9, name: LABEL, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 10, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 11, name: ILLEGAL, fg: '#982010', bg: '#FCD848'}
+  asm:
+    description: Assembly
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 3, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 5, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 6, name: CPU INSTRUCTION, fg: '#CCE048', bg: '#58683C'}
+      - {id: 7, name: MATH INSTRUCTION, fg: '#CCE048', bg: '#58683C'}
+      - {id: 8, name: REGISTER, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 9, name: DIRECTIVE, fg: '#B0D090', bg: '#58683C'}
+      - {id: 10, name: DIRECTIVE OPERAND, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: COMMENT BLOCK, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 12, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: EXT INSTRUCTION, fg: '#B0D090', bg: '#58683C'}
+  asp:
+    description: asp
+    extensions: asp
+    styles:
+      - {id: 81, name: DEFAULT, fg: '#F0C478', bg: '#607454'}
+      - {id: 82, name: COMMENTLINE, fg: '#283810', bg: '#607454', fontStyle: italic}
+      - {id: 83, name: NUMBER, fg: '#FCDC88', bg: '#607454'}
+      - {id: 84, name: WORD, fg: '#CCE048', bg: '#607454'}
+      - {id: 85, name: STRING, fg: '#FCDC88', bg: '#607454'}
+      - {id: 86, name: IDENTIFIER, fg: '#F0C43C', bg: '#607454'}
+      - {id: 15, name: ASPSYMBOL, fg: '#402C04', bg: '#CCC458', fontStyle: bold}
+      - {id: 16, name: SCRIPTTYPE, fg: '#CCC458', bg: '#607454'}
+      - {id: 216, name: USER KEYWORDS 1, fg: '#CCE048', bg: '#607454'}
+      - {id: 217, name: USER KEYWORDS 2, fg: '#CCE048', bg: '#607454'}
+      - {id: 218, name: USER KEYWORDS 3, fg: '#CCE048', bg: '#607454'}
+      - {id: 219, name: USER KEYWORDS 4, fg: '#CCE048', bg: '#607454'}
+      - {id: 220, name: USER KEYWORDS 5, fg: '#CCE048', bg: '#607454'}
+      - {id: 221, name: USER KEYWORDS 6, fg: '#CCE048', bg: '#607454'}
+      - {id: 222, name: USER KEYWORDS 7, fg: '#CCE048', bg: '#607454'}
+      - {id: 223, name: USER KEYWORDS 8, fg: '#CCE048', bg: '#607454'}
+  autoit:
+    description: autoIt
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: FUNCTION, fg: '#B0D090', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 6, name: MACRO, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 7, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 8, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 9, name: VARIABLE, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 10, name: SENT, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 11, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 12, name: SPECIAL, fg: '#FCF088', bg: '#58683C'}
+      - {id: 13, name: EXPAND, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 14, name: COMOBJ, fg: '#B0D090', bg: '#58683C'}
+  bash:
+    description: bash
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: ERROR, fg: '#982010', bg: '#FCD848'}
+      - {id: 4, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 3, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 8, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 9, name: SCALAR, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 10, name: PARAM, fg: '#B0D090', bg: '#58683C'}
+      - {id: 11, name: BACKTICKS, fg: '#C0B8C4', bg: '#808828'}
+      - {id: 12, name: HERE DELIM, fg: '#FCBCA8', bg: '#7C7410'}
+      - {id: 13, name: HERE Q, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 128, name: USER KEYWORDS 1, fg: '#CCE048', bg: '#58683C'}
+      - {id: 129, name: USER KEYWORDS 2, fg: '#CCE048', bg: '#58683C'}
+      - {id: 130, name: USER KEYWORDS 3, fg: '#CCE048', bg: '#58683C'}
+      - {id: 131, name: USER KEYWORDS 4, fg: '#CCE048', bg: '#58683C'}
+      - {id: 132, name: USER SCALAR 1, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 133, name: USER SCALAR 2, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 134, name: USER SCALAR 3, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 135, name: USER SCALAR 4, fg: '#FCDC88', bg: '#58683C'}
+  batch:
+    description: Batch
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: KEYWORDS, fg: '#CCE048', bg: '#58683C'}
+      - {id: 3, name: LABEL, fg: '#B0D090', bg: '#58683C'}
+      - {id: 4, name: HIDE SYMBOL, fg: '#582010', bg: '#58683C'}
+      - {id: 5, name: COMMAND, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 6, name: VARIABLE, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 7, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 8, name: AFTER LABEL, fg: '#283810', bg: '#58683C', fontStyle: italic}
+  c:
+    description: C
+    styles:
+      - {id: 9, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 11, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 16, name: TYPE WORD, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: VERBATIM, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: REGEX, fg: '#B0D090', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#283810', bg: '#58683C', fontStyle: bold italic}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#982010', bg: '#FCD848', fontStyle: bold italic}
+      - {id: 128, name: USER KEYWORDS 1, fg: '#CCE048', bg: '#58683C'}
+      - {id: 129, name: USER KEYWORDS 2, fg: '#CCE048', bg: '#58683C'}
+      - {id: 130, name: USER KEYWORDS 3, fg: '#CCE048', bg: '#58683C'}
+      - {id: 131, name: USER KEYWORDS 4, fg: '#CCE048', bg: '#58683C'}
+      - {id: 132, name: USER KEYWORDS 5, fg: '#CCE048', bg: '#58683C'}
+      - {id: 133, name: USER KEYWORDS 6, fg: '#CCE048', bg: '#58683C'}
+      - {id: 134, name: USER KEYWORDS 7, fg: '#CCE048', bg: '#58683C'}
+      - {id: 135, name: USER KEYWORDS 8, fg: '#CCE048', bg: '#58683C'}
+      - {id: 23, name: PREPROCESSOR COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 24, name: PREPROCESSOR COMMENT DOC, fg: '#F0C478', bg: '#58683C'}
+  caml:
+    description: Caml
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 2, name: TAGNAME, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 3, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 4, name: BUILIN FUNC & TYPE, fg: '#B0D090', bg: '#58683C'}
+      - {id: 5, name: TYPE, fg: '#582010', bg: '#58683C'}
+      - {id: 6, name: LINENUM, fg: '#182404', bg: '#58683C'}
+      - {id: 7, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 8, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 9, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 11, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 12, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 13, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 14, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+  cmake:
+    description: CMakeFile
+    extensions: cmake
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: STRING D, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 3, name: STRING L, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: STRING R, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: COMMAND, fg: '#CCE048', bg: '#58683C'}
+      - {id: 6, name: PARAMETER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: VARIABLE, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 8, name: USER DEFINED, fg: '#582010', bg: '#58683C'}
+      - {id: 9, name: WHILEDEF, fg: '#CCE048', bg: '#58683C'}
+      - {id: 10, name: FOREACHDEF, fg: '#CCE048', bg: '#58683C'}
+      - {id: 11, name: IFDEF, fg: '#CCE048', bg: '#58683C'}
+      - {id: 12, name: MACRODEF, fg: '#CCE048', bg: '#58683C'}
+      - {id: 13, name: STRING VARIABLE, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 14, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+  cobol:
+    description: COBOL
+    styles:
+      - {id: 9, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 11, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: DECLARATION, fg: '#B0D090', bg: '#58683C'}
+      - {id: 16, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 8, name: KEYWORD, fg: '#582010', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#283810', bg: '#58683C', fontStyle: bold italic}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#982010', bg: '#FCD848', fontStyle: bold italic}
+  coffeescript:
+    description: CoffeeScript
+    styles:
+      - {id: 9, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 11, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 16, name: TYPE WORD, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: VERBATIM, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: REGEX, fg: '#B0D090', bg: '#58683C', fontStyle: bold}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C'}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C'}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C'}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C'}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#283810', bg: '#58683C', fontStyle: bold}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#982010', bg: '#FCD848'}
+      - {id: 19, name: PREDEFINED CONSTANT, fg: '#FCBCA8', bg: '#58683C', fontStyle: bold}
+      - {id: 22, name: COMMENT BLOCK, fg: '#283810', bg: '#58683C'}
+      - {id: 23, name: VERBOSE REGEX, fg: '#B0D090', bg: '#58683C', fontStyle: bold italic}
+      - {id: 24, name: VERBOSE REGEX COMMENT, fg: '#283810', bg: '#58683C'}
+  cpp:
+    description: C++
+    styles:
+      - {id: 9, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 11, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 16, name: TYPE WORD, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 20, name: STRINGRAW, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: VERBATIM, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: REGEX, fg: '#B0D090', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#283810', bg: '#58683C', fontStyle: bold italic}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#982010', bg: '#FCD848', fontStyle: bold italic}
+      - {id: 128, name: USER KEYWORDS 1, fg: '#CCE048', bg: '#58683C'}
+      - {id: 129, name: USER KEYWORDS 2, fg: '#CCE048', bg: '#58683C'}
+      - {id: 130, name: USER KEYWORDS 3, fg: '#CCE048', bg: '#58683C'}
+      - {id: 131, name: USER KEYWORDS 4, fg: '#CCE048', bg: '#58683C'}
+      - {id: 132, name: USER KEYWORDS 5, fg: '#CCE048', bg: '#58683C'}
+      - {id: 133, name: USER KEYWORDS 6, fg: '#CCE048', bg: '#58683C'}
+      - {id: 134, name: USER KEYWORDS 7, fg: '#CCE048', bg: '#58683C'}
+      - {id: 135, name: USER KEYWORDS 8, fg: '#CCE048', bg: '#58683C'}
+      - {id: 23, name: PREPROCESSOR COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 24, name: PREPROCESSOR COMMENT DOC, fg: '#F0C478', bg: '#58683C'}
+  cs:
+    description: 'C#'
+    styles:
+      - {id: 9, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 11, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 16, name: TYPE WORD, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: VERBATIM, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: REGEX, fg: '#B0D090', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#283810', bg: '#58683C', fontStyle: bold italic}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#982010', bg: '#FCD848', fontStyle: bold italic}
+      - {id: 128, name: USER KEYWORDS 1, fg: '#CCE048', bg: '#58683C'}
+      - {id: 129, name: USER KEYWORDS 2, fg: '#CCE048', bg: '#58683C'}
+      - {id: 130, name: USER KEYWORDS 3, fg: '#CCE048', bg: '#58683C'}
+      - {id: 131, name: USER KEYWORDS 4, fg: '#CCE048', bg: '#58683C'}
+      - {id: 132, name: USER KEYWORDS 5, fg: '#CCE048', bg: '#58683C'}
+      - {id: 133, name: USER KEYWORDS 6, fg: '#CCE048', bg: '#58683C'}
+      - {id: 134, name: USER KEYWORDS 7, fg: '#CCE048', bg: '#58683C'}
+      - {id: 135, name: USER KEYWORDS 8, fg: '#CCE048', bg: '#58683C'}
+      - {id: 23, name: PREPROCESSOR COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 24, name: PREPROCESSOR COMMENT DOC, fg: '#F0C478', bg: '#58683C'}
+  css:
+    description: CSS
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: TAG, fg: '#B0D090', bg: '#58683C'}
+      - {id: 2, name: CLASS, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 3, name: PSEUDOCLASS, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 4, name: UNKNOWN_PSEUDOCLASS, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 5, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: UNKNOWN_IDENTIFIER, fg: '#982010', bg: '#FCD848'}
+      - {id: 8, name: VALUE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 9, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 10, name: ID, fg: '#CCE048', bg: '#58683C'}
+      - {id: 11, name: IMPORTANT, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 12, name: DIRECTIVE, fg: '#B0D090', bg: '#58683C'}
+      - {id: 13, name: DOUBLESTRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: SINGLESTRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 16, name: ATTRIBUTE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: PSEUDOELEMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 20, name: LEGACY PSEUDOELEMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 22, name: MEDIA, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 23, name: VARIABLE, fg: '#F0C478', bg: '#58683C'}
+  d:
+    description: D
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 6, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 7, name: KEYWORD1, fg: '#582010', bg: '#58683C'}
+      - {id: 8, name: KEYWORD2, fg: '#582010', bg: '#58683C'}
+      - {id: 9, name: KEYWORD3, fg: '#582010', bg: '#58683C'}
+      - {id: 20, name: KEYWORD4, fg: '#582010', bg: '#58683C'}
+      - {id: 21, name: KEYWORD5, fg: '#582010', bg: '#58683C'}
+      - {id: 22, name: KEYWORD6, fg: '#582010', bg: '#58683C'}
+      - {id: 5, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 12, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 13, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 4, name: COMMENT NESTED, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 16, name: COMMENT DOC KEYWORD, fg: '#283810', bg: '#58683C', fontStyle: bold italic}
+      - {id: 17, name: COMMENT DOC KEYWORD ERROR, fg: '#982010', bg: '#FCD848', fontStyle: bold italic}
+      - {id: 18, name: STRING B, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 19, name: STRING R, fg: '#FCDC88', bg: '#58683C'}
+  diff:
+    description: DIFF
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMAND, fg: '#CCE048', bg: '#58683C'}
+      - {id: 3, name: HEADER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 4, name: POSITION, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 5, name: DELETED, fg: '#582010', bg: '#58683C', fontStyle: italic}
+      - {id: 6, name: ADDED, fg: '#B0D090', bg: '#58683C', fontStyle: bold}
+  errorlist:
+    description: ErrorList
+    styles:
+      - {id: 0, name: DEFAULT STYLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: PYTHON Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 2, name: GCC Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 3, name: MS Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 4, name: CMD Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 5, name: BORLAND Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 6, name: PERL Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 7, name: NET Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 8, name: LUA Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 9, name: CTAG Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 10, name: DIFF Changed, fg: '#FC0080', bg: '#58683C'}
+      - {id: 11, name: DIFF Addition, fg: '#14A010', bg: '#58683C'}
+      - {id: 12, name: DIFF Deletion, fg: '#CC0004', bg: '#58683C'}
+      - {id: 13, name: DIFF Message, fg: '#3898DC', bg: '#58683C'}
+      - {id: 14, name: PHP Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 15, name: ELF Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 16, name: IFC Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 17, name: IFORT Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 18, name: ABSF Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 19, name: TIDY Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 20, name: JAVA Stack Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 21, name: VALUE Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 22, name: GCC Included-From Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 23, name: Escape Sequence, fg: '#C0C0C4', bg: '#58683C'}
+      - {id: 24, name: Unknown Escape Sequence, fg: '#FCFC78', bg: '#58683C'}
+      - {id: 25, name: GCC Excerpt Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 26, name: BASH Error, fg: '#FC0000', bg: '#58683C'}
+      - {id: 40, name: ANSI COLOR BLACK, fg: '#000004', bg: '#58683C'}
+      - {id: 41, name: ANSI COLOR RED, fg: '#CC0004', bg: '#58683C'}
+      - {id: 42, name: ANSI COLOR GREEN, fg: '#00CC04', bg: '#58683C'}
+      - {id: 43, name: ANSI COLOR BROWN, fg: '#A85400', bg: '#58683C'}
+      - {id: 44, name: ANSI COLOR BLUE, fg: '#0000FC', bg: '#58683C'}
+      - {id: 45, name: ANSI COLOR MAGENTA, fg: '#CC00CC', bg: '#58683C'}
+      - {id: 46, name: ANSI COLOR CYAN, fg: '#00888C', bg: '#58683C'}
+      - {id: 47, name: ANSI COLOR GRAY, fg: '#E4E4E8', bg: '#58683C'}
+      - {id: 48, name: ANSI COLOR DARK GRAY, fg: '#808084', bg: '#58683C'}
+      - {id: 49, name: ANSI COLOR BRIGHT RED, fg: '#FC0000', bg: '#58683C'}
+      - {id: 50, name: ANSI COLOR BRIGHT GREEN, fg: '#00FC04', bg: '#58683C'}
+      - {id: 51, name: ANSI COLOR YELLOW, fg: '#CCCC04', bg: '#58683C'}
+      - {id: 52, name: ANSI COLOR BRIGHT BLUE, fg: '#3C78FC', bg: '#58683C'}
+      - {id: 53, name: ANSI COLOR BRIGHT MAGENTA, fg: '#FC00FC', bg: '#58683C'}
+      - {id: 54, name: ANSI COLOR BRIGHT CYAN, fg: '#00CCD0', bg: '#58683C'}
+      - {id: 55, name: ANSI COLOR WHITE, fg: '#FCFCFC', bg: '#58683C'}
+  escseq:
+    description: Escape Sequence (ANSI)
+    styles:
+      - {id: 0, name: DEFAULT on DEFAULT, fg: '#000004', bg: '#FCFCFC'}
+      - {id: 1, name: BLACK on DEFAULT, fg: '#000004', bg: '#FCFCFC'}
+      - {id: 2, name: RED on DEFAULT, fg: '#CC0004', bg: '#FCFCFC'}
+      - {id: 3, name: GREEN on DEFAULT, fg: '#00CC04', bg: '#FCFCFC'}
+      - {id: 4, name: YELLOW on DEFAULT, fg: '#A85400', bg: '#FCFCFC'}
+      - {id: 5, name: BLUE on DEFAULT, fg: '#0000FC', bg: '#FCFCFC'}
+      - {id: 6, name: MAGENTA on DEFAULT, fg: '#CC00CC', bg: '#FCFCFC'}
+      - {id: 7, name: CYAN on DEFAULT, fg: '#00888C', bg: '#FCFCFC'}
+      - {id: 8, name: WHITE on DEFAULT, fg: '#E4E4E8', bg: '#FCFCFC'}
+      - {id: 9, name: DEFAULT on BLACK, fg: '#000004', bg: '#000004'}
+      - {id: 10, name: BLACK on BLACK, fg: '#000004', bg: '#000004'}
+      - {id: 11, name: RED on BLACK, fg: '#CC0004', bg: '#000004'}
+      - {id: 12, name: GREEN on BLACK, fg: '#00CC04', bg: '#000004'}
+      - {id: 13, name: YELLOW on BLACK, fg: '#A85400', bg: '#000004'}
+      - {id: 14, name: BLUE on BLACK, fg: '#0000FC', bg: '#000004'}
+      - {id: 15, name: MAGENTA on BLACK, fg: '#CC00CC', bg: '#000004'}
+      - {id: 16, name: CYAN on BLACK, fg: '#00888C', bg: '#000004'}
+      - {id: 17, name: WHITE on BLACK, fg: '#E4E4E8', bg: '#000004'}
+      - {id: 18, name: DEFAULT on RED, fg: '#000004', bg: '#CC0004'}
+      - {id: 19, name: BLACK on RED, fg: '#000004', bg: '#CC0004'}
+      - {id: 20, name: RED on RED, fg: '#CC0004', bg: '#CC0004'}
+      - {id: 21, name: GREEN on RED, fg: '#00CC04', bg: '#CC0004'}
+      - {id: 22, name: YELLOW on RED, fg: '#A85400', bg: '#CC0004'}
+      - {id: 23, name: BLUE on RED, fg: '#0000FC', bg: '#CC0004'}
+      - {id: 24, name: MAGENTA on RED, fg: '#CC00CC', bg: '#CC0004'}
+      - {id: 25, name: CYAN on RED, fg: '#00888C', bg: '#CC0004'}
+      - {id: 26, name: WHITE on RED, fg: '#E4E4E8', bg: '#CC0004'}
+      - {id: 27, name: DEFAULT on GREEN, fg: '#000004', bg: '#00CC04'}
+      - {id: 28, name: BLACK on GREEN, fg: '#000004', bg: '#00CC04'}
+      - {id: 29, name: RED on GREEN, fg: '#CC0004', bg: '#00CC04'}
+      - {id: 30, name: GREEN on GREEN, fg: '#00CC04', bg: '#00CC04'}
+      - {id: 40, name: YELLOW on GREEN, fg: '#A85400', bg: '#00CC04'}
+      - {id: 41, name: BLUE on GREEN, fg: '#0000FC', bg: '#00CC04'}
+      - {id: 42, name: MAGENTA on GREEN, fg: '#CC00CC', bg: '#00CC04'}
+      - {id: 43, name: CYAN on GREEN, fg: '#00888C', bg: '#00CC04'}
+      - {id: 44, name: WHITE on GREEN, fg: '#E4E4E8', bg: '#00CC04'}
+      - {id: 45, name: DEFAULT on YELLOW, fg: '#000004', bg: '#A85400'}
+      - {id: 46, name: BLACK on YELLOW, fg: '#000004', bg: '#A85400'}
+      - {id: 47, name: RED on YELLOW, fg: '#CC0004', bg: '#A85400'}
+      - {id: 48, name: GREEN on YELLOW, fg: '#00CC04', bg: '#A85400'}
+      - {id: 49, name: YELLOW on YELLOW, fg: '#A85400', bg: '#A85400'}
+      - {id: 50, name: BLUE on YELLOW, fg: '#0000FC', bg: '#A85400'}
+      - {id: 51, name: MAGENTA on YELLOW, fg: '#CC00CC', bg: '#A85400'}
+      - {id: 52, name: CYAN on YELLOW, fg: '#00888C', bg: '#A85400'}
+      - {id: 53, name: WHITE on YELLOW, fg: '#E4E4E8', bg: '#A85400'}
+      - {id: 54, name: DEFAULT on BLUE, fg: '#000004', bg: '#0000FC'}
+      - {id: 55, name: BLACK on BLUE, fg: '#000004', bg: '#0000FC'}
+      - {id: 56, name: RED on BLUE, fg: '#CC0004', bg: '#0000FC'}
+      - {id: 57, name: GREEN on BLUE, fg: '#00CC04', bg: '#0000FC'}
+      - {id: 58, name: YELLOW on BLUE, fg: '#A85400', bg: '#0000FC'}
+      - {id: 59, name: BLUE on BLUE, fg: '#0000FC', bg: '#0000FC'}
+      - {id: 60, name: MAGENTA on BLUE, fg: '#CC00CC', bg: '#0000FC'}
+      - {id: 61, name: CYAN on BLUE, fg: '#00888C', bg: '#0000FC'}
+      - {id: 62, name: WHITE on BLUE, fg: '#E4E4E8', bg: '#0000FC'}
+      - {id: 63, name: DEFAULT on MAGENTA, fg: '#000004', bg: '#CC00CC'}
+      - {id: 64, name: BLACK on MAGENTA, fg: '#000004', bg: '#CC00CC'}
+      - {id: 65, name: RED on MAGENTA, fg: '#CC0004', bg: '#CC00CC'}
+      - {id: 66, name: GREEN on MAGENTA, fg: '#00CC04', bg: '#CC00CC'}
+      - {id: 67, name: YELLOW on MAGENTA, fg: '#A85400', bg: '#CC00CC'}
+      - {id: 68, name: BLUE on MAGENTA, fg: '#0000FC', bg: '#CC00CC'}
+      - {id: 69, name: MAGENTA on MAGENTA, fg: '#CC00CC', bg: '#CC00CC'}
+      - {id: 70, name: CYAN on MAGENTA, fg: '#00888C', bg: '#CC00CC'}
+      - {id: 71, name: WHITE on MAGENTA, fg: '#E4E4E8', bg: '#CC00CC'}
+      - {id: 72, name: DEFAULT on CYAN, fg: '#000004', bg: '#00888C'}
+      - {id: 73, name: BLACK on CYAN, fg: '#000004', bg: '#00888C'}
+      - {id: 74, name: RED on CYAN, fg: '#CC0004', bg: '#00888C'}
+      - {id: 75, name: GREEN on CYAN, fg: '#00CC04', bg: '#00888C'}
+      - {id: 76, name: YELLOW on CYAN, fg: '#A85400', bg: '#00888C'}
+      - {id: 77, name: BLUE on CYAN, fg: '#0000FC', bg: '#00888C'}
+      - {id: 78, name: MAGENTA on CYAN, fg: '#CC00CC', bg: '#00888C'}
+      - {id: 79, name: CYAN on CYAN, fg: '#00888C', bg: '#00888C'}
+      - {id: 80, name: WHITE on CYAN, fg: '#E4E4E8', bg: '#00888C'}
+      - {id: 81, name: DEFAULT on WHITE, fg: '#000004', bg: '#FCFCFC'}
+      - {id: 82, name: BLACK on WHITE, fg: '#000004', bg: '#FCFCFC'}
+      - {id: 83, name: RED on WHITE, fg: '#CC0004', bg: '#FCFCFC'}
+      - {id: 84, name: GREEN on WHITE, fg: '#00CC04', bg: '#FCFCFC'}
+      - {id: 85, name: YELLOW on WHITE, fg: '#A85400', bg: '#FCFCFC'}
+      - {id: 86, name: BLUE on WHITE, fg: '#0000FC', bg: '#FCFCFC'}
+      - {id: 87, name: MAGENTA on WHITE, fg: '#CC00CC', bg: '#FCFCFC'}
+      - {id: 88, name: CYAN on WHITE, fg: '#00888C', bg: '#FCFCFC'}
+      - {id: 89, name: WHITE on WHITE, fg: '#E4E4E8', bg: '#FCFCFC'}
+      - {id: 90, name: BOLD DEFAULT on DEFAULT, fg: '#000004', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 91, name: BOLD BLACK on DEFAULT, fg: '#000004', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 92, name: BOLD RED on DEFAULT, fg: '#CC0004', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 93, name: BOLD GREEN on DEFAULT, fg: '#00CC04', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 94, name: BOLD YELLOW on DEFAULT, fg: '#A85400', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 95, name: BOLD BLUE on DEFAULT, fg: '#0000FC', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 96, name: BOLD MAGENTA on DEFAULT, fg: '#CC00CC', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 97, name: BOLD CYAN on DEFAULT, fg: '#00888C', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 98, name: BOLD WHITE on DEFAULT, fg: '#E4E4E8', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 99, name: BOLD DEFAULT on BLACK, fg: '#000004', bg: '#000004', fontStyle: bold}
+      - {id: 100, name: BOLD BLACK on BLACK, fg: '#000004', bg: '#000004', fontStyle: bold}
+      - {id: 101, name: BOLD RED on BLACK, fg: '#CC0004', bg: '#000004', fontStyle: bold}
+      - {id: 102, name: BOLD GREEN on BLACK, fg: '#00CC04', bg: '#000004', fontStyle: bold}
+      - {id: 103, name: BOLD YELLOW on BLACK, fg: '#A85400', bg: '#000004', fontStyle: bold}
+      - {id: 104, name: BOLD BLUE on BLACK, fg: '#0000FC', bg: '#000004', fontStyle: bold}
+      - {id: 105, name: BOLD MAGENTA on BLACK, fg: '#CC00CC', bg: '#000004', fontStyle: bold}
+      - {id: 106, name: BOLD CYAN on BLACK, fg: '#00888C', bg: '#000004', fontStyle: bold}
+      - {id: 107, name: BOLD WHITE on BLACK, fg: '#E4E4E8', bg: '#000004', fontStyle: bold}
+      - {id: 108, name: BOLD DEFAULT on RED, fg: '#000004', bg: '#CC0004', fontStyle: bold}
+      - {id: 109, name: BOLD BLACK on RED, fg: '#000004', bg: '#CC0004', fontStyle: bold}
+      - {id: 110, name: BOLD RED on RED, fg: '#CC0004', bg: '#CC0004', fontStyle: bold}
+      - {id: 111, name: BOLD GREEN on RED, fg: '#00CC04', bg: '#CC0004', fontStyle: bold}
+      - {id: 112, name: BOLD YELLOW on RED, fg: '#A85400', bg: '#CC0004', fontStyle: bold}
+      - {id: 113, name: BOLD BLUE on RED, fg: '#0000FC', bg: '#CC0004', fontStyle: bold}
+      - {id: 114, name: BOLD MAGENTA on RED, fg: '#CC00CC', bg: '#CC0004', fontStyle: bold}
+      - {id: 115, name: BOLD CYAN on RED, fg: '#00888C', bg: '#CC0004', fontStyle: bold}
+      - {id: 116, name: BOLD WHITE on RED, fg: '#E4E4E8', bg: '#CC0004', fontStyle: bold}
+      - {id: 117, name: BOLD DEFAULT on GREEN, fg: '#000004', bg: '#00CC04', fontStyle: bold}
+      - {id: 118, name: BOLD BLACK on GREEN, fg: '#000004', bg: '#00CC04', fontStyle: bold}
+      - {id: 119, name: BOLD RED on GREEN, fg: '#CC0004', bg: '#00CC04', fontStyle: bold}
+      - {id: 120, name: BOLD GREEN on GREEN, fg: '#00CC04', bg: '#00CC04', fontStyle: bold}
+      - {id: 121, name: BOLD YELLOW on GREEN, fg: '#A85400', bg: '#00CC04', fontStyle: bold}
+      - {id: 122, name: BOLD BLUE on GREEN, fg: '#0000FC', bg: '#00CC04', fontStyle: bold}
+      - {id: 123, name: BOLD MAGENTA on GREEN, fg: '#CC00CC', bg: '#00CC04', fontStyle: bold}
+      - {id: 124, name: BOLD CYAN on GREEN, fg: '#00888C', bg: '#00CC04', fontStyle: bold}
+      - {id: 125, name: BOLD WHITE on GREEN, fg: '#E4E4E8', bg: '#00CC04', fontStyle: bold}
+      - {id: 126, name: BOLD DEFAULT on YELLOW, fg: '#000004', bg: '#A85400', fontStyle: bold}
+      - {id: 127, name: BOLD BLACK on YELLOW, fg: '#000004', bg: '#A85400', fontStyle: bold}
+      - {id: 128, name: BOLD RED on YELLOW, fg: '#CC0004', bg: '#A85400', fontStyle: bold}
+      - {id: 129, name: BOLD GREEN on YELLOW, fg: '#00CC04', bg: '#A85400', fontStyle: bold}
+      - {id: 130, name: BOLD YELLOW on YELLOW, fg: '#A85400', bg: '#A85400', fontStyle: bold}
+      - {id: 131, name: BOLD BLUE on YELLOW, fg: '#0000FC', bg: '#A85400', fontStyle: bold}
+      - {id: 132, name: BOLD MAGENTA on YELLOW, fg: '#CC00CC', bg: '#A85400', fontStyle: bold}
+      - {id: 133, name: BOLD CYAN on YELLOW, fg: '#00888C', bg: '#A85400', fontStyle: bold}
+      - {id: 134, name: BOLD WHITE on YELLOW, fg: '#E4E4E8', bg: '#A85400', fontStyle: bold}
+      - {id: 135, name: BOLD DEFAULT on BLUE, fg: '#000004', bg: '#0000FC', fontStyle: bold}
+      - {id: 136, name: BOLD BLACK on BLUE, fg: '#000004', bg: '#0000FC', fontStyle: bold}
+      - {id: 137, name: BOLD RED on BLUE, fg: '#CC0004', bg: '#0000FC', fontStyle: bold}
+      - {id: 138, name: BOLD GREEN on BLUE, fg: '#00CC04', bg: '#0000FC', fontStyle: bold}
+      - {id: 139, name: BOLD YELLOW on BLUE, fg: '#A85400', bg: '#0000FC', fontStyle: bold}
+      - {id: 140, name: BOLD BLUE on BLUE, fg: '#0000FC', bg: '#0000FC', fontStyle: bold}
+      - {id: 141, name: BOLD MAGENTA on BLUE, fg: '#CC00CC', bg: '#0000FC', fontStyle: bold}
+      - {id: 142, name: BOLD CYAN on BLUE, fg: '#00888C', bg: '#0000FC', fontStyle: bold}
+      - {id: 143, name: BOLD WHITE on BLUE, fg: '#E4E4E8', bg: '#0000FC', fontStyle: bold}
+      - {id: 144, name: BOLD DEFAULT on MAGENTA, fg: '#000004', bg: '#CC00CC', fontStyle: bold}
+      - {id: 145, name: BOLD BLACK on MAGENTA, fg: '#000004', bg: '#CC00CC', fontStyle: bold}
+      - {id: 146, name: BOLD RED on MAGENTA, fg: '#CC0004', bg: '#CC00CC', fontStyle: bold}
+      - {id: 147, name: BOLD GREEN on MAGENTA, fg: '#00CC04', bg: '#CC00CC', fontStyle: bold}
+      - {id: 148, name: BOLD YELLOW on MAGENTA, fg: '#A85400', bg: '#CC00CC', fontStyle: bold}
+      - {id: 149, name: BOLD BLUE on MAGENTA, fg: '#0000FC', bg: '#CC00CC', fontStyle: bold}
+      - {id: 150, name: BOLD MAGENTA on MAGENTA, fg: '#CC00CC', bg: '#CC00CC', fontStyle: bold}
+      - {id: 151, name: BOLD CYAN on MAGENTA, fg: '#00888C', bg: '#CC00CC', fontStyle: bold}
+      - {id: 152, name: BOLD WHITE on MAGENTA, fg: '#E4E4E8', bg: '#CC00CC', fontStyle: bold}
+      - {id: 153, name: BOLD DEFAULT on CYAN, fg: '#000004', bg: '#00888C', fontStyle: bold}
+      - {id: 154, name: BOLD BLACK on CYAN, fg: '#000004', bg: '#00888C', fontStyle: bold}
+      - {id: 155, name: BOLD RED on CYAN, fg: '#CC0004', bg: '#00888C', fontStyle: bold}
+      - {id: 156, name: BOLD GREEN on CYAN, fg: '#00CC04', bg: '#00888C', fontStyle: bold}
+      - {id: 157, name: BOLD YELLOW on CYAN, fg: '#A85400', bg: '#00888C', fontStyle: bold}
+      - {id: 158, name: BOLD BLUE on CYAN, fg: '#0000FC', bg: '#00888C', fontStyle: bold}
+      - {id: 159, name: BOLD MAGENTA on CYAN, fg: '#CC00CC', bg: '#00888C', fontStyle: bold}
+      - {id: 160, name: BOLD CYAN on CYAN, fg: '#00888C', bg: '#00888C', fontStyle: bold}
+      - {id: 161, name: BOLD WHITE on CYAN, fg: '#E4E4E8', bg: '#00888C', fontStyle: bold}
+      - {id: 162, name: BOLD DEFAULT on WHITE, fg: '#000004', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 163, name: BOLD BLACK on WHITE, fg: '#000004', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 164, name: BOLD RED on WHITE, fg: '#CC0004', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 165, name: BOLD GREEN on WHITE, fg: '#00CC04', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 166, name: BOLD YELLOW on WHITE, fg: '#A85400', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 167, name: BOLD BLUE on WHITE, fg: '#0000FC', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 168, name: BOLD MAGENTA on WHITE, fg: '#CC00CC', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 169, name: BOLD CYAN on WHITE, fg: '#00888C', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 170, name: BOLD WHITE on WHITE, fg: '#E4E4E8', bg: '#FCFCFC', fontStyle: bold}
+      - {id: 171, name: Sequence Identifier, fg: '#C0C0C4', bg: '#58683C'}
+      - {id: 172, name: Sequence Unknown, fg: '#FCFC78', bg: '#58683C'}
+  fortran:
+    description: Fortran
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 3, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: STRING2, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: STRINGEOL, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 6, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 8, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 9, name: FUNCTION1, fg: '#B0D090', bg: '#58683C'}
+      - {id: 10, name: FUNCTION2, fg: '#B0D090', bg: '#58683C'}
+      - {id: 11, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 12, name: OPERATOR2, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: LABEL, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 14, name: CONTINUATION, fg: '#982010', bg: '#FCD848'}
+  fortran77:
+    description: Fortran (fixed form)
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 3, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: STRING2, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: STRINGEOL, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 6, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 8, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 9, name: FUNCTION1, fg: '#B0D090', bg: '#58683C'}
+      - {id: 10, name: FUNCTION2, fg: '#B0D090', bg: '#58683C'}
+      - {id: 11, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 12, name: OPERATOR2, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: LABEL, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 14, name: CONTINUATION, fg: '#982010', bg: '#FCD848'}
+  go:
+    description: Go
+    styles:
+      - {id: 9, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 11, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 16, name: TYPE WORD, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 19, name: PREDECLARED IDENTIFIERS, fg: '#F0C4F0', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 20, name: STRING RAW, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: VERBATIM, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: REGEX, fg: '#B0D090', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#283810', bg: '#58683C', fontStyle: bold italic}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#982010', bg: '#FCD848', fontStyle: bold italic}
+      - {id: 128, name: USER KEYWORDS 1, fg: '#CCE048', bg: '#58683C'}
+      - {id: 129, name: USER KEYWORDS 2, fg: '#CCE048', bg: '#58683C'}
+      - {id: 130, name: USER KEYWORDS 3, fg: '#CCE048', bg: '#58683C'}
+      - {id: 131, name: USER KEYWORDS 4, fg: '#CCE048', bg: '#58683C'}
+      - {id: 132, name: USER KEYWORDS 5, fg: '#CCE048', bg: '#58683C'}
+      - {id: 133, name: USER KEYWORDS 6, fg: '#CCE048', bg: '#58683C'}
+      - {id: 134, name: USER KEYWORDS 7, fg: '#CCE048', bg: '#58683C'}
+      - {id: 135, name: USER KEYWORDS 8, fg: '#CCE048', bg: '#58683C'}
+      - {id: 23, name: PREPROCESSOR COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 24, name: PREPROCESSOR COMMENT DOC, fg: '#F0C478', bg: '#58683C'}
+  gui4cli:
+    description: GUI4CLI
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: GLOBAL, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 4, name: EVENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: ATTRIBUTE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: CONTROL, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: COMMAND, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 9, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+  haskell:
+    description: Haskell
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 2, name: KEYWORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 3, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: CLASS, fg: '#B0D090', bg: '#58683C'}
+      - {id: 7, name: MODULE, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 8, name: CAPITAL, fg: '#B0D090', bg: '#58683C'}
+      - {id: 9, name: DATA, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: IMPORT, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 11, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 12, name: INSTANCE, fg: '#582010', bg: '#58683C'}
+      - {id: 13, name: COMMENTLINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 14, name: COMMENTBLOCK, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: COMMENTBLOCK2, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 16, name: COMMENTBLOCK3, fg: '#283810', bg: '#58683C', fontStyle: italic}
+  html:
+    description: HTML
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 5, name: NUMBER, fg: '#982010', bg: '#FCD848', fontStyle: bold}
+      - {id: 6, name: DOUBLESTRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: SINGLESTRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 1, name: TAG, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 11, name: TAGEND, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 2, name: TAGUNKNOWN, fg: '#982010', bg: '#FCD848'}
+      - {id: 3, name: ATTRIBUTE, fg: '#182404', bg: '#58683C'}
+      - {id: 4, name: ATTRIBUTEUNKNOWN, fg: '#982010', bg: '#FCD848'}
+      - {id: 21, name: SGML DEFAULT, fg: '#FCFCF0', bg: '#746C24'}
+      - {id: 22, name: SGML COMMAND, fg: '#D4D09C', bg: '#506038', fontStyle: bold}
+      - {id: 23, name: SGML 1ST PARAM, fg: '#D4D09C', bg: '#506038'}
+      - {id: 24, name: SGML DOUBLESTRING, fg: '#FCDC88', bg: '#506038'}
+      - {id: 25, name: SGML SIMPLESTRING, fg: '#FCDC88', bg: '#506038'}
+      - {id: 31, name: SGML BLOCK DEFAULT, fg: '#000004', bg: '#485430'}
+      - {id: 17, name: CDATA, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 19, name: VALUE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: ENTITY, fg: '#582010', bg: '#58683C', fontStyle: italic}
+      - {id: 192, name: USER TAGS 1, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 193, name: USER TAGS 2, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 194, name: USER TAGS 3, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 195, name: USER TAGS 4, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 196, name: USER ATTRIBUTES 1, fg: '#182404', bg: '#58683C'}
+      - {id: 197, name: USER ATTRIBUTES 2, fg: '#182404', bg: '#58683C'}
+      - {id: 198, name: USER ATTRIBUTES 3, fg: '#182404', bg: '#58683C'}
+      - {id: 199, name: USER ATTRIBUTES 4, fg: '#182404', bg: '#58683C'}
+  ini:
+    description: ini file
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: SECTION, fg: '#B0D090', bg: '#58683C'}
+      - {id: 3, name: ASSIGNMENT, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: DEFVAL, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: KEY, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+  inno:
+    description: InnoSetup
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: KEYWORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 3, name: PARAMETER, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 4, name: SECTION, fg: '#B0D090', bg: '#58683C'}
+      - {id: 5, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 6, name: PREPROCESSOR INLINE, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 7, name: COMMENT PASCAL, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 8, name: KEYWORD PASCAL, fg: '#CCE048', bg: '#58683C'}
+      - {id: 9, name: KEYWORD USER, fg: '#CCE048', bg: '#58683C'}
+      - {id: 10, name: STRING DOUBLE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 11, name: STRING SINGLE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 12, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+  java:
+    description: Java
+    styles:
+      - {id: 11, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 16, name: TYPE WORD, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: VERBATIM, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: REGEX, fg: '#B0D090', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#B0D090', bg: '#58683C', fontStyle: bold italic}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#982010', bg: '#FCD848', fontStyle: bold italic}
+      - {id: 128, name: USER KEYWORDS 1, fg: '#CCE048', bg: '#58683C'}
+      - {id: 129, name: USER KEYWORDS 2, fg: '#CCE048', bg: '#58683C'}
+      - {id: 130, name: USER KEYWORDS 3, fg: '#CCE048', bg: '#58683C'}
+      - {id: 131, name: USER KEYWORDS 4, fg: '#CCE048', bg: '#58683C'}
+      - {id: 132, name: USER KEYWORDS 5, fg: '#CCE048', bg: '#58683C'}
+      - {id: 133, name: USER KEYWORDS 6, fg: '#CCE048', bg: '#58683C'}
+      - {id: 134, name: USER KEYWORDS 7, fg: '#CCE048', bg: '#58683C'}
+      - {id: 135, name: USER KEYWORDS 8, fg: '#CCE048', bg: '#58683C'}
+  javascript:
+    description: JavaScript (embedded)
+    styles:
+      - {id: 41, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 45, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 46, name: WORD, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 47, name: KEYWORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 20, name: STRINGRAW, fg: '#FCDC88', bg: '#6C7C50'}
+      - {id: 48, name: DOUBLESTRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 49, name: SINGLESTRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 53, name: TEMPLATE LIT. (CLIENT), fg: '#FCDC88', bg: '#58683C'}
+      - {id: 68, name: TEMPLATE LIT. (SERVER), fg: '#FCDC88', bg: '#58683C'}
+      - {id: 50, name: SYMBOLS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 51, name: STRINGEOL, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 52, name: REGEX, fg: '#B0D090', bg: '#58683C'}
+      - {id: 42, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 43, name: COMMENTLINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 44, name: COMMENTDOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#B0D090', bg: '#58683C', fontStyle: bold italic}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#982010', bg: '#FCD848', fontStyle: bold italic}
+      - {id: 200, name: USER KEYWORDS 1, fg: '#CCE048', bg: '#58683C'}
+      - {id: 201, name: USER KEYWORDS 2, fg: '#CCE048', bg: '#58683C'}
+      - {id: 202, name: USER KEYWORDS 3, fg: '#CCE048', bg: '#58683C'}
+      - {id: 203, name: USER KEYWORDS 4, fg: '#CCE048', bg: '#58683C'}
+      - {id: 204, name: USER KEYWORDS 5, fg: '#CCE048', bg: '#58683C'}
+      - {id: 205, name: USER KEYWORDS 6, fg: '#CCE048', bg: '#58683C'}
+      - {id: 206, name: USER KEYWORDS 7, fg: '#CCE048', bg: '#58683C'}
+      - {id: 207, name: USER KEYWORDS 8, fg: '#CCE048', bg: '#58683C'}
+  json:
+    description: JSON
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#C4C098', bg: '#58683C'}
+      - {id: 1, name: NUMBER, fg: '#FC8000', bg: '#58683C'}
+      - {id: 2, name: STRING, fg: '#DCDCD0', bg: '#58683C'}
+      - {id: 3, name: STRING EOL, fg: '#808084', bg: '#58683C'}
+      - {id: 4, name: PROPERTY NAME, fg: '#8CD0D4', bg: '#58683C'}
+      - {id: 5, name: ESCAPE SEQUENCE, fg: '#0000FC', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: LINE COMMENT, fg: '#008004', bg: '#58683C'}
+      - {id: 7, name: BLOCK COMMENT, fg: '#008004', bg: '#58683C'}
+      - {id: 8, name: OPERATOR, fg: '#E4D0AC', bg: '#58683C'}
+      - {id: 9, name: URI, fg: '#FCFC80', bg: '#58683C'}
+      - {id: 10, name: COMPACT IRI, fg: '#0000FC', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: KEYWORD, fg: '#18B088', bg: '#58683C', fontStyle: bold}
+      - {id: 12, name: LD KEYWORD, fg: '#FC0000', bg: '#58683C'}
+      - {id: 13, name: ERROR, fg: '#FCFC80', bg: '#FC0000'}
+  kix:
+    description: KiXtart
+    styles:
+      - {id: 31, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 3, name: STRING2, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: VAR, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 6, name: MACRO, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 7, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 8, name: FUNCTION, fg: '#582010', bg: '#58683C'}
+      - {id: 9, name: OPERATOR, fg: '#F0C478', bg: '#58683C'}
+  lisp:
+    description: LISP
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENTLINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 3, name: FUNCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 4, name: FUNCTION WORD2, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 5, name: SYMBOL, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 8, name: STRINGEOL, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 9, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: SPECIAL, fg: '#C0B8C4', bg: '#58683C'}
+      - {id: 12, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+  lua:
+    description: Lua
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 8, name: LITERALSTRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 9, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: FUNC1, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 14, name: FUNC2, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 15, name: FUNC3, fg: '#582010', bg: '#58683C'}
+      - {id: 16, name: USER KEYWORD 1, fg: '#582010', bg: '#58683C'}
+      - {id: 17, name: USER KEYWORD 2, fg: '#582010', bg: '#58683C'}
+      - {id: 18, name: USER KEYWORD 3, fg: '#582010', bg: '#58683C'}
+      - {id: 19, name: USER KEYWORD 4, fg: '#582010', bg: '#58683C'}
+      - {id: 128, name: USER KEYWORDS 5, fg: '#CCE048', bg: '#58683C'}
+      - {id: 129, name: USER KEYWORDS 6, fg: '#CCE048', bg: '#58683C'}
+      - {id: 130, name: USER KEYWORDS 7, fg: '#CCE048', bg: '#58683C'}
+      - {id: 131, name: USER KEYWORDS 8, fg: '#CCE048', bg: '#58683C'}
+      - {id: 11, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 20, name: LABEL, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+  makefile:
+    description: Makefile
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 3, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 4, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 5, name: TARGET, fg: '#B0D090', bg: '#58683C'}
+      - {id: 9, name: IDEOL, fg: '#FCBCA8', bg: '#58683C'}
+  matlab:
+    description: Matlab
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMAND, fg: '#CCE048', bg: '#58683C'}
+      - {id: 3, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 5, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 8, name: DOUBLE QUOTE STRING, fg: '#FCDC88', bg: '#58683C'}
+  nfo:
+    description: Dos Style
+    styles:
+      - {id: 32, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+  nsis:
+    description: NSIS
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENTLINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: STRING DOUBLE QUOTE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 3, name: STRING LEFT QUOTE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: STRING RIGHT QUOTE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: FUNCTION, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 6, name: VARIABLE, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 7, name: LABEL, fg: '#582010', bg: '#58683C'}
+      - {id: 8, name: USER DEFINED, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 9, name: SECTION, fg: '#B0D090', bg: '#58683C'}
+      - {id: 10, name: SUBSECTION, fg: '#B0D090', bg: '#58683C'}
+      - {id: 11, name: IF DEFINE, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 12, name: MACRO, fg: '#CCE048', bg: '#58683C'}
+      - {id: 13, name: STRING VAR, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 14, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 15, name: SECTION GROUP, fg: '#B0D090', bg: '#58683C'}
+      - {id: 16, name: PAGE EX, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 17, name: FUNCTION DEFINITIONS, fg: '#CCE048', bg: '#58683C'}
+      - {id: 18, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+  objc:
+    description: Objective-C
+    styles:
+      - {id: 19, name: DIRECTIVE, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 11, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 20, name: QUALIFIER, fg: '#B0D090', bg: '#58683C'}
+      - {id: 9, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 16, name: TYPE WORD, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: VERBATIM, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: REGEX, fg: '#B0D090', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#283810', bg: '#58683C', fontStyle: bold italic}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#982010', bg: '#FCD848', fontStyle: bold italic}
+  pascal:
+    description: Pascal
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 2, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 4, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 5, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 6, name: PREPROCESSOR2, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 7, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 8, name: HEX NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 9, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 10, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 12, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 13, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 14, name: ASM, fg: '#B0D090', bg: '#58683C'}
+      - {id: 15, name: MULTILINESTRING, fg: '#FCDC88', bg: '#58683C'}
+  perl:
+    description: Perl
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C'}
+      - {id: 11, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 12, name: SCALAR, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 13, name: ARRAY, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 14, name: HASH, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 15, name: SYMBOL TABLE, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 40, name: PROTOTYPE, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C'}
+      - {id: 7, name: STRING SINGLEQUOTE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING DOUBLEQUOTE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 20, name: STRING BACKTICKS, fg: '#C0B8C4', bg: '#808828'}
+      - {id: 26, name: STRING Q, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 27, name: STRING QQ, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 28, name: STRING QX, fg: '#C0B8C4', bg: '#808828'}
+      - {id: 29, name: STRING QR, fg: '#B0D090', bg: '#58683C'}
+      - {id: 30, name: STRING QW, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 17, name: REGEX MATCH, fg: '#B0D090', bg: '#58683C'}
+      - {id: 18, name: REGEX SUBSTITUTION, fg: '#B0D090', bg: '#58683C'}
+      - {id: 44, name: TRANSLATION, fg: '#F0C478', bg: '#58683C'}
+      - {id: 22, name: HEREDOC DELIMITER, fg: '#FCA8C0', bg: '#7C7410'}
+      - {id: 23, name: HEREDOC SINGLEQUOTE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 24, name: HEREDOC DOUBLEQUOTE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 25, name: HEREDOC BACKTICK, fg: '#C0B8C4', bg: '#808828'}
+      - {id: 43, name: VAR IN STRING, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 54, name: VAR IN REGEX, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 55, name: VAR IN REGEX SUBSTITUTION, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 57, name: VAR IN BACKTICKS, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 61, name: VAR IN HEREDOC DOUBLEQUOTE, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 62, name: VAR IN HEREDOC BACKTICK, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 64, name: VAR IN STRING QQ, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 65, name: VAR IN STRING QX, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 66, name: VAR IN STRING QR, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 41, name: FORMAT IDENTIFIER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 42, name: FORMAT BODY, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 21, name: DATA SECTION, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 3, name: POD, fg: '#283810', bg: '#58683C'}
+      - {id: 31, name: POD VERBATIM, fg: '#283810', bg: '#58683C', fontStyle: bold italic}
+      - {id: 1, name: ERROR, fg: '#982010', bg: '#FCD848'}
+  php:
+    description: php
+    styles:
+      - {id: 18, name: QUESTION MARK, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 118, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 119, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 126, name: STRING VARIABLE, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 120, name: SIMPLESTRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 121, name: WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 122, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 123, name: VARIABLE, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 124, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 125, name: COMMENTLINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 127, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 213, name: PREDEFINED, fg: '#CCE048', bg: '#58683C'}
+      - {id: 214, name: FUNCS AND METHODS 1, fg: '#CCE048', bg: '#58683C'}
+      - {id: 215, name: FUNCS AND METHODS 2, fg: '#CCE048', bg: '#58683C'}
+      - {id: 208, name: USER KEYWORDS 1, fg: '#CCE048', bg: '#58683C'}
+      - {id: 209, name: USER KEYWORDS 2, fg: '#CCE048', bg: '#58683C'}
+      - {id: 210, name: USER KEYWORDS 3, fg: '#CCE048', bg: '#58683C'}
+      - {id: 211, name: USER KEYWORDS 4, fg: '#CCE048', bg: '#58683C'}
+      - {id: 212, name: USER KEYWORDS 5, fg: '#CCE048', bg: '#58683C'}
+      - {id: 104, name: COMPLEX VARIABLE, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+  postscript:
+    description: Postscript
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: DSC COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: DSC VALUE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: Name, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 6, name: INSTRUCTION, fg: '#CCE048', bg: '#58683C'}
+      - {id: 7, name: LITERAL, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 8, name: IMMEVAL, fg: '#B0D090', bg: '#58683C'}
+      - {id: 9, name: PAREN ARRAY, fg: '#FCF088', bg: '#58683C'}
+      - {id: 10, name: PAREN DICT, fg: '#FCF088', bg: '#58683C'}
+      - {id: 11, name: PAREN PROC, fg: '#FCF088', bg: '#58683C'}
+      - {id: 12, name: TEXT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 13, name: HEX STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: BASE85 STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 15, name: BAD STRING CHAR, fg: '#982010', bg: '#FCD848'}
+  powershell:
+    description: PowerShell
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 3, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: VARIABLE, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 6, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 8, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 9, name: CMDLET, fg: '#B0D090', bg: '#58683C'}
+      - {id: 10, name: ALIAS, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 7, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: FUNCTION, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: USER KEYWORDS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 13, name: COMMENT STREAM, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: HERE STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: HERE CHARACTER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: COMMENT DOC KEYWORD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+  props:
+    description: Properties file
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: SECTION, fg: '#B0D090', bg: '#58683C'}
+      - {id: 3, name: ASSIGNMENT, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 4, name: DEFVAL, fg: '#FCF088', bg: '#58683C'}
+      - {id: 5, name: KEY, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+  python:
+    description: Python
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENTLINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 3, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: KEYWORDS, fg: '#CCE048', bg: '#58683C'}
+      - {id: 6, name: TRIPLE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: TRIPLEDOUBLE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 8, name: CLASSNAME, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 9, name: DEFNAME, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 12, name: COMMENTBLOCK, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 13, name: STRINGEOL, fg: '#182404', bg: '#58683C'}
+      - {id: 14, name: BUILTINS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: F STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 17, name: F CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 18, name: F TRIPLE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 19, name: F TRIPLEDOUBLE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 15, name: DECORATOR, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 20, name: ATTRIBUTE, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 128, name: USER KEYWORDS 1, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 129, name: USER KEYWORDS 2, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 130, name: USER KEYWORDS 3, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 131, name: USER KEYWORDS 4, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 132, name: USER KEYWORDS 5, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 133, name: USER KEYWORDS 6, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 134, name: USER KEYWORDS 7, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 135, name: USER KEYWORDS 8, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+  r:
+    description: R
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 3, name: BASE WORD, fg: '#B0D090', bg: '#58683C'}
+      - {id: 4, name: KEYWORD, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 5, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: STRING2, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 8, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 10, name: INFIX, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 9, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 11, name: INFIXEOL, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 12, name: BACKTICKS, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 13, name: RAWSTRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: RAWSTRING2, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 15, name: ESCAPESEQUENCE, fg: '#0000FC', bg: '#58683C'}
+  raku:
+    description: Raku
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: ERROR, fg: '#982010', bg: '#FCD848'}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C'}
+      - {id: 3, name: COMMENT EMBED, fg: '#283810', bg: '#58683C'}
+      - {id: 4, name: POD, fg: '#283810', bg: '#58683C'}
+      - {id: 5, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: HEREDOC Q, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: HEREDOC QQ, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 8, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 9, name: STRING Q, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: STRING QQ, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 11, name: STRING Q_LANG, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 12, name: STRING VAR, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 13, name: REGEX, fg: '#B0D090', bg: '#58683C'}
+      - {id: 14, name: REGEX VAR, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 15, name: ADVERB, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 16, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 17, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 18, name: OPERATOR, fg: '#FCF088', bg: '#58683C'}
+      - {id: 19, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 20, name: FUNCTION, fg: '#CCE048', bg: '#58683C'}
+      - {id: 21, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 22, name: TYPEDEF, fg: '#CCE048', bg: '#58683C'}
+      - {id: 23, name: MU, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 24, name: POSITIONAL, fg: '#C0B8C4', bg: '#808828'}
+      - {id: 25, name: ASSOCIATIVE, fg: '#C0B8C4', bg: '#808828'}
+      - {id: 26, name: CALLABLE, fg: '#CCE048', bg: '#58683C'}
+      - {id: 27, name: GRAMMAR, fg: '#FCF088', bg: '#58683C'}
+      - {id: 28, name: CLASS, fg: '#FCF088', bg: '#58683C'}
+  rc:
+    description: RC
+    styles:
+      - {id: 9, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 11, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 16, name: TYPE WORD, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: VERBATIM, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: REGEX, fg: '#B0D090', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#CCE048', bg: '#58683C', fontStyle: bold italic}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#982010', bg: '#FCD848', fontStyle: bold italic}
+      - {id: 128, name: USER KEYWORDS 1, fg: '#CCE048', bg: '#58683C'}
+      - {id: 129, name: USER KEYWORDS 2, fg: '#CCE048', bg: '#58683C'}
+      - {id: 130, name: USER KEYWORDS 3, fg: '#CCE048', bg: '#58683C'}
+      - {id: 131, name: USER KEYWORDS 4, fg: '#CCE048', bg: '#58683C'}
+      - {id: 132, name: USER KEYWORDS 5, fg: '#CCE048', bg: '#58683C'}
+      - {id: 133, name: USER KEYWORDS 6, fg: '#CCE048', bg: '#58683C'}
+      - {id: 134, name: USER KEYWORDS 7, fg: '#CCE048', bg: '#58683C'}
+      - {id: 135, name: USER KEYWORDS 8, fg: '#CCE048', bg: '#58683C'}
+      - {id: 23, name: PREPROCESSOR COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 24, name: PREPROCESSOR COMMENT DOC, fg: '#F0C478', bg: '#58683C'}
+  ruby:
+    description: Ruby
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: ERROR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 2, name: COMMENTLINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: POD, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION, fg: '#CCE048', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 8, name: CLASS NAME, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 9, name: DEF NAME, fg: '#B0D090', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 12, name: REGEX, fg: '#B0D090', bg: '#58683C'}
+      - {id: 13, name: GLOBAL, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 14, name: SYMBOL, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: MODULE NAME, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 16, name: INSTANCE VAR, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 17, name: CLASS VAR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: BACKTICKS, fg: '#C0B8C4', bg: '#808828'}
+      - {id: 19, name: DATA SECTION, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 24, name: STRING Q, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 25, name: BOOLEAN, fg: '#B0D090', bg: '#58683C'}
+  sas:
+    description: SAS
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C'}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C'}
+      - {id: 3, name: COMMENT BLOCK, fg: '#283810', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: OPERATOR, fg: '#FCF088', bg: '#58683C'}
+      - {id: 6, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 7, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 11, name: MACRO, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 12, name: MACRO KEYWORD, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 14, name: MACRO FUNCTION, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 13, name: FUNCTION, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 15, name: STATEMENT, fg: '#CCE048', bg: '#58683C'}
+  scheme:
+    description: Scheme
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENTLINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 3, name: FUNCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 4, name: FUNCTION WORD2, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 5, name: SYMBOL, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 9, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: SPECIAL, fg: '#C0B8C4', bg: '#58683C'}
+      - {id: 12, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+  searchResult:
+    description: Search result
+    styles:
+      - {id: 0, name: Default, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: Search Header, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 2, name: File Header, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 3, name: Line Number, fg: '#182404', bg: '#58683C'}
+      - {id: 4, name: Hit Word, fg: '#F0C43C', bg: '#582010'}
+      - {id: 5, name: Selected Line, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: Current line background colour, bg: '#84904C'}
+  smalltalk:
+    description: Smalltalk
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 2, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 3, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 4, name: SYMBOL, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 5, name: BINARY, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: BOOL, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: SELF, fg: '#B0D090', bg: '#58683C'}
+      - {id: 8, name: SUPER, fg: '#B0D090', bg: '#58683C'}
+      - {id: 9, name: NIL, fg: '#CCE048', bg: '#58683C'}
+      - {id: 10, name: GLOBAL, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 11, name: RETURN, fg: '#B0D090', bg: '#58683C'}
+      - {id: 12, name: SPECIAL, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: KWS END, fg: '#CCE048', bg: '#58683C'}
+      - {id: 14, name: ASSIGN, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 16, name: SPECIAL SELECTOR, fg: '#CCE048', bg: '#58683C'}
+  sql:
+    description: SQL
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: KEYWORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 16, name: USER1, fg: '#CCE048', bg: '#58683C'}
+      - {id: 19, name: KEYWORD2, fg: '#FC8080', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 7, name: STRING2, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 24, name: Q OPERATOR, fg: '#FCBCA8', bg: '#58683C'}
+  tcl:
+    description: TCL
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: MODIFIER, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 11, name: EXPAND, fg: '#B0D090', bg: '#58683C'}
+      - {id: 12, name: TCL KEYWORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 13, name: iTCL KEYWORD, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 14, name: TK KEYWORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 15, name: TK COMMAND, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 3, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 9, name: SUB BRACE, fg: '#B0D090', bg: '#58683C'}
+      - {id: 8, name: SUBSTITUTION, fg: '#B0D090', bg: '#58683C'}
+      - {id: 6, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 4, name: WORD IN QUOTE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: IN QUOTE, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 20, name: COMMENT BOX, fg: '#283810', bg: '#58683C', fontStyle: bold}
+      - {id: 21, name: BLOCK COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 16, name: USER1, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 17, name: USER2, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 18, name: USER3, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 19, name: USER4, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+  tex:
+    description: TeX
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: SPECIAL, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 2, name: GROUP, fg: '#FCF088', bg: '#58683C'}
+      - {id: 3, name: SYMBOL, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 4, name: COMMAND, fg: '#CCE048', bg: '#58683C'}
+      - {id: 5, name: TEXT, fg: '#F0C478', bg: '#58683C'}
+  toml:
+    description: TOML
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#FC0000', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#68B45C', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: IDENTIFIER, fg: '#C0C0C4', bg: '#58683C'}
+      - {id: 3, name: KEYWORD, fg: '#B870FC', bg: '#58683C', fontStyle: bold}
+      - {id: 4, name: NUMBER, fg: '#FC8000', bg: '#58683C'}
+      - {id: 5, name: TABLE, fg: '#FCD850', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: KEY, fg: '#8CC8FC', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: ERROR, fg: '#FC0000', bg: '#58683C', fontStyle: underline}
+      - {id: 8, name: OPERATOR, fg: '#C0C0C4', bg: '#58683C', fontStyle: bold}
+      - {id: 9, name: STRING SQ, fg: '#D09C9C', bg: '#58683C', fontStyle: bold}
+      - {id: 10, name: STRING DQ, fg: '#D09C9C', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: TRIPLE STRING SQ, fg: '#D09C9C', bg: '#58683C', fontStyle: bold}
+      - {id: 12, name: TRIPLE STRING DQ, fg: '#D09C9C', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: ESCAPE CHAR, fg: '#00FC04', bg: '#58683C'}
+      - {id: 14, name: DATETIME, fg: '#A0F8C8', bg: '#58683C', fontStyle: bold}
+  vb:
+    description: VB / VBS
+    styles:
+      - {id: 7, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 3, name: WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 4, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 6, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 8, name: DATE, fg: '#FCDC88', bg: '#58683C'}
+  verilog:
+    description: Verilog
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 7, name: KEYWORD, fg: '#C0B8C4', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 9, name: PREPROCESSOR, fg: '#FCBCA8', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: COMMENT LINE BANG, fg: '#283810', bg: '#58683C', fontStyle: bold italic}
+      - {id: 12, name: STRING EOL, fg: '#182404', bg: '#58683C'}
+      - {id: 19, name: USER, fg: '#F0C478', bg: '#58683C'}
+  vhdl:
+    description: VHDL
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LIne, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 4, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: OPERATOR, fg: '#FCF088', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 7, name: STRING EOL, fg: '#182404', bg: '#58683C'}
+      - {id: 8, name: INSTRUCTION, fg: '#CCE048', bg: '#58683C'}
+      - {id: 9, name: STD OPERATOR, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 10, name: ATTRIBUTE, fg: '#582010', bg: '#58683C'}
+      - {id: 11, name: STD FUNCTION, fg: '#B0D090', bg: '#58683C'}
+      - {id: 12, name: STD PACKAGE, fg: '#B0D090', bg: '#58683C'}
+      - {id: 13, name: STD TYPE, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 14, name: USER DEFINE, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 15, name: COMMENT BLOCK, fg: '#F0C478', bg: '#58683C'}
+  xml:
+    description: XML
+    styles:
+      - {id: 12, name: XMLSTART, fg: '#402C04', bg: '#CCC458'}
+      - {id: 13, name: XMLEND, fg: '#402C04', bg: '#CCC458'}
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 5, name: NUMBER, fg: '#FCDC88', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: DOUBLESTRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: SINGLESTRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 1, name: TAG, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 11, name: TAGEND, fg: '#D4D09C', bg: '#58683C'}
+      - {id: 2, name: TAGUNKNOWN, fg: '#982010', bg: '#FCD848'}
+      - {id: 3, name: ATTRIBUTE, fg: '#182404', bg: '#58683C'}
+      - {id: 4, name: ATTRIBUTEUNKNOWN, fg: '#982010', bg: '#FCD848'}
+      - {id: 21, name: SGML DEFAULT, fg: '#FCFCF0', bg: '#746C24'}
+      - {id: 22, name: SGML COMMAND, fg: '#D4D09C', bg: '#506038', fontStyle: bold}
+      - {id: 23, name: SGML 1ST PARAM, fg: '#D4D09C', bg: '#506038'}
+      - {id: 24, name: SGML DOUBLESTRING, fg: '#FCDC88', bg: '#506038'}
+      - {id: 25, name: SGML SIMPLESTRING, fg: '#FCDC88', bg: '#506038'}
+      - {id: 31, name: SGML BLOCK DEFAULT, fg: '#000004', bg: '#485430'}
+      - {id: 17, name: CDATA, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: ENTITY, fg: '#582010', bg: '#58683C', fontStyle: italic}
+      - {id: 192, name: USER ATTRIBUTES 1, fg: '#182404', bg: '#58683C'}
+      - {id: 193, name: USER ATTRIBUTES 2, fg: '#182404', bg: '#58683C'}
+      - {id: 194, name: USER ATTRIBUTES 3, fg: '#182404', bg: '#58683C'}
+      - {id: 195, name: USER ATTRIBUTES 4, fg: '#182404', bg: '#58683C'}
+      - {id: 196, name: USER ATTRIBUTES 5, fg: '#182404', bg: '#58683C'}
+      - {id: 197, name: USER ATTRIBUTES 6, fg: '#182404', bg: '#58683C'}
+      - {id: 198, name: USER ATTRIBUTES 7, fg: '#182404', bg: '#58683C'}
+      - {id: 199, name: USER ATTRIBUTES 8, fg: '#182404', bg: '#58683C'}
+  yaml:
+    description: YAML
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: IDENTIFIER, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 5, name: REFERENCE, fg: '#B0D090', bg: '#58683C'}
+      - {id: 6, name: DOCUMENT, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 7, name: TEXT, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 8, name: ERROR, fg: '#982010', bg: '#FCD848'}
+  asn1:
+    description: ASN.1
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: IDENTIFIERS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 3, name: DOUBLE QUOTED STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: NUMERIC OID DEFINITION, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 5, name: NON OID NUMBERS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: KEYWORDS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: ATTRIBUTES, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: DESCRIPTORS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: TYPES, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: OPERATORS, fg: '#F0C478', bg: '#58683C'}
+  avs:
+    description: AviSynth
+    styles:
+      - {id: 32, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 0, name: WHITE SPACE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: 'COMMENT: /* */', fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: 'COMMENT: [* *]', fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: 'LINE COMMENT: #', fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: OPERATORS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: IDENTIFIERS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: DOUBLE QUOTED STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: STRING WITH THREE DOUBLE QUOTES, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: KEYWORD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 10, name: FILTER, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: PLUGIN, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 12, name: FUNCTION, fg: '#F0C478', bg: '#58683C'}
+      - {id: 13, name: CLIP PROPERTIES, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: USER DEFINED, fg: '#F0C478', bg: '#58683C'}
+  baanc:
+    description: BaanC
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 2, name: COMMENT DOC, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 3, name: NUMBER, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 4, name: KEYWORDS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 5, name: STRING, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: PREPROCESSOR, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: OPERATOR, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 8, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: STRING EOL NC, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 10, name: FUNCTIONS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: FUNCTIONS ABRIDGED, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 12, name: SUB SECTIONS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: MAIN SECTIONS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 14, name: PREDEFINED VARIABLE, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 15, name: PREDEFINED ATTRIBUTES, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 16, name: ENUM DOMAINS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 17, name: USER DEFINED, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 18, name: TABLE DEFINITIONS, fg: '#F0C478', bg: '#58683C', fontStyle: bold underline}
+      - {id: 19, name: TABLE SQL, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 20, name: DLL FUNCTIONS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 21, name: DOMAIN DEFINITIONS, fg: '#F0C478', bg: '#58683C', fontStyle: bold underline}
+      - {id: 22, name: FUNCTION DEFINITIONS, fg: '#F0C478', bg: '#58683C', fontStyle: bold underline}
+      - {id: 23, name: OBJECT DEFINITIONS, fg: '#F0C478', bg: '#58683C', fontStyle: bold underline}
+      - {id: 24, name: PREPROC DEFINITIONS, fg: '#F0C478', bg: '#58683C', fontStyle: bold underline}
+  blitzbasic:
+    description: BlitzBasic
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: KEYWORD1, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: OPERATOR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: KEYWORD2, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: KEYWORD3, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: KEYWORD4, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: LABEL, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: ERROR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 17, name: HEXNUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: BINNUMBER, fg: '#F0C478', bg: '#58683C'}
+  csound:
+    description: Csound
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: OPERATOR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: INSTR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: OPCODE, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: HEADER STATEMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: USER KEYWORDS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: COMMENT BLOCK, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: PARAMETER, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: A-RATE VARIABLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: K-RATE VARIABLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 13, name: I-RATE VARIABLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: GLOBAL VARIABLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: END OF LINE WHERE STRING IS NOT CLOSED, fg: '#F0C478', bg: '#58683C'}
+  erlang:
+    description: Erlang
+    styles:
+      - {id: 0, name: DEFAULT STYLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: DEFAULT COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: FUNCTION COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: MODULE COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: DOCUMENTATION HELPER IN COMMENT, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 17, name: DOCUMENTATION MACRO IN COMMENT, fg: '#F0C478', bg: '#58683C', fontStyle: bold italic}
+      - {id: 2, name: VARIABLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: CHARACTER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: MACRO, fg: '#F0C478', bg: '#58683C'}
+      - {id: 19, name: MACRO QUOTED, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: RECORD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 20, name: RECORD QUOTED, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: ATOM, fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: ATOM QUOTED, fg: '#F0C478', bg: '#58683C'}
+      - {id: 13, name: NODE NAME, fg: '#F0C478', bg: '#58683C'}
+      - {id: 21, name: NODE NAME QUOTED, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: RESERVED WORDS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 22, name: BUILT-IN FUNCTIONS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 8, name: FUNCTION NAME, fg: '#F0C478', bg: '#58683C'}
+      - {id: 23, name: MODULE NAME, fg: '#F0C478', bg: '#58683C'}
+      - {id: 24, name: MODULE ATTRIBUTES, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: PREPROCESSOR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: OPERATORS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 31, name: 'UNKNOWN: ERROR', fg: '#F0C478', bg: '#58683C'}
+  escript:
+    description: eScript
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: LINE COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: DOC COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: KEYWORD, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: DOUBLE QUOTED STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: OPERATORS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: IDENTIFIERS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: BRACES, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: KEYWORDS2, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: KEYWORDS3, fg: '#F0C478', bg: '#58683C'}
+  forth:
+    description: Forth
+    styles:
+      - {id: 0, name: WHITESPACE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: ML COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 4, name: CONTROL, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 5, name: KEYWORDS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: DEFWORDS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: PREWORD1, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 8, name: PREWORD2, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 9, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: DOUBLE QUOTED STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: LOCALE, fg: '#F0C478', bg: '#58683C'}
+  freebasic:
+    description: FreeBASIC
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: KEYWORD1, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 4, name: STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: PREPROCESSOR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: OPERATOR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: KEYWORD2, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: KEYWORD3, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: KEYWORD4, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: LABEL, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: ERROR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 17, name: HEXNUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: BINNUMBER, fg: '#F0C478', bg: '#58683C'}
+  gdscript:
+    description: GDScript
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT LINE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: CHARACTER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: WORD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: TRIPLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: TRIPLE DOUBLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: CLASS NAME, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 9, name: FUNC NAME, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: COMMENT BLOCK, fg: '#F0C478', bg: '#58683C'}
+      - {id: 13, name: STRING EOL, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 14, name: WORD2, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 15, name: ANNOTATION, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: NODEPATH, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 128, name: USER KEYWORDS 1, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 129, name: USER KEYWORDS 2, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 130, name: USER KEYWORDS 3, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 131, name: USER KEYWORDS 4, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 132, name: USER KEYWORDS 5, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 133, name: USER KEYWORDS 6, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 134, name: USER KEYWORDS 7, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 135, name: USER KEYWORDS 8, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+  hollywood:
+    description: Hollywood
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: COMMENT BLOCK, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: KEYWORD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 5, name: CORE API, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: PLUGIN API, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: PLUGIN METHOD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 8, name: STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: STRING BLOCK, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: PREPROCESSOR, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: OPERATOR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 13, name: CONSTANT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: HEXNUMBER, fg: '#F0C478', bg: '#58683C'}
+  ihex:
+    description: Intel HEX
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: RECSTART, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: RECTYPE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: RECTYPE_UNKNOWN, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 4, name: BYTECOUNT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: BYTECOUNT_WRONG, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: NOADDRESS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: DATAADDRESS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: STARTADDRESS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: ADDRESSFIELD_UNKNOWN, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 11, name: EXTENDEDADDRESS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: DATA_ODD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: DATA_EVEN, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: DATA_UNKNOWN, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: DATA_EMPTY, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: CHECKSUM, fg: '#F0C478', bg: '#58683C'}
+      - {id: 17, name: CHECKSUM_WRONG, fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: GARBAGE, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+  javascript.js:
+    description: JavaScript
+    styles:
+      - {id: 11, name: DEFAULT, fg: '#F0C43C', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 16, name: TYPE WORD, fg: '#CCE048', bg: '#58683C'}
+      - {id: 19, name: WINDOW INSTRUCTION, fg: '#F0C43C', bg: '#58683C', fontStyle: bold}
+      - {id: 4, name: NUMBER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 20, name: STRING RAW, fg: '#FCDC88', bg: '#58683C', fontStyle: bold italic}
+      - {id: 7, name: CHARACTER, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: VERBATIM, fg: '#FCDC88', bg: '#58683C'}
+      - {id: 14, name: REGEX, fg: '#B0D090', bg: '#58683C', fontStyle: bold}
+      - {id: 1, name: COMMENT, fg: '#283810', bg: '#58683C'}
+      - {id: 2, name: COMMENT LINE, fg: '#283810', bg: '#58683C'}
+      - {id: 3, name: COMMENT DOC, fg: '#283810', bg: '#58683C'}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#283810', bg: '#58683C'}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#B0D090', bg: '#58683C', fontStyle: bold}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#982010', bg: '#58683C'}
+      - {id: 128, name: USER KEYWORDS 1, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 129, name: USER KEYWORDS 2, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 130, name: USER KEYWORDS 3, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 131, name: USER KEYWORDS 4, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 132, name: USER KEYWORDS 5, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 133, name: USER KEYWORDS 6, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 134, name: USER KEYWORDS 7, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+      - {id: 135, name: USER KEYWORDS 8, fg: '#CCE048', bg: '#58683C', fontStyle: bold}
+  latex:
+    description: LaTeX
+    styles:
+      - {id: 0, name: WHITE SPACE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMAND, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 2, name: TAG OPENING, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 3, name: MATH INLINE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: TAG CLOSING, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: MATH BLOCK, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: COMMENT BLOCK, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: VERBATIM SEGMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: SHORT COMMAND, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 10, name: SPECIAL CHAR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: COMMAND OPTIONAL ARGUMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: SYNTAX ERROR, fg: '#F0C478', bg: '#58683C'}
+  mssql:
+    description: MS T-SQL
+    styles:
+      - {id: 9, name: STATEMENT, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 10, name: DATA TYPE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: SYSTEM TABLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: GLOBAL, fg: '#F0C478', bg: '#58683C'}
+      - {id: 13, name: FUNCTION, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: SYSTEM STORED PROC, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 2, name: COMMENT LINE, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 3, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: STRING, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 5, name: OPERATOR, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: VARIABLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: COL NAME, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: 'COL NAME IN []''s', fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+  mmixal:
+    description: MMIXAL
+    styles:
+      - {id: 0, name: DIVSION OF LEADING WHITESPACE IN LINE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: LABEL, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: OPCODE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: DIVISION BETWEEN LABEL AND OPCODE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: VALID OPCODE, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: UNKNOWN OPCODE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: DIVISION BETWEEN OPCODE AND OPERANDS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: DIVISION OF OPERANDS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: REFERENCE (TO A LABEL), fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: CHAR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 13, name: REGISTER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: HEXADECIMAL NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: OPERATOR, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 16, name: SYMBOL, fg: '#F0C478', bg: '#58683C'}
+      - {id: 17, name: COMMENT OTHERWISE, fg: '#F0C478', bg: '#58683C'}
+  nim:
+    description: Nim
+    styles:
+      - {id: 0, name: WHITE SPACE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: SINGLE QUOTED STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: KEYWORD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: TRIPLE QUOTES, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: TRIPLE DOUBLE QUOTES, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: CLASS NAME DEFINITION, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 9, name: FUNCTION OR METHOD NAME DEFINITION, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 10, name: OPERATORS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: IDENTIFIERS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: COMMENT-BLOCKS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 13, name: END OF LINE WHERE STRING IS NOT CLOSED, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: HIGHLIGHTED IDENTIFIERS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: DECORATORS, fg: '#F0C478', bg: '#58683C'}
+  nncrontab:
+    description: nnCron
+    styles:
+      - {id: 0, name: WHITE SPACE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: TASK START/END, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: SECTION KEYWORDS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 4, name: KEYWORDS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 5, name: MODIFICATORS, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 6, name: ASTERISK, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: DOUBLE QUOTED STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: ENVIRONMENT VARIABLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+  oscript:
+    description: OScript
+    styles:
+      - {id: 0, name: DEFAULT TEXT STYLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: SINGLE-LINE COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: MULTI-LINE COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: '#IFDEF DOC AND #ENDIF', fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: PREPROCESSOR DIRECTIVE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: STRING SINGLE QUOTES, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: STRING DOUBLE QUOTES, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: CONSTANT LITERAL, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: SERVER-GLOBAL VARIABLE (PREFIXED BY $), fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: LANGUAGE NATIVE KEYWORD OR RESERVED WORD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 12, name: OPERATOR; EITHER SYMBOLIC OR LITERAL, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: LABEL TO JUMP TO WITH THE GOTO STATEMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: TYPE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: FUNCTION, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: STATIC BUILT-IN OBJECT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 17, name: OBJECT PROPERTY, fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: OBJECT METHOD, fg: '#F0C478', bg: '#58683C'}
+  purebasic:
+    description: PureBasic
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: KEYWORD1, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: OPERATOR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: KEYWORD2, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: KEYWORD3, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: KEYWORD4, fg: '#F0C478', bg: '#58683C'}
+      - {id: 13, name: CONSTANT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: LABEL, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: ERROR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 17, name: HEXNUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: BINNUMBER, fg: '#F0C478', bg: '#58683C'}
+  rebol:
+    description: REBOL
+    styles:
+      - {id: 32, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 0, name: ANY OTHER TEXT, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 1, name: LINE COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: BLOCK COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: PREFACE, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 4, name: OPERATORS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 5, name: CHARACTERS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: STRING WITH QUOTES, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: STRING WITH BRACES, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: PAIR ( 800X600 ), fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: TUPLE ( 127.0.0.1 ), fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: 'BINARY ( 16#{1A803F59} )', fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: MONEY, fg: '#F0C478', bg: '#58683C'}
+      - {id: 13, name: 'ISSUE { #123-CD-456 }', fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: 'TAG { <TITLE HEIGHT=100> }', fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: 'FILE { %/C/WINNT/SOME.DLL }', fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: 'EMAIL { JOE@MAIL.DOM }', fg: '#F0C478', bg: '#58683C'}
+      - {id: 17, name: 'URL { FTP://THERE.DOM }', fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: 'DATE { 17-FEB-2004 1/3/99 }', fg: '#F0C478', bg: '#58683C'}
+      - {id: 19, name: 'TIME { 12:30 11:22:59 01:59:59.123 }', fg: '#F0C478', bg: '#58683C'}
+      - {id: 20, name: IDENTIFIERS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 21, name: KEYWORD (ALL), fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 22, name: KEYWORD (TEST FUNCTIONS), fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 23, name: KEYWORD (DATATYPES), fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 24, name: KEYWORD 4, fg: '#F0C478', bg: '#58683C'}
+      - {id: 25, name: KEYWORD 5, fg: '#F0C478', bg: '#58683C'}
+      - {id: 26, name: KEYWORD 6, fg: '#F0C478', bg: '#58683C'}
+      - {id: 27, name: KEYWORD 7, fg: '#F0C478', bg: '#58683C'}
+  registry:
+    description: Registry
+    styles:
+      - {id: 32, name: DEFAULT STYLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: VALUE NAME, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: HEX DIGIT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: VALUE TYPE, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 6, name: ADDED KEY, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: REMOVED KEY, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: ESCAPED CHARACTERS IN STRINGS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 9, name: GUID IN KEY PATH, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: GUID IN STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: PARAMETER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: OPERATORS, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+  rust:
+    description: Rust
+    styles:
+      - {id: 32, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 0, name: WHITESPACE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: BLOCK COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: LINE COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: BLOCK DOC COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: LINE DOC COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: KEYWORDS 1, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: KEYWORDS 2, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 8, name: KEYWORDS 3, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: KEYWORDS 4, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 10, name: KEYWORDS 5, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: KEYWORDS 6, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 12, name: KEYWORDS 7, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: REGULAR STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: RAW STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: CHARACTER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: OPERATOR, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 17, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: LIFETIME, fg: '#F0C478', bg: '#58683C'}
+      - {id: 19, name: MACRO, fg: '#F0C478', bg: '#58683C'}
+      - {id: 20, name: LEXICAL ERROR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 21, name: BYTE STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 22, name: RAW BYTE STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 23, name: BYTE CHARACTER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 24, name: C STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 25, name: RAW C STRING, fg: '#F0C478', bg: '#58683C'}
+  spice:
+    description: SPICE
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: IDENTIFIERS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: KEYWORD, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: KEYWORD2, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 4, name: KEYWORD3, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: OPERATORS (DELIMITERS), fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: VALUE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+  srec:
+    description: S-Record
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: RECSTART, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: RECTYPE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: RECTYPE_UNKNOWN, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 4, name: BYTECOUNT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: BYTECOUNT_WRONG, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: NOADDRESS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: DATAADDRESS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: RECCOUNT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: STARTADDRESS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: ADDRESSFIELD_UNKNOWN, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 12, name: DATA_ODD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: DATA_EVEN, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: DATA_UNKNOWN, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 15, name: DATA_EMPTY, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: CHECKSUM, fg: '#F0C478', bg: '#58683C'}
+      - {id: 17, name: CHECKSUM_WRONG, fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: GARBAGE, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+  swift:
+    description: Swift
+    styles:
+      - {id: 9, name: PREPROCESSOR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 16, name: TYPE WORD, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: VERBATIM, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: REGEX, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: COMMENT LINE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: COMMENT DOC, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#F0C478', bg: '#58683C'}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 23, name: PREPROCESSOR COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 24, name: PREPROCESSOR COMMENT DOC, fg: '#F0C478', bg: '#58683C'}
+      - {id: 128, name: USER KEYWORDS 1, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 129, name: USER KEYWORDS 2, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 130, name: USER KEYWORDS 3, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 131, name: USER KEYWORDS 4, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 132, name: USER KEYWORDS 5, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 133, name: USER KEYWORDS 6, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 134, name: USER KEYWORDS 7, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 135, name: USER KEYWORDS 8, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+  tehex:
+    description: Tektronix extended HEX
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: RECSTART, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: RECTYPE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: RECTYPE_UNKNOWN, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 4, name: BYTECOUNT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: BYTECOUNT_WRONG, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: DATAADDRESS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: STARTADDRESS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: ADDRESSFIELD_UNKNOWN, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 12, name: DATA_ODD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: DATA_EVEN, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: CHECKSUM, fg: '#F0C478', bg: '#58683C'}
+      - {id: 17, name: CHECKSUM_WRONG, fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: GARBAGE, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+  txt2tags:
+    description: txt2tags
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: SPECIAL, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: STRONG, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 3, name: STRONG 2 (NOT USED), fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: EM1 (ITALIC), fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 5, name: EM2 (UNDERLINE), fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: H1, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 7, name: H2, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 8, name: H3, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 9, name: H4, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 10, name: H5, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 11, name: H6, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 12, name: PRECHAR (NOT USED), fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: ULIST, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: OLIST, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: BLOCKQUOTE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: STRIKEOUT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 17, name: HRULE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: LINK, fg: '#F0C478', bg: '#58683C', fontStyle: italic}
+      - {id: 19, name: CODE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 20, name: CODE2, fg: '#F0C478', bg: '#58683C'}
+      - {id: 21, name: CODEBLOCK, fg: '#F0C478', bg: '#58683C'}
+      - {id: 22, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 23, name: OPTION, fg: '#F0C478', bg: '#58683C'}
+      - {id: 24, name: PREPROC, fg: '#F0C478', bg: '#58683C'}
+      - {id: 25, name: POSTPROC, fg: '#F0C478', bg: '#58683C'}
+  typescript:
+    description: TypeScript
+    styles:
+      - {id: 11, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: INSTRUCTION WORD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 16, name: TYPE WORD, fg: '#F0C478', bg: '#58683C'}
+      - {id: 19, name: WINDOW INSTRUCTION, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 4, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 20, name: STRING RAW, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: CHARACTER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: OPERATOR, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 13, name: VERBATIM, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: REGEX, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 1, name: COMMENT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: COMMENT LINE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: COMMENT DOC, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: COMMENT LINE DOC, fg: '#F0C478', bg: '#58683C'}
+      - {id: 17, name: COMMENT DOC KEYWORD, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 18, name: COMMENT DOC KEYWORD ERROR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 128, name: USER KEYWORDS 1, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 129, name: USER KEYWORDS 2, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 130, name: USER KEYWORDS 3, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 131, name: USER KEYWORDS 4, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 132, name: USER KEYWORDS 5, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 133, name: USER KEYWORDS 6, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 134, name: USER KEYWORDS 7, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+      - {id: 135, name: USER KEYWORDS 8, fg: '#F0C478', bg: '#58683C', fontStyle: bold}
+  visualprolog:
+    description: Visual Prolog
+    styles:
+      - {id: 0, name: DEFAULT, fg: '#F0C478', bg: '#58683C'}
+      - {id: 1, name: MAJOR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 2, name: MINOR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 3, name: DIRECTIVE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 4, name: COMMENT BLOCK, fg: '#F0C478', bg: '#58683C'}
+      - {id: 5, name: COMMENT LINE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 6, name: COMMENT KEY, fg: '#F0C478', bg: '#58683C'}
+      - {id: 7, name: COMMENT KEY ERROR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 8, name: IDENTIFIER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 9, name: VARIABLE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 10, name: ANONYMOUS, fg: '#F0C478', bg: '#58683C'}
+      - {id: 11, name: NUMBER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 12, name: OPERATOR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 13, name: CHARACTER, fg: '#F0C478', bg: '#58683C'}
+      - {id: 14, name: CHARACTER TOO MANY, fg: '#F0C478', bg: '#58683C'}
+      - {id: 15, name: CHARACTER ESCAPE ERROR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 16, name: STRING, fg: '#F0C478', bg: '#58683C'}
+      - {id: 17, name: STRING ESCAPE, fg: '#F0C478', bg: '#58683C'}
+      - {id: 18, name: STRING ESCAPE ERROR, fg: '#F0C478', bg: '#58683C'}
+      - {id: 19, name: STRING EOL OPEN, fg: '#F0C478', bg: '#58683C'}
+      - {id: 20, name: STRING VERBATIM, fg: '#F0C478', bg: '#58683C'}
+      - {id: 21, name: STRING VERBATIM SPECIAL, fg: '#F0C478', bg: '#58683C'}
+      - {id: 22, name: STRING VERBATIM EOL, fg: '#F0C478', bg: '#58683C'}

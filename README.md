@@ -25,7 +25,10 @@ Linux/macOS builds are structured and CI-wired but still being validated.
 
 **Implemented:** tabbed editor with per-tab Scintilla documents, a **split second view**
 (MAIN | SUB — Move/Clone to Other View, with the split collapsing when a pane empties), syntax
-highlighting (Lexilla), a **native custom-language engine** — **Scintillua** (Lua 5.4.7 + LPeg 1.1.0
+highlighting (Lexilla) with **keyword lists for 98 languages** (SciTE's, and the languages' own projects'
+where SciTE has none) and **language detection** from the file's name and first line, **your own
+language definitions** (`languages.yaml`: extensions, comment tokens and keyword lists, also edited in
+the Style Configurator), a **native custom-language engine** — **Scintillua** (Lua 5.4.7 + LPeg 1.1.0
 lexer grammars run through a Scintilla container lexer; see
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)), with legacy Notepad++ `userDefineLang.xml`
 files importable via the optional GPL `udl-compat` plugin (see [Plugins](#plugins)), find/replace and
@@ -37,10 +40,11 @@ lexers and custom Scintillua languages), bookmarks, a **Document Map**
 grammar — C++, Python, JS/TS, Java, C#, Go, Rust, Lua), a **real integrated terminal** (a genuine ConPTY/`forkpty` pseudo-terminal with libvterm emulation,
 so `vim`, `htop`, ANSI colour and the shell's own line editing all work; multi-tab, with a
 per-platform shell picker, and a redirected-pipe fallback on Windows older than 10 1809), a **Clipboard History** panel, a **Project Panel** (workspace tree of
-folders + files, saved as `.xml`) and folder-as-workspace, pinned tabs, **Restore Recent Closed File**
+folders + files, saved as `.yaml`) and folder-as-workspace, pinned tabs, **Restore Recent Closed File**
 (Ctrl+Shift+T) + MRU Ctrl+Tab switching, an **interactive status bar** (double-click to go-to-line,
-convert EOL or encoding, or toggle INS/OVR), EOL detection, session restore, print + print preview,
-macro recording/playback (saved macros persist and are bindable in the Shortcut Mapper),
+convert EOL or encoding, or toggle INS/OVR), EOL detection, session restore, print + print preview, a
+**customizable right-click menu** (submenus, labels of your own, plugin commands), macro
+recording/playback (saved macros persist and are bindable in the Shortcut Mapper),
 **Monitoring** (tail -f: reload on external change), four selectable **toolbar icon sets** (Tabler,
 Solar, IconPark, Streamline — see Credits), full UI **localization** into 8
 languages (pl, de, fr, es, ru, ja, zh, ko), and a **plugin host** — see [Plugins](#plugins).
@@ -69,6 +73,14 @@ Scintillua Lua/LPeg lexer, and registers it with the core via the new `nib.langd
 ships a standalone `udl2scintillua` converter CLI). Because it knows the Notepad++ UDL format it is
 licensed **GPL-3.0-or-later** and kept isolated from the Apache-2.0 core, and is built as
 `bin/nib/udl_compat.dll` (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)).
+
+wxNote keeps its own settings, key bindings, themes, language definitions, sessions and workspaces as
+plain **YAML** files (see [`docs/SETTINGS_DESIGN.md`](docs/SETTINGS_DESIGN.md)); the core reads no
+Notepad++ format. A third optional plugin, `packages/npp-compat`, brings an existing Notepad++ setup
+across: **Extensions > Import from Notepad++...** translates `config.xml` into settings, `shortcuts.xml`
+into a key-binding scheme, and themes, `contextMenu.xml` and what was added to `langs.xml` into wxNote's
+own files, and it also opens a Notepad++ session or workspace (the `npp2wxnote` CLI does the same translations from a terminal). It
+reproduces Notepad++'s file formats, so it too is **GPL-3.0-or-later** and kept out of the core.
 
 ## Building
 
@@ -105,12 +117,15 @@ src/                 the wxNote application (main.cpp + the data-driven menu eng
 packages/            npp-bridge (optional GPL Notepad++-ABI bridge, builds on every OS — loads real
                      Notepad++ plugin DLLs on Windows, recompiled npp_shim plugins on Linux/macOS; itself a Nib plugin),
                      udl-compat (optional GPL Nib plugin: imports legacy Notepad++ UDLs as Scintillua lexers),
+                     npp-compat (optional GPL Nib plugin: translates a Notepad++ setup - config.xml, shortcuts.xml,
+                     themes, contextMenu.xml, sessions, workspaces - into wxNote's own YAML files),
                      test_plugin (a Notepad++-ABI test fixture, Windows-only, never shipped)
 include/nib/         the project's own permissive, cross-platform plugin API (nib.h)
-include/npp-compat/  clean-room Notepad++-ABI headers (consumed only by packages/npp-bridge and
-                     packages/test_plugin — the core includes nothing from here)
+include/npp-compat/  clean-room Notepad++-ABI headers (consumed only by packages/npp-bridge,
+                     packages/npp-compat and packages/test_plugin — the core includes nothing from here)
 resources/           toolbar icons (icons/ = Tabler default, icons-solar/, icons-iconpark/,
-                     icons-streamline/), themes, default styler, fonts, locale/ (8-language i18n catalogs)
+                     icons-streamline/), themes/ (Default.yaml is the light default), contextmenu.yaml, fonts,
+                     locale/ (8-language i18n catalogs)
 third_party/         scintilla + lexilla (both permissive, HPND), lua + lpeg + scintillua (the custom-language engine, all MIT), libvterm-tables (generated DEC tables for the fetched libvterm terminal core, MIT), wxbf (wxBorderlessFrame, wxWindows Licence)
 installer/           packaging scripts: windows/ (NSIS), linux/ (AppImage, .deb, .rpm, Flatpak), macos/ (.dmg)
 docs/                GOALS.md (why the project exists), ARCHITECTURE.md (how the editor is put
@@ -171,11 +186,13 @@ code/licensing ground rules.
 
 ## License
 
-**Apache License 2.0**, with two exceptions in what ships: the optional `packages/npp-bridge/` plugin
-(which lets real compiled Notepad++ plugins load) and the optional `packages/udl-compat/` plugin
+**Apache License 2.0**, with three exceptions in what ships: the optional `packages/npp-bridge/` plugin
+(which lets real compiled Notepad++ plugins load), the optional `packages/udl-compat/` plugin
 (which imports legacy Notepad++ `userDefineLang.xml` files by translating them to Scintillua lexers)
-both stay **GPL-3.0-or-later** — npp-bridge because it reproduces Notepad++'s plugin ABI, udl-compat
-because it knows the Notepad++ UDL format — kept isolated from the otherwise Apache-2.0 core; the
+and the optional `packages/npp-compat/` plugin (which imports a Notepad++ setup — settings, shortcuts,
+themes, context menu, sessions, workspaces) all stay **GPL-3.0-or-later** — npp-bridge because it
+reproduces Notepad++'s plugin ABI, udl-compat and npp-compat because they know Notepad++'s file
+formats — kept isolated from the otherwise Apache-2.0 core; the
 never-shipped, Windows-only test fixture `packages/test_plugin/` tracks the same GPL license for the
 same reason. wxNote is an
 **independent project** — it copies no Notepad++ source
@@ -191,15 +208,16 @@ for the per-component record.
 The full record of everything used or consulted during development — including the editors studied as
 design references — is in [`docs/CREDITS.md`](docs/CREDITS.md). The headliners:
 
-- [Notepad++](https://github.com/notepad-plus-plus/notepad-plus-plus) — Don Ho (GPL v3): the editor whose behavior served as the original reference and test target. Its plugin ABI is reimplemented **clean-room and cross-platform** in our own `include/npp-compat/`, consumed only by the optional `packages/npp-bridge` bridge — no Notepad++ source is used (see [`LICENSING.md`](LICENSING.md)).
+- [Notepad++](https://github.com/notepad-plus-plus/notepad-plus-plus) — Don Ho (GPL v3): the editor whose behavior served as the original reference and test target. Its plugin ABI is reimplemented **clean-room and cross-platform** in our own `include/npp-compat/`, consumed only by the optional GPL packages (`packages/npp-bridge`, `packages/npp-compat`) — no Notepad++ source is used (see [`LICENSING.md`](LICENSING.md)).
 - [Scintilla & Lexilla](https://www.scintilla.org/) — Neil Hodgson (permissive): the editing / syntax-highlighting engine.
 - [Lua](https://www.lua.org/) 5.4.7 (MIT), [LPeg](http://www.inf.puc-rio.br/~roberto/lpeg/) 1.1.0 (MIT), and [Scintillua](https://github.com/orbitalquark/scintillua) — © Mitchell (MIT): embedded to power wxNote's native custom-language engine.
 - [libvterm](https://github.com/neovim/libvterm) — © 2008 Paul Evans (MIT): the VT/xterm terminal-emulation core behind the integrated terminal, fetched at build (Neovim's now-archived mirror, pinned to tag `v0.3.3` by SHA256); two generated DEC charset tables it needs are vendored in `third_party/libvterm-tables/`.
 - [wxWidgets](https://www.wxwidgets.org/): the cross-platform UI toolkit.
+- [rapidyaml](https://github.com/biojppm/rapidyaml) — © 2018 Joao Paulo Magalhaes (MIT): reads and writes wxNote's own YAML files (settings, key bindings, themes, sessions) and the plugin catalog's JSON, fetched at build (the single-header `v0.16.0` release, pinned by SHA256).
 - Toolbar icon sets (Settings > Preferences > General > Toolbar icon style — see each set's own CREDITS.md for exact modifications):
   - [Tabler Icons](https://tabler.io/icons) (MIT) + [Open Color](https://yeun.github.io/open-color/) (MIT) — the default line-icon set (`resources/icons/CREDITS.md`).
   - [Solar Icons](https://icon-sets.iconify.design/solar/) (Bold Duotone) — © 480 Design (CC BY 4.0, attribution required; `resources/icons-solar/CREDITS.md`).
   - [IconPark](https://github.com/bytedance/IconPark) — © ByteDance (Apache-2.0; `resources/icons-iconpark/CREDITS.md`).
   - [Streamline](https://streamlinehq.com) Core free icons — free icons from Streamline (CC BY 4.0, attribution required; `resources/icons-streamline/CREDITS.md`).
 - Bundled editor fonts — five monospace families, all unmodified, shipped in place of the proprietary Consolas (`resources/fonts/CREDITS.md`): [Cascadia Mono](https://github.com/microsoft/cascadia-code) — © Microsoft, the **default** and fallback face — [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) — © the JetBrains Mono Project Authors — [IBM Plex Mono](https://github.com/IBM/plex) — © IBM Corp. — [Iosevka Fixed](https://github.com/be5invis/Iosevka) — © Renzhi Li — all four SIL OFL 1.1 — and [Hack](https://github.com/source-foundry/Hack) — © Source Foundry Authors (MIT + Bitstream Vera). Cascadia, IBM Plex and Iosevka carry Reserved Font Names (see [`LICENSING.md`](LICENSING.md)).
-- Color themes: kept third-party themes are MIT (© Fabio Zendhi Nagao; Bespin © Oren Farhi) or CC BY 3.0 (© Paul Neubauer); regenerated themes + the default styler use permissive palettes (GitHub Primer, Atom One, Nord, Dracula, VS Code — all MIT; canonical Zenburn/Obsidian colors). [Markdown Preview Enhanced](https://github.com/shd101wyy/vscode-markdown-preview-enhanced) (NCSA) was reviewed as a permissive palette source.
+- Color themes: kept third-party themes are MIT (© Fabio Zendhi Nagao; Bespin © Oren Farhi) or CC BY 3.0 (© Paul Neubauer); regenerated themes (both defaults among them) use permissive palettes (GitHub Primer, Atom One, Nord, Dracula, VS Code — all MIT; canonical Zenburn/Obsidian colors). [Markdown Preview Enhanced](https://github.com/shd101wyy/vscode-markdown-preview-enhanced) (NCSA) was reviewed as a permissive palette source.

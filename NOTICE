@@ -6,7 +6,8 @@ LICENSE), with a few exceptions among the optional plugins that ship, each of
 which remains GPL-3.0-or-later because it reproduces a Notepad++
 interoperability surface: packages/npp-bridge/ (the plugin ABI),
 packages/udl-compat/ (the userDefineLang.xml UDL format), and
-packages/npp-shortcuts-compat/ (the shortcuts.xml keybinding format). Each has
+packages/npp-compat/ (Notepad++'s settings, shortcuts, theme, context-menu, language,
+session and workspace file formats). Each has
 its own LICENSE. npp-bridge's never-shipped, Windows-only test fixture
 packages/test_plugin/ tracks the same GPL license for the same reason. The
 Apache-2.0 core links against none of them. This NOTICE records the project's
@@ -72,6 +73,60 @@ libvterm
   third_party/libvterm-tables/ (same MIT license and copyright - mechanical
   transformations of upstream's .tbl data; see that directory's README.md).
 
+rapidyaml (YAML and JSON reader and writer)
+  Copyright (c) 2018 Joao Paulo Magalhaes <dev@jpmag.me>. MIT License.
+  Reads and writes every file wxNote keeps for itself (settings, key bindings,
+  themes, sessions...) and the Plugins Admin catalog. Its single-header release
+  v0.16.0, pinned by SHA256, is fetched at build time and compiled into the
+  executable and the npp-compat and npp-bridge plugins; not vendored in this
+  repository. That header carries, under their own notices:
+    * c4core - Copyright (c) 2018 Joao Paulo Magalhaes, MIT License.
+    * fast_float (number parsing) - Copyright (c) 2021 The fast_float authors,
+      MIT License.
+    * debugbreak - Copyright (c) 2011-2021 Scott Tsai, BSD 2-Clause License.
+
+Keyword lists for languages SciTE has none for — src/keywords_contrib.h
+  The header carries each source and its terms; the licenses are reproduced
+  at the end of this file. Repeated words are dropped and one typo is
+  corrected.
+  Clarion: from Devuna's Kwik Source Search (bin/clarion.properties),
+  Copyright (c) 2017 Devuna, MIT License.
+  Gui4Cli: from Gui4Cli's own SciEd editor (Languages/Gui4Cli.ini, Gui4Cli
+  20.06), by D. Keletsekis (www.gui4cli.org); SciEd "can be freely used,
+  redistributed, enhanced, altered, canibalized and deleted", and Gui4Cli is
+  released under the MIT licence.
+  ABL (OpenEdge): abl-tmlanguage's abl-keywords.txt, Copyright (c) 2016
+  ZaphyrVonGenevese, MIT License.
+  BibTeX: LaTeX Workshop's entry lists, Copyright (c) 2016 James Yu, MIT
+  License.
+  CoffeeScript: CoffeeScript 2.7.0's lexer, Copyright (c) 2009-2018 Jeremy
+  Ashkenas, MIT License; global classes from highlight.js 11.12.0, Copyright
+  (c) 2006, Ivan Sagalaev, BSD 3-Clause License.
+  GDScript: Godot 4.7.2, Copyright (c) 2014-present Godot Engine contributors,
+  Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur, MIT License.
+  Julia: JuliaSyntax.jl, Copyright (c) 2021 Julia Computing and contributors,
+  and Julia 1.13.1, Copyright (c) 2009-2025 Jeff Bezanson, Stefan Karpinski,
+  Viral B. Shah, and other contributors; both MIT License.
+  MS SQL, MySQL and Stata: Pygments 2.21.0, Copyright (c) 2006-2022 by the
+  respective authors (see the Pygments AUTHORS file), BSD 2-Clause License.
+  MS SQL also: system view, @@ function and system procedure names from
+  Microsoft's SQL Server documentation (github.com/MicrosoftDocs/sql-docs),
+  (c) Microsoft, Creative Commons Attribution 4.0 International
+  (https://creativecommons.org/licenses/by/4.0/); changed: the page titles
+  reduced to the bare names and lower-cased.
+  MySQL also: system variable names from go-mysql-server, Copyright 2022
+  Dolthub, Inc., Apache License 2.0 (the text is in LICENSE); changed: only
+  the variable names are taken.
+  Stata also: newer commands from tree-sitter-stata (public domain, the
+  Unlicense) and types from language-stata, Copyright (c) 2017 Kyle Barron,
+  MIT License.
+
+Notepad++'s English menu names — packages/npp-compat/npp_menu_names.h
+  The <Commands> table of Notepad++ 8.9.6.4's localization/english.xml,
+  Copyright (C) Don HO, GPL-3.0-or-later. Only the GPL npp-compat plugin
+  carries it, to read a contextMenu.xml whose items are named by their menu
+  text; the Apache-2.0 core has no copy.
+
 Hunspell (spell-check engine)
   Copyright (c) László Németh and contributors.
   Tri-licensed MPL-1.1 / GPL-2.0-or-later / LGPL-2.1-or-later; wxNote uses it
@@ -103,7 +158,122 @@ Color themes — resources/themes/
   original author header. The formerly-kept DansLeRuSH-Dark theme was removed
   2026-07-11: its upstream license is CC BY-NC-SA 3.0 (NonCommercial), which we
   do not redistribute — see LICENSING.md.
-  Regenerated themes + stylers.model.xml are our own data
+  Regenerated themes (Default.yaml among them) are our own data
   (Apache-2.0): the factual Lexilla style structure recoloured from permissive
   palettes - GitHub Primer, Atom One Dark/Light, Nord, Dracula and VS Code (all
   MIT) plus the canonical Zenburn / Obsidian palettes (colour values are facts).
+
+------------------------------------------------------------------------------
+License texts
+------------------------------------------------------------------------------
+
+The permissive licenses named above ask for their text to travel with every
+copy of the software, the binaries included. The Apache License 2.0 is in
+LICENSE; the others follow.
+
+MIT License
+  Applies to each component above marked "MIT License" (or "MIT licence"),
+  with the copyright notice given at that entry:
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to
+  deal in the Software without restriction, including without limitation the
+  rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+  sell copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+
+BSD 2-Clause License - Pygments (the MS SQL, MySQL and Stata keyword lists)
+
+  Copyright (c) 2006-2022 by the respective authors (see AUTHORS file).
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are
+  met:
+
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+BSD 2-Clause License - debugbreak (inside rapidyaml)
+
+  Copyright (c) 2011-2021, Scott Tsai
+
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+  1. Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
+  2. Redistributions in binary form must reproduce the above copyright notice,
+     this list of conditions and the following disclaimer in the documentation
+     and/or other materials provided with the distribution.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
+
+BSD 3-Clause License - highlight.js (the CoffeeScript global classes)
+
+  Copyright (c) 2006, Ivan Sagalaev.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+  * Redistributions of source code must retain the above copyright notice, this
+    list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+
+  * Neither the name of the copyright holder nor the names of its
+    contributors may be used to endorse or promote products derived from
+    this software without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

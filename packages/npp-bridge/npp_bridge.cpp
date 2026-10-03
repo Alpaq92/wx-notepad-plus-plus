@@ -20,6 +20,7 @@
 #include "Docking.h"           // tTbData / DWS_DF_* / CONT_* - the N++ docking-registration ABI
 #include "abi_layout_asserts.h"  // compile-time guard: catches accidental ABI struct-layout drift
 #include "shim/npp_shim.h"     // NppHostBridge / npp_shim_bind - the shim<->bridge contract (CONTRACT 2)
+#include "npp_session.h"       // Notepad++ session XML, read and written for the NPPM_*SESSION* messages (npp-compat)
 
 #ifdef _WIN32
   #include <windows.h>
@@ -72,13 +73,13 @@ static const NibDocumentsApi* g_docs  = nullptr;  // nib.documents - serves the 
 static const NibWin32Api*     g_win32 = nullptr;  // nib.win32 - serves docking (NPPM_DMM*); NULL off-Windows
 static const NibSciApi*       g_sci   = nullptr;  // nib.sci - the portable SCI_* passthrough (every OS)
 static const NibPathsApi*     g_paths = nullptr;  // nib.paths - user-data dir; the off-Windows plugins base
+static const NibSessionApi*   g_session = nullptr; // nib.session - the host's own session files, positions and all
 static const NibCommandsApi*  g_cmds  = nullptr;  // nib.commands - invoke a built-in command by id (NPPM_MENUCOMMAND)
 static const NibUiApi*        g_ui      = nullptr;  // nib.ui - menu checkmarks + dark probe/palette (SETMENUITEMCHECK, ISDARKMODEENABLED, GETDARKMODECOLORS)
 static const NibToolbarApi*   g_toolbar = nullptr;  // nib.toolbar - plugin toolbar buttons (ADDTOOLBARICON*); NULL on old hosts
 static const NibAllocApi*     g_alloc   = nullptr;  // nib.alloc - cmd-id/marker/indicator grants (ALLOCATE* + FuncItem cmdIDs)
 static const NibKeymapApi*    g_keymap  = nullptr;  // nib.keymap - v2 effective_shortcut read (NPPM_GETSHORTCUTBYCMDID); NULL on old hosts
 static const NibEventsApi*    g_eventsV3 = nullptr; // nib.events v3 table - set_modified_mask + the v3 event kinds; NULL on old hosts
-static const NibSessionApi*   g_session = nullptr;  // nib.session - save/load/enumerate session files (NPPM_*SESSION*); NULL on old hosts
 static const NibLexerApi*     g_lexer   = nullptr;  // nib.lexer - Lexilla CreateLexer + user-lang count (NPPM_CREATELEXER/GETNBUSERLANG); NULL on old hosts
 static const NibEventsApi*    g_eventsV4 = nullptr; // nib.events v4 table - long-tail file lifecycle + cmdline plugin message; NULL on old hosts
 static bool                   g_eventsV2 = false;   // host speaks nib.events v2 (id-carrying SAVING/SAVED/BEFORE_OPEN)
@@ -616,6 +617,92 @@ static int activeView()
 {
     return (g_docs && g_docs->version >= 3 && g_docs->active_view) ? g_docs->active_view(g_host) : 0;
 }
+
+// ---- Notepad++ session files (NPPM_SAVECURRENTSESSION, NPPM_LOADSESSION, ...) --------------------
+// Notepad++ plugins save, list and load sessions by path and expect Notepad++'s own session XML in those
+// files - a session manager may well parse them itself. wxNote's own sessions are YAML (nib.session), so
+// the bridge translates (npp_session.h): it has the host save its session into a scratch file and writes
+// that out as Notepad++ XML, and loads a Notepad++ session by writing it out as a scratch wxNote session
+// for the host to open - which is how the active file's caret, first visible line and bookmarks, and each
+// view's active tab, come across both ways. The host never sees Notepad++'s format. A host without
+// nib.session gets the plain file list, from nib.documents.
+static bool readFileAtUtf8Path(const std::string& path, std::string& out)
+{
+    out.clear();
+#ifdef _WIN32
+    FILE* f = ::_wfopen(wFromUtf8(path.c_str()).c_str(), L"rb");
+#else
+    FILE* f = std::fopen(path.c_str(), "rb");
+#endif
+    if (!f) return false;
+    char buf[65536];
+    for (size_t n; (n = std::fread(buf, 1, sizeof buf, f)) > 0;) out.append(buf, n);
+    const bool ok = !std::ferror(f);
+    std::fclose(f);
+    return ok;
+}
+static bool writeFileAtUtf8Path(const std::string& path, const std::string& bytes)
+{
+#ifdef _WIN32
+    FILE* f = ::_wfopen(wFromUtf8(path.c_str()).c_str(), L"wb");
+#else
+    FILE* f = std::fopen(path.c_str(), "wb");
+#endif
+    if (!f) return false;
+    const bool wrote = std::fwrite(bytes.data(), 1, bytes.size(), f) == bytes.size();
+    return std::fclose(f) == 0 && wrote;
+}
+// The scratch wxNote session the translation goes through: in the user's own data folder, never a shared
+// temp directory where another account could have planted something under the name.
+static std::string scratchSessionPath()
+{
+    if (!g_paths || !g_paths->user_data_dir) return std::string();
+    char buf[2048];
+    const int n = g_paths->user_data_dir(g_host, buf, static_cast<int>(sizeof(buf)));
+    if (n <= 0 || n >= static_cast<int>(sizeof(buf))) return std::string();
+    return std::string(buf, static_cast<size_t>(n)) + "/npp-session.scratch.yaml";
+}
+static void removeFileAtUtf8Path(const std::string& path)
+{
+#ifdef _WIN32
+    ::_wremove(wFromUtf8(path.c_str()).c_str());
+#else
+    std::remove(path.c_str());
+#endif
+}
+// The host's open (saved) documents, both views, as a Notepad++ session at `path`.
+static bool saveCurrentNppSession(const std::string& path)
+{
+    const std::string scratch = scratchSessionPath();
+    if (g_session && g_session->save_current && !scratch.empty())
+    {
+        std::string yaml;
+        nppcompat::NppSession s;
+        const bool ok = g_session->save_current(g_host, scratch.c_str()) && readFileAtUtf8Path(scratch, yaml)
+                     && nppcompat::sessionFromWxnote(yaml, s);
+        removeFileAtUtf8Path(scratch);
+        if (ok) return writeFileAtUtf8Path(path, nppcompat::nppSessionXml(s));
+    }
+    if (!g_docs || g_docs->version < 5 || !g_docs->view_count || !g_docs->id_at) return false;
+    std::vector<std::string> views[2];
+    int active[2] = { 0, 0 };
+    const intptr_t activeId = g_docs->active_id ? g_docs->active_id(g_host) : 0;
+    for (int v = 0; v < 2; ++v)
+        for (int i = 0, n = g_docs->view_count(g_host, v); i < n; ++i)
+        {
+            const intptr_t id = g_docs->id_at(g_host, v, i);
+            const std::string p = toUtf8(pathFromIdW(id).c_str());
+            if (p.empty()) continue;                      // untitled: nothing on disk to reopen
+            if (id == activeId) active[v] = static_cast<int>(views[v].size());
+            views[v].push_back(p);
+        }
+    return writeFileAtUtf8Path(path, nppcompat::nppSessionXml(views, active, activeView()));
+}
+static bool nppSessionFiles(const std::string& path, std::vector<std::string>& files)
+{
+    std::string xml;
+    return readFileAtUtf8Path(path, xml) && nppcompat::sessionFilesFromNpp(xml, files);
+}
 // Map a file path's extension to a Notepad++ LangType. The L_* enum is N++ ABI, so this mapping lives in
 // the GPL bridge (not the permissive core). Untitled / unknown -> L_TEXT.
 static int langTypeForPath(const std::wstring& path)
@@ -668,7 +755,8 @@ static LRESULT putPath(WPARAM wParam, LPARAM lParam, const std::wstring& s)
 // every OS from the shared router (no HWND, no host hook).
 
 // The host's per-user data dir (nib.paths), wide; empty if unavailable. Backs NPPM_GETNPPSETTINGSDIRPATH
-// (Windows N++ keeps its settings in the registry; wxNote keeps them under this dir on every OS).
+// (Notepad++ keeps its settings in %APPDATA%\Notepad++ or beside a portable copy; wxNote keeps them
+// under this dir on every OS).
 static std::wstring userDataDirW()
 {
     if (g_host && g_paths && g_paths->user_data_dir) {
@@ -1528,62 +1616,69 @@ static bool bridge_handleNppm(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& o
         }
 
         // ================================================================================================
-        //  Phase 5 - sessions (nib.session), UI-chrome + editor state (nib.ui v2), lexer registry
-        //  (nib.lexer). All cross-platform: session XML is by-path, chrome visibility is a portable model
+        //  Phase 5 - sessions (Notepad++ XML, see saveCurrentNppSession), UI-chrome + editor state (nib.ui v2), lexer registry
+        //  (nib.lexer). All cross-platform: sessions are Notepad++ XML by path, chrome visibility is a portable model
         //  (the macOS global menubar is a documented no-op, NOT a per-platform detach hack), and Lexilla's
         //  CreateLexer is built into the host on every OS.
         // ================================================================================================
-        // -- sessions (all by explicit path; the written XML is Notepad++-session-parseable) --
+        // -- sessions: all by explicit path, all in Notepad++'s own session XML (see saveCurrentNppSession) --
         case NPPM_SAVECURRENTSESSION: {   // lParam = session file path; save the currently-open files
             const wchar_t* path = reinterpret_cast<const wchar_t*>(lParam);
             out = 0;
-            if (path && *path && g_session && g_session->save_current
-                && g_session->save_current(g_host, toUtf8(path).c_str()))
+            if (path && *path && saveCurrentNppSession(toUtf8(path)))
                 out = static_cast<LRESULT>(lParam);   // N++ returns the session path on success, NULL otherwise
             return true;
         }
         case NPPM_SAVESESSION: {          // lParam = sessionInfo* (explicit file list to save)
             const sessionInfo* si = reinterpret_cast<const sessionInfo*>(lParam);
             out = 0;
-            if (!si || !si->sessionFilePathName || !g_session || !g_session->save_files) return true;
-            std::vector<std::string> utf8;   // own the UTF-8 conversions...
-            std::vector<const char*> ptrs;   // ...then a stable const char*[] for the ABI
-            for (int i = 0; i < si->nbFile; ++i) utf8.push_back(si->files && si->files[i] ? toUtf8(si->files[i]) : std::string());
-            for (const auto& s : utf8) ptrs.push_back(s.c_str());
-            if (g_session->save_files(g_host, toUtf8(si->sessionFilePathName).c_str(),
-                                      ptrs.empty() ? nullptr : ptrs.data(), static_cast<int>(ptrs.size())))
+            if (!si || !si->sessionFilePathName) return true;
+            std::vector<std::string> views[2];
+            const int active[2] = { 0, 0 };
+            for (int i = 0; i < si->nbFile; ++i)
+                if (si->files && si->files[i] && *si->files[i]) views[0].push_back(toUtf8(si->files[i]));
+            if (writeFileAtUtf8Path(toUtf8(si->sessionFilePathName), nppcompat::nppSessionXml(views, active, 0)))
                 out = reinterpret_cast<LRESULT>(si->sessionFilePathName);   // N++ returns the path back
             return true;
         }
         case NPPM_LOADSESSION: {          // lParam = session file path; open its files
             const wchar_t* path = reinterpret_cast<const wchar_t*>(lParam);
-            out = (path && *path && g_session && g_session->load
-                   && g_session->load(g_host, toUtf8(path).c_str())) ? TRUE : FALSE;
+            std::string xml;
+            nppcompat::NppSession s;
+            out = FALSE;
+            if (!path || !*path || !readFileAtUtf8Path(toUtf8(path), xml) || !nppcompat::sessionFromNpp(xml, s)) return true;
+            out = TRUE;                                                            // it parsed as a session
+            // Through the host's own session loader, so positions, bookmarks and the active tab come too.
+            const std::string scratch = scratchSessionPath();
+            if (g_session && g_session->load && !scratch.empty()
+                && writeFileAtUtf8Path(scratch, nppcompat::wxnoteSessionYaml(s)))
+            {
+                const int loaded = g_session->load(g_host, scratch.c_str());
+                removeFileAtUtf8Path(scratch);
+                if (loaded) return true;
+            }
+            if (g_docs && g_docs->open)
+                for (const auto& view : s.views)
+                    for (const nppcompat::NppSessionFile& f : view) g_docs->open(g_host, f.path.c_str());   // a file gone since is skipped
             return true;
         }
         case NPPM_GETNBSESSIONFILES: {    // wParam = optional BOOL* pbIsValidXML, lParam = session file path
             const wchar_t* path = reinterpret_cast<const wchar_t*>(lParam);
             BOOL* valid = reinterpret_cast<BOOL*>(wParam);
-            if (valid) *valid = FALSE;
-            out = 0;
-            if (!path || !*path || !g_session || !g_session->file_count) return true;
-            int v = 0;
-            out = g_session->file_count(g_host, toUtf8(path).c_str(), &v);
-            if (valid) *valid = v ? TRUE : FALSE;
+            std::vector<std::string> files;
+            const bool ok = path && *path && nppSessionFiles(toUtf8(path), files);
+            if (valid) *valid = ok ? TRUE : FALSE;
+            out = ok ? static_cast<LRESULT>(files.size()) : 0;
             return true;
         }
         case NPPM_GETSESSIONFILES: {      // wParam = wchar_t** (caller-sized via GETNBSESSIONFILES), lParam = path
             wchar_t** arr = reinterpret_cast<wchar_t**>(wParam);
             const wchar_t* path = reinterpret_cast<const wchar_t*>(lParam);
+            std::vector<std::string> files;
             out = FALSE;
-            if (!arr || !path || !*path || !g_session || !g_session->file_count || !g_session->file_at) return true;
-            const std::string p = toUtf8(path);
-            const int n = g_session->file_count(g_host, p.c_str(), nullptr);
-            for (int i = 0; i < n; ++i) {
-                char buf[MAX_PATH * 3] = {0};
-                g_session->file_at(g_host, p.c_str(), i, buf, static_cast<int>(sizeof(buf)));
-                if (arr[i]) copyWideZ(arr[i], wFromUtf8(buf).c_str(), MAX_PATH);
-            }
+            if (!arr || !path || !*path || !nppSessionFiles(toUtf8(path), files)) return true;
+            for (size_t i = 0; i < files.size(); ++i)
+                if (arr[i]) copyWideZ(arr[i], wFromUtf8(files[i].c_str()).c_str(), MAX_PATH);
             out = TRUE; return true;
         }
         // -- UI chrome visibility (nib.ui v2). HIDE* return the OLD hidden status; IS* return TRUE when
@@ -1763,6 +1858,7 @@ static void activate(NibHost* host, NibQueryFn query)
     g_docs = static_cast<const NibDocumentsApi*>(query(host, NIB_IFACE_DOCUMENTS, 1));   // current-file-path NPPM
     g_sci  = static_cast<const NibSciApi*>(query(host, NIB_IFACE_SCI, 1));               // portable SCI_* passthrough (every OS)
     g_paths = static_cast<const NibPathsApi*>(query(host, NIB_IFACE_PATHS, 1));          // off-Windows plugins base + NPPM home/config dir
+    g_session = static_cast<const NibSessionApi*>(query(host, NIB_IFACE_SESSION, 1));    // NPPM_SAVECURRENTSESSION / LOADSESSION, via the host's files
     const NibWin32Api* w = static_cast<const NibWin32Api*>(query(host, NIB_IFACE_WIN32, 1));
     g_win32 = w;   // docking (NPPM_DMM*) routes through nib.win32; NULL off-Windows
     g_ui      = static_cast<const NibUiApi*>(query(host, NIB_IFACE_UI, 1));            // menu checks + dark palette
@@ -1770,7 +1866,6 @@ static void activate(NibHost* host, NibQueryFn query)
     if (!g_toolbar) g_toolbar = static_cast<const NibToolbarApi*>(query(host, NIB_IFACE_TOOLBAR, 1));
     g_alloc   = static_cast<const NibAllocApi*>(query(host, NIB_IFACE_ALLOC, 1));      // cmd/marker/indicator grants
     g_keymap  = static_cast<const NibKeymapApi*>(query(host, NIB_IFACE_KEYMAP, 2));    // v2 effective_shortcut read (NPPM_GETSHORTCUTBYCMDID); NULL on old hosts
-    g_session = static_cast<const NibSessionApi*>(query(host, NIB_IFACE_SESSION, 1));  // session save/load/enumerate (NPPM_*SESSION*); NULL on old hosts
     g_lexer   = static_cast<const NibLexerApi*>(query(host, NIB_IFACE_LEXER, 1));      // Lexilla CreateLexer + user-lang count; NULL on old hosts
     // The bridge's one command sink: fired allocated ids dispatch FuncItem actions and relay dynamic
     // NPPM_ALLOCATECMDID ids to every plugin's messageProc (see on_alloc_command). Registered BEFORE

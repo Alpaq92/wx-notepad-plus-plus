@@ -15,12 +15,12 @@ Three of the four hard parts already have precedent in this tree:
 | Need | Already here |
 | --- | --- |
 | Spawn a child process and consume its output without freezing the UI | `src/term_backend.cpp` (the PTY backend) |
-| Read JSON | `src/json_value.h` — **parse only** |
+| Read JSON | `src/yaml_io.h` — `parseJson` over rapidyaml, which keeps `"1"` and `1` apart (`jsonType`) |
 | Do background work in slices off a timer | `src/file_index.h` (the Quick Open crawl) |
 | Keep protocol logic pure so it is testable with no server | `diff_myers.h`, `regex_engine.h`, `file_index.h` |
 
-The genuinely new pieces are a small **JSON writer** (the reader is parse-only; the writer that exists
-lives in `keymap_store.h` and is schema-specific) and the **position conversion** below.
+The genuinely new pieces are **JSON output** (rapidyaml emits JSON too, but `yaml_io.h` wraps only its YAML
+emitter so far) and the **position conversion** below.
 
 ## The actual hard part: positions, not features
 

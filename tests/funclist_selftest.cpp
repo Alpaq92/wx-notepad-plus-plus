@@ -214,6 +214,41 @@ int main(int argc, char** argv)
     check(flCollect("whatever\n", "no-such-language").empty(), "unknown language -> no symbols, no throw");
     check(flCollect("", "cpp").empty(), "empty buffer -> no symbols");
 
+    // ---- functionlist.yaml: the user's own rules, merged over the built-ins --------------------------
+    {
+        const wxString path = wxFileName::CreateTempFileName("wxnfl");
+        const std::string yaml =
+            "languages:\n"
+            "  ocaml:\n"
+            "    extensions: [ml, MLI]\n"
+            "    comment: '\\(\\*[\\s\\S]*?\\*\\)'\n"
+            "    rules:\n"
+            "      - {kind: container, group: 1, regex: '^\\s*module\\s+(\\w+)'}\n"
+            "      - {kind: function, group: 1, regex: '^\\s*let\\s+(?:rec\\s+)?(\\w+)'}\n"
+            "      - {kind: function, group: 1, regex: '([unclosed'}\n"   // a bad pattern is dropped alone
+            "  python:\n"
+            "    extend: true\n"
+            "    rules:\n"
+            "      - {regex: '^\\s*(\\w+)\\s*=\\s*lambda'}\n";
+        { wxFile f(path, wxFile::write); f.Write(yaml.data(), yaml.size()); }
+        check(loadFunctionListRules(path).empty(), "functionlist.yaml: a good file reports no error");
+        check(g_flUserExtToLang.count("ml") && g_flUserExtToLang["ml"] == "ocaml" && g_flUserExtToLang.count("mli"),
+              "functionlist.yaml: extensions map to the language, lower-cased");
+        check(g_flUserRules.count("ocaml") && g_flUserRules["ocaml"].size() == 2, "functionlist.yaml: two good rules, the bad one dropped");
+        expectNames("(* let fake = 1 *)\nmodule M = struct\n  let rec go x = x\nend\n", "ocaml", { "M", "go" },
+                    "functionlist.yaml: a new language's rules and comment mask apply");
+        check(g_flUserRules.count("python") && g_flUserRules["python"].size() > 1,
+              "functionlist.yaml: extend: true keeps the built-in rules and adds to them");
+        check(contains(names("double = lambda x: 2 * x\ndef f():\n    pass\n", "python"), "double")
+              && contains(names("def f():\n    pass\n", "python"), "f"),
+              "functionlist.yaml: the added rule finds its symbol, a built-in one still finds its own");
+        { wxFile f(path, wxFile::write); f.Write("languages: [broken\n", 19); }
+        const std::string err = loadFunctionListRules(path);
+        check(g_flUserRules.empty() && g_flUserExtToLang.empty(), "functionlist.yaml: a file that does not parse adds nothing");
+        check(err.find("line") != std::string::npos, "functionlist.yaml: ...and says where it broke");
+        wxRemoveFile(path);
+    }
+
     // ---- wxnCollectWords: prefix match, dedupe, and the style filter ---------------------------------
     {
         const std::string doc = "alpha alphabet alpha beta\n";
@@ -364,54 +399,72 @@ int main(int argc, char** argv)
               "prose mask: no zone list at all falls back to the regex, which masks that comment");
     }
 
-    // ---- plugin state (plugins.dat): disabled + queued-for-uninstall round-trip -------------------
+    // ---- plugin state (state.yaml plugins/*): disabled + queued-for-uninstall round-trip -----------
     {
         std::set<std::string> dis, uni, d2, u2;
         dis.insert("udl_compat.dll");
-        dis.insert("my plugin with spaces.dll");   // file names may contain spaces: the payload is the
-        uni.insert("old_thing.dll");               // rest of the line, not the next token
-        check(wxnParsePluginState(wxnSerializePluginState(dis, uni), d2, u2),
-              "plugins.dat: current format version parses");
-        check(d2 == dis, "plugins.dat: the disabled set round-trips, spaces in file names included");
-        check(u2 == uni, "plugins.dat: the queued-uninstall set round-trips");
+        dis.insert("my plugin with spaces.dll");   // file names may contain spaces
+        uni.insert("old_thing.dll");
+        wxnsettings::StateFile s;
+        s.load("");
+        wxnWritePluginState(s, dis, uni);
+        wxnsettings::StateFile back;
+        check(back.load(s.mergeForSave("")), "plugin state: state.yaml with it parses");
+        wxnReadPluginState(back, d2, u2);
+        check(d2 == dis, "plugin state: the disabled set round-trips, spaces in file names included");
+        check(u2 == uni, "plugin state: the queued-uninstall set round-trips");
 
         // Keys are compared lowercased everywhere (nibIsDisabled lowercases before lookup), so a file
         // recorded in mixed case must come back lowercased or a disable would silently stop matching.
-        std::set<std::string> mixed, back, none2;
-        mixed.insert("MiXeD.DLL");
-        wxnParsePluginState("wxn-plugins 1\nD MiXeD.DLL\n", back, none2);
-        check(back.size() == 1 && *back.begin() == "mixed.dll", "plugins.dat: keys normalise to lowercase");
-
-        // A newer format version is refused outright rather than partly read - the caller then leaves
-        // the file alone instead of rewriting it and dropping what it could not represent.
-        std::set<std::string> a, b;
-        check(!wxnParsePluginState("wxn-plugins 2\nD x.dll\n", a, b), "plugins.dat: a newer version is refused");
-        check(a.empty() && b.empty(), "plugins.dat: ... and yields nothing rather than a partial set");
-
-        // Junk is skipped, and an unknown leading tag contributes nothing.
-        std::set<std::string> c, d;
-        check(wxnParsePluginState("wxn-plugins 1\nnonsense\nX y.dll\nD ok.dll\n", c, d),
-              "plugins.dat: junk and unknown tags are skipped");
-        check(c.size() == 1 && *c.begin() == "ok.dll" && d.empty(), "plugins.dat: ... leaving only the valid row");
+        wxnsettings::StateFile mixed;
+        mixed.load("plugins:\n  disabled: [MiXeD.DLL, '']\n");
+        std::set<std::string> m1, m2;
+        wxnReadPluginState(mixed, m1, m2);
+        check(m1.size() == 1 && *m1.begin() == "mixed.dll" && m2.empty(), "plugin state: names normalise to lowercase, blanks dropped");
     }
 
-    // ---- saved Run commands: the runcommands.dat format round-trips -------------------------------
-    // Free functions precisely so this needs no frame. The fields are base64'd because either may hold
-    // a space, a quote or a newline, and the format is line-oriented - so those are what get tested.
+    // ---- saved Run commands: runcommands.yaml round-trips ------------------------------------------
+    // Free functions precisely so this needs no frame. Either field may hold a space, a quote or a
+    // newline, so those are what get tested.
     {
         std::vector<SavedRun> in = {
             { 1, "Build",              "cmake --build build" },
             { 7, "Open in \"Notepad\"", "notepad \"$(FULL_CURRENT_PATH)\"" },
             { 9, "Multi\nline name",   "echo a\nb" },
+            // UTF-8 spelled out: a plain char* literal goes through the C library's locale (C on CI's Linux,
+            // which turns it into nothing), not UTF-8
+            { 11, wxString::FromUTF8("\xC4\x84\xC4\x99 #not: a comment"), "- dash first" },
         };
         std::vector<SavedRun> out; long nextUid = 0;
-        check(wxnParseRuns(wxnSerializeRuns(in, 42), out, nextUid), "runs: current format version parses");
-        check(out.size() == 3, "runs: all three commands survive the round trip");
+        const std::string written = wxnSerializeRuns(in, 42);
+        check(wxnParseRuns(written, out, nextUid), "runs: current format version parses");
+        check(out.size() == in.size(), "runs: every command survives the round trip");
         check(nextUid == 42, "runs: nextUid is carried through");
+        if (nextUid != 42)   // seen on Windows ARM64 only: show what was written and how it reads back
+        {
+            const std::string& text = written;
+            std::vector<SavedRun> again;
+            long nextAgain = 0;
+            const bool parsedAgain = wxnParseRuns(text, again, nextAgain);
+            std::printf("        nextUid %ld (the same text parsed again: %d, %ld), read from:\n%s\n", nextUid,
+                        parsedAgain, nextAgain, text.c_str());
+            wxnyaml::Doc d;
+            const bool parsed = wxnyaml::parse(text, d);
+            std::printf("        parsed %d (%s), root map %d\n", parsed, d.error.c_str(), wxnyaml::isMap(d.root()));
+            if (wxnyaml::isMap(d.root()))
+                for (wxnyaml::Node c : d.root().children())
+                {
+                    long long v = 0;
+                    const bool isInt = wxnyaml::getInteger(c, v);
+                    std::printf("        key [%s] text [%s] integer %d %lld\n", wxnyaml::keyOf(c).c_str(),
+                                wxnyaml::textOr(c, std::string("<none>")).c_str(), isInt, v);
+                }
+            std::fflush(stdout);
+        }
         bool same = out.size() == in.size();
         for (size_t i = 0; same && i < in.size(); ++i)
             same = out[i].uid == in[i].uid && out[i].name == in[i].name && out[i].cmd == in[i].cmd;
-        check(same, "runs: uid, name and command all round-trip verbatim (spaces, quotes, newlines)");
+        check(same, "runs: uid, name and command all round-trip verbatim (spaces, quotes, newlines, non-ASCII)");
 
         // A uid on disk at or above the stored nextUid must push nextUid past it, or the next saved
         // command would reuse a uid and inherit a shortcut bound to the old one.
@@ -420,16 +473,47 @@ int main(int argc, char** argv)
         wxnParseRuns(wxnSerializeRuns(hi, 1), back, n2);
         check(n2 == 501, "runs: nextUid is pulled ahead of the highest uid on disk");
 
-        // A newer format version is refused rather than silently truncated - the caller marks the set
-        // read-only so saving cannot drop commands it could not represent.
+        // A newer format version - or a file that does not parse - is refused rather than silently
+        // truncated: the caller marks the set read-only so saving cannot drop commands it could not read.
         std::vector<SavedRun> none; long n3 = 0;
-        check(!wxnParseRuns("wxn-runs 2\nnext 5\n", none, n3), "runs: a newer format version is refused");
+        check(!wxnParseRuns("version: 2\nnextId: 5\n", none, n3), "runs: a newer format version is refused");
         check(none.empty(), "runs: ... and yields no commands rather than a partial set");
+        check(!wxnParseRuns("commands: [unclosed\n", none, n3), "runs: an unreadable file is refused too");
+        check(wxnParseRuns("", none, n3) && none.empty(), "runs: an empty file is simply no commands");
 
-        // Garbage lines are skipped, not fatal.
+        // Rows missing what they need are skipped, not fatal.
         std::vector<SavedRun> ok; long n4 = 0;
-        check(wxnParseRuns("wxn-runs 1\nnonsense\nR notanumber zz zz\n", ok, n4), "runs: junk lines are skipped");
-        check(ok.empty(), "runs: ... and contribute no commands");
+        check(wxnParseRuns("commands:\n  - {id: x, name: a, command: b}\n  - {id: 3, name: '', command: b}\n  - {id: 4, name: ok, command: run}\n", ok, n4),
+              "runs: bad rows are skipped");
+        check(ok.size() == 1 && ok[0].uid == 4, "runs: ... leaving only the complete one");
+    }
+
+    // ---- saved macros: macros.yaml round-trips --------------------------------------------------------
+    {
+        std::vector<SavedMacro> in(2);
+        in[0].uid = 3; in[0].name = "Trim: \"and\" save";
+        in[0].steps.push_back({ 2327, 0, 0 });
+        MacroStep typed{ 2170, 0, 0 }; typed.hasText = true; typed.text = "hello \xC4\x85 # not a comment\n";
+        in[0].steps.push_back(typed);
+        in[1].uid = 8; in[1].name = "Legacy bytes";
+        MacroStep raw{ 2170, 0, 0 }; raw.hasText = true; raw.text = std::string("\xE9t\xE9\0x", 5);   // CP-1252, and a NUL
+        in[1].steps.push_back(raw);
+        const std::string yaml = wxnSerializeMacros(in, 9);
+        check(yaml.find("textBase64") != std::string::npos, "macros: non-UTF-8 text is stored as textBase64");
+        std::vector<SavedMacro> out; long nextUid = 0;
+        check(wxnParseMacros(yaml, out, nextUid), "macros: current format version parses");
+        bool same = out.size() == 2 && nextUid == 9;
+        for (size_t i = 0; same && i < in.size(); ++i)
+        {
+            same = out[i].uid == in[i].uid && out[i].name == in[i].name && out[i].steps.size() == in[i].steps.size();
+            for (size_t k = 0; same && k < in[i].steps.size(); ++k)
+                same = out[i].steps[k].msg == in[i].steps[k].msg && out[i].steps[k].hasText == in[i].steps[k].hasText
+                    && out[i].steps[k].text == in[i].steps[k].text;
+        }
+        check(same, "macros: names, steps and text (UTF-8 or not, NUL included) round-trip byte for byte");
+        std::vector<SavedMacro> none; long n2 = 0;
+        check(!wxnParseMacros("version: 2\nmacros: []\n", none, n2) && none.empty(), "macros: a newer format version is refused");
+        check(!wxnParseMacros("macros: [unclosed\n", none, n2), "macros: an unreadable file is refused");
     }
 
     // ---- call-tip signatures: the extractor shared by the keystroke path and the workspace index ---

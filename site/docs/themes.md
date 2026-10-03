@@ -11,21 +11,53 @@ There are two independent appearance settings, and it helps to keep them apart:
 
 **Settings&nbsp;&rsaquo; Style Configurator…** opens a three-column editor:
 
-1. **Select theme** — a dropdown of *Default* plus every theme XML installed.
+1. **Select theme** — a dropdown of *Default* plus every theme installed: the bundled ones and your own.
 2. **Language** — *Global Styles* plus one entry per lexer the theme defines.
 3. **Style** — the token styles within the selected language.
 
-For the selected style you can set the **Foreground colour**, the **Background colour**, and **Bold** /
-**Italic**. (Bold and Italic are disabled for Global Styles, which carry colours only.)
+For the selected style you can set the **Foreground colour**, the **Background colour**, **Bold** /
+**Italic** / **Underline**, and the style's own **font**, **size** and **weight** (blank or 0 inherits
+the editor's). (The font settings are disabled for Global Styles, which carry colours only.)
 
 Changes preview live in the editor as you make them. The dialog has **Save &amp; Close** and **Cancel**,
 so unlike Preferences you can back out.
 
+### File extensions
+
+Below the lists, the **File extensions** box shows which files open as the selected language:
+
+- **Default ext.** — the extensions wxNote already recognises for it (read-only).
+- **User ext.** — your own, separated by spaces: `inc` under *php*, say, or `txt` under *python*.
+  Press <kbd>Enter</kbd> to try them on the open document; **Save &amp; Close** keeps them.
+
+Your extensions decide the highlighting, Toggle Comment and the Function List together, and win over
+every built-in rule and over a plugin language's own extensions. An extension belongs to one language
+at a time, so typing it under another language moves it there. (INI-style files open as *Properties*,
+so their extensions go under *props*.) They are kept in wxNote's settings, not in the theme file as in Notepad++,
+so they stay when you switch themes (or the theme follows dark/light mode). A theme's own
+per-language `extensions` lists (which a theme imported from Notepad++ brings along) are read as well,
+but only for extensions wxNote does not already place.
+
+### Keywords
+
+Beside it, the **Keywords** box shows the selected language's keyword lists, as Notepad++'s Style
+Configurator does:
+
+- **Keyword list** — each list the language's lexer reads (its keywords, types, built-in functions…),
+  then your own **USER KEYWORDS** groups, which the theme colours with the styles of that name.
+- **Default keywords** — wxNote's own words in that list (read-only).
+- **User-defined keywords** — words you add, separated by spaces. The document in front shows them as
+  you switch lists; **Save &amp; Close** keeps them.
+
+The words are saved in [`languages.yaml`](languages.md#your-own-language-definitions-languagesyaml) with
+the rest of the language's definition — not in the theme, as Notepad++ does — so they stay when you
+switch themes. A list that file replaces whole is shown but not edited here.
+
 ## Bundled themes
 
-27 themes ship with the editor:
+28 themes ship with the editor:
 
-Bespin · Black board · Choco · DarkModeDefault · Deep Black · Dracula · GitHub Dark · GitHub Light ·
+Bespin · Black board · Choco · DarkModeDefault · Deep Black · Default · Dracula · GitHub Dark · GitHub Light ·
 Hello Kitty · HotFudgeSundae · Mono Industrial · Monokai · MossyLawn · Navajo · Nord · Obsidian ·
 One Dark · One Light · Plastic Code Wrap · Ruby Blue · Solarized · Solarized-light · Twilight ·
 Vibrant Ink · Zenburn · khaki · vim Dark Blue
@@ -36,11 +68,39 @@ otherwise.
 
 ## Importing themes
 
-**Settings&nbsp;&rsaquo; Import&nbsp;&rsaquo; Import style theme(s)…** takes one or more `.xml` theme
-files and copies them into the editor's `themes` directory. The status bar confirms how many were
-imported; the new entries then appear in the Style Configurator's theme dropdown.
+**Settings&nbsp;&rsaquo; Import&nbsp;&rsaquo; Import style theme(s)…** takes one or more wxNote theme
+files (`.yaml`) and copies them into your own `themes` folder in the per-user data directory; a file
+that does not read as a theme is named in a warning and not copied. The status bar confirms how many
+were imported; the new entries then appear in the Style Configurator's theme dropdown. A theme of your
+own with the same name as a bundled one takes its place.
 
-The format is the familiar `stylers`-style XML, so Notepad++ theme files generally import directly.
+A **Notepad++ theme** (`.xml`) comes in through the optional `npp-compat` plugin: open it in wxNote and
+run **Extensions&nbsp;&rsaquo; Import the Open Notepad++ File**, or let
+**Extensions&nbsp;&rsaquo; Import from Notepad++…** bring across every theme in your Notepad++ settings
+folder. Each is translated into a wxNote theme named *&lt;name&gt; (Notepad++)*.
+
+## The theme file
+
+A theme is a YAML file: a `global:` block of named editor styles, and a `lexers:` block with each
+language's token styles. A colour is written `'#RRGGBB'`, `fontStyle` takes any of `bold`, `italic`
+and `underline`, and a field left out is simply not set — the style then keeps the default's value.
+
+```yaml
+# My theme.
+global:
+  Default Style: {fg: '#24292F', bg: '#FFFFFF', size: 10}
+  Current line background colour: {bg: '#F6F8FA'}
+lexers:
+  python:
+    description: Python
+    styles:
+      - {id: 1, name: COMMENTLINE, fg: '#6E7781', fontStyle: italic}
+      - {id: 5, name: KEYWORDS, fg: '#CF222E', fontStyle: bold}
+```
+
+The Style Configurator writes its changes back into the theme's file and keeps the comment block at its
+top. If a theme file does not parse, the editor falls back to its built-in colours and the status bar
+says where the file broke.
 
 ## Editor colours not covered by the theme
 

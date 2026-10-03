@@ -466,7 +466,7 @@ int main()
         deep.append(200, ']');
         wxnplug::Index idx;
         wxnplug::ParseResult pr = wxnplug::parseIndex(deep, idx);
-        check(!pr.ok && !pr.error.empty(), "parseIndex: 200-deep array rejected (kMaxDepth), no crash");
+        check(!pr.ok && !pr.error.empty(), "parseIndex: 200-deep array rejected (no catalog object), no crash");
         std::vector<wxnplug::Entry> es;
         pr = wxnplug::parseTargetList(deep, es);
         check(!pr.ok, "parseTargetList: 200-deep array rejected, no crash");

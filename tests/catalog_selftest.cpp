@@ -26,6 +26,9 @@
 //      the old strings, and the regional twin dirs (pl_PL, de_DE, ...) hold a byte-identical copy that
 //      is easy to forget. -> each wxn.mo is the current compile of its wxn.po (msgstrs compared, not
 //      just msgids), and each twin matches its base byte for byte.
+//   E. LEFTOVER MSGID - a string the code no longer uses, kept in the template and translated eight times
+//      over for nothing: 107 had piled up (a retired dialog, old preferences, reworded messages).
+//      -> every msgid in wxn.pot is a marked literal somewhere in src/ (wxGetTranslation("...") counts).
 //
 // The source side is a real C++ lexer, not a regex. Comments are skipped: three PROSE comments in src/
 // discuss _("...") / wxTRANSLATE("...") in passing, and a regex reports those as missing strings - that
@@ -133,7 +136,7 @@ static bool lexSource(const std::string& s, std::vector<Span>& spans, std::vecto
                 i = e + close.size();
                 continue;
             }
-            if (id == "_" || id == "wxTRANSLATE") {
+            if (id == "_" || id == "wxTRANSLATE" || id == "wxGetTranslation") {
                 size_t k = j;
                 while (k < n && (s[k] == ' ' || s[k] == '\t')) ++k;
                 if (k < n && s[k] == '(') markers.push_back(k + 1);
@@ -421,6 +424,7 @@ int main()
     std::sort(sources.begin(), sources.end());
 
     size_t scanned = 0, missing = 0, broken = 0;
+    std::set<std::string> used;   // every marked literal, for E
     for (const auto& p : sources) {
         const std::string name = p.filename().string();
         std::string text;
@@ -452,6 +456,7 @@ int main()
             }
             if (!taken || lit.empty()) continue;
             ++scanned;
+            used.insert(lit);
             if (!potIds.count(lit)) {
                 ++missing;
                 detail(name + ":" + std::to_string(lineOf(text, at)) + " not in wxn.pot: " + repr(lit));
@@ -461,6 +466,12 @@ int main()
     check(missing == 0 && broken == 0,
           "A: all " + std::to_string(scanned) + " _()/wxTRANSLATE() literals in " +
           std::to_string(sources.size()) + " src/ files are msgids in wxn.pot");
+
+    // ---- E: every msgid in the template is still used ----------------------------------------------
+    size_t leftover = 0;
+    for (const std::string& id : potIds)
+        if (!id.empty() && !used.count(id)) { ++leftover; detail("in wxn.pot, used nowhere in src/: " + repr(id)); }
+    check(leftover == 0 && broken == 0, "E: every msgid in wxn.pot is used in src/");
 
     // ---- B/C/D: the per-language catalogs --------------------------------------------------------
     std::vector<fs::path> pos;

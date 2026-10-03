@@ -13,4 +13,5 @@ inline const wxString SettingsImportSubmenu()    { return _("Import"); }
 inline const wxString SettingsImportPlugins()    { return _("Import plugin(s)..."); }
 inline const wxString SettingsImportStyleThemes(){ return _("Import style theme(s)..."); }
 inline const wxString SettingsEditContextMenu()  { return _("Edit Popup ContextMenu"); }
+inline const wxString SettingsEditLanguages()    { return _("Edit Language Definitions"); }
 }

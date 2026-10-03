@@ -18,11 +18,29 @@ The menu also has:
 - **User Defined Language ▸** containing **Open User Defined Language folder…**,
 - **User-Defined** at the bottom.
 
-The language is normally chosen automatically from the file's extension; picking an entry from this
-menu **forces** that lexer on the active buffer for the rest of the session.
+Picking an entry from this menu **forces** that lexer on the active buffer. A saved session keeps the
+pick, and **File&nbsp;&rsaquo; Load Session** applies it again.
 
 Set the language new documents start in with
 **Preferences&nbsp;&rsaquo; New Document&nbsp;&rsaquo; Default language**.
+
+### How a file's language is chosen
+
+Unless you pick one, wxNote chooses a file's language itself, from its **name** and, when the name says
+nothing, its **first line** — in this order:
+
+1. **Your own mappings:** the Style Configurator's [**User ext.**](themes.md#file-extensions), a
+   `functionlist.yaml` `extensions` list, then the file names and extensions in
+   [`languages.yaml`](#your-own-language-definitions-languagesyaml).
+2. **The name:** some 340 extensions and whole file names such as `Makefile`, `CMakeLists.txt`,
+   `Dockerfile` or `PKGBUILD` (Scintillua's own detection table), plus wxNote's table for the languages
+   that one has no entry for (Kotlin, JSON5, Inno Setup…).
+3. **The first line:** a `languages.yaml` `firstLine` pattern, a shebang (`#!/usr/bin/env python3`),
+   an XML prolog, an HTML doctype, or the shape of JSON.
+
+Upper-case names count too (`FOO.CPP` is C++), and a backup copy (`.orig`, `.bak`, a trailing `~`)
+is judged by the name underneath it. An extension several languages claim (`.m`, `.inc`, `.cls`…)
+stays plain text rather than being guessed: map it with **User ext.** if you always mean one of them.
 
 ## Comments
 
@@ -63,6 +81,68 @@ A few points worth knowing:
 Languages registered at runtime by a plugin (see below) are not in this table: the `nib.langdef`
 interface has no way to hand their comment characters to the host yet, so those buffers report that
 their comment syntax is unknown instead of guessing.
+
+Any of these can be changed for a language in [`languages.yaml`](#your-own-language-definitions-languagesyaml).
+
+## Keyword lists
+
+Most Lexilla lexers colour keywords only from lists the editor hands them. wxNote hands lists to
+**98 languages**: SciTE's — Lexilla's companion editor, whose language files are written for exactly
+these lexers — for most of them, Lexilla's own for Dart, Nix, TOML and Zig, and for the ten SciTE has
+none for, lists from the languages' own projects and other editors: Clarion, Gui4Cli, ABL (OpenEdge),
+BibTeX, CoffeeScript, GDScript, Julia, MS SQL, MySQL and Stata. Each list goes into the lexer's slot
+for it — keywords, types, built-in functions… — so a theme can colour each kind its own way, and
+autocomplete offers the same words.
+
+The [Style Configurator](themes.md#keywords) shows each language's lists, and `languages.yaml` (below)
+changes them. Where every list comes from, and under what licence, is in
+[NOTICE](https://github.com/Alpaq92/wx-notepad-plus-plus/blob/master/NOTICE).
+
+## Your own language definitions — `languages.yaml`
+
+What Notepad++ keeps in `langs.xml` — which files open as each language, how it is commented, and its
+keyword lists — wxNote keeps in its own data, and **`languages.yaml`** in the user data folder holds
+your changes to it. **Settings&nbsp;&rsaquo; Edit Language Definitions** opens it, starting it from a
+commented example the first time. Only what you write there changes; everything else stays as wxNote
+has it, so a later wxNote's new keywords and extensions still reach you.
+
+```yaml
+languages:
+  C++:                                     # the Language menu's name, in any case
+    extensions: {add: [ipp, tpp]}          # files that open as it, without the dot
+    filenames: [conanfile.txt]             # whole file names
+    firstLine: '^//.*-\*-\s*c\+\+'         # a regular expression the first line can match
+    comments: {line: '//', block: ['/*', '*/']}
+    keywords:
+      types: {add: [size_t, ssize_t]}
+      userKeywords1: [Q_OBJECT, emit]      # coloured by the theme's USER KEYWORDS 1
+  Python:
+    keywords: {add: [match, case]}         # short for its "keywords" list
+```
+
+- **Every list takes two forms.** A plain list replaces wxNote's own; `{add: [...], remove: [...]}`
+  changes it. A word or extension you remove stays removed when wxNote's own list grows.
+- **Extensions** you add win over wxNote's own rules (and a plugin language's); one you remove no
+  longer opens as that language, so the file falls back to its first line, or to plain text.
+  The **User ext.** field of the [Style Configurator](themes.md#file-extensions) is the quicker way
+  to map an extension, and wins over this file.
+- **Comments** take a `line` token and a `block` pair; `''` or `[]` takes a form away.
+- **Keyword lists** go by the names the Style Configurator shows for the language — `keywords`,
+  `types`, `functions`, `taskMarkers`… — and `userKeywords1`…`8` (`userTags`, `userAttributes`,
+  `userScalars` for HTML, XML and shell) are your own groups, coloured by the theme's **USER KEYWORDS**
+  styles. What a list holds is what the highlighting and completion use. Write words in the case the
+  language's own list uses (the Style Configurator shows it): SQL's or Pascal's lists are lower case,
+  and their lexers match only lower-case entries. `null`, `Null` and `NULL` are words in a list like
+  any other, though YAML reads them as nothing elsewhere.
+- A language or list name wxNote does not know, or a value of the wrong shape, is skipped and named in
+  the status bar; the rest of the file still counts. A file that does not parse is not used at all
+  until it is fixed; one that cannot be read leaves things as they were. Changes apply to the next
+  document you open or switch to.
+
+The [Style Configurator](themes.md#keywords) edits the keyword part for you, and
+**Extensions&nbsp;&rsaquo; Import from Notepad++…** brings across what you added to Notepad++'s
+`langs.xml` — and the *User-defined keywords* of its Style Configurator — when Notepad++'s own
+`langs.model.xml` is at hand to compare with (an installed Notepad++ has it in its program folder).
 
 ## Code folding
 

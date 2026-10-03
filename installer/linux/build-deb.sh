@@ -19,7 +19,7 @@ OUTDIR="build/installer"
 rm -rf "$PKGDIR"
 mkdir -p "$PKGDIR/DEBIAN" "$PKGDIR/opt/wxnote" "$PKGDIR/usr/bin" \
          "$PKGDIR/usr/share/applications" "$PKGDIR/usr/share/icons/hicolor/scalable/apps" \
-         "$OUTDIR"
+         "$PKGDIR/usr/share/doc/wxnote" "$OUTDIR"
 
 # Installs to /opt/wxnote (exe + resources co-located) with a /usr/bin symlink, rather than the
 # traditional FHS split (exe in /usr/bin, resources in /usr/share) - same reasoning as
@@ -31,6 +31,10 @@ rm -rf "$PKGDIR/opt/wxnote/nib/nib_test_plugin.so" "$PKGDIR/opt/wxnote/nib/examp
 ln -s /opt/wxnote/wxnote "$PKGDIR/usr/bin/wxnote"
 cp installer/linux/wxnote.desktop "$PKGDIR/usr/share/applications/wxnote.desktop"
 cp resources/wxnote.svg "$PKGDIR/usr/share/icons/hicolor/scalable/apps/wxnote.svg"
+# The licence travels with the package (Apache-2.0 4(a)), where Debian keeps it: the package's
+# copyright file - NOTICE, with the third-party attributions and the licence texts they ask for,
+# then the Apache License itself.
+{ cat NOTICE; printf '\n'; cat LICENSE; } > "$PKGDIR/usr/share/doc/wxnote/copyright"
 
 cat > "$PKGDIR/DEBIAN/control" <<EOF
 Package: wxnote

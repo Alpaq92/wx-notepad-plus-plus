@@ -57,6 +57,11 @@ make_icns resources/wxnote.svg     wxnote
 # and Windows cannot end up shipping two different document icons.
 make_icns resources/wxnote-doc.svg wxnote-doc
 
+# The licence travels with the app (Apache-2.0 4(a)) - Info.plist's copyright line points at it - and
+# NOTICE with it: the third-party attributions and the licence texts they ask for. Copied before the
+# codesign below, so the signature covers them.
+cp LICENSE NOTICE "$APPDIR/Contents/Resources/"
+
 cat > "$APPDIR/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

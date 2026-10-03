@@ -256,8 +256,8 @@
           <p>
             wxNote is a ground-up, cross-platform text editor built on wxWidgets and wxStyledTextCtrl
             (Scintilla/Lexilla). It runs natively on Windows, Linux, and macOS — on x64 and ARM alike —
-            from one codebase, with its own plugin API, theming, User-Defined Languages, and full UI
-            localization.
+            from one codebase, with its own plugin API, theming, User-Defined Languages, settings in plain
+            YAML, and full UI localization.
           </p>
 
           <p>
@@ -393,6 +393,13 @@
 
             <li class="highlights-item">
               <div class="content-card highlight-card">
+                <p class="highlight-number">98</p>
+                <p class="highlight-label">Programming languages with full keyword lists, for highlighting and autocomplete</p>
+              </div>
+            </li>
+
+            <li class="highlights-item">
+              <div class="content-card highlight-card">
                 <p class="highlight-number">Apache-2.0</p>
                 <p class="highlight-label">Free, open source, and permissively licensed</p>
               </div>
@@ -416,6 +423,7 @@
             <li><a href="https://www.wxwidgets.org/" target="_blank" rel="noopener">wxWidgets</a></li>
             <li><a href="https://www.scintilla.org/" target="_blank" rel="noopener">Scintilla</a></li>
             <li><a href="https://github.com/ScintillaOrg/lexilla" target="_blank" rel="noopener">Lexilla</a></li>
+            <li><a href="https://github.com/biojppm/rapidyaml" target="_blank" rel="noopener">rapidyaml</a></li>
             <li><a href="https://cmake.org/" target="_blank" rel="noopener">CMake</a></li>
             <li><a href="https://github.com/features/actions" target="_blank" rel="noopener">GitHub Actions</a></li>
             <li><a href="https://nsis.sourceforge.io/" target="_blank" rel="noopener">NSIS</a></li>
@@ -489,7 +497,7 @@
 
               <p class="timeline-text">
                 Type a name, press Tab, and fill in the blanks &mdash; Tab moves between them. Write the loop
-                variable once and every copy follows as you type. Bring your own in a plain text file.
+                variable once and every copy follows as you type. Bring your own in <code>snippets.yaml</code>.
               </p>
 
             </li>
@@ -504,7 +512,8 @@
                 Comment and uncomment using the characters the language actually uses - <code>#</code> in
                 Python, <code>--</code> in SQL, <code>;</code> in an INI file, <code>&lt;!-- --&gt;</code> in
                 HTML - across all 112 built-in languages. Formats with no comment syntax, like JSON, are left
-                alone and say so rather than being quietly broken.
+                alone and say so rather than being quietly broken. Your own tokens for any language go in
+                <code>languages.yaml</code>.
               </p>
 
             </li>
@@ -556,7 +565,7 @@
 
               <p class="timeline-text">
                 Rebind any menu or editor command in the Shortcut Mapper, switch between shortcut schemes -
-                or import your Notepad++ shortcuts.xml as one - all stored in a portable shortcuts.json.
+                or import your Notepad++ shortcuts.xml as one - all stored in a portable keybindings.yaml.
               </p>
 
             </li>
@@ -570,6 +579,91 @@
               <p class="timeline-text">
                 A themed, live print preview with customizable header and footer macros, backed by Scintilla's
                 own formatted-range printing.
+              </p>
+
+            </li>
+
+          </ol>
+
+        </section>
+
+        <section class="timeline">
+
+          <div class="title-wrapper">
+            <div class="icon-box">
+              <svg viewBox="0 0 512 512" width="1em" height="1em" fill="currentColor" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="35" d="M160 368L32 256l128-112M352 368l128-112-128-112M304 96l-96 320"/></svg>
+            </div>
+
+            <h3 class="h3">Languages &amp; settings</h3>
+          </div>
+
+          <ol class="timeline-list">
+
+            <li class="timeline-item">
+
+              <h4 class="h4 timeline-item-title">Keyword lists for 98 languages</h4>
+
+              <span>Highlighting &amp; autocomplete</span>
+
+              <p class="timeline-text">
+                Pascal, Fortran, Ada, VHDL, COBOL, the SQL dialects and dozens more colour their keywords,
+                types and built-in functions - from SciTE's lists, written for the very same lexers, and from the
+                languages' own projects where SciTE has none. Autocomplete offers the same words.
+              </p>
+
+            </li>
+
+            <li class="timeline-item">
+
+              <h4 class="h4 timeline-item-title">Opens as the right language</h4>
+
+              <span>Name &amp; first line</span>
+
+              <p class="timeline-text">
+                Some 340 extensions and file names such as <code>Makefile</code> or <code>Dockerfile</code>,
+                then the first line - a shebang, an XML prolog, an HTML doctype - when the name says nothing.
+                Map extensions of your own in the Style Configurator, as in Notepad++.
+              </p>
+
+            </li>
+
+            <li class="timeline-item">
+
+              <h4 class="h4 timeline-item-title">Your own language definitions</h4>
+
+              <span>languages.yaml</span>
+
+              <p class="timeline-text">
+                Change a language's extensions, comment characters and keyword lists - add a few words or
+                replace a whole list - in one file that holds only your changes, so a newer wxNote's own
+                additions still reach you. The Style Configurator's Keywords box edits it for you.
+              </p>
+
+            </li>
+
+            <li class="timeline-item">
+
+              <h4 class="h4 timeline-item-title">Settings you can read</h4>
+
+              <span>settings.yaml</span>
+
+              <p class="timeline-text">
+                Every preference is one line of plain YAML in your user folder - only what you changed, with your
+                own comments kept - and key bindings, themes, snippets, sessions and workspaces are YAML too.
+                Nothing goes to the registry.
+              </p>
+
+            </li>
+
+            <li class="timeline-item">
+
+              <h4 class="h4 timeline-item-title">A right-click menu of your own</h4>
+
+              <span>contextmenu.yaml</span>
+
+              <p class="timeline-text">
+                Add, remove and rename the editor's context-menu commands, group them into submenus and include
+                plugin commands - or bring Notepad++'s <code>contextMenu.xml</code> across as it is.
               </p>
 
             </li>
@@ -636,7 +730,7 @@
               <span>Import &amp; export</span>
 
               <p class="timeline-text">
-                Reads and writes Notepad++'s own session, style-theme, and user-defined-language XML formats.
+                Brings a Notepad++ setup across: its settings, shortcuts, themes, context menu, language definitions, sessions and user-defined languages.
               </p>
 
             </li>
@@ -722,6 +816,11 @@
                   <td class="c-npp">Yes</td>
                 </tr>
                 <tr>
+                  <th scope="row">Settings</th>
+                  <td class="c-wx"><span class="c-plus">Plain YAML - only what you changed, your comments kept</span></td>
+                  <td class="c-npp">XML files</td>
+                </tr>
+                <tr>
                   <th scope="row">Plugins</th>
                   <td class="c-wx"><span class="c-plus">Its own, plus Notepad++ plugins on Windows</span></td>
                   <td class="c-npp">Notepad++ plugins</td>
@@ -744,7 +843,8 @@
           <p class="compare-note">
             <strong>The short version:</strong> if you love Notepad++, you lose nothing by trying
             wxNote - and you gain your Mac and Linux machines, a more permissive open-source licence,
-            and a fresh plugin system that can still load your existing Windows plugins. wxNote is the
+            and a fresh plugin system that can still load your existing Windows plugins. An optional import
+            brings your Notepad++ settings, shortcuts, themes and right-click menu along. wxNote is the
             younger project, so its plugin library is smaller today, but it's growing. Grab it from the
             <strong>Download</strong> tab.
           </p>

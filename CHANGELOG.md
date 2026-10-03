@@ -3,6 +3,138 @@
 All notable changes to wxNote are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Language detection now recognises about 340 file extensions and file names, and first lines.** It
+  uses the detection built into Scintillua (already shipped with wxNote) instead of a table of 16
+  extension groups, so `.html`, `.php`, `.md`, `.toml`, `.go`, `.kt`, `Makefile`, `CMakeLists.txt`,
+  `Dockerfile`, `PKGBUILD`, `.bashrc` and the rest of the Language menu now open highlighted.
+  Upper-case names and backup copies (`.orig`, `.bak`, a trailing `~`) are recognised too, and a file
+  with no extension is placed by its shebang, XML prolog, HTML doctype or JSON shape. Extensions that
+  several languages claim (`.m`, `.inc`, `.cls`, ...) stay plain text rather than being guessed. A
+  `functionlist.yaml` `extensions` list now changes the highlighting as well, not only the Function List
+  and comments.
+- **Your own file extensions, in the Style Configurator.** Each language now shows a "File extensions"
+  box like Notepad++'s: the extensions wxNote already opens as that language (**Default ext.**), and a
+  **User ext.** field for your own, such as `inc` for PHP or `txt` for Python. They change the
+  highlighting, Toggle Comment and the Function List together, and beat every built-in rule as well as
+  a plugin language's own extensions. Unlike Notepad++ they are stored in wxNote's settings rather
+  than in the theme, so switching themes, or dark and light mode, does not lose them. A theme's own
+  `extensions` lists (which a Notepad++ theme brings along when imported) are read too, but only fill in
+  extensions wxNote does not already place.
+- **Your own language definitions: `languages.yaml`.** What Notepad++ keeps in `langs.xml` - which files
+  open as each language, how it is commented, and its keyword lists - can now be changed per language
+  in `languages.yaml` (**Settings > Edit Language Definitions**): `extensions`, `filenames` and a
+  `firstLine` pattern, the `comments` tokens, and every keyword list by name (`keywords`, `types`,
+  `functions`, `taskMarkers`...). Each list is either replaced or edited with `{add, remove}`, so a later
+  wxNote's own additions still arrive; the file holds only what you change. The shape follows VS Code,
+  Sublime Text, Pulsar and TextMate where they agree.
+- **The Style Configurator edits keywords.** Each language has a Keywords box like Notepad++'s: the
+  list (with what it holds), wxNote's *Default keywords*, and your *User-defined keywords*, saved to
+  `languages.yaml`. Your own **USER KEYWORDS** groups work now: the themes' USER KEYWORDS 1-8 styles (USER
+  TAGS and USER ATTRIBUTES for HTML and XML, USER SCALAR for shell) colour the words you put in them, as
+  in Notepad++.
+- The Function List now follows a language picked from the Language menu, as Toggle Comment already
+  did, and the detected language when its own extension table has no answer - an untitled buffer set to
+  Python, a script with no extension, a `Rakefile`. MS SQL and MySQL use the SQL rules.
+- **Keyword lists for 98 languages, most from SciTE.** Pascal, Fortran, Ada, VB, Haskell, Tcl, Verilog,
+  VHDL, NSIS, Inno Setup, AutoIt, COBOL, LaTeX and about 60 more languages had no keyword list, so their
+  keywords looked like any other word; they now get SciTE's - Lexilla's companion editor, whose lists
+  are written for exactly these lexers - in every keyword slot the lexer has (keywords, types, built-in
+  functions...). Dart, Nix, TOML and Zig, which SciTE's files leave out, get Lexilla's own lists, and
+  the ten languages SciTE never had lists for get other projects': Devuna's Kwik Source Search for Clarion
+  (MIT), Gui4Cli's own SciEd editor for Gui4Cli, OpenEdge's own keyword list for ABL, LaTeX Workshop's
+  entry types for BibTeX, CoffeeScript's own lexer, Godot's reserved words, types and functions for
+  GDScript, Julia's own keywords and exports, and Pygments' lists for MS SQL, MySQL and Stata (with
+  Microsoft's documentation for SQL Server's system procedures). Clarion also switches to Lexilla's case-insensitive
+  lexer, so `loop` and `LOOP` colour alike, and - since no theme has a Clarion section - takes its colours
+  from each theme's C++ ones; the Style Configurator lists it like any other language.
+  Autocomplete offers the same words. `tools/scite_keywords.cpp` regenerates the table from a newer
+  SciTE.
+- **Import from Notepad++.** The optional GPL module that imported `shortcuts.xml` is now `npp-compat`
+  and brings a whole Notepad++ setup across: **Extensions > Import from Notepad++...** reads an
+  installed Notepad++'s settings folder and translates `config.xml` into wxNote settings (tab size,
+  word wrap, line numbers, new-document EOL and encoding, dark mode, the theme and more), `shortcuts.xml`
+  into a key-binding scheme, its themes into wxNote themes and `contextMenu.xml` into wxNote's right-click
+  menu (items named by their menu text such as Notepad++'s own Cut, Copy and Paste, submenus, renamed
+  items and plugin commands included), and what you added to `langs.xml` - extensions, keywords, the
+  Style Configurator's user-defined keywords - into `languages.yaml`, then reports what came across
+  and what had nowhere to go. A file it replaces is kept aside as `.bak`, never over an earlier backup. **Import the Open Notepad++ File** does the
+  same for one file, and opens a Notepad++ session or turns a Project-panel workspace into a wxNote one.
+  The new `npp2wxnote` command-line tool runs the same translations without wxNote.
+- **The right-click menu can have submenus, labels of your own and plugin commands.** In
+  `contextmenu.yaml` an item can be `{command: edit.copy, label: Copy Text}`, `{menu: ..., items: [...]}`
+  or `{plugin: MIME Tools, command: Base64 Encode}`, as Notepad++'s `contextMenu.xml` allows. Toggles
+  such as Word Wrap show their check mark, and an item naming something wxNote or its loaded plugins
+  don't have is left out rather than breaking the menu.
+- **`nib.settings/1`** (Nib ABI 1.8): a plugin can read and change a setting by its id; wxNote checks
+  every value against its own table of settings, as it does for a hand-edited `settings.yaml`.
+
+### Fixed
+- **File > Close All crashed** with any file open, and so did **Close All But This** with the view
+  split and **Close All But Pinned**: deleting one tab moved the editor onto the next, which was then
+  deleted with it. Exiting with the view split crashed too, as did splitting again after the views had
+  folded back together.
+- **Close All to the Left / Right** closed tabs with unsaved changes without the save prompt, even with
+  *Ask before closing unsaved changes* on. They now ask, as Close All does, and a Cancel closes nothing.
+  Like **Close All Unchanged**, they now also let **Restore Recent Closed File** reopen what they
+  closed, and tell a waiting `wxnote -w` when its file goes.
+- A saved session wrote each file's status-bar label (translated, "C++ source file") as its language and
+  never read it back. It now keeps a language picked from the Language menu, Normal Text included, and
+  **Load Session** picks it again; a detected language is detected again.
+- `.go` files opened as plain text: they were handed to a Lexilla lexer that does not exist. They now
+  highlight as Go, with Go keywords - and picking Go, Kotlin or Swift from the Language menu now gets
+  that language's keywords instead of C++'s.
+- ActionScript was highlighted by Lexilla's GNU-assembler lexer; it now uses the C++ lexer, as in
+  Notepad++.
+- HTML, PHP, ASP, JSP, fixed-form Fortran, PostScript, AutoIt, BaanC, COBOL, Octave and VBScript found
+  no theme colours and were painted with the C++ fallback colours on unrelated tokens. They now use
+  their own theme sections, and JavaScript and PHP inside HTML are coloured too.
+- Toggle Comment now works in files whose language is only known from detection (scripts with no
+  extension, `CMakeLists.txt`, `PKGBUILD`, systemd units), and comments `.inf` files with `;`.
+
+### Changed
+- **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved
+  out of the Windows registry (an INI file elsewhere) into `settings.yaml` in the per-user data
+  directory. It holds only what you changed - the defaults live in wxNote - as one `id: value` line
+  per setting, VS Code style, plus a `languages:` block for per-language values (tab size and tabs or
+  spaces so far). wxNote changes one line at a time, so comments and order you add by hand survive, and
+  a file that does not parse is reported in the status bar, used as all-defaults and never written
+  over. What wxNote only remembers - window, zoom, recent files, the last session - goes to a separate
+  `state.yaml`, so moving a window never rewrites your settings. Key bindings (`keybindings.yaml`, rules
+  like `{key: ctrl+shift+a, command: file.saveAll}`), themes (`themes/<name>.yaml`), the right-click
+  menu (`contextmenu.yaml`), snippets, Function List rules, saved macros and Run commands, sessions and
+  Project-panel workspaces are YAML too. The layout follows VS Code, Sublime Text, JetBrains IDEs,
+  TextMate, Pulsar and Notepad4; [`docs/SETTINGS_DESIGN.md`](docs/SETTINGS_DESIGN.md) has the design.
+  Settings from earlier versions are not carried over. On Linux, where they were a file at the path the
+  data folder now takes (`~/.wxNote`), that file is renamed `~/.wxNote.old-settings` so the folder can be
+  created.
+- wxNote's core no longer reads any Notepad++ file - themes, sessions, workspaces and the context
+  menu included; `npp-compat` imports them (see Added). Notepad++ plugins running under `npp-bridge`
+  still save and load Notepad++ session files as before.
+- **Settings > Import > Import style theme(s)...** takes wxNote themes (`.yaml`) into your own themes
+  folder, which an installed copy can write to; a file that is not a theme is named and skipped.
+- Help > Debug Info names the `settings.yaml` in use, and its error if it has one.
+- The build fetches rapidyaml 0.16.0 (MIT, one header, pinned by SHA-256). It reads and writes every
+  file wxNote keeps and parses the plugin catalog, replacing wxNote's own JSON reader, its several XML
+  readers and its use of wxWidgets' XML library.
+- wxNote's own hand-written keyword lists (C/C++, JavaScript, Java, C#, Python, SQL, CSS and a dozen
+  more) are replaced by SciTE's for the same languages; only Kotlin, which SciTE has no list for, keeps
+  wxNote's. HTML now gets SciTE's tag and attribute list too, so an element or attribute it does not
+  know (a custom element, a framework attribute) takes the theme's "unknown tag" style, as in SciTE and
+  Notepad++ - the same colour as a known tag in 20 of the 28 bundled themes, a warning colour in the
+  other eight (Bespin, Solarized, khaki...).
+- New Toggle Comment toolbar icons in all four icon sets: the code tag with its slash doubled (`<//>`)
+  in the default set, Solar's own `code-circle`, IconPark's own `hashtag-key`, and a double slash on a
+  tile in Streamline.
+- The build pins Scintillua's `lexer.lua` to one upstream commit and checks its SHA-256. It used to be
+  taken from Scintillua's moving `default` branch, so a clean build could ship a different file.
+- The Linux and macOS packages now carry `LICENSE` and `NOTICE`, as the Windows installer and zip
+  already did: in the `.deb`'s `copyright` file, among the `.rpm`'s licence files, in the AppImage, in
+  the Flatpak's licence folder and inside the macOS app. `NOTICE` now also holds the full MIT and BSD
+  texts the bundled third-party code asks to travel with it.
+
 ## [0.20.0] - 2026-09-05
 
 ### Added

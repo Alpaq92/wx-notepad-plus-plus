@@ -62,6 +62,17 @@ public:
     std::vector<Token> lexAndFold(const std::string& name, const char* data, size_t len,
                                   std::vector<int>* foldLevels);
 
+    // Scintillua's own language detection, lexer.detect(): the name of the Scintillua lexer usually
+    // associated with `fileName` (a bare name - "main.go", "Makefile", "CMakeLists.txt") and/or with
+    // `firstLine` (shebangs, the XML prolog, #cloud-config). "" when it does not know. The first-line
+    // patterns are tried BEFORE the name; pass an empty `firstLine` to ask about the name alone.
+    std::string detect(const std::string& fileName, const std::string& firstLine);
+
+    // Every file name and extension detect() recognises by name, sorted: the keys of its built-in
+    // table plus any lexer.detect_extensions added at run time. For listing what a language opens by
+    // default; which language each one means is still detect()'s answer. Empty on error.
+    std::vector<std::string> detectionKeys();
+
 private:
     // Map a display name to a collision-free lexer key (its `<key>.lua` filename and require()/cache
     // key). Distinct names that would sanitize to the same identifier (e.g. "C++" and "C--") get

@@ -89,13 +89,13 @@ Save / Don't Save / Cancel prompt instead.
 
 ## Sessions
 
-**File&nbsp;&rsaquo; Save Session…** writes an XML file listing the open documents. Each entry stores
-more than the path: the caret position, the first visible line and the bookmarked lines are all
-preserved, so **File&nbsp;&rsaquo; Load Session…** restores where you actually were, not just which
-files were open.
+**File&nbsp;&rsaquo; Save Session…** writes a `.yaml` file listing the open documents. Each entry
+stores more than the path: the caret position, the first visible line and the bookmarked lines are all
+preserved, and so is a language you picked from the Language menu, so **File&nbsp;&rsaquo; Load
+Session…** restores where you actually were, not just which files were open.
 
-Session files written by Notepad++ (with a `<NotepadPlus>` root element) load fine — the loader does
-not check the root tag name.
+A session saved by Notepad++ opens through the optional `npp-compat` plugin: **Extensions&nbsp;&rsaquo;
+Import the Open Notepad++ File** with the session file open in front.
 
 ## Next steps
 

@@ -1,0 +1,32 @@
+# wxNote's editor right-click menu, top to bottom.
+#
+# Each item is one of:
+#
+#   - edit.copy                        a command, named as the Shortcut Mapper names it - or its number
+#                                      (42002 for Copy, the same numbers Notepad++ uses)
+#   - '-'                              a separator line
+#   - {command: edit.copy, label: Copy Text}
+#                                      a command under a label of your own (the shortcut still shows)
+#   - {plugin: MIME Tools, command: Base64 Encode}
+#                                      a plugin's command, by the plugin's name and the command's
+#   - menu: Change Case                a submenu, holding items of its own
+#     items: [edit.convertCaseTo.uppercase, edit.convertCaseTo.lowercase]
+#
+# A name this build does not have, or a plugin that is not installed, is skipped, so a typo cannot break
+# the menu - it just won't show that entry. Labels come from the real menu, in the current language,
+# unless you give one; a toggle such as view.wordWrap shows its check mark.
+#
+# Settings > Edit Popup ContextMenu opens your own copy of this file; a change applies at the next
+# right-click. Extensions > Import from Notepad++... can turn Notepad++'s contextMenu.xml into one.
+items:
+  - edit.undo
+  - edit.redo
+  - '-'
+  - edit.cut
+  - edit.copy
+  - edit.paste
+  - edit.delete
+  - '-'
+  - selection.selectAll
+  - '-'
+  - search.bookmark.toggle

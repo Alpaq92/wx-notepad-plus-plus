@@ -12,7 +12,7 @@
 ; (.po/.pot/tooling - the app only reads the compiled .mo files).
 ;
 ; THIS LIST IS HAND-MAINTAINED AND HAS DRIFTED BEFORE. Everything CMake stages into build/bin must be
-; either shipped here or consciously excluded above: fonts/, lexers/, contextMenu.xml and two of the
+; either shipped here or consciously excluded above: fonts/, lexers/, the context menu file and two of the
 ; three nib plugins were silently absent from every release up to and including 0.14.1, which meant
 ; installed builds had no Scintillua highlighting (lexer.lua is a hard requirement), no bundled default
 ; font, and no UDL support. The same list is duplicated in .github/workflows/build.yml's zip step and
@@ -35,8 +35,8 @@
 !define ARP_KEY     "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 ; File-association identity. PROGID is the registry name for "a file wxNote opens" - Windows will not
 ; offer an application as a handler at all until one exists. CAP_KEY is the Capabilities subkey that
-; lists wxNote in Settings > Default apps; it deliberately sits UNDER Software\wxNote, the app's own
-; settings key, so every removal path below deletes that SUBKEY alone and leaves the settings beside it.
+; lists wxNote in Settings > Default apps. It sits under Software\wxNote, and every removal path below
+; deletes that SUBKEY alone: anything else there (an earlier wxNote's registry settings) is not ours.
 !define PROGID      "wxNote.Document"
 !define CAP_KEY     "Software\wxNote\Capabilities"
 !define DOC_ICON    "wxnote-doc.ico"
@@ -65,10 +65,9 @@ SetCompressor /SOLID lzma
 ManifestDPIAware true
 
 ; Per-user install (no UAC), mirroring the previous installer's lowest-privilege default.
-; NOTE: the installer's own registry state deliberately lives OUTSIDE "Software\wxNote" - that key
-; is wxConfig's root for the app's user settings, and an installer-created subkey there would (a)
-; defeat the app's first-launch "new settings tree is still empty" legacy-migration gate and (b)
-; make uninstall's cleanup of installer state delete the user's settings with it.
+; NOTE: the installer's own registry state lives in a key of its own, "Software\wxNote-Installer", so
+; uninstall can delete it whole. wxNote itself keeps nothing in the registry - its settings are YAML
+; files in %APPDATA%\wxNote - and "Software\wxNote", where earlier versions kept them, is left alone.
 RequestExecutionLevel user
 InstallDir "$LOCALAPPDATA\Programs\${APP_NAME}"
 InstallDirRegKey HKCU "Software\wxNote-Installer" "InstallDir"
@@ -417,8 +416,8 @@ VIAddVersionKey /LANG=1033 "Comments"         "Open-source text editor. Source: 
   DeleteRegKey   HKCU "Software\Classes\Directory\shell\${APP_NAME}"
   DeleteRegKey   HKCU "Software\Classes\Directory\Background\shell\${APP_NAME}"
   DeleteRegValue HKCU "Software\RegisteredApplications" "${APP_NAME}"
-  ; The Capabilities SUBKEY only. Software\wxNote beside it is the user's settings and must survive,
-  ; exactly as the uninstaller's closing comment promises.
+  ; The Capabilities SUBKEY only - anything else under Software\wxNote is an earlier wxNote's settings,
+  ; not the installer's to remove.
   DeleteRegKey   HKCU "${CAP_KEY}"
 !macroend
 
@@ -474,8 +473,14 @@ Section "${APP_NAME} (required)" SecCore
   ; though the association section is optional: a DefaultIcon pointing at a file that is not there
   ; renders as a blank sheet, and that would outlive any later re-tick of the section.
   File "..\..\resources\${DOC_ICON}"
-  File "..\..\build\bin\stylers.model.xml"
-  File "..\..\build\bin\contextMenu.xml"
+  ; What earlier versions installed and this one no longer ships, so an install over one leaves nothing
+  ; stale behind: the XML resources the YAML files replaced, and npp_compat.dll's old name - which, left
+  ; in nib\, would still load as a second plugin claiming the same commands.
+  Delete "$INSTDIR\stylers.model.xml"
+  Delete "$INSTDIR\contextMenu.xml"
+  Delete "$INSTDIR\themes\*.xml"
+  Delete "$INSTDIR\nib\npp_shortcuts_compat.dll"
+  File "..\..\build\bin\contextmenu.yaml"
   File /r "..\..\build\bin\icons"
   File /r "..\..\build\bin\icons-solar"
   File /r "..\..\build\bin\icons-iconpark"
@@ -493,10 +498,11 @@ Section "${APP_NAME} (required)" SecCore
   SetOutPath "$INSTDIR\nib"
   File "..\..\build\bin\nib\npp_bridge.dll"
   ; The other two shipped bridge plugins: udl_compat provides User-Defined Language support (it is
-  ; where UDL moved when it left the core) and npp_shortcuts_compat maps Notepad++ keyboard shortcuts.
+  ; where UDL moved when it left the core) and npp_compat imports a Notepad++ setup (its settings,
+  ; shortcuts, themes, context menu, sessions and workspaces).
   ; nib_test_plugin.dll is deliberately NOT shipped - it is a dev-only loader test.
   File "..\..\build\bin\nib\udl_compat.dll"
-  File "..\..\build\bin\nib\npp_shortcuts_compat.dll"
+  File "..\..\build\bin\nib\npp_compat.dll"
   SetOutPath "$INSTDIR"
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -644,8 +650,7 @@ Section "Uninstall"
   Delete "$INSTDIR\LICENSE"
   Delete "$INSTDIR\NOTICE"
   Delete "$INSTDIR\${DOC_ICON}"
-  Delete "$INSTDIR\stylers.model.xml"
-  Delete "$INSTDIR\contextMenu.xml"
+  Delete "$INSTDIR\contextmenu.yaml"
   RMDir /r "$INSTDIR\icons"
   RMDir /r "$INSTDIR\icons-solar"
   RMDir /r "$INSTDIR\icons-iconpark"
@@ -657,7 +662,8 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\locale"
   Delete "$INSTDIR\nib\npp_bridge.dll"
   Delete "$INSTDIR\nib\udl_compat.dll"
-  Delete "$INSTDIR\nib\npp_shortcuts_compat.dll"
+  Delete "$INSTDIR\nib\npp_compat.dll"
+  Delete "$INSTDIR\nib\npp_shortcuts_compat.dll"   ; an earlier version's name for it
   RMDir "$INSTDIR\nib"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
@@ -691,5 +697,5 @@ Section "Uninstall"
   !insertmacro AssocNotifyShell
 
   DeleteRegKey HKCU "${ARP_KEY}"
-  DeleteRegKey HKCU "Software\wxNote-Installer"   ; installer state only - the user's settings under Software\wxNote survive uninstall
+  DeleteRegKey HKCU "Software\wxNote-Installer"   ; installer state only - the user's settings (%APPDATA%\wxNote) survive uninstall
 SectionEnd

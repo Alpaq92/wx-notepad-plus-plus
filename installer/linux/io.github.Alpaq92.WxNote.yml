@@ -47,11 +47,13 @@ modules:
       - mkdir -p /app/bin/nib
       - cp -r build-bin/nib/. /app/bin/nib/
       - rm -rf /app/bin/nib/nib_test_plugin.so /app/bin/nib/example
-      - install -Dm644 build-bin/stylers.model.xml /app/bin/stylers.model.xml
-      - install -Dm644 build-bin/contextMenu.xml /app/bin/contextMenu.xml
+      - install -Dm644 build-bin/contextmenu.yaml /app/bin/contextmenu.yaml
       - install -Dm644 wxnote.desktop /app/share/applications/io.github.Alpaq92.WxNote.desktop
       - install -Dm644 wxnote.png /app/share/icons/hicolor/256x256/apps/io.github.Alpaq92.WxNote.png
       - install -Dm644 wxnote.metainfo.xml /app/share/metainfo/io.github.Alpaq92.WxNote.metainfo.xml
+      # The licence travels with the app (Apache-2.0 4(a)), where Flatpak keeps licences, and NOTICE
+      # with it: the third-party attributions and the licence texts they ask for.
+      - install -Dm644 -t /app/share/licenses/io.github.Alpaq92.WxNote LICENSE NOTICE
     sources:
       - type: dir
         path: ../../build/bin
@@ -69,3 +71,7 @@ modules:
       - type: file
         path: io.github.Alpaq92.WxNote.metainfo.xml
         dest-filename: wxnote.metainfo.xml
+      - type: file
+        path: ../../LICENSE
+      - type: file
+        path: ../../NOTICE

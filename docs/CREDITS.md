@@ -19,18 +19,15 @@ this list. It was used throughout development as:
 - **a source of inspiration** — the feature set itself (Function List,
   Document Map, custom/user-defined languages, session handling, the Mark
   styles, macro recording, and much more) is Notepad++'s feature set, rebuilt;
-- **a file-format compatibility target** — wxNote reads Notepad++'s own
-  formats and writes compatible ones under its own root tag: the
-  `<NotepadPlus>` theme/styler XML (real N++ theme files load unmodified;
-  wxNote only reads these, it never writes a theme file), session XML (file
-  list, scroll position and bookmarks interchange; caret position uses a
-  wxNote-specific attribute and N++ second-view files are not restored; read
-  from a `<wxNote>` or `<NotepadPlus>` root and written as `<wxNote>`), and
-  `contextMenu.xml` (same schema, id-based entries; N++'s
-  name-based/folder/plugin entries are not interpreted); legacy
-  `userDefineLang.xml` UDL files are no longer read by the core — the optional
-  GPL `packages/udl-compat/` plugin translates them into Scintillua lexers (see
-  the native-language-engine section above);
+- **a file-format compatibility target** — wxNote's own files are YAML (see
+  [`SETTINGS_DESIGN.md`](SETTINGS_DESIGN.md)), and the core reads no
+  Notepad++ format at all. The optional GPL packages translate them instead:
+  `packages/npp-compat/` brings in a user's `config.xml` (as settings),
+  `shortcuts.xml` (as a key-binding scheme), themes, `contextMenu.xml`, `langs.xml`,
+  sessions and Project-panel workspaces; `packages/udl-compat/` turns legacy
+  `userDefineLang.xml` UDL files into Scintillua lexers (see the
+  native-language-engine section above); and `packages/npp-bridge/` answers
+  Notepad++ plugins' session messages in Notepad++'s own session XML;
 - **a plugin-ABI fact source** — the numeric `IDM_*`/`NPPM_*` ids, struct
   layouts, and entry-point names a compiled Notepad++ plugin expects are
   reproduced clean-room (from public documentation) in `include/npp-compat/`,
@@ -55,7 +52,7 @@ pipe-console design.
 
 [wxWidgets](https://www.wxwidgets.org/) 3.3.1 (wxWindows Library Licence:
 LGPL + binary-distribution exception) is the entire cross-platform UI layer —
-windows, menus, AUI docking, printing, config, i18n, IPC — and supplies the
+windows, menus, AUI docking, printing, i18n, IPC — and supplies the
 editor widget itself (`wxStyledTextCtrl`, which embeds Scintilla). Fetched and
 built from source at build time, statically linked. Nothing in wxNote renders
 without it.
@@ -68,6 +65,54 @@ Scintilla runs inside wxWidgets' `wxStyledTextCtrl`; Lexilla is vendored in
 `third_party/lexilla/` and compiled in for its full lexer collection. Four of
 those vendored lexers (Dart, Nix, TOML, Zig) are themselves based on **Zufu
 Liu's Notepad4** lexers, adapted for Scintilla by Jiri Techet — see below.
+
+The keyword lists those lexers are given (`src/keywords_scite.h`) are
+**[SciTE](https://www.scintilla.org/SciTE.html)**'s — Lexilla's companion
+editor, by the same author and under the same licence — taken from the
+language files of SciTE 5.6.7, plus Lexilla's own lists for Dart, Nix, TOML
+and Zig from the same source archive. `tools/scite_keywords.cpp` regenerates
+the file; its header reproduces the licence notice.
+
+Ten languages SciTE never had lists for take them from other projects
+(`src/keywords_contrib.h`, which carries each source and its terms; `NOTICE`
+reproduces the licences):
+
+- **Clarion** — **Devuna**'s Kwik Source Search (`bin/clarion.properties`,
+  MIT, © 2017 Devuna), written for Lexilla's case-insensitive Clarion lexer;
+  one typo corrected (`ELLISPE` → `ELLIPSE`). Copies also live in
+  mriffey/KSSOpen and RobertArtigas/DEVUNA__IDE__.
+- **Gui4Cli** — the language's own editor, **SciEd**, from the Gui4Cli 20.06
+  distribution (`Languages/Gui4Cli.ini`), by **D. Keletsekis**. SciEd's help
+  says it "can be freely used, redistributed, enhanced, altered, canibalized
+  and deleted", and gui4cli.org states Gui4Cli is released under the MIT
+  licence; the distribution itself has no licence file.
+- **ABL (OpenEdge)** — the keyword list OpenEdge 13.0 prints itself, as kept
+  in **abl-tmlanguage** (MIT, © 2016 ZaphyrVonGenevese).
+- **BibTeX** — the BibTeX and biblatex entry types of **LaTeX Workshop**
+  (MIT, © 2016 James Yu).
+- **CoffeeScript** — **CoffeeScript**'s own lexer (MIT, © 2009–2018 Jeremy
+  Ashkenas) and **highlight.js**'s global classes (BSD-3-Clause, © 2006 Ivan
+  Sagalaev).
+- **GDScript** — **Godot** 4.7's reserved words, types and global functions
+  (MIT, © 2014-present Godot Engine contributors, © 2007–2014 Juan Linietsky,
+  Ariel Manzur).
+- **Julia** — **JuliaSyntax.jl**'s keywords (MIT, © 2021 Julia Computing and
+  contributors) and what **Julia** 1.13's `base/exports.jl` exports (MIT,
+  © 2009–2025 Jeff Bezanson, Stefan Karpinski, Viral B. Shah and other
+  contributors).
+- **MS SQL** — **Pygments**' T-SQL lists (BSD-2-Clause, © the Pygments
+  authors) and the system views, `@@` functions and system procedures named
+  in **Microsoft**'s SQL Server documentation (CC BY 4.0).
+- **MySQL** — **Pygments**' MySQL lists and the system variables of
+  **go-mysql-server** (Apache-2.0, © 2022 Dolthub, Inc.).
+- **Stata** — **Pygments**' Stata commands, newer commands from
+  **tree-sitter-stata** (public domain, Unlicense) and the types of
+  **language-stata** (MIT, © 2017 Kyle Barron).
+
+Considered for these and not used: SynEdit's PSPad highlighter
+(MPL/LGPL), CudaText's and EditPlus's Clarion files (no licence), Editra's
+and dnGrep's Gui4Cli definitions (wxWindows / GPL), and Notepad++'s own
+Gui4Cli list (GPL; a copy of SciEd's).
 
 ## Scintillua, Lua & LPeg — the native language engine
 
@@ -110,6 +155,17 @@ everywhere by:
 
 The identifier-aware tokenizer (splitting `camelCase`/`snake_case`) is wxNote's
 own, informed by **[CSpell](https://cspell.org/)**'s approach to checking code.
+
+## rapidyaml — wxNote's files
+
+**[rapidyaml](https://github.com/biojppm/rapidyaml)** (Joao Paulo Magalhaes,
+MIT) reads and writes every file wxNote keeps for itself — settings, key
+bindings, themes, sessions, snippets — and the Plugins Admin catalog, which is
+JSON. Its single-header release (with c4core and fast_float, MIT, and
+debugbreak, BSD-2-Clause) is fetched at build time, pinned by hash; wxNote
+talks to it only through `src/yaml_io.h`. Chosen over libyaml and yaml-cpp for
+speed, a single-file build and a permissive licence — see
+[`SETTINGS_DESIGN.md`](SETTINGS_DESIGN.md).
 
 ## CMake & Ninja — the build
 
@@ -161,6 +217,14 @@ No code was taken from any of these; each contributed ideas, structure, or
 - **Electron** — the macOS integrated-top-bar technique
   (`src/macos_native.mm` implements the same transparent-titlebar +
   re-centred traffic-lights approach Electron ships).
+- **Settings and key-binding files** — VS Code (`settings.json` with only the
+  differences from the defaults, edited in place so comments survive;
+  `keybindings.json`'s rule list and its `-command` removal), JetBrains (keymaps
+  that store only their differences from a parent), Sublime Text, Pulsar's
+  `config.cson`, TextMate's `.tm_properties` and Notepad4's `Notepad4.ini` were
+  compared for how settings layer, where per-language values live and what
+  belongs in a file people edit rather than in the app's memory. The result is
+  [`SETTINGS_DESIGN.md`](SETTINGS_DESIGN.md).
 - **DjvuNet / DjVuLibre** — the model for the clean-reimplementation
   methodology itself (reference implementation informs and validates
   behavior, never a code dependency).

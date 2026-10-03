@@ -17,6 +17,8 @@ accurate statement rather than an omission.
 | Learn the key bindings | [Keyboard Shortcuts](shortcuts.md) |
 | Remap shortcuts, or import Notepad++ keys | [Customizing Shortcuts](custom-shortcuts.md) |
 | Configure the editor | [Preferences](preferences.md) |
+| Edit the settings file by hand, or find where it is kept | [Preferences](preferences.md#where-settings-are-stored) |
+| Bring a Notepad++ setup across | [Plugins](plugins.md#bundled-optional-modules) |
 | Browse a project tree | [Folder as Workspace](workspace.md) |
 | Run shell commands without leaving the editor | [Integrated Terminal](terminal.md) |
 | Set up syntax highlighting | [Languages &amp; Syntax](languages.md) |
@@ -30,6 +32,9 @@ accurate statement rather than an omission.
   wxWidgets throughout, so Linux and macOS are first-class rather than ports.
 - **Scintilla-based.** Editing, folding, multi-selection, rectangular selection, markers and
   lexing all come from the same engine that powers Scintilla-family editors.
+- **Settings in plain text.** Preferences, key bindings, themes, language definitions, snippets,
+  sessions and workspaces are YAML files in one folder, and the settings themselves hold only what you
+  changed — edit them by hand, keep them under version control, or copy them to another machine.
 - **Localised.** The user interface ships translated into eight languages besides English:
   Polish, German, French, Spanish, Russian, Japanese, Chinese and Korean.
 - **Extensible with a permissive plugin API.** The native plugin API ("Nib") is Apache-2.0 and

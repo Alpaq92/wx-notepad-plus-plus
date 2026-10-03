@@ -4,7 +4,7 @@
 // reserved command kCmdSettingShortcutMapper == 48009). One searchable grid over every menu command's
 // effective binding, a scheme picker, a key-capture sub-dialog, and a live conflict engine - a pure VIEW
 // over the frame's KeymapStore: every edit calls store.rebind()/unbind()/resetToDefault() (which write to
-// the floating USER layer, VS Code mode), then store.save() (writes shortcuts.json immediately,
+// the floating USER layer, VS Code mode), then store.save() (writes keybindings.yaml immediately,
 // never on exit), then an apply callback the frame wires to refreshAccelerators().
 //
 // Layout and theming follow onPreferences()/themeDialog() in main.cpp. Accelerators persist ONLY as
@@ -117,7 +117,7 @@ private:
     // "macro.playback", "macro.manageSaved", ...). A bare StartsWith("macro.") test lumps the two
     // together, which put the six built-in menu commands under Show: Macros and hid them from Show: Menu
     // commands. The uid suffix is all-digits and the menu commands are all camelCase, so requiring digits
-    // separates them without changing the on-disk binding key (existing shortcuts.json rows keep working).
+    // separates them without changing the on-disk binding key.
     static bool isSavedMacroSym(const wxString& sym) { return isUidSym(sym, "macro."); }
     // A SAVED Run command, main.cpp's runSym() format "run.<uid>". The same trap as macros, and here it
     // is not hypothetical: the static Run-MENU commands are "run.execute", "run.manageSaved" and
@@ -230,15 +230,17 @@ private:
         // switches to it - the GUI front door for what custom-shortcuts.md calls a "user-defined scheme".
         m_btnAddMapping = new wxButton(panel, wxID_ANY, _("Add Mapping..."));
         schemeRow->Add(m_btnAddMapping, 0, wxALIGN_CENTRE_VERTICAL | wxLEFT, 8);
-        // Read-only store (shortcuts.json written by a NEWER wxNote - save() refuses to clobber it):
-        // freeze the mutating UI and say so, instead of letting edits apply live all session and then
-        // silently vanish on restart. "Read-Only" is the status-bar string, already in every catalog.
+        // Read-only store (a keybindings.yaml that does not parse, or one a NEWER wxNote wrote - save()
+        // refuses to clobber either): freeze the mutating UI and say so, instead of letting edits apply
+        // live all session and then silently vanish on restart. "Read-Only" is the status-bar string,
+        // already in every catalog.
         if (m_store.isReadOnly())
         {
             m_scheme->Disable();
             m_btnAddMapping->Disable();
             auto* roNote = new wxStaticText(panel, wxID_ANY, _("Read-Only"));
             roNote->SetForegroundColour(wxColour(0xC0, 0x80, 0x20));
+            if (!m_store.loadError().empty()) roNote->SetToolTip("keybindings.yaml: " + m_store.loadError());
             schemeRow->Add(roNote, 0, wxALIGN_CENTRE_VERTICAL | wxLEFT, 12);
         }
         schemeRow->AddStretchSpacer();
@@ -683,7 +685,7 @@ private:
     }
 
     // ---- edit actions -----------------------------------------------------------------------------
-    // Every mutating entry point early-outs on a read-only store (a shortcuts.json a NEWER wxNote wrote,
+    // Every mutating entry point early-outs on a read-only store (a keybindings.yaml a NEWER wxNote wrote,
     // see KeymapStore::save). The buttons and the scheme picker are disabled too (buildUi/updateButtons),
     // but a grid double-click still lands in onModify(), so the guard lives here as well - an edit that
     // applies live and then silently fails to persist would look successful all session and vanish on

@@ -63,18 +63,19 @@ byte-for-byte.
 
 ## Original glyphs (NOT from Streamline)
 
-Four files in this directory are original wxNote artwork rather than re-baked Streamline
+Five files in this directory are original wxNote artwork rather than re-baked Streamline
 glyphs, and are therefore **not** covered by the Streamline attribution above. They are licensed
 under the project's own licence (Apache-2.0, see the root `LICENSE`). They are also NOT
 produced by `tools/generate_streamline_icons.py` — each carries a machine-readable
 `wxnote-original` marker comment inside the SVG, and the script derives its exclusion set from
 those markers, so re-running it leaves them alone (a deleted one turns up as "missing" in its
-manifest check). All four are drawn on this set's 14x14 viewBox
+manifest check). All five are drawn on this set's 14x14 viewBox
 with its two-paint pair (green-4 `#69db7c`, teal-8 `#099268`) so the dark-mode re-tint in
 `iconColored()` finds the same hexes as the re-baked files:
 
 | File                 | Why it exists                                                        |
 | -------------------- | -------------------------------------------------------------------- |
+| `comment.svg`        | A badge holding the `//` that C-family languages comment a line with. The free Core set has no source-comment glyph. |
 | `wrap-selection.svg` | Curly braces around two text lines - "wrap the selection in delimiters". The free Streamline Core set has no glyph for this concept. |
 | `print-preview.svg`  | A page with an eye over it - "look at it before printing". The free Core set's only print glyph is the printer device itself (used here for `print`), which cannot distinguish preview from print. |
 | `func-leaf.svg`      | The Function List tree's LEAF node: a filled bolt inside a filled badge, both flat fills as the rest of this pack is. Was the stock `nature-ecology/leaf.svg` - "func-leaf" names a leaf of the symbol tree, and the original asset read as foliage. |
