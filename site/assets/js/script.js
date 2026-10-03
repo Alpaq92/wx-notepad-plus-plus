@@ -234,6 +234,9 @@ const ASSET_MATCHERS = {
   'rpm-arm64': (name) => name.endsWith('.rpm') && name.includes('aarch64'),
   flatpak: (name) => name.endsWith('.flatpak') && !name.includes('aarch64'),
   'flatpak-arm64': (name) => name.endsWith('.flatpak') && name.includes('aarch64'),
+  // One package per FreeBSD major release: pkg refuses a package built for another one.
+  freebsd15: (name) => name.endsWith('-freebsd15-amd64.pkg'),
+  freebsd14: (name) => name.endsWith('-freebsd14-amd64.pkg'),
 };
 
 const formatDate = (iso) => {

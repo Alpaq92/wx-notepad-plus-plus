@@ -148,7 +148,7 @@ Tools that wait on the process handle themselves are unaffected and block correc
 `CreateProcess` + `WaitForSingleObject`. So `git config --global core.editor "wxnote --wait"` works on
 Windows as written — the caveat only bites when *you* type the command at a `cmd` prompt.
 
-On Linux and macOS there is no such distinction; the shell waits for the foreground process either way.
+On Linux, macOS and FreeBSD there is no such distinction; the shell waits for the foreground process either way.
 
 ## Saving to a protected location (Windows)
 

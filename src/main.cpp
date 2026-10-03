@@ -92,6 +92,11 @@
 #else
 #include <unistd.h>          // isatty()/read() - the POSIX side of `wxnote -` (read piped stdin into a buffer)
 #include <sys/stat.h>        // stat()/chmod() - the POSIX side of File > Read-Only Attribute
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+#include <sys/types.h>
+#include <sys/sysctl.h>      // KERN_PROC_PATHNAME - the executable's own path (see WxnStandardPaths)
+#include <wx/apptrait.h>     // wxGUIAppTraits - how wxWidgets is handed that wxStandardPaths
+#endif
 using UINT = unsigned int;   // Win32 scalar that leaks into the portable sci()/sciSend() message-id params
 #endif
 
@@ -17473,9 +17478,39 @@ static bool readPipedStdin(wxString& out)
     return true;
 }
 
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+// wxWidgets asks the kernel for the running executable on Linux only (/proc/self/exe); elsewhere it goes by
+// argv[0]. Started through the /usr/local/bin/wxnote symlink the FreeBSD package installs, that names the
+// link, not the program in /usr/local/lib/wxnote beside which every shipped resource - themes, icons,
+// lexers, plugins - is looked up. kern.proc.pathname is the kernel's answer, symlinks resolved.
+class WxnStandardPaths : public wxStandardPaths
+{
+public:
+    wxString GetExecutablePath() const override
+    {
+        int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+        char path[4096];
+        size_t len = sizeof(path);
+        if (::sysctl(mib, 4, path, &len, nullptr, 0) == 0)
+            return wxString(path, *wxConvFileName);
+        return wxStandardPaths::GetExecutablePath();
+    }
+};
+class WxnAppTraits : public wxGUIAppTraits
+{
+public:
+    wxStandardPaths& GetStandardPaths() override { return m_paths; }
+private:
+    WxnStandardPaths m_paths;
+};
+#endif
+
 class WxnApp : public wxApp
 {
 public:
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+    wxAppTraits* CreateTraits() override { return new WxnAppTraits; }   // see WxnStandardPaths
+#endif
     bool OnInit() override
     {
 #ifdef __WXMSW__

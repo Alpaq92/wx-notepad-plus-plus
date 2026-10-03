@@ -446,20 +446,25 @@ std::unique_ptr<TermBackend> TermBackend::spawn(const wxString& cmd, const wxStr
 
 #else
 // ======================================================================================= POSIX ====
-#ifdef __APPLE__
-    #include <util.h>       // forkpty lives here on macOS/BSD
-#else
-    #include <pty.h>        // forkpty on Linux (glibc < 2.34: link libutil; see CMakeLists.txt)
-#endif
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
+// forkpty's header differs per system; libutil, where it is a separate library, is linked by
+// CMakeLists.txt for every Unix but macOS.
+#if defined(__APPLE__) || defined(__OpenBSD__) || defined(__NetBSD__)
+    #include <util.h>
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
+    #include <libutil.h>    // after <sys/types.h>, <termios.h> and <sys/ioctl.h>, which it relies on
+#else
+    #include <pty.h>        // Linux (glibc < 2.34 keeps forkpty in libutil)
+#endif
 
 extern char** environ;   // POSIX guarantees it exists, but no header is required to declare it
 

@@ -1,4 +1,4 @@
-# wxNote - experimental cross-platform (Windows / Linux / macOS) text editor.
+# wxNote - experimental cross-platform (Windows / Linux / macOS / FreeBSD) text editor.
 #
 # wxWidgets UI + wxStyledTextCtrl editor (which bundles Scintilla); our portable Lexilla supplies the
 # language lexers. The core exposes its own permissive cross-platform plugin API ("Nib") and contains no
@@ -48,6 +48,20 @@ endfunction()
 if(MSVC)
     string(APPEND CMAKE_CXX_FLAGS " /EHsc")          # wxWidgets requires /EHsc
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")   # /MT - match wx's static CRT (CMP0091 NEW @ cmake 3.20)
+endif()
+
+# ---- GTK3 (Linux, FreeBSD): found once, with its library directory on every link line --------------
+# pkg-config names GTK's libraries without their directory, and wxWidgets links them that way. That
+# works on Linux, whose linker searches /usr/lib by itself, but FreeBSD keeps every package under
+# /usr/local/lib, which its linker never searches unasked - so every target linking wx would fail
+# there. Hence a directory-wide link_directories(), set before any target exists, rather than one per
+# target. The include directories stay per target - only the few that include GTK headers need them -
+# and are added as SYSTEM, which puts them after the project's own: on FreeBSD they include
+# /usr/local/include itself, where glib's pcre2.h would otherwise be found before the bundled one.
+if(UNIX AND NOT APPLE)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
+    link_directories(${GTK3_LIBRARY_DIRS})
 endif()
 
 # ---- wxWidgets (fetched + built from source; provides wxStyledTextCtrl + its bundled Scintilla) ----
@@ -228,10 +242,7 @@ if(WIN32 OR (UNIX AND NOT APPLE))
     # propagate the GTK include dirs to dependents, so add them explicitly (the upstream CMake does the
     # same in its UNIX block). GTK3 is already present - wxGTK itself was built against it.
     if(UNIX AND NOT APPLE)
-        find_package(PkgConfig REQUIRED)
-        pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
-        target_include_directories(wxbf PRIVATE ${GTK3_INCLUDE_DIRS})
-        target_link_directories(wxbf PUBLIC ${GTK3_LIBRARY_DIRS})
+        target_include_directories(wxbf SYSTEM PRIVATE ${GTK3_INCLUDE_DIRS})
         target_link_libraries(wxbf PUBLIC ${GTK3_LIBRARIES})
     endif()
 endif()
@@ -291,18 +302,16 @@ endif()
 # accent gradient that otherwise paints full-height down the editor's right edge). Plain C++ (no Objective-C);
 # compiled + GTK3-wired ONLY here, so MSW/macOS never see it. NOTE: gtk_native.cpp has no #ifdef self-guard
 # (it includes no wx header, so __WXGTK__ wouldn't be defined there) - the CMake gate below is what excludes
-# it off-Linux. wxWidgets does not propagate GTK include dirs to dependents, so add them explicitly (the wxbf
-# block above already discovered GTK3 via pkg_check_modules; re-invoking is idempotent).
+# it from the Windows and macOS builds. wxWidgets does not propagate GTK include dirs to dependents, so add
+# them explicitly (GTK3 itself is found once, at the top of this file).
 if(UNIX AND NOT APPLE)
     target_sources(wxnote PRIVATE src/gtk_native.cpp)
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
-    target_include_directories(wxnote PRIVATE ${GTK3_INCLUDE_DIRS})
-    target_link_directories(wxnote PRIVATE ${GTK3_LIBRARY_DIRS})
+    target_include_directories(wxnote SYSTEM PRIVATE ${GTK3_INCLUDE_DIRS})
     target_link_libraries(wxnote PRIVATE ${GTK3_LIBRARIES})
-    # forkpty() (src/term_backend.cpp) lives in the separate libutil on glibc < 2.34 (merged into
-    # libc since, with libutil kept as a stub) - linking it unconditionally is safe on every glibc
-    # and required on the old ones. macOS needs nothing: forkpty is in libSystem there.
+    # forkpty() (src/term_backend.cpp) lives in the separate libutil on FreeBSD and on glibc < 2.34
+    # (merged into libc since, with libutil kept as a stub) - linking it unconditionally is safe on
+    # every glibc and required on the old ones and on FreeBSD. macOS needs nothing: forkpty is in
+    # libSystem there.
     target_link_libraries(wxnote PRIVATE util)
 endif()
 
@@ -366,7 +375,7 @@ target_include_directories(terminal_selftest PRIVATE
     "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(terminal_selftest PRIVATE wx::core wx::aui wx::base wx::stc vterm)
 if(UNIX AND NOT APPLE)
-    target_include_directories(terminal_selftest PRIVATE ${GTK3_INCLUDE_DIRS})
+    target_include_directories(terminal_selftest SYSTEM PRIVATE ${GTK3_INCLUDE_DIRS})
     target_link_libraries(terminal_selftest PRIVATE ${GTK3_LIBRARIES})
     # forkpty() for term_backend.cpp - same libutil note as the wxnote target above.
     target_link_libraries(terminal_selftest PRIVATE util)
@@ -728,8 +737,7 @@ function(wxn_add_app_selftest name)
     endif()
     if(UNIX AND NOT APPLE)
         target_sources(${name} PRIVATE src/gtk_native.cpp)
-        target_include_directories(${name} PRIVATE ${GTK3_INCLUDE_DIRS})
-        target_link_directories(${name} PRIVATE ${GTK3_LIBRARY_DIRS})
+        target_include_directories(${name} SYSTEM PRIVATE ${GTK3_INCLUDE_DIRS})
         target_link_libraries(${name} PRIVATE ${GTK3_LIBRARIES})
         target_link_libraries(${name} PRIVATE util)
     endif()
