@@ -2,7 +2,8 @@
 # to unpack or compile here, only the already-built wxnote binary (installer/linux/build-rpm.sh passes
 # _srcdir pointing at the repo root, already built via `cmake --build build --target wxnote`). This is
 # the same well-established "binary redistribution" spec pattern used for vendor-supplied prebuilt
-# software; %install just stages the existing build/bin/ output into %{buildroot}.
+# software; %install just stages the application payload out of the existing build/bin/ into
+# %{buildroot}, through installer/stage-payload.sh.
 #
 # Same /opt/wxnote + /usr/bin symlink layout as build-deb.sh, for the same reason: the app resolves
 # every resource path relative to its own executable, so keeping the binary and its resources
@@ -26,9 +27,8 @@ Windows compatibility bridge for legacy Notepad++ plugin binaries.
 
 %install
 rm -rf %{buildroot}
-mkdir -p %{buildroot}/opt/wxnote
-cp -r %{_srcdir}/build/bin/. %{buildroot}/opt/wxnote/
-rm -rf %{buildroot}/opt/wxnote/nib/nib_test_plugin.so %{buildroot}/opt/wxnote/nib/example %{buildroot}/opt/wxnote/plugins
+# The payload by name: build/bin also holds every selftest (see installer/stage-payload.sh).
+bash %{_srcdir}/installer/stage-payload.sh %{_srcdir}/build/bin %{buildroot}/opt/wxnote
 mkdir -p %{buildroot}/usr/bin
 ln -s /opt/wxnote/wxnote %{buildroot}/usr/bin/wxnote
 mkdir -p %{buildroot}/usr/share/applications
