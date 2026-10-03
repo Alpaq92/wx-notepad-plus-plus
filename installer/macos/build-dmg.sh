@@ -27,8 +27,8 @@ mkdir -p "$APPDIR/Contents/MacOS" "$APPDIR/Contents/Resources" "$OUTDIR"
 # (wxStandardPaths::Get().GetExecutablePath() in src/main.cpp), so this layout needs zero runtime
 # code changes to work. Same reasoning as installer/linux/build-appimage.sh and build-deb.sh: this
 # project has no macOS machine to verify a resource-path code change against - only CI.
-cp -r build/bin/. "$APPDIR/Contents/MacOS/"
-rm -rf "$APPDIR/Contents/MacOS/nib/nib_test_plugin."* "$APPDIR/Contents/MacOS/plugins"
+# The payload by name: build/bin also holds every selftest (see installer/stage-payload.sh).
+bash installer/stage-payload.sh build/bin "$APPDIR/Contents/MacOS"
 
 # Icons: rasterize the SVG (sips can't read SVG directly) via librsvg, then build a proper
 # multi-resolution .iconset for iconutil. librsvg is a fast Homebrew install on GitHub's

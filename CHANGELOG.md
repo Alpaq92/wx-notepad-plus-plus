@@ -93,6 +93,12 @@ All notable changes to wxNote are documented here. Format loosely follows
   their own theme sections, and JavaScript and PHP inside HTML are coloured too.
 - Toggle Comment now works in files whose language is only known from detection (scripts with no
   extension, `CMakeLists.txt`, `PKGBUILD`, systemd units), and comments `.inf` files with `;`.
+- **The Linux and macOS packages shipped wxNote's test programs.** The `.deb`, `.rpm`, AppImage and
+  `.dmg` copied the whole build folder, which also holds every self-test the build makes: 0.20.0's
+  `.deb` installed 16 of them into `/opt/wxnote` beside `wxnote`, `bridge_selftest` alone 22 MB, and
+  the translations' `.po` sources with them. Every Linux and macOS package now copies wxNote and the
+  files it reads by name - the same set as the Windows installer and zip - and the build stops if one
+  of them is missing. The Flatpak already shipped only that set.
 
 ### Changed
 - **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved

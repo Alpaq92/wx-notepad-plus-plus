@@ -16,7 +16,8 @@
 ; three nib plugins were silently absent from every release up to and including 0.14.1, which meant
 ; installed builds had no Scintillua highlighting (lexer.lua is a hard requirement), no bundled default
 ; font, and no UDL support. The same list is duplicated in .github/workflows/build.yml's zip step and
-; in installer/linux/io.github.Alpaq92.WxNote.yml - change all three together.
+; in installer/stage-payload.sh, which every Linux and macOS package copies through - change all three
+; together.
 
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
