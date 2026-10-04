@@ -498,11 +498,12 @@ int main(int argc, char** argv)
         in[1].uid = 8; in[1].name = "Legacy bytes";
         MacroStep raw{ 2170, 0, 0 }; raw.hasText = true; raw.text = std::string("\xE9t\xE9\0x", 5);   // CP-1252, and a NUL
         in[1].steps.push_back(raw);
-        const std::string yaml = wxnSerializeMacros(in, 9);
+        const std::string yaml = wxnSerializeMacros(in, 40);   // ahead of both uids, so it must come from nextId
         check(yaml.find("textBase64") != std::string::npos, "macros: non-UTF-8 text is stored as textBase64");
         std::vector<SavedMacro> out; long nextUid = 0;
         check(wxnParseMacros(yaml, out, nextUid), "macros: current format version parses");
-        bool same = out.size() == 2 && nextUid == 9;
+        check(nextUid == 40, "macros: nextUid is carried through");
+        bool same = out.size() == 2;
         for (size_t i = 0; same && i < in.size(); ++i)
         {
             same = out[i].uid == in[i].uid && out[i].name == in[i].name && out[i].steps.size() == in[i].steps.size();
