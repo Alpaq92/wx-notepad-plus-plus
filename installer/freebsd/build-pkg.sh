@@ -19,26 +19,14 @@ APPDIR="$STAGE$PREFIX/lib/wxnote"
 OUTDIR="build/installer"
 
 rm -rf "$STAGE"
-mkdir -p "$APPDIR/nib" "$STAGE$PREFIX/bin" "$STAGE$PREFIX/share/applications" \
+mkdir -p "$STAGE$PREFIX/bin" "$STAGE$PREFIX/share/applications" \
          "$STAGE$PREFIX/share/icons/hicolor/scalable/apps" "$STAGE$PREFIX/share/doc/wxnote" "$OUTDIR"
 
 # The program and its resources stay together, as on every other platform - it looks them up next to
 # its own executable - in /usr/local/lib/wxnote, where FreeBSD keeps an application's private files.
-# An explicit list, mirroring installer/windows/wxnote.nsi's SecCore: build/bin also holds every selftest
-# CI has just run, and a package must not ship those.
-cp build/bin/wxnote build/bin/contextmenu.yaml "$APPDIR/"
-for d in icons icons-solar icons-iconpark icons-streamline themes dictionaries fonts lexers locale; do
-  cp -R "build/bin/$d" "$APPDIR/"
-done
-find "$APPDIR/locale" \( -name '*.po' -o -name '*.pot' \) -delete
-# Every shipped bridge plugin, but NOT nib_test_plugin.so (dev-only loader test) or nib/example.
-cp build/bin/nib/npp_bridge.so build/bin/nib/udl_compat.so build/bin/nib/npp_compat.so "$APPDIR/nib/"
-for must in wxnote contextmenu.yaml themes/Default.yaml themes/DarkModeDefault.yaml fonts lexers/lexer.lua \
-            nib/npp_bridge.so nib/udl_compat.so nib/npp_compat.so; do
-  # lexers/lexer.lua in particular disables ALL Scintillua highlighting by its absence, which no
-  # smoke test catches - fail here rather than ship a silently incomplete package.
-  [ -e "$APPDIR/$must" ] || { echo "package payload is missing $must" >&2; exit 1; }
-done
+# stage-payload.sh holds the one list every package ships (never build/bin whole: it also holds every
+# selftest CI has just run), and fails on anything missing. Run by sh: FreeBSD has no bash.
+sh installer/stage-payload.sh build/bin "$APPDIR"
 strip "$APPDIR/wxnote" "$APPDIR"/nib/*.so   # what the ports framework does to every program it installs
 
 ln -s ../lib/wxnote/wxnote "$STAGE$PREFIX/bin/wxnote"   # relative, so it holds under `pkg -r <root>` too
