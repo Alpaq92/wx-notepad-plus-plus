@@ -118,6 +118,9 @@ All notable changes to wxNote are documented here. Format loosely follows
 - **Move to Recycle Bin deleted the file for good on Linux, FreeBSD and macOS.** It now moves it to the
   Trash, from which the file manager restores it, and says so if it cannot rather than deleting it. The
   tab closes without asking to save what was just thrown away, as in Notepad++.
+- **"Reuse an existing window" did not work on Linux, FreeBSD and macOS**: a second launch never found
+  the running window and opened its own. The running window now listens on a socket in your user data
+  folder, where a second launch looks.
 
 ### Changed
 - **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved

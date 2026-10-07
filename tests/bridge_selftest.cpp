@@ -61,6 +61,10 @@
 #include <climits>
 #include <map>          // the probe-button image check's colour histogram
 #include <algorithm>    // std::max (same)
+#ifndef __WXMSW__
+#include <sys/socket.h> // the reuse-window handoff test connects to the instance's socket
+#include <sys/un.h>
+#endif
 
 static int g_pass = 0;
 static int g_failCount = 0;
@@ -183,6 +187,26 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         check(g_closePrompts == asked + 1, "close: ...closing its last tab does");
         f->m_askBeforeClose = askWhenQuitting;
     }
+
+#ifndef __WXMSW__
+    // ---- "Reuse an existing window": the instance listens where a second launch looks ----------------
+    // The service name had no '/', which wx looks up as a TCP service: the server listened on a random
+    // port and no second launch ever found it.
+    {
+        const wxString svc = wxnIpcService();
+        check(svc.StartsWith(wxStandardPaths::Get().GetUserDataDir() + "/"), "handoff: a Unix socket in the user data folder");
+        WxnIpcServer server;
+        struct stat st{};
+        check(server.Create(svc) && ::stat(svc.fn_str(), &st) == 0 && S_ISSOCK(st.st_mode), "handoff: the instance listens there");
+        sockaddr_un a{};
+        a.sun_family = AF_UNIX;
+        std::strncpy(a.sun_path, svc.fn_str(), sizeof(a.sun_path) - 1);
+        const int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        check(fd >= 0 && ::connect(fd, reinterpret_cast<const sockaddr*>(&a), sizeof(a)) == 0,
+              "handoff: ...and a second launch can connect to it");
+        if (fd >= 0) ::close(fd);
+    }
+#endif
 
     // ---- (1) a regex that CROSSES A LINE BREAK, through the real Find path ------------------------
     // The headline capability. Before PCRE2 this could not match at all, at any surface.

@@ -1080,7 +1080,7 @@ static wxString      g_pluginMessage;
 // must NOT go through openPath() - that returns nullptr for a directory, i.e. the running instance would
 // silently swallow `wxnote .`) and FGOTO=idx,line,col (a per-file `file:line[:col]` suffix).
 // Standard wx pattern for pairing wxSingleInstanceChecker with wxServer/wxClient; DDE on Windows, a
-// loopback TCP port elsewhere.
+// Unix-domain socket elsewhere (wxnIpcService()).
 //
 // NOTE the string-literal split in "\x01" "ENC=", "\x01" "DIR=", "\x01" "FGOTO=" - on BOTH the sending and
 // the receiving side. A C++ \x escape eats every following HEX DIGIT, so an unsplit "\x01ENC=" is really
@@ -1088,12 +1088,26 @@ static wxString      g_pluginMessage;
 // the IPC handoff (the receiver's Mid(5) walked past the digits, leaving forceEnc at -1). "\x01GOTO="
 // escaped it only because 'G' is not a hex digit, which is why that one key always worked.
 // Keep the concatenation, and count every Mid() offset from the SPLIT form (5 for \x01XXX=, 7 for FGOTO=).
-// Fixed "port" (Unix socket path component) / DDE service name (Windows). Self-identifying on purpose:
-// the previous bare "31415" read, to anything inspecting strings in the binary, like a hardcoded port or
-// an opaque identifier rather than an application resource. Changing it means a running instance from an
-// older build will not be found by a newer one - the newcomer just opens its own window, which is the
-// same already-correct behaviour as when no instance is running.
-static const wxChar* const kIpcServiceName = wxT("wxNote-IPC");
+// Where a second launch finds the running instance. Windows: a DDE service name, self-identifying on
+// purpose - the previous bare "31415" read, to anything inspecting strings in the binary, like a
+// hardcoded port or an opaque identifier rather than an application resource. Elsewhere wx's IPC is a
+// socket, and only a name containing '/' makes it a Unix-domain one: any other is looked up as a TCP
+// service, so "wxNote-IPC" there listened on a random port no client could find, and "Reuse an existing
+// window" never worked on Linux, FreeBSD or macOS. The socket sits in the user's own data folder: private
+// to them (wx creates it 0600 and removes a stale one first), and a --sandbox or test run, with a data
+// folder of its own, can never reach a real instance. Changing either means a running instance from an
+// older build will not be found by a newer one - the newcomer just opens its own window, the same
+// already-correct behaviour as when no instance is running.
+static wxString wxnIpcService()
+{
+#ifdef __WXMSW__
+    return wxT("wxNote-IPC");
+#else
+    const wxString dir = wxStandardPaths::Get().GetUserDataDir();
+    if (!wxDirExists(dir)) { wxLogNull quiet; wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL); }
+    return dir + "/ipc.sock";
+#endif
+}
 static const wxChar* const kIpcTopic = wxT("wxnote-open");
 
 class WxnIpcConnection : public wxConnection
@@ -17844,7 +17858,7 @@ public:
             {
                 wxLogNull noWarn;                                 // a refused/failed connection is handled below
                 wxClient client;
-                wxConnectionBase* conn = client.MakeConnection(wxEmptyString, kIpcServiceName, kIpcTopic);
+                wxConnectionBase* conn = client.MakeConnection(wxEmptyString, wxnIpcService(), kIpcTopic);
                 if (conn)
                 {
                     wxString payload;
@@ -17980,7 +17994,7 @@ public:
             frame->applySavedWindowState();   // Maximize() before Show() is a no-op on some ports
             frame->reportSettingsError(settingsError);
             if (restoreOnStart) frame->restoreSession();   // --clean: no session AND no recovery restore (restoreSession does both)
-            if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(kIpcServiceName); }
+            if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(wxnIpcService()); }
             applyRequest(frame);
             return true;
         }
@@ -17993,7 +18007,7 @@ public:
                                                 // one-file window; leave session/pending set so the next real launch
                                                 // still restores the user's tabs. --clean: skip session AND recovery
                                                 // restore entirely (restoreSession drives both) for a pristine launch
-        if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(kIpcServiceName); }
+        if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(wxnIpcService()); }
         applyRequest(frame);
         return true;
     }
