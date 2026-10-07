@@ -1146,9 +1146,9 @@ main {
 .platform-card {
   text-align: center;
   padding-top: 25px;
-  /* Only the Windows card carries a .platform-note, so without this it grows taller than the macOS
-     and Linux cards and the 3-column layout gets a ragged bottom edge (measured: 347px vs 243px at
-     1280px wide). Flexing the item + growing the card equalises all three. */
+  /* Only the Windows and FreeBSD cards carry a .platform-note, so without this they grow taller than
+     their row's other card and the grid gets a ragged edge (measured: 347px vs 243px at 1280px wide,
+     back when it was three columns). Flexing the item + growing the card equalises each row. */
   flex: 1;
 }
 
@@ -1718,7 +1718,7 @@ main {
    * DOWNLOAD
    */
 
-  .platform-list { grid-template-columns: repeat(3, 1fr); }
+  .platform-list { grid-template-columns: repeat(2, 1fr); }   /* four platforms: two rows of two */
 
 }
 

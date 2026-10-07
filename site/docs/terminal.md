@@ -45,7 +45,7 @@ so change it first, then open the tab.
 
 ## A real terminal
 
-Each tab is a **genuine pseudo-terminal** — ConPTY on Windows, `forkpty` on Linux and macOS — rendered
+Each tab is a **genuine pseudo-terminal** — ConPTY on Windows, `forkpty` on Linux, macOS and FreeBSD — rendered
 by a built-in terminal emulator (libvterm, the same core Neovim embeds). The shell believes it is
 talking to a real TTY, because it is. That means:
 
