@@ -83,9 +83,10 @@ On Windows, if a save fails because the file needs administrator rights, wxNote 
 temporary file and relaunches a minimal, GUI-less helper instance elevated to perform just the copy.
 Nothing else ever runs elevated.
 
-By default, closing a modified document discards it silently. Turn on
-**Preferences&nbsp;&rsaquo; General&nbsp;&rsaquo; "Ask before closing unsaved changes"** if you want a
-Save / Don't Save / Cancel prompt instead.
+Closing a modified document asks Save / Don't Save / Cancel. Quitting does not: unsaved documents are
+kept and reopen the next time you start wxNote, as with Notepad++'s session snapshot. Turn on
+**Preferences&nbsp;&rsaquo; General&nbsp;&rsaquo; "Ask to save unsaved changes when quitting"** if you
+want the prompt there too.
 
 ## Sessions
 

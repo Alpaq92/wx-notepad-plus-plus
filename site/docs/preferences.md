@@ -17,7 +17,7 @@
 | Show toolbar | on | |
 | Show status bar | on | |
 | Show zoom control in status bar | **off** | adds an editable zoom field to the status bar — see [below](#the-zoom-control). Applies immediately, no restart. Zooming itself is unaffected either way |
-| Ask before closing unsaved changes | **off** | when off, closing a modified document discards it silently |
+| Ask to save unsaved changes when quitting | **off** | when off, quitting keeps unsaved documents and reopens them next time, without asking; when on, it asks about each one. Closing a tab always asks |
 | Auto-hide toolbar in full screen | **off** | when on, full screen hides the toolbar (macOS-style) |
 | Reuse an existing window | off | *restart* — when on, a second launch hands its files to the first window over IPC and exits. `-n` / `-r` override this per launch |
 | Show integrated top bar | — | *restart* — only present on platforms with borderless-window support and on macOS |

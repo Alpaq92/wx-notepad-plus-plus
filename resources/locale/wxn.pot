@@ -2045,7 +2045,7 @@ msgstr ""
 msgid "Light"
 msgstr ""
 
-msgid "Ask before closing unsaved changes"
+msgid "Ask to save unsaved changes when quitting"
 msgstr ""
 
 msgid "Use a custom line-number margin colour"

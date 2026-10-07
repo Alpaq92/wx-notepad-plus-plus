@@ -2043,8 +2043,8 @@ msgstr "Тёмная"
 msgid "Light"
 msgstr "Светлая"
 
-msgid "Ask before closing unsaved changes"
-msgstr "Спрашивать перед закрытием несохранённых изменений"
+msgid "Ask to save unsaved changes when quitting"
+msgstr "Спрашивать о сохранении несохранённых изменений при выходе"
 
 msgid "Use a custom line-number margin colour"
 msgstr "Использовать собственный цвет поля номеров строк"

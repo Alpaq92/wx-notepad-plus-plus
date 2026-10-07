@@ -2043,8 +2043,8 @@ msgstr "深色"
 msgid "Light"
 msgstr "浅色"
 
-msgid "Ask before closing unsaved changes"
-msgstr "关闭未保存的更改前询问"
+msgid "Ask to save unsaved changes when quitting"
+msgstr "退出时询问是否保存未保存的更改"
 
 msgid "Use a custom line-number margin colour"
 msgstr "为行号边距使用自定义颜色"

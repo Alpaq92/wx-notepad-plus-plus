@@ -2043,8 +2043,8 @@ msgstr "Oscuro"
 msgid "Light"
 msgstr "Claro"
 
-msgid "Ask before closing unsaved changes"
-msgstr "Preguntar antes de cerrar cambios sin guardar"
+msgid "Ask to save unsaved changes when quitting"
+msgstr "Preguntar si guardar los cambios sin guardar al salir"
 
 msgid "Use a custom line-number margin colour"
 msgstr "Usar un color personalizado para el margen de números de línea"

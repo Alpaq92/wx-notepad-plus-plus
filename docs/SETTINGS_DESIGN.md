@@ -192,7 +192,7 @@ marked so in the table: today the indentation pair.
 | `files.associations` | extension → Language-menu name | — | `UserExt` group |
 | `files.largeFileThresholdMiB` | MiB | `16` | `Editing/LargeFileMiB` |
 | `files.maxRecentFiles` | 1–50 | `10` | `RecentFiles/Max` |
-| `files.confirmCloseUnsaved` | bool | `false` | `AskBeforeClose` |
+| `files.confirmCloseUnsaved` | bool — ask when quitting; closing a tab always asks | `false` | `AskBeforeClose` |
 | `files.newDocument.eol` | `crlf` / `lf` / `cr` | `crlf` | `NewDoc/Eol` |
 | `files.newDocument.language` | Language-menu name; empty = Normal text | — | `NewDoc/Lang` (a menu index) |
 | `files.newDocument.encoding` | `utf-8` / `utf-8-bom` / `utf-16le` / `utf-16be` / `ansi` | `utf-8` | `NewDoc/Encoding` |

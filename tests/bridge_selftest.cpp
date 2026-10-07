@@ -83,6 +83,7 @@ static wxString g_sandboxRoot;       // <temp>/wxnote_bridge_selftest
 static wxString g_sandboxUserData;   // <root>/userdata - what the app believes its user-data dir is
 static bool writeWholeFile(const wxString& path, const char* content);
 static wxString readWholeFile(const wxString& path);
+static int g_closePrompts = 0;       // save prompts CloseDialogHook (below) has answered: what a close asked
 
 // Defined here and declared in main.cpp as a friend of the frame, so the private seams stay private.
 template <class FB>
@@ -158,6 +159,29 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         check(p->autoLang == "JSON" && comments() == 0, "JSON5: ...and plain JSON still marks them");
         p->path.clear();
         f->closeActive();
+    }
+
+    // ---- closing a modified tab asks; quitting keeps the work for the next launch -----------------
+    // Closing a tab used to discard unsaved edits without a word unless "ask" was on - the setting now
+    // decides only what quitting does, as Notepad++'s session snapshot does.
+    {
+        const bool askWhenQuitting = f->m_askBeforeClose;
+        f->m_askBeforeClose = false;                                // the default
+        f->addDocument(wxString(), "untitled-close-test");
+        EditorPage* p = f->activePage();
+        f->sci(SCI_APPENDTEXT, 5, reinterpret_cast<sptr_t>("edits"));
+        const int asked = g_closePrompts;
+        check(f->confirmClose(p, /*exiting=*/true) && g_closePrompts == asked && !p->recoveryId.empty(),
+              "close: quitting keeps a modified document for the next launch, without asking");
+        f->clearRecovery(p);
+        const size_t pages = f->allPages().size();
+        f->openInOtherView(true);                                   // the same document in the other view too
+        f->closeActive();
+        check(g_closePrompts == asked && f->allPages().size() == pages, "close: closing one view's copy of it does not ask");
+        f->activatePage(p);
+        f->closeActive();                                           // CloseDialogHook answers Don't Save
+        check(g_closePrompts == asked + 1, "close: ...closing its last tab does");
+        f->m_askBeforeClose = askWhenQuitting;
     }
 
     // ---- (1) a regex that CROSSES A LINE BREAK, through the real Find path ------------------------
@@ -809,17 +833,22 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
 
 // ---- the sandbox (g_sandboxRoot / g_sandboxUserData, above; read by the traits below) ---------------
 
-// Headlessly answer the confirmClose "wxNote" save prompt (no OS input injection). The whole run has
-// AskBeforeClose armed (so the Phase-4 shutdown VETO path can be driven), but every close in Phases 1-3
-// wants the old discard-and-proceed behaviour, so the DEFAULT answer is Don't Save (wxID_NO -> discard,
-// close proceeds). The shutdown test arms g_closeAnswer to wxID_CANCEL for one vetoed close, forcing
-// confirmClose to return false. Any dialog that is NOT the "wxNote" prompt is shown as usual (wxID_NONE).
+// Headlessly answer the confirmClose "wxNote" save prompt (no OS input injection), counting each one in
+// g_closePrompts. Closing a modified tab always asks, and the whole run has "ask when quitting" armed too
+// (so the Phase-4 shutdown VETO path can be driven), but every close in Phases 1-3 wants discard-and-
+// proceed, so the DEFAULT answer is Don't Save (wxID_NO -> discard, close proceeds). The shutdown test arms
+// g_closeAnswer to wxID_CANCEL for one vetoed close, forcing confirmClose to return false. Any dialog
+// that is NOT the "wxNote" prompt is shown as usual (wxID_NONE).
 static int g_closeAnswer = wxID_NO;
 class CloseDialogHook : public wxModalDialogHook
 {
 protected:
     int Enter(wxDialog* dlg) override
-    { return (dlg && dlg->GetTitle() == "wxNote") ? g_closeAnswer : wxID_NONE; }
+    {
+        if (!dlg || dlg->GetTitle() != "wxNote") return wxID_NONE;
+        ++g_closePrompts;
+        return g_closeAnswer;
+    }
 };
 
 // wxStandardPaths whose GetUserDataDir() lands in the sandbox. Everything keyed off userDataDir() -
@@ -1838,7 +1867,7 @@ private:
 
             // clean up: close every Phase-3 buffer back to a single untitled document so the tail
             // assertions (the TBMODIFICATION-once tripwire) run against a settled model. Force-close via
-            // the file-close command; dirty buffers are discarded (m_askBeforeClose is off in the sandbox).
+            // the file-close command; dirty buffers are discarded (CloseDialogHook answers Don't Save).
             for (int guard = 0; g_nibDocCount && g_nibDocCount() > 1 && guard < 20; ++guard) {
                 g_nibInvokeCommand(kCmdFileClose);
                 pump();

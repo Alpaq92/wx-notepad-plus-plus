@@ -4487,8 +4487,8 @@ public:
     void applySavedWindowState() { if (m_wasMaximized) Maximize(true); }
     // -w/--wait: the paths the launching process is blocked on. Also force the save prompt ON for this run
     // only (not persisted - saveSettings() skips files.confirmCloseUnsaved in wait mode): m_askBeforeClose
-    // defaults to OFF, i.e. a modified buffer is discarded silently - which for a commit message would hand
-    // git back an unedited COMMIT_EDITMSG with no warning.
+    // defaults to OFF, i.e. quitting keeps a modified buffer for the next launch without asking - which for
+    // a commit message would hand git back an unedited COMMIT_EDITMSG with no warning.
     void enterWaitMode(const wxArrayString& paths)
     { g_waitMode = true; g_waitPaths = paths; m_askBeforeClose = true; }
     // Apply -g (goto line[,col]) / -e (force encoding) to whichever page is active after opening some
@@ -8261,9 +8261,9 @@ private:
         return g_sandboxMode ? sandboxDataDir() : wxStandardPaths::Get().GetUserDataDir();
     }
 
-    // ----- unsaved-changes recovery (Preferences > General "Ask before closing unsaved changes", off
-    // by default) - when a modified document is discarded WITHOUT prompting, its content is backed up
-    // to <userDataDir>/RecoveryBackups/<id>.bak first, so it survives that close (or a later crash/relaunch)
+    // ----- unsaved-changes recovery (Preferences > General "Ask to save unsaved changes when quitting",
+    // off by default) - when the app quits with a modified document WITHOUT asking, its content is backed
+    // up to <userDataDir>/RecoveryBackups/<id>.bak first, so it survives the exit (or a later crash)
     // instead of being silently lost. The manifest is state.yaml's recovery/entries, keyed by that same id
     // (recovery/entries/<id>/path and /title) - independent of session/files (which only tracks
     // "what's currently open" and is fully rewritten on every exit); an id is only removed once its
@@ -8338,17 +8338,22 @@ private:
     }
     // Ask to save a modified document before closing it (Save / Don't Save / Cancel), themed like the
     // rest of the app. Returns true if the caller may close the page, false if the user cancelled.
-    // exiting=true (only from onCloseWindow) means this discard is the app quitting with unsaved content
-    // still open - back it up so it can be recovered next launch. A deliberate in-session tab close
-    // (exiting=false, all other call sites) is a final decision - clear any stale recovery instead, or
-    // discarded scratch tabs would resurrect as ghost tabs on every future launch forever.
+    // Closing a tab always asks, as in Notepad++ - except for a document still open in the other view,
+    // which loses nothing. exiting=true (only from onCloseWindow) is the app quitting: with "Ask to save
+    // unsaved changes when quitting" off (the default) the document is backed up instead, to reopen next
+    // launch (Notepad++'s session snapshot); on, it asks as well. An answered in-session close is a final
+    // decision - clear any stale recovery, or discarded scratch tabs would resurrect as ghost tabs on every
+    // future launch forever.
     bool confirmClose(EditorPage* p, bool exiting = false)
     {
         if (!p) return true;
+        if (!exiting)
+            for (EditorPage* o : allPages())
+                if (o != p && o->doc == p->doc) { clearRecovery(p); return true; }   // a clone: the other view keeps it
         setActiveView(viewOf(p));            // make p's view active so sci()/m_path/onSave refer to p (incl. the OTHER split view)
         activateBuffer(p);                   // swap that view to p's document and select its tab
         if (sci(SCI_GETMODIFY) == 0) return true;
-        if (!m_askBeforeClose) { if (exiting) backupUnsavedChanges(p); else clearRecovery(p); return true; }   // setting off (the default): discard silently, no prompt
+        if (exiting && !m_askBeforeClose) { backupUnsavedChanges(p); return true; }   // quitting, setting off (the default): keep it for next launch
         const wxString name = !p->path.empty() ? p->path : (p->title.empty() ? wxString("new") : p->title);
 
         wxDialog dlg(this, wxID_ANY, "wxNote");
@@ -13793,9 +13798,9 @@ private:
         auto* cbZoomField = new wxCheckBox(gen, wxID_ANY, _("Show zoom control in status bar"));
         cbZoomField->SetValue(m_showZoomField);
         row(gs, cbToolbar); row(gs, cbStatus); row(gs, cbZoomField);
-        // Off by default: closing a modified document just discards it silently
-        // rather than blocking on a Save/Don't Save/Cancel prompt every time.
-        auto* cbAskClose = new wxCheckBox(gen, wxID_ANY, _("Ask before closing unsaved changes"));
+        // Off by default: quitting keeps unsaved documents for the next launch instead of asking about each
+        // one (Notepad++'s session snapshot). Closing a tab asks either way - see confirmClose.
+        auto* cbAskClose = new wxCheckBox(gen, wxID_ANY, _("Ask to save unsaved changes when quitting"));
         cbAskClose->SetValue(m_askBeforeClose); row(gs, cbAskClose);
         // AppImage builds only - see wxnMaybeIntegrateAppImage. Added rather than merely disabled
         // elsewhere, because on an installed build the package manager already registered the
@@ -17384,7 +17389,7 @@ private:
     wxRect      m_normalRect{wxDefaultCoord, wxDefaultCoord, 1100, 720};
     bool        m_wasMaximized = false;   // applied via Maximize(true) post-Show() in OnInit
     int         m_themeMode = 1;   // Preferences > General "Theme": 0 = System, 1 = Dark, 2 = Light (restart-to-apply)
-    bool        m_askBeforeClose = false;   // Preferences > General "Ask before closing unsaved changes" (off by default)
+    bool        m_askBeforeClose = false;   // Preferences > General "Ask to save unsaved changes when quitting" (off by default)
     bool        m_fsAutohideToolbar = false; // Preferences > General "Auto-hide toolbar in full screen" (off by default: toolbar stays)
     bool        m_reuseInstance = false;    // Preferences > General "Reuse an existing window" (restart-to-apply; read in OnInit)
     bool        m_customGutterColor = false;   // Preferences > Editing "Use a custom line-number margin colour"

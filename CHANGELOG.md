@@ -109,6 +109,12 @@ All notable changes to wxNote are documented here. Format loosely follows
   the translations' `.po` sources with them. Every Linux and macOS package now copies wxNote and the
   files it reads by name - the same set as the Windows installer and zip - and the build stops if one
   of them is missing. The Flatpak already shipped only that set.
+- **Closing a modified tab no longer throws its edits away without asking.** Unless "Ask before closing
+  unsaved changes" was on, closing a tab - its close button, File > Close, Close All and the rest -
+  discarded unsaved edits without a word, and deleted their recovery copy too. Closing a tab now always
+  asks Save / Don't Save / Cancel, as in Notepad++; a document still open in the other view closes
+  without asking. The setting, now **Ask to save unsaved changes when quitting**, decides only what
+  quitting does: off, as before, unsaved documents are kept and reopen at the next launch.
 
 ### Changed
 - **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved

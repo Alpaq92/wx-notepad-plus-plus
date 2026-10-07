@@ -2043,8 +2043,8 @@ msgstr "Ciemny"
 msgid "Light"
 msgstr "Jasny"
 
-msgid "Ask before closing unsaved changes"
-msgstr "Pytaj przed zamknięciem niezapisanych zmian"
+msgid "Ask to save unsaved changes when quitting"
+msgstr "Pytaj o zapisanie niezapisanych zmian przy wychodzeniu"
 
 msgid "Use a custom line-number margin colour"
 msgstr "Użyj niestandardowego koloru marginesu numerów linii"

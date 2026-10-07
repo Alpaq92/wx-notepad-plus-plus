@@ -2043,8 +2043,8 @@ msgstr "ダーク"
 msgid "Light"
 msgstr "ライト"
 
-msgid "Ask before closing unsaved changes"
-msgstr "未保存の変更を閉じる前に確認する"
+msgid "Ask to save unsaved changes when quitting"
+msgstr "終了時に未保存の変更を保存するか確認する"
 
 msgid "Use a custom line-number margin colour"
 msgstr "行番号マージンにカスタムカラーを使用する"
