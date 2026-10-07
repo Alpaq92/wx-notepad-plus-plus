@@ -451,9 +451,6 @@ int main(int argc, char** argv)
             wxnyaml::Doc d;
             const bool parsed = wxnyaml::parse(text, d);
             std::printf("        parsed %d (%s), root map %d\n", parsed, d.error.c_str(), wxnyaml::isMap(d.root()));
-            const wxnyaml::Node byName = wxnyaml::child(d.root(), "nextId");   // the lookup wxnParseRuns makes
-            std::printf("        by name: readable %d, integerOr %lld\n", byName.readable() ? 1 : 0,
-                        wxnyaml::integerOr(byName, -1));
             if (wxnyaml::isMap(d.root()))
                 for (wxnyaml::Node c : d.root().children())
                 {
