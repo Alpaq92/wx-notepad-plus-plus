@@ -145,8 +145,8 @@ everywhere, rather than a Windows-only hack).
 | Hard tail — not built | `CREATESCINTILLAHANDLE` (`NULL`), `HIDETABBAR` / `ISTABBARHIDDEN` (`FALSE`), `DARKMODESUBCLASSANDTHEME` (`0`, plugin dialogs stay light) | as noted |
 | Phase 5 — deliberately not implemented | `REMOVESHORTCUTBYCMDID` (would mutate the user's *active* keymap scheme in place, which the `nib.keymap` contract forbids a plugin from doing; plugin commands carry no removable binding anyway), `TRIGGERTABBARCONTEXTMENU` (popping a context menu needs a real right-click position a message can't supply) | `FALSE` |
 
-`RELOADBUFFERID` (and Phase-1's `RELOADFILE`) reload through the non-deduping `nib.documents` `open()`,
-so reloading an already-open file leaves a duplicate tab; a switch-if-already-open seam is future work.
+`RELOADBUFFERID` (and Phase-1's `RELOADFILE`) go through `nib.documents` `open()`, which switches to a file
+that is already open, then run File > Reload, so they reload that tab rather than opening a second copy.
 
 `GETCURRENTVIEW` / `GETCURRENTSCINTILLA` report the focused pane (0=main, 1=sub) via `nib.documents` v3, so
 view-aware plugins target the right editor in a split. **Partial**: `GETBUFFERLANGTYPE` / `GETCURRENTLANGTYPE`
