@@ -1542,6 +1542,9 @@ msgstr "В буфере обмена нет подходящего содерж�
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "Переместить \"%s\" в Корзину?"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "Не удалось переместить \"%s\" в Корзину."
+
 msgid "Enter valid character codes."
 msgstr "Введите корректные коды символов."
 

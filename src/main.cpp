@@ -107,6 +107,7 @@ extern "C" void wxn_HideWindowTitle(void* nsWindow);        // titleVisibility =
 // Returns the left inset (px) where toolbar content may start, 0 if unavailable.
 extern "C" int  wxn_InlineTrafficLights(void* nsWindow, int rowHeightPx);
 extern "C" void wxn_DragWindow(void* nsWindow);             // native window drag from the current mouse-down
+extern "C" int  wxn_TrashFile(const char* path, char* err, int errLen);   // Move to Recycle Bin: the Trash
 #endif
 
 #ifdef __WXGTK__
@@ -127,6 +128,9 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 // reports 0 natural width otherwise and the row clips); barHeightPx = the panel/bar height; sharpCorners
 // != 0 keeps the window corners square ("Ignore platform decoration"), else they round to match the theme.
 extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidget, int barWidthPx, int barHeightPx, int sharpCorners);
+// Move to Recycle Bin (also gtk_native.cpp): the freedesktop.org Trash via GIO. 1 on success, else 0 with
+// the reason in err.
+extern "C" int  wxn_TrashFile(const char* path, char* err, int errLen);
 #endif
 
 #include <string>
@@ -12149,10 +12153,12 @@ private:
         if (dlg.ShowModal() != wxID_OK) { nibFireDocEvent(NIB_EV_FILE_RENAME_CANCEL, ep); return; }   // user cancelled -> NPPN_FILERENAMECANCEL
         renameActiveTo(dlg.GetPath());
     }
-    // The delete operation itself (no confirm dialog): fires NIB_EV_FILE_BEFORE_DELETE, deletes the active
-    // document's on-disk file, then NIB_EV_FILE_DELETED (success, fired while the buffer id is still
-    // resolvable) or NIB_EV_FILE_DELETE_FAILED. On success the tab is closed. Returns success.
-    bool recycleActive()
+    // The delete operation itself (no confirm dialog): fires NIB_EV_FILE_BEFORE_DELETE, moves the active
+    // document's file to the Recycle Bin - the Trash on Linux, FreeBSD and macOS, never a permanent delete -
+    // then NIB_EV_FILE_DELETED (success, fired while the buffer id is still resolvable) or
+    // NIB_EV_FILE_DELETE_FAILED, with the system's reason in *why where it gives one. On success the tab is
+    // closed without a save prompt, as in Notepad++: its edits go with the file. Returns success.
+    bool recycleActive(wxString* why = nullptr)
     {
         EditorPage* ep = activePage();
         const wxString p = curPath();
@@ -12163,18 +12169,27 @@ private:
         SHFILEOPSTRUCTW op{}; op.wFunc = FO_DELETE; op.pFrom = from.c_str(); op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
         const bool ok = (SHFileOperationW(&op) == 0);
 #else
-        const bool ok = wxRemoveFile(p);
+        char err[512];
+        const bool ok = wxn_TrashFile(p.fn_str(), err, sizeof(err)) != 0;
+        if (!ok && why) *why = wxString::FromUTF8(err);
 #endif
-        if (ok) { nibFireDocEvent(NIB_EV_FILE_DELETED, ep); closeActive(); }   // -> NPPN_FILEDELETED (id still valid), then close the tab
-        else    { nibFireDocEvent(NIB_EV_FILE_DELETE_FAILED, ep); }             // -> NPPN_FILEDELETEFAILED
-        return ok;
+        if (!ok) { nibFireDocEvent(NIB_EV_FILE_DELETE_FAILED, ep); return false; }   // -> NPPN_FILEDELETEFAILED
+        nibFireDocEvent(NIB_EV_FILE_DELETED, ep);   // -> NPPN_FILEDELETED (id still valid)
+        activatePage(ep);                           // whatever a plugin switched to meanwhile, close this one
+        clearRecovery(ep);
+        sci(SCI_SETSAVEPOINT);                      // so closing it does not ask to save what was just thrown away
+        closeActive();
+        return true;
     }
     void recycleFile()
     {
         const wxString p = curPath();
         if (p.empty()) { notImpl(_("Move to Recycle Bin (save the file first)")); return; }
         if (wxMessageBox(wxString::Format(_("Move \"%s\" to the Recycle Bin?"), wxFileNameFromPath(p)), "wxNote", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
-        recycleActive();
+        wxString why;
+        if (!recycleActive(&why))
+            wxMessageBox(wxString::Format(_("Could not move \"%s\" to the Recycle Bin."), wxFileNameFromPath(p))
+                         + (why.empty() ? wxString() : "\n\n" + why), "wxNote", wxOK | wxICON_ERROR, this);
     }
     // Close All to the Left / Right: closeAllBut's three passes over the tabs on that side of the active one
     // - confirm them all first, so a Cancel aborts before anything closes, then record and delete - and the

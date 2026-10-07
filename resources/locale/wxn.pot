@@ -1634,6 +1634,9 @@ msgstr ""
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr ""
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr ""
+
 msgid "Read/Write"
 msgstr ""
 

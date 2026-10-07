@@ -1542,6 +1542,9 @@ msgstr "Schowek nie zawiera pasującej zawartości."
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "Przenieść \"%s\" do kosza?"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "Nie można przenieść \"%s\" do kosza."
+
 msgid "Enter valid character codes."
 msgstr "Wprowadź prawidłowe kody znaków."
 

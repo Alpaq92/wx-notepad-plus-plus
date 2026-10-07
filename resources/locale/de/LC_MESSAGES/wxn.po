@@ -1542,6 +1542,9 @@ msgstr "Die Zwischenablage enthält keinen passenden Inhalt."
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "\"%s\" in den Papierkorb verschieben?"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "\"%s\" konnte nicht in den Papierkorb verschoben werden."
+
 msgid "Enter valid character codes."
 msgstr "Geben Sie gültige Zeichencodes ein."
 

@@ -2155,9 +2155,13 @@ private:
                     "re-activated the renamed file for the delete test"); }
             pump();
             check(g_nibDocActiveId && g_nibDocActiveId() == id6a, "the renamed file is the active buffer before delete");
+            nibSciCall(nullptr, -1, SCI_APPENDTEXT, 6, reinterpret_cast<intptr_t>("edits\n"));   // unsaved edits go with it
+            pump();
+            const int askedBeforeDelete = g_closePrompts;
             mark = readLogLines().size();
             check(g_nibRecycleActive && g_nibRecycleActive() == 1, "programmatic delete of the active file succeeded");
             pump();
+            check(g_closePrompts == askedBeforeDelete, "deleting a modified file closes its tab without asking to save it");
             L = readLogLines();
             {
                 const int iBd = findFrom(L, mark, notifNeedleForPage(NPPN_FILEBEFOREDELETE, id6a));
@@ -2178,10 +2182,9 @@ private:
             check(id6c != 0, "opened p6c.txt (active buffer id is non-zero)");
             check(wxRemoveFile(p6c), "removed p6c.txt out from under its open buffer (simulates external deletion)");
             mark = readLogLines().size();
-            // wxLogNull: on POSIX, recycleActive()'s fallback path calls wxRemoveFile() again on the
-            // already-gone file, whose expected ENOENT failure wxRemoveFile() reports via wxLogSysError -
-            // same un-auto-answered-dialog risk as the rename-cancel case above (Windows takes the
-            // SHFileOperationW branch instead, which never logs, but the guard is harmless there too).
+            // wxLogNull: a guard against any wxLogSysError a failing delete path might raise - the same
+            // un-auto-answered-dialog risk as the rename-cancel case above. (Neither the Trash call on
+            // Linux, FreeBSD and macOS nor SHFileOperationW on Windows logs today, but the guard is cheap.)
             { wxLogNull noLog; check(g_nibRecycleActive && g_nibRecycleActive() == 0,
                   "programmatic delete of an already-gone file reports failure"); }
             pump();

@@ -1542,6 +1542,9 @@ msgstr "El portapapeles no tiene contenido compatible."
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "¿Mover \"%s\" a la Papelera de reciclaje?"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "No se pudo mover \"%s\" a la Papelera de reciclaje."
+
 msgid "Enter valid character codes."
 msgstr "Introduzca códigos de carácter válidos."
 

@@ -1542,6 +1542,9 @@ msgstr "クリップボードに一致する内容がありません。"
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "\"%s\" をごみ箱に移動しますか？"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "\"%s\" をごみ箱に移動できませんでした。"
+
 msgid "Enter valid character codes."
 msgstr "有効な文字コードを入力してください。"
 

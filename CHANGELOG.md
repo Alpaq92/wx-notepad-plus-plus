@@ -115,6 +115,9 @@ All notable changes to wxNote are documented here. Format loosely follows
   asks Save / Don't Save / Cancel, as in Notepad++; a document still open in the other view closes
   without asking. The setting, now **Ask to save unsaved changes when quitting**, decides only what
   quitting does: off, as before, unsaved documents are kept and reopen at the next launch.
+- **Move to Recycle Bin deleted the file for good on Linux, FreeBSD and macOS.** It now moves it to the
+  Trash, from which the file manager restores it, and says so if it cannot rather than deleting it. The
+  tab closes without asking to save what was just thrown away, as in Notepad++.
 
 ### Changed
 - **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved

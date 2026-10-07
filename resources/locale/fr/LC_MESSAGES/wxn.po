@@ -1542,6 +1542,9 @@ msgstr "Le presse-papiers ne contient aucun contenu correspondant."
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "Déplacer \"%s\" vers la Corbeille ?"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "Impossible de déplacer \"%s\" vers la Corbeille."
+
 msgid "Enter valid character codes."
 msgstr "Saisissez des codes de caractères valides."
 
