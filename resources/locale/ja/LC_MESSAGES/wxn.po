@@ -1542,6 +1542,9 @@ msgstr "クリップボードに一致する内容がありません。"
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "\"%s\" をごみ箱に移動しますか？"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "\"%s\" をごみ箱に移動できませんでした。"
+
 msgid "Enter valid character codes."
 msgstr "有効な文字コードを入力してください。"
 
@@ -2043,8 +2046,8 @@ msgstr "ダーク"
 msgid "Light"
 msgstr "ライト"
 
-msgid "Ask before closing unsaved changes"
-msgstr "未保存の変更を閉じる前に確認する"
+msgid "Ask to save unsaved changes when quitting"
+msgstr "終了時に未保存の変更を保存するか確認する"
 
 msgid "Use a custom line-number margin colour"
 msgstr "行番号マージンにカスタムカラーを使用する"
@@ -3210,3 +3213,18 @@ msgstr "languages.yaml を変更できませんでした (%s)。"
 
 msgid "Keywords saved"
 msgstr "キーワードを保存しました"
+
+msgid "Default Directory"
+msgstr "既定のフォルダー"
+
+msgid "Follow current document"
+msgstr "現在の文書に従う"
+
+msgid "Remember last used directory"
+msgstr "最後に使用したフォルダーを記憶する"
+
+msgid "This folder:"
+msgstr "このフォルダー:"
+
+msgid "Open and Save dialogs start in"
+msgstr "「開く」と「保存」ダイアログの開始位置"

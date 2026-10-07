@@ -1542,6 +1542,9 @@ msgstr "클립보드에 일치하는 내용이 없습니다."
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "\"%s\"을(를) 휴지통으로 이동하시겠습니까?"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "\"%s\"을(를) 휴지통으로 이동할 수 없습니다."
+
 msgid "Enter valid character codes."
 msgstr "유효한 문자 코드를 입력하세요."
 
@@ -2043,8 +2046,8 @@ msgstr "다크"
 msgid "Light"
 msgstr "라이트"
 
-msgid "Ask before closing unsaved changes"
-msgstr "저장하지 않은 변경 사항을 닫기 전에 확인"
+msgid "Ask to save unsaved changes when quitting"
+msgstr "종료할 때 저장하지 않은 변경 사항을 저장할지 확인"
 
 msgid "Use a custom line-number margin colour"
 msgstr "줄 번호 여백에 사용자 지정 색상 사용"
@@ -3210,3 +3213,18 @@ msgstr "languages.yaml을 변경할 수 없습니다(%s)."
 
 msgid "Keywords saved"
 msgstr "키워드 저장됨"
+
+msgid "Default Directory"
+msgstr "기본 디렉터리"
+
+msgid "Follow current document"
+msgstr "현재 문서 따르기"
+
+msgid "Remember last used directory"
+msgstr "마지막으로 사용한 디렉터리 기억"
+
+msgid "This folder:"
+msgstr "이 디렉터리:"
+
+msgid "Open and Save dialogs start in"
+msgstr "열기 및 저장 대화 상자의 시작 위치"

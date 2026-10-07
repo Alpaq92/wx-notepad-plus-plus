@@ -70,6 +70,9 @@ All notable changes to wxNote are documented here. Format loosely follows
   don't have is left out rather than breaking the menu.
 - **`nib.settings/1`** (Nib ABI 1.8): a plugin can read and change a setting by its id; wxNote checks
   every value against its own table of settings, as it does for a hand-edited `settings.yaml`.
+- **Preferences > Default Directory**: where File > Open, and Save As for an untitled document, start -
+  the current document's folder (the default), the folder you last used, or a fixed one, as in
+  Notepad++.
 
 ### Fixed
 - **File > Close All crashed** with any file open, and so did **Close All But This** with the view
@@ -93,12 +96,34 @@ All notable changes to wxNote are documented here. Format loosely follows
   their own theme sections, and JavaScript and PHP inside HTML are coloured too.
 - Toggle Comment now works in files whose language is only known from detection (scripts with no
   extension, `CMakeLists.txt`, `PKGBUILD`, systemd units), and comments `.inf` files with `;`.
+- Reading the selection with several selections active (multi-cursor, or a column selection) overran
+  a buffer - in Find and Replace's prefill, Mark, Find in Files, searching the web and Open File. They
+  now take the main selection. **Convert Case** and **Redact** convert each selection on its own and
+  keep them selected, instead of replacing them all with one merged copy.
+- Opening a file that is already open - File > Open, drag and drop, a second launch with *Reuse an
+  existing window*, Recent Files, Load Session, a plugin - opened it in a second tab. It now switches to
+  the open one, and a plugin's request to reload a file reloads that tab.
+- The function parameter hint vanished for good once the completion list opened over it. It now comes
+  back when the list closes, while the caret is still in the call.
+- JSON5 files (and `.jsonc`) showed `//` and `/* */` comments as errors; they are coloured as comments.
 - **The Linux and macOS packages shipped wxNote's test programs.** The `.deb`, `.rpm`, AppImage and
   `.dmg` copied the whole build folder, which also holds every self-test the build makes: 0.20.0's
   `.deb` installed 16 of them into `/opt/wxnote` beside `wxnote`, `bridge_selftest` alone 22 MB, and
   the translations' `.po` sources with them. Every Linux and macOS package now copies wxNote and the
   files it reads by name - the same set as the Windows installer and zip - and the build stops if one
   of them is missing. The Flatpak already shipped only that set.
+- **Closing a modified tab no longer throws its edits away without asking.** Unless "Ask before closing
+  unsaved changes" was on, closing a tab - its close button, File > Close, Close All and the rest -
+  discarded unsaved edits without a word, and deleted their recovery copy too. Closing a tab now always
+  asks Save / Don't Save / Cancel, as in Notepad++; a document still open in the other view closes
+  without asking. The setting, now **Ask to save unsaved changes when quitting**, decides only what
+  quitting does: off, as before, unsaved documents are kept and reopen at the next launch.
+- **Move to Recycle Bin deleted the file for good on Linux, FreeBSD and macOS.** It now moves it to the
+  Trash, from which the file manager restores it, and says so if it cannot rather than deleting it. The
+  tab closes without asking to save what was just thrown away, as in Notepad++.
+- **"Reuse an existing window" did not work on Linux, FreeBSD and macOS**: a second launch never found
+  the running window and opened its own. The running window now listens on a socket in your user data
+  folder, where a second launch looks.
 
 ### Changed
 - **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved
@@ -140,6 +165,9 @@ All notable changes to wxNote are documented here. Format loosely follows
   already did: in the `.deb`'s `copyright` file, among the `.rpm`'s licence files, in the AppImage, in
   the Flatpak's licence folder and inside the macOS app. `NOTICE` now also holds the full MIT and BSD
   texts the bundled third-party code asks to travel with it.
+- **File > Open** starts in the active document's folder and opens several files at once.
+- **Save As** proposes the document's own name and folder - an untitled one's tab name, such as
+  `new 2.txt` - instead of always `new 1.txt`.
 
 ## [0.20.0] - 2026-09-05
 

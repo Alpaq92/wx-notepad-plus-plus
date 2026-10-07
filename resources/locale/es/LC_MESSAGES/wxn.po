@@ -1542,6 +1542,9 @@ msgstr "El portapapeles no tiene contenido compatible."
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "¿Mover \"%s\" a la Papelera de reciclaje?"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "No se pudo mover \"%s\" a la Papelera de reciclaje."
+
 msgid "Enter valid character codes."
 msgstr "Introduzca códigos de carácter válidos."
 
@@ -2043,8 +2046,8 @@ msgstr "Oscuro"
 msgid "Light"
 msgstr "Claro"
 
-msgid "Ask before closing unsaved changes"
-msgstr "Preguntar antes de cerrar cambios sin guardar"
+msgid "Ask to save unsaved changes when quitting"
+msgstr "Preguntar si guardar los cambios sin guardar al salir"
 
 msgid "Use a custom line-number margin colour"
 msgstr "Usar un color personalizado para el margen de números de línea"
@@ -3210,3 +3213,18 @@ msgstr "No se pudo cambiar languages.yaml (%s)."
 
 msgid "Keywords saved"
 msgstr "Palabras clave guardadas"
+
+msgid "Default Directory"
+msgstr "Directorio predeterminado"
+
+msgid "Follow current document"
+msgstr "Seguir el documento actual"
+
+msgid "Remember last used directory"
+msgstr "Recordar el último directorio usado"
+
+msgid "This folder:"
+msgstr "Este directorio:"
+
+msgid "Open and Save dialogs start in"
+msgstr "Los diálogos Abrir y Guardar se abren en"

@@ -1542,6 +1542,9 @@ msgstr "Le presse-papiers ne contient aucun contenu correspondant."
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "Déplacer \"%s\" vers la Corbeille ?"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "Impossible de déplacer \"%s\" vers la Corbeille."
+
 msgid "Enter valid character codes."
 msgstr "Saisissez des codes de caractères valides."
 
@@ -2043,8 +2046,8 @@ msgstr "Sombre"
 msgid "Light"
 msgstr "Clair"
 
-msgid "Ask before closing unsaved changes"
-msgstr "Demander avant de fermer les modifications non enregistrées"
+msgid "Ask to save unsaved changes when quitting"
+msgstr "Demander d'enregistrer les modifications non enregistrées en quittant"
 
 msgid "Use a custom line-number margin colour"
 msgstr "Utiliser une couleur personnalisée pour la marge des numéros de ligne"
@@ -3210,3 +3213,18 @@ msgstr "Impossible de modifier languages.yaml (%s)."
 
 msgid "Keywords saved"
 msgstr "Mots-clés enregistrés"
+
+msgid "Default Directory"
+msgstr "Répertoire par défaut"
+
+msgid "Follow current document"
+msgstr "Suivre le document actif"
+
+msgid "Remember last used directory"
+msgstr "Mémoriser le dernier répertoire utilisé"
+
+msgid "This folder:"
+msgstr "Ce répertoire :"
+
+msgid "Open and Save dialogs start in"
+msgstr "Les dialogues Ouvrir et Enregistrer s'ouvrent dans"

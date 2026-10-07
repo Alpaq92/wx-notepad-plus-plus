@@ -1542,6 +1542,9 @@ msgstr "В буфере обмена нет подходящего содерж�
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "Переместить \"%s\" в Корзину?"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "Не удалось переместить \"%s\" в Корзину."
+
 msgid "Enter valid character codes."
 msgstr "Введите корректные коды символов."
 
@@ -2043,8 +2046,8 @@ msgstr "Тёмная"
 msgid "Light"
 msgstr "Светлая"
 
-msgid "Ask before closing unsaved changes"
-msgstr "Спрашивать перед закрытием несохранённых изменений"
+msgid "Ask to save unsaved changes when quitting"
+msgstr "Спрашивать о сохранении несохранённых изменений при выходе"
 
 msgid "Use a custom line-number margin colour"
 msgstr "Использовать собственный цвет поля номеров строк"
@@ -3210,3 +3213,18 @@ msgstr "Не удалось изменить languages.yaml (%s)."
 
 msgid "Keywords saved"
 msgstr "Ключевые слова сохранены"
+
+msgid "Default Directory"
+msgstr "Папка по умолчанию"
+
+msgid "Follow current document"
+msgstr "Следовать за текущим документом"
+
+msgid "Remember last used directory"
+msgstr "Запоминать последнюю использованную папку"
+
+msgid "This folder:"
+msgstr "Эта папка:"
+
+msgid "Open and Save dialogs start in"
+msgstr "Диалоги открытия и сохранения открываются в"

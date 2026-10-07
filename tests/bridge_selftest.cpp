@@ -61,6 +61,10 @@
 #include <climits>
 #include <map>          // the probe-button image check's colour histogram
 #include <algorithm>    // std::max (same)
+#ifndef __WXMSW__
+#include <sys/socket.h> // the reuse-window handoff test connects to the instance's socket
+#include <sys/un.h>
+#endif
 
 static int g_pass = 0;
 static int g_failCount = 0;
@@ -83,6 +87,7 @@ static wxString g_sandboxRoot;       // <temp>/wxnote_bridge_selftest
 static wxString g_sandboxUserData;   // <root>/userdata - what the app believes its user-data dir is
 static bool writeWholeFile(const wxString& path, const char* content);
 static wxString readWholeFile(const wxString& path);
+static int g_closePrompts = 0;       // save prompts CloseDialogHook (below) has answered: what a close asked
 
 // Defined here and declared in main.cpp as a friend of the frame, so the private seams stay private.
 template <class FB>
@@ -94,6 +99,146 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         FindOpts o; o.find = wxString::FromUTF8(find); o.regex = regex; o.matchCase = true;
         o.forward = fwd; o.wrap = false; return o;
     };
+
+    // ---- several selections: the main one is what reads; a conversion rewrites each ------------------
+    // Reading "the selection" sized its buffer for the main selection and then copied all of them into
+    // it (a heap overflow), and a case conversion replaced every selection with one merged copy.
+    {
+        load("one two three");
+        f->sci(SCI_SETSELECTION, 3, 0);    // "one"
+        f->sci(SCI_ADDSELECTION, 13, 8);   // "three", now the main selection
+        check(f->selText() == "three", "selection: several selections read as the main one");
+        f->transformSel([](std::string& s) { for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c))); });
+        check(text() == "ONE two THREE", "selection: a conversion rewrites each selection on its own");
+        check(f->sci(SCI_GETSELECTIONS) == 2 && f->selText() == "THREE", "selection: ...leaving both selected, the main one main");
+        f->sci(SCI_UNDO);
+        check(text() == "one two three", "selection: ...as one undo step");
+        f->sci(SCI_CLEARSELECTIONS);
+    }
+
+    // ---- a file already open is switched to, not opened twice ---------------------------------------
+    {
+        const wxString path = wxFileName::CreateTempFileName("wxndup");
+        check(writeWholeFile(path, "dup\n"), "open: fixture written");
+        EditorPage* first = f->openPath(path);
+        const size_t pages = f->allPages().size();
+        f->addDocument(wxString(), "untitled-dup-test");     // somewhere else in front
+        EditorPage* scratch = f->activePage();
+        EditorPage* again = f->openPath(path);
+        check(first && again == first && f->allPages().size() == pages + 1,
+              "open: opening an open file again gives its tab, not a second one");
+        check(f->activePage() == first, "open: ...and brings that tab to the front");
+        f->closeActive();                                     // the file's tab
+        f->activatePage(scratch);
+        f->closeActive();
+        wxRemoveFile(path);
+    }
+
+    // ---- the call tip survives the completion list ----------------------------------------------
+    // Scintilla closes a call tip when the completion list opens; the tip used to be dropped for good.
+    {
+        load("int addem(int a, int b) { return a + b; }\naddem(");
+        f->sci(SCI_GOTOPOS, f->sci(SCI_GETLENGTH));
+        f->funcCallTip();
+        check(f->sci(SCI_CALLTIPACTIVE) != 0, "call tip: shown for the call being typed");
+        f->sci(SCI_AUTOCSHOW, 0, reinterpret_cast<sptr_t>("alpha beta"));
+        f->callTipCaretMoved();   // as the next caret update does while the list is up
+        check(f->sci(SCI_AUTOCACTIVE) != 0 && !f->m_ctSigs.empty(), "call tip: kept while the completion list hides it");
+        f->sci(SCI_AUTOCCANCEL);
+        f->resumeCallTip();       // what the list's closing schedules
+        check(f->sci(SCI_CALLTIPACTIVE) != 0, "call tip: back once the list has closed");
+        f->sci(SCI_CALLTIPCANCEL);
+        f->callTipCaretMoved();
+        check(f->m_ctSigs.empty(), "call tip: ...while one closed by the user stays closed");
+    }
+
+    // ---- JSON5 comments --------------------------------------------------------------------------
+    {
+        f->addDocument(wxString(), "untitled-json5-test");
+        EditorPage* p = f->activePage();
+        auto comments = [f] { return f->sci(SCI_GETPROPERTYINT, reinterpret_cast<uptr_t>("lexer.json.allow.comments"), 0); };
+        p->path = "settings.json5"; p->langForced = false; f->setLexerForFile(p->path);
+        check(p->autoLang == "JSON5" && comments() == 1, "JSON5: the JSON lexer colours its comments");
+        p->path = "data.json"; f->setLexerForFile(p->path);
+        check(p->autoLang == "JSON" && comments() == 0, "JSON5: ...and plain JSON still marks them");
+        p->path.clear();
+        f->closeActive();
+    }
+
+    // ---- closing a modified tab asks; quitting keeps the work for the next launch -----------------
+    // Closing a tab used to discard unsaved edits without a word unless "ask" was on - the setting now
+    // decides only what quitting does, as Notepad++'s session snapshot does.
+    {
+        const bool askWhenQuitting = f->m_askBeforeClose;
+        f->m_askBeforeClose = false;                                // the default
+        f->addDocument(wxString(), "untitled-close-test");
+        EditorPage* p = f->activePage();
+        f->sci(SCI_APPENDTEXT, 5, reinterpret_cast<sptr_t>("edits"));
+        const int asked = g_closePrompts;
+        check(f->confirmClose(p, /*exiting=*/true) && g_closePrompts == asked && !p->recoveryId.empty(),
+              "close: quitting keeps a modified document for the next launch, without asking");
+        f->clearRecovery(p);
+        const size_t pages = f->allPages().size();
+        f->openInOtherView(true);                                   // the same document in the other view too
+        f->closeActive();
+        check(g_closePrompts == asked && f->allPages().size() == pages, "close: closing one view's copy of it does not ask");
+        f->activatePage(p);
+        f->closeActive();                                           // CloseDialogHook answers Don't Save
+        check(g_closePrompts == asked + 1, "close: ...closing its last tab does");
+        f->m_askBeforeClose = askWhenQuitting;
+    }
+
+    // ---- Preferences > Default Directory: where Open and Save As start ---------------------------
+    {
+        const int mode = f->m_defaultDirMode;
+        const wxString fixed = f->m_defaultDirPath;
+        const wxString root = g_sandboxRoot + wxFILE_SEP_PATH + "dirs";
+        const wxString docDir = root + wxFILE_SEP_PATH + "doc", lastDir = root + wxFILE_SEP_PATH + "last",
+                       fixedDir = root + wxFILE_SEP_PATH + "fixed";
+        for (const wxString& d : { docDir, lastDir, fixedDir }) wxFileName::Mkdir(d, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        const wxString file = docDir + wxFILE_SEP_PATH + "doc.txt";
+        check(writeWholeFile(file, "x\n"), "default dir: fixture written");
+        EditorPage* doc = f->openPath(file);
+        f->rememberDialogDir(lastDir + wxFILE_SEP_PATH + "saved.txt");   // as a Save As there would
+        f->m_defaultDirMode = f->kDirFollow;
+        check(f->dialogStartDir() == docDir, "default dir: follows the active document's folder");
+        f->addDocument(wxString(), "untitled-dir-test");
+        EditorPage* untitled = f->activePage();
+        check(f->dialogStartDir() == lastDir, "default dir: ...or, for an untitled one, the folder last used");
+        f->m_defaultDirMode = f->kDirRemember;
+        f->activatePage(doc);
+        check(f->dialogStartDir() == lastDir, "default dir: remember: the folder last used, whatever is open");
+        f->m_defaultDirMode = f->kDirFixed;
+        f->m_defaultDirPath = fixedDir;
+        check(f->dialogStartDir() == fixedDir, "default dir: a fixed folder");
+        f->m_defaultDirPath = root + wxFILE_SEP_PATH + "gone";
+        check(f->dialogStartDir().empty(), "default dir: ...and the system's choice once that folder is gone");
+        f->m_defaultDirMode = mode;
+        f->m_defaultDirPath = fixed;
+        f->activatePage(untitled); f->closeActive();
+        f->activatePage(doc); f->closeActive();
+        wxRemoveFile(file);
+    }
+
+#ifndef __WXMSW__
+    // ---- "Reuse an existing window": the instance listens where a second launch looks ----------------
+    // The service name had no '/', which wx looks up as a TCP service: the server listened on a random
+    // port and no second launch ever found it.
+    {
+        const wxString svc = wxnIpcService();
+        check(svc.StartsWith(wxStandardPaths::Get().GetUserDataDir() + "/"), "handoff: a Unix socket in the user data folder");
+        WxnIpcServer server;
+        struct stat st{};
+        check(server.Create(svc) && ::stat(svc.fn_str(), &st) == 0 && S_ISSOCK(st.st_mode), "handoff: the instance listens there");
+        sockaddr_un a{};
+        a.sun_family = AF_UNIX;
+        std::strncpy(a.sun_path, svc.fn_str(), sizeof(a.sun_path) - 1);
+        const int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        check(fd >= 0 && ::connect(fd, reinterpret_cast<const sockaddr*>(&a), sizeof(a)) == 0,
+              "handoff: ...and a second launch can connect to it");
+        if (fd >= 0) ::close(fd);
+    }
+#endif
 
     // ---- (1) a regex that CROSSES A LINE BREAK, through the real Find path ------------------------
     // The headline capability. Before PCRE2 this could not match at all, at any surface.
@@ -744,17 +889,22 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
 
 // ---- the sandbox (g_sandboxRoot / g_sandboxUserData, above; read by the traits below) ---------------
 
-// Headlessly answer the confirmClose "wxNote" save prompt (no OS input injection). The whole run has
-// AskBeforeClose armed (so the Phase-4 shutdown VETO path can be driven), but every close in Phases 1-3
-// wants the old discard-and-proceed behaviour, so the DEFAULT answer is Don't Save (wxID_NO -> discard,
-// close proceeds). The shutdown test arms g_closeAnswer to wxID_CANCEL for one vetoed close, forcing
-// confirmClose to return false. Any dialog that is NOT the "wxNote" prompt is shown as usual (wxID_NONE).
+// Headlessly answer the confirmClose "wxNote" save prompt (no OS input injection), counting each one in
+// g_closePrompts. Closing a modified tab always asks, and the whole run has "ask when quitting" armed too
+// (so the Phase-4 shutdown VETO path can be driven), but every close in Phases 1-3 wants discard-and-
+// proceed, so the DEFAULT answer is Don't Save (wxID_NO -> discard, close proceeds). The shutdown test arms
+// g_closeAnswer to wxID_CANCEL for one vetoed close, forcing confirmClose to return false. Any dialog
+// that is NOT the "wxNote" prompt is shown as usual (wxID_NONE).
 static int g_closeAnswer = wxID_NO;
 class CloseDialogHook : public wxModalDialogHook
 {
 protected:
     int Enter(wxDialog* dlg) override
-    { return (dlg && dlg->GetTitle() == "wxNote") ? g_closeAnswer : wxID_NONE; }
+    {
+        if (!dlg || dlg->GetTitle() != "wxNote") return wxID_NONE;
+        ++g_closePrompts;
+        return g_closeAnswer;
+    }
 };
 
 // wxStandardPaths whose GetUserDataDir() lands in the sandbox. Everything keyed off userDataDir() -
@@ -1773,7 +1923,7 @@ private:
 
             // clean up: close every Phase-3 buffer back to a single untitled document so the tail
             // assertions (the TBMODIFICATION-once tripwire) run against a settled model. Force-close via
-            // the file-close command; dirty buffers are discarded (m_askBeforeClose is off in the sandbox).
+            // the file-close command; dirty buffers are discarded (CloseDialogHook answers Don't Save).
             for (int guard = 0; g_nibDocCount && g_nibDocCount() > 1 && guard < 20; ++guard) {
                 g_nibInvokeCommand(kCmdFileClose);
                 pump();
@@ -2061,9 +2211,13 @@ private:
                     "re-activated the renamed file for the delete test"); }
             pump();
             check(g_nibDocActiveId && g_nibDocActiveId() == id6a, "the renamed file is the active buffer before delete");
+            nibSciCall(nullptr, -1, SCI_APPENDTEXT, 6, reinterpret_cast<intptr_t>("edits\n"));   // unsaved edits go with it
+            pump();
+            const int askedBeforeDelete = g_closePrompts;
             mark = readLogLines().size();
             check(g_nibRecycleActive && g_nibRecycleActive() == 1, "programmatic delete of the active file succeeded");
             pump();
+            check(g_closePrompts == askedBeforeDelete, "deleting a modified file closes its tab without asking to save it");
             L = readLogLines();
             {
                 const int iBd = findFrom(L, mark, notifNeedleForPage(NPPN_FILEBEFOREDELETE, id6a));
@@ -2084,10 +2238,9 @@ private:
             check(id6c != 0, "opened p6c.txt (active buffer id is non-zero)");
             check(wxRemoveFile(p6c), "removed p6c.txt out from under its open buffer (simulates external deletion)");
             mark = readLogLines().size();
-            // wxLogNull: on POSIX, recycleActive()'s fallback path calls wxRemoveFile() again on the
-            // already-gone file, whose expected ENOENT failure wxRemoveFile() reports via wxLogSysError -
-            // same un-auto-answered-dialog risk as the rename-cancel case above (Windows takes the
-            // SHFileOperationW branch instead, which never logs, but the guard is harmless there too).
+            // wxLogNull: a guard against any wxLogSysError a failing delete path might raise - the same
+            // un-auto-answered-dialog risk as the rename-cancel case above. (Neither the Trash call on
+            // Linux, FreeBSD and macOS nor SHFileOperationW on Windows logs today, but the guard is cheap.)
             { wxLogNull noLog; check(g_nibRecycleActive && g_nibRecycleActive() == 0,
                   "programmatic delete of an already-gone file reports failure"); }
             pump();
