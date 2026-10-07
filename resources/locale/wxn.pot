@@ -3215,3 +3215,18 @@ msgstr ""
 
 msgid "Keywords saved"
 msgstr ""
+
+msgid "Default Directory"
+msgstr ""
+
+msgid "Follow current document"
+msgstr ""
+
+msgid "Remember last used directory"
+msgstr ""
+
+msgid "This folder:"
+msgstr ""
+
+msgid "Open and Save dialogs start in"
+msgstr ""

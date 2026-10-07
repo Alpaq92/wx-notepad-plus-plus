@@ -3213,3 +3213,18 @@ msgstr "languages.yaml을 변경할 수 없습니다(%s)."
 
 msgid "Keywords saved"
 msgstr "키워드 저장됨"
+
+msgid "Default Directory"
+msgstr "기본 디렉터리"
+
+msgid "Follow current document"
+msgstr "현재 문서 따르기"
+
+msgid "Remember last used directory"
+msgstr "마지막으로 사용한 디렉터리 기억"
+
+msgid "This folder:"
+msgstr "이 디렉터리:"
+
+msgid "Open and Save dialogs start in"
+msgstr "열기 및 저장 대화 상자의 시작 위치"

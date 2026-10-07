@@ -70,6 +70,9 @@ All notable changes to wxNote are documented here. Format loosely follows
   don't have is left out rather than breaking the menu.
 - **`nib.settings/1`** (Nib ABI 1.8): a plugin can read and change a setting by its id; wxNote checks
   every value against its own table of settings, as it does for a hand-edited `settings.yaml`.
+- **Preferences > Default Directory**: where File > Open, and Save As for an untitled document, start -
+  the current document's folder (the default), the folder you last used, or a fixed one, as in
+  Notepad++.
 
 ### Fixed
 - **File > Close All crashed** with any file open, and so did **Close All But This** with the view

@@ -3213,3 +3213,18 @@ msgstr "Impossible de modifier languages.yaml (%s)."
 
 msgid "Keywords saved"
 msgstr "Mots-clés enregistrés"
+
+msgid "Default Directory"
+msgstr "Répertoire par défaut"
+
+msgid "Follow current document"
+msgstr "Suivre le document actif"
+
+msgid "Remember last used directory"
+msgstr "Mémoriser le dernier répertoire utilisé"
+
+msgid "This folder:"
+msgstr "Ce répertoire :"
+
+msgid "Open and Save dialogs start in"
+msgstr "Les dialogues Ouvrir et Enregistrer s'ouvrent dans"

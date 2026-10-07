@@ -116,6 +116,19 @@ Defaults applied to newly created documents:
 - **Encoding** — UTF-8, UTF-8 with BOM, UTF-16 LE, UTF-16 BE or ANSI
 - **Default language** — *Normal Text* or any built-in language
 
+## Default Directory
+
+Where **File&nbsp;&rsaquo; Open**, and **Save As** for a document that has no file yet, start, as in
+Notepad++:
+
+- **Follow current document** (the default) — the active document's folder; for an untitled one, the
+  folder you last opened or saved a file in
+- **Remember last used directory** — the folder you last opened or saved a file in, whatever is active
+- **This folder:** — always the folder you pick
+
+Save As for a document that already has a file starts in its own folder. When the folder no longer
+exists, the system's dialog decides.
+
 ## Tab Bar
 
 - **Show close button on each tab** — *restart*

@@ -10727,16 +10727,36 @@ private:
         setLexerForFile(path);
         updateEncodingMenuChecks();
     }
-    // File > Open starts in the active document's folder, takes several files at once, and switches to
-    // a file that is already open rather than opening it again (openPath).
+    // Where File > Open, and Save As for a document with no file yet, start - Preferences > Default
+    // Directory, as in Notepad++: the active document's folder (or, for an untitled one, the folder last
+    // used in one of them), that last-used folder, or a fixed one. Empty, so the system decides, when the
+    // folder is gone.
+    wxString dialogStartDir() const
+    {
+        wxString dir;
+        const EditorPage* p = activePage();
+        if (m_defaultDirMode == kDirFixed) dir = m_defaultDirPath;
+        else if (m_defaultDirMode == kDirFollow && p && !p->path.empty()) dir = wxPathOnly(p->path);
+        else dir = wxString::FromUTF8(g_state.getText("dialogs/lastDirectory").c_str());
+        return !dir.empty() && wxDirExists(dir) ? dir : wxString();
+    }
+    // The folder a file was just opened from or saved to, for "Remember last used directory" (and an
+    // untitled document under "Follow current document").
+    void rememberDialogDir(const wxString& file)
+    {
+        g_state.setText("dialogs/lastDirectory", wxnUtf8(wxPathOnly(file)));
+        wxnFlushState();
+    }
+    // File > Open starts where Preferences > Default Directory says, takes several files at once, and
+    // switches to a file that is already open rather than opening it again (openPath).
     void onOpen()
     {
-        const EditorPage* p = activePage();
-        wxFileDialog d(this, _("Open"), (p && !p->path.empty()) ? wxPathOnly(p->path) : wxString(), "", _("All files (*.*)|*.*"),
+        wxFileDialog d(this, _("Open"), dialogStartDir(), "", _("All files (*.*)|*.*"),
                        wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
         if (d.ShowModal() != wxID_OK) return;
         wxArrayString paths;
         d.GetPaths(paths);
+        if (!paths.empty()) rememberDialogDir(paths[0]);
         for (const wxString& f : paths) openPath(f);
     }
     void onReload() { if (!m_path.empty()) loadFile(m_path); }
@@ -11016,16 +11036,19 @@ private:
     }
     void onSave() { if (m_path.empty()) onSaveAs(); else writeFile(m_path); }
     // Save As starts where the document lives, under its own name; an untitled one under its tab's
-    // name (new 2.txt for "new 2" - it used to propose "new 1.txt" for everything).
+    // name (new 2.txt for "new 2" - it used to propose "new 1.txt" for everything), in the Default
+    // Directory.
     void onSaveAs()
     {
         const EditorPage* p = activePage();
         const bool named = p && !p->path.empty();
         wxString name = named ? wxFileNameFromPath(p->path) : (p && !p->title.empty() ? p->title : wxString("new 1"));
         if (!named && wxFileName(name).GetExt().empty()) name += ".txt";
-        wxFileDialog d(this, _("Save As"), named ? wxPathOnly(p->path) : wxString(), name, _("All files (*.*)|*.*"),
+        wxFileDialog d(this, _("Save As"), named ? wxPathOnly(p->path) : dialogStartDir(), name, _("All files (*.*)|*.*"),
                        wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
-        if (d.ShowModal() == wxID_OK) writeFile(d.GetPath());
+        if (d.ShowModal() != wxID_OK) return;
+        rememberDialogDir(d.GetPath());
+        writeFile(d.GetPath());
     }
     // Repaint page p's tab label (add/remove the unsaved "*") on ITS OWN notebook - works for a page in
     // EITHER split view, unlike refreshTab() which only touches the active view's strip.
@@ -12132,8 +12155,10 @@ private:
     // ---- file operations ----
     void saveCopyAs()
     {
-        wxFileDialog dlg(this, _("Save a Copy As"), wxFileName(curPath()).GetPath(), wxFileNameFromPath(curPath()), _("All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        const wxString cur = curPath();
+        wxFileDialog dlg(this, _("Save a Copy As"), cur.empty() ? dialogStartDir() : wxPathOnly(cur), wxFileNameFromPath(cur), _("All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
         if (dlg.ShowModal() != wxID_OK) return;
+        rememberDialogDir(dlg.GetPath());
         snippetSyncTransforms();   // this path writes the buffer itself, so it needs its own sync
         const std::string body = encodeForPage(getDocUtf8(), activePage());
         wxFile f(dlg.GetPath(), wxFile::write);
@@ -13559,6 +13584,8 @@ private:
 #endif
         m_themeMode = (int)readThemeMode();   // also resolved in OnInit (before the frame exists)
         m_askBeforeClose = s.getBool("files.confirmCloseUnsaved");
+        m_defaultDirMode = s.getChoice("files.defaultDirectory");      // its names are in DefaultDir order
+        m_defaultDirPath = wxnSettingText("files.defaultDirectoryPath");
         m_fsAutohideToolbar = s.getBool("ui.fullScreen.hideToolbar");
         m_reuseInstance = s.getBool("window.reuseInstance");
         m_customGutterColor = s.getBool("editor.customGutterColor");
@@ -13662,6 +13689,7 @@ private:
         n("search.webEngine", m_searchEngine);
         if (!g_waitMode)   // -w/--wait force-enables the prompt for that run only (enterWaitMode): never written
             b("files.confirmCloseUnsaved", m_askBeforeClose);
+        n("files.defaultDirectory", m_defaultDirMode);  t("files.defaultDirectoryPath", m_defaultDirPath);
         b("ui.fullScreen.hideToolbar", m_fsAutohideToolbar);
         b("editor.customGutterColor", m_customGutterColor);
         v["editor.gutterColor"] = wxnyaml::colorText(rgbToBgr((unsigned)m_gutterColorValue));
@@ -14067,6 +14095,27 @@ private:
         lrow->Add(chLang, 0, wxALIGN_CENTRE_VERTICAL);
         nds->Add(lrow, 0, wxALL, 10); nd->SetSizer(nds);
 
+        // ---- Default Directory: where File > Open and Save As start (dialogStartDir) ----------
+        auto* dd = pg(_("Default Directory")); auto* dds = new wxBoxSizer(wxVERTICAL);
+        const wxString dirChoices[3] = { _("Follow current document"), _("Remember last used directory"), _("This folder:") };
+        auto* rbDir = new wxRadioBox(dd, wxID_ANY, _("Open and Save dialogs start in"), wxDefaultPosition, wxDefaultSize,
+                                     3, dirChoices, 1, wxRA_SPECIFY_COLS);
+        rbDir->SetSelection(m_defaultDirMode);
+        dds->Add(rbDir, 0, wxALL, 10);
+        auto* dirRow = new wxBoxSizer(wxHORIZONTAL);
+        auto* txDir = new wxTextCtrl(dd, wxID_ANY, m_defaultDirPath);
+        auto* btDir = new wxButton(dd, wxID_ANY, "...", wxDefaultPosition, wxSize(32, -1));
+        dirRow->Add(txDir, 1, wxALIGN_CENTRE_VERTICAL); dirRow->Add(btDir, 0, wxLEFT, 4);
+        dds->Add(dirRow, 0, wxEXPAND | wxLEFT | wxRIGHT, 10);
+        auto syncDir = [rbDir, txDir, btDir] { const bool fixed = rbDir->GetSelection() == kDirFixed; txDir->Enable(fixed); btDir->Enable(fixed); };
+        syncDir();
+        rbDir->Bind(wxEVT_RADIOBOX, [syncDir](wxCommandEvent&) { syncDir(); });
+        btDir->Bind(wxEVT_BUTTON, [&dlg, txDir](wxCommandEvent&) {
+            wxDirDialog d(&dlg, _("Choose folder"), txDir->GetValue());
+            if (d.ShowModal() == wxID_OK) txDir->SetValue(d.GetPath());
+        });
+        dd->SetSizer(dds);
+
         // ---- Tab Bar --------------------------------------------------------------------------
         auto* tbp = pg(_("Tab Bar")); auto* tbs = new wxBoxSizer(wxVERTICAL);
         auto* cbTabClose = new wxCheckBox(tbp, wxID_ANY, _("Show close button on each tab   (applied on restart)"));
@@ -14208,6 +14257,7 @@ private:
         m_showToolbar = cbToolbar->GetValue(); m_showStatusbar = cbStatus->GetValue();
         m_showZoomField = cbZoomField->GetValue();
         m_askBeforeClose = cbAskClose->GetValue();
+        m_defaultDirMode = rbDir->GetSelection(); m_defaultDirPath = txDir->GetValue().Strip(wxString::both);
         if (cbAppImage)   // null unless running as an AppImage (see above)
         {
             const bool want = cbAppImage->GetValue();
@@ -17419,6 +17469,10 @@ private:
     bool        m_wasMaximized = false;   // applied via Maximize(true) post-Show() in OnInit
     int         m_themeMode = 1;   // Preferences > General "Theme": 0 = System, 1 = Dark, 2 = Light (restart-to-apply)
     bool        m_askBeforeClose = false;   // Preferences > General "Ask to save unsaved changes when quitting" (off by default)
+    // Preferences > Default Directory: where File > Open and Save As start (dialogStartDir).
+    enum DefaultDir { kDirFollow, kDirRemember, kDirFixed };   // files.defaultDirectory's names, in order
+    int         m_defaultDirMode = kDirFollow;
+    wxString    m_defaultDirPath;                              // the kDirFixed folder
     bool        m_fsAutohideToolbar = false; // Preferences > General "Auto-hide toolbar in full screen" (off by default: toolbar stays)
     bool        m_reuseInstance = false;    // Preferences > General "Reuse an existing window" (restart-to-apply; read in OnInit)
     bool        m_customGutterColor = false;   // Preferences > Editing "Use a custom line-number margin colour"

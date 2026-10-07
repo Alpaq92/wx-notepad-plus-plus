@@ -3213,3 +3213,18 @@ msgstr "Не удалось изменить languages.yaml (%s)."
 
 msgid "Keywords saved"
 msgstr "Ключевые слова сохранены"
+
+msgid "Default Directory"
+msgstr "Папка по умолчанию"
+
+msgid "Follow current document"
+msgstr "Следовать за текущим документом"
+
+msgid "Remember last used directory"
+msgstr "Запоминать последнюю использованную папку"
+
+msgid "This folder:"
+msgstr "Эта папка:"
+
+msgid "Open and Save dialogs start in"
+msgstr "Диалоги открытия и сохранения открываются в"

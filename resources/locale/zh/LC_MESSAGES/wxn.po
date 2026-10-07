@@ -3213,3 +3213,18 @@ msgstr "无法更改 languages.yaml (%s)。"
 
 msgid "Keywords saved"
 msgstr "关键字已保存"
+
+msgid "Default Directory"
+msgstr "默认目录"
+
+msgid "Follow current document"
+msgstr "跟随当前文档"
+
+msgid "Remember last used directory"
+msgstr "记住上次使用的目录"
+
+msgid "This folder:"
+msgstr "此目录:"
+
+msgid "Open and Save dialogs start in"
+msgstr "打开和保存对话框的起始位置"

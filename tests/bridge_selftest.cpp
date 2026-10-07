@@ -188,6 +188,38 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         f->m_askBeforeClose = askWhenQuitting;
     }
 
+    // ---- Preferences > Default Directory: where Open and Save As start ---------------------------
+    {
+        const int mode = f->m_defaultDirMode;
+        const wxString fixed = f->m_defaultDirPath;
+        const wxString root = g_sandboxRoot + wxFILE_SEP_PATH + "dirs";
+        const wxString docDir = root + wxFILE_SEP_PATH + "doc", lastDir = root + wxFILE_SEP_PATH + "last",
+                       fixedDir = root + wxFILE_SEP_PATH + "fixed";
+        for (const wxString& d : { docDir, lastDir, fixedDir }) wxFileName::Mkdir(d, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        const wxString file = docDir + wxFILE_SEP_PATH + "doc.txt";
+        check(writeWholeFile(file, "x\n"), "default dir: fixture written");
+        EditorPage* doc = f->openPath(file);
+        f->rememberDialogDir(lastDir + wxFILE_SEP_PATH + "saved.txt");   // as a Save As there would
+        f->m_defaultDirMode = f->kDirFollow;
+        check(f->dialogStartDir() == docDir, "default dir: follows the active document's folder");
+        f->addDocument(wxString(), "untitled-dir-test");
+        EditorPage* untitled = f->activePage();
+        check(f->dialogStartDir() == lastDir, "default dir: ...or, for an untitled one, the folder last used");
+        f->m_defaultDirMode = f->kDirRemember;
+        f->activatePage(doc);
+        check(f->dialogStartDir() == lastDir, "default dir: remember: the folder last used, whatever is open");
+        f->m_defaultDirMode = f->kDirFixed;
+        f->m_defaultDirPath = fixedDir;
+        check(f->dialogStartDir() == fixedDir, "default dir: a fixed folder");
+        f->m_defaultDirPath = root + wxFILE_SEP_PATH + "gone";
+        check(f->dialogStartDir().empty(), "default dir: ...and the system's choice once that folder is gone");
+        f->m_defaultDirMode = mode;
+        f->m_defaultDirPath = fixed;
+        f->activatePage(untitled); f->closeActive();
+        f->activatePage(doc); f->closeActive();
+        wxRemoveFile(file);
+    }
+
 #ifndef __WXMSW__
     // ---- "Reuse an existing window": the instance listens where a second launch looks ----------------
     // The service name had no '/', which wx looks up as a TCP service: the server listened on a random

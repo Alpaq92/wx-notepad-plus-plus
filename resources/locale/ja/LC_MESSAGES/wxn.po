@@ -3213,3 +3213,18 @@ msgstr "languages.yaml を変更できませんでした (%s)。"
 
 msgid "Keywords saved"
 msgstr "キーワードを保存しました"
+
+msgid "Default Directory"
+msgstr "既定のフォルダー"
+
+msgid "Follow current document"
+msgstr "現在の文書に従う"
+
+msgid "Remember last used directory"
+msgstr "最後に使用したフォルダーを記憶する"
+
+msgid "This folder:"
+msgstr "このフォルダー:"
+
+msgid "Open and Save dialogs start in"
+msgstr "「開く」と「保存」ダイアログの開始位置"
