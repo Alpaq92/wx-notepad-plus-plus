@@ -103,6 +103,12 @@ All notable changes to wxNote are documented here. Format loosely follows
 - The function parameter hint vanished for good once the completion list opened over it. It now comes
   back when the list closes, while the caret is still in the call.
 - JSON5 files (and `.jsonc`) showed `//` and `/* */` comments as errors; they are coloured as comments.
+- **The Linux and macOS packages shipped wxNote's test programs.** The `.deb`, `.rpm`, AppImage and
+  `.dmg` copied the whole build folder, which also holds every self-test the build makes: 0.20.0's
+  `.deb` installed 16 of them into `/opt/wxnote` beside `wxnote`, `bridge_selftest` alone 22 MB, and
+  the translations' `.po` sources with them. Every Linux and macOS package now copies wxNote and the
+  files it reads by name - the same set as the Windows installer and zip - and the build stops if one
+  of them is missing. The Flatpak already shipped only that set.
 
 ### Changed
 - **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved

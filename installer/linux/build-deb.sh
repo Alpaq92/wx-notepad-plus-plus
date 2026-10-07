@@ -26,8 +26,8 @@ mkdir -p "$PKGDIR/DEBIAN" "$PKGDIR/opt/wxnote" "$PKGDIR/usr/bin" \
 # build-appimage.sh: the app's resource lookups are all relative to its own executable path, and
 # this layout needs no runtime code changes to work, which matters given this project has no
 # Linux machine to verify a code change against - only CI.
-cp -r build/bin/. "$PKGDIR/opt/wxnote/"
-rm -rf "$PKGDIR/opt/wxnote/nib/nib_test_plugin.so" "$PKGDIR/opt/wxnote/nib/example" "$PKGDIR/opt/wxnote/plugins"   # dev-only test artifacts (nib/example is the compile-only recompiled-plugin proof)
+# The payload by name: build/bin also holds every selftest (see installer/stage-payload.sh).
+bash installer/stage-payload.sh build/bin "$PKGDIR/opt/wxnote"
 ln -s /opt/wxnote/wxnote "$PKGDIR/usr/bin/wxnote"
 cp installer/linux/wxnote.desktop "$PKGDIR/usr/share/applications/wxnote.desktop"
 cp resources/wxnote.svg "$PKGDIR/usr/share/icons/hicolor/scalable/apps/wxnote.svg"

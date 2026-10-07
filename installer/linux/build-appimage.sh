@@ -24,8 +24,8 @@ mkdir -p "$APPDIR/usr/bin" "$OUTDIR"
 # src/main.cpp), and AppRun launches the real binary from inside usr/bin, so this layout needs
 # zero runtime code changes to work, which matters since this project has no Linux machine to
 # verify a code change against - only CI.
-cp -r build/bin/. "$APPDIR/usr/bin/"
-rm -rf "$APPDIR/usr/bin/nib/nib_test_plugin.so" "$APPDIR/usr/bin/nib/example" "$APPDIR/usr/bin/plugins"   # dev-only test artifacts
+# The payload by name: build/bin also holds every selftest (see installer/stage-payload.sh).
+bash installer/stage-payload.sh build/bin "$APPDIR/usr/bin"
 cp installer/linux/wxnote.desktop "$APPDIR/wxnote.desktop"
 cp resources/wxnote.svg "$APPDIR/wxnote.svg"
 # The licence travels with the AppImage (Apache-2.0 4(a)), and NOTICE with it: the third-party

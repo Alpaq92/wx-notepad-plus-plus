@@ -514,9 +514,12 @@ static bool wxnParseMacros(const std::string& text, std::vector<SavedMacro>& out
     const wxnyaml::Node root = doc.root();
     if (!root.readable()) return true;                                   // empty file: no macros yet
     if (wxnyaml::integerOr(wxnyaml::child(root, "version"), 1) > kWxnListFileVersion) return false;
-    nextUid = (long)wxnyaml::integerOr(wxnyaml::child(root, "nextId"), 1);
+    // nextId is kept in a local and stored into nextUid once, at the end. Updated through the reference,
+    // Windows ARM64 builds compared each uid with the 1 stored above rather than the nextId just read,
+    // so a file whose nextId ran ahead of its highest uid came back with that uid + 1 instead.
+    long long next = wxnyaml::integerOr(wxnyaml::child(root, "nextId"), 1);
     const wxnyaml::Node list = wxnyaml::child(root, "macros");
-    if (!wxnyaml::isSeq(list)) return true;
+    if (!wxnyaml::isSeq(list)) { nextUid = (long)next; return true; }
     for (wxnyaml::Node e : list.children())
     {
         long long uid = 0;
@@ -544,9 +547,10 @@ static bool wxnParseMacros(const std::string& text, std::vector<SavedMacro>& out
                 }
                 m.steps.push_back(st);
             }
-        if (uid >= nextUid) nextUid = (long)uid + 1;                      // keep nextUid ahead of any uid on disk
+        if (uid >= next) next = uid + 1;                                  // keep nextUid ahead of any uid on disk
         out.push_back(m);
     }
+    nextUid = (long)next;
     return true;
 }
 
@@ -578,9 +582,12 @@ static bool wxnParseRuns(const std::string& text, std::vector<SavedRun>& out, lo
     const wxnyaml::Node root = doc.root();
     if (!root.readable()) return true;                                   // empty file: no commands yet
     if (wxnyaml::integerOr(wxnyaml::child(root, "version"), 1) > kWxnListFileVersion) return false;
-    nextUid = (long)wxnyaml::integerOr(wxnyaml::child(root, "nextId"), 1);
+    // nextId is kept in a local and stored into nextUid once, at the end. Updated through the reference,
+    // Windows ARM64 builds compared each uid with the 1 stored above rather than the nextId just read,
+    // so a file whose nextId ran ahead of its highest uid came back with that uid + 1 instead.
+    long long next = wxnyaml::integerOr(wxnyaml::child(root, "nextId"), 1);
     const wxnyaml::Node list = wxnyaml::child(root, "commands");
-    if (!wxnyaml::isSeq(list)) return true;
+    if (!wxnyaml::isSeq(list)) { nextUid = (long)next; return true; }
     for (wxnyaml::Node e : list.children())
     {
         long long uid = 0;
@@ -590,9 +597,10 @@ static bool wxnParseRuns(const std::string& text, std::vector<SavedRun>& out, lo
         r.name = wxString::FromUTF8(wxnyaml::textOr(wxnyaml::child(e, "name"), std::string()).c_str());
         r.cmd  = wxString::FromUTF8(wxnyaml::textOr(wxnyaml::child(e, "command"), std::string()).c_str());
         if (r.name.empty() || r.cmd.empty()) continue;   // a half-written row is dropped, not shown blank
-        if (uid >= nextUid) nextUid = (long)uid + 1;     // keep nextUid ahead of any uid on disk
+        if (uid >= next) next = uid + 1;                 // keep nextUid ahead of any uid on disk
         out.push_back(r);
     }
+    nextUid = (long)next;
     return true;
 }
 
