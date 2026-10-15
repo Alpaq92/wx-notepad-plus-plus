@@ -7,7 +7,7 @@ portability.
 | | Nib | npp-bridge |
 | --- | --- | --- |
 | Licence | Apache-2.0, same as the core | GPL-3.0-or-later |
-| Platforms | Windows, Linux, macOS | precompiled plugin binaries: **Windows only**; recompiled plugins: all platforms |
+| Platforms | Windows, Linux, macOS, FreeBSD | precompiled plugin binaries: **Windows only**; recompiled plugins: all platforms |
 | Part of the core? | yes — the API the core speaks | no — an optional module, loaded only if present |
 | Loaded from | `<exe>/nib/`, then `nib/` in the per-user data directory | itself a Nib plugin in `<exe>/nib/`; it then loads N++ plugins |
 
@@ -93,7 +93,7 @@ the `NPPM_*` messages that plugin sends into Nib calls.
 
 - **Windows** — loads `<exe>/plugins/<Name>/<Name>.dll`, calls `setInfo` / `getFuncsArray` / `getName`,
   and surfaces every `FuncItem` as a command in the Extensions menu.
-- **Linux and macOS** — hosting a *precompiled* Windows plugin binary is not possible. A plugin author
+- **Linux, macOS and FreeBSD** — hosting a *precompiled* Windows plugin binary is not possible. A plugin author
   can instead **recompile** against the bridge's GPL shim SDK, which routes the plugin's own
   `::SendMessage` calls into the bridge's portable dispatch core.
 

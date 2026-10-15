@@ -42,7 +42,7 @@ jobs:
           # Flatten every packaged artifact (each leg uploaded build/installer/*) into one dir. Match by
           # extension so a stray log from a leg can't sneak into the release.
           find artifacts -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \
-            -o -name '*.AppImage' -o -name '*.flatpak' \) -exec cp -n {} dist/ \;
+            -o -name '*.AppImage' -o -name '*.flatpak' -o -name '*.pkg' \) -exec cp -n {} dist/ \;
           echo "Release assets:" && ls -la dist
 
       - name: Sign Windows installers (Authenticode)

@@ -31,6 +31,9 @@
   #include <cstdint>           // uint32_t (UTF conversions)
   #ifdef __APPLE__
     #include <mach-o/dyld.h>   // _NSGetExecutablePath (exeDir)
+  #elif defined(__FreeBSD__) || defined(__DragonFly__)
+    #include <sys/types.h>
+    #include <sys/sysctl.h>    // KERN_PROC_PATHNAME (exeDir): FreeBSD mounts no /proc by default
   #else
     #include <unistd.h>        // readlink (exeDir)
   #endif
@@ -172,6 +175,10 @@ static std::wstring exeFullPathW()
   #ifdef __APPLE__
     char buf[4096]; uint32_t sz = sizeof(buf);
     if (_NSGetExecutablePath(buf, &sz) == 0) p = buf;
+  #elif defined(__FreeBSD__) || defined(__DragonFly__)
+    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+    char buf[4096]; size_t len = sizeof(buf);
+    if (::sysctl(mib, 4, buf, &len, nullptr, 0) == 0) p = buf;
   #else
     char buf[4096];
     ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);

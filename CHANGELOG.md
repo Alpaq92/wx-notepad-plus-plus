@@ -70,6 +70,11 @@ All notable changes to wxNote are documented here. Format loosely follows
   don't have is left out rather than breaking the menu.
 - **`nib.settings/1`** (Nib ABI 1.8): a plugin can read and change a setting by its id; wxNote checks
   every value against its own table of settings, as it does for a hand-edited `settings.yaml`.
+- **FreeBSD.** wxNote builds, runs its tests and is packaged on FreeBSD: each release adds a package for
+  FreeBSD 15 and one for FreeBSD 14, both amd64. `pkg add` looks for dependencies only next to the file,
+  so install them from the repository first with `pkg install $(pkg query -F <file> %dn)`. The
+  integrated terminal and the plugin bridge work there too, and wxNote finds its themes, icons and
+  lexers even when started through `/usr/local/bin/wxnote`, a link.
 
 ### Fixed
 - **File > Close All crashed** with any file open, and so did **Close All But This** with the view
