@@ -1,7 +1,7 @@
 # wxNote User Manual
 
 wxNote is a cross-platform text and source-code editor built on **wxWidgets 3.3** and
-**wxStyledTextCtrl** (Scintilla). It runs on Windows, Linux and macOS from one codebase.
+**wxStyledTextCtrl** (Scintilla). It runs on Windows, Linux, macOS and FreeBSD from one codebase.
 
 This manual documents what the application actually does today. Everything here was written against
 the source tree, so if a feature is described as unimplemented or limited, that is a deliberate,

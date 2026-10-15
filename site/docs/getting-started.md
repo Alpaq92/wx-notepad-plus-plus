@@ -11,6 +11,7 @@ buttons on the [wxNote home page](../), which read the latest release live from 
 | Windows | NSIS installer (`.exe`) — x64, ARM64 and 32-bit x86, each with a matching `.zip` of the same files |
 | macOS | Disk image (`.dmg`) — Apple Silicon (`arm64`) and Intel (`x86_64`) |
 | Linux | `.AppImage`, `.deb`, `.rpm` and `.flatpak` — x64 and ARM64, plus a RISC-V `.deb` |
+| FreeBSD | `.pkg` for `pkg add` — amd64, one for FreeBSD 15 and one for FreeBSD 14 |
 
 On Windows, take **x64** unless you know otherwise — it is the right answer for essentially every
 machine sold in the last fifteen years, and it runs on ARM64 Windows too, under emulation. Take
@@ -18,6 +19,21 @@ machine sold in the last fifteen years, and it runs on ARM64 Windows too, under 
 cooler-running build. Take **x86** only if you are on a genuinely 32-bit Windows, where nothing else
 will run; note that a 32-bit process is limited to a few GB of memory, which matters for very large
 files.
+
+### Installing on FreeBSD
+
+Take the package for your FreeBSD release — `freebsd-version` prints it. A package records the major
+version it was built for, and `pkg` refuses one built for another. `pkg add` looks for a package's
+dependencies only in the folder the file is in, so install those from the repository first; `pkg query`
+reads their names out of the file. As root:
+
+```sh
+pkg install $(pkg query -F wxnote-<version>-freebsd15-amd64.pkg %dn)
+pkg add wxnote-<version>-freebsd15-amd64.pkg
+```
+
+wxNote then appears in the desktop's application menu and runs as `wxnote`. Its files live in
+`/usr/local/lib/wxnote`; `pkg delete wxnote` removes them again.
 
 ### Verifying your download
 
@@ -28,7 +44,7 @@ Get-FileHash .\wxNote-<version>-Setup.exe -Algorithm SHA256
 ```
 
 and compare that against the matching line in `SHA256SUMS`. On macOS and Linux, `shasum -a 256 -c
-SHA256SUMS` checks everything at once.
+SHA256SUMS` checks everything at once; on FreeBSD, `sha256 <file>` prints the checksum to compare.
 
 ### "Windows protected your PC", or an antivirus warning
 

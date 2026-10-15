@@ -6,7 +6,7 @@ plain-English version.
 
 | | wxNote | Notepad++ |
 | --- | --- | --- |
-| Runs on | Windows, macOS &amp; Linux | Windows only |
+| Runs on | Windows, macOS, Linux &amp; FreeBSD | Windows only |
 | Apple Silicon &amp; ARM | Yes, native | ARM Windows only |
 | Price | Free | Free |
 | Open source | Yes — permissive (Apache-2.0) | Yes — GPL |

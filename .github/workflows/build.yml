@@ -1,9 +1,9 @@
 name: build
 
-# Builds wxNote on all three target platforms (x64 + ARM64 + 32-bit x86 for Windows, x64 + ARM64
+# Builds wxNote on every target platform (x64 + ARM64 + 32-bit x86 for Windows, x64 + ARM64
 # for Linux, arm64 + x86_64
-# for macOS). wxWidgets is fetched + built from source
-# (FetchContent), so the only system dependency is GTK3 on Linux; macOS/Windows need just the
+# for macOS, amd64 for FreeBSD 14 and 15). wxWidgets is fetched + built from source
+# (FetchContent), so the only system dependency is GTK3 on Linux and FreeBSD; macOS/Windows need just the
 # toolchain. Verifies the cross-platform claim - the parts the Windows dev machine can't check.
 
 # Note: each job builds wxWidgets from source (cached after the first green run), so the matrix is heavy.
@@ -18,7 +18,7 @@ on:
   # never merge normally.
   pull_request:
   workflow_dispatch:
-  workflow_call:   # release.yml calls this on a version tag push, then publishes the 6 packaging artifacts
+  workflow_call:   # release.yml calls this on a version tag push, then publishes every leg's packages
 
 # A newer push to a branch cancels that branch's still-queued/running build, so the matrix doesn't
 # pile up (each macOS run counts 10x against private-repo Actions minutes). Only the latest commit
@@ -424,4 +424,54 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: wxnote-${{ matrix.name }}-installer
+          path: build/installer/*
+
+  # FreeBSD has no GitHub-hosted runner, so each leg boots a FreeBSD VM on an Ubuntu runner (QEMU with
+  # KVM, via vmactions/freebsd-vm) and configures, builds, tests and packages inside it - the steps the
+  # native legs above take. One leg per supported FreeBSD major: a package records the major it was built
+  # on, and pkg refuses it on any other. Not a required check; master's ruleset names the legs above.
+  freebsd:
+    name: freebsd${{ matrix.release }}
+    strategy:
+      fail-fast: false
+      matrix:
+        release: [ '14', '15' ]   # the newest point release of each
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      # cmake-core rather than the cmake meta-package, which also pulls in its documentation. gtk3 is the
+      # one real dependency, as on Linux; dbus, Xvfb and a font are for the selftests. The VM gets 12 of
+      # the runner's 16 GB (the action's default is 6): three compiles of the single-TU main.cpp - wxnote
+      # and the two selftests that include it - can overlap.
+      - name: Build, test and package (FreeBSD ${{ matrix.release }} VM)
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: ${{ matrix.release }}
+          mem: 12288
+          prepare: |
+            pkg install -y cmake-core ninja pkgconf gtk3 dbus xorg-vfbserver dejavu
+          run: |
+            set -e
+            export LANG=C.UTF-8   # the Linux legs' locale; the VM's ssh session has none
+            freebsd-version -ku
+            cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+            cmake --build build --target wxnote --parallel 4
+            cmake --build build --target selftests --parallel 4
+            # The gui selftests need a display (xvfb-run on the Linux legs), and a private session bus
+            # keeps GTK from autolaunching one that outlives the run. Xvfb's output goes to /dev/null so
+            # it cannot hold the VM's ssh session open once the script ends.
+            Xvfb :99 -screen 0 1280x1024x24 >/dev/null 2>&1 &
+            sleep 3
+            DISPLAY=:99 NO_AT_BRIDGE=1 dbus-run-session -- ctest --test-dir build --output-on-failure --timeout 900
+            sh installer/freebsd/build-pkg.sh
+            # Only the package is copied back to the runner: the rest of the build tree is gigabytes it
+            # has no use for.
+            find build -mindepth 1 -maxdepth 1 ! -name installer -exec rm -rf {} +
+
+      - name: Upload FreeBSD package
+        uses: actions/upload-artifact@v7
+        with:
+          name: wxnote-freebsd${{ matrix.release }}-packages
           path: build/installer/*

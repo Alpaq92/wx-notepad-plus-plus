@@ -73,6 +73,11 @@ All notable changes to wxNote are documented here. Format loosely follows
 - **Preferences > Default Directory**: where File > Open, and Save As for an untitled document, start -
   the current document's folder (the default), the folder you last used, or a fixed one, as in
   Notepad++.
+- **FreeBSD.** wxNote builds, runs its tests and is packaged on FreeBSD: each release adds a package for
+  FreeBSD 15 and one for FreeBSD 14, both amd64. `pkg add` looks for dependencies only next to the file,
+  so install them from the repository first with `pkg install $(pkg query -F <file> %dn)`. The
+  integrated terminal and the plugin bridge work there too, and wxNote finds its themes, icons and
+  lexers even when started through `/usr/local/bin/wxnote`, a link.
 
 ### Fixed
 - **File > Close All crashed** with any file open, and so did **Close All But This** with the view
