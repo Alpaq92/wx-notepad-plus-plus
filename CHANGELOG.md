@@ -70,6 +70,9 @@ All notable changes to wxNote are documented here. Format loosely follows
   don't have is left out rather than breaking the menu.
 - **`nib.settings/1`** (Nib ABI 1.8): a plugin can read and change a setting by its id; wxNote checks
   every value against its own table of settings, as it does for a hand-edited `settings.yaml`.
+- **Preferences > Default Directory**: where File > Open, and Save As for an untitled document, start -
+  the current document's folder (the default), the folder you last used, or a fixed one, as in
+  Notepad++.
 - **FreeBSD.** wxNote builds, runs its tests and is packaged on FreeBSD: each release adds a package for
   FreeBSD 15 and one for FreeBSD 14, both amd64. `pkg add` looks for dependencies only next to the file,
   so install them from the repository first with `pkg install $(pkg query -F <file> %dn)`. The
@@ -114,6 +117,18 @@ All notable changes to wxNote are documented here. Format loosely follows
   the translations' `.po` sources with them. Every Linux and macOS package now copies wxNote and the
   files it reads by name - the same set as the Windows installer and zip - and the build stops if one
   of them is missing. The Flatpak already shipped only that set.
+- **Closing a modified tab no longer throws its edits away without asking.** Unless "Ask before closing
+  unsaved changes" was on, closing a tab - its close button, File > Close, Close All and the rest -
+  discarded unsaved edits without a word, and deleted their recovery copy too. Closing a tab now always
+  asks Save / Don't Save / Cancel, as in Notepad++; a document still open in the other view closes
+  without asking. The setting, now **Ask to save unsaved changes when quitting**, decides only what
+  quitting does: off, as before, unsaved documents are kept and reopen at the next launch.
+- **Move to Recycle Bin deleted the file for good on Linux, FreeBSD and macOS.** It now moves it to the
+  Trash, from which the file manager restores it, and says so if it cannot rather than deleting it. The
+  tab closes without asking to save what was just thrown away, as in Notepad++.
+- **"Reuse an existing window" did not work on Linux, FreeBSD and macOS**: a second launch never found
+  the running window and opened its own. The running window now listens on a socket in your user data
+  folder, where a second launch looks.
 
 ### Changed
 - **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved

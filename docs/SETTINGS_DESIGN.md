@@ -192,7 +192,9 @@ marked so in the table: today the indentation pair.
 | `files.associations` | extension → Language-menu name | — | `UserExt` group |
 | `files.largeFileThresholdMiB` | MiB | `16` | `Editing/LargeFileMiB` |
 | `files.maxRecentFiles` | 1–50 | `10` | `RecentFiles/Max` |
-| `files.confirmCloseUnsaved` | bool | `false` | `AskBeforeClose` |
+| `files.confirmCloseUnsaved` | bool — ask when quitting; closing a tab always asks | `false` | `AskBeforeClose` |
+| `files.defaultDirectory` | `follow` / `remember` / `fixed` | `follow` | — |
+| `files.defaultDirectoryPath` | folder, for `fixed` | — | — |
 | `files.newDocument.eol` | `crlf` / `lf` / `cr` | `crlf` | `NewDoc/Eol` |
 | `files.newDocument.language` | Language-menu name; empty = Normal text | — | `NewDoc/Lang` (a menu index) |
 | `files.newDocument.encoding` | `utf-8` / `utf-8-bom` / `utf-16le` / `utf-16be` / `ansi` | `utf-8` | `NewDoc/Encoding` |
@@ -229,6 +231,8 @@ recovery:                # unsaved text backed up under RecoveryBackups/<id>.bak
     r6650b3f2-2f4c-1: {path: '', title: new 3}   # id: process start time, process id, a count
 run:
   lastCommand: notepad "$(FULL_CURRENT_PATH)"
+dialogs:
+  lastDirectory: C:\work   # the folder a file was last opened from or saved to (files.defaultDirectory)
 plugins:
   disabled: [someplugin.dll]
   pendingUninstall: []

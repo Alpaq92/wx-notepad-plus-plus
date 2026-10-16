@@ -174,3 +174,22 @@ extern "C" bool wxn_spell_add(const char* utf8word)
         return true;
     }
 }
+
+// File > Move to Recycle Bin on macOS: the user's Trash, from which Finder's Put Back restores the file. 1 on
+// success; on failure 0 with the reason in err - the caller reports it, and never falls back to deleting
+// the file outright.
+extern "C" int wxn_TrashFile(const char* path, char* err, int errLen)
+{
+    @autoreleasepool {
+        if (err && errLen > 0) err[0] = '\0';
+        NSString* p = path ? [NSString stringWithUTF8String:path] : nil;
+        if (!p) return 0;
+        NSError* e = nil;
+        const BOOL ok = [[NSFileManager defaultManager] trashItemAtURL:[NSURL fileURLWithPath:p]
+                                                      resultingItemURL:nil
+                                                                 error:&e];
+        if (!ok && e && err && errLen > 0)
+            if (const char* m = [[e localizedDescription] UTF8String]) strlcpy(err, m, (size_t)errLen);
+        return ok ? 1 : 0;
+    }
+}

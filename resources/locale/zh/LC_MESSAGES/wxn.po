@@ -1149,6 +1149,9 @@ msgstr "监视已停止（文档已被编辑）"
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "将 \"%s\" 移动到回收站？"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "无法将 \"%s\" 移动到回收站。"
+
 msgid "Move Down Current Line"
 msgstr "下移当前行"
 
@@ -2043,8 +2046,8 @@ msgstr "深色"
 msgid "Light"
 msgstr "浅色"
 
-msgid "Ask before closing unsaved changes"
-msgstr "关闭未保存的更改前询问"
+msgid "Ask to save unsaved changes when quitting"
+msgstr "退出时询问是否保存未保存的更改"
 
 msgid "Use a custom line-number margin colour"
 msgstr "为行号边距使用自定义颜色"
@@ -3210,3 +3213,18 @@ msgstr "无法更改 languages.yaml (%s)。"
 
 msgid "Keywords saved"
 msgstr "关键字已保存"
+
+msgid "Default Directory"
+msgstr "默认目录"
+
+msgid "Follow current document"
+msgstr "跟随当前文档"
+
+msgid "Remember last used directory"
+msgstr "记住上次使用的目录"
+
+msgid "This folder:"
+msgstr "此目录:"
+
+msgid "Open and Save dialogs start in"
+msgstr "打开和保存对话框的起始位置"

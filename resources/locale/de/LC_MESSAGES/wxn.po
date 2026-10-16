@@ -1542,6 +1542,9 @@ msgstr "Die Zwischenablage enthält keinen passenden Inhalt."
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "\"%s\" in den Papierkorb verschieben?"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "\"%s\" konnte nicht in den Papierkorb verschoben werden."
+
 msgid "Enter valid character codes."
 msgstr "Geben Sie gültige Zeichencodes ein."
 
@@ -2043,8 +2046,8 @@ msgstr "Dunkel"
 msgid "Light"
 msgstr "Hell"
 
-msgid "Ask before closing unsaved changes"
-msgstr "Vor dem Schließen ungespeicherter Änderungen fragen"
+msgid "Ask to save unsaved changes when quitting"
+msgstr "Beim Beenden fragen, ob ungespeicherte Änderungen gespeichert werden sollen"
 
 msgid "Use a custom line-number margin colour"
 msgstr "Benutzerdefinierte Farbe für den Zeilennummern-Rand verwenden"
@@ -3210,3 +3213,18 @@ msgstr "languages.yaml konnte nicht geändert werden (%s)."
 
 msgid "Keywords saved"
 msgstr "Schlüsselwörter gespeichert"
+
+msgid "Default Directory"
+msgstr "Standardverzeichnis"
+
+msgid "Follow current document"
+msgstr "Dem aktuellen Dokument folgen"
+
+msgid "Remember last used directory"
+msgstr "Zuletzt verwendetes Verzeichnis merken"
+
+msgid "This folder:"
+msgstr "Dieses Verzeichnis:"
+
+msgid "Open and Save dialogs start in"
+msgstr "Öffnen- und Speichern-Dialoge beginnen in"
