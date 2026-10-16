@@ -2783,6 +2783,14 @@ int main(int argc, char** argv)
     fs::create_directories(root / "userdata", ec);
     g_sandboxRoot     = wxString::FromUTF8(root.u8string().c_str());
     g_sandboxUserData = wxString::FromUTF8((root / "userdata").u8string().c_str());
+#if !defined(_WIN32) && !defined(__APPLE__)
+    // The Trash Move to Recycle Bin uses (GIO) goes into the sandbox too: GLib trashes a file into the
+    // home Trash only when both sit on one filesystem, and refuses a system mount's own - FreeBSD 15's
+    // tmpfs /tmp is one - so a sandbox under /tmp needs its Trash beside it. It also keeps the test's
+    // files out of the real Trash. Set before GTK reads it.
+    fs::create_directories(root / "xdg-data", ec);
+    setenv("XDG_DATA_HOME", (root / "xdg-data").c_str(), 1);
+#endif
 
 #ifdef _WIN32
     // Drop a stale probe log (the pid-stamp check would catch it anyway; this keeps runs tidy).
