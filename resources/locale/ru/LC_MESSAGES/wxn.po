@@ -1368,29 +1368,14 @@ msgstr "Далее"
 msgid "Close"
 msgstr "Закрыть"
 
-msgid "Find result"
-msgstr "Результаты поиска"
-
 msgid "Match case"
 msgstr "Учитывать регистр"
-
-msgid "Whole word only"
-msgstr "Только слово целиком"
 
 msgid "Regular expression"
 msgstr "Регулярное выражение"
 
 msgid "In all sub-folders"
 msgstr "Во всех подпапках"
-
-msgid "Find what:"
-msgstr "Найти:"
-
-msgid "Directory:"
-msgstr "Папка:"
-
-msgid "Filters:"
-msgstr "Фильтры:"
 
 msgid "Find All"
 msgstr "Найти все"
@@ -1884,9 +1869,6 @@ msgstr "Замена в файлах: %d вхождение(й) в %d файле
 msgid "Find in Files: %d hit(s) in %d / %d file(s)"
 msgstr "Поиск в файлах: %d совпадений в %d / %d файлах"
 
-msgid "No search results yet - run Find in Files or Find All first"
-msgstr "Пока нет результатов поиска - сначала выполните «Поиск в файлах» или «Найти всё»"
-
 msgid "Count: %d match(es)"
 msgstr "Количество: %d совпадений"
 
@@ -2186,15 +2168,6 @@ msgstr "Быстрый кроссплатформенный текстовый �
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
 msgstr "Поиск \"%s\"  (%d совпадений в %d из %d просмотренных файлов)"
-
-msgid "Line %d:  %s"
-msgstr "Строка %d:  %s"
-
-msgid "Search \"%s\" in %s  (%s)"
-msgstr "Поиск \"%s\" в %s  (%s)"
-
-msgid "  %s  (%d replaced)"
-msgstr "  %s  (%d заменено)"
 
 msgid "    Line %d:  %s"
 msgstr "    Строка %d:  %s"
@@ -3210,3 +3183,66 @@ msgstr "Не удалось изменить languages.yaml (%s)."
 
 msgid "Keywords saved"
 msgstr "Ключевые слова сохранены"
+
+msgid "The current document's folder"
+msgstr "Папка текущего документа"
+
+msgid "In &hidden folders"
+msgstr "В &скрытых папках"
+
+msgid "Find All in Current Document"
+msgstr "Найти все в текущем документе"
+
+msgid "Find All in All Opened Documents"
+msgstr "Найти все во всех открытых документах"
+
+msgid "Replace All in All Opened Documents"
+msgstr "Заменить все во всех открытых документах"
+
+msgid "  %s (%d hits)"
+msgstr "  %s (совпадений: %d)"
+
+msgid "Find All: nothing to search for"
+msgstr "Найти все: нечего искать"
+
+msgid "Find All: %d hit(s) in %d of %d document(s)"
+msgstr "Найти все: совпадений — %d, в %d из %d документов"
+
+msgid "Replace every \"%s\" in all open documents?"
+msgstr "Заменить каждое \"%s\" во всех открытых документах?"
+
+msgid "Replace All: %d occurrence(s) in %d document(s)"
+msgstr "Заменить все: замен — %d, документов — %d"
+
+msgid "Find in search results: %d hit(s)"
+msgstr "Поиск в результатах: совпадений — %d"
+
+msgid "That document is no longer open"
+msgstr "Этот документ больше не открыт"
+
+msgid "Copy Selected Line(s)"
+msgstr "Копировать выбранные строки"
+
+msgid "Copy Selected Pathname(s)"
+msgstr "Копировать выбранные пути"
+
+msgid "Select All"
+msgstr "Выделить все"
+
+msgid "Clear All"
+msgstr "Очистить все"
+
+msgid "Open Selected Pathname(s)"
+msgstr "Открыть выбранные пути"
+
+msgid "Find in These Search Results..."
+msgstr "Найти в этих результатах поиска..."
+
+msgid "Word Wrap Long Lines"
+msgstr "Переносить длинные строки"
+
+msgid "Purge for Every Search"
+msgstr "Очищать при каждом поиске"
+
+msgid "Find in These Search Results"
+msgstr "Найти в этих результатах поиска"

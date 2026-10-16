@@ -91,11 +91,46 @@ An invalid pattern reports **"Invalid regular expression"** with the reason and 
   character each time instead of looping forever, and never splits a multi-byte character.
 - A file that is not valid UTF-8 still searches. Malformed bytes simply do not match.
 
+## Find All, in one document or all of them
+
+The **Find** tab's **Find All in Current Document** and **Find All in All Opened Documents** list every
+match in the **Search results** panel; the **Replace** tab's **Replace All in All Opened Documents**
+replaces in every open document after asking, each document in one undo step. A document open in both
+views is searched once, and read-only ones are left alone.
+
 ## Find in Files
 
-Find in Files and Replace in Files use the same engine, so a multi-line pattern works across a whole
-directory tree. The *Filters* field takes `;`-separated wildcards (`*.cpp;*.h`), and a file matching
-two of them is scanned once.
+**Search&nbsp;&rsaquo; Find in Files** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>) opens the Find
+dialog's **Find in Files** tab. Find in Files and Replace in Files use the same engine, so a multi-line
+pattern works across a whole directory tree.
+
+- **Directory** — `...` browses; `<<` fills in the current document's folder.
+- **Filters** — Notepad++'s syntax: wildcards separated by spaces or `;` (`*.cpp *.h`), `!pattern` to
+  leave files out (`!*.min.js`), and `!older` (or `!+older`) to leave a folder out wherever it is
+  (`!
+ode_modules`). `*.*` means every file, with or without an extension.
+- **In all sub-folders** — on by default; off searches the directory alone.
+- **In hidden folders** — off by default, so `.git` and the like stay out (on Windows, folders with the
+  hidden attribute).
+
+Find All lists its hits in the Search results panel. Replace in Files changes the files on disk and
+reports how many replacements it made, as Notepad++ does.
+
+## The Search results panel
+
+Every Find All adds a search to the panel, newest on top, the older ones folded away; a search lists
+the files or documents it hit and each line with its matches highlighted. Lines with several matches
+appear once.
+
+- **Enter** or a double-click opens the document at the match, selected. On a file line it opens the
+  file; on a search line it folds or unfolds it.
+- **Delete** removes a hit line, a file with its hits, or a whole search.
+- <kbd>F4</kbd> / <kbd>Shift</kbd>+<kbd>F4</kbd> step through the hits; <kbd>F7</kbd> shows the panel
+  and moves between it and the editor.
+- The right-click menu has **Copy**, **Copy Selected Line(s)**, **Copy Selected Pathname(s)**,
+  **Select All**, **Clear All**, **Open Selected Pathname(s)**, **Find in These Search Results...** (the
+  same search over the listed lines, as a new search of its own), **Word Wrap Long Lines** and **Purge
+  for Every Search** (keep only the latest search). The last two are remembered.
 
 ## Marks and counting
 

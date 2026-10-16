@@ -1368,29 +1368,14 @@ msgstr "Następny"
 msgid "Close"
 msgstr "Zamknij"
 
-msgid "Find result"
-msgstr "Wyniki wyszukiwania"
-
 msgid "Match case"
 msgstr "Uwzględnij wielkość liter"
-
-msgid "Whole word only"
-msgstr "Tylko całe wyrazy"
 
 msgid "Regular expression"
 msgstr "Wyrażenie regularne"
 
 msgid "In all sub-folders"
 msgstr "We wszystkich podfolderach"
-
-msgid "Find what:"
-msgstr "Znajdź:"
-
-msgid "Directory:"
-msgstr "Katalog:"
-
-msgid "Filters:"
-msgstr "Filtry:"
 
 msgid "Find All"
 msgstr "Znajdź wszystkie"
@@ -1884,9 +1869,6 @@ msgstr "Zamień w plikach: %d wystąpień w %d pliku(ach)"
 msgid "Find in Files: %d hit(s) in %d / %d file(s)"
 msgstr "Znajdź w plikach: %d trafień w %d / %d plikach"
 
-msgid "No search results yet - run Find in Files or Find All first"
-msgstr "Brak wyników wyszukiwania - najpierw uruchom Znajdź w plikach lub Znajdź wszystko"
-
 msgid "Count: %d match(es)"
 msgstr "Liczba: %d dopasowań"
 
@@ -2186,15 +2168,6 @@ msgstr "Szybki, międzyplatformowy edytor tekstu oparty na wxWidgets:\nnatywny e
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
 msgstr "Szukaj \"%s\"  (%d wystąpień w %d z %d przeszukanych plików)"
-
-msgid "Line %d:  %s"
-msgstr "Wiersz %d:  %s"
-
-msgid "Search \"%s\" in %s  (%s)"
-msgstr "Szukaj \"%s\" w %s  (%s)"
-
-msgid "  %s  (%d replaced)"
-msgstr "  %s  (%d zamienionych)"
 
 msgid "    Line %d:  %s"
 msgstr "    Wiersz %d:  %s"
@@ -3210,3 +3183,66 @@ msgstr "Nie można zmienić languages.yaml (%s)."
 
 msgid "Keywords saved"
 msgstr "Słowa kluczowe zapisane"
+
+msgid "The current document's folder"
+msgstr "Folder bieżącego dokumentu"
+
+msgid "In &hidden folders"
+msgstr "W &ukrytych folderach"
+
+msgid "Find All in Current Document"
+msgstr "Znajdź wszystko w bieżącym dokumencie"
+
+msgid "Find All in All Opened Documents"
+msgstr "Znajdź wszystko we wszystkich otwartych dokumentach"
+
+msgid "Replace All in All Opened Documents"
+msgstr "Zamień wszystko we wszystkich otwartych dokumentach"
+
+msgid "  %s (%d hits)"
+msgstr "  %s (trafienia: %d)"
+
+msgid "Find All: nothing to search for"
+msgstr "Znajdź wszystko: nie podano szukanego tekstu"
+
+msgid "Find All: %d hit(s) in %d of %d document(s)"
+msgstr "Znajdź wszystko: %d trafień w %d z %d dokumentów"
+
+msgid "Replace every \"%s\" in all open documents?"
+msgstr "Zamienić każde \"%s\" we wszystkich otwartych dokumentach?"
+
+msgid "Replace All: %d occurrence(s) in %d document(s)"
+msgstr "Zamień wszystko: %d wystąpień w %d dokumentach"
+
+msgid "Find in search results: %d hit(s)"
+msgstr "Szukaj w wynikach: %d trafień"
+
+msgid "That document is no longer open"
+msgstr "Ten dokument nie jest już otwarty"
+
+msgid "Copy Selected Line(s)"
+msgstr "Kopiuj zaznaczone wiersze"
+
+msgid "Copy Selected Pathname(s)"
+msgstr "Kopiuj zaznaczone ścieżki"
+
+msgid "Select All"
+msgstr "Zaznacz wszystko"
+
+msgid "Clear All"
+msgstr "Wyczyść wszystko"
+
+msgid "Open Selected Pathname(s)"
+msgstr "Otwórz zaznaczone ścieżki"
+
+msgid "Find in These Search Results..."
+msgstr "Znajdź w tych wynikach wyszukiwania..."
+
+msgid "Word Wrap Long Lines"
+msgstr "Zawijaj długie wiersze"
+
+msgid "Purge for Every Search"
+msgstr "Czyść przy każdym wyszukiwaniu"
+
+msgid "Find in These Search Results"
+msgstr "Znajdź w tych wynikach wyszukiwania"
