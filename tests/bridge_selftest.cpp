@@ -2215,7 +2215,16 @@ private:
             pump();
             const int askedBeforeDelete = g_closePrompts;
             mark = readLogLines().size();
-            check(g_nibRecycleActive && g_nibRecycleActive() == 1, "programmatic delete of the active file succeeded");
+            const bool recycled = g_nibRecycleActive && g_nibRecycleActive() == 1;
+            check(recycled, "programmatic delete of the active file succeeded");
+#ifdef __WXGTK__
+            if (!recycled)   // say why: the Trash's own reason, which the app only shows in a dialog
+            {
+                char why[512];
+                wxn_TrashFile(p6aRenamed.fn_str(), why, sizeof(why));
+                std::printf("        (the Trash said: %s)\n", why);
+            }
+#endif
             pump();
             check(g_closePrompts == askedBeforeDelete, "deleting a modified file closes its tab without asking to save it");
             L = readLogLines();
