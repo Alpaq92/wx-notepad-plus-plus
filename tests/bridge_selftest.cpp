@@ -2785,18 +2785,23 @@ int main(int argc, char** argv)
 
     namespace fs = std::filesystem;
     std::error_code ec;
+#if !defined(_WIN32) && !defined(__APPLE__)
+    // Beside the binary, not in /tmp: GLib refuses to trash anything on a mount it counts as system
+    // internal, /tmp among them ("Trashing on system internal mounts is not supported"), so wherever /tmp
+    // is a mount of its own - FreeBSD 15 - Move to Recycle Bin could never pass there.
+    fs::path root = fs::absolute(fs::path(argv[0]), ec).parent_path();
+#else
     fs::path root = fs::temp_directory_path(ec);
-    if (ec) root = fs::path(".");
+#endif
+    if (ec || root.empty()) root = fs::path(".");
     root /= "wxnote_bridge_selftest";
     fs::remove_all(root, ec);                       // hermetic: every run starts from a blank sandbox
     fs::create_directories(root / "userdata", ec);
     g_sandboxRoot     = wxString::FromUTF8(root.u8string().c_str());
     g_sandboxUserData = wxString::FromUTF8((root / "userdata").u8string().c_str());
 #if !defined(_WIN32) && !defined(__APPLE__)
-    // The Trash Move to Recycle Bin uses (GIO) goes into the sandbox too: GLib trashes a file into the
-    // home Trash only when both sit on one filesystem, and refuses a system mount's own - FreeBSD 15's
-    // tmpfs /tmp is one - so a sandbox under /tmp needs its Trash beside it. It also keeps the test's
-    // files out of the real Trash. Set before GTK reads it.
+    // The Trash Move to Recycle Bin uses (GIO) goes into the sandbox too, on the same filesystem as the
+    // files it trashes, which keeps them out of the real Trash. Set before GTK reads it.
     fs::create_directories(root / "xdg-data", ec);
     setenv("XDG_DATA_HOME", (root / "xdg-data").c_str(), 1);
 #endif
