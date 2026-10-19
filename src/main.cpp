@@ -112,6 +112,7 @@ extern "C" void wxn_HideWindowTitle(void* nsWindow);        // titleVisibility =
 // Returns the left inset (px) where toolbar content may start, 0 if unavailable.
 extern "C" int  wxn_InlineTrafficLights(void* nsWindow, int rowHeightPx);
 extern "C" void wxn_DragWindow(void* nsWindow);             // native window drag from the current mouse-down
+extern "C" int  wxn_TrashFile(const char* path, char* err, int errLen);   // Move to Recycle Bin: the Trash
 #endif
 
 #ifdef __WXGTK__
@@ -132,6 +133,9 @@ extern "C" void wxn_InstallDarkScrollbarCss(void* gtkWidgetOrNull, int dark);
 // reports 0 natural width otherwise and the row clips); barHeightPx = the panel/bar height; sharpCorners
 // != 0 keeps the window corners square ("Ignore platform decoration"), else they round to match the theme.
 extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidget, int barWidthPx, int barHeightPx, int sharpCorners);
+// Move to Recycle Bin (also gtk_native.cpp): the freedesktop.org Trash via GIO. 1 on success, else 0 with
+// the reason in err.
+extern "C" int  wxn_TrashFile(const char* path, char* err, int errLen);
 #endif
 
 #include <string>
@@ -1081,7 +1085,7 @@ static wxString      g_pluginMessage;
 // must NOT go through openPath() - that returns nullptr for a directory, i.e. the running instance would
 // silently swallow `wxnote .`) and FGOTO=idx,line,col (a per-file `file:line[:col]` suffix).
 // Standard wx pattern for pairing wxSingleInstanceChecker with wxServer/wxClient; DDE on Windows, a
-// loopback TCP port elsewhere.
+// Unix-domain socket elsewhere (wxnIpcService()).
 //
 // NOTE the string-literal split in "\x01" "ENC=", "\x01" "DIR=", "\x01" "FGOTO=" - on BOTH the sending and
 // the receiving side. A C++ \x escape eats every following HEX DIGIT, so an unsplit "\x01ENC=" is really
@@ -1089,12 +1093,26 @@ static wxString      g_pluginMessage;
 // the IPC handoff (the receiver's Mid(5) walked past the digits, leaving forceEnc at -1). "\x01GOTO="
 // escaped it only because 'G' is not a hex digit, which is why that one key always worked.
 // Keep the concatenation, and count every Mid() offset from the SPLIT form (5 for \x01XXX=, 7 for FGOTO=).
-// Fixed "port" (Unix socket path component) / DDE service name (Windows). Self-identifying on purpose:
-// the previous bare "31415" read, to anything inspecting strings in the binary, like a hardcoded port or
-// an opaque identifier rather than an application resource. Changing it means a running instance from an
-// older build will not be found by a newer one - the newcomer just opens its own window, which is the
-// same already-correct behaviour as when no instance is running.
-static const wxChar* const kIpcServiceName = wxT("wxNote-IPC");
+// Where a second launch finds the running instance. Windows: a DDE service name, self-identifying on
+// purpose - the previous bare "31415" read, to anything inspecting strings in the binary, like a
+// hardcoded port or an opaque identifier rather than an application resource. Elsewhere wx's IPC is a
+// socket, and only a name containing '/' makes it a Unix-domain one: any other is looked up as a TCP
+// service, so "wxNote-IPC" there listened on a random port no client could find, and "Reuse an existing
+// window" never worked on Linux, FreeBSD or macOS. The socket sits in the user's own data folder: private
+// to them (wx creates it 0600 and removes a stale one first), and a --sandbox or test run, with a data
+// folder of its own, can never reach a real instance. Changing either means a running instance from an
+// older build will not be found by a newer one - the newcomer just opens its own window, the same
+// already-correct behaviour as when no instance is running.
+static wxString wxnIpcService()
+{
+#ifdef __WXMSW__
+    return wxT("wxNote-IPC");
+#else
+    const wxString dir = wxStandardPaths::Get().GetUserDataDir();
+    if (!wxDirExists(dir)) { wxLogNull quiet; wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL); }
+    return dir + "/ipc.sock";
+#endif
+}
 static const wxChar* const kIpcTopic = wxT("wxnote-open");
 
 class WxnIpcConnection : public wxConnection
@@ -4492,8 +4510,8 @@ public:
     void applySavedWindowState() { if (m_wasMaximized) Maximize(true); }
     // -w/--wait: the paths the launching process is blocked on. Also force the save prompt ON for this run
     // only (not persisted - saveSettings() skips files.confirmCloseUnsaved in wait mode): m_askBeforeClose
-    // defaults to OFF, i.e. a modified buffer is discarded silently - which for a commit message would hand
-    // git back an unedited COMMIT_EDITMSG with no warning.
+    // defaults to OFF, i.e. quitting keeps a modified buffer for the next launch without asking - which for
+    // a commit message would hand git back an unedited COMMIT_EDITMSG with no warning.
     void enterWaitMode(const wxArrayString& paths)
     { g_waitMode = true; g_waitPaths = paths; m_askBeforeClose = true; }
     // Apply -g (goto line[,col]) / -e (force encoding) to whichever page is active after opening some
@@ -8266,9 +8284,9 @@ private:
         return g_sandboxMode ? sandboxDataDir() : wxStandardPaths::Get().GetUserDataDir();
     }
 
-    // ----- unsaved-changes recovery (Preferences > General "Ask before closing unsaved changes", off
-    // by default) - when a modified document is discarded WITHOUT prompting, its content is backed up
-    // to <userDataDir>/RecoveryBackups/<id>.bak first, so it survives that close (or a later crash/relaunch)
+    // ----- unsaved-changes recovery (Preferences > General "Ask to save unsaved changes when quitting",
+    // off by default) - when the app quits with a modified document WITHOUT asking, its content is backed
+    // up to <userDataDir>/RecoveryBackups/<id>.bak first, so it survives the exit (or a later crash)
     // instead of being silently lost. The manifest is state.yaml's recovery/entries, keyed by that same id
     // (recovery/entries/<id>/path and /title) - independent of session/files (which only tracks
     // "what's currently open" and is fully rewritten on every exit); an id is only removed once its
@@ -8343,17 +8361,22 @@ private:
     }
     // Ask to save a modified document before closing it (Save / Don't Save / Cancel), themed like the
     // rest of the app. Returns true if the caller may close the page, false if the user cancelled.
-    // exiting=true (only from onCloseWindow) means this discard is the app quitting with unsaved content
-    // still open - back it up so it can be recovered next launch. A deliberate in-session tab close
-    // (exiting=false, all other call sites) is a final decision - clear any stale recovery instead, or
-    // discarded scratch tabs would resurrect as ghost tabs on every future launch forever.
+    // Closing a tab always asks, as in Notepad++ - except for a document still open in the other view,
+    // which loses nothing. exiting=true (only from onCloseWindow) is the app quitting: with "Ask to save
+    // unsaved changes when quitting" off (the default) the document is backed up instead, to reopen next
+    // launch (Notepad++'s session snapshot); on, it asks as well. An answered in-session close is a final
+    // decision - clear any stale recovery, or discarded scratch tabs would resurrect as ghost tabs on every
+    // future launch forever.
     bool confirmClose(EditorPage* p, bool exiting = false)
     {
         if (!p) return true;
+        if (!exiting)
+            for (EditorPage* o : allPages())
+                if (o != p && o->doc == p->doc) { clearRecovery(p); return true; }   // a clone: the other view keeps it
         setActiveView(viewOf(p));            // make p's view active so sci()/m_path/onSave refer to p (incl. the OTHER split view)
         activateBuffer(p);                   // swap that view to p's document and select its tab
         if (sci(SCI_GETMODIFY) == 0) return true;
-        if (!m_askBeforeClose) { if (exiting) backupUnsavedChanges(p); else clearRecovery(p); return true; }   // setting off (the default): discard silently, no prompt
+        if (exiting && !m_askBeforeClose) { backupUnsavedChanges(p); return true; }   // quitting, setting off (the default): keep it for next launch
         const wxString name = !p->path.empty() ? p->path : (p->title.empty() ? wxString("new") : p->title);
 
         wxDialog dlg(this, wxID_ANY, "wxNote");
@@ -10709,16 +10732,36 @@ private:
         setLexerForFile(path);
         updateEncodingMenuChecks();
     }
-    // File > Open starts in the active document's folder, takes several files at once, and switches to
-    // a file that is already open rather than opening it again (openPath).
+    // Where File > Open, and Save As for a document with no file yet, start - Preferences > Default
+    // Directory, as in Notepad++: the active document's folder (or, for an untitled one, the folder last
+    // used in one of them), that last-used folder, or a fixed one. Empty, so the system decides, when the
+    // folder is gone.
+    wxString dialogStartDir() const
+    {
+        wxString dir;
+        const EditorPage* p = activePage();
+        if (m_defaultDirMode == kDirFixed) dir = m_defaultDirPath;
+        else if (m_defaultDirMode == kDirFollow && p && !p->path.empty()) dir = wxPathOnly(p->path);
+        else dir = wxString::FromUTF8(g_state.getText("dialogs/lastDirectory").c_str());
+        return !dir.empty() && wxDirExists(dir) ? dir : wxString();
+    }
+    // The folder a file was just opened from or saved to, for "Remember last used directory" (and an
+    // untitled document under "Follow current document").
+    void rememberDialogDir(const wxString& file)
+    {
+        g_state.setText("dialogs/lastDirectory", wxnUtf8(wxPathOnly(file)));
+        wxnFlushState();
+    }
+    // File > Open starts where Preferences > Default Directory says, takes several files at once, and
+    // switches to a file that is already open rather than opening it again (openPath).
     void onOpen()
     {
-        const EditorPage* p = activePage();
-        wxFileDialog d(this, _("Open"), (p && !p->path.empty()) ? wxPathOnly(p->path) : wxString(), "", _("All files (*.*)|*.*"),
+        wxFileDialog d(this, _("Open"), dialogStartDir(), "", _("All files (*.*)|*.*"),
                        wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
         if (d.ShowModal() != wxID_OK) return;
         wxArrayString paths;
         d.GetPaths(paths);
+        if (!paths.empty()) rememberDialogDir(paths[0]);
         for (const wxString& f : paths) openPath(f);
     }
     void onReload() { if (!m_path.empty()) loadFile(m_path); }
@@ -10998,16 +11041,19 @@ private:
     }
     void onSave() { if (m_path.empty()) onSaveAs(); else writeFile(m_path); }
     // Save As starts where the document lives, under its own name; an untitled one under its tab's
-    // name (new 2.txt for "new 2" - it used to propose "new 1.txt" for everything).
+    // name (new 2.txt for "new 2" - it used to propose "new 1.txt" for everything), in the Default
+    // Directory.
     void onSaveAs()
     {
         const EditorPage* p = activePage();
         const bool named = p && !p->path.empty();
         wxString name = named ? wxFileNameFromPath(p->path) : (p && !p->title.empty() ? p->title : wxString("new 1"));
         if (!named && wxFileName(name).GetExt().empty()) name += ".txt";
-        wxFileDialog d(this, _("Save As"), named ? wxPathOnly(p->path) : wxString(), name, _("All files (*.*)|*.*"),
+        wxFileDialog d(this, _("Save As"), named ? wxPathOnly(p->path) : dialogStartDir(), name, _("All files (*.*)|*.*"),
                        wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
-        if (d.ShowModal() == wxID_OK) writeFile(d.GetPath());
+        if (d.ShowModal() != wxID_OK) return;
+        rememberDialogDir(d.GetPath());
+        writeFile(d.GetPath());
     }
     // Repaint page p's tab label (add/remove the unsaved "*") on ITS OWN notebook - works for a page in
     // EITHER split view, unlike refreshTab() which only touches the active view's strip.
@@ -12114,8 +12160,10 @@ private:
     // ---- file operations ----
     void saveCopyAs()
     {
-        wxFileDialog dlg(this, _("Save a Copy As"), wxFileName(curPath()).GetPath(), wxFileNameFromPath(curPath()), _("All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        const wxString cur = curPath();
+        wxFileDialog dlg(this, _("Save a Copy As"), cur.empty() ? dialogStartDir() : wxPathOnly(cur), wxFileNameFromPath(cur), _("All files (*.*)|*.*"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
         if (dlg.ShowModal() != wxID_OK) return;
+        rememberDialogDir(dlg.GetPath());
         snippetSyncTransforms();   // this path writes the buffer itself, so it needs its own sync
         const std::string body = encodeForPage(getDocUtf8(), activePage());
         wxFile f(dlg.GetPath(), wxFile::write);
@@ -12149,10 +12197,12 @@ private:
         if (dlg.ShowModal() != wxID_OK) { nibFireDocEvent(NIB_EV_FILE_RENAME_CANCEL, ep); return; }   // user cancelled -> NPPN_FILERENAMECANCEL
         renameActiveTo(dlg.GetPath());
     }
-    // The delete operation itself (no confirm dialog): fires NIB_EV_FILE_BEFORE_DELETE, deletes the active
-    // document's on-disk file, then NIB_EV_FILE_DELETED (success, fired while the buffer id is still
-    // resolvable) or NIB_EV_FILE_DELETE_FAILED. On success the tab is closed. Returns success.
-    bool recycleActive()
+    // The delete operation itself (no confirm dialog): fires NIB_EV_FILE_BEFORE_DELETE, moves the active
+    // document's file to the Recycle Bin - the Trash on Linux, FreeBSD and macOS, never a permanent delete -
+    // then NIB_EV_FILE_DELETED (success, fired while the buffer id is still resolvable) or
+    // NIB_EV_FILE_DELETE_FAILED, with the system's reason in *why where it gives one. On success the tab is
+    // closed without a save prompt, as in Notepad++: its edits go with the file. Returns success.
+    bool recycleActive(wxString* why = nullptr)
     {
         EditorPage* ep = activePage();
         const wxString p = curPath();
@@ -12163,18 +12213,27 @@ private:
         SHFILEOPSTRUCTW op{}; op.wFunc = FO_DELETE; op.pFrom = from.c_str(); op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
         const bool ok = (SHFileOperationW(&op) == 0);
 #else
-        const bool ok = wxRemoveFile(p);
+        char err[512];
+        const bool ok = wxn_TrashFile(p.fn_str(), err, sizeof(err)) != 0;
+        if (!ok && why) *why = wxString::FromUTF8(err);
 #endif
-        if (ok) { nibFireDocEvent(NIB_EV_FILE_DELETED, ep); closeActive(); }   // -> NPPN_FILEDELETED (id still valid), then close the tab
-        else    { nibFireDocEvent(NIB_EV_FILE_DELETE_FAILED, ep); }             // -> NPPN_FILEDELETEFAILED
-        return ok;
+        if (!ok) { nibFireDocEvent(NIB_EV_FILE_DELETE_FAILED, ep); return false; }   // -> NPPN_FILEDELETEFAILED
+        nibFireDocEvent(NIB_EV_FILE_DELETED, ep);   // -> NPPN_FILEDELETED (id still valid)
+        activatePage(ep);                           // whatever a plugin switched to meanwhile, close this one
+        clearRecovery(ep);
+        sci(SCI_SETSAVEPOINT);                      // so closing it does not ask to save what was just thrown away
+        closeActive();
+        return true;
     }
     void recycleFile()
     {
         const wxString p = curPath();
         if (p.empty()) { notImpl(_("Move to Recycle Bin (save the file first)")); return; }
         if (wxMessageBox(wxString::Format(_("Move \"%s\" to the Recycle Bin?"), wxFileNameFromPath(p)), "wxNote", wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
-        recycleActive();
+        wxString why;
+        if (!recycleActive(&why))
+            wxMessageBox(wxString::Format(_("Could not move \"%s\" to the Recycle Bin."), wxFileNameFromPath(p))
+                         + (why.empty() ? wxString() : "\n\n" + why), "wxNote", wxOK | wxICON_ERROR, this);
     }
     // Close All to the Left / Right: closeAllBut's three passes over the tabs on that side of the active one
     // - confirm them all first, so a Cancel aborts before anything closes, then record and delete - and the
@@ -13530,6 +13589,8 @@ private:
 #endif
         m_themeMode = (int)readThemeMode();   // also resolved in OnInit (before the frame exists)
         m_askBeforeClose = s.getBool("files.confirmCloseUnsaved");
+        m_defaultDirMode = s.getChoice("files.defaultDirectory");      // its names are in DefaultDir order
+        m_defaultDirPath = wxnSettingText("files.defaultDirectoryPath");
         m_fsAutohideToolbar = s.getBool("ui.fullScreen.hideToolbar");
         m_reuseInstance = s.getBool("window.reuseInstance");
         m_customGutterColor = s.getBool("editor.customGutterColor");
@@ -13633,6 +13694,7 @@ private:
         n("search.webEngine", m_searchEngine);
         if (!g_waitMode)   // -w/--wait force-enables the prompt for that run only (enterWaitMode): never written
             b("files.confirmCloseUnsaved", m_askBeforeClose);
+        n("files.defaultDirectory", m_defaultDirMode);  t("files.defaultDirectoryPath", m_defaultDirPath);
         b("ui.fullScreen.hideToolbar", m_fsAutohideToolbar);
         b("editor.customGutterColor", m_customGutterColor);
         v["editor.gutterColor"] = wxnyaml::colorText(rgbToBgr((unsigned)m_gutterColorValue));
@@ -13798,9 +13860,9 @@ private:
         auto* cbZoomField = new wxCheckBox(gen, wxID_ANY, _("Show zoom control in status bar"));
         cbZoomField->SetValue(m_showZoomField);
         row(gs, cbToolbar); row(gs, cbStatus); row(gs, cbZoomField);
-        // Off by default: closing a modified document just discards it silently
-        // rather than blocking on a Save/Don't Save/Cancel prompt every time.
-        auto* cbAskClose = new wxCheckBox(gen, wxID_ANY, _("Ask before closing unsaved changes"));
+        // Off by default: quitting keeps unsaved documents for the next launch instead of asking about each
+        // one (Notepad++'s session snapshot). Closing a tab asks either way - see confirmClose.
+        auto* cbAskClose = new wxCheckBox(gen, wxID_ANY, _("Ask to save unsaved changes when quitting"));
         cbAskClose->SetValue(m_askBeforeClose); row(gs, cbAskClose);
         // AppImage builds only - see wxnMaybeIntegrateAppImage. Added rather than merely disabled
         // elsewhere, because on an installed build the package manager already registered the
@@ -14038,6 +14100,27 @@ private:
         lrow->Add(chLang, 0, wxALIGN_CENTRE_VERTICAL);
         nds->Add(lrow, 0, wxALL, 10); nd->SetSizer(nds);
 
+        // ---- Default Directory: where File > Open and Save As start (dialogStartDir) ----------
+        auto* dd = pg(_("Default Directory")); auto* dds = new wxBoxSizer(wxVERTICAL);
+        const wxString dirChoices[3] = { _("Follow current document"), _("Remember last used directory"), _("This folder:") };
+        auto* rbDir = new wxRadioBox(dd, wxID_ANY, _("Open and Save dialogs start in"), wxDefaultPosition, wxDefaultSize,
+                                     3, dirChoices, 1, wxRA_SPECIFY_COLS);
+        rbDir->SetSelection(m_defaultDirMode);
+        dds->Add(rbDir, 0, wxALL, 10);
+        auto* dirRow = new wxBoxSizer(wxHORIZONTAL);
+        auto* txDir = new wxTextCtrl(dd, wxID_ANY, m_defaultDirPath);
+        auto* btDir = new wxButton(dd, wxID_ANY, "...", wxDefaultPosition, wxSize(32, -1));
+        dirRow->Add(txDir, 1, wxALIGN_CENTRE_VERTICAL); dirRow->Add(btDir, 0, wxLEFT, 4);
+        dds->Add(dirRow, 0, wxEXPAND | wxLEFT | wxRIGHT, 10);
+        auto syncDir = [rbDir, txDir, btDir] { const bool fixed = rbDir->GetSelection() == kDirFixed; txDir->Enable(fixed); btDir->Enable(fixed); };
+        syncDir();
+        rbDir->Bind(wxEVT_RADIOBOX, [syncDir](wxCommandEvent&) { syncDir(); });
+        btDir->Bind(wxEVT_BUTTON, [&dlg, txDir](wxCommandEvent&) {
+            wxDirDialog d(&dlg, _("Choose folder"), txDir->GetValue());
+            if (d.ShowModal() == wxID_OK) txDir->SetValue(d.GetPath());
+        });
+        dd->SetSizer(dds);
+
         // ---- Tab Bar --------------------------------------------------------------------------
         auto* tbp = pg(_("Tab Bar")); auto* tbs = new wxBoxSizer(wxVERTICAL);
         auto* cbTabClose = new wxCheckBox(tbp, wxID_ANY, _("Show close button on each tab   (applied on restart)"));
@@ -14179,6 +14262,7 @@ private:
         m_showToolbar = cbToolbar->GetValue(); m_showStatusbar = cbStatus->GetValue();
         m_showZoomField = cbZoomField->GetValue();
         m_askBeforeClose = cbAskClose->GetValue();
+        m_defaultDirMode = rbDir->GetSelection(); m_defaultDirPath = txDir->GetValue().Strip(wxString::both);
         if (cbAppImage)   // null unless running as an AppImage (see above)
         {
             const bool want = cbAppImage->GetValue();
@@ -17389,7 +17473,11 @@ private:
     wxRect      m_normalRect{wxDefaultCoord, wxDefaultCoord, 1100, 720};
     bool        m_wasMaximized = false;   // applied via Maximize(true) post-Show() in OnInit
     int         m_themeMode = 1;   // Preferences > General "Theme": 0 = System, 1 = Dark, 2 = Light (restart-to-apply)
-    bool        m_askBeforeClose = false;   // Preferences > General "Ask before closing unsaved changes" (off by default)
+    bool        m_askBeforeClose = false;   // Preferences > General "Ask to save unsaved changes when quitting" (off by default)
+    // Preferences > Default Directory: where File > Open and Save As start (dialogStartDir).
+    enum DefaultDir { kDirFollow, kDirRemember, kDirFixed };   // files.defaultDirectory's names, in order
+    int         m_defaultDirMode = kDirFollow;
+    wxString    m_defaultDirPath;                              // the kDirFixed folder
     bool        m_fsAutohideToolbar = false; // Preferences > General "Auto-hide toolbar in full screen" (off by default: toolbar stays)
     bool        m_reuseInstance = false;    // Preferences > General "Reuse an existing window" (restart-to-apply; read in OnInit)
     bool        m_customGutterColor = false;   // Preferences > Editing "Use a custom line-number margin colour"
@@ -17859,7 +17947,7 @@ public:
             {
                 wxLogNull noWarn;                                 // a refused/failed connection is handled below
                 wxClient client;
-                wxConnectionBase* conn = client.MakeConnection(wxEmptyString, kIpcServiceName, kIpcTopic);
+                wxConnectionBase* conn = client.MakeConnection(wxEmptyString, wxnIpcService(), kIpcTopic);
                 if (conn)
                 {
                     wxString payload;
@@ -17995,7 +18083,7 @@ public:
             frame->applySavedWindowState();   // Maximize() before Show() is a no-op on some ports
             frame->reportSettingsError(settingsError);
             if (restoreOnStart) frame->restoreSession();   // --clean: no session AND no recovery restore (restoreSession does both)
-            if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(kIpcServiceName); }
+            if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(wxnIpcService()); }
             applyRequest(frame);
             return true;
         }
@@ -18008,7 +18096,7 @@ public:
                                                 // one-file window; leave session/pending set so the next real launch
                                                 // still restores the user's tabs. --clean: skip session AND recovery
                                                 // restore entirely (restoreSession drives both) for a pristine launch
-        if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(kIpcServiceName); }
+        if (startIpcServer) { m_ipcServer = new WxnIpcServer(); m_ipcServer->Create(wxnIpcService()); }
         applyRequest(frame);
         return true;
     }

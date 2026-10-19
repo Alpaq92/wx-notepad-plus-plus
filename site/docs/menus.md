@@ -47,7 +47,9 @@ A few notes before the list:
 **The file on disk**
 
 - **Rename…** — needs a saved file
-- **Move to Recycle Bin** — needs a saved file
+- **Move to Recycle Bin** — needs a saved file. The Trash on Linux, FreeBSD and macOS, so the file can be
+  restored; if it cannot be moved there, wxNote says so rather than deleting it. The tab closes without
+  asking to save.
 
 **Sessions, printing, exit**
 

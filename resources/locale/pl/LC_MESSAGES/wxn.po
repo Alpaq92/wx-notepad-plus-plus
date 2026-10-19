@@ -1542,6 +1542,9 @@ msgstr "Schowek nie zawiera pasującej zawartości."
 msgid "Move \"%s\" to the Recycle Bin?"
 msgstr "Przenieść \"%s\" do kosza?"
 
+msgid "Could not move \"%s\" to the Recycle Bin."
+msgstr "Nie można przenieść \"%s\" do kosza."
+
 msgid "Enter valid character codes."
 msgstr "Wprowadź prawidłowe kody znaków."
 
@@ -2043,8 +2046,8 @@ msgstr "Ciemny"
 msgid "Light"
 msgstr "Jasny"
 
-msgid "Ask before closing unsaved changes"
-msgstr "Pytaj przed zamknięciem niezapisanych zmian"
+msgid "Ask to save unsaved changes when quitting"
+msgstr "Pytaj o zapisanie niezapisanych zmian przy wychodzeniu"
 
 msgid "Use a custom line-number margin colour"
 msgstr "Użyj niestandardowego koloru marginesu numerów linii"
@@ -3210,3 +3213,18 @@ msgstr "Nie można zmienić languages.yaml (%s)."
 
 msgid "Keywords saved"
 msgstr "Słowa kluczowe zapisane"
+
+msgid "Default Directory"
+msgstr "Katalog domyślny"
+
+msgid "Follow current document"
+msgstr "Podążaj za bieżącym dokumentem"
+
+msgid "Remember last used directory"
+msgstr "Zapamiętaj ostatnio używany katalog"
+
+msgid "This folder:"
+msgstr "Ten katalog:"
+
+msgid "Open and Save dialogs start in"
+msgstr "Okna dialogowe Otwórz i Zapisz otwierają się w"

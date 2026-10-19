@@ -17,7 +17,7 @@
 | Show toolbar | on | |
 | Show status bar | on | |
 | Show zoom control in status bar | **off** | adds an editable zoom field to the status bar — see [below](#the-zoom-control). Applies immediately, no restart. Zooming itself is unaffected either way |
-| Ask before closing unsaved changes | **off** | when off, closing a modified document discards it silently |
+| Ask to save unsaved changes when quitting | **off** | when off, quitting keeps unsaved documents and reopens them next time, without asking; when on, it asks about each one. Closing a tab always asks |
 | Auto-hide toolbar in full screen | **off** | when on, full screen hides the toolbar (macOS-style) |
 | Reuse an existing window | off | *restart* — when on, a second launch hands its files to the first window over IPC and exits. `-n` / `-r` override this per launch |
 | Show integrated top bar | — | *restart* — only present on platforms with borderless-window support and on macOS |
@@ -115,6 +115,19 @@ Defaults applied to newly created documents:
 - **Format (Line ending)** — Windows (CR LF), Unix (LF) or Macintosh (CR)
 - **Encoding** — UTF-8, UTF-8 with BOM, UTF-16 LE, UTF-16 BE or ANSI
 - **Default language** — *Normal Text* or any built-in language
+
+## Default Directory
+
+Where **File&nbsp;&rsaquo; Open**, and **Save As** for a document that has no file yet, start, as in
+Notepad++:
+
+- **Follow current document** (the default) — the active document's folder; for an untitled one, the
+  folder you last opened or saved a file in
+- **Remember last used directory** — the folder you last opened or saved a file in, whatever is active
+- **This folder:** — always the folder you pick
+
+Save As for a document that already has a file starts in its own folder. When the folder no longer
+exists, the system's dialog decides.
 
 ## Tab Bar
 
