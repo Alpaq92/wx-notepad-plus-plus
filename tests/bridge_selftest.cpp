@@ -160,6 +160,92 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         f->closeActive();
     }
 
+    // ---- the Search results panel: Find All, a jump, accumulation, Delete, find in results ---------
+    {
+        f->m_sr.clear(); f->m_srPurge = false;
+        auto lineOf = [f](int si, int fi, int hi) {
+            for (int i = 0; i < static_cast<int>(f->m_srLines.size()); ++i)
+                if (f->m_srLines[i].s == si && f->m_srLines[i].f == fi && f->m_srLines[i].h == hi) return i;
+            return -1;
+        };
+        f->addDocument(wxString(), "untitled-results-test");
+        load("alpha beta\n  beta gamma beta\nomega\n");
+        check(f->srFindAllDocs(opts("beta", false), false) == 3, "results: Find All in Current Document counts every match");
+        check(f->m_sr.size() == 1 && f->m_sr[0].files.size() == 1 && f->m_sr[0].files[0].hits.size() == 2,
+              "results: ...one entry per line, the two matches on the second sharing it");
+        {
+            const SrHit& h = f->m_sr[0].files[0].hits[1];
+            check(h.line0 == 1 && h.strip == 2 && h.text == "beta gamma beta" && h.m.size() == 2 && h.m[0].first == 2,
+                  "results: ...its text without the indent, each match at its column");
+        }
+        check(f->m_findResults->GetText().Contains(wxString::Format(_("    Line %d:  %s"), 2, "beta gamma beta")),
+              "results: the panel lists the hit line");   // in whatever language the UI runs
+        f->srActivate(lineOf(0, 0, 1));
+        check(f->sci(SCI_GETSELECTIONSTART) == 13 && f->sci(SCI_GETSELECTIONEND) == 17, "results: a jump selects the match");
+        f->srFindAllDocs(opts("omega", false), false);
+        check(f->m_sr.size() == 2 && f->m_sr[0].term == "omega" && f->m_sr[1].folded,
+              "results: a new search goes on top, the one before it folded");
+        f->srDeleteAt(lineOf(1, 0, 0));
+        check(f->m_sr[1].files[0].hits.size() == 1, "results: Delete removes a hit line");
+        f->srDeleteAt(lineOf(0, -1, -1));
+        check(f->m_sr.size() == 1 && f->m_sr[0].term == "beta", "results: ...and a search line its whole search");
+        check(f->srFindInResults(opts("gamma", false)) == 1 && f->m_sr[0].files.size() == 1
+              && f->m_sr[0].files[0].hits[0].line0 == 1 && f->m_sr[0].files[0].hits[0].m[0].first == 7,
+              "results: Find in These Search Results searches the hit lines");
+        f->m_sr.clear(); f->srRender();
+        f->closeActive();
+    }
+
+    // ---- Find All / Replace All in All Opened Documents ------------------------------------------
+    {
+        f->addDocument(wxString(), "untitled-alldocs-a");
+        EditorPage* a = f->activePage();
+        load("qxneedle one\n");
+        f->addDocument(wxString(), "untitled-alldocs-b");
+        EditorPage* b = f->activePage();
+        load("two qxneedle qxneedle\n");
+        check(f->srFindAllDocs(opts("qxneedle", false), true) == 3 && f->m_sr[0].files.size() == 2,
+              "all documents: Find All lists every open document with hits");
+        FindOpts r = opts("qxneedle", false); r.repl = "pin";
+        a->dirty = false;
+        check(f->srReplaceAllDocs(r, /*confirm=*/false) == 3, "all documents: Replace All replaces in every one");
+        check(text() == "two pin pin\n" && a->dirty, "all documents: ...the active one, and the background one is marked modified");
+        f->activatePage(a);
+        check(text() == "pin one\n", "all documents: ...whose text changed too");
+        f->sci(SCI_UNDO);
+        check(text() == "qxneedle one\n", "all documents: ...in one undo step");
+        f->m_sr.clear(); f->srRender();
+        f->closeActive();
+        f->activatePage(b);
+        f->closeActive();
+    }
+
+    // ---- Find in Files: Notepad++'s filter syntax and the folder options -------------------------
+    {
+        const wxString root = g_sandboxRoot + wxFILE_SEP_PATH + "fifcollect";
+        const wxString S = wxFILE_SEP_PATH;
+#ifdef __WXMSW__
+        const wxString hid = root + S + "hid";
+#else
+        const wxString hid = root + S + ".hid";
+#endif
+        for (const wxString& d : { root + S + "sub", root + S + "skip", hid }) wxFileName::Mkdir(d, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+#ifdef __WXMSW__
+        ::SetFileAttributesW(hid.wc_str(), FILE_ATTRIBUTE_HIDDEN);
+#endif
+        for (const wxString& n : { S + "a.txt", S + "b.txt", S + "c.cpp", S + "Makefile", S + "sub" + S + "d.txt", S + "skip" + S + "e.txt" })
+            writeWholeFile(root + n, "x\n");
+        writeWholeFile(hid + S + "f.txt", "x\n");
+        auto names = [](const wxArrayString& v) { wxString out; for (const wxString& x : v) out += wxFileNameFromPath(x) + " "; return out.Trim(); };
+        check(names(f->fifCollectFiles(root, "*.txt !b.txt", false)) == "a.txt", "fif filters: '!' leaves files out");
+        check(names(f->fifCollectFiles(root, "*.txt", true)) == "a.txt b.txt e.txt d.txt", "fif filters: sub-folders when asked");
+        check(names(f->fifCollectFiles(root, "*.txt !\\skip", true)) == "a.txt b.txt d.txt", "fif filters: '!\\folder' leaves a folder out");
+        check(names(f->fifCollectFiles(root, "*.cpp *.txt", false)) == "a.txt b.txt c.cpp", "fif filters: space-separated patterns");
+        check(names(f->fifCollectFiles(root, "*.*", false)) == "Makefile a.txt b.txt c.cpp", "fif filters: '*.*' is every file, Makefile too");
+        check(!names(f->fifCollectFiles(root, "f.txt", true)).Contains("f.txt"), "fif filters: hidden folders stay out...");
+        check(names(f->fifCollectFiles(root, "f.txt", true, /*hidden=*/true)) == "f.txt", "fif filters: ...unless asked for");
+    }
+
     // ---- (1) a regex that CROSSES A LINE BREAK, through the real Find path ------------------------
     // The headline capability. Before PCRE2 this could not match at all, at any surface.
     {
