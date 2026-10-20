@@ -106,9 +106,8 @@ pattern works across a whole directory tree.
 
 - **Directory** — `...` browses; `<<` fills in the current document's folder.
 - **Filters** — Notepad++'s syntax: wildcards separated by spaces or `;` (`*.cpp *.h`), `!pattern` to
-  leave files out (`!*.min.js`), and `!older` (or `!+older`) to leave a folder out wherever it is
-  (`!
-ode_modules`). `*.*` means every file, with or without an extension.
+  leave files out (`!*.min.js`), and `!\folder` (or `!+\folder`) to leave a folder out wherever it is
+  (`!\node_modules`). `*.*` means every file, with or without an extension.
 - **In all sub-folders** — on by default; off searches the directory alone.
 - **In hidden folders** — off by default, so `.git` and the like stay out (on Windows, folders with the
   hidden attribute).

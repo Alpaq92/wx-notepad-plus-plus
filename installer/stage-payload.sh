@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Copy wxNote's application payload out of a build's bin/ directory into a package's staging tree:
 #   installer/stage-payload.sh <build-bin> <dest>
-# Every Linux and macOS package stages through this one script - the .deb, .rpm, AppImage, Flatpak and
-# .dmg all keep the resources beside the executable, so they all ship the same tree.
+# Every Linux, macOS and FreeBSD package stages through this one script - the .deb, .rpm, AppImage,
+# Flatpak, .dmg and FreeBSD .pkg all keep the resources beside the executable, so they all ship the same
+# tree. Keep it to POSIX sh (plus pipefail, which FreeBSD's sh has too): installer/freebsd/build-pkg.sh
+# runs it with sh, as FreeBSD ships no bash.
 #
 # It copies a LIST, never build/bin as a whole: CI builds the `selftests` target before it packages, and
 # every suite lands in build/bin next to wxnote, so the wholesale copy these packages used to make

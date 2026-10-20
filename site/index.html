@@ -6,7 +6,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>wxNote</title>
-  <meta name="description" content="wxNote - a fast, cross-platform text editor built on wxWidgets + Scintilla, for Windows, Linux, and macOS.">
+  <meta name="description" content="wxNote - a fast, cross-platform text editor built on wxWidgets + Scintilla, for Windows, Linux, macOS, and FreeBSD.">
 
   <!--
     - theme (applied before first paint, so there's no flash of the wrong theme - script.js
@@ -113,7 +113,7 @@
             <div class="contact-info">
               <p class="contact-title">Platforms</p>
 
-              <address>Windows (x64 · ARM64 · x86) · Linux · macOS (x64 · ARM64)</address>
+              <address>Windows (x64 · ARM64 · x86) · Linux · macOS (x64 · ARM64) · FreeBSD</address>
             </div>
 
           </li>
@@ -255,7 +255,7 @@
         <section class="about-text">
           <p>
             wxNote is a ground-up, cross-platform text editor built on wxWidgets and wxStyledTextCtrl
-            (Scintilla/Lexilla). It runs natively on Windows, Linux, and macOS — on x64 and ARM alike —
+            (Scintilla/Lexilla). It runs natively on Windows, Linux, macOS, and FreeBSD — on x64 and ARM alike —
             from one codebase, with its own plugin API, theming, User-Defined Languages, settings in plain
             YAML, and full UI localization.
           </p>
@@ -290,7 +290,7 @@
                 <h4 class="h4 service-item-title">Cross-platform</h4>
 
                 <p class="service-item-text">
-                  One codebase, native builds for Windows, Linux, and macOS - not a wrapper around a single
+                  One codebase, native builds for Windows, Linux, macOS, and FreeBSD - not a wrapper around a single
                   platform's APIs.
                 </p>
               </div>
@@ -365,8 +365,8 @@
 
             <li class="highlights-item">
               <div class="content-card highlight-card">
-                <p class="highlight-number">3</p>
-                <p class="highlight-label">Platforms - native on Windows, Linux, and macOS; x64, ARM64 and 32-bit x86</p>
+                <p class="highlight-number">4</p>
+                <p class="highlight-label">Platforms - native on Windows, Linux, macOS, and FreeBSD; x64, ARM64 and 32-bit x86</p>
               </div>
             </li>
 
@@ -686,13 +686,13 @@
 
             <li class="timeline-item">
 
-              <h4 class="h4 timeline-item-title">Native on three platforms</h4>
+              <h4 class="h4 timeline-item-title">Native on four platforms</h4>
 
-              <span>Windows · Linux · macOS</span>
+              <span>Windows · Linux · macOS · FreeBSD</span>
 
               <p class="timeline-text">
                 One codebase, built on wxWidgets and Scintilla/Lexilla, packaged as an NSIS installer, an
-                AppImage/.deb/.rpm/Flatpak, and a .dmg.
+                AppImage/.deb/.rpm/Flatpak, a .dmg, and a FreeBSD .pkg.
               </p>
 
             </li>
@@ -777,7 +777,7 @@
               <tbody>
                 <tr>
                   <th scope="row">Runs on</th>
-                  <td class="c-wx"><span class="c-plus">Windows, macOS &amp; Linux</span></td>
+                  <td class="c-wx"><span class="c-plus">Windows, macOS, Linux &amp; FreeBSD</span></td>
                   <td class="c-npp">Windows only</td>
                 </tr>
                 <tr>
@@ -1221,6 +1221,39 @@
                   </ul>
 
                 </div>
+
+              </div>
+            </li>
+
+            <li class="platform-item">
+              <div class="content-card platform-card">
+
+                <svg viewBox="0 0 512 512" width="1em" height="1em" fill="currentColor" aria-hidden="true" focusable="false"><path d="M16 352a48.05 48.05 0 0048 48h133.88l-4 32H144a16 16 0 000 32h224a16 16 0 000-32h-49.88l-4-32H448a48.05 48.05 0 0048-48v-48H16zm240-16a16 16 0 11-16 16 16 16 0 0116-16zM496 96a48.05 48.05 0 00-48-48H64a48.05 48.05 0 00-48 48v192h480z"/></svg>
+
+                <h4 class="h4">FreeBSD</h4>
+
+                <p>Pick your FreeBSD release</p>
+
+                <div class="platform-download-dropdown" data-dropdown>
+
+                  <button type="button" class="platform-download-btn" data-dropdown-btn aria-expanded="false">
+                    <svg viewBox="0 0 512 512" width="1em" height="1em" fill="currentColor" aria-hidden="true" focusable="false"><path d="M336 176h40a40 40 0 0140 40v208a40 40 0 01-40 40H136a40 40 0 01-40-40V216a40 40 0 0140-40h40" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="32"/><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="32" d="M176 272l80 80 80-80M256 48v288"/></svg>
+                    <span>Download for FreeBSD</span>
+                    <svg viewBox="0 0 512 512" width="1em" height="1em" fill="currentColor" aria-hidden="true" focusable="false" class="dropdown-caret"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="48" d="M112 184l144 144 144-144"/></svg>
+                  </button>
+
+                  <ul class="platform-download-menu" data-dropdown-menu>
+                    <li><span class="menu-group-label">amd64 · x86_64</span></li>
+                    <li><a data-download="freebsd15" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">FreeBSD 15 (.pkg)</a></li>
+                    <li><a data-download="freebsd14" href="https://github.com/Alpaq92/wx-notepad-plus-plus/releases" aria-disabled="true">FreeBSD 14 (.pkg)</a></li>
+                  </ul>
+
+                </div>
+
+                <p class="platform-note">
+                  <code>pkg add</code> looks for dependencies only beside the file, so install them from the
+                  repository first. <a href="./docs/#/getting-started?id=installing-on-freebsd" target="_blank" rel="noopener">How, in Getting started</a>.
+                </p>
 
               </div>
             </li>

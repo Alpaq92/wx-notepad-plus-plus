@@ -80,9 +80,13 @@ All notable changes to wxNote are documented here. Format loosely follows
   matches, which the Mark tab still does.
 - **Find in Files options**: **In all sub-folders** (the Find dialog's tab never searched sub-folders),
   **In hidden folders**, a `...` and a `<<` (current document's folder) button, Notepad++'s filter syntax
-  (`*.cpp *.h`, `!*.min.js`, `!
-ode_modules`), history for the Filters and Directory fields, and Enter
+  (`*.cpp *.h`, `!*.min.js`, `!\node_modules`), history for the Filters and Directory fields, and Enter
   running Find All.
+- **FreeBSD.** wxNote builds, runs its tests and is packaged on FreeBSD: each release adds a package for
+  FreeBSD 15 and one for FreeBSD 14, both amd64. `pkg add` looks for dependencies only next to the file,
+  so install them from the repository first with `pkg install $(pkg query -F <file> %dn)`. The
+  integrated terminal and the plugin bridge work there too, and wxNote finds its themes, icons and
+  lexers even when started through `/usr/local/bin/wxnote`, a link.
 
 ### Fixed
 - **File > Close All crashed** with any file open, and so did **Close All But This** with the view
