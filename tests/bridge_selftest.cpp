@@ -2786,10 +2786,15 @@ int main(int argc, char** argv)
     namespace fs = std::filesystem;
     std::error_code ec;
 #if !defined(_WIN32) && !defined(__APPLE__)
-    // Beside the binary, not in /tmp: GLib refuses to trash anything on a mount it counts as system
-    // internal, /tmp among them ("Trashing on system internal mounts is not supported"), so wherever /tmp
-    // is a mount of its own - FreeBSD 15 - Move to Recycle Bin could never pass there.
-    fs::path root = fs::absolute(fs::path(argv[0]), ec).parent_path();
+    // Under $HOME, not in /tmp: GLib trashes into the home Trash only files on the home directory's
+    // filesystem, and refuses anything on a mount it counts as system internal, /tmp among them
+    // ("Trashing on system internal mounts is not supported") - so wherever /tmp is a mount of its own
+    // (FreeBSD 15) Move to Recycle Bin could never pass there. Not beside the binary either: that is the
+    // read-only install dir the plugins checks keep user data out of, and deep enough to overflow the
+    // handoff socket's path limit.
+    fs::path root;
+    if (const char* home = getenv("HOME"); home && *home) root = fs::path(home);
+    else root = fs::temp_directory_path(ec);
 #else
     fs::path root = fs::temp_directory_path(ec);
 #endif
