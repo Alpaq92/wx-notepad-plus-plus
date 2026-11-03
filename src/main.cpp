@@ -13283,7 +13283,7 @@ private:
         r->SetMarginWidth(0, 0); r->SetMarginWidth(1, 0);
         r->SetMarginType(2, wxSTC_MARGIN_SYMBOL);
         r->SetMarginMask(2, wxSTC_MASK_FOLDERS);
-        r->SetMarginWidth(2, FromDIP(14));
+        r->SetMarginWidth(2, this->FromDIP(14));
         r->SetMarginSensitive(2, true);
         r->SetAutomaticFold(wxSTC_AUTOMATICFOLD_CLICK);
         const std::pair<int, int> marks[] = {
