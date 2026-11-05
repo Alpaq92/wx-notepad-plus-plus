@@ -197,6 +197,8 @@ marked so in the table: today the indentation pair.
 | `files.newDocument.language` | Language-menu name; empty = Normal text | — | `NewDoc/Lang` (a menu index) |
 | `files.newDocument.encoding` | `utf-8` / `utf-8-bom` / `utf-16le` / `utf-16be` / `ansi` | `utf-8` | `NewDoc/Encoding` |
 | `search.webEngine` | `duckduckgo` / `google` / `bing` / `yahoo` / `brave` | `duckduckgo` | `Editing/SearchEngine` |
+| `search.results.purgeEachSearch` | bool — the Search results panel keeps only the latest search | `false` | — |
+| `search.results.wordWrap` | bool — the Search results panel wraps long lines | `false` | — |
 | `spelling.backend` | `native` / `native+hunspell` / `hunspell` | `native+hunspell` | `Editing/SpellBackend` |
 | `spelling.dictionary` | dictionary name | `en_US` | `Editing/SpellDict` |
 | `spelling.commentsOnly` | bool | `true` | `Editing/SpellCommentsOnly` |

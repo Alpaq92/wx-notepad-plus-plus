@@ -1368,29 +1368,14 @@ msgstr "다음"
 msgid "Close"
 msgstr "닫기"
 
-msgid "Find result"
-msgstr "찾기 결과"
-
 msgid "Match case"
 msgstr "대/소문자 구분"
-
-msgid "Whole word only"
-msgstr "단어 단위로만"
 
 msgid "Regular expression"
 msgstr "정규식"
 
 msgid "In all sub-folders"
 msgstr "모든 하위 폴더에서"
-
-msgid "Find what:"
-msgstr "찾을 내용:"
-
-msgid "Directory:"
-msgstr "디렉터리:"
-
-msgid "Filters:"
-msgstr "필터:"
 
 msgid "Find All"
 msgstr "모두 찾기"
@@ -1884,9 +1869,6 @@ msgstr "파일에서 바꾸기: %2$d개 파일에서 %1$d개 일치"
 msgid "Find in Files: %d hit(s) in %d / %d file(s)"
 msgstr "파일에서 찾기: %2$d / %3$d개 파일에서 %1$d개 일치"
 
-msgid "No search results yet - run Find in Files or Find All first"
-msgstr "아직 검색 결과가 없습니다 - 먼저 파일에서 찾기 또는 모두 찾기를 실행하세요"
-
 msgid "Count: %d match(es)"
 msgstr "개수: %d개 일치"
 
@@ -2186,15 +2168,6 @@ msgstr "wxWidgets 기반의 빠른 크로스 플랫폼 텍스트 편집기:\n다
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
 msgstr "검색 \"%s\"  (%d건 일치, 검색한 %d개 파일 중 %d개)"
-
-msgid "Line %d:  %s"
-msgstr "%d줄:  %s"
-
-msgid "Search \"%s\" in %s  (%s)"
-msgstr "검색 \"%s\"  위치: %s  (%s)"
-
-msgid "  %s  (%d replaced)"
-msgstr "  %s  (%d개 바꿈)"
 
 msgid "    Line %d:  %s"
 msgstr "    %d줄:  %s"
@@ -3210,3 +3183,66 @@ msgstr "languages.yaml을 변경할 수 없습니다(%s)."
 
 msgid "Keywords saved"
 msgstr "키워드 저장됨"
+
+msgid "The current document's folder"
+msgstr "현재 문서의 폴더"
+
+msgid "In &hidden folders"
+msgstr "숨김 폴더에서(&H)"
+
+msgid "Find All in Current Document"
+msgstr "현재 문서에서 모두 찾기"
+
+msgid "Find All in All Opened Documents"
+msgstr "열린 모든 문서에서 모두 찾기"
+
+msgid "Replace All in All Opened Documents"
+msgstr "열린 모든 문서에서 모두 바꾸기"
+
+msgid "  %s (%d hits)"
+msgstr "  %s (%d개)"
+
+msgid "Find All: nothing to search for"
+msgstr "모두 찾기: 찾을 내용이 없습니다"
+
+msgid "Find All: %d hit(s) in %d of %d document(s)"
+msgstr "모두 찾기: %d개 일치 (%d / %d개 문서)"
+
+msgid "Replace every \"%s\" in all open documents?"
+msgstr "열린 모든 문서의 \"%s\"을(를) 모두 바꾸시겠습니까?"
+
+msgid "Replace All: %d occurrence(s) in %d document(s)"
+msgstr "모두 바꾸기: %d개 (%d개 문서)"
+
+msgid "Find in search results: %d hit(s)"
+msgstr "검색 결과에서 찾기: %d개"
+
+msgid "That document is no longer open"
+msgstr "해당 문서가 더 이상 열려 있지 않습니다"
+
+msgid "Copy Selected Line(s)"
+msgstr "선택한 줄 복사"
+
+msgid "Copy Selected Pathname(s)"
+msgstr "선택한 경로 복사"
+
+msgid "Select All"
+msgstr "모두 선택"
+
+msgid "Clear All"
+msgstr "모두 지우기"
+
+msgid "Open Selected Pathname(s)"
+msgstr "선택한 경로 열기"
+
+msgid "Find in These Search Results..."
+msgstr "이 검색 결과에서 찾기..."
+
+msgid "Word Wrap Long Lines"
+msgstr "긴 줄 자동 줄 바꿈"
+
+msgid "Purge for Every Search"
+msgstr "검색할 때마다 지우기"
+
+msgid "Find in These Search Results"
+msgstr "이 검색 결과에서 찾기"

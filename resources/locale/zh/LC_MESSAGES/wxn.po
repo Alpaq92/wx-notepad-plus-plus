@@ -639,9 +639,6 @@ msgstr "默认语言:"
 msgid "Directory :"
 msgstr "目录 :"
 
-msgid "Directory:"
-msgstr "目录:"
-
 msgid "Display line number"
 msgstr "显示行号"
 
@@ -729,9 +726,6 @@ msgstr "文件：%s\n\n字符数：%ld\n字数：%ld\n行数：%d"
 msgid "Filters :"
 msgstr "筛选器 :"
 
-msgid "Filters:"
-msgstr "筛选器:"
-
 msgid "Find"
 msgstr "查找"
 
@@ -777,14 +771,8 @@ msgstr "在文件中查找：没有此目录 - %s"
 msgid "Find in Files: nothing to search for"
 msgstr "在文件中查找：没有要搜索的内容"
 
-msgid "Find result"
-msgstr "搜索结果"
-
 msgid "Find what :"
 msgstr "查找目标 :"
-
-msgid "Find what:"
-msgstr "查找目标:"
 
 msgid "Find: "
 msgstr "查找: "
@@ -1226,9 +1214,6 @@ msgstr "没有可跳转的标记"
 
 msgid "No matches"
 msgstr "无匹配项"
-
-msgid "No search results yet - run Find in Files or Find All first"
-msgstr "尚无搜索结果 - 请先运行“在文件中查找”或“查找全部”"
 
 msgid "None"
 msgstr "无"
@@ -1938,9 +1923,6 @@ msgstr "越南语"
 msgid "Western European"
 msgstr "西欧"
 
-msgid "Whole word only"
-msgstr "全词匹配"
-
 msgid "Windows"
 msgstr "窗口"
 
@@ -2186,15 +2168,6 @@ msgstr "基于 wxWidgets 的快速跨平台文本编辑器:\n原生 Scintilla �
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
 msgstr "搜索 \"%s\"  (%d 处匹配，搜索的 %d 个文件中有 %d 个)"
-
-msgid "Line %d:  %s"
-msgstr "第 %d 行:  %s"
-
-msgid "Search \"%s\" in %s  (%s)"
-msgstr "搜索 \"%s\"  位置: %s  (%s)"
-
-msgid "  %s  (%d replaced)"
-msgstr "  %s  (已替换 %d 处)"
 
 msgid "    Line %d:  %s"
 msgstr "    第 %d 行:  %s"
@@ -3210,3 +3183,66 @@ msgstr "无法更改 languages.yaml (%s)。"
 
 msgid "Keywords saved"
 msgstr "关键字已保存"
+
+msgid "The current document's folder"
+msgstr "当前文档所在的文件夹"
+
+msgid "In &hidden folders"
+msgstr "在隐藏文件夹中(&H)"
+
+msgid "Find All in Current Document"
+msgstr "在当前文档中全部查找"
+
+msgid "Find All in All Opened Documents"
+msgstr "在所有打开的文档中全部查找"
+
+msgid "Replace All in All Opened Documents"
+msgstr "在所有打开的文档中全部替换"
+
+msgid "  %s (%d hits)"
+msgstr "  %s（%d 处）"
+
+msgid "Find All: nothing to search for"
+msgstr "全部查找：没有要查找的内容"
+
+msgid "Find All: %d hit(s) in %d of %d document(s)"
+msgstr "全部查找：%d 处匹配，位于 %d / %d 个文档"
+
+msgid "Replace every \"%s\" in all open documents?"
+msgstr "要替换所有打开的文档中的每个 \"%s\" 吗？"
+
+msgid "Replace All: %d occurrence(s) in %d document(s)"
+msgstr "全部替换：%d 处，位于 %d 个文档"
+
+msgid "Find in search results: %d hit(s)"
+msgstr "在搜索结果中查找：%d 处"
+
+msgid "That document is no longer open"
+msgstr "该文档已不再打开"
+
+msgid "Copy Selected Line(s)"
+msgstr "复制选定的行"
+
+msgid "Copy Selected Pathname(s)"
+msgstr "复制选定的路径"
+
+msgid "Select All"
+msgstr "全选"
+
+msgid "Clear All"
+msgstr "全部清除"
+
+msgid "Open Selected Pathname(s)"
+msgstr "打开选定的路径"
+
+msgid "Find in These Search Results..."
+msgstr "在这些搜索结果中查找..."
+
+msgid "Word Wrap Long Lines"
+msgstr "长行自动换行"
+
+msgid "Purge for Every Search"
+msgstr "每次搜索时清除"
+
+msgid "Find in These Search Results"
+msgstr "在这些搜索结果中查找"

@@ -1406,28 +1406,13 @@ msgstr ""
 msgid "%d matches"
 msgstr ""
 
-msgid "Find result"
-msgstr ""
-
 msgid "Match case"
-msgstr ""
-
-msgid "Whole word only"
 msgstr ""
 
 msgid "Regular expression"
 msgstr ""
 
 msgid "In all sub-folders"
-msgstr ""
-
-msgid "Find what:"
-msgstr ""
-
-msgid "Directory:"
-msgstr ""
-
-msgid "Filters:"
 msgstr ""
 
 msgid "Find All"
@@ -1728,9 +1713,6 @@ msgid "Replace in Files: %d occurrence(s) in %d file(s)"
 msgstr ""
 
 msgid "Find in Files: %d hit(s) in %d / %d file(s)"
-msgstr ""
-
-msgid "No search results yet - run Find in Files or Find All first"
 msgstr ""
 
 msgid "Count: %d match(es)"
@@ -2187,15 +2169,6 @@ msgid "A fast, cross-platform text editor built on wxWidgets:\na native Scintill
 msgstr ""
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
-msgstr ""
-
-msgid "Line %d:  %s"
-msgstr ""
-
-msgid "Search \"%s\" in %s  (%s)"
-msgstr ""
-
-msgid "  %s  (%d replaced)"
 msgstr ""
 
 msgid "    Line %d:  %s"
@@ -3211,4 +3184,67 @@ msgid "languages.yaml could not be changed (%s)."
 msgstr ""
 
 msgid "Keywords saved"
+msgstr ""
+
+msgid "The current document's folder"
+msgstr ""
+
+msgid "In &hidden folders"
+msgstr ""
+
+msgid "Find All in Current Document"
+msgstr ""
+
+msgid "Find All in All Opened Documents"
+msgstr ""
+
+msgid "Replace All in All Opened Documents"
+msgstr ""
+
+msgid "  %s (%d hits)"
+msgstr ""
+
+msgid "Find All: nothing to search for"
+msgstr ""
+
+msgid "Find All: %d hit(s) in %d of %d document(s)"
+msgstr ""
+
+msgid "Replace every \"%s\" in all open documents?"
+msgstr ""
+
+msgid "Replace All: %d occurrence(s) in %d document(s)"
+msgstr ""
+
+msgid "Find in search results: %d hit(s)"
+msgstr ""
+
+msgid "That document is no longer open"
+msgstr ""
+
+msgid "Copy Selected Line(s)"
+msgstr ""
+
+msgid "Copy Selected Pathname(s)"
+msgstr ""
+
+msgid "Select All"
+msgstr ""
+
+msgid "Clear All"
+msgstr ""
+
+msgid "Open Selected Pathname(s)"
+msgstr ""
+
+msgid "Find in These Search Results..."
+msgstr ""
+
+msgid "Word Wrap Long Lines"
+msgstr ""
+
+msgid "Purge for Every Search"
+msgstr ""
+
+msgid "Find in These Search Results"
 msgstr ""

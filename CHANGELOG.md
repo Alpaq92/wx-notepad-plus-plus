@@ -70,6 +70,18 @@ All notable changes to wxNote are documented here. Format loosely follows
   don't have is left out rather than breaking the menu.
 - **`nib.settings/1`** (Nib ABI 1.8): a plugin can read and change a setting by its id; wxNote checks
   every value against its own table of settings, as it does for a hand-edited `settings.yaml`.
+- **A Search results panel like Notepad++'s.** Every Find All adds a search to it, newest on top and the
+  older ones folded: the files or documents it hit, and each line with its matches highlighted. Enter or
+  a double-click opens the match selected; Delete removes a hit, a file or a search; the right-click menu
+  copies lines or paths, opens the files, clears the panel, runs **Find in These Search Results**, and
+  turns on word wrap or **Purge for Every Search**. F7 shows the panel even after it was closed.
+- **Find All in Current Document, Find All in All Opened Documents and Replace All in All Opened
+  Documents**, on the Find and Replace tabs as in Notepad++. The Find tab's old Find All only marked the
+  matches, which the Mark tab still does.
+- **Find in Files options**: **In all sub-folders** (the Find dialog's tab never searched sub-folders),
+  **In hidden folders**, a `...` and a `<<` (current document's folder) button, Notepad++'s filter syntax
+  (`*.cpp *.h`, `!*.min.js`, `!\node_modules`), history for the Filters and Directory fields, and Enter
+  running Find All.
 - **FreeBSD.** wxNote builds, runs its tests and is packaged on FreeBSD: each release adds a package for
   FreeBSD 15 and one for FreeBSD 14, both amd64. `pkg add` looks for dependencies only next to the file,
   so install them from the repository first with `pkg install $(pkg query -F <file> %dn)`. The
@@ -158,6 +170,9 @@ All notable changes to wxNote are documented here. Format loosely follows
 - **File > Open** starts in the active document's folder and opens several files at once.
 - **Save As** proposes the document's own name and folder - an untitled one's tab name, such as
   `new 2.txt` - instead of always `new 1.txt`.
+- **Search > Find in Files** (Ctrl+Shift+F) opens the Find dialog's Find in Files tab instead of a
+  separate dialog with fewer options, and its hits go to the Search results panel instead of a "Find
+  result" tree of their own.
 
 ## [0.20.0] - 2026-09-05
 

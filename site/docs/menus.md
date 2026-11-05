@@ -120,8 +120,11 @@ tabs. Shared options: Match whole word only, Match case, Wrap around, plus Backw
 Replace) and In selection (Replace and Mark). The Search Mode radio group offers **Normal**,
 **Extended** (`\n`, `\r`, `\t`, `\0`, `\x…`) and **Regular expression** — PCRE2, so patterns may cross
 line breaks and use lookbehind, named groups and `\U`/`\L` in replacements, with a **`.` matches
-newline** checkbox alongside; see [Search &amp; Regular Expressions](search.md). Find in Files adds *Filters*
-and *Directory* fields and a **Replace in Files** button.
+newline** checkbox alongside; see [Search &amp; Regular Expressions](search.md). The Find tab's **Find
+All in Current Document** and **Find All in All Opened Documents** and the Replace tab's **Replace All in
+All Opened Documents** work across documents; Find in Files adds *Filters* (Notepad++'s syntax, `!`
+exclusions included) and *Directory* fields, **In all sub-folders** and **In hidden folders**, and a
+**Replace in Files** button. Every Find All lists its hits in the **Search results** panel.
 
 The incremental search bar is a slim find-as-you-type strip with its own case, whole-word and regex
 toggles and a live match count. <kbd>Enter</kbd> jumps to the next match, <kbd>Esc</kbd> closes it.

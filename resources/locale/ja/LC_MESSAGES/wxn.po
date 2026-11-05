@@ -1368,29 +1368,14 @@ msgstr "次へ"
 msgid "Close"
 msgstr "閉じる"
 
-msgid "Find result"
-msgstr "検索結果"
-
 msgid "Match case"
 msgstr "大文字小文字を区別"
-
-msgid "Whole word only"
-msgstr "単語単位のみ"
 
 msgid "Regular expression"
 msgstr "正規表現"
 
 msgid "In all sub-folders"
 msgstr "すべてのサブフォルダーを対象"
-
-msgid "Find what:"
-msgstr "検索する文字列:"
-
-msgid "Directory:"
-msgstr "ディレクトリ:"
-
-msgid "Filters:"
-msgstr "フィルター:"
 
 msgid "Find All"
 msgstr "すべて検索"
@@ -1884,9 +1869,6 @@ msgstr "ファイル内置換: %d 個の一致（%d 個のファイル内）"
 msgid "Find in Files: %d hit(s) in %d / %d file(s)"
 msgstr "ファイル内検索: %2$d / %3$d 個のファイル中 %1$d 件ヒット"
 
-msgid "No search results yet - run Find in Files or Find All first"
-msgstr "検索結果がまだありません - 先に「ファイル内検索」または「すべて検索」を実行してください"
-
 msgid "Count: %d match(es)"
 msgstr "件数: %d 件一致"
 
@@ -2186,15 +2168,6 @@ msgstr "wxWidgets 上に構築された高速なクロスプラットフォー�
 
 msgid "Search \"%s\"  (%d hits in %d files of %d searched)"
 msgstr "検索 \"%s\"  (%d件ヒット、検索した%dファイル中%dファイルで)"
-
-msgid "Line %d:  %s"
-msgstr "行 %d:  %s"
-
-msgid "Search \"%s\" in %s  (%s)"
-msgstr "検索 \"%s\"  対象: %s  (%s)"
-
-msgid "  %s  (%d replaced)"
-msgstr "  %s  (%d 件置換)"
 
 msgid "    Line %d:  %s"
 msgstr "    行 %d:  %s"
@@ -3210,3 +3183,66 @@ msgstr "languages.yaml を変更できませんでした (%s)。"
 
 msgid "Keywords saved"
 msgstr "キーワードを保存しました"
+
+msgid "The current document's folder"
+msgstr "現在の文書のフォルダー"
+
+msgid "In &hidden folders"
+msgstr "隠しフォルダー内(&H)"
+
+msgid "Find All in Current Document"
+msgstr "現在の文書ですべて検索"
+
+msgid "Find All in All Opened Documents"
+msgstr "開いているすべての文書ですべて検索"
+
+msgid "Replace All in All Opened Documents"
+msgstr "開いているすべての文書ですべて置換"
+
+msgid "  %s (%d hits)"
+msgstr "  %s (%d 件)"
+
+msgid "Find All: nothing to search for"
+msgstr "すべて検索: 検索する文字列がありません"
+
+msgid "Find All: %d hit(s) in %d of %d document(s)"
+msgstr "すべて検索: %d 件 (%d / %d 文書)"
+
+msgid "Replace every \"%s\" in all open documents?"
+msgstr "開いているすべての文書の \"%s\" をすべて置換しますか？"
+
+msgid "Replace All: %d occurrence(s) in %d document(s)"
+msgstr "すべて置換: %d 件 (%d 文書)"
+
+msgid "Find in search results: %d hit(s)"
+msgstr "検索結果内を検索: %d 件"
+
+msgid "That document is no longer open"
+msgstr "その文書はもう開かれていません"
+
+msgid "Copy Selected Line(s)"
+msgstr "選択した行をコピー"
+
+msgid "Copy Selected Pathname(s)"
+msgstr "選択したパス名をコピー"
+
+msgid "Select All"
+msgstr "すべて選択"
+
+msgid "Clear All"
+msgstr "すべてクリア"
+
+msgid "Open Selected Pathname(s)"
+msgstr "選択したパス名を開く"
+
+msgid "Find in These Search Results..."
+msgstr "この検索結果内を検索..."
+
+msgid "Word Wrap Long Lines"
+msgstr "長い行を折り返す"
+
+msgid "Purge for Every Search"
+msgstr "検索のたびに消去"
+
+msgid "Find in These Search Results"
+msgstr "この検索結果内を検索"

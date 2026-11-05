@@ -86,6 +86,8 @@ inline const std::vector<Def>& schema()
         { "files.newDocument.language",       Kind::Text,   "" },
         { "files.newDocument.encoding",       Kind::Choice, "utf-8", 0, 0, "utf-8|utf-8-bom|utf-16le|utf-16be|ansi" },
         { "search.webEngine",                 Kind::Choice, "duckduckgo", 0, 0, "duckduckgo|google|bing|yahoo|brave" },
+        { "search.results.purgeEachSearch",   Kind::Bool,   "false" },
+        { "search.results.wordWrap",          Kind::Bool,   "false" },
         { "spelling.backend",                 Kind::Choice, "native+hunspell", 0, 0, "native|native+hunspell|hunspell" },
         { "spelling.dictionary",              Kind::Text,   "en_US" },
         { "spelling.commentsOnly",            Kind::Bool,   "true" },
