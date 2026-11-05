@@ -373,3 +373,18 @@ extern "C" void wxn_HostInHeaderBar(void* gtkWindowWidget, void* childPanelWidge
 
     gtk_widget_show_all(hb);
 }
+
+// File > Move to Recycle Bin off Windows: the freedesktop.org Trash, through GIO (part of GLib, which GTK
+// links anyway), so the file manager can restore it. 1 on success; on failure 0 with GIO's reason in err -
+// the caller reports it, and never falls back to deleting the file outright.
+extern "C" int wxn_TrashFile(const char* path, char* err, int errLen)
+{
+    if (err && errLen > 0) err[0] = '\0';
+    GFile* f = g_file_new_for_path(path);
+    GError* e = nullptr;
+    const gboolean ok = g_file_trash(f, nullptr, &e);
+    if (!ok && e && err && errLen > 0) g_strlcpy(err, e->message, static_cast<gsize>(errLen));
+    if (e) g_error_free(e);
+    g_object_unref(f);
+    return ok ? 1 : 0;
+}

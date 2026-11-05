@@ -129,9 +129,10 @@ Two further consequences of the `-w` run being its own dedicated instance:
 - **The previous session is not restored.** A `--wait` window opens with just the file you passed, so a
   commit-message edit is not buried under a restored pile of tabs. Your saved session is left untouched
   and comes back on the next ordinary launch.
-- **"Ask before closing unsaved changes" is force-enabled for that run only** — otherwise closing the
-  window with unsaved edits would silently hand git back an unmodified `COMMIT_EDITMSG`. The setting is
-  not written to your preferences; your own choice is preserved.
+- **"Ask to save unsaved changes when quitting" is force-enabled for that run only** — otherwise closing
+  the window with unsaved edits would keep them for the next launch and silently hand git back an
+  unmodified `COMMIT_EDITMSG`. The setting is not written to your preferences; your own choice is
+  preserved.
 
 ### Windows: `cmd.exe` will not wait
 

@@ -82,6 +82,8 @@ inline const std::vector<Def>& schema()
         { "files.largeFileThresholdMiB",      Kind::Int,    "16", 0, 4096 },
         { "files.maxRecentFiles",             Kind::Int,    "10", 1, 50 },
         { "files.confirmCloseUnsaved",        Kind::Bool,   "false" },
+        { "files.defaultDirectory",           Kind::Choice, "follow", 0, 0, "follow|remember|fixed" },
+        { "files.defaultDirectoryPath",       Kind::Text,   "" },
         { "files.newDocument.eol",            Kind::Choice, "crlf", 0, 0, "crlf|cr|lf" },   // = SC_EOL_CRLF/CR/LF
         { "files.newDocument.language",       Kind::Text,   "" },
         { "files.newDocument.encoding",       Kind::Choice, "utf-8", 0, 0, "utf-8|utf-8-bom|utf-16le|utf-16be|ansi" },
