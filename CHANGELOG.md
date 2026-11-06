@@ -13,6 +13,10 @@ All notable changes to wxNote are documented here. Format loosely follows
   the main window has it, and `--rs` is `-r`. Notepad++'s spellings work as aliases (`-multiInst`,
   `-nosession`, `-openSession`, `-ro`, `-lpython`, `-n42 -c7`, `-noPlugin`), and its window and printing
   options are ignored instead of refusing the launch.
+- **Line and Blank Operations work on the selection, as in Notepad++.** Sorting, Reverse, Randomize,
+  Remove Duplicate / Consecutive Duplicate / Empty Lines, the Trims, TAB/Space and EOL to Space act on
+  the lines the selection covers (a selection ending at the start of a line leaves that line out), or on
+  the whole document when nothing is selected. A column selection's columns are the sort key.
 - **Per-language indentation in Preferences.** Preferences ▸ Indentation lists **[Default]** and every
   language, as Notepad++'s does: a language either uses the default or has its own tab size and tabs or
   spaces (tabs for Makefiles, 4 spaces for Python). It was possible before only by editing
@@ -103,6 +107,13 @@ All notable changes to wxNote are documented here. Format loosely follows
   lexers even when started through `/usr/local/bin/wxnote`, a link.
 
 ### Fixed
+- **Line and Blank Operations no longer rewrite the whole document.** They change only the lines they
+  must, so bookmarks stay on their lines (Remove Unmarked Lines keeps the marked ones), the caret no
+  longer jumps to the top, the change-history margin marks only what changed, and mixed line endings stay
+  as they were. A NUL byte no longer cuts the file short. Sorting a file that ends with a line break no
+  longer moves that break to the top; a descending sort no longer reverses equal lines; Sort in Locale
+  Order now uses the locale instead of plain byte order; TAB to Space goes to the next tab stop instead of
+  a fixed run of spaces; EOL to Space no longer leaves a trailing space where the final line break was.
 - **File > Close All crashed** with any file open, and so did **Close All But This** with the view
   split and **Close All But Pinned**: deleting one tab moved the editor onto the next, which was then
   deleted with it. Exiting with the view split crashed too, as did splitting again after the views had

@@ -240,6 +240,105 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
     }
 #endif
 
+    // ---- Line Operations / Blank Operations: the selection's lines, edited in place -----------------
+    // They used to read and rewrite the whole document (SCI_SETTEXT) whatever was selected: bookmarks
+    // left their lines, a NUL byte cut the file short, and the final line break was sorted like a line.
+    {
+        f->addDocument(wxString(), "untitled-lineops-test");
+        auto selLines = [f](int a, int b) { f->sci(SCI_SETSEL, f->sci(SCI_POSITIONFROMLINE, a), f->sci(SCI_POSITIONFROMLINE, b)); };
+        auto marked = [f](int l) { return (f->sci(SCI_MARKERGET, l) & (1 << MARK_BOOKMARK)) != 0; };
+        auto mark = [f](int l) { f->sci(SCI_MARKERADD, l, MARK_BOOKMARK); };
+        auto fresh = [&](const char* s) { load(s); f->sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); };
+
+        fresh("b\na\n");
+        f->sortLines(0, false);
+        check(text() == "a\nb\n", "line ops: sorting the document leaves the final line break where it is");
+        fresh("b\na");
+        f->sortLines(0, false);
+        check(text() == "a\nb", "line ops: ...and a last line without one stays without");
+        fresh("b\r\na\n");
+        f->sortLines(0, false);
+        check(text() == "a\r\nb\n", "line ops: ...mixed line endings stay where they were");
+        fresh("keep\nz\nb\na\nkeep2\n");
+        mark(0); mark(4);
+        selLines(1, 4);                                           // ends at column 0 of line 4: not that line
+        f->sortLines(0, false);
+        check(text() == "keep\na\nb\nz\nkeep2\n", "line ops: sorting a selection sorts only its lines");
+        check(marked(0) && marked(4) && !marked(1), "line ops: ...and bookmarks outside it stay on their lines");
+        f->sci(SCI_UNDO);
+        check(text() == "keep\nz\nb\na\nkeep2\n", "line ops: ...in one undo step");
+        fresh("b\nApple\napple\n");
+        f->sortLines(1, true);
+        check(text() == "b\nApple\napple\n", "line ops: a descending sort keeps equal lines in their order");
+        fresh("10\n9\n100\n");
+        f->sortLines(2, false);
+        check(text() == "9\n10\n100\n", "line ops: integer sort");
+        fresh("1 c\n2 a\n3 b\n");
+        f->sci(SCI_SETRECTANGULARSELECTIONANCHOR, 2);
+        f->sci(SCI_SETRECTANGULARSELECTIONCARET, f->sci(SCI_POSITIONFROMLINE, 2) + 3);
+        f->sortLines(0, false);
+        check(text() == "2 a\n3 b\n1 c\n", "line ops: a column selection is the sort key");
+        f->sci(SCI_SETSEL, 0, 0);
+        fresh("b\n");
+        f->sci(SCI_APPENDTEXT, 4, reinterpret_cast<sptr_t>("a\0x\n"));
+        f->sortLines(0, false);
+        check(text() == std::string("a\0x\nb\n", 6), "line ops: a NUL byte survives a sort");
+        fresh("1\n2\n3");
+        f->reverseLines();
+        check(text() == "3\n2\n1", "line ops: reverse");
+
+        fresh("a\nb\na\nc\n");
+        mark(3);
+        f->removeDuplicateLines(false);
+        check(text() == "a\nb\nc\n" && marked(2), "line ops: Remove Duplicate Lines keeps the first, and the bookmarks of what stays");
+        fresh("a\na\nb\na\n");
+        f->removeDuplicateLines(true);
+        check(text() == "a\nb\na\n", "line ops: Remove Consecutive Duplicate Lines");
+        fresh("a\n\nb\n\n");
+        f->removeEmptyLines(false);
+        check(text() == "a\nb\n", "line ops: Remove Empty Lines keeps the final line break");
+        fresh("a\n  \t\nb\nc");
+        f->removeEmptyLines(true);
+        check(text() == "a\nb\nc", "line ops: ...(Containing Blank characters)");
+        fresh("a\nb\n\n");
+        f->removeEmptyLines(false);
+        check(text() == "a\nb\n", "line ops: ...an empty last line goes with the break before it");
+
+        fresh("a  \nb  \nc  \n");
+        selLines(1, 2);
+        f->trimTrailing();
+        check(text() == "a  \nb\nc  \n", "blank ops: Trim Trailing Space trims the selected lines only");
+        f->sci(SCI_SETSEL, 0, 0);
+        fresh(" \t a \n");
+        f->trimBoth();
+        check(text() == "a\n", "blank ops: Trim Leading and Trailing Space");
+        f->sci(SCI_SETTABWIDTH, 4);
+        fresh("a\tb\n\tc\n");
+        f->tabsToSpaces();
+        check(text() == "a   b\n    c\n", "blank ops: TAB to Space goes to the next tab stop");
+        fresh("        x  y\n");
+        f->spacesToTabs(true);
+        check(text() == "\t\tx  y\n", "blank ops: Space to TAB (Leading) rewrites the indentation only");
+        fresh("a\nb\nc\n");
+        f->sci(SCI_SETSEL, 0, 3);
+        f->eolToSpace();
+        check(text() == "a b\nc\n", "blank ops: EOL to Space joins the selected lines");
+        f->sci(SCI_SETSEL, 0, 0);
+        fresh("a\nb\n");
+        f->eolToSpace();
+        check(text() == "a b\n", "blank ops: ...or the document's, the final line break kept");
+
+        fresh("a\nb\nc\n");
+        mark(1);
+        f->bookmarkLinesOp(3);
+        check(text() == "b\n" && marked(0), "bookmarks: Remove Unmarked Lines keeps the marked line's bookmark");
+        fresh("a\nb\nc\n");
+        mark(0); mark(2);
+        f->bookmarkLinesOp(2);
+        check(text() == "b\n", "bookmarks: Remove Bookmarked Lines");
+        f->closeActive();
+    }
+
     // ---- the Search results panel: Find All, a jump, accumulation, Delete, find in results ---------
     {
         f->m_sr.clear(); f->m_srPurge = false;
