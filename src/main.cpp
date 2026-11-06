@@ -195,6 +195,7 @@ extern "C" int  wxn_TrashFile(const char* path, char* err, int errLen);
 #include "shortcut_mapper_dialog.h"  // the Shortcut Mapper dialog + conflict engine (implements kCmdSettingShortcutMapper 48009)
 #include "shortcut_labels.h"   // curated Scintilla "Editor commands" tier: seedEditorKeymapDefaults + wx<->SCK translation
 #include "desktop_entry.h"      // .desktop rewriting for AppImage self-integration (see wxnAppImageIntegrate)
+#include "cmdline_compat.h"     // Notepad++'s launch options rewritten into ours, and the language a -l names
 #include "scintillua_engine.h" // embedded Lua+LPeg+Scintillua engine (the native language-definition engine)
 #include "command_palette.h"   // Ctrl+Shift+P: harvests the live menu bar into the shared filter list
 #include "file_index.h"        // Ctrl+Shift+O: the time-sliced workspace crawler behind Quick Open
@@ -885,6 +886,11 @@ struct WxnOpenRequest
     bool hasStdin = false;                            // '-': a piped-stdin buffer was captured (never travels over IPC - forces a new instance)
     wxString stdinText;                               // the captured stdin bytes (decoded UTF-8)
     wxString pluginMessage;                           // -pluginMessage=<text>, forwarded over the reuse-window IPC handoff too
+    wxString language;                                // -l/--language: open THIS launch's files as this Language-menu language
+    bool create   = false;                            // -q/--create: create a missing file without asking
+    wxString sessionFile;                             // --session <file>: open the files of a saved session, absolute
+    bool perFile  = false;                            // --ns: each file in its own window, unless the main window has it open
+    bool perFileHere = false;                         // --ns with no main window: this window takes the first file (never travels over IPC)
 };
 
 // Set by the frame: a second wxnote launch handed its file args (+ optional -g/-e) to us over IPC
@@ -1044,6 +1050,14 @@ static void wxnMaybeIntegrateAppImage(wxWindow* parent)
 // below Execute()s and returns immediately, which would unblock git before the tab was even opened.
 static wxArrayString g_waitPaths;          // absolute paths still being waited on; emptying it quits the app
 static bool          g_waitMode = false;   // --wait was given (also suppresses session restore/save)
+// ---- the main copy: the one window that owns the session ---------------------------------------------
+// Several copies can run at once (-n, --no-session, -w, or with "Reuse an existing window" off), but only
+// one of them - the first, holding the instance lock - restores and saves the session, keeps the 30 s
+// crash-recovery backups and takes later launches over IPC, as in Notepad++. The others would otherwise
+// overwrite each other's session on exit and sweep each other's backups, so they have neither: they start
+// empty, and quitting with unsaved changes asks instead of keeping them for next time. Set in OnInit before
+// the frame is built; true by default so a frame built without OnInit (the self-tests) behaves as before.
+static bool          g_sessionOwner = true;
 // ---- --safe: start with no plugins loaded (guards loadNibPlugins(), which pulls in the N++ bridge too) --
 static bool          g_safeMode = false;
 // ---- --clean: a pristine launch = --safe (no plugins) PLUS skip session restore AND recovery-backup ----
@@ -1102,7 +1116,7 @@ static int           g_localeOverride = -1;
 // pre-scan in WxnApp::OnInit (also registered with the parser so it shows in --help); empty when not given.
 static wxString      g_pluginMessage;
 
-// ---- single-instance "reuse window" IPC (Preferences > General; off by default) ------------------
+// ---- single-instance "reuse window" IPC (Preferences > General; on by default) -------------------
 // A second wxnote process, on finding one already running (wxSingleInstanceChecker), connects here as a
 // wxClient and Executes() a small payload instead of opening its own window - one path per line, plus
 // \x01-prefixed key lines: GOTO=line,col and ENC=n (-g/-e), DIR=<folder> (a positional directory, which
@@ -1127,6 +1141,17 @@ static wxString      g_pluginMessage;
 // folder of its own, can never reach a real instance. Changing either means a running instance from an
 // older build will not be found by a newer one - the newcomer just opens its own window, the same
 // already-correct behaviour as when no instance is running.
+// Start another wxNote with these arguments (the executable goes in front). Each argument travels as
+// itself - there is no command-line string to quote - so a path with spaces or quotes arrives intact.
+static long wxnLaunchCopy(const wxArrayString& args)
+{
+    std::vector<std::wstring> ws{ wxStandardPaths::Get().GetExecutablePath().ToStdWstring() };
+    for (const wxString& a : args) ws.push_back(a.ToStdWstring());
+    std::vector<const wchar_t*> argv;
+    for (const std::wstring& w : ws) argv.push_back(w.c_str());
+    argv.push_back(nullptr);
+    return wxExecute(argv.data(), wxEXEC_ASYNC);
+}
 static wxString wxnIpcService()
 {
 #ifdef __WXMSW__
@@ -1190,6 +1215,14 @@ public:
                 // FIND=, this does not escape an embedded newline in the message text - the same known
                 // corner case as the pattern above (not reachable from a normal shell command line).
                 req.pluginMessage = line.Mid(11);
+            } else if (line.StartsWith("\x01LANG=")) {
+                req.language = line.Mid(6);            // -l/--language ('L' is not a hex digit, so unsplit is safe)
+            } else if (line.StartsWith("\x01" "CREATE=")) {
+                req.create = true;                     // -q/--create. Split: 'C' IS a hex digit, like ENC=/DIR=/FIND=
+            } else if (line.StartsWith("\x01SESSION=")) {
+                req.sessionFile = line.Mid(9);         // --session <file>
+            } else if (line.StartsWith("\x01NS=")) {
+                req.perFile = true;                    // --ns: files this window lacks each get their own window
             } else if (!line.empty()) req.paths.Add(line);
         }
         if (g_ipcOpenRequest) g_ipcOpenRequest(req);
@@ -4540,7 +4573,8 @@ public:
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) { updateStatus(); updateUiState(); }, myID_TIMER);
         Bind(wxEVT_TIMER, &WxnShellFrameT::onBackupTimer, this, myID_BACKUPTIMER);   // periodic crash-safety snapshot
         m_backupTimer = new wxTimer(this, myID_BACKUPTIMER);
-        m_backupTimer->Start(30000);                                  // every 30s: back up any buffer with unsaved edits
+        if (g_sessionOwner)                                           // the main copy only: see g_sessionOwner
+            m_backupTimer->Start(30000);                              // every 30s: back up any buffer with unsaved edits
         // No --sandbox gate here: userDataDir() already points at a throwaway temp dir in that mode, so
         // backups stay isolated. Gating the timer would also have been incomplete - the exit-path backup
         // in confirmClose() is a separate writer and would have leaked anyway.
@@ -4675,6 +4709,10 @@ public:
     {
         wxArrayString opened;
         std::vector<EditorPage*> openedPages;
+        // --session <file>: its files first, so the launch's own files open after them and -g lands on those.
+        if (!req.sessionFile.empty() && loadSessionFromPath(req.sessionFile) < 0)
+        { setStatus(0, wxString::Format(_("Could not read the session file %s"), req.sessionFile)); m_hint = true; }
+        bool keepHere = req.perFileHere;
         // wxNote's split is exactly TWO views in ONE (always side-by-side) orientation, so -o and -O are
         // identical and there is no third pane / second orientation to honour vim's -oN/-ON counts: N>2 just
         // piles the tail onto SUB. Only split for >=2 files - a lone `-o file` in an empty second pane is pointless.
@@ -4683,10 +4721,30 @@ public:
         for (size_t i = 0; i < req.paths.GetCount(); ++i)
         {
             if (doSplit) setActiveView(i == 0 ? &m_main : &m_sub);    // first file MAIN, everything after it SUB
-            if (EditorPage* pg = openPath(req.paths[i]))
+            // A file that does not exist is created (empty) when -q says so, or when the user agrees -
+            // rather than silently opening nothing, which is all a mistyped or brand-new name used to get.
+            const wxString& path = req.paths[i];
+            if (!wxFileExists(path) && !wxDirExists(path) && !pageForPath(path))
             {
-                opened.Add(req.paths[i]);
+                if (!req.create && wxMessageBox(wxString::Format(_("%s does not exist.\n\nCreate it?"), path),
+                                                "wxNote", wxYES_NO | wxICON_QUESTION, this) != wxYES)
+                    continue;
+                wxFile f;
+                { wxLogNull quiet; f.Create(path); }
+                if (!f.IsOpened()) { setStatus(0, wxString::Format(_("Could not create %s"), path)); m_hint = true; continue; }
+            }
+            // --ns: a file this window does not have gets a window of its own (the first one stays here when
+            // this launch IS the main window - there was none to ask).
+            if (req.perFile && !pageForPath(path))
+            {
+                if (keepHere) keepHere = false;
+                else { launchCopyFor(req, i); continue; }
+            }
+            if (EditorPage* pg = openPath(path))
+            {
+                opened.Add(path);
                 openedPages.push_back(pg);
+                if (!req.language.empty()) forceLanguageNamed(req.language);   // -l/--language
                 if (i < req.lines.GetCount() && req.lines[i] > 0)
                     applyGotoAndEncoding(req.lines[i], req.cols[i], -1);   // this file's own :line[:col] suffix
             }
@@ -4699,6 +4757,28 @@ public:
         if (req.readOnly) setReadOnlyForPages(openedPages);
         if (doSplit) setActiveView(&m_main);
         return opened;
+    }
+    // -l/--language on the page just opened: a Language-menu name (cmdline_compat.h has already turned a
+    // Notepad++ spelling such as "cpp" into "C++"), or Normal Text.
+    void forceLanguageNamed(const wxString& name)
+    {
+        if (name.CmpNoCase("Normal Text") == 0) { setForcedLang("", _("Normal text file")); return; }
+        if (const WxnLang* L = wxnLangFindByName(wxnUtf8(name)))
+            setForcedLang(wxString::FromUTF8(L->lexer), wxString::FromUTF8(L->name));
+        else { setStatus(0, wxString::Format(_("Unknown language: %s"), name)); m_hint = true; }
+    }
+    // --ns: open req.paths[i] in a new copy of wxNote, carrying this launch's per-file options with it.
+    void launchCopyFor(const WxnOpenRequest& req, size_t i)
+    {
+        wxArrayString args;
+        args.Add("-n");
+        if (req.readOnly) args.Add("-R");
+        if (!req.language.empty()) args.Add("--language=" + req.language);
+        if (i < req.lines.GetCount() && req.lines[i] > 0)
+            args.Add(wxString::Format("--goto=%d,%d", req.lines[i], req.cols[i]));
+        args.Add("--");
+        args.Add(req.paths[i]);
+        wxnLaunchCopy(args);
     }
     // -R/-M/--read-only: set (soft, Scintilla) read-only on ONLY the pages just opened by this launch, not
     // every tab - a reuse-window launch must never freeze the user's already-open buffers. Read-only lives
@@ -4846,7 +4926,8 @@ public:
         // behind, and nothing else ever deletes it (clearRecovery removes only the .bak) - each such
         // crash would otherwise leak a full document copy in the user's data dir forever. Age-gated
         // rather than assuming "no write is in flight at startup": a SECOND wxnote process shares this
-        // dir (window.reuseInstance defaults off), and its snapshot mid-write must not be swept. Anything older
+        // dir (only the main copy writes backups now, but a restart hands over while the old one may still be
+        // finishing one), and its snapshot mid-write must not be swept. Anything older
         // than the longest backup cadence is an orphan under any process topology.
         {
             wxArrayString tmps;
@@ -8454,7 +8535,9 @@ private:
         setActiveView(viewOf(p));            // make p's view active so sci()/m_path/onSave refer to p (incl. the OTHER split view)
         activateBuffer(p);                   // swap that view to p's document and select its tab
         if (sci(SCI_GETMODIFY) == 0) return true;
-        if (exiting && !m_askBeforeClose) { backupUnsavedChanges(p); return true; }   // quitting, setting off (the default): keep it for next launch
+        // Quitting with the setting off (the default): keep it for next launch. Only the main copy has a next
+        // launch to keep it for (g_sessionOwner), so every other copy asks.
+        if (exiting && !m_askBeforeClose && g_sessionOwner) { backupUnsavedChanges(p); return true; }
         if (sweep && sweep->answer == wxID_YES) { onSave(); return sci(SCI_GETMODIFY) == 0; }   // an untitled one still asks for its name
         if (sweep && sweep->answer == wxID_NO)  { clearRecovery(p); return true; }
         const wxString name = !p->path.empty() ? p->path : (p->title.empty() ? wxString("new") : p->title);
@@ -8640,12 +8723,13 @@ private:
         // spell-scope commands, the search-engine picker and the theme editor all call saveSettings()
         // themselves), so there is nothing left here to flush. Writing the full block from memory instead
         // meant a window that had changed NOTHING still stamped its startup snapshot over the whole
-        // preference tree on exit - so with two windows open (which is the default: a second launch opens
-        // a new window unless "Reuse an existing window" is on), whichever closed last silently reverted
+        // preference tree on exit - so with two windows open (-n, or "Reuse an existing window" turned
+        // off), whichever closed last silently reverted
         // everything the other had just configured. Reproduced by changing a key underneath a running
         // instance and closing it: the value was reset to the one that instance had loaded at startup.
         saveWindowGeometry();
-        if (!g_waitMode)   // a --wait window is ephemeral (a commit message is not a session): without this every
+        if (g_sessionOwner && !g_waitMode)   // only the main copy has a session (g_sessionOwner). A --wait window
+                           // never is one, which matters: a commit message is not a session, and without this every
                            // `git commit` would overwrite the user's saved tabs with .git/COMMIT_EDITMSG and the
                            // next normal launch would reopen it
             saveExitSession();   // remember the open (saved) files so the next launch reopens them
@@ -16900,7 +16984,19 @@ private:
             if (!confirmClose(p, /*exiting=*/true, &sweep)) return;
         if (commit) commit();   // settings writes that must NOT land when the user cancels above (e.g. the new UI language)
         { WxnSettingsEdit s; s->setChoice("ui.themeMode", m_themeMode); }   // m_themeMode is updated inside commit() when it actually changed
-        saveExitSession();         // remember open files so the relaunch restores them
+        wxArrayString args;
+        if (g_sessionOwner)
+        {
+            saveExitSession();     // remember open files so the relaunch restores them
+            // The relaunch is the main copy again: it waits for this process to let go of the instance lock
+            // instead of finding it taken and opening as a second copy (or handing its launch back to us).
+            args.Add("--session-handover");
+        }
+        else
+        {
+            // Another copy has no session to come back through, so its files go on the command line.
+            args.Add("-n"); args.Add("--no-session");
+        }
         this->Hide();   // hide the current window before relaunching so the two processes' windows don't briefly overlap on screen
         // Carry the run-scoped modes across the relaunch. Without this a restart-to-apply preference
         // change silently DROPS OUT of --sandbox: the replacement process reads and writes the real
@@ -16909,14 +17005,18 @@ private:
         // the one action most likely to be taken inside a sandbox was the one that escaped it.
         // --safe/--clean/--locale are forwarded for the same reason: the user asked for this run to be
         // that way, and a theme switch is not a request to change it.
-        wxString cmd = "\"" + wxStandardPaths::Get().GetExecutablePath() + "\"";
-        if (g_sandboxMode) cmd += " --sandbox";
-        if (g_cleanMode)   cmd += " --clean";
-        else if (g_safeMode) cmd += " --safe";   // --clean already implies --safe; don't pass both
+        if (g_sandboxMode) args.Add("--sandbox");
+        if (g_cleanMode)   args.Add("--clean");
+        else if (g_safeMode) args.Add("--safe");   // --clean already implies --safe; don't pass both
         if (g_localeOverride >= 0)
             if (const wxLanguageInfo* li = wxLocale::GetLanguageInfo(g_localeOverride))
-                cmd += " --locale " + li->CanonicalName;
-        wxExecute(cmd, wxEXEC_ASYNC);
+            { args.Add("--locale"); args.Add(li->CanonicalName); }
+        if (!g_sessionOwner)
+        {
+            args.Add("--");
+            for (EditorPage* p : allPages()) if (p && !p->path.empty()) args.Add(p->path);
+        }
+        wxnLaunchCopy(args);
         Close(true);
     }
     // The files open at exit, for restoreSession() to reopen next launch (state.yaml session/*).
@@ -18289,7 +18389,7 @@ private:
     int         m_defaultDirMode = kDirFollow;
     wxString    m_defaultDirPath;                              // the kDirFixed folder
     bool        m_fsAutohideToolbar = false; // Preferences > General "Auto-hide toolbar in full screen" (off by default: toolbar stays)
-    bool        m_reuseInstance = false;    // Preferences > General "Reuse an existing window" (restart-to-apply; read in OnInit)
+    bool        m_reuseInstance = true;     // Preferences > General "Reuse an existing window" (restart-to-apply; read in OnInit)
     bool        m_customGutterColor = false;   // Preferences > Editing "Use a custom line-number margin colour"
     long        m_gutterColorValue = 0xE0E0E0;   // Scintilla BGR-packed int (see bgrToColour/colourToBgr); only used when m_customGutterColor
     wxString    m_fontFace = "Cascadia Mono";    // Preferences > Editing "Font"; effectiveFontFace() falls back to this if it's no longer installed
@@ -18617,7 +18717,16 @@ public:
         m_locale.AddCatalog("wxn");
 
         // ---- command line: -g/--goto, -e/--encoding, -n/--new-instance, -r/--reuse-instance, file... ----
-        wxCmdLineParser parser(argc, argv);
+        // Notepad++'s spellings (-multiInst, -nosession, -n42, -lpython, ...) become ours first: see
+        // cmdline_compat.h. The pre-scans above read the raw argv, which that leaves alone where they look.
+        std::vector<std::string> rawArgs;
+        for (int i = 0; i < argc; ++i) rawArgs.push_back(wxnUtf8(wxString(argv[i])));
+        std::vector<std::wstring> normArgs;
+        for (const std::string& a : wxncli::normalizeArgs(rawArgs)) normArgs.push_back(wxString::FromUTF8(a.c_str()).ToStdWstring());
+        std::vector<wxChar*> normArgv;
+        for (std::wstring& a : normArgs) normArgv.push_back(&a[0]);
+        normArgv.push_back(nullptr);
+        wxCmdLineParser parser((int)normArgs.size(), normArgv.data());
         parser.SetSwitchChars("-");                              // don't also accept "/" (ambiguous with paths)
         parser.AddOption("g", "goto", _("open at line[,col]"), wxCMD_LINE_VAL_STRING);
         parser.AddSwitch("", "end", _("put the caret at the end of the last file opened"));
@@ -18635,6 +18744,15 @@ public:
         parser.AddSwitch("n", "new-instance", _("always open a new window"));
         parser.AddSwitch("r", "reuse-instance", _("reuse an already-running window"));
         parser.AddSwitch("w", "wait", _("wait for the file to be closed before returning"));
+        parser.AddLongSwitch("ns", _("open each file in its own window, unless the main window has it open"));
+        parser.AddLongSwitch("rs", _("same as -r: the running window never opens a file twice"));
+        parser.AddOption("l", "language", _("open the given file(s) as this language (e.g. Python, cpp)"), wxCMD_LINE_VAL_STRING);
+        parser.AddSwitch("q", "create", _("create a file that does not exist without asking"));
+        parser.AddLongSwitch("no-session", _("neither restore nor save the session"));
+        parser.AddOption("", "session", _("open the files of a session file"), wxCMD_LINE_VAL_STRING);
+        // A theme or language restart of the main window: wait for the old process to let go of the instance
+        // lock (see takeInstanceLock below). Internal, so not in --help.
+        parser.AddLongSwitch("session-handover", wxString(), wxCMD_LINE_HIDDEN);
         parser.AddLongSwitch("safe", _("start without loading any plugins"));   // no short form
         // --clean: --safe (no plugins) PLUS skip session and recovery-backup restore - a pristine launch for
         // bug-repro / catalog screenshots. Distinct from --safe; gates g_cleanMode alongside g_safeMode below.
@@ -18723,6 +18841,17 @@ public:
         // captured a stream do we flag it; an empty pipe still opens an empty "(stdin)" buffer, matching
         // `echo -n | wxnote -`. Piped content has no path to forward, so it forces a NEW instance below.
         if (stdinRequested) { wxString s; if (readPipedStdin(s)) { req.hasStdin = true; req.stdinText = s; } }
+        wxString langArg, sessionArg;
+        if (parser.Found("l", &langArg))
+        {
+            const std::string name = wxncli::languageFor(wxnUtf8(langArg));   // "cpp" -> "C++"; "" = unknown
+            req.language = name.empty() ? langArg : wxString::FromUTF8(name.c_str());   // unknown: said so on open
+        }
+        req.create = parser.Found("q");
+        if (parser.Found("session", &sessionArg)) { wxFileName fn(sessionArg); fn.MakeAbsolute(); req.sessionFile = fn.GetFullPath(); }
+        req.perFile = parser.Found("ns");
+        const bool noSession = parser.Found("no-session") || g_cleanMode;   // --clean starts without the session too
+        const bool handover  = parser.Found("session-handover");
 
         // --wait must never take the IPC handoff path below: that process Execute()s and exits immediately,
         // so the caller (git) would unblock before the tab even opened and commit the untouched template.
@@ -18741,19 +18870,29 @@ public:
         // parser.Found("d") is in here because --diff is NOT serialized over the reuse-window IPC
         // payload below: handing the two files to a running window would open them as plain tabs and
         // silently skip the diff. Forcing our own window keeps -d meaning what it says.
-        const bool forceNew = parser.Found("n") || wait || req.hasStdin || g_safeMode || g_sandboxMode || parser.Found("d");
+        const bool forceNew = parser.Found("n") || wait || req.hasStdin || g_safeMode || g_sandboxMode || parser.Found("d") || handover;
         // -d has to be excluded here as well as included in forceNew above: forceReuse is tested FIRST
         // in the branch below, so an explicit `-r -d a b` would take the IPC handoff before forceNew was
         // ever consulted, opening two tabs in the running window and silently never diffing them.
-        const bool forceReuse = parser.Found("r") && !wait && !req.hasStdin && !g_safeMode && !g_sandboxMode && !parser.Found("d");
+        // --rs is -r: the running window never opens a file twice anyway. --ns has to ask the running window
+        // which files it already has, so it takes the handoff too (and that window opens the rest elsewhere).
+        const bool forceReuse = (parser.Found("r") || parser.Found("rs") || req.perFile)
+                                && !wait && !req.hasStdin && !g_safeMode && !g_sandboxMode && !parser.Found("d") && !handover;
 
-        // ---- single-instance "reuse window" handoff (Preferences > General; off by default) -----------
+        // ---- the main copy, and the "reuse window" handoff to it (Preferences > General; on by default) ----
+        // The first copy takes the instance lock and becomes the main copy (g_sessionOwner): it restores and
+        // saves the session, keeps the recovery backups and runs the IPC server later launches hand over to.
+        // A copy that must not own the session - -w, --no-session/--clean, --sandbox - never takes the lock,
+        // so the next ordinary launch still can. A copy that finds the lock taken hands its files over when
+        // reuse is on, and otherwise (-n, or the setting off) opens beside the main copy without a session.
         const bool reuseSetting = g_settings.getBool("window.reuseInstance");
+        const bool wantsReuse = forceReuse || (reuseSetting && !forceNew);
+        const bool mayOwn = !wait && !noSession && !g_sandboxMode;
         bool startIpcServer = false;
-        if (forceReuse || (reuseSetting && !forceNew))
+        if (wantsReuse || mayOwn)
         {
-            m_checker = new wxSingleInstanceChecker(wxString::Format("wxnote-%s", wxGetUserId()));
-            if (m_checker->IsAnotherRunning())
+            m_checker = takeInstanceLock(handover);
+            if (m_checker->IsAnotherRunning() && wantsReuse)
             {
                 wxLogNull noWarn;                                 // a refused/failed connection is handled below
                 wxClient client;
@@ -18779,6 +18918,10 @@ public:
                     // documents for RO/SPLIT/FIND. g_pluginMessage is captured by the raw-argv pre-scan
                     // above (this process never reaches applyRequest(), which is where a new window fires it).
                     if (!g_pluginMessage.empty()) payload += "\x01PLUGINMSG=" + g_pluginMessage + "\n";
+                    if (!req.language.empty())    payload += "\x01LANG=" + req.language + "\n";
+                    if (req.create)               payload += "\x01" "CREATE=1\n";
+                    if (!req.sessionFile.empty()) payload += "\x01SESSION=" + req.sessionFile + "\n";
+                    if (req.perFile)              payload += "\x01NS=1\n";
                     conn->Execute(payload);
                     conn->Disconnect();
                     delete conn;
@@ -18787,11 +18930,13 @@ public:
                 // the lock holder isn't answering IPC (e.g. crashed mid-startup) - fall through and open
                 // our own window rather than getting stuck; don't start a second server under this name.
             }
-            else
-            {
+            else if (!m_checker->IsAnotherRunning() && mayOwn)
                 startIpcServer = true;                            // we're first; later launches will find us
-            }
+            if (!startIpcServer) { delete m_checker; m_checker = nullptr; }   // a copy beside the main one holds nothing
         }
+        g_sessionOwner = startIpcServer;
+        // --ns that was not handed over: there was no main window to ask, so this one keeps the first file.
+        if (req.perFile) req.perFileHere = true;
 
         wxImage::AddHandler(new wxPNGHandler());                // needed to load raster icons (iconColored) - SVG icons go through NanoSVG instead and don't need this
         // Register the bundled code font (SIL OFL 1.1 - see resources/fonts/CREDITS.md) so it is rendered
@@ -18851,7 +18996,10 @@ public:
         // Worth stating why --sandbox is here even though its settings are empty and the session read
         // would find nothing: restoreSession() also runs the orphaned-.tmp sweep, which DELETES files
         // in the real recovery dir. That is the part a sandbox must not do.
-        const bool restoreOnStart = !wait && !g_cleanMode && !g_sandboxMode;
+        //
+        // All of that now comes down to "is this the main copy": -w, --clean and --sandbox never are, and
+        // neither is --no-session or a second copy beside the main one.
+        const bool restoreOnStart = g_sessionOwner;
 
 #ifdef __WXOSX__
         // Fold in anything Finder delivered while the frame was still being built (MacOpenFiles),
@@ -18996,8 +19144,23 @@ public:
 #endif
 
 private:
+    // The instance lock that makes a copy the main one. With `handover` (a restart of the main window, see
+    // restartWithTheme) the old process is still exiting and still holds it, so wait for it - up to 10 s,
+    // after which this opens as a second copy rather than not at all.
+    static wxSingleInstanceChecker* takeInstanceLock(bool handover)
+    {
+        const wxString name = wxString::Format("wxnote-%s", wxGetUserId());
+        auto* checker = new wxSingleInstanceChecker(name);
+        for (int i = 0; handover && checker->IsAnotherRunning() && i < 100; ++i)
+        {
+            delete checker;
+            wxMilliSleep(100);
+            checker = new wxSingleInstanceChecker(name);
+        }
+        return checker;
+    }
     wxLocale m_locale;   // must outlive OnInit() - destroying it would revert the process's locale
-    wxSingleInstanceChecker* m_checker = nullptr;   // held for the app's lifetime while "reuse window" is active
+    wxSingleInstanceChecker* m_checker = nullptr;   // held for the app's lifetime by the main copy (g_sessionOwner)
     WxnIpcServer* m_ipcServer = nullptr;            // ditto - accepts handoffs from later wxnote launches
 };
 

@@ -2549,6 +2549,20 @@ private:
             check(findFrom(readLogLines(), mark, notifNeedle(NPPN_CMDLINEPLUGINMSG, 0)) >= 0,
                   "-pluginMessage survives the reuse-window IPC handoff (OnExec -> g_ipcOpenRequest -> NPPN_CMDLINEPLUGINMSG)");
 
+            // -- -q/--create over the same handoff: a file that does not exist is created and opened, not
+            // dropped (and not asked about - the question would block this harness, which is the point of -q).
+            {
+                const wxString made = g_sandboxRoot + wxFILE_SEP_PATH + "ipc-created.txt";
+                if (wxFileExists(made)) wxRemoveFile(made);
+                const int before = g_nibDocCount ? g_nibDocCount() : 0;
+                auto* conn = new WxnIpcConnection();   // never deleted - see the PLUGINMSG case above
+                check(conn->OnExec(wxEmptyString, made + "\n\x01" "CREATE=1\n"),
+                      "WxnIpcConnection::OnExec accepted a CREATE= reuse-window payload");
+                pump();
+                check(wxFileExists(made), "-q over the reuse-window handoff creates the missing file");
+                check(g_nibDocCount && g_nibDocCount() == before + 1, "-q over the reuse-window handoff opens the file it created");
+            }
+
             // clean up back to a single document for the tail assertions
             for (int guard = 0; g_nibDocCount && g_nibDocCount() > 1 && guard < 20; ++guard) { g_nibInvokeCommand(kCmdFileClose); pump(); }
             check(g_nibDocCount && g_nibDocCount() == 1, "Phase-6 buffers closed - back to a single document");

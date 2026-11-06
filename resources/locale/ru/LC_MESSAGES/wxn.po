@@ -3276,3 +3276,33 @@ msgstr "Сохранить &все"
 
 msgid "Don't Save An&y"
 msgstr "Не сохранять &ни один"
+
+msgid "open each file in its own window, unless the main window has it open"
+msgstr "открыть каждый файл в отдельном окне, если он ещё не открыт в главном окне"
+
+msgid "same as -r: the running window never opens a file twice"
+msgstr "то же, что -r: запущенное окно никогда не открывает файл дважды"
+
+msgid "open the given file(s) as this language (e.g. Python, cpp)"
+msgstr "открыть указанные файлы с этим языком (например, Python, cpp)"
+
+msgid "create a file that does not exist without asking"
+msgstr "создать несуществующий файл без вопроса"
+
+msgid "neither restore nor save the session"
+msgstr "не восстанавливать и не сохранять сеанс"
+
+msgid "open the files of a session file"
+msgstr "открыть файлы из файла сеанса"
+
+msgid "Could not read the session file %s"
+msgstr "Не удалось прочитать файл сеанса %s"
+
+msgid "%s does not exist.\n\nCreate it?"
+msgstr "%s не существует.\n\nСоздать?"
+
+msgid "Could not create %s"
+msgstr "Не удалось создать %s"
+
+msgid "Unknown language: %s"
+msgstr "Неизвестный язык: %s"

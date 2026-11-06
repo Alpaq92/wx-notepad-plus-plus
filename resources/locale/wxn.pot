@@ -3277,4 +3277,33 @@ msgid "Save &All"
 msgstr ""
 
 msgid "Don't Save An&y"
+
+msgid "open each file in its own window, unless the main window has it open"
+msgstr ""
+
+msgid "same as -r: the running window never opens a file twice"
+msgstr ""
+
+msgid "open the given file(s) as this language (e.g. Python, cpp)"
+msgstr ""
+
+msgid "create a file that does not exist without asking"
+msgstr ""
+
+msgid "neither restore nor save the session"
+msgstr ""
+
+msgid "open the files of a session file"
+msgstr ""
+
+msgid "Could not read the session file %s"
+msgstr ""
+
+msgid "%s does not exist.\n\nCreate it?"
+msgstr ""
+
+msgid "Could not create %s"
+msgstr ""
+
+msgid "Unknown language: %s"
 msgstr ""

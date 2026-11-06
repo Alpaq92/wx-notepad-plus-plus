@@ -3276,3 +3276,33 @@ msgstr "Guardar &todo"
 
 msgid "Don't Save An&y"
 msgstr "No &guardar ninguno"
+
+msgid "open each file in its own window, unless the main window has it open"
+msgstr "abrir cada archivo en su propia ventana, salvo que la ventana principal ya lo tenga abierto"
+
+msgid "same as -r: the running window never opens a file twice"
+msgstr "igual que -r: la ventana en ejecución nunca abre un archivo dos veces"
+
+msgid "open the given file(s) as this language (e.g. Python, cpp)"
+msgstr "abrir los archivos indicados con este lenguaje (p. ej. Python, cpp)"
+
+msgid "create a file that does not exist without asking"
+msgstr "crear sin preguntar un archivo que no existe"
+
+msgid "neither restore nor save the session"
+msgstr "no restaurar ni guardar la sesión"
+
+msgid "open the files of a session file"
+msgstr "abrir los archivos de un archivo de sesión"
+
+msgid "Could not read the session file %s"
+msgstr "No se pudo leer el archivo de sesión %s"
+
+msgid "%s does not exist.\n\nCreate it?"
+msgstr "%s no existe.\n\n¿Crearlo?"
+
+msgid "Could not create %s"
+msgstr "No se pudo crear %s"
+
+msgid "Unknown language: %s"
+msgstr "Lenguaje desconocido: %s"

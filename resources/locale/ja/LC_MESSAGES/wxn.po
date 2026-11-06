@@ -3276,3 +3276,33 @@ msgstr "すべて保存(&A)"
 
 msgid "Don't Save An&y"
 msgstr "どれも保存しない(&Y)"
+
+msgid "open each file in its own window, unless the main window has it open"
+msgstr "各ファイルを個別のウィンドウで開く（メインウィンドウで開いているものを除く）"
+
+msgid "same as -r: the running window never opens a file twice"
+msgstr "-r と同じ：実行中のウィンドウは同じファイルを二重に開かない"
+
+msgid "open the given file(s) as this language (e.g. Python, cpp)"
+msgstr "指定したファイルをこの言語で開く（例: Python, cpp）"
+
+msgid "create a file that does not exist without asking"
+msgstr "存在しないファイルを確認せずに作成する"
+
+msgid "neither restore nor save the session"
+msgstr "セッションを復元も保存もしない"
+
+msgid "open the files of a session file"
+msgstr "セッションファイルに含まれるファイルを開く"
+
+msgid "Could not read the session file %s"
+msgstr "セッションファイル %s を読み込めませんでした"
+
+msgid "%s does not exist.\n\nCreate it?"
+msgstr "%s は存在しません。\n\n作成しますか？"
+
+msgid "Could not create %s"
+msgstr "%s を作成できませんでした"
+
+msgid "Unknown language: %s"
+msgstr "不明な言語: %s"

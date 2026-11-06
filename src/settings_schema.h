@@ -55,7 +55,7 @@ inline const std::vector<Def>& schema()
         { "window.integratedTitleBar",        Kind::Bool,   "false" },
         { "window.buttonStyle",               Kind::Choice, WXN_DEFAULT_BUTTON_STYLE, 0, 0, "native|flat|minimal" },
         { "window.ignorePlatformDecorations", Kind::Bool,   "false" },
-        { "window.reuseInstance",             Kind::Bool,   "false" },
+        { "window.reuseInstance",             Kind::Bool,   "true" },
         { "editor.fontFamily",                Kind::Text,   "Cascadia Mono" },
         { "editor.tabSize",                   Kind::Int,    "4", 1, 16, nullptr, true },
         { "editor.useTabs",                   Kind::Bool,   "true", 0, 0, nullptr, true },
