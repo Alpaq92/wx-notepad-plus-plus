@@ -151,6 +151,9 @@ extern "C" int  wxn_TrashFile(const char* path, char* err, int errLen);
 #include <cstdlib>
 #include <memory>             // std::unique_ptr - host-owned pending nib.keymap scheme builders
 #include <random>              // std::shuffle - "Randomize Line Order"
+#include <numeric>             // std::iota
+#include <unordered_set>
+#include <wx/uilocale.h>       // wxUILocale::CompareStrings - the locale sorts
 
 #include <wx/clipbrd.h>        // wxClipboard - copy file paths / hashes to the clipboard
 #include <wx/utils.h>          // wxExecute / wxLaunchDefaultBrowser / wxLaunchDefaultApplication
@@ -11124,40 +11127,6 @@ private:
         sci(SCI_GETTEXT, len + 1, reinterpret_cast<sptr_t>(&b[0])); b.resize(len); return b;
     }
     void setDocUtf8(const std::string& s) { sci(SCI_BEGINUNDOACTION); sci(SCI_SETTEXT, 0, reinterpret_cast<sptr_t>(s.c_str())); sci(SCI_ENDUNDOACTION); }
-    void removeEmptyLines()
-    {
-        const std::string b = getDocUtf8(); std::string out; size_t i = 0;
-        while (i < b.size())
-        {
-            const size_t nl = b.find('\n', i);
-            std::string line = (nl == std::string::npos) ? b.substr(i) : b.substr(i, nl - i);
-            std::string core = line; if (!core.empty() && core.back() == '\r') core.pop_back();
-            if (!core.empty()) { out += line; if (nl != std::string::npos) out += '\n'; }
-            if (nl == std::string::npos) break; i = nl + 1;
-        }
-        setDocUtf8(out);
-    }
-    void trimTrailing()
-    {
-        const std::string b = getDocUtf8(); std::string out; size_t i = 0;
-        for (;;)
-        {
-            const size_t nl = b.find('\n', i);
-            std::string line = (nl == std::string::npos) ? b.substr(i) : b.substr(i, nl - i);
-            const bool cr = !line.empty() && line.back() == '\r'; if (cr) line.pop_back();
-            const size_t last = line.find_last_not_of(" \t"); line = (last == std::string::npos) ? std::string() : line.substr(0, last + 1);
-            if (cr) line += '\r';
-            out += line;
-            if (nl == std::string::npos) break;
-            out += '\n'; i = nl + 1;
-        }
-        setDocUtf8(out);
-    }
-    void tabsToSpaces()
-    {
-        const int tw = static_cast<int>(sci(SCI_GETTABWIDTH)); wxString sp(' ', tw <= 0 ? 4 : tw);
-        wxString t = getAllText(); t.Replace("\t", sp); setAllText(t);
-    }
     // Ctrl+/ - toggle the selected lines' comment state. The token comes from the buffer's LANGUAGE
     // (see applyLineComments, with the other comment commands); it used to be a hardcoded "//".
     void toggleLineComment() { applyLineComments(WxnCommentToggle); }
@@ -11179,53 +11148,305 @@ private:
         const wxScopedCharBuffer u = s.ToUTF8();
         sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(u.data()));
     }
-    std::vector<std::string> docLines()   // doc split into lines, EOLs stripped
+    // ----- Line Operations / Blank Operations ------------------------------------------------------
+    // As Notepad++'s: they act on the lines the selection spans - a selection ending at the start of a
+    // line leaves that line out - or on the whole document when nothing is selected, where the empty
+    // "line" after a final line break does not count. Each edits only what changes and never rewrites
+    // the document: lines left alone keep their bookmarks, folds and line endings, a NUL byte survives,
+    // and the change-history margin marks only what changed. The approach - the line range, one target
+    // replace for a reordering, line-by-line deletes and trims - follows Notepad4's EditSortLines,
+    // EditStripTrailingBlanks and EditRemoveBlankLines (src/Edit.cpp, BSD-3-Clause, (c) Zufu Liu and
+    // contributors, after Notepad2 (c) Florian Balmer; see docs/CREDITS.md).
+    struct OpLines { int first = 0, last = -1; bool rect = false; };
+    int lineStartPos(int l)
     {
-        const std::string b = getDocUtf8(); std::vector<std::string> v; size_t i = 0;
-        for (;;) {
-            const size_t nl = b.find('\n', i);
-            std::string ln = (nl == std::string::npos) ? b.substr(i) : b.substr(i, nl - i);
-            if (!ln.empty() && ln.back() == '\r') ln.pop_back();
-            v.push_back(ln);
-            if (nl == std::string::npos) break; i = nl + 1;
+        return l >= (int)sci(SCI_GETLINECOUNT) ? (int)sci(SCI_GETLENGTH) : (int)sci(SCI_POSITIONFROMLINE, l);
+    }
+    int docLastLine()   // the last line, not counting the empty one after a final line break
+    {
+        int last = (int)sci(SCI_GETLINECOUNT) - 1;
+        if (last > 0 && lineStartPos(last) == (int)sci(SCI_GETLENGTH)) --last;
+        return last;
+    }
+    OpLines opLines()
+    {
+        OpLines r;
+        r.rect = sci(SCI_SELECTIONISRECTANGLE) != 0;
+        if (r.rect)
+        {
+            const int a = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETRECTANGULARSELECTIONANCHOR));
+            const int c = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETRECTANGULARSELECTIONCARET));
+            r.first = std::min(a, c); r.last = std::max(a, c);
+            return r;
+        }
+        const int a = (int)sci(SCI_GETSELECTIONSTART), b = (int)sci(SCI_GETSELECTIONEND);
+        if (a == b) { r.last = docLastLine(); return r; }
+        r.first = (int)sci(SCI_LINEFROMPOSITION, a);
+        r.last = (int)sci(SCI_LINEFROMPOSITION, b);
+        if (r.last > r.first && b == lineStartPos(r.last)) --r.last;
+        return r;
+    }
+    std::string rangeBytes(int a, int b)   // NUL-safe, unlike anything that goes through a C string
+    {
+        if (b <= a) return std::string();
+        const char* p = reinterpret_cast<const char*>(sci(SCI_GETRANGEPOINTER, a, b - a));
+        return p ? std::string(p, static_cast<size_t>(b - a)) : std::string();
+    }
+    void replaceRange(int a, int b, const std::string& s)
+    {
+        sci(SCI_SETTARGETRANGE, a, b);
+        sci(SCI_REPLACETARGET, s.size(), reinterpret_cast<sptr_t>(s.data()));
+    }
+    struct OpLine { std::string text, eol; };
+    std::vector<OpLine> readLines(int first, int last)
+    {
+        std::vector<OpLine> v;
+        for (int l = first; l <= last; ++l)
+        {
+            const int s = lineStartPos(l), e = (int)sci(SCI_GETLINEENDPOSITION, l), n = lineStartPos(l + 1);
+            v.push_back(OpLine{ rangeBytes(s, e), rangeBytes(e, n) });
         }
         return v;
     }
-    void putLines(const std::vector<std::string>& v)
+    // A selection end kept as line and column (virtual space included), so it lands in the same place
+    // after the text under it changed.
+    struct SelEnd { int line, col; };
+    SelEnd selEndAt(sptr_t pos, sptr_t virt)
     {
-        const std::string eol = eolStr(); std::string out;
-        for (size_t i = 0; i < v.size(); ++i) { out += v[i]; if (i + 1 < v.size()) out += eol; }
-        setDocUtf8(out);
+        return SelEnd{ (int)sci(SCI_LINEFROMPOSITION, pos), (int)(sci(SCI_GETCOLUMN, pos) + virt) };
     }
-    void removeDuplicateLines(bool consecutiveOnly)
+    std::pair<int, int> selEndPos(const SelEnd& e)   // position and virtual space
     {
-        std::vector<std::string> v = docLines(), out;
-        if (consecutiveOnly) { for (auto& l : v) if (out.empty() || out.back() != l) out.push_back(l); }
-        else { std::set<std::string> seen; for (auto& l : v) if (seen.insert(l).second) out.push_back(l); }
-        putLines(out);
+        const int p = (int)sci(SCI_FINDCOLUMN, e.line, e.col);
+        return { p, std::max(0, e.col - (int)sci(SCI_GETCOLUMN, p)) };
     }
-    void reverseLines() { auto v = docLines(); std::reverse(v.begin(), v.end()); putLines(v); }
-    void sortLines(int mode, bool desc)   // 0=lexicographic 1=case-insensitive 2=integer 3=length 4=decimal-dot 5=decimal-comma
+    // Puts the lines in `order` (indices into v, which holds lines r.first..r.last). Each position keeps
+    // its line ending - a last line without one stays without, mixed endings stay where they were - and
+    // only the run from the first line that changes to the last one is replaced. The selection stays.
+    void reorderLines(const OpLines& r, const std::vector<OpLine>& v, const std::vector<size_t>& order)
     {
-        auto v = docLines();
-        auto lower = [](std::string s){ for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; };
-        auto dec   = [](std::string s, bool comma){ if (comma) for (char& c : s) if (c == ',') c = '.'; return std::strtod(s.c_str(), nullptr); };
-        std::stable_sort(v.begin(), v.end(), [&](const std::string& a, const std::string& b){
-            if (mode == 5) return dec(a, true)  < dec(b, true);
-            if (mode == 4) return dec(a, false) < dec(b, false);
-            if (mode == 3) return a.size() < b.size();
-            if (mode == 2) return std::strtoll(a.c_str(), nullptr, 10) < std::strtoll(b.c_str(), nullptr, 10);
-            if (mode == 1) return lower(a) < lower(b);
-            return a < b;
+        size_t lo = 0, hi = order.size();
+        while (lo < hi && v[order[lo]].text == v[lo].text) ++lo;
+        while (hi > lo && v[order[hi - 1]].text == v[hi - 1].text) --hi;
+        if (lo >= hi) return;
+        std::string out;
+        for (size_t i = lo; i < hi; ++i) out += v[order[i]].text + v[i].eol;
+        const bool rect = r.rect;
+        const SelEnd anchor = rect ? selEndAt(sci(SCI_GETRECTANGULARSELECTIONANCHOR), sci(SCI_GETRECTANGULARSELECTIONANCHORVIRTUALSPACE))
+                                   : selEndAt(sci(SCI_GETANCHOR), 0);
+        const SelEnd caret  = rect ? selEndAt(sci(SCI_GETRECTANGULARSELECTIONCARET), sci(SCI_GETRECTANGULARSELECTIONCARETVIRTUALSPACE))
+                                   : selEndAt(sci(SCI_GETCURRENTPOS), 0);
+        replaceRange(lineStartPos(r.first + (int)lo), lineStartPos(r.first + (int)hi), out);
+        const auto a = selEndPos(anchor), c = selEndPos(caret);
+        if (rect)
+        {
+            sci(SCI_SETRECTANGULARSELECTIONANCHOR, a.first); sci(SCI_SETRECTANGULARSELECTIONANCHORVIRTUALSPACE, a.second);
+            sci(SCI_SETRECTANGULARSELECTIONCARET, c.first);  sci(SCI_SETRECTANGULARSELECTIONCARETVIRTUALSPACE, c.second);
+        }
+        else sci(SCI_SETSEL, a.first, c.first);
+    }
+    // Deletes line l with its line break - for the document's last line, which has none, the break
+    // before it - so the lines around it keep theirs.
+    void deleteLineAt(int l)
+    {
+        const int a = lineStartPos(l), b = lineStartPos(l + 1);
+        if (l > 0 && l == (int)sci(SCI_GETLINECOUNT) - 1)
+        {
+            const int e = (int)sci(SCI_GETLINEENDPOSITION, l - 1);
+            sci(SCI_DELETERANGE, e, b - e);
+        }
+        else sci(SCI_DELETERANGE, a, b - a);
+    }
+    // Deletes the lines `drop` says to (indices from first), last to first, in one undo step.
+    void dropLines(int first, const std::vector<bool>& drop)
+    {
+        sci(SCI_BEGINUNDOACTION);
+        for (int i = (int)drop.size() - 1; i >= 0; --i)
+            if (drop[i]) deleteLineAt(first + i);
+        sci(SCI_ENDUNDOACTION);
+    }
+    // Rewrites each line of the range (without its line break) that fn changes, in one undo step.
+    void editLines(const std::function<bool(std::string&)>& fn)
+    {
+        const OpLines r = opLines();
+        sci(SCI_BEGINUNDOACTION);
+        for (int l = r.first; l <= r.last; ++l)
+        {
+            const int s = lineStartPos(l), e = (int)sci(SCI_GETLINEENDPOSITION, l);
+            std::string t = rangeBytes(s, e);
+            if (fn(t)) replaceRange(s, e, t);
+        }
+        sci(SCI_ENDUNDOACTION);
+    }
+    static bool isBlank(const std::string& s) { return s.find_first_not_of(" \t") == std::string::npos; }
+
+    void removeEmptyLines(bool blankToo)
+    {
+        const OpLines r = opLines();
+        const std::vector<OpLine> v = readLines(r.first, r.last);
+        std::vector<bool> drop(v.size());
+        for (size_t i = 0; i < v.size(); ++i) drop[i] = blankToo ? isBlank(v[i].text) : v[i].text.empty();
+        dropLines(r.first, drop);
+    }
+    void removeDuplicateLines(bool consecutiveOnly)   // the first of each set stays
+    {
+        const OpLines r = opLines();
+        const std::vector<OpLine> v = readLines(r.first, r.last);
+        std::vector<bool> drop(v.size());
+        std::unordered_set<std::string> seen;
+        for (size_t i = 0; i < v.size(); ++i)
+            drop[i] = consecutiveOnly ? (i > 0 && v[i].text == v[i - 1].text) : !seen.insert(v[i].text).second;
+        dropLines(r.first, drop);
+    }
+    void reverseLines()
+    {
+        const OpLines r = opLines();
+        const std::vector<OpLine> v = readLines(r.first, r.last);
+        std::vector<size_t> order(v.size());
+        for (size_t i = 0; i < order.size(); ++i) order[i] = order.size() - 1 - i;
+        sci(SCI_BEGINUNDOACTION); reorderLines(r, v, order); sci(SCI_ENDUNDOACTION);
+    }
+    void shuffleLines()
+    {
+        const OpLines r = opLines();
+        const std::vector<OpLine> v = readLines(r.first, r.last);
+        std::vector<size_t> order(v.size());
+        std::iota(order.begin(), order.end(), size_t(0));
+        std::mt19937 g{ std::random_device{}() };
+        std::shuffle(order.begin(), order.end(), g);
+        sci(SCI_BEGINUNDOACTION); reorderLines(r, v, order); sci(SCI_ENDUNDOACTION);
+    }
+    // 0=lexicographic 1=case-insensitive 2=integer 3=length 4=decimal-dot 5=decimal-comma 6=locale.
+    // With a column selection the selected columns are the key. A stable sort, and descending compares
+    // the keys the other way round rather than reversing the result, so equal lines keep their order.
+    void sortLines(int mode, bool desc)
+    {
+        const OpLines r = opLines();
+        if (r.last <= r.first) return;
+        const std::vector<OpLine> v = readLines(r.first, r.last);
+        const size_t n = v.size();
+        std::vector<std::string> key(n);
+        for (size_t i = 0; i < n; ++i)
+        {
+            if (!r.rect) { key[i] = v[i].text; continue; }
+            const int l = r.first + (int)i;
+            const int s = (int)sci(SCI_GETLINESELSTARTPOSITION, l), e = (int)sci(SCI_GETLINESELENDPOSITION, l);
+            key[i] = s < 0 ? std::string() : rangeBytes(s, e);   // a line too short for the columns: empty
+        }
+        std::vector<wxString> wkey;
+        std::vector<double> num;
+        if (mode == 1 || mode == 6)
+        {
+            wkey.resize(n);
+            for (size_t i = 0; i < n; ++i) { wkey[i] = wxString::FromUTF8(key[i].data(), key[i].size()); if (mode == 1) wkey[i].MakeLower(); }
+        }
+        else if (mode == 2 || mode == 4 || mode == 5)
+        {
+            num.resize(n);
+            for (size_t i = 0; i < n; ++i)
+            {
+                std::string k = key[i];
+                if (mode == 5) for (char& c : k) if (c == ',') c = '.';
+                num[i] = mode == 2 ? (double)std::strtoll(k.c_str(), nullptr, 10) : std::strtod(k.c_str(), nullptr);
+            }
+        }
+        auto chars = [](const std::string& s) { size_t c = 0; for (unsigned char b : s) if ((b & 0xC0) != 0x80) ++c; return c; };
+        const wxUILocale& loc = wxUILocale::GetCurrent();
+        auto less = [&](size_t a, size_t b) {
+            switch (mode)
+            {
+            case 1: return wkey[a].compare(wkey[b]) < 0;
+            case 2: case 4: case 5: return num[a] < num[b];
+            case 3: return chars(key[a]) < chars(key[b]);
+            case 6: return loc.CompareStrings(wkey[a], wkey[b]) < 0;
+            default: return key[a] < key[b];
+            }
+        };
+        std::vector<size_t> order(n);
+        std::iota(order.begin(), order.end(), size_t(0));
+        std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return desc ? less(b, a) : less(a, b); });
+        sci(SCI_BEGINUNDOACTION); reorderLines(r, v, order); sci(SCI_ENDUNDOACTION);
+    }
+    void trimLines(bool leading, bool trailing)
+    {
+        editLines([&](std::string& s) {
+            const size_t a = leading ? s.find_first_not_of(" \t") : 0;
+            if (a == std::string::npos) { const bool had = !s.empty(); s.clear(); return had; }
+            size_t b = s.size();
+            if (trailing) { const size_t z = s.find_last_not_of(" \t"); b = z == std::string::npos ? 0 : z + 1; }
+            if (a == 0 && b == s.size()) return false;
+            s = b > a ? s.substr(a, b - a) : std::string();
+            return true;
         });
-        if (desc) std::reverse(v.begin(), v.end());
-        putLines(v);
     }
-    void shuffleLines() { auto v = docLines(); std::mt19937 g{ std::random_device{}() }; std::shuffle(v.begin(), v.end(), g); putLines(v); }
-    void transformLines(const std::function<void(std::string&)>& fn) { auto v = docLines(); for (auto& l : v) fn(l); putLines(v); }
-    void trimLeading() { transformLines([](std::string& s){ const size_t p = s.find_first_not_of(" \t"); s = (p == std::string::npos) ? std::string() : s.substr(p); }); }
-    void trimBoth()    { transformLines([](std::string& s){ const size_t a = s.find_first_not_of(" \t"); const size_t b = s.find_last_not_of(" \t"); s = (a == std::string::npos) ? std::string() : s.substr(a, b - a + 1); }); }
-    void eolToSpace()  { std::string b = getDocUtf8(), out; for (char c : b) { if (c == '\r') continue; out += (c == '\n') ? ' ' : c; } setDocUtf8(out); }
+    void trimTrailing() { trimLines(false, true); }
+    void trimLeading()  { trimLines(true, false); }
+    void trimBoth()     { trimLines(true, true); }
+    // The line breaks inside the selection - or, with nothing selected, every one between the document's
+    // lines (the final one stays) - each turned into a space.
+    void eolToSpace()
+    {
+        const int a = (int)sci(SCI_GETSELECTIONSTART), b = (int)sci(SCI_GETSELECTIONEND);
+        const bool whole = a == b || sci(SCI_SELECTIONISRECTANGLE);
+        const int last = whole ? docLastLine() : (int)sci(SCI_LINEFROMPOSITION, b);
+        const int first = whole ? 0 : (int)sci(SCI_LINEFROMPOSITION, a);
+        sci(SCI_BEGINUNDOACTION);
+        for (int l = last; l >= first; --l)
+        {
+            const int e = (int)sci(SCI_GETLINEENDPOSITION, l), n = lineStartPos(l + 1);
+            if (n == e || (whole ? l == last : (e < a || n > b))) continue;
+            replaceRange(e, n, " ");
+        }
+        sci(SCI_ENDUNDOACTION);
+    }
+    // To tab stops, not a fixed run of spaces: a tab becomes as many spaces as reach the next stop. A
+    // character counts one column (wide ones too).
+    void tabsToSpaces()
+    {
+        const int tw = std::max(1, (int)sci(SCI_GETTABWIDTH));
+        editLines([tw](std::string& s) {
+            if (s.find('\t') == std::string::npos) return false;
+            std::string out; int col = 0;
+            for (const char c : s)
+            {
+                if (c == '\t') { const int k = tw - col % tw; out.append(static_cast<size_t>(k), ' '); col += k; }
+                else { out += c; if ((static_cast<unsigned char>(c) & 0xC0) != 0x80) ++col; }
+            }
+            s = out;
+            return true;
+        });
+    }
+    // Runs of two or more spaces that reach a tab stop become a tab; leadingOnly stops at the first
+    // character that is not a space or tab.
+    void spacesToTabs(bool leadingOnly)
+    {
+        const int tw = std::max(1, (int)sci(SCI_GETTABWIDTH));
+        editLines([tw, leadingOnly](std::string& s) {
+            std::string out; int col = 0, pend = 0;
+            size_t i = 0;
+            for (; i < s.size(); ++i)
+            {
+                const char c = s[i];
+                if (c == ' ')
+                {
+                    ++pend; ++col;
+                    if (col % tw == 0) { out += pend >= 2 ? std::string("\t") : std::string(static_cast<size_t>(pend), ' '); pend = 0; }
+                }
+                else if (c == '\t') { col += tw - col % tw; out += '\t'; pend = 0; }   // the tab covers the spaces before it
+                else
+                {
+                    if (leadingOnly) break;
+                    out.append(static_cast<size_t>(pend), ' '); pend = 0;
+                    out += c; if ((static_cast<unsigned char>(c) & 0xC0) != 0x80) ++col;
+                }
+            }
+            out.append(static_cast<size_t>(pend), ' ');
+            out += s.substr(i);
+            if (out == s) return false;
+            s = out;
+            return true;
+        });
+    }
 
     // ===================================================================================
     //  Additional menu commands (clipboard / files / shell / search / view / tools)
@@ -12495,17 +12716,6 @@ private:
         }
         sci(SCI_ENDUNDOACTION);
     }
-    void spacesToTabs(bool leadingOnly)
-    {
-        const int tw = (int)sci(SCI_GETTABWIDTH); if (tw <= 0) return;
-        const std::string sp(static_cast<size_t>(tw), ' ');
-        transformLines([&](std::string& s){
-            if (leadingOnly)
-            { size_t n = s.find_first_not_of(' '); if (n == std::string::npos) n = s.size(); std::string lead = s.substr(0, n), rest = s.substr(n); size_t pos; while ((pos = lead.find(sp)) != std::string::npos) lead.replace(pos, sp.size(), "\t"); s = lead + rest; }
-            else { size_t pos; while ((pos = s.find(sp)) != std::string::npos) s.replace(pos, sp.size(), "\t"); }
-        });
-    }
-    void removeEmptyLinesBlank() { auto v = docLines(); v.erase(std::remove_if(v.begin(), v.end(), [](const std::string& s){ return s.find_first_not_of(" \t") == std::string::npos; }), v.end()); putLines(v); }
     void redactSelection() { transformSel([](std::string& s){ std::string o; for (size_t i = 0; i < s.size();) { unsigned char c = s[i]; if (c == '\r' || c == '\n') { o += (char)c; ++i; } else { const int n = (c >= 0xF0) ? 4 : (c >= 0xE0) ? 3 : (c >= 0x80) ? 2 : 1; o += "\xE2\x96\x88"; i += n; } } s = o; }); }
     void searchOnInternet()
     {
@@ -12563,18 +12773,31 @@ private:
         const int n = (int)sci(SCI_GETLINECOUNT);
         if (op == 5) { sci(SCI_BEGINUNDOACTION); for (int l = 0; l < n; ++l) { if (sci(SCI_MARKERGET, l) & (1 << MARK_BOOKMARK)) sci(SCI_MARKERDELETE, l, MARK_BOOKMARK); else sci(SCI_MARKERADD, l, MARK_BOOKMARK); } sci(SCI_ENDUNDOACTION); return; }
         std::vector<bool> mark(n, false); for (int l = 0; l < n; ++l) mark[l] = (sci(SCI_MARKERGET, l) & (1 << MARK_BOOKMARK)) != 0;
-        auto lines = docLines();
-        if (op == 0 || op == 1) { wxString out; for (int l = 0; l < (int)lines.size() && l < n; ++l) if (mark[l]) out += wxString::FromUTF8(lines[l].data(), lines[l].size()) + "\r\n"; copyToClip(out); }
-        if (op == 1 || op == 2) { std::vector<std::string> keep; for (int l = 0; l < (int)lines.size(); ++l) if (l >= n || !mark[l]) keep.push_back(lines[l]); putLines(keep); sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); }
-        else if (op == 3)       { std::vector<std::string> keep; for (int l = 0; l < (int)lines.size(); ++l) if (l < n && mark[l]) keep.push_back(lines[l]); putLines(keep); sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); }
+        const int last = docLastLine();
+        if (op == 0 || op == 1)
+        {
+            wxString out;
+            for (int l = 0; l <= last; ++l)
+                if (mark[l]) { const std::string t = rangeBytes(lineStartPos(l), (int)sci(SCI_GETLINEENDPOSITION, l)); out += wxString::FromUTF8(t.data(), t.size()) + "\r\n"; }
+            copyToClip(out);
+        }
+        if (op == 1 || op == 2 || op == 3)   // line by line: the lines that stay keep their bookmarks
+        {
+            std::vector<bool> drop(static_cast<size_t>(last + 1));
+            for (int l = 0; l <= last; ++l) drop[l] = (op == 3) != mark[l];
+            dropLines(0, drop);
+        }
         else if (op == 4)
         {
             wxString clip = getClipText(); std::vector<std::string> repl; wxString cur;
             for (wxUniChar ch : clip) { if (ch == '\n') { repl.push_back(std::string(cur.utf8_str())); cur.clear(); } else if (ch != '\r') cur += ch; }
             if (!cur.empty()) repl.push_back(std::string(cur.utf8_str()));
-            size_t ri = 0; std::vector<std::string> outv;
-            for (int l = 0; l < (int)lines.size(); ++l) { if (l < n && mark[l]) outv.push_back(ri < repl.size() ? repl[ri++] : std::string()); else outv.push_back(lines[l]); }
-            putLines(outv);
+            std::vector<int> marked;
+            for (int l = 0; l <= last; ++l) if (mark[l]) marked.push_back(l);
+            sci(SCI_BEGINUNDOACTION);
+            for (size_t i = marked.size(); i-- > 0;)
+                replaceRange(lineStartPos(marked[i]), (int)sci(SCI_GETLINEENDPOSITION, marked[i]), i < repl.size() ? repl[i] : std::string());
+            sci(SCI_ENDUNDOACTION);
         }
     }
 
@@ -17136,12 +17359,12 @@ private:
             case kCmdEditDupLine: sci(SCI_LINEDUPLICATE); break;
             case kCmdEditLineUp: sci(SCI_MOVESELECTEDLINESUP); break;
             case kCmdEditLineDown: sci(SCI_MOVESELECTEDLINESDOWN); break;
-            case kCmdEditRemoveEmptyLines: removeEmptyLines(); break;
+            case kCmdEditRemoveEmptyLines: removeEmptyLines(false); break;
             case kCmdEditTrimTrailing: trimTrailing(); break;
             case kCmdEditTrimLineHead: trimLeading(); break;
             case kCmdEditTrimBoth: trimBoth(); break;
             case kCmdEditEol2ws: eolToSpace(); break;
-            case kCmdEditTrimall: trimBoth(); eolToSpace(); break;
+            case kCmdEditTrimall: sci(SCI_BEGINUNDOACTION); trimBoth(); eolToSpace(); sci(SCI_ENDUNDOACTION); break;
             case kCmdEditTab2sw: tabsToSpaces(); break;
             case kCmdEditInsTab: sci(SCI_TAB); break;
             case kCmdEditRmvTab: sci(SCI_BACKTAB); break;
@@ -17322,10 +17545,10 @@ private:
             case kCmdEditSortlinesDecimaldotDescending: sortLines(4, true); break;
             case kCmdEditSortlinesDecimalCommaAscending: sortLines(5, false); break;
             case kCmdEditSortlinesDecimalCommaDescending: sortLines(5, true); break;
-            case kCmdEditSortlinesLocaleAscending: sortLines(0, false); break;
-            case kCmdEditSortlinesLocaleDescending: sortLines(0, true); break;
+            case kCmdEditSortlinesLocaleAscending: sortLines(6, false); break;
+            case kCmdEditSortlinesLocaleDescending: sortLines(6, true); break;
             case kCmdEditSortlinesRandomly: shuffleLines(); break;
-            case kCmdEditRemoveEmptyLinesWithBlank: removeEmptyLinesBlank(); break;
+            case kCmdEditRemoveEmptyLinesWithBlank: removeEmptyLines(true); break;
             case kCmdEditSw2tabAll: spacesToTabs(false); break;
             case kCmdEditSw2tabLeading: spacesToTabs(true); break;
             case kCmdEditOpenSelectedFileFolderInExplorer: revealInFolder(); break;

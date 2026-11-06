@@ -174,6 +174,19 @@ generator builds everything on all three platforms, including fetching and
 building wxWidgets from source. Compilers: MSVC (Windows), GCC (Linux),
 AppleClang (macOS).
 
+## Notepad4 — the Line and Blank Operations
+
+The Edit menu's Line Operations and Blank Operations (`src/main.cpp`) follow
+**[Notepad4](https://github.com/zufuliu/notepad4)** (Zufu Liu and contributors,
+after Notepad2-mod and Florian Balmer's Notepad2; BSD-3-Clause): its
+`EditSortLines` for which lines a selection covers, the column of a column
+selection as the sort key and one target replace for the reordered lines, and
+its `EditStripTrailingBlanks` / `EditRemoveBlankLines` for editing line by line
+so the lines left alone keep their bookmarks. wxNote's version keeps each
+line's own line ending, reads NUL-safely, sorts descending without reversing
+equal lines, and replaces Notepad4's Windows-only comparisons with portable
+ones. [`NOTICE`](../NOTICE) reproduces the licence.
+
 ## Editors studied as design references
 
 No code was taken from any of these; each contributed ideas, structure, or
