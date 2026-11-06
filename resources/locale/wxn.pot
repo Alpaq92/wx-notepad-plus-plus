@@ -3266,3 +3266,9 @@ msgstr ""
 
 msgid "Find in These Search Results"
 msgstr ""
+
+msgid "[Default]"
+msgstr ""
+
+msgid "Use default value"
+msgstr ""

@@ -10,6 +10,10 @@ All notable changes to wxNote are documented here. Format loosely follows
   Remove Duplicate / Consecutive Duplicate / Empty Lines, the Trims, TAB/Space and EOL to Space act on
   the lines the selection covers (a selection ending at the start of a line leaves that line out), or on
   the whole document when nothing is selected. A column selection's columns are the sort key.
+- **Per-language indentation in Preferences.** Preferences ▸ Indentation lists **[Default]** and every
+  language, as Notepad++'s does: a language either uses the default or has its own tab size and tabs or
+  spaces (tabs for Makefiles, 4 spaces for Python). It was possible before only by editing
+  `settings.yaml` by hand.
 - **Language detection now recognises about 340 file extensions and file names, and first lines.** It
   uses the detection built into Scintillua (already shipped with wxNote) instead of a table of 16
   extension groups, so `.html`, `.php`, `.md`, `.toml`, `.go`, `.kt`, `Makefile`, `CMakeLists.txt`,

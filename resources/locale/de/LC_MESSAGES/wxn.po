@@ -3264,3 +3264,9 @@ msgstr "Bei jeder Suche leeren"
 
 msgid "Find in These Search Results"
 msgstr "In diesen Suchergebnissen suchen"
+
+msgid "[Default]"
+msgstr "[Standard]"
+
+msgid "Use default value"
+msgstr "Standardwert verwenden"

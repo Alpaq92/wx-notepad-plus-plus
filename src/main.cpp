@@ -14403,6 +14403,59 @@ private:
         sciSend(v, SCI_SETUSETABS, useTabs ? 1 : 0);
     }
 
+    // Preferences > Indentation: [Default] (lang "") and each Language-menu language, with whether it has
+    // its own values. A language with only one of the two of its own counts as having its own.
+    struct IndentPick
+    {
+        std::string lang;
+        bool own = false;
+        int tab = 4;
+        bool useTabs = true;
+        bool operator==(const IndentPick& o) const { return own == o.own && (!own || (tab == o.tab && useTabs == o.useTabs)); }
+    };
+    std::vector<IndentPick> indentPicks() const
+    {
+        wxnRefreshSettings();
+        std::vector<IndentPick> v{ IndentPick{ std::string(), false, m_tabWidth, m_useTabs } };
+        size_t n = 0;
+        const WxnLang* t = wxnLangTable(n);
+        for (size_t i = 0; i < n; ++i)
+        {
+            long long tab = m_tabWidth;
+            bool useTabs = m_useTabs;
+            const bool a = g_settings.languageInt("editor.tabSize", t[i].name, tab);
+            const bool b = g_settings.languageBool("editor.useTabs", t[i].name, useTabs);
+            v.push_back(IndentPick{ t[i].name, a || b, (int)tab, useTabs });
+        }
+        return v;
+    }
+    // Only the languages changed in the dialog are written: one whose own values were set by hand and
+    // left alone keeps them as they are.
+    void saveIndentPicks(const std::vector<IndentPick>& now, const std::vector<IndentPick>& was)
+    {
+        bool any = false;
+        for (size_t i = 1; i < now.size() && !any; ++i) any = !(now[i] == was[i]);
+        if (!any) return;
+        {
+            WxnSettingsEdit s;
+            for (size_t i = 1; i < now.size(); ++i)
+            {
+                if (now[i] == was[i]) continue;
+                if (now[i].own)
+                {
+                    s->setLanguageInt("editor.tabSize", now[i].lang, now[i].tab);
+                    s->setLanguageBool("editor.useTabs", now[i].lang, now[i].useTabs);
+                }
+                else
+                {
+                    s->clearLanguage("editor.tabSize", now[i].lang);
+                    s->clearLanguage("editor.useTabs", now[i].lang);
+                }
+            }
+        }
+        noteIfSettingsUnsaved();
+    }
+
     void applySettings()   // push the current preferences onto the editor view + chrome
     {
         // BOTH halves of a split, not just m_stc. m_stc follows focus, so the inactive half kept the
@@ -14659,14 +14712,53 @@ private:
 
 
         // ---- Indentation ----------------------------------------------------------------------
+        // As Notepad++'s: [Default] or a language, and each language either uses the default or has its
+        // own tab size and tabs/spaces - settings.yaml's `languages: <lang>:` (see applyDocSettings).
         auto* ind = pg(_("Indentation")); auto* is = new wxBoxSizer(wxVERTICAL);
+        auto indPicks = std::make_shared<std::vector<IndentPick>>(indentPicks());
+        const std::vector<IndentPick> indWas = *indPicks;
+        auto* indRow = new wxBoxSizer(wxHORIZONTAL);
+        auto* indList = new wxListBox(ind, wxID_ANY, wxDefaultPosition, ind->FromDIP(wxSize(170, 200)));
+        for (const IndentPick& ip : *indPicks) indList->Append(ip.lang.empty() ? wxString(_("[Default]")) : wxString::FromUTF8(ip.lang.c_str()));
+        indRow->Add(indList, 0, wxEXPAND | wxRIGHT, 12);
+        auto* indSide = new wxBoxSizer(wxVERTICAL);
+        auto* cbIndDefault = new wxCheckBox(ind, wxID_ANY, _("Use default value"));
+        indSide->Add(cbIndDefault, 0, wxBOTTOM, 8);
         auto* trow = new wxBoxSizer(wxHORIZONTAL);
         trow->Add(new wxStaticText(ind, wxID_ANY, _("Tab size:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spTab = new SpinField(ind, 1, 16, m_tabWidth, m_dark, 70);
-        trow->Add(spTab, 0); is->Add(trow, 0, wxALL, 10);
+        trow->Add(spTab, 0); indSide->Add(trow, 0, wxBOTTOM, 8);
         auto* cbSpace  = new wxCheckBox(ind, wxID_ANY, _("Replace by space"));      cbSpace->SetValue(!m_useTabs);
+        indSide->Add(cbSpace, 0);
+        indRow->Add(indSide, 1);
+        is->Add(indRow, 0, wxALL, 10);
         auto* cbIndent = new wxCheckBox(ind, wxID_ANY, _("Auto-indent new lines")); cbIndent->SetValue(m_autoindent);
-        row(is, cbSpace); row(is, cbIndent); ind->SetSizer(is);
+        row(is, cbIndent); ind->SetSizer(is);
+        // The fields show the picked entry: a language that uses the default shows the default, greyed.
+        auto indSel = std::make_shared<int>(0);
+        auto indStore = [=] {
+            IndentPick& ip = (*indPicks)[*indSel];
+            if (*indSel == 0 || ip.own) { ip.tab = spTab->GetValue(); ip.useTabs = !cbSpace->GetValue(); }
+        };
+        auto indShow = [=] {
+            const IndentPick& ip = (*indPicks)[*indSel];
+            const IndentPick& shown = (*indSel == 0 || ip.own) ? ip : (*indPicks)[0];
+            cbIndDefault->Enable(*indSel != 0);
+            cbIndDefault->SetValue(*indSel != 0 && !ip.own);
+            spTab->SetValue(shown.tab); cbSpace->SetValue(!shown.useTabs);
+            spTab->Enable(*indSel == 0 || ip.own); cbSpace->Enable(*indSel == 0 || ip.own);
+        };
+        indList->SetSelection(0); indShow();
+        indList->Bind(wxEVT_LISTBOX, [=](wxCommandEvent&) {
+            if (indList->GetSelection() == wxNOT_FOUND) return;
+            indStore(); *indSel = indList->GetSelection(); indShow();
+        });
+        cbIndDefault->Bind(wxEVT_CHECKBOX, [=](wxCommandEvent&) {
+            IndentPick& ip = (*indPicks)[*indSel];
+            ip.own = !cbIndDefault->GetValue();
+            if (ip.own && !indWas[*indSel].own) { ip.tab = (*indPicks)[0].tab; ip.useTabs = (*indPicks)[0].useTabs; }   // starts from the default
+            indShow();
+        });
 
         // ---- Auto-Completion ------------------------------------------------------------------
         auto* ac = pg(_("Auto-Completion")); auto* as = new wxBoxSizer(wxVERTICAL);
@@ -14888,7 +14980,7 @@ private:
             }
         }
         m_fsAutohideToolbar = cbFsToolbar->GetValue();
-        m_tabWidth = spTab->GetValue(); m_useTabs = !cbSpace->GetValue(); m_lineNumbers = cbLineNum->GetValue();
+        indStore(); m_tabWidth = (*indPicks)[0].tab; m_useTabs = (*indPicks)[0].useTabs; m_lineNumbers = cbLineNum->GetValue();
         m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
         m_caretLine = cbCaretLn->GetValue(); m_autoindent = cbIndent->GetValue(); m_caretWidth = spCaret->GetValue(); m_edgeColumn = spEdge->GetValue();
 #ifdef __WXMSW__
@@ -14914,6 +15006,7 @@ private:
         const bool spellBackendChanged = (chSpell->GetSelection() != m_spellBackend);
         m_spellBackend = chSpell->GetSelection();
 #endif
+        saveIndentPicks(*indPicks, indWas);
         applySettings(); saveSettings();
         // Gutter-colour override takes effect immediately, no restart needed - but applyEditorTheme's
         // StyleClearAll wipes the lexer's per-token colours, so re-run the full lexer pass (which itself

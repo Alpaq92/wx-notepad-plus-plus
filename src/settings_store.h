@@ -312,6 +312,67 @@ public:
         return edit(id, std::string(), std::string(), [&](const wxnyaml::Doc& d) { return !wxnyaml::child(d.root(), id).readable(); });
     }
 
+    // Set `id` under `languages: <lang>:` to a one-line value (as set() spells it), or drop it when
+    // `yaml` is empty. The `languages:` block is written out again - every other language's values
+    // kept as they read, comments inside the block lost - and a language left with nothing goes.
+    bool setForLanguage(const std::string& lang, const std::string& id, const std::string& yaml, const std::string& expect)
+    {
+        if (!m_doc.ok() || lang.empty()) return false;
+        if (yaml.empty() && !getForLanguage(lang, id).readable()) return true;
+        struct Lang { std::string name; std::vector<std::pair<std::string, std::string>> entries; };   // key -> its YAML
+        std::vector<Lang> langs;
+        const Node all = get("languages");
+        if (wxnyaml::isMap(all))
+            for (Node l : all.children())
+            {
+                Lang L{ wxnyaml::keyOf(l), {} };
+                if (wxnyaml::isMap(l))
+                    for (Node c : l.children()) L.entries.emplace_back(wxnyaml::keyOf(c), wxnyaml::emitNode(c));
+                else if (l.has_children() || (l.has_val() && !l.val_is_null()))
+                    return false;   // not `lang: {id: value}`: leave a layout this does not understand alone
+                langs.push_back(std::move(L));
+            }
+        else if (all.readable() && (all.has_children() || (all.has_val() && !all.val_is_null())))
+            return false;
+        auto it = std::find_if(langs.begin(), langs.end(), [&](const Lang& L) { return L.name == lang; });
+        if (it == langs.end()) { langs.push_back(Lang{ lang, {} }); it = langs.end() - 1; }
+        auto e = std::find_if(it->entries.begin(), it->entries.end(), [&](const std::pair<std::string, std::string>& kv) { return kv.first == id; });
+        const std::string line = yaml.empty() ? std::string() : wxnyaml::keyYaml(id) + ": " + yaml + "\n";
+        if (e != it->entries.end()) { if (line.empty()) it->entries.erase(e); else e->second = line; }
+        else if (!line.empty()) it->entries.emplace_back(id, line);
+
+        const std::string nl = detail::newlineOf(m_text);
+        std::string block;
+        for (const Lang& L : langs)
+        {
+            if (L.entries.empty()) continue;
+            block += "  " + wxnyaml::keyYaml(L.name) + ":\n";
+            for (const auto& kv : L.entries)
+            {
+                size_t ls = 0;   // each entry's lines, indented under its language
+                while (ls < kv.second.size())
+                {
+                    size_t le = kv.second.find('\n', ls);
+                    if (le == std::string::npos) le = kv.second.size();
+                    block += "    " + kv.second.substr(ls, le - ls) + "\n";
+                    ls = le + 1;
+                }
+            }
+        }
+        if (!block.empty()) block = detail::withNewlines("languages:\n" + block, nl);
+        return edit("languages", block, std::string(), [&](const wxnyaml::Doc& d) {
+            const Node got = wxnyaml::child(wxnyaml::child(wxnyaml::child(d.root(), "languages"), lang), id);
+            std::string v;
+            if (yaml.empty() ? got.readable() : !(wxnyaml::getText(got, v) && v == expect)) return false;
+            for (const Lang& L : langs)   // and every other value is what it was
+                for (const auto& kv : L.entries)
+                    if (!(L.name == lang && kv.first == id)
+                        && wxnyaml::emitNode(wxnyaml::child(wxnyaml::child(wxnyaml::child(d.root(), "languages"), L.name), kv.first)) != kv.second)
+                        return false;
+            return true;
+        });
+    }
+
 private:
     std::string   m_text;
     wxnyaml::Doc  m_doc;

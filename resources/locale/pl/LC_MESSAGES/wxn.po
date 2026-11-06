@@ -3264,3 +3264,9 @@ msgstr "Czyść przy każdym wyszukiwaniu"
 
 msgid "Find in These Search Results"
 msgstr "Znajdź w tych wynikach wyszukiwania"
+
+msgid "[Default]"
+msgstr "[Domyślne]"
+
+msgid "Use default value"
+msgstr "Użyj wartości domyślnej"

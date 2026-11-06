@@ -3264,3 +3264,9 @@ msgstr "검색할 때마다 지우기"
 
 msgid "Find in These Search Results"
 msgstr "이 검색 결과에서 찾기"
+
+msgid "[Default]"
+msgstr "[기본값]"
+
+msgid "Use default value"
+msgstr "기본값 사용"
