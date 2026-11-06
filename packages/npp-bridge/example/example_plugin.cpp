@@ -600,6 +600,23 @@ NPP_EXPORT void beNotified(SCNotification* scn)
         // correctly-filled one from a zeroed one. Log the two members the selftest pins.
         case SCN_CHARADDED:   probeLogLine("{\"k\":\"ca\",\"ch\":%d}", scn->ch); break;
         case SCN_MARGINCLICK: probeLogLine("{\"k\":\"mc\",\"m\":%d,\"mod\":%d}", scn->margin, scn->modifiers); break;
+        // nib.events v6: the same reasoning, for the members these codes document. hwndFrom too, on one
+        // code: a relayed notification has to name the editor that sent it.
+        case SCN_UPDATEUI:    probeLogLine("{\"k\":\"uu\",\"u\":%d}", scn->updated); break;
+        case SCN_MODIFIED:
+            probeLogLine("{\"k\":\"md\",\"la\":%lld,\"c0\":%d,\"len\":%lld}", static_cast<long long>(scn->linesAdded),
+                         scn->text ? static_cast<unsigned char>(scn->text[0]) : -1, static_cast<long long>(scn->length));
+            break;
+        case SCN_AUTOCSELECTION:
+            probeLogLine("{\"k\":\"acs\",\"p\":%lld,\"t\":\"%s\",\"m\":%d}", static_cast<long long>(scn->position),
+                         scn->text ? scn->text : "", scn->listCompletionMethod);
+            break;
+        case SCN_USERLISTSELECTION:
+            probeLogLine("{\"k\":\"uls\",\"lt\":%d,\"t\":\"%s\"}", scn->listType, scn->text ? scn->text : "");
+            break;
+        case SCN_SAVEPOINTLEFT:
+            probeLogLine("{\"k\":\"spl\",\"sub\":%d}", scn->nmhdr.hwndFrom == g_npp._scintillaSecondHandle ? 1 : 0);
+            break;
         default:                  break;
     }
 }

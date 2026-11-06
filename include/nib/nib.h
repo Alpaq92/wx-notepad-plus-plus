@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-#define NIB_ABI_VERSION 0x00010008u   // (major << 16) | minor  ->  1.8 (additive: nib.settings/1 - read and change settings by ID)
+#define NIB_ABI_VERSION 0x00010009u   // (major << 16) | minor  ->  1.9 (additive: nib.events v6 - the editor's own notifications)
 
 #if defined(_WIN32)
   #define NIB_API __declspec(dllexport)
@@ -184,7 +184,32 @@ typedef struct NibCommandsApi {
 //     they need no mask: each is either low-volume (margin/hotspot), off unless the plugin turns it on
 //     (dwell), or exactly one per typed character (char-added), so the cost with no subscriber is the
 //     same single list walk every other kind pays.
+//   * query(..., NIB_IFACE_EVENTS, 6) -> the v6 table (identical layout again). It adds one kind,
+//     NIB_EV_EDITOR_NOTIFY, which carries the editor's own Scintilla notifications rather than a
+//     host-level digest of them: the list of codes is at NIB_EV_EDITOR_NOTIFY below. A plugin that takes
+//     this no longer needs TEXT_CHANGED or SELECTION_CHANGED, which report the same changes with less
+//     detail, and subscribing to both delivers both.
 #define NIB_IFACE_EVENTS "nib.events/1"
+
+// The payload of NIB_EV_EDITOR_NOTIFY: Scintilla's SCNotification, in fixed-width types, holding what a
+// given code documents and zero elsewhere. Host-owned and valid only during the callback. Fields may be
+// added at the end; check struct_size before reading one that came later than 1.9.
+//
+// wxStyledTextCtrl hands the host `position`, `length` and `line` as 32-bit values, so in a document past
+// 2 GiB they wrap, for these events only: the messages a plugin sends use the full range.
+typedef struct NibEditorNotify {
+    uint32_t struct_size;
+    uint32_t code;              // SCN_*
+    int32_t  view;              // the editor that fired: 0 = the main view, 1 = the split's second view
+    int32_t  ch, modifiers, margin, x, y;
+    int32_t  updated;           // SC_UPDATE_* (SCN_UPDATEUI)
+    int32_t  list_type, list_completion_method;
+    int32_t  modification_type, lines_added, fold_level_now, fold_level_prev, token, annotation_lines_added;
+    int64_t  position, length, line;
+    const char* text;           // UTF-8. NUL-terminated for the list codes; for SCN_MODIFIED, `length` bytes
+                                //   and not terminated (Scintilla's own rule), and NULL when there is none
+} NibEditorNotify;
+
 typedef enum {
     NIB_EV_TEXT_CHANGED = 1,    // as.text:      pos, added, removed (bytes). NOTE: carries no view field
                                 //   (a v1 layout, frozen) - with the split open a consumer cannot tell
@@ -274,7 +299,18 @@ typedef enum {
     NIB_EV_HOTSPOT_CLICK = 30,  // as.hotspot: position, modifiers - a click on a hotspot-styled range
                                 //   (SCN_HOTSPOTCLICK). Only reachable once some style sets hotspot.
     NIB_EV_HOTSPOT_DOUBLE_CLICK = 31,  // as.hotspot - SCN_HOTSPOTDOUBLECLICK.
-    NIB_EV_HOTSPOT_RELEASE_CLICK = 32  // as.hotspot - SCN_HOTSPOTRELEASECLICK.
+    NIB_EV_HOTSPOT_RELEASE_CLICK = 32, // as.hotspot - SCN_HOTSPOTRELEASECLICK.
+
+    // v6: as.editor.info - see NibEditorNotify. One kind rather than one per code, because every code
+    // here reaches a plugin the same way. Carries SCN_MODIFIED, SCN_UPDATEUI, SCN_DOUBLECLICK, SCN_ZOOM,
+    // SCN_PAINTED, SCN_NEEDSHOWN, SCN_STYLENEEDED, SCN_SAVEPOINTLEFT, SCN_MODIFYATTEMPTRO,
+    // SCN_USERLISTSELECTION, SCN_AUTOCSELECTION, SCN_AUTOCCANCELLED, SCN_AUTOCCHARDELETED,
+    // SCN_AUTOCCOMPLETED, SCN_AUTOCSELECTIONCHANGE, SCN_CALLTIPCLICK, SCN_INDICATORCLICK,
+    // SCN_INDICATORRELEASE, SCN_MARGINRIGHTCLICK, SCN_FOCUSIN and SCN_FOCUSOUT.
+    // Not SCN_MACRORECORD: its lParam is often a pointer, which wxStyledTextEvent keeps in an int.
+    // Delivered synchronously, as Scintilla sends them, so calling SCI_AUTOCCANCEL during
+    // SCN_AUTOCSELECTION does stop the insertion. SCN_PAINTED and SCN_MODIFIED are frequent: do little.
+    NIB_EV_EDITOR_NOTIFY = 33
 } NibEventKind;
 typedef struct NibEvent {
     NibEventKind kind;
@@ -295,6 +331,9 @@ typedef struct NibEvent {
         struct { int64_t position; int32_t number, modifiers, view; } margin;   // MARGIN_CLICK
         struct { int64_t position; int32_t x, y, view; }              mouse;    // DWELL_START / DWELL_END
         struct { int64_t position; int32_t modifiers, view; }         hotspot;  // HOTSPOT_*
+        // v6: a pointer, because the payload is wider than NibEvent can grow to (see the static_assert
+        // in the host) and because a pointer lets it gain fields.
+        struct { const NibEditorNotify* info; }                       editor;   // EDITOR_NOTIFY
     } as;
 } NibEvent;
 typedef void (*NibEventFn)(NibHost* host, const NibEvent* ev, void* user);

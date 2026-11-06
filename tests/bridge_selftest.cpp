@@ -2618,6 +2618,184 @@ private:
             check(findFrom(L, mark, notifNeedlePrefix(SCN_HOTSPOTCLICK))>= 0, "SCN_HOTSPOTCLICK reached the probe");
         }
 
+        // ---- Phase 8: the current Scintilla API, against a 5.0 editor ---------------------------------
+        // Plugins compile against a newer Scintilla than the one running, and an id the editor does not
+        // know comes back as a silent 0. So each of these runs on the real editor, and twice: through the
+        // funnel every SendMessage takes, and through the direct function, which a plugin holds on to and
+        // calls without coming back through it.
+        {
+            const std::string body = "alpha beta\ngamma ALPHA\n";
+            const intptr_t base = coreSciCall(-1, SCI_GETLENGTH, 0, 0);
+            const intptr_t end  = base + static_cast<intptr_t>(body.size());
+            const auto direct    = reinterpret_cast<SciFnDirect>(coreSciCall(-1, SCI_GETDIRECTFUNCTION, 0, 0));
+            const auto directSt  = reinterpret_cast<SciFnDirectStatus>(coreSciCall(-1, SCI_GETDIRECTSTATUSFUNCTION, 0, 0));
+            const sptr_t directP = coreSciCall(-1, SCI_GETDIRECTPOINTER, 0, 0);
+            check(direct && directSt && directP, "the direct function and pointer are handed out");
+
+            using Call = std::function<intptr_t(unsigned, uintptr_t, intptr_t)>;
+            const auto exercise = [&](const Call& call, const char* how) {
+                const auto named = [how](const char* what) { return std::string(how) + ": " + what; };
+                nibSciCall(nullptr, -1, SCI_BEGINUNDOACTION, 0, 0);
+                nibSciCall(nullptr, -1, SCI_APPENDTEXT, body.size(), reinterpret_cast<intptr_t>(body.c_str()));
+
+                const auto textOf = [&](intptr_t from, intptr_t to, intptr_t* len = nullptr) {
+                    char buf[64]; std::memset(buf, 'X', sizeof(buf));
+                    Sci_TextRangeFull tr{ { from, to }, buf };
+                    const intptr_t n = call(SCI_GETTEXTRANGEFULL, 0, reinterpret_cast<intptr_t>(&tr));
+                    if (len) *len = n;
+                    return std::string(buf);    // stops at the NUL, which is part of what is being tested
+                };
+                intptr_t n = 0;
+                check(textOf(base, base + 5, &n) == "alpha" && n == 5, named("SCI_GETTEXTRANGEFULL copies the range and terminates it").c_str());
+                check(textOf(base + 11, -1, &n) == "gamma ALPHA\n" && n == 12, named("...cpMax -1 means the end of the document").c_str());
+                check(textOf(end - 1, end + 1000, &n) == "\n" && n == 1, named("...a range past the end stops at the end").c_str());
+
+                const auto find = [&](uintptr_t flags, intptr_t from, intptr_t to, const char* what, Sci_CharacterRangeFull* hit) {
+                    Sci_TextToFindFull ft{ { from, to }, what, { -7, -7 } };
+                    const intptr_t at = call(SCI_FINDTEXTFULL, flags, reinterpret_cast<intptr_t>(&ft));
+                    *hit = ft.chrgText;
+                    return at;
+                };
+                coreSciCall(-1, SCI_SETTARGETRANGE, 1, 2);
+                coreSciCall(-1, SCI_SETSEARCHFLAGS, SCFIND_WHOLEWORD, 0);
+                Sci_CharacterRangeFull hit{};
+                check(find(SCFIND_MATCHCASE, base, end, "ALPHA", &hit) == base + 17 && hit.cpMin == base + 17 && hit.cpMax == base + 22,
+                      named("SCI_FINDTEXTFULL honours the flags and fills chrgText").c_str());
+                check(find(0, end, base, "alpha", &hit) == base + 17, named("...a reversed range searches backwards").c_str());
+                check(find(SCFIND_REGEXP, base, end, "g.mma", &hit) == base + 11 && hit.cpMax == base + 16, named("...regular expressions work").c_str());
+                check(find(0, base, end, "absent", &hit) == -1 && hit.cpMin == -7, named("...a miss returns -1 and leaves chrgText alone").c_str());
+                check(coreSciCall(-1, SCI_GETTARGETSTART, 0, 0) == 1 && coreSciCall(-1, SCI_GETTARGETEND, 0, 0) == 2 &&
+                      coreSciCall(-1, SCI_GETSEARCHFLAGS, 0, 0) == SCFIND_WHOLEWORD,
+                      named("...the plugin's own target and search flags survive it").c_str());
+
+                coreSciCall(-1, SCI_STARTSTYLING, base, 0);
+                coreSciCall(-1, SCI_SETSTYLING, 1, 200);
+                check(call(SCI_GETSTYLEINDEXAT, base, 0) == 200, named("SCI_GETSTYLEINDEXAT reads a style above 127 as positive").c_str());
+                char styled[16]; std::memset(styled, 'X', sizeof(styled));
+                Sci_TextRangeFull stf{ { base, base + 2 }, styled };
+                check(call(SCI_GETSTYLEDTEXTFULL, 0, reinterpret_cast<intptr_t>(&stf)) == 4 && styled[0] == 'a' &&
+                      static_cast<unsigned char>(styled[1]) == 200 && styled[2] == 'l' && styled[4] == 0 && styled[5] == 0,
+                      named("SCI_GETSTYLEDTEXTFULL returns character and style cells, doubly terminated").c_str());
+
+                coreSciCall(-1, SCI_SETTARGETRANGE, base, base + 5);
+                check(call(SCI_REPLACETARGETMINIMAL, 5, reinterpret_cast<intptr_t>("omega")) == 5 && textOf(base, base + 5) == "omega",
+                      named("SCI_REPLACETARGETMINIMAL replaces the target").c_str());
+                coreSciCall(-1, SCI_GOTOPOS, base + 12, 0);
+                call(SCI_CUTALLOWLINE, 0, 0);
+                check(coreSciCall(-1, SCI_GETLENGTH, 0, 0) == end - 12, named("SCI_CUTALLOWLINE with no selection takes the whole line").c_str());
+
+                call(SCI_SETMOVEEXTENDSSELECTION, 1, 0);
+                check(coreSciCall(-1, SCI_GETMOVEEXTENDSSELECTION, 0, 0) == 1, named("SCI_SETMOVEEXTENDSSELECTION sets the flag").c_str());
+                call(SCI_SETMOVEEXTENDSSELECTION, 1, 0);
+                check(coreSciCall(-1, SCI_GETMOVEEXTENDSSELECTION, 0, 0) == 1, named("...setting it twice does not toggle it").c_str());
+                call(SCI_SETMOVEEXTENDSSELECTION, 0, 0);
+                check(coreSciCall(-1, SCI_GETMOVEEXTENDSSELECTION, 0, 0) == 0, named("...and it clears").c_str());
+                call(SCI_CHANGESELECTIONMODE, SC_SEL_LINES, 0);
+                check(coreSciCall(-1, SCI_GETSELECTIONMODE, 0, 0) == SC_SEL_LINES && coreSciCall(-1, SCI_GETMOVEEXTENDSSELECTION, 0, 0) == 0,
+                      named("SCI_CHANGESELECTIONMODE changes the mode and leaves that flag").c_str());
+                call(SCI_CHANGESELECTIONMODE, SC_SEL_STREAM, 0);
+
+                nibSciCall(nullptr, -1, SCI_ENDUNDOACTION, 0, 0);
+                nibSciCall(nullptr, -1, SCI_UNDO, 0, 0);
+                check(coreSciCall(-1, SCI_GETLENGTH, 0, 0) == base, named("the fixture text was undone").c_str());
+
+                // Scrolling needs more lines than a window holds.
+                const std::string lines(300, '\n');
+                const intptr_t top = coreSciCall(-1, SCI_GETFIRSTVISIBLELINE, 0, 0);
+                nibSciCall(nullptr, -1, SCI_APPENDTEXT, lines.size(), reinterpret_cast<intptr_t>(lines.c_str()));
+                const intptr_t docLine = coreSciCall(-1, SCI_GETLINECOUNT, 0, 0) - 150;
+                call(SCI_SCROLLVERTICAL, docLine, 1);
+                check(coreSciCall(-1, SCI_GETFIRSTVISIBLELINE, 0, 0) == coreSciCall(-1, SCI_VISIBLEFROMDOCLINE, docLine, 0) + 1,
+                      named("SCI_SCROLLVERTICAL scrolls to the line and sub-line").c_str());
+                nibSciCall(nullptr, -1, SCI_UNDO, 0, 0);
+                coreSciCall(-1, SCI_SETFIRSTVISIBLELINE, top, 0);
+            };
+            exercise([](unsigned m, uintptr_t w, intptr_t l) { return nibSciCall(nullptr, -1, m, w, l); }, "funnel");
+            exercise([&](unsigned m, uintptr_t w, intptr_t l) -> intptr_t { return direct(directP, m, w, l); }, "direct");
+
+            int status = -1;
+            check(directSt(directP, SCI_GETLENGTH, 0, 0, &status) == base && status == 0, "the direct status function answers and reports the status");
+
+            // The direct route used to be the way around this guard (see sciDispatch).
+            const intptr_t mask = coreSciCall(-1, SCI_GETMODEVENTMASK, 0, 0);
+            direct(directP, SCI_SETMODEVENTMASK, SC_MOD_CHANGEFOLD, 0);
+            const intptr_t narrowed = coreSciCall(-1, SCI_GETMODEVENTMASK, 0, 0);
+            direct(directP, SCI_SETMODEVENTMASK, 0, 0);                  // withdraw the plugin's request...
+            g_sciDirect(directP, SCI_SETMODEVENTMASK, mask, 0);          // ...and give the host its mask back, past the guard
+            check((narrowed & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT)) == (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT) && (narrowed & SC_MOD_CHANGEFOLD),
+                  "a mask set through the direct function keeps the host's bits, and the plugin's");
+
+#ifdef _WIN32
+            // wx reads this structure's hdc as a wxDC*: a raw HDC reaching it crashes rather than failing.
+            // Measuring (wParam 0) goes through the same surface code a draw does.
+            HDC dc = ::CreateCompatibleDC(nullptr);
+            nibSciCall(nullptr, -1, SCI_APPENDTEXT, body.size(), reinterpret_cast<intptr_t>(body.c_str()));
+            const Sci_Rectangle page{ 0, 0, 2000, 2000 };
+            Sci_RangeToFormatFull fr{ dc, dc, page, page, { base, end } };
+            check(nibSciCall(nullptr, -1, SCI_FORMATRANGEFULL, 0, reinterpret_cast<intptr_t>(&fr)) == end,
+                  "SCI_FORMATRANGEFULL formats a range on a plugin's HDC");
+            check(direct(directP, SCI_FORMATRANGEFULL, 1, reinterpret_cast<intptr_t>(&fr)) == end, "...and draws on it, through the direct function too");
+            fr.hdc = nullptr;
+            check(nibSciCall(nullptr, -1, SCI_FORMATRANGEFULL, 0, reinterpret_cast<intptr_t>(&fr)) == 0, "...and refuses a null HDC");
+            nibSciCall(nullptr, -1, SCI_UNDO, 0, 0);
+            ::DeleteDC(dc);
+#endif
+        }
+
+        // The rest of Scintilla's notifications (nib.events v6). Driven the way Phase 7 drives them, for the
+        // same reason, except SCN_MODIFIED, which real edits produce. A code arriving proves little by
+        // itself, so each asserts the payload its own reader would use.
+        {
+            mark = readLogLines().size();
+            const auto send = [](wxStyledTextCtrl* stc, wxStyledTextEvent& e) { e.SetEventObject(stc); stc->ProcessWindowEvent(e); };
+            { wxStyledTextEvent e(wxEVT_STC_AUTOCOMP_SELECTION); e.SetPosition(4); e.SetString("hello"); e.SetListCompletionMethod(SC_AC_TAB); send(g_view, e); }
+            { wxStyledTextEvent e(wxEVT_STC_USERLISTSELECTION);  e.SetListType(9); e.SetString("item"); send(g_view, e); }
+            { wxStyledTextEvent e(wxEVT_STC_UPDATEUI);           e.SetUpdated(SC_UPDATE_V_SCROLL); send(g_view, e); }
+            { wxStyledTextEvent e(wxEVT_STC_SAVEPOINTLEFT);      send(g_view, e); }
+            { wxStyledTextEvent e(wxEVT_STC_SAVEPOINTLEFT);      send(g_subStc, e); }
+            { wxStyledTextEvent e(wxEVT_STC_ZOOM);               send(g_view, e); }
+            { wxStyledTextEvent e(wxEVT_STC_CALLTIP_CLICK);      send(g_view, e); }
+            { wxFocusEvent e(wxEVT_KILL_FOCUS); e.SetEventObject(g_view); g_view->ProcessWindowEvent(e); }
+            { wxFocusEvent e(wxEVT_SET_FOCUS);  e.SetEventObject(g_view); g_view->ProcessWindowEvent(e); }
+            nibSciCall(nullptr, -1, SCI_APPENDTEXT, 2, reinterpret_cast<intptr_t>("q\n"));
+            nibSciCall(nullptr, -1, SCI_UNDO, 0, 0);
+            pump();
+            L = readLogLines();
+            check(findFrom(L, mark, "{\"k\":\"acs\",\"p\":4,\"t\":\"hello\",\"m\":3}") >= 0, "SCN_AUTOCSELECTION carries the position, text and completion method");
+            check(findFrom(L, mark, "{\"k\":\"uls\",\"lt\":9,\"t\":\"item\"}") >= 0, "SCN_USERLISTSELECTION carries the list type and text");
+            check(findFrom(L, mark, "{\"k\":\"uu\",\"u\":4}") >= 0, "SCN_UPDATEUI reports a scroll, not only a selection change");
+            check(findFrom(L, mark, "{\"k\":\"spl\",\"sub\":0}") >= 0, "a notification from the main view names the main view");
+            check(findFrom(L, mark, "{\"k\":\"spl\",\"sub\":1}") >= 0, "a notification from the second view names the second view");
+            check(findFrom(L, mark, notifNeedlePrefix(SCN_ZOOM)) >= 0, "SCN_ZOOM reached the probe");
+            check(findFrom(L, mark, notifNeedlePrefix(SCN_CALLTIPCLICK)) >= 0, "SCN_CALLTIPCLICK reached the probe");
+            check(findFrom(L, mark, notifNeedlePrefix(SCN_FOCUSOUT)) >= 0, "SCN_FOCUSOUT reached the probe");
+            check(findFrom(L, mark, notifNeedlePrefix(SCN_FOCUSIN)) >= 0, "SCN_FOCUSIN reached the probe");
+            check(findFrom(L, mark, "{\"k\":\"md\",\"la\":1,\"c0\":113,\"len\":2}") >= 0, "a real insert's SCN_MODIFIED carries its text, length and line count");
+
+            // Restyling is the case that matters: it is an SCN_MODIFIED per run, unless a plugin asks.
+            nibSciCall(nullptr, -1, SCI_APPENDTEXT, 1, reinterpret_cast<intptr_t>("z"));
+            const intptr_t styled = coreSciCall(-1, SCI_GETLENGTH, 0, 0) - 1;
+            const sptr_t editor = coreSciCall(-1, SCI_GETDIRECTPOINTER, 0, 0);
+            const intptr_t styleMask = coreSciCall(-1, SCI_GETMODEVENTMASK, 0, 0);
+            const auto restyleReachesProbe = [&] {
+                const size_t before = readLogLines().size();
+                for (int style : { 201, 0 })
+                {
+                    coreSciCall(-1, SCI_STARTSTYLING, styled, 0);
+                    coreSciCall(-1, SCI_SETSTYLING, 1, style);
+                }
+                pump();
+                return findFrom(readLogLines(), before, notifNeedlePrefix(SCN_MODIFIED)) >= 0;
+            };
+            g_sciDirect(editor, SCI_SETMODEVENTMASK, SC_MODEVENTMASKALL, 0);   // the host's own wide mask
+            check(!restyleReachesProbe(), "restyling stays away from plugins that did not ask for it");
+            coreSciCall(-1, SCI_SETMODEVENTMASK, SC_MOD_CHANGESTYLE, 0);
+            check(restyleReachesProbe(), "...and reaches one that did");
+            coreSciCall(-1, SCI_SETMODEVENTMASK, 0, 0);
+            g_sciDirect(editor, SCI_SETMODEVENTMASK, styleMask, 0);
+            nibSciCall(nullptr, -1, SCI_UNDO, 0, 0);
+        }
+
         // ---- autocomplete windowed harvest: bounded per-keystroke cost, end-to-end ------------------
         // autoComplete used to copy + scan the WHOLE buffer on every word character typed, on every file
         // (300 ms/keystroke at 16 MiB - funclist_selftest --bench). Now it harvests at most a 1 MiB
