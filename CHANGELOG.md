@@ -6,6 +6,13 @@ All notable changes to wxNote are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Notepad4- and Notepad++-style launch options.** `-l`/`--language <Language>` opens the files as that
+  language (`-l python`, `-l cpp`); `-q`/`--create` creates a missing file without asking (without it,
+  wxNote now offers to create it instead of opening nothing); `--no-session` neither restores nor saves
+  the session; `--session <file>` opens a saved session; `--ns` opens each file in its own window unless
+  the main window has it, and `--rs` is `-r`. Notepad++'s spellings work as aliases (`-multiInst`,
+  `-nosession`, `-openSession`, `-ro`, `-lpython`, `-n42 -c7`, `-noPlugin`), and its window and printing
+  options are ignored instead of refusing the launch.
 - **Line and Blank Operations work on the selection, as in Notepad++.** Sorting, Reverse, Randomize,
   Remove Duplicate / Consecutive Duplicate / Empty Lines, the Trims, TAB/Space and EOL to Space act on
   the lines the selection covers (a selection ending at the start of a line leaves that line out), or on
@@ -158,6 +165,11 @@ All notable changes to wxNote are documented here. Format loosely follows
   folder, where a second launch looks.
 
 ### Changed
+- **One window by default.** "Reuse an existing window" is now on, as in Notepad++: a second launch hands
+  its files to the running window. Only the main window - the first one - restores and saves the session
+  and keeps crash-recovery copies; a window opened beside it with `-n` starts empty, leaves the session
+  alone and asks to save unsaved changes when it quits, instead of two windows overwriting each other's
+  session. A theme or language restart of the main window stays the main window.
 - **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved
   out of the Windows registry (an INI file elsewhere) into `settings.yaml` in the per-user data
   directory. It holds only what you changed - the defaults live in wxNote - as one `id: value` line

@@ -166,7 +166,7 @@ marked so in the table: today the indentation pair.
 | `window.integratedTitleBar` | bool | `false` | `IntegratedBar` |
 | `window.buttonStyle` | `native` / `flat` / `minimal` | `native` (Windows), `flat` (Linux) | `TopBarButtonStyle` 0–2 |
 | `window.ignorePlatformDecorations` | bool (Linux) | `false` | `IgnorePlatformDeco` |
-| `window.reuseInstance` | bool | `false` | `ReuseInstance` |
+| `window.reuseInstance` | bool | `true` | `ReuseInstance` |
 | `editor.fontFamily` | font name | `Cascadia Mono` | `Editing/FontFace` |
 | `editor.tabSize` | 1–16 · *per language* | `4` | `Editing/TabWidth` |
 | `editor.useTabs` | bool · *per language* | `true` | `Editing/UseTabs` |
