@@ -8,6 +8,20 @@ All notable changes to wxNote are documented here. Format loosely follows
 ### Added
 - **Save All and Don't Save Any on the save prompt**, when several modified documents close together
   (Close All, the Close Multiple Documents commands, quitting).
+- **Plugins get the current Scintilla API.** wxNote's editor is Scintilla 5.0, and a plugin built against
+  today's Notepad++ headers sends messages that editor has never heard of, which quietly did nothing. The
+  ones with an exact equivalent now work: `SCI_GETTEXTRANGEFULL`, `SCI_FINDTEXTFULL`, `SCI_FORMATRANGEFULL`,
+  `SCI_GETSTYLEDTEXTFULL`, `SCI_GETSTYLEINDEXAT`, `SCI_REPLACETARGETMINIMAL`, `SCI_CUTALLOWLINE`,
+  `SCI_SCROLLVERTICAL`, `SCI_CHANGESELECTIONMODE`, `SCI_SETMOVEEXTENDSSELECTION` and
+  `SCI_GETDIRECTSTATUSFUNCTION`. They reach files past 2 GiB, which is what the `FULL` ones are for, except
+  `SCI_FORMATRANGEFULL`, which stops there. They work through the direct function too, which also closes
+  the way a plugin could turn off the change tracking that crash recovery depends on.
+- **Plugins hear what the editor says.** `nib.events` v6 relays Scintilla's own notifications, so the
+  Notepad++ bridge now delivers 21 more of them: `SCN_MODIFIED` and `SCN_UPDATEUI` with their full details
+  (scrolling included, and from the view that really sent them), the auto-completion and user-list
+  selections, `SCN_DOUBLECLICK`, `SCN_ZOOM`, `SCN_PAINTED`, `SCN_FOCUSIN`/`OUT`, and the rest listed at
+  `NIB_EV_EDITOR_NOTIFY` in `nib.h`. Restyling stays away from plugins unless they ask for it, as in
+  Notepad++. `SCN_MACRORECORD` is not relayed.
 - **Notepad4- and Notepad++-style launch options.** `-l`/`--language <Language>` opens the files as that
   language (`-l python`, `-l cpp`); `-q`/`--create` creates a missing file without asking (without it,
   wxNote now offers to create it instead of opening nothing); `--no-session` neither restores nor saves

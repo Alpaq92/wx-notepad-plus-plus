@@ -78,6 +78,7 @@
 #include <dwmapi.h>
 #include <uxtheme.h>
 #include <wx/msw/darkmode.h>   // wxDarkModeSettings - recolour wx's native dark menu bar (see WxnDarkModeSettings)
+#include <wx/msw/dc.h>         // wxDCTemp - a plugin's HDC, in the form wx's Scintilla can draw on
 #include <shellapi.h>          // ShellExecuteW / SHFileOperationW - File menu shell commands (Explorer, cmd, Recycle Bin)
 #include <shobjidl.h>          // IFileOperation / SHCreateItemFromParsingName - shell-brokered elevated save (tryElevatedWrite)
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
@@ -164,6 +165,7 @@ extern "C" int  wxn_TrashFile(const char* path, char* err, int errLen);
 #include "ILexer.h"             // Scintilla::ILexer5 (required by Lexilla.h)
 #include "Lexilla.h"            // CreateLexer() - syntax highlighting
 #include "SciLexer.h"           // SCE_* lexer style numbers
+#include "sci_compat.h"         // Scintilla messages newer than the Scintilla wxWidgets ships
 #include <wx/dynlib.h>         // wxDynamicLibrary - portable .dll/.so/.dylib loader (Nib plugin host)
 #include <cstring>             // strcmp / memcpy (Nib host)
 #include <climits>             // INT_MAX - the autocomplete harvest's int-position overflow guard
@@ -794,6 +796,80 @@ static int selection_fore_bgr(int selBackBgr, int themeForeBgr)
 static std::function<intptr_t(int, unsigned, uintptr_t, intptr_t)> g_coreSciCall;
 static intptr_t coreSciCall(int view, unsigned msg, uintptr_t w, intptr_t l)
 { return g_coreSciCall ? g_coreSciCall(view, msg, w, l) : 0; }
+
+// SCI_FORMATRANGEFULL by way of 5.0's SCI_FORMATRANGE, whose range is a `long` (see sci_compat.h: there is
+// no other route to the printing code). Past that limit it reports the page as finished, which ends a
+// plugin's print loop instead of spinning it.
+//
+// wx reads the structure's hdc as a wxDC*, so a plugin's HDC has to be wrapped or the first draw crashes.
+// Off Windows a plugin has no surface to offer that wx could use, so there it reports nothing formatted.
+template <class Send>
+static intptr_t sciFormatRangeFull(bool draw, const Sci_RangeToFormatFull* fr, Send& send)
+{
+#ifdef __WXMSW__
+    struct { Sci_SurfaceID hdc, hdcTarget; Sci_Rectangle rc, rcPage; long cpMin, cpMax; } narrow;
+    if (!fr || !fr->hdc || !fr->hdcTarget) return 0;
+    const Sci_Position limit = LONG_MAX;
+    if (fr->chrg.cpMin > limit) return fr->chrg.cpMax;
+    wxDCTemp surface(reinterpret_cast<WXHDC>(fr->hdc)), target(reinterpret_cast<WXHDC>(fr->hdcTarget));
+    narrow.hdc = static_cast<wxDC*>(&surface);
+    narrow.hdcTarget = static_cast<wxDC*>(&target);
+    narrow.rc = fr->rc;
+    narrow.rcPage = fr->rcPage;
+    narrow.cpMin = static_cast<long>(fr->chrg.cpMin);
+    narrow.cpMax = static_cast<long>(std::min(fr->chrg.cpMax, limit));
+    constexpr unsigned kSciFormatRange = 2151;   // SCI_FORMATRANGE: the plugin header has retired the name
+    return send(kSciFormatRange, draw ? 1 : 0, reinterpret_cast<intptr_t>(&narrow));
+#else
+    (void)draw; (void)fr; (void)send;
+    return 0;
+#endif
+}
+
+using SciDirectFn = intptr_t (*)(intptr_t, unsigned, uintptr_t, intptr_t);
+static SciDirectFn g_sciDirect = nullptr;   // the editor's own direct function: one per process, not per view
+static unsigned g_sciPluginModMask = 0;     // what plugins asked for with SCI_SETMODEVENTMASK (see nibHearsModified)
+static intptr_t sciDirectCall(intptr_t ptr, unsigned msg, uintptr_t w, intptr_t l);
+static intptr_t sciDirectStatusCall(intptr_t ptr, unsigned msg, uintptr_t w, intptr_t l, int* status);
+
+// What every plugin Scintilla message passes through, whichever way it arrived.
+template <class Send>
+static intptr_t sciDispatch(unsigned msg, uintptr_t w, intptr_t l, Send&& send)
+{
+    switch (msg)
+    {
+    // A plugin narrowing the modify-event mask (a common N++ plugin action - it is why N++ grew
+    // NPPM_ADDSCNMODIFIEDFLAGS as a union) must not starve the HOST: onStcModified feeds the
+    // crash-backup's editSerial from SCN_MODIFIED insert/delete events, so a mask without those
+    // bits would freeze the serial while content keeps changing and skip-if-unchanged would then
+    // hold a stale .bak through every tick AND the exit backup. OR the host's bits in; the plugin
+    // still receives at least everything it asked for.
+    case SCI_SETMODEVENTMASK:
+        g_sciPluginModMask = static_cast<unsigned>(w);
+        return send(msg, w | static_cast<uintptr_t>(SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT), l);
+    case SCI_FORMATRANGEFULL:
+        return sciFormatRangeFull(w != 0, reinterpret_cast<const Sci_RangeToFormatFull*>(l), send);
+    // A plugin that asks for the direct function is handing back this funnel, and it is the kind of
+    // plugin that sends the most messages. So it gets a function that still comes through here.
+    case SCI_GETDIRECTFUNCTION:
+    case SCI_GETDIRECTSTATUSFUNCTION:
+        g_sciDirect = reinterpret_cast<SciDirectFn>(send(SCI_GETDIRECTFUNCTION, 0, 0));
+        return msg == SCI_GETDIRECTFUNCTION ? reinterpret_cast<intptr_t>(&sciDirectCall)
+                                            : reinterpret_cast<intptr_t>(&sciDirectStatusCall);
+    default:
+        return wxnsci::translate(msg, w, l, send);
+    }
+}
+static intptr_t sciDirectCall(intptr_t ptr, unsigned msg, uintptr_t w, intptr_t l)
+{
+    return sciDispatch(msg, w, l, [ptr](unsigned m, uintptr_t a, intptr_t b) { return g_sciDirect(ptr, m, a, b); });
+}
+static intptr_t sciDirectStatusCall(intptr_t ptr, unsigned msg, uintptr_t w, intptr_t l, int* status)
+{
+    const intptr_t result = sciDirectCall(ptr, msg, w, l);
+    if (status) *status = static_cast<int>(g_sciDirect(ptr, SCI_GETSTATUS, 0, 0));
+    return result;
+}
 
 // The two view editors, published so the free-function Win32 SCI bridge (SciHwndProc can't see the
 // frame's m_main/m_sub) can turn a subclass ref back into a view index. Set by the frame.
@@ -2810,6 +2886,62 @@ static void nibFireEvent(const NibEvent& ev, NibFireGate gate = NIB_FIRE_ALL)   
         if (s.kind == ev.kind && s.fn && (gate == NIB_FIRE_ALL || (gate == NIB_FIRE_V2_ONLY) == s.v2))
             s.fn(reinterpret_cast<NibHost*>(g_view), &ev, s.user);
 }
+// v6 NIB_EV_EDITOR_NOTIFY. Free functions taking the view by number, because a focus event can still
+// reach an editor while the frame that owns it is being destroyed.
+static bool nibWantsEditorNotify()
+{
+    for (const auto& s : g_nibSubs)
+        if (s.kind == NIB_EV_EDITOR_NOTIFY) return true;
+    return false;
+}
+static void nibFireEditorNotify(const NibEditorNotify& info)
+{
+    NibEvent ev{}; ev.kind = NIB_EV_EDITOR_NOTIFY; ev.struct_size = sizeof(NibEvent);
+    ev.as.editor.info = &info;
+    nibFireEvent(ev);
+}
+// The editor's event mask serves the host, and the host's is wide: every run of restyled text is an
+// SCN_MODIFIED. Notepad++ keeps those from plugins unless they ask, and calling every plugin for each one
+// would be felt in any large file. So plugins get what it sends by default, plus what they asked for, by
+// either of the two ways they can ask.
+static bool nibHearsModified(int type)
+{
+    const unsigned byDefault = SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT | SC_MOD_CHANGEINDICATOR;
+    return (static_cast<unsigned>(type) & (byDefault | g_nibModifiedMask | g_sciPluginModMask)) != 0;
+}
+static void nibRelayStcEvent(wxStyledTextEvent& e, unsigned code, int view)
+{
+    if (nibWantsEditorNotify() && (code != SCN_MODIFIED || nibHearsModified(e.GetModificationType())))
+    {
+        NibEditorNotify n{};
+        n.struct_size = sizeof(n); n.code = code; n.view = view;
+        n.ch = e.GetKey(); n.modifiers = e.GetModifiers(); n.margin = e.GetMargin();
+        n.x = e.GetX(); n.y = e.GetY();
+        n.updated = e.GetUpdated();
+        n.list_type = e.GetListType(); n.list_completion_method = e.GetListCompletionMethod();
+        n.modification_type = e.GetModificationType(); n.lines_added = e.GetLinesAdded();
+        n.fold_level_now = e.GetFoldLevelNow(); n.fold_level_prev = e.GetFoldLevelPrev();
+        n.token = e.GetToken(); n.annotation_lines_added = e.GetAnnotationsLinesAdded();
+        n.position = e.GetPosition(); n.length = e.GetLength(); n.line = e.GetLine();
+        const wxString text = e.GetString();        // named: utf8_str() points into the string it was called on
+        const wxScopedCharBuffer u8 = text.utf8_str();
+        // `length` is what a plugin will read, and it counts the document's bytes. Bytes that did not
+        // survive the trip through wxString could leave fewer here, so such text is dropped, not overrun.
+        if (code == SCN_MODIFIED ? (u8.length() > 0 && static_cast<int>(u8.length()) == e.GetLength())
+                                 : (code == SCN_USERLISTSELECTION || code == SCN_AUTOCSELECTION ||
+                                    code == SCN_AUTOCCOMPLETED    || code == SCN_AUTOCSELECTIONCHANGE))
+            n.text = u8.data();
+        nibFireEditorNotify(n);
+    }
+    e.Skip();
+}
+static void nibRelayFocus(unsigned code, int view)
+{
+    if (!nibWantsEditorNotify()) return;
+    NibEditorNotify n{};
+    n.struct_size = sizeof(n); n.code = code; n.view = view;
+    nibFireEditorNotify(n);
+}
 // Fire a document-scoped event (id = the EditorPage*). The one shape every document event shares.
 static void nibFireDocEvent(NibEventKind kind, void* page, NibFireGate gate = NIB_FIRE_ALL)
 {
@@ -3227,6 +3359,7 @@ static const NibEventsApi   g_nibEventsApiV2 = { 2, sizeof(NibEventsApi),   nibS
 static const NibEventsApi   g_nibEventsApiV3 = { 3, sizeof(NibEventsApi),   nibSubscribeV2, nibSetModifiedMask }; // v3: + modified-mask, language/style/shortcut/shutdown kinds
 static const NibEventsApi   g_nibEventsApiV4 = { 4, sizeof(NibEventsApi),   nibSubscribeV2, nibSetModifiedMask }; // v4: + long-tail file lifecycle (rename/delete/order/readonly/before-load) + cmdline plugin message
 static const NibEventsApi   g_nibEventsApiV5 = { 5, sizeof(NibEventsApi),   nibSubscribeV2, nibSetModifiedMask }; // v5: + raw editor input (char-added / margin-click / dwell / hotspot)
+static const NibEventsApi   g_nibEventsApiV6 = { 6, sizeof(NibEventsApi),   nibSubscribeV2, nibSetModifiedMask }; // v6: + the editor's own notifications (NIB_EV_EDITOR_NOTIFY)
 // Adding an event KIND is free; adding a union member is not, if it grows NibEvent. A plugin built
 // against an older nib.h sized its own copies from the header it saw, so a bigger struct is how an
 // "additive" change turns into an overrun. Every v5 member (key/margin/mouse/hotspot) is smaller than
@@ -3254,6 +3387,7 @@ static const void* nibQuery(NibHost*, const char* iface, uint32_t minv)
         if (minv == 3) return &g_nibEventsApiV3;   // + set_modified_mask + v3 event kinds
         if (minv == 4) return &g_nibEventsApiV4;   // + v4 long-tail file-lifecycle + cmdline plugin message kinds
         if (minv == 5) return &g_nibEventsApiV5;   // + v5 raw editor input (char-added / margin-click / dwell / hotspot)
+        if (minv == 6) return &g_nibEventsApiV6;   // + v6 the editor's own notifications
         return nullptr;
     }
     if (minv <= 1 && std::strcmp(iface, NIB_IFACE_PANELS)   == 0) return &g_nibPanelsApi;
@@ -5070,16 +5204,10 @@ private:
         g_mainStc = m_main.stc; g_subStc = m_sub.stc;
         g_coreSciCall = [this](int view, unsigned msg, uintptr_t w, intptr_t l) -> intptr_t {
             wxStyledTextCtrl* stc = (view == 0) ? m_main.stc : (view == 1) ? m_sub.stc : m_stc;
-            // A plugin narrowing the modify-event mask (a common N++ plugin action - it is why N++ grew
-            // NPPM_ADDSCNMODIFIEDFLAGS as a union) must not starve the HOST: onStcModified feeds the
-            // crash-backup's editSerial from SCN_MODIFIED insert/delete events, so a mask without those
-            // bits would freeze the serial while content keeps changing and skip-if-unchanged would then
-            // hold a stale .bak through every tick AND the exit backup. OR the host's bits in; the plugin
-            // still receives at least everything it asked for. (Known residual: a plugin that fetches
-            // SCI_GETDIRECTFUNCTION and sets the mask through the direct pointer bypasses this funnel -
-            // peekDoc preserves whatever mask it finds, but the serial starves until the mask is widened.)
-            if (msg == SCI_SETMODEVENTMASK) w |= (uintptr_t)(SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT);
-            return stc ? static_cast<intptr_t>(stc->SendMsg(static_cast<int>(msg), static_cast<wxUIntPtr>(w), static_cast<wxIntPtr>(l))) : 0;
+            if (!stc) return 0;
+            return sciDispatch(msg, w, l, [stc](unsigned m, uintptr_t a, intptr_t b) {
+                return static_cast<intptr_t>(stc->SendMsg(static_cast<int>(m), static_cast<wxUIntPtr>(a), static_cast<wxIntPtr>(b)));
+            });
         };
         // Let plugins invoke a built-in command by id (nib.commands v2 -> the N++ bridge's NPPM_MENUCOMMAND),
         // through the same dispatcher as menu/toolbar clicks so large frozen ids don't wrap in WM_COMMAND.
@@ -5202,6 +5330,36 @@ private:
             if (EditorPage* p = pageShownIn(vp)) { p->dirty = false; clearRecovery(p); refreshTabLabel(p); }
             NibEvent ev{}; ev.kind = NIB_EV_DOCUMENT_SAVED; ev.struct_size = sizeof(NibEvent); nibFireEvent(ev, NIB_FIRE_V1_ONLY); e.Skip(); });
         v.stc->Bind(wxEVT_CONTEXT_MENU,         &WxnShellFrameT::onStcContextMenu, this);
+        // v6 nib.events: Scintilla's notifications, as they are. wx runs the last handler bound first, so
+        // binding these here means a plugin hears each one before the host's own handler above can decide
+        // not to Skip it, and SCN_AUTOCSELECTION in time to cancel the insertion. Focus is the reverse:
+        // bound below the host's handler, so that it has made this view the active one by then.
+        const int view = paneIndex(&v);
+        const struct { wxEventTypeTag<wxStyledTextEvent> type; unsigned code; } relays[] = {
+            { wxEVT_STC_MODIFIED,                  SCN_MODIFIED },
+            { wxEVT_STC_UPDATEUI,                  SCN_UPDATEUI },
+            { wxEVT_STC_DOUBLECLICK,               SCN_DOUBLECLICK },
+            { wxEVT_STC_ZOOM,                      SCN_ZOOM },
+            { wxEVT_STC_PAINTED,                   SCN_PAINTED },
+            { wxEVT_STC_NEEDSHOWN,                 SCN_NEEDSHOWN },
+            { wxEVT_STC_STYLENEEDED,               SCN_STYLENEEDED },
+            { wxEVT_STC_SAVEPOINTLEFT,             SCN_SAVEPOINTLEFT },
+            { wxEVT_STC_ROMODIFYATTEMPT,           SCN_MODIFYATTEMPTRO },
+            { wxEVT_STC_USERLISTSELECTION,         SCN_USERLISTSELECTION },
+            { wxEVT_STC_AUTOCOMP_SELECTION,        SCN_AUTOCSELECTION },
+            { wxEVT_STC_AUTOCOMP_CANCELLED,        SCN_AUTOCCANCELLED },
+            { wxEVT_STC_AUTOCOMP_CHAR_DELETED,     SCN_AUTOCCHARDELETED },
+            { wxEVT_STC_AUTOCOMP_COMPLETED,        SCN_AUTOCCOMPLETED },
+            { wxEVT_STC_AUTOCOMP_SELECTION_CHANGE, SCN_AUTOCSELECTIONCHANGE },
+            { wxEVT_STC_CALLTIP_CLICK,             SCN_CALLTIPCLICK },
+            { wxEVT_STC_INDICATOR_CLICK,           SCN_INDICATORCLICK },
+            { wxEVT_STC_INDICATOR_RELEASE,         SCN_INDICATORRELEASE },
+            { wxEVT_STC_MARGIN_RIGHT_CLICK,        SCN_MARGINRIGHTCLICK },
+        };
+        for (const auto& r : relays)
+            v.stc->Bind(r.type, [code = r.code, view](wxStyledTextEvent& e) { nibRelayStcEvent(e, code, view); });
+        v.stc->Bind(wxEVT_SET_FOCUS,  [view](wxFocusEvent& e) { nibRelayFocus(SCN_FOCUSIN, view);  e.Skip(); });
+        v.stc->Bind(wxEVT_KILL_FOCUS, [view](wxFocusEvent& e) { nibRelayFocus(SCN_FOCUSOUT, view); e.Skip(); });
         v.stc->Bind(wxEVT_SET_FOCUS, [this, vp = &v](wxFocusEvent& e) { onViewFocus(vp); e.Skip(); });   // focus -> this view becomes active
     }
     // Auto-insert the matching closer (caret stays between), or skip over an existing one. Returns true if it

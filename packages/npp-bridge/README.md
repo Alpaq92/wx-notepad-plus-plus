@@ -66,6 +66,12 @@ rides in `nmhdr.hwndFrom`, matching N++). Each file notification carries the aff
 app-global before-load / cmdline message). See the compatibility notes for the two documented reductions
 (`NPPN_READONLYCHANGED` / `NPPN_DOCORDERCHANGED` do not carry N++'s secondary doc-status / new-index field).
 
+The **`nib.events` v6** round relays Scintilla's own notifications: `SCN_MODIFIED`, `SCN_UPDATEUI` and 19
+others (listed at `NIB_EV_EDITOR_NOTIFY` in `nib.h`) reach `beNotified` with their full payload, stamped with
+the view that sent them. `SCN_MODIFIED` carries insertions, deletions and indicator changes by default, and
+whatever else a plugin asked for with `NPPM_ADDSCNMODIFIEDFLAGS` or `SCI_SETMODEVENTMASK`. On a host without
+v6 the bridge falls back to deriving the two from `NIB_EV_TEXT_CHANGED` and `NIB_EV_SELECTION_CHANGED`.
+
 The **Phase-4** round added **event fidelity**: `ADDSCNMODIFIEDFLAGS` (opt into raw `SCN_MODIFIED` flags —
 the union is pushed to the host, which filters per modification *before* it crosses the ABI, the perf
 gate) surfaces matching modifications as `NPPN_GLOBALMODIFIED` carrying the real `modificationType`;
@@ -209,8 +215,8 @@ Code to the documented behaviour.
   so the visible views are never disturbed.
 * **`NPPM_ADDSCNMODIFIEDFLAGS` is a single global accumulator** (as in N++): each call ORs its flags into
   one shared mask and pushes the union to the host, which fires the raw-modification event *only* for
-  modifications whose `modificationType` intersects that mask (the perf gate — with no opt-in, the
-  high-volume `SCN_MODIFIED` path never crosses the ABI). Matching modifications are surfaced to every
+  modifications whose `modificationType` intersects that mask (the perf gate — with no opt-in, restyling
+  and other high-volume modifications never cross the ABI). Matching modifications are surfaced to every
   loaded plugin as **`NPPN_GLOBALMODIFIED`** carrying the real `modificationType` / position / length /
   linesAdded — this host routes the masked Scintilla-modification payload under that notification code.
 * **`NPPN_BEFORESHUTDOWN` / `NPPN_CANCELSHUTDOWN`** bracket a close *attempt*: BEFORESHUTDOWN fires when a
