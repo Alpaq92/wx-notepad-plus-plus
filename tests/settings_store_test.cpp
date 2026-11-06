@@ -221,6 +221,26 @@ static void testSchema()
     check(tabFor("Makefile") == 2, "...an invalid per-language value falls back");
     check(s.setInt("editor.tabSize", 3) && tabFor("Python") == 4, "editing the general value leaves languages alone");
     check(f.text().find("  Python:\n    editor.tabSize: 4\n") != std::string::npos, "...textually too");
+
+    // Writing them, as Preferences > Indentation does.
+    check(s.setLanguageInt("editor.tabSize", "Makefile", 8) && s.setLanguageBool("editor.useTabs", "Makefile", true)
+          && tabFor("Makefile") == 8 && tabsFor("Makefile"), "set a language's own values");
+    check(tabFor("Python") == 4 && !tabsFor("Python") && s.getInt("editor.tabSize") == 3, "...the other language and the general value untouched");
+    check(s.setLanguageInt("editor.tabSize", "C++", 3) && tabFor("C++") == 3
+          && f.text().find("    editor.tabSize: 3\n") != std::string::npos, "...kept when it equals the general value");
+    check(s.setLanguageInt("editor.tabSize", "Shell Script", 2) && tabFor("Shell Script") == 2, "...a name that needs no quoting");
+    check(!s.setLanguageInt("editor.tabSize", "Python", 99) && tabFor("Python") == 4, "...an out-of-range value refused");
+    check(!s.setLanguageInt("editor.lineNumbers", "Python", 1), "...and a setting that is not per language");
+    check(s.clearLanguage("editor.tabSize", "Python") && tabFor("Python") == 3 && !tabsFor("Python"), "clear one of a language's values");
+    check(s.clearLanguage("editor.useTabs", "Python") && f.text().find("Python") == std::string::npos, "...a language left with none goes");
+    check(s.clearLanguage("editor.tabSize", "Lua"), "...clearing what is not there is fine");
+    for (const char* l : { "Makefile", "C++", "Shell Script" }) { s.clearLanguage("editor.tabSize", l); s.clearLanguage("editor.useTabs", l); }
+    check(f.text() == "editor.tabSize: 3\n", "...and with no language left, `languages:` goes too");
+    f.load("# mine\neditor.wordWrap: true   # keep\nlanguages:\n");
+    check(s.setLanguageInt("editor.tabSize", "C#", 2) && tabFor("C#") == 2
+          && f.text().rfind("# mine\neditor.wordWrap: true   # keep\n", 0) == 0, "a language added under an empty `languages:`, comments elsewhere kept");
+    f.load("languages: [Python]\n");
+    check(!s.setLanguageInt("editor.tabSize", "Python", 2) && f.text() == "languages: [Python]\n", "a `languages:` this does not understand is left alone");
 }
 
 // No value at `path` (a container there counts as none, as for every reader).

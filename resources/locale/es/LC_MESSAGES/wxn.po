@@ -3264,3 +3264,9 @@ msgstr "Vaciar en cada búsqueda"
 
 msgid "Find in These Search Results"
 msgstr "Buscar en estos resultados"
+
+msgid "[Default]"
+msgstr "[Predeterminado]"
+
+msgid "Use default value"
+msgstr "Usar el valor predeterminado"

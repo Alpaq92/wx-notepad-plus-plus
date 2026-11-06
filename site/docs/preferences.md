@@ -94,6 +94,11 @@ reachable percentages to move with it.
 
 ## Indentation
 
+The list on the left picks what the settings beside it apply to: **[Default]**, for every language
+that has none of its own, or one language. A language with **Use default value** ticked follows
+[Default]; untick it to give that language its own tab size and tabs or spaces — tabs for Makefiles, 4
+spaces for Python. Open documents in that language pick the change up straight away.
+
 | Setting | Notes |
 | --- | --- |
 | Tab size | 1–16 |
@@ -209,7 +214,8 @@ languages:
   file as it is on disk, so neither change is lost.
 - **`languages:`** gives a language its own values, by its Language-menu name (`Python`, `C++`,
   `Shell`); today the tab size and tabs-or-spaces pair can be set per language, and a per-language
-  value beats the general one.
+  value beats the general one. Preferences ▸ Indentation writes them there too; it writes the whole
+  `languages:` block again when it does, so a comment inside that block does not survive.
 - A value of the wrong type falls back to the default for that one setting. A file that does not
   parse at all is not used — wxNote runs on the defaults, the status bar says where the file broke,
   and nothing is written to it until you fix it, so a typo can never cost you the rest of the file.

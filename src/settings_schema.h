@@ -210,6 +210,27 @@ public:
         return d && d->perLanguage && !lang.empty() && wxnyaml::getBool(m_file.getForLanguage(lang, id), out);
     }
 
+    // A language's own value, written under `languages: <lang>:` - kept even when it equals the general
+    // one, since it says this language does not follow that one. clearLanguage drops it again.
+    bool setLanguageInt(const char* id, const std::string& lang, long long v)
+    {
+        const Def* d = findDef(id);
+        if (!d || !d->perLanguage || d->kind != Kind::Int || v < d->lo || v > d->hi) return false;
+        const std::string s = std::to_string(v);
+        return m_file.setForLanguage(lang, id, s, s);
+    }
+    bool setLanguageBool(const char* id, const std::string& lang, bool v)
+    {
+        const Def* d = findDef(id);
+        if (!d || !d->perLanguage || d->kind != Kind::Bool) return false;
+        return m_file.setForLanguage(lang, id, v ? "true" : "false", v ? "true" : "false");
+    }
+    bool clearLanguage(const char* id, const std::string& lang)
+    {
+        const Def* d = findDef(id);
+        return d && d->perLanguage && m_file.setForLanguage(lang, id, std::string(), std::string());
+    }
+
     // Writes. A value equal to the default is removed from the file instead. False when the file
     // refused the edit (it does not parse) or the ID is unknown.
     bool setBool(const char* id, bool v)
