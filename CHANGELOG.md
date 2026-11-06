@@ -6,6 +6,8 @@ All notable changes to wxNote are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Save All and Don't Save Any on the save prompt**, when several modified documents close together
+  (Close All, the Close Multiple Documents commands, quitting).
 - **Line and Blank Operations work on the selection, as in Notepad++.** Sorting, Reverse, Randomize,
   Remove Duplicate / Consecutive Duplicate / Empty Lines, the Trims, TAB/Space and EOL to Space act on
   the lines the selection covers (a selection ending at the start of a line leaves that line out), or on
@@ -100,6 +102,10 @@ All notable changes to wxNote are documented here. Format loosely follows
   lexers even when started through `/usr/local/bin/wxnote`, a link.
 
 ### Fixed
+- **A tab keeps its folds, hidden lines, selection and scroll position.** Switching tabs used to expand
+  every fold, show hidden lines and put the caret at the top of the document. The tab in front lost its
+  folds too whenever another document was read in the background, as the 30 s backup does; it no longer
+  does. A saved session now records the caret of background tabs as well.
 - **Line and Blank Operations no longer rewrite the whole document.** They change only the lines they
   must, so bookmarks stay on their lines (Remove Unmarked Lines keeps the marked ones), the caret no
   longer jumps to the top, the change-history margin marks only what changed, and mixed line endings stay

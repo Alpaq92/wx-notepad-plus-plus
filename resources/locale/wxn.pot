@@ -3272,3 +3272,9 @@ msgstr ""
 
 msgid "Use default value"
 msgstr ""
+
+msgid "Save &All"
+msgstr ""
+
+msgid "Don't Save An&y"
+msgstr ""

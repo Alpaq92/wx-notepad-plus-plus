@@ -3270,3 +3270,9 @@ msgstr "[По умолчанию]"
 
 msgid "Use default value"
 msgstr "Использовать значение по умолчанию"
+
+msgid "Save &All"
+msgstr "Сохранить &все"
+
+msgid "Don't Save An&y"
+msgstr "Не сохранять &ни один"

@@ -3270,3 +3270,9 @@ msgstr "[默认]"
 
 msgid "Use default value"
 msgstr "使用默认值"
+
+msgid "Save &All"
+msgstr "全部保存(&A)"
+
+msgid "Don't Save An&y"
+msgstr "全部不保存(&Y)"

@@ -3270,3 +3270,9 @@ msgstr "[Domyślne]"
 
 msgid "Use default value"
 msgstr "Użyj wartości domyślnej"
+
+msgid "Save &All"
+msgstr "Zapisz &wszystkie"
+
+msgid "Don't Save An&y"
+msgstr "Nie zapisuj ż&adnego"

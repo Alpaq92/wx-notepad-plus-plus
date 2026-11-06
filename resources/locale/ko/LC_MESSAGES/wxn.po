@@ -3270,3 +3270,9 @@ msgstr "[기본값]"
 
 msgid "Use default value"
 msgstr "기본값 사용"
+
+msgid "Save &All"
+msgstr "모두 저장(&A)"
+
+msgid "Don't Save An&y"
+msgstr "모두 저장 안 함(&Y)"

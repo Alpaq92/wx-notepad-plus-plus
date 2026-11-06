@@ -3270,3 +3270,9 @@ msgstr "[Predeterminado]"
 
 msgid "Use default value"
 msgstr "Usar el valor predeterminado"
+
+msgid "Save &All"
+msgstr "Guardar &todo"
+
+msgid "Don't Save An&y"
+msgstr "No &guardar ninguno"
