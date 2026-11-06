@@ -3264,3 +3264,9 @@ msgstr "每次搜索时清除"
 
 msgid "Find in These Search Results"
 msgstr "在这些搜索结果中查找"
+
+msgid "[Default]"
+msgstr "[默认]"
+
+msgid "Use default value"
+msgstr "使用默认值"

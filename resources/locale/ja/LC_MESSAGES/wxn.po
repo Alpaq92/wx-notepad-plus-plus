@@ -3264,3 +3264,9 @@ msgstr "検索のたびに消去"
 
 msgid "Find in These Search Results"
 msgstr "この検索結果内を検索"
+
+msgid "[Default]"
+msgstr "[既定]"
+
+msgid "Use default value"
+msgstr "既定値を使用"
