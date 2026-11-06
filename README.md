@@ -164,16 +164,22 @@ wxnote [options] [files...]
 -e, --encoding <name>     force encoding: ansi|utf8|utf8bom|utf16le|utf16be
 -n, --new-instance        always open a new window
 -r, --reuse-instance      reuse an already-running window
+    --ns                  each file in its own window, unless the main window has it
+-l, --language <name>     open the files as this language (python, cpp, ...)
+-q, --create              create a missing file without asking
+    --no-session          neither restore nor save the session
+    --session <file>      open the files of a saved session
 -w, --wait                do not return until the file is closed
     --safe                start without loading any plugins
 -v, --version             print the version and exit
 -h, --help                show the usage message
 ```
 
-Files given on the command line are opened in tabs. By default every launch opens its own window;
-turning on Preferences > General > "Reuse an existing window" makes a second launch hand its files to
-the already-running window instead (over a local IPC connection) and exit — `-n`/`-r` override that
-setting for a single launch either way.
+Files given on the command line are opened in tabs. There is one window by default: a second launch
+hands its files to the running window (over a local IPC connection) and exits. Turning off
+Preferences > General > "Reuse an existing window" gives each launch its own window — `-n`/`-r` override
+that setting for a single launch either way. Only the first window restores and saves the session.
+Notepad++'s spellings (`-multiInst`, `-nosession`, `-lpython`, `-n42`, ...) are accepted too.
 
 `-w`/`--wait` makes wxnote usable as `$EDITOR` / `git config core.editor "wxnote --wait"`. It
 deliberately **implies `-n`**: the IPC handoff path exits immediately, so without forcing a new

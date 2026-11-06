@@ -600,6 +600,19 @@ if(MSVC)
     target_compile_options(desktop_entry_test PRIVATE /utf-8)
 endif()
 
+# ---- cmdline_compat_test: Notepad++'s launch options rewritten into wxNote's (src/cmdline_compat.h) --
+# Links NOTHING - the header is std::string over lang_table.h.
+#   cmake --build build --target cmdline_compat_test && build/bin/cmdline_compat_test
+add_executable(cmdline_compat_test tests/cmdline_compat_test.cpp)
+set_target_properties(cmdline_compat_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(cmdline_compat_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+if(MSVC)
+    target_compile_options(cmdline_compat_test PRIVATE /utf-8)
+endif()
+
 # ---- snippets_test: self-test for the snippet grammar (src/snippets.h) -----------------------------
 # STL and rapidyaml (snippets.yaml) - no wx. The grammar is where a snippet body silently loses a placeholder or
 # a field offset drifts off the text it marks, and both are visible from the parse result alone.
@@ -868,12 +881,13 @@ add_custom_target(selftests DEPENDS
     charset_selftest
     hunspell_selftest funclist_selftest comment_tokens_test lang_detect_test keywords_test language_defs_test catalog_selftest bridge_selftest
     desktop_entry_test
+    cmdline_compat_test
     terminal_selftest)
 
 # "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed. file_index_test
 # does call wxInitializer, but it links wx::base only, so it gets console traits and never opens a display.
 foreach(t diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test hunspell_selftest
-          funclist_selftest comment_tokens_test lang_detect_test keywords_test language_defs_test catalog_selftest plugin_catalog_test desktop_entry_test
+          funclist_selftest comment_tokens_test lang_detect_test keywords_test language_defs_test catalog_selftest plugin_catalog_test desktop_entry_test cmdline_compat_test
           yaml_io_test settings_store_test npp_compat_selftest)
     add_test(NAME ${t} COMMAND ${t})
     set_tests_properties(${t} PROPERTIES LABELS pure)

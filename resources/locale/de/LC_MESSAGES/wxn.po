@@ -3270,3 +3270,33 @@ msgstr "[Standard]"
 
 msgid "Use default value"
 msgstr "Standardwert verwenden"
+
+msgid "open each file in its own window, unless the main window has it open"
+msgstr "jede Datei in einem eigenen Fenster öffnen, außer das Hauptfenster hat sie schon offen"
+
+msgid "same as -r: the running window never opens a file twice"
+msgstr "wie -r: das laufende Fenster öffnet eine Datei nie zweimal"
+
+msgid "open the given file(s) as this language (e.g. Python, cpp)"
+msgstr "die angegebene(n) Datei(en) in dieser Sprache öffnen (z. B. Python, cpp)"
+
+msgid "create a file that does not exist without asking"
+msgstr "eine nicht vorhandene Datei ohne Nachfrage anlegen"
+
+msgid "neither restore nor save the session"
+msgstr "die Sitzung weder wiederherstellen noch speichern"
+
+msgid "open the files of a session file"
+msgstr "die Dateien einer Sitzungsdatei öffnen"
+
+msgid "Could not read the session file %s"
+msgstr "Die Sitzungsdatei %s konnte nicht gelesen werden"
+
+msgid "%s does not exist.\n\nCreate it?"
+msgstr "%s existiert nicht.\n\nAnlegen?"
+
+msgid "Could not create %s"
+msgstr "%s konnte nicht angelegt werden"
+
+msgid "Unknown language: %s"
+msgstr "Unbekannte Sprache: %s"
