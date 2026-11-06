@@ -2006,13 +2006,30 @@ static void srAddMatch(std::vector<SrHit>& hits, wxStyledTextCtrl* stc, int s, i
 // "DarkMode_CFD" visual style (the common-file-dialog one) to darken their *edit background* --
 // "DarkMode_Explorer" only darkens the dropdown arrow/scrollbar and leaves the field white.
 #ifdef __WXMSW__
+// In dark mode wx calls the undocumented uxtheme AllowDarkModeForWindow(TRUE) on every native control it
+// creates (wxMSWDarkMode::AllowForWindow). On a user32 LISTBOX that flag makes Windows paint the selected
+// row as a solid WHITE bar with white text - invisible - regardless of the visual style or the wx colours.
+// Revoking the flag restores the normal COLOR_HIGHLIGHT (blue) bar with COLOR_HIGHLIGHTTEXT, while an
+// explicit "DarkMode_Explorer" style still keeps the listbox's scrollbar dark. Measured on Win11 with a
+// pixel probe: flag on => (255,255,255) bar + white text; flag off => (0,120,212) bar + white text.
+// Ordinal 133 exists since Win10 1809; on anything older wx never set the flag, so a missing export is fine.
+static void darkListBoxSelectionMSW(HWND h)
+{
+    using AllowDarkModeForWindowFn = BOOL(WINAPI*)(HWND, BOOL);
+    static const auto allow = reinterpret_cast<AllowDarkModeForWindowFn>(
+        ::GetProcAddress(::GetModuleHandleW(L"uxtheme.dll"), MAKEINTRESOURCEA(133)));
+    if (allow) allow(h, FALSE);
+    ::SetWindowTheme(h, L"DarkMode_Explorer", nullptr);   // after revoking: dark scrollbar, no white selection
+}
+
 static BOOL CALLBACK themeChildProc(HWND h, LPARAM dark)
 {
     wchar_t cls[64] = {};
     ::GetClassNameW(h, cls, 63);
     const bool editLike = (::lstrcmpW(cls, L"ComboBox") == 0 || ::lstrcmpW(cls, L"Edit") == 0 || ::lstrcmpW(cls, L"ComboLBox") == 0);
-    if (dark) ::SetWindowTheme(h, editLike ? L"DarkMode_CFD" : L"DarkMode_Explorer", nullptr);
-    else      ::SetWindowTheme(h, L"Explorer", nullptr);
+    if (dark && ::lstrcmpW(cls, L"ListBox") == 0) darkListBoxSelectionMSW(h);
+    else if (dark) ::SetWindowTheme(h, editLike ? L"DarkMode_CFD" : L"DarkMode_Explorer", nullptr);
+    else           ::SetWindowTheme(h, L"Explorer", nullptr);
     return TRUE;
 }
 #endif
@@ -6018,6 +6035,9 @@ private:
     {
         m_docList = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE | wxBORDER_NONE);
         themeToEditor(m_docList);
+#ifdef __WXMSW__
+        if (m_dark) darkListBoxSelectionMSW(static_cast<HWND>(m_docList->GetHandle()));   // else its selected row paints white-on-white
+#endif
         m_docList->Bind(wxEVT_LISTBOX, [this](wxCommandEvent& ev) {
             const int s = ev.GetSelection();
             if (m_tabs && s >= 0 && (size_t)s < m_tabs->GetPageCount()) m_tabs->SetSelection((size_t)s);
@@ -6066,6 +6086,9 @@ private:
     {
         m_clipList = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE | wxBORDER_NONE);
         themeToEditor(m_clipList);
+#ifdef __WXMSW__
+        if (m_dark) darkListBoxSelectionMSW(static_cast<HWND>(m_clipList->GetHandle()));   // else its selected row paints white-on-white
+#endif
         m_clipList->Bind(wxEVT_LISTBOX_DCLICK, [this](wxCommandEvent& ev) { pasteClip(ev.GetSelection()); });   // double-click to paste
         m_aui.AddPane(m_clipList, wxAuiPaneInfo().Name("cliphistory").Caption(_("Clipboard History"))
                           .Right().BestSize(210, 400).MinSize(110, 80).CloseButton(true).Hide());
