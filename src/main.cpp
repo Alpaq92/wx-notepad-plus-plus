@@ -618,6 +618,26 @@ static bool wxnParseRuns(const std::string& text, std::vector<SavedRun>& out, lo
 }
 
 
+// What the view holds about the document it shows, not the document: selection, scroll, folds and hidden
+// lines. SCI_SETDOCPOINTER drops all of it, so whatever swaps a document out keeps this and puts it back
+// (captureViewState / applyViewState). Folds and hidden lines count document lines, so they only apply to a
+// document that still has as many lines; a selection is clamped by Scintilla whatever happened meanwhile.
+struct DocViewState
+{
+    bool saved = false;                            // false: never shown, nothing to put back
+    sptr_t anchor = 0, caret = 0;
+    int firstLine = 0, xOffset = 0, lines = 0;
+    std::vector<int> folded;                       // contracted fold headers
+    std::vector<std::pair<int, int>> hidden;       // runs of lines not on screen: fold bodies and Hide Lines alike
+};
+
+// Several documents closing together (Close All, quitting): the answer that covers the rest of them.
+struct CloseSweep
+{
+    int answer = 0;                                // wxID_YES Save All, wxID_NO Don't Save Any, 0 ask each
+    int modified = 0;                              // modified documents still to ask about
+};
+
 class EditorPage : public wxPanel
 {
 public:
@@ -648,6 +668,7 @@ public:
     uint64_t editSerial   = 0;             // bumped on every insert/delete (onStcModified; plus the one quiet background mutation, g_nibDocEolSet's CONVERTEOLS)
     uint64_t backupSerial = ~0ull;         // editSerial at the last successful .bak write; ~0 = no snapshot this session (a restored recovery buffer is dirty with 0 edits - it re-persists once, then rests)
     long long lastBackupMs = 0;            // wall-clock ms of that write; drives the big-buffer cadence stretch (wxnBackupThrottleMs)
+    DocViewState viewState;                // kept while this tab is in the background (activateBuffer)
 };
 
 // One editor "view" = a tab strip + ONE persistent wxStyledTextCtrl that hops across its pages (the
@@ -4767,10 +4788,10 @@ public:
     {
         if (!m_stc || pages.empty()) return;
         const sptr_t original = sci(SCI_GETDOCPOINTER);
-        const int savedAnchor = (int)sci(SCI_GETANCHOR), savedCaret = (int)sci(SCI_GETCURRENTPOS);
+        const DocViewState savedView = captureViewState();
         for (EditorPage* p : pages) { if (!p) continue; sci(SCI_SETDOCPOINTER, 0, p->doc); sci(SCI_SETREADONLY, 1); }
         sci(SCI_SETDOCPOINTER, 0, original);
-        sci(SCI_SETSEL, savedAnchor, savedCaret);
+        applyViewState(savedView);
         setStatus(0, _("Read-Only"));
     }
     // +/{pattern}: put the caret on the first LITERAL match of pattern in the active (last-opened) document.
@@ -7269,6 +7290,7 @@ private:
                     while ((ln = (int)sci(SCI_MARKERNEXT, ln + 1, 1 << MARK_BOOKMARK)) >= 0 && ln < lc) f.bookmarks.push_back(ln);
                     s.active[v] = (int)s.files[v].size();
                 }
+                else if (p->viewState.saved) { f.caret = (int)p->viewState.caret; f.firstLine = p->viewState.firstLine; }
                 s.files[v].push_back(f);
                 ++total;
             }
@@ -7819,10 +7841,16 @@ private:
             if (m_stc && m_stc->GetParent() == page) m_stc->SetSize(page->GetClientSize());   // only the page hosting the view resizes it
             e.Skip();
         });
+        // SCI_CREATEDOCUMENT also resets the folds of the document in this view (Editor.cxx), so the tab being
+        // left has to be read before it, not when activateBuffer leaves it.
+        EditorPage* leaving = activePage();
+        DocViewState leavingState;
+        if (leaving && leaving->doc == sci(SCI_GETDOCPOINTER)) leavingState = captureViewState();
         page->doc = sci(SCI_CREATEDOCUMENT, 0, SC_DOCUMENTOPTION_TEXT_LARGE);   // the buffer owns one ref
         page->path = path; page->title = title;
         m_tabs->AddPage(page, title, true);    // selecting it fires PAGE_CHANGED -> activateBuffer
         activateBuffer(page);                  // ensure it (the first AddPage may not fire PAGE_CHANGED); idempotent
+        if (leavingState.saved) leaving->viewState = leavingState;
         if (!path.empty())
         {
             // v4: a global "a file is about to load from disk" signal (id 0, before the content is read),
@@ -8084,10 +8112,47 @@ private:
         for (EditorPage* p : allPages()) if (reinterpret_cast<intptr_t>(p) == id) return p;
         return nullptr;
     }
+    // The view's state of the mounted document, and putting it back after a document swap. Hidden lines are
+    // set directly rather than by folding again, so a fold body and a Hide Lines run come back exactly as
+    // they were; SCI_SETFOLDEXPANDED only sets the header's flag. The all-visible check keeps the common
+    // case (nothing folded) free of a walk over every line.
+    DocViewState captureViewState()
+    {
+        DocViewState st;
+        st.saved = true;
+        st.anchor = sci(SCI_GETANCHOR);
+        st.caret = sci(SCI_GETCURRENTPOS);
+        st.firstLine = (int)sci(SCI_GETFIRSTVISIBLELINE);
+        st.xOffset = (int)sci(SCI_GETXOFFSET);
+        st.lines = (int)sci(SCI_GETLINECOUNT);
+        for (int l = (int)sci(SCI_CONTRACTEDFOLDNEXT, 0); l >= 0; l = (int)sci(SCI_CONTRACTEDFOLDNEXT, l + 1))
+            st.folded.push_back(l);
+        if (sci(SCI_GETALLLINESVISIBLE)) return st;
+        for (int l = 0; l < st.lines; ++l)
+        {
+            if (sci(SCI_GETLINEVISIBLE, l)) continue;
+            const int first = l;
+            while (l + 1 < st.lines && !sci(SCI_GETLINEVISIBLE, l + 1)) ++l;
+            st.hidden.emplace_back(first, l);
+        }
+        return st;
+    }
+    void applyViewState(const DocViewState& st)
+    {
+        if (!st.saved) return;
+        if (st.lines == (int)sci(SCI_GETLINECOUNT))
+        {
+            for (const int l : st.folded) sci(SCI_SETFOLDEXPANDED, l, 0);
+            for (const auto& run : st.hidden) sci(SCI_HIDELINES, run.first, run.second);
+        }
+        sci(SCI_SETSEL, st.anchor, st.caret);
+        sci(SCI_SETXOFFSET, st.xOffset);
+        sci(SCI_SETFIRSTVISIBLELINE, st.firstLine);
+    }
     // Run `fn` with page p's Scintilla document mounted on the ACTIVE view's editor. If p is already the
     // active page, fn runs directly. Otherwise p's doc is swapped in via a raw doc-pointer swap (NOT
     // activateBuffer - the active view's lexer/status/minimap/tab selection are untouched) with editor
-    // events quiet, and the active view's OWN document + caret/scroll are restored afterwards (a doc swap
+    // events quiet, and the active view's OWN document + view state are restored afterwards (a doc swap
     // clears the per-view selection - the documented doc-pointer-swap-loses-caret pitfall; the OTHER view
     // is never touched). Mirrors onSaveAll's background-buffer peek. Read-only or content-modifying `fn`.
     template <class Fn>
@@ -8095,17 +8160,14 @@ private:
     {
         if (!p || !m_stc) return;
         if (p == activePage()) { fn(); return; }
-        const sptr_t savedDoc    = sci(SCI_GETDOCPOINTER);
-        const int    savedAnchor = static_cast<int>(sci(SCI_GETANCHOR));
-        const int    savedCaret  = static_cast<int>(sci(SCI_GETCURRENTPOS));
-        const int    savedTop    = static_cast<int>(sci(SCI_GETFIRSTVISIBLELINE));
+        const sptr_t savedDoc  = sci(SCI_GETDOCPOINTER);
+        const DocViewState savedView = captureViewState();
         const sptr_t savedMask = sci(SCI_GETMODEVENTMASK);   // restore what was SET, not a hard ALL: a plugin-narrowed mask must survive a peek
         sci(SCI_SETMODEVENTMASK, 0);                 // quiet: the active view must not react to the peeked doc
         sci(SCI_SETDOCPOINTER, 0, p->doc);
         fn();
         sci(SCI_SETDOCPOINTER, 0, savedDoc);         // remount the active view's own document...
-        sci(SCI_SETSEL, savedAnchor, savedCaret);    // ...and restore its caret/selection (lost by the swap)
-        sci(SCI_SETFIRSTVISIBLELINE, savedTop);
+        applyViewState(savedView);                   // ...and restore its selection, scroll and folds (lost by the swap)
         sci(SCI_SETMODEVENTMASK, savedMask);
     }
     // Save the active document to `path`. asCopy: write a copy WITHOUT rebinding the active buffer to it
@@ -8211,8 +8273,10 @@ private:
         if (key == TabSortKey::Size && m_stc)
         {
             const sptr_t original = sci(SCI_GETDOCPOINTER);
+            const DocViewState savedView = captureViewState();
             for (EditorPage* p : pages) { sci(SCI_SETDOCPOINTER, 0, p->doc); lengths[p] = (int)sci(SCI_GETLENGTH); }
             sci(SCI_SETDOCPOINTER, 0, original);
+            applyViewState(savedView);
         }
 
         std::stable_sort(pages.begin(), pages.end(), [&](EditorPage* a, EditorPage* b) {
@@ -8320,6 +8384,9 @@ private:
         if (!m_stc) return;
         if (m_stc->GetParent() == p && sci(SCI_GETDOCPOINTER) == p->doc)
         { m_stc->SetFocus(); return; }                                      // already showing this buffer - nothing to do
+        // The tab being left. A closing one has had the editor lifted off it (deletePage), so is never this.
+        if (auto* out = dynamic_cast<EditorPage*>(m_stc->GetParent()); out && out != p && out->doc == sci(SCI_GETDOCPOINTER))
+            out->viewState = captureViewState();
         if (m_stc->GetParent() != p) m_stc->Reparent(p);                    // the one view hops onto the active page (wx-tracked)
         m_stc->SetSize(p->GetClientSize());
         m_stc->Show();
@@ -8329,6 +8396,7 @@ private:
         applyDocSettings(m_stc);   // tab width / use-tabs live on the DOCUMENT - see applyDocSettings
         m_path = p->path;
         setLexerForFile(p->path);                                           // re-apply lexer/styling for this doc
+        applyViewState(p->viewState);                                       // after the lexer: its fold levels belong to the document, and are already there
         m_lastFoldSection = -2; refreshFoldNestedAccent();                  // the nested-square accent marker is global to the view - re-evaluate it for the swapped-in document
         if (m_docMap) { m_docMap->SetDocPointer(reinterpret_cast<void*>(p->doc)); updateDocMapViewport(); }   // minimap follows the active doc
         parseFuncList();                                                    // re-parse symbols for the newly active doc
@@ -8456,7 +8524,9 @@ private:
     // launch (Notepad++'s session snapshot); on, it asks as well. An answered in-session close is a final
     // decision - clear any stale recovery, or discarded scratch tabs would resurrect as ghost tabs on every
     // future launch forever.
-    bool confirmClose(EditorPage* p, bool exiting = false)
+    // `sweep`: several documents are closing together, so the prompt offers Save All and Don't Save Any,
+    // and an answer given there covers the rest without asking.
+    bool confirmClose(EditorPage* p, bool exiting = false, CloseSweep* sweep = nullptr)
     {
         if (!p) return true;
         if (!exiting)
@@ -8468,6 +8538,8 @@ private:
         // Quitting with the setting off (the default): keep it for next launch. Only the main copy has a next
         // launch to keep it for (g_sessionOwner), so every other copy asks.
         if (exiting && !m_askBeforeClose && g_sessionOwner) { backupUnsavedChanges(p); return true; }
+        if (sweep && sweep->answer == wxID_YES) { onSave(); return sci(SCI_GETMODIFY) == 0; }   // an untitled one still asks for its name
+        if (sweep && sweep->answer == wxID_NO)  { clearRecovery(p); return true; }
         const wxString name = !p->path.empty() ? p->path : (p->title.empty() ? wxString("new") : p->title);
 
         wxDialog dlg(this, wxID_ANY, "wxNote");
@@ -8477,7 +8549,25 @@ private:
         auto* bSave = new wxButton(&dlg, wxID_YES, _("&Save"));
         auto* bNo   = new wxButton(&dlg, wxID_NO, _("Do&n't Save"));
         auto* bCan  = new wxButton(&dlg, wxID_CANCEL, _("&Cancel"));
-        row->Add(bSave, 0, wxRIGHT, 6); row->Add(bNo, 0, wxRIGHT, 6); row->Add(bCan, 0);
+        row->Add(bSave, 0, wxRIGHT, 6);
+        // Only with another modified document still to come: for the last one they would mean the same as
+        // Save and Don't Save.
+        enum { kSaveAll = wxID_HIGHEST + 1, kDiscardAll };
+        const bool forAll = sweep && sweep->modified > 1;
+        if (forAll)
+        {
+            auto* bAll = new wxButton(&dlg, kSaveAll, _("Save &All"));
+            row->Add(bAll, 0, wxRIGHT, 6);
+            bAll->Bind(wxEVT_BUTTON, [&dlg](wxCommandEvent&) { dlg.EndModal(kSaveAll); });
+        }
+        row->Add(bNo, 0, wxRIGHT, 6);
+        if (forAll)
+        {
+            auto* bNone = new wxButton(&dlg, kDiscardAll, _("Don't Save An&y"));
+            row->Add(bNone, 0, wxRIGHT, 6);
+            bNone->Bind(wxEVT_BUTTON, [&dlg](wxCommandEvent&) { dlg.EndModal(kDiscardAll); });
+        }
+        row->Add(bCan, 0);
         s->Add(row, 0, wxALIGN_RIGHT | wxLEFT | wxRIGHT | wxBOTTOM, 12);
         bSave->Bind(wxEVT_BUTTON, [&dlg](wxCommandEvent&) { dlg.EndModal(wxID_YES); });
         bNo->Bind(wxEVT_BUTTON,   [&dlg](wxCommandEvent&) { dlg.EndModal(wxID_NO); });
@@ -8485,11 +8575,19 @@ private:
         bSave->SetDefault();
         dlg.SetSizerAndFit(s); dlg.CentreOnParent();
         themeDialog(&dlg);
-        const int r = dlg.ShowModal();
+        int r = dlg.ShowModal();
         if (r == wxID_CANCEL) return false;
+        if (r == kSaveAll || r == kDiscardAll) { r = r == kSaveAll ? wxID_YES : wxID_NO; sweep->answer = r; }
+        if (sweep) --sweep->modified;
         if (r == wxID_YES) { onSave(); return sci(SCI_GETMODIFY) == 0; }   // p is active now (SetSelection above); false if Save As cancelled
         clearRecovery(p);   // Don't Save -> discard; an explicit, informed choice needs no safety net
         return true;
+    }
+    CloseSweep closeSweep(const std::vector<EditorPage*>& pages)
+    {
+        CloseSweep sweep;
+        for (EditorPage* p : pages) if (pageDirty(p)) ++sweep.modified;
+        return sweep;
     }
     void onPageClose(wxAuiNotebookEvent& e)
     {
@@ -8536,8 +8634,9 @@ private:
     }
     void closeAll()
     {
+        CloseSweep sweep = closeSweep(allPages());
         for (EditorPage* p : allPages())
-            if (!confirmClose(p)) return;                  // prompt across BOTH views; cancel aborts
+            if (!confirmClose(p, false, &sweep)) return;   // prompt across BOTH views; cancel aborts
         for (EditorPage* p : allPages()) recordClosed(p);  // all become restorable via Ctrl+Shift+T
         for (EditorPage* p : allPages()) nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);   // before any teardown: path/id still resolvable
         for (ViewPane* v : { &m_main, &m_sub })
@@ -8566,8 +8665,11 @@ private:
     }
     void closeAllBut(EditorPage* keep)
     {
-        for (EditorPage* p : allPages())
-            if (p != keep && !confirmClose(p)) return;     // prompt across BOTH views; cancel aborts
+        std::vector<EditorPage*> others = allPages();
+        others.erase(std::remove(others.begin(), others.end(), keep), others.end());
+        CloseSweep sweep = closeSweep(others);
+        for (EditorPage* p : others)
+            if (!confirmClose(p, false, &sweep)) return;   // prompt across BOTH views; cancel aborts
         for (EditorPage* p : allPages()) if (p != keep) recordClosed(p);
         for (EditorPage* p : allPages()) if (p != keep) nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);   // before teardown
         for (ViewPane* v : { &m_main, &m_sub })
@@ -8583,9 +8685,12 @@ private:
     void closeAllButPinned()
     {
         auto unpinned = [](wxAuiNotebook* nb, int i) { return nb->GetPageKind(i) != wxAuiTabKind::Pinned; };
+        std::vector<EditorPage*> closing;
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
             if (nb) for (int i = 0; i < (int)nb->GetPageCount(); ++i)
-                if (unpinned(nb, i) && !confirmClose(static_cast<EditorPage*>(nb->GetPage(i)))) return;   // cancel aborts
+                if (unpinned(nb, i)) closing.push_back(static_cast<EditorPage*>(nb->GetPage(i)));
+        CloseSweep sweep = closeSweep(closing);
+        for (EditorPage* p : closing) if (!confirmClose(p, false, &sweep)) return;   // cancel aborts
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
             if (nb) for (int i = 0; i < (int)nb->GetPageCount(); ++i)
                 if (unpinned(nb, i)) recordClosed(static_cast<EditorPage*>(nb->GetPage(i)));
@@ -8608,8 +8713,11 @@ private:
         // unloadNibPlugins() below - never moved (the plugin-unload-crash fix); this is only the "begin".
         nibFireDocEvent(NIB_EV_SHUTDOWN_BEGIN, nullptr);
         if (e.CanVeto())   // a forced close (e.g. the theme-restart) skips prompts and just exits
+        {
+            CloseSweep sweep = closeSweep(allPages());
             for (EditorPage* p : allPages())   // prompt EVERY modified doc across BOTH views - none lost on exit
-                if (!confirmClose(p, /*exiting=*/true)) { nibFireDocEvent(NIB_EV_SHUTDOWN_CANCEL, nullptr); e.Veto(); return; }   // -> NPPN_CANCELSHUTDOWN
+                if (!confirmClose(p, /*exiting=*/true, &sweep)) { nibFireDocEvent(NIB_EV_SHUTDOWN_CANCEL, nullptr); e.Veto(); return; }   // -> NPPN_CANCELSHUTDOWN
+        }
         // Geometry ONLY - deliberately not saveSettings(). Every preference the user can actually change
         // is written the moment it changes (the Preferences dialog's OK handler, the spell-dictionary and
         // spell-scope commands, the search-engine picker and the theme editor all call saveSettings()
@@ -11174,10 +11282,8 @@ private:
         // dirty, write it - without going through activateBuffer, so the active view's lexer/doc-map/status
         // aren't churned. A doc swap clears the view's per-view selection (see the second-view lifecycle
         // notes / sortTabs' size sort), so snapshot the caret + scroll and restore them afterwards.
-        const sptr_t savedDoc    = sci(SCI_GETDOCPOINTER);
-        const int    savedAnchor = static_cast<int>(sci(SCI_GETANCHOR));
-        const int    savedCaret  = static_cast<int>(sci(SCI_GETCURRENTPOS));
-        const int    savedTop    = static_cast<int>(sci(SCI_GETFIRSTVISIBLELINE));
+        const sptr_t savedDoc  = sci(SCI_GETDOCPOINTER);
+        const DocViewState savedView = captureViewState();
         bool swapped = false;
         for (EditorPage* p : allPages())
         {
@@ -11192,8 +11298,7 @@ private:
         if (swapped)                                             // restore the active view's own document + caret/scroll
         {
             sci(SCI_SETDOCPOINTER, 0, savedDoc);
-            sci(SCI_SETSEL, savedAnchor, savedCaret);
-            sci(SCI_SETFIRSTVISIBLELINE, savedTop);
+            applyViewState(savedView);
         }
 
         // (3) Untitled dirty buffers need a filename - activate each and run Save As (one prompt each).
@@ -12555,7 +12660,8 @@ private:
         std::vector<EditorPage*> gone;
         for (int i = 0; i < (int)m_tabs->GetPageCount(); ++i)
             if ((toRight && i > at) || (!toRight && i < at)) gone.push_back(static_cast<EditorPage*>(m_tabs->GetPage(i)));
-        for (EditorPage* p : gone) if (!confirmClose(p)) return;
+        CloseSweep sweep = closeSweep(gone);
+        for (EditorPage* p : gone) if (!confirmClose(p, false, &sweep)) return;
         for (EditorPage* p : gone) recordClosed(p);                                  // restorable via Ctrl+Shift+T
         for (EditorPage* p : gone) nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);   // before teardown: path/id still resolvable
         for (EditorPage* p : gone) deletePage(m_active, m_tabs->GetPageIndex(p));
@@ -12609,10 +12715,10 @@ private:
     {
         if (!m_stc) return;
         const sptr_t original = sci(SCI_GETDOCPOINTER);
-        const int savedAnchor = (int)sci(SCI_GETANCHOR), savedCaret = (int)sci(SCI_GETCURRENTPOS);   // caret/selection are per-VIEW, not per-document - SETDOCPOINTER below won't preserve them on its own
+        const DocViewState savedView = captureViewState();   // caret/selection are per-VIEW, not per-document - SETDOCPOINTER below won't preserve them on its own
         for (EditorPage* p : allPages()) { sci(SCI_SETDOCPOINTER, 0, p->doc); sci(SCI_SETREADONLY, ro ? 1 : 0); }
         sci(SCI_SETDOCPOINTER, 0, original);
-        sci(SCI_SETSEL, savedAnchor, savedCaret);
+        applyViewState(savedView);
         setStatus(0, ro ? _("Read-Only for All Documents") : _("Read/Write for All Documents"));
     }
     // Edit > Begin/End Select: a sticky selection anchor for keyboard/mouse-driven selection without
@@ -16873,8 +16979,9 @@ private:
         // Close(true) below is a FORCED close (no veto), so run the save prompts up front -
         // otherwise unsaved edits would be silently discarded. Cancel aborts the restart. This process
         // is about to exit (to relaunch), same as onCloseWindow, so any silent discard here is backed up too.
+        CloseSweep sweep = closeSweep(allPages());
         for (EditorPage* p : allPages())
-            if (!confirmClose(p, /*exiting=*/true)) return;
+            if (!confirmClose(p, /*exiting=*/true, &sweep)) return;
         if (commit) commit();   // settings writes that must NOT land when the user cancels above (e.g. the new UI language)
         { WxnSettingsEdit s; s->setChoice("ui.themeMode", m_themeMode); }   // m_themeMode is updated inside commit() when it actually changed
         wxArrayString args;

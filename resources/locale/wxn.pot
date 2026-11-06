@@ -3273,6 +3273,11 @@ msgstr ""
 msgid "Use default value"
 msgstr ""
 
+msgid "Save &All"
+msgstr ""
+
+msgid "Don't Save An&y"
+
 msgid "open each file in its own window, unless the main window has it open"
 msgstr ""
 

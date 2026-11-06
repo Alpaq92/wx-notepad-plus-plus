@@ -3271,6 +3271,12 @@ msgstr "[Domyślne]"
 msgid "Use default value"
 msgstr "Użyj wartości domyślnej"
 
+msgid "Save &All"
+msgstr "Zapisz &wszystkie"
+
+msgid "Don't Save An&y"
+msgstr "Nie zapisuj ż&adnego"
+
 msgid "open each file in its own window, unless the main window has it open"
 msgstr "otwórz każdy plik w osobnym oknie, chyba że główne okno ma go już otwarty"
 

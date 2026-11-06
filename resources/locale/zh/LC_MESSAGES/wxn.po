@@ -3271,6 +3271,12 @@ msgstr "[默认]"
 msgid "Use default value"
 msgstr "使用默认值"
 
+msgid "Save &All"
+msgstr "全部保存(&A)"
+
+msgid "Don't Save An&y"
+msgstr "全部不保存(&Y)"
+
 msgid "open each file in its own window, unless the main window has it open"
 msgstr "在各自的窗口中打开每个文件，除非主窗口已打开该文件"
 

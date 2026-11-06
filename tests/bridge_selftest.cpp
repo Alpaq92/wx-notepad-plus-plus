@@ -240,6 +240,76 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
     }
 #endif
 
+    // ---- a tab keeps its folds, hidden lines, caret and scroll ------------------------------------
+    // Scintilla drops all four when the document under a view changes. That is every tab switch, and every
+    // background read of another document too - the 30 s backup among them - so the tab in front lost them
+    // as well, with the user doing nothing.
+    {
+        f->addDocument(wxString(), "untitled-viewstate-a");
+        EditorPage* a = f->activePage();
+        std::string body;
+        for (int i = 0; i < 300; ++i) body += "line of text\n";
+        load(body.c_str());
+        f->sci(SCI_SETFOLDLEVEL, 10, SC_FOLDLEVELBASE | SC_FOLDLEVELHEADERFLAG);
+        for (int l = 11; l < 20; ++l) f->sci(SCI_SETFOLDLEVEL, l, SC_FOLDLEVELBASE + 1);
+        f->sci(SCI_TOGGLEFOLD, 10);
+        f->sci(SCI_HIDELINES, 50, 59);
+        const sptr_t anchor = f->sci(SCI_POSITIONFROMLINE, 120) + 2, caret = f->sci(SCI_POSITIONFROMLINE, 122);
+        f->sci(SCI_SETSEL, anchor, caret);
+        f->sci(SCI_SETFIRSTVISIBLELINE, 40);
+        const sptr_t top = f->sci(SCI_GETFIRSTVISIBLELINE);
+        auto held = [&](const char* what) {
+            check(f->sci(SCI_GETFOLDEXPANDED, 10) == 0 && f->sci(SCI_GETLINEVISIBLE, 15) == 0, (std::string(what) + ": the fold stays folded").c_str());
+            check(f->sci(SCI_GETLINEVISIBLE, 55) == 0 && f->sci(SCI_GETLINEVISIBLE, 60) != 0, (std::string(what) + ": hidden lines stay hidden").c_str());
+            check(f->sci(SCI_GETANCHOR) == anchor && f->sci(SCI_GETCURRENTPOS) == caret, (std::string(what) + ": the selection stays").c_str());
+            check(f->sci(SCI_GETFIRSTVISIBLELINE) == top, (std::string(what) + ": the scroll position stays").c_str());
+        };
+        f->addDocument(wxString(), "untitled-viewstate-b");
+        EditorPage* b = f->activePage();
+        check(f->sci(SCI_GETCURRENTPOS) == 0 && f->sci(SCI_GETALLLINESVISIBLE) != 0, "view state: another tab does not inherit it");
+        f->sci(SCI_INSERTTEXT, 0, reinterpret_cast<sptr_t>("kept\n"));
+        f->sci(SCI_GOTOPOS, 3);
+        f->activatePage(a); f->activateBuffer(a);
+        held("back on the tab");
+        f->sci(SCI_COLOURISE, 0, -1);
+        held("after styling");
+        f->peekDoc(b, [] {});
+        held("a background read of another tab");
+        f->setReadOnlyForPages({ b });
+        held("read-only set on another tab");
+        f->activatePage(b); f->activateBuffer(b);
+        check(f->sci(SCI_GETCURRENTPOS) == 3, "view state: each tab has its own");
+        f->sci(SCI_SETREADONLY, 0);
+
+        // Lines added meanwhile: folds no longer name the same lines, so they go; the caret stays in range.
+        f->peekDoc(a, [&] { f->sci(SCI_SETTEXT, 0, reinterpret_cast<sptr_t>("short\n")); });
+        f->activatePage(a); f->activateBuffer(a);
+        check(f->sci(SCI_GETALLLINESVISIBLE) != 0, "view state: dropped when the document's lines changed behind it");
+        check(f->sci(SCI_GETCURRENTPOS) <= f->sci(SCI_GETLENGTH), "view state: a stale caret is clamped");
+
+        // Close All and friends: an answer that covers the rest needs no prompt - one here would hang the run.
+        const wxString path = g_sandboxRoot + wxFILE_SEP_PATH + "close-sweep.txt";
+        { wxFile w(path, wxFile::write); w.Write(wxString("disk\n")); }
+        EditorPage* onDisk = f->openPath(path);
+        check(onDisk != nullptr, "close sweep: the file opened");
+        f->sci(SCI_INSERTTEXT, 0, reinterpret_cast<sptr_t>("saved "));
+        CloseSweep sweep;
+        sweep.answer = wxID_YES;
+        check(f->confirmClose(onDisk, false, &sweep), "close sweep: Save All goes on without asking");
+        check(f->sci(SCI_GETMODIFY) == 0 && f->getDocUtf8() == "saved disk\n", "close sweep: Save All saved the document");
+        f->sci(SCI_INSERTTEXT, 0, reinterpret_cast<sptr_t>("lost "));
+        sweep.answer = wxID_NO;
+        check(f->confirmClose(onDisk, false, &sweep), "close sweep: Don't Save Any goes on without asking");
+        check(f->sci(SCI_GETMODIFY) != 0, "close sweep: Don't Save Any left the document unsaved");
+        check(f->closeSweep({ onDisk, a, b }).modified == 3, "close sweep: counts the modified documents");
+        for (EditorPage* p : { onDisk, b, a })
+        {
+            f->activatePage(p); f->activateBuffer(p);
+            f->sci(SCI_SETSAVEPOINT);
+            f->closeActive();
+        }
+    }
+
     // ---- Line Operations / Blank Operations: the selection's lines, edited in place -----------------
     // They used to read and rewrite the whole document (SCI_SETTEXT) whatever was selected: bookmarks
     // left their lines, a NUL byte cut the file short, and the final line break was sorted like a line.

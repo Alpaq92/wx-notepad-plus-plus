@@ -6,6 +6,8 @@ All notable changes to wxNote are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Save All and Don't Save Any on the save prompt**, when several modified documents close together
+  (Close All, the Close Multiple Documents commands, quitting).
 - **Notepad4- and Notepad++-style launch options.** `-l`/`--language <Language>` opens the files as that
   language (`-l python`, `-l cpp`); `-q`/`--create` creates a missing file without asking (without it,
   wxNote now offers to create it instead of opening nothing); `--no-session` neither restores nor saves
@@ -107,6 +109,10 @@ All notable changes to wxNote are documented here. Format loosely follows
   lexers even when started through `/usr/local/bin/wxnote`, a link.
 
 ### Fixed
+- **A tab keeps its folds, hidden lines, selection and scroll position.** Switching tabs used to expand
+  every fold, show hidden lines and put the caret at the top of the document. The tab in front lost its
+  folds too whenever another document was read in the background, as the 30 s backup does; it no longer
+  does. A saved session now records the caret of background tabs as well.
 - **Line and Blank Operations no longer rewrite the whole document.** They change only the lines they
   must, so bookmarks stay on their lines (Remove Unmarked Lines keeps the marked ones), the caret no
   longer jumps to the top, the change-history margin marks only what changed, and mixed line endings stay

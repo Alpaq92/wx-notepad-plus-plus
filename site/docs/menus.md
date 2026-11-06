@@ -42,6 +42,9 @@ A few notes before the list:
 - **Close All** — <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd>
 - **Close Multiple Documents ▸** — Close All but Active Document · Close All but Pinned Documents ·
   Close All to the Left · Close All to the Right · Close All Unchanged
+
+When several modified documents close together, the save prompt also offers **Save All** and
+**Don't Save Any** for the ones still to come. An untitled document still asks for its name.
 - **Restore Recent Closed File** — <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd>
 
 **The file on disk**

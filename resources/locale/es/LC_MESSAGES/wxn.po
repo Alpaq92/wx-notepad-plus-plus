@@ -3271,6 +3271,12 @@ msgstr "[Predeterminado]"
 msgid "Use default value"
 msgstr "Usar el valor predeterminado"
 
+msgid "Save &All"
+msgstr "Guardar &todo"
+
+msgid "Don't Save An&y"
+msgstr "No &guardar ninguno"
+
 msgid "open each file in its own window, unless the main window has it open"
 msgstr "abrir cada archivo en su propia ventana, salvo que la ventana principal ya lo tenga abierto"
 

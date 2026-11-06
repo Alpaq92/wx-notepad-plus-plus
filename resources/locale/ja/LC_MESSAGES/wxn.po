@@ -3271,6 +3271,12 @@ msgstr "[既定]"
 msgid "Use default value"
 msgstr "既定値を使用"
 
+msgid "Save &All"
+msgstr "すべて保存(&A)"
+
+msgid "Don't Save An&y"
+msgstr "どれも保存しない(&Y)"
+
 msgid "open each file in its own window, unless the main window has it open"
 msgstr "各ファイルを個別のウィンドウで開く（メインウィンドウで開いているものを除く）"
 

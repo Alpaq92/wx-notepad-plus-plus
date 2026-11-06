@@ -3271,6 +3271,12 @@ msgstr "[기본값]"
 msgid "Use default value"
 msgstr "기본값 사용"
 
+msgid "Save &All"
+msgstr "모두 저장(&A)"
+
+msgid "Don't Save An&y"
+msgstr "모두 저장 안 함(&Y)"
+
 msgid "open each file in its own window, unless the main window has it open"
 msgstr "각 파일을 별도의 창에서 열기(주 창에 이미 열려 있으면 제외)"
 

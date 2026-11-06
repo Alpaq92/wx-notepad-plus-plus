@@ -3271,6 +3271,12 @@ msgstr "[По умолчанию]"
 msgid "Use default value"
 msgstr "Использовать значение по умолчанию"
 
+msgid "Save &All"
+msgstr "Сохранить &все"
+
+msgid "Don't Save An&y"
+msgstr "Не сохранять &ни один"
+
 msgid "open each file in its own window, unless the main window has it open"
 msgstr "открыть каждый файл в отдельном окне, если он ещё не открыт в главном окне"
 
