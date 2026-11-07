@@ -1140,6 +1140,56 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
     f->sci(SCI_EMPTYUNDOBUFFER);
     f->sci(SCI_SETSAVEPOINT);
     check(f->sci(SCI_GETMODIFY) == 0, "editor seams: the buffer is left clean for the phases that follow");
+
+    // ---- macro recording ----------------------------------------------------------------------------
+    // Text reaches the recorder as a pointer inside a Scintilla notification, by two routes: typing, which
+    // reports after the insert, and a sent message, which reports before it. On a 64-bit build the pointer
+    // used to arrive truncated, so the first character recorded crashed.
+    {
+        const auto type = [f](wchar_t c) {
+            wxKeyEvent k(wxEVT_CHAR);
+            k.m_keyCode = c; k.m_uniChar = c;
+            k.SetEventObject(f->m_stc);
+            f->m_stc->ProcessWindowEvent(k);
+        };
+        const auto sendText = [f](unsigned msg, uptr_t w, std::string s) {    // by value: gone when the call returns
+            f->sci(msg, w, reinterpret_cast<sptr_t>(s.c_str()));
+        };
+        load("");
+        f->startMacroRecord();
+        type('h'); type('i'); type('!');
+        f->sci(SCI_DELETEBACK);
+        type(0x017C);                                     // z with a dot: two bytes in the document
+        sendText(SCI_REPLACESEL, 0, " there");
+        f->sci(SCI_GOTOPOS, 0);
+        f->sci(SCI_SEARCHANCHOR);
+        sendText(SCI_SEARCHNEXT, 0, "there");
+        sendText(SCI_REPLACESEL, 0, "you");
+        f->stopMacroRecord();
+        f->sci(SCI_AUTOCCANCEL);
+        const std::string recorded = text();
+        check(recorded == "hi\xC5\xBC you", "the recorded edits happened");
+        check(f->m_macro.size() == 5, "typing and text sent right after it merged into one step; the rest are one step each");
+        if (f->m_macro.size() == 5)
+        {
+            check(f->m_macro[0].text == "hi\xC5\xBC there", "typed text recorded, with a backspace undoing its last character");
+            check(f->m_macro[3].msg == SCI_SEARCHNEXT && f->m_macro[3].hasText && f->m_macro[3].text == "there", "a search's text is copied, not its pointer");
+            check(f->m_macro[0].lparam == 0 && f->m_macro[3].lparam == 0, "no text step keeps an address");
+        }
+        load("");
+        f->playMacro(f->m_macro);
+        check(text() == recorded, "playback reproduces the recording, search included");
+        std::vector<SavedMacro> saved(1), reread;
+        saved[0].uid = 1; saved[0].name = "m"; saved[0].steps = f->m_macro;
+        long nextUid = 0;
+        check(wxnParseMacros(wxnSerializeMacros(saved, 2), reread, nextUid) && reread.size() == 1 && reread[0].steps.size() == f->m_macro.size(),
+              "the recording survives a save and reload");
+        load("");
+        if (!reread.empty()) f->playMacro(reread[0].steps);
+        check(text() == recorded, "...and plays back the same afterwards");
+        f->m_macro.clear();
+        load("");
+    }
 }
 
 // ---- the sandbox (g_sandboxRoot / g_sandboxUserData, above; read by the traits below) ---------------
