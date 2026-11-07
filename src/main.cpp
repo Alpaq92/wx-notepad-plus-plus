@@ -167,6 +167,7 @@ extern "C" int  wxn_TrashFile(const char* path, char* err, int errLen);
 #include <wx/dynlib.h>         // wxDynamicLibrary - portable .dll/.so/.dylib loader (Nib plugin host)
 #include <cstring>             // strcmp / memcpy (Nib host)
 #include <climits>             // INT_MAX - the autocomplete harvest's int-position overflow guard
+#include <utility>             // std::declval
 #include <chrono>              // std::chrono::steady_clock - the crash-backup cadence's monotonic time
 #include "command_ids.h"
 #include "app_icon_svg.h"
@@ -460,6 +461,9 @@ static int encodingFromName(const wxString& name)
 }
 
 // One recorded Scintilla command in a macro (Macro menu: record / playback / run multiple).
+// Recording reads a text pointer out of this event, and only cmake/patch_wx_stc.cmake makes that possible.
+static_assert(sizeof(std::declval<wxStyledTextEvent&>().GetLParam()) == sizeof(sptr_t),
+              "wxStyledTextEvent truncates lParam: macro recording would crash (see cmake/patch_wx_stc.cmake)");
 struct MacroStep { int msg; uptr_t wparam; sptr_t lparam; bool hasText = false; std::string text; };
 struct SavedMacro { long uid = 0; wxString name; std::vector<MacroStep> steps; };   // persisted to macros.yaml
 
@@ -15289,7 +15293,11 @@ private:
     }
 
     // ----- macros (record / playback / run multiple / save) -------------
-    static bool macroMsgHasText(int m) { return m == SCI_REPLACESEL || m == SCI_ADDTEXT || m == SCI_INSERTTEXT || m == SCI_APPENDTEXT; }
+    static bool macroMsgHasText(int m)
+    {
+        return m == SCI_REPLACESEL || m == SCI_ADDTEXT || m == SCI_INSERTTEXT || m == SCI_APPENDTEXT ||
+               m == SCI_SEARCHNEXT || m == SCI_SEARCHPREV;
+    }
     void onMacroRecord(wxStyledTextEvent& e)   // Scintilla emits one of these per recordable command while recording
     {
         if (!m_recording) return;
@@ -15306,7 +15314,9 @@ private:
             size_t n = 1; while (n < t.size() && ((unsigned char)t[t.size() - n] & 0xC0) == 0x80) ++n;   // drop a whole UTF-8 character
             t.erase(t.size() - n); if (t.empty()) m_macro.pop_back(); return;
         }
-        MacroStep s; s.msg = msg; s.wparam = wp; s.lparam = lp;
+        // For a text message lParam is only that transient pointer: replay uses the copy, and the address
+        // has no business in macros.yaml.
+        MacroStep s; s.msg = msg; s.wparam = wp; s.lparam = macroMsgHasText(msg) ? 0 : lp;
         if (macroMsgHasText(msg) && lp)   // copy the string payload now (the pointer is transient)
         { const char* t = reinterpret_cast<const char*>(lp); s.text = (msg == SCI_ADDTEXT) ? std::string(t, (size_t)wp) : std::string(t); s.hasText = true; }
         m_macro.push_back(s);

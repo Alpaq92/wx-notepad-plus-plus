@@ -76,6 +76,7 @@ set(wxBUILD_DEMOS            OFF CACHE BOOL "" FORCE)
 message(STATUS "[wxnote] Fetching wxWidgets 3.3.1 (one-time; builds from source)...")
 FetchContent_Declare(wxwidgets
     URL https://github.com/wxWidgets/wxWidgets/releases/download/v3.3.1/wxWidgets-3.3.1.tar.bz2
+    PATCH_COMMAND ${CMAKE_COMMAND} -P "${CMAKE_SOURCE_DIR}/cmake/patch_wx_stc.cmake"   # see that file
 )
 FetchContent_MakeAvailable(wxwidgets)
 
