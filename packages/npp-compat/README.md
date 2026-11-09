@@ -2,7 +2,7 @@
 
 `npp-compat` brings **a user's Notepad++ setup into wxNote**. It reads Notepad++'s own files —
 `config.xml`, `shortcuts.xml`, themes (`stylers.xml`, `themes/*.xml`), `contextMenu.xml`, `langs.xml`,
-sessions and Project-panel workspaces — and translates each into what wxNote keeps for itself, which is plain YAML
+the `autoCompletion` API files, sessions and Project-panel workspaces — and translates each into what wxNote keeps for itself, which is plain YAML
 (see [`docs/SETTINGS_DESIGN.md`](../../docs/SETTINGS_DESIGN.md)). wxNote's core reads none of these
 formats: everything Notepad++-shaped happens here.
 
@@ -32,6 +32,7 @@ what this module writes is exactly what wxNote reads.
 | `stylers.xml`, `themes/*.xml` | `themes/<name> (Notepad++).yaml` (`stylers.xml`: *Notepad++ (imported)*) in the user's theme folder | written directly; the theme's credits comment becomes its header |
 | `contextMenu.xml` | `contextmenu.yaml` | items by command number (shared with Notepad++) or by menu name (`MenuEntryName`/`MenuItemName`, looked up in Notepad++'s English menu names, `npp_menu_names.h`, as Notepad++ looks them up); `FolderName` submenus become `{menu, items}` (with wxNote's names for the stock ones that carry a `TranslateID`), `ItemNameAs` becomes `{command, label}`, and a plugin's command (`PluginEntryName`/`PluginCommandItemName`) becomes `{plugin, command}`, which wxNote shows when that plugin is loaded |
 | `langs.xml`, and the active theme's *User-defined keywords* | entries laid over the user's `languages.yaml` | only what the user added: `langs.xml` is compared with Notepad++'s own `langs.model.xml` (beside it, or in an installed Notepad++'s program folder) - without one only the theme's keywords come across, and a language the model lacks (another Notepad++ version's) is reported, not imported. Added extensions and keywords, changed comment tokens; Notepad++'s keyword classes go to wxNote's lists as its lexers wire them (by number, the C family's `type1` to *types* and `instre2` to *globalClasses*, the HTML family's markup and script lists shared by HTML, PHP, ASP and JSP, `substyleN` to the user keyword groups) |
+| `autoCompletion/*.xml` (beside the settings for a portable Notepad++, else in an installed one's program folder) | `api/<Language>.yaml` in the user's settings folder, for completion and call tips | each `<KeyWord func="yes">` with its `<Overload retVal descr>` and `<Param name>`s becomes a function, any other keyword a completion word (a function given no overload too: there is nothing for its call tip); `<Environment>` becomes `ignoreCase`, the call characters and `wordChars`. The file's name says the language (`coffee.xml` is CoffeeScript), else its `language` attribute, else the name itself, as a user-defined language's file is named |
 | a session `.xml` | its files, opened, with the active file's position and bookmarks | `nib.session`, through a scratch wxNote session (`nib.documents` on a host without it) |
 | a workspace `.xml` | a `.yaml` workspace beside it, ready for a Project panel | written directly |
 
@@ -68,6 +69,7 @@ build/bin/npp2wxnote theme       "Notepad++/themes/Zenburn.xml" Zenburn.yaml
 build/bin/npp2wxnote config      "Notepad++/config.xml"           # prints the settings.yaml lines
 build/bin/npp2wxnote contextmenu "Notepad++/contextMenu.xml" contextmenu.yaml
 build/bin/npp2wxnote languages   "Notepad++/langs.xml" languages.yaml langs.model.xml "Notepad++/stylers.xml"
+build/bin/npp2wxnote api         "Notepad++/autoCompletion/php.xml" PHP.yaml   # prints the language
 build/bin/npp2wxnote workspace   project.xml project.yaml
 build/bin/npp2wxnote session     session.xml                      # prints the files it lists
 build/bin/npp2wxnote detect      some.xml                         # what kind of Notepad++ file it is

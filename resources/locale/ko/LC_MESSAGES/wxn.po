@@ -3157,6 +3157,9 @@ msgstr "편집할 수 있는 languages.yaml을 만들 수 없습니다."
 msgid "languages.yaml: %s - the rest of the file is used"
 msgstr "languages.yaml: %s - 파일의 나머지 부분은 사용됩니다"
 
+msgid "%s: %s - the rest of the file is used"
+msgstr "%s: %s - 파일의 나머지 부분은 사용됩니다"
+
 msgid "languages.yaml: %s, and %d more like it - the rest of the file is used"
 msgstr "languages.yaml: %s 외 %d건 - 파일의 나머지 부분은 사용됩니다"
 

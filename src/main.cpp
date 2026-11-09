@@ -176,6 +176,7 @@ extern "C" int  wxn_TrashFile(const char* path, char* err, int errLen);
 #include "lang_detect.h"         // which language a file opens as (Scintillua's lexer.detect() + wxNote's overrides)
 #include "keywords.h"            // the keyword lists each language's lexer gets - SciTE's, by language and slot
 #include "language_defs.h"       // languages.yaml: the user's extensions, comment tokens and keyword lists per language
+#include "api_defs.h"            // api/<Language>.yaml: the functions completion and call tips know, with their signatures
 #include "snippets.h"            // snippet grammar + store: $1 / ${1:default} / $0 tab stops and mirrors
 #include "regex_engine.h"        // PCRE2 behind Find/Replace - std::regex could not cross a line break
 #include "spell_engine.h"        // pluggable spell-check backend (OS-native: ISpellChecker / NSSpellChecker)
@@ -5247,12 +5248,16 @@ private:
         else
         {
             const bool paired = autoInsertPair(ch);            // insert matching )]}"' or skip over an existing one
-            if (ch == '(') funcCallTip();                      // parameter hint for the function being called
+            const std::shared_ptr<const WxnApi> api = activeApi();
+            const bool wordChar = std::isalnum((unsigned char)ch) || ch == '_' ||
+                                  (api && ch > ' ' && ch < 0x7F && api->wordChars.find((char)ch) != std::string::npos);
+            if (ch == (api ? api->open : '(')) funcCallTip();   // parameter hint for the function being called
+            else if (api && api->end && ch == api->end && !m_ctSigs.empty()) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); }   // the statement ends
             else if (ch == '}') dedentCloseBrace(m_stc);
-            else if (!paired && m_autocomplete && (std::isalnum((unsigned char)ch) || ch == '_'))   // word/keyword completion
+            else if (!paired && m_autocomplete && wordChar)   // word/keyword completion
             {
                 const int caret = (int)sci(SCI_GETCURRENTPOS);
-                if (caret - (int)sci(SCI_WORDSTARTPOSITION, caret, 1) >= m_autoCompFrom) autoComplete(true);
+                if (caret - completionWordStart(caret, api.get()) >= m_autoCompFrom) autoComplete(true);
             }
         }
         // v5 NIB_EV_CHAR_ADDED, fired LAST - after our own auto-indent / auto-pair / autocompletion have
@@ -7515,6 +7520,69 @@ private:
         if (in) out.push_back({ start, n });
         return true;
     }
+    // ----- api/<Language>.yaml (api_defs.h) --------------------------------------------------------
+    // wxNote's own file beside the program, then the user's over it. Looked at again for a language at
+    // most every two seconds, as completion and call tips ask, so a saved edit applies at the next one.
+    struct ApiFiles
+    {
+        std::shared_ptr<const WxnApi> api;   // null: neither file has anything
+        wxLongLong ms[2] = { -1, -1 };
+        wxULongLong size[2] = { 0, 0 };
+        wxLongLong checked = 0;
+    };
+    std::map<std::string, ApiFiles> m_apis;   // by language
+    std::shared_ptr<const WxnApi> apiFor(const std::string& lang)
+    {
+        if (lang.empty()) return nullptr;
+        ApiFiles& f = m_apis[lang];
+        const wxLongLong now = wxGetLocalTimeMillis();
+        if (f.checked != 0 && now - f.checked < 2000) return f.api;
+        f.checked = now;
+        wxLogNull noLog;
+        const wxString name = wxString::FromUTF8(wxnApiFileName(lang).c_str());
+        const wxString paths[2] = {
+            wxPathOnly(wxStandardPaths::Get().GetExecutablePath()) + wxFILE_SEP_PATH + "api" + wxFILE_SEP_PATH + name,
+            userDataDir() + wxFILE_SEP_PATH + "api" + wxFILE_SEP_PATH + name };
+        wxLongLong ms[2] = { -1, -1 };
+        wxULongLong size[2] = { 0, 0 };
+        for (int i = 0; i < 2; ++i)
+            if (wxFileExists(paths[i])) { const wxFileName fn(paths[i]); ms[i] = fn.GetModificationTime().GetValue(); size[i] = fn.GetSize(); }
+        if (f.ms[0] == ms[0] && f.ms[1] == ms[1] && f.size[0] == size[0] && f.size[1] == size[1]) return f.api;
+        auto api = std::make_shared<WxnApi>();
+        for (int i = 0; i < 2; ++i)
+        {
+            std::string text, err;
+            WxnApi one;
+            if (wxnReadSettled(paths[i], text, &ms[i], &size[i]) != WxnRead::Ok) continue;
+            const wxString shown = "api" + wxString(wxFILE_SEP_PATH) + name;
+            if (!wxnParseApi(text, one, &err, wxnUtf8(shown))) { reportFileError(shown, err); continue; }
+            if (!one.warnings.empty())
+                reportFileNotice(wxString::Format(_("%s: %s - the rest of the file is used"), shown, wxString::FromUTF8(one.warnings.front().c_str())));
+            api->merge(one);
+        }
+        std::copy(ms, ms + 2, f.ms);
+        std::copy(size, size + 2, f.size);
+        f.api = api->empty() ? nullptr : std::shared_ptr<const WxnApi>(std::move(api));
+        return f.api;
+    }
+    std::shared_ptr<const WxnApi> activeApi()
+    {
+        auto* p = activePage();
+        return p ? apiFor(wxnUtf8(p->language())) : nullptr;
+    }
+    // Where the word before `caret` starts, counting the API's extra word characters ('$' in PHP) as
+    // part of it.
+    int completionWordStart(int caret, const WxnApi* api)
+    {
+        if (!api || api->wordChars.empty()) return (int)sci(SCI_WORDSTARTPOSITION, caret, 1);
+        int start = caret;
+        for (; start > 0; --start)   // Scintilla's word characters (bytes past ASCII among them), and the API's
+        {
+            const unsigned char c = (unsigned char)sci(SCI_GETCHARAT, start - 1);
+            if (c < 0x80 && !std::isalnum(c) && c != '_' && api->wordChars.find((char)c) == std::string::npos) break;
+        }
+        return start;
+    }
     // `doc` is the whole buffer as UTF-8, so a byte index into it IS a Scintilla position - which is what
     // lets a candidate be rejected by the style at its own start. skip empty = harvest everything.
     // (see wxnCollectWords, above the frame class - kept a free function so it is testable without a
@@ -7540,7 +7608,8 @@ private:
     void autoComplete(bool withKeywords)
     {
         if (!m_stc) return;
-        const int caret = (int)sci(SCI_GETCURRENTPOS), start = (int)sci(SCI_WORDSTARTPOSITION, caret, 1), plen = caret - start;
+        const std::shared_ptr<const WxnApi> api = withKeywords ? activeApi() : nullptr;
+        const int caret = (int)sci(SCI_GETCURRENTPOS), start = completionWordStart(caret, api.get()), plen = caret - start;
         if (plen <= 0) { sci(SCI_AUTOCCANCEL); return; }
         const std::string prefix = rangeText(start, caret);
         // This runs on every word character typed, so its cost must be bounded by a constant, not by the
@@ -7585,16 +7654,21 @@ private:
                             },
                             /*clipHead=*/hStart > 0, /*clipTail=*/hEnd < docLen);
         if (withKeywords) collectKeywords(prefix, cand);
+        if (api) api->collect(prefix, cand);   // the language's functions and words (api/<Language>.yaml)
         cand.erase(prefix);
         if (cand.empty()) { sci(SCI_AUTOCCANCEL); return; }
-        std::string list; for (const auto& w : cand) { if (!list.empty()) list += ' '; list += w; }
-        sci(SCI_AUTOCSETIGNORECASE, 0); sci(SCI_AUTOCSETSEPARATOR, ' '); sci(SCI_AUTOCSETMAXHEIGHT, 10); sci(SCI_AUTOCSETORDER, SC_ORDER_PERFORMSORT);
+        // Separated by line breaks, not spaces: an API's words can hold a space ("Loop Until").
+        std::string list; for (const auto& w : cand) { if (!list.empty()) list += '\n'; list += w; }
+        sci(SCI_AUTOCSETIGNORECASE, api && api->ignoreCase ? 1 : 0); sci(SCI_AUTOCSETSEPARATOR, '\n'); sci(SCI_AUTOCSETMAXHEIGHT, 10); sci(SCI_AUTOCSETORDER, SC_ORDER_PERFORMSORT);
         sci(SCI_AUTOCSHOW, plen, reinterpret_cast<sptr_t>(list.c_str()));
+        sci(SCI_AUTOCSETSEPARATOR, ' ');   // the list is split by now; a plugin's own list expects Scintilla's default
     }
     // ----- function parameter call tips ("Function Parameters Hint") ----------------------
-    // No API database is loaded, so signatures are harvested from the open document: each distinct
+    // A function the language's API file describes shows its overloads from there, each with its
+    // description on the lines below. Any other is harvested from the open document: each distinct
     // "name(...)" (plus any preceding return-type / def token) becomes an overload.
     std::vector<std::string> m_ctSigs; int m_ctIdx = 0; int m_ctOpen = -1;
+    char m_ctOpenCh = '(', m_ctCloseCh = ')', m_ctSepCh = ',';   // how this call is written (the API's call characters)
     const EditorPage* m_ctPage = nullptr;   // the page the call tip belongs to
     std::vector<std::string> callTipSigs(const std::string& name)
     {
@@ -7634,13 +7708,24 @@ private:
     {
         if (m_ctSigs.empty() || m_ctOpen < 0 || !m_stc) return;
         const int caret = (int)sci(SCI_GETCURRENTPOS);
+        const char op = m_ctOpenCh, cl = m_ctCloseCh, sep = m_ctSepCh;
+        auto opens = [op](char c) { return c == op || c == '(' || c == '['; };
+        auto closes = [cl](char c) { return c == cl || c == ')' || c == ']'; };
         int d = 0, arg = 0;
-        for (int p = m_ctOpen + 1; p < caret; ++p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == '(' || c == '[') ++d; else if ((c == ']' || c == ')') && d) --d; else if (c == ',' && d == 0) ++arg; }
-        const std::string& sig = m_ctSigs[m_ctIdx];
-        const size_t lp = sig.find('(');
+        for (int p = m_ctOpen + 1; p < caret; ++p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == sep && d == 0) ++arg; else if (opens(c)) ++d; else if (closes(c) && d) --d; }
+        const std::string& tip = m_ctSigs[m_ctIdx];
+        const std::string sig = tip.substr(0, tip.find('\n'));   // the signature; any lines below are its description
+        const size_t lp = sig.find(op);
         if (lp == std::string::npos) return;
         int cur = 0, dd = 0; size_t ps = lp + 1, hs = std::string::npos, he = std::string::npos;
-        for (size_t i = lp + 1; i < sig.size(); ++i) { const char c = sig[i]; if (c == '(' || c == '[') ++dd; else if (c == ']') { if (dd) --dd; } else if (c == ')') { if (dd == 0) { if (cur == arg) { hs = ps; he = i; } break; } --dd; } else if (c == ',' && dd == 0) { if (cur == arg) { hs = ps; he = i; break; } ++cur; ps = i + 1; } }
+        for (size_t i = lp + 1; i < sig.size(); ++i)
+        {
+            const char c = sig[i];
+            if (c == sep && dd == 0) { if (cur == arg) { hs = ps; he = i; break; } ++cur; ps = i + 1; }
+            else if (c == cl && dd == 0) { if (cur == arg) { hs = ps; he = i; } break; }
+            else if (opens(c)) ++dd;
+            else if (closes(c) && dd) --dd;
+        }
         if (hs == std::string::npos) return;
         while (hs < he && sig[hs] == ' ') ++hs;
         const int pre = ctPrefixLen();
@@ -7657,17 +7742,26 @@ private:
     void funcCallTip()   // menu / '(' trigger: show the signature of the call enclosing the caret
     {
         if (!m_stc) return;
+        const std::shared_ptr<const WxnApi> api = activeApi();
+        const char op = api ? api->open : '(', cl = api ? api->close : ')';
         const int caret = (int)sci(SCI_GETCURRENTPOS);
         int depth = 0, open = -1;
-        for (int p = caret - 1; p >= 0 && p > caret - 4000; --p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == ')') ++depth; else if (c == '(') { if (depth == 0) { open = p; break; } --depth; } }
+        for (int p = caret - 1; p >= 0 && p > caret - 4000; --p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == cl) ++depth; else if (c == op) { if (depth == 0) { open = p; break; } --depth; } }
         if (open < 0) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; }
         int ne = open; while (ne && std::isspace((unsigned char)sci(SCI_GETCHARAT, ne - 1))) --ne;
-        const int ns = (int)sci(SCI_WORDSTARTPOSITION, ne, 1);
+        const int ns = completionWordStart(ne, api.get());
         if (ns >= ne) { sci(SCI_CALLTIPCANCEL); m_ctSigs.clear(); return; }
         const std::string callName = rangeText(ns, ne);
-        m_ctSigs = callTipSigs(callName);
-        appendProjectSigs(callName, m_ctSigs);   // then anything the workspace index knows
+        m_ctSigs.clear();
+        if (const std::vector<WxnApiOverload>* overloads = api ? api->find(callName) : nullptr)
+            for (const WxnApiOverload& o : *overloads) m_ctSigs.push_back(wxnApiSignature(callName, o, *api));
+        else
+        {
+            m_ctSigs = callTipSigs(callName);
+            appendProjectSigs(callName, m_ctSigs);   // then anything the workspace index knows
+        }
         if (m_ctSigs.empty()) { sci(SCI_CALLTIPCANCEL); return; }
+        m_ctOpenCh = op; m_ctCloseCh = cl; m_ctSepCh = api ? api->separator : ',';
         m_ctIdx = 0; m_ctOpen = open; m_ctPage = activePage(); renderCallTip();
     }
     // Is the caret still between the call's '(' and the ')' that closes it?
@@ -7676,7 +7770,7 @@ private:
         const int caret = (int)sci(SCI_GETCURRENTPOS);
         if (caret <= m_ctOpen) return false;
         int d = 0;
-        for (int p = m_ctOpen + 1; p < caret; ++p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == '(') ++d; else if (c == ')') { if (d == 0) return false; --d; } }
+        for (int p = m_ctOpen + 1; p < caret; ++p) { const char c = (char)sci(SCI_GETCHARAT, p); if (c == m_ctOpenCh) ++d; else if (c == m_ctCloseCh) { if (d == 0) return false; --d; } }
         return true;
     }
     void callTipCaretMoved()   // keep the highlight in sync, dismiss once the caret leaves the call

@@ -22,7 +22,7 @@
 namespace nppcompat {
 
 // What the Notepad++ file is, judged by its content (the root element and what is under it).
-enum class NppFileKind { Unknown, Theme, Config, Shortcuts, ContextMenu, Session, Workspace, Languages };
+enum class NppFileKind { Unknown, Theme, Config, Shortcuts, ContextMenu, Session, Workspace, Languages, Api };
 NppFileKind detectNppFile(const std::string& xml);
 const char* nppFileKindName(NppFileKind k);
 
@@ -75,6 +75,20 @@ struct LanguagesTranslation
 };
 bool languagesFromNpp(const std::string& langsXml, const std::string& modelXml, const std::string& themeXml,
                       LanguagesTranslation& out, std::string* err = nullptr);
+
+// ---- autoCompletion/<lang>.xml -> api/<Language>.yaml (api_defs.h) -----------------------------------
+// A language's functions, their overloads and the words completion offers. `fileStem` is the file's name
+// without ".xml" - Notepad++'s name for the language, which says which wxNote language the file is for;
+// a stem wxNote does not know falls back to the file's own language attribute, then to the stem itself
+// (a user-defined language's file is named after it). A keyword marked as a function but given no
+// overload is only a word: nothing is known for its call tip.
+struct ApiTranslation
+{
+    std::string language;                     // the wxNote language: api/<language>.yaml
+    std::string yaml;
+    size_t functions = 0, words = 0;
+};
+bool apiFromNpp(const std::string& xml, const std::string& fileStem, ApiTranslation& out, std::string* err = nullptr);
 
 // ---- a session: npp_session.h (kept apart so the npp-bridge can include it) ---------------------------
 

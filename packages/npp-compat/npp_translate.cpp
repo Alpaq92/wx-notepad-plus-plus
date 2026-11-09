@@ -10,6 +10,7 @@
 #include "lang_detect.h"         // wxnLangForNppLexerType: Notepad++ lexer name -> Language-menu name
 #include "lang_table.h"          // each Language-menu language's lexer
 #include "language_defs.h"       // languages.yaml, and wxNote's keyword lists by name
+#include "api_defs.h"            // api/<Language>.yaml
 #include "settings_schema.h"     // the settings a translation may set, and how each is spelled
 #include "yaml_io.h"
 
@@ -158,6 +159,7 @@ NppFileKind detectNppFile(const std::string& xml)
         if (c.name == "Session") return NppFileKind::Session;
         if (c.name == "Project") return NppFileKind::Workspace;
         if (c.name == "Languages") return NppFileKind::Languages;
+        if (c.name == "AutoComplete") return NppFileKind::Api;
     }
     return NppFileKind::Unknown;
 }
@@ -173,6 +175,7 @@ const char* nppFileKindName(NppFileKind k)
         case NppFileKind::Session:     return "session";
         case NppFileKind::Workspace:   return "workspace";
         case NppFileKind::Languages:   return "langs.xml";
+        case NppFileKind::Api:         return "autoCompletion";
         default:                       return "unknown";
     }
 }
@@ -891,6 +894,72 @@ bool languagesFromNpp(const std::string& langsXml, const std::string& modelXml, 
     std::string body;
     if (!wxnyaml::emit(t, body)) { if (err) *err = "could not write the language definitions"; return false; }
     out.yaml = "# Imported from Notepad++.\n" + body;
+    return true;
+}
+
+bool apiFromNpp(const std::string& xml, const std::string& fileStem, ApiTranslation& out, std::string* err)
+{
+    out = ApiTranslation();
+    XmlElement root;
+    if (!parseXml(xml, root, err)) return false;
+    const XmlElement* ac = root.name == "AutoComplete" ? &root : root.child("AutoComplete");
+    if (!ac) { if (err) *err = "no <AutoComplete> element"; return false; }
+
+    // Notepad++ names an API file after its language, but for CoffeeScript's, which it calls coffee.xml.
+    std::string lang = wxnoteLanguage(fileStem == "coffee" ? std::string("coffeescript") : fileStem);
+    if (lang.empty()) lang = wxnLangCanonicalName(ac->attr("language"));
+    if (lang.empty()) lang = wxnLangCanonicalName(fileStem);
+    if (lang.empty()) lang = ac->attr("language").empty() ? fileStem : ac->attr("language");
+    if (lang.empty()) { if (err) *err = "the file does not say which language it is for"; return false; }
+    out.language = lang;
+
+    WxnApi api;
+    api.hasIgnoreCase = true;
+    api.ignoreCase = true;   // Notepad++'s default
+    if (const XmlElement* env = ac->child("Environment"))
+    {
+        api.ignoreCase = env->attr("ignoreCase", "yes") != "no";
+        auto one = [&](const char* name, char& slot) {
+            const std::string v = env->attr(name);
+            if (v.size() == 1 && (unsigned char)v[0] > ' ' && (unsigned char)v[0] < 0x7F) slot = v[0];
+        };
+        one("startFunc", api.open);
+        one("stopFunc", api.close);
+        one("paramSeparator", api.separator);
+        one("terminal", api.end);
+        api.hasCall = env->hasAttr("startFunc") || env->hasAttr("stopFunc") || env->hasAttr("paramSeparator") || env->hasAttr("terminal");
+        const std::string wc = env->attr("additionalWordChar");
+        if (!wc.empty()) { api.wordChars = wc; api.hasWordChars = true; }
+    }
+    std::set<std::string> words;
+    for (const XmlElement& kw : ac->children)
+    {
+        if (kw.name != "KeyWord") continue;
+        const std::string name = kw.attr("name");
+        if (name.empty()) continue;
+        std::vector<WxnApiOverload> overloads;
+        if (kw.attr("func") == "yes")
+            for (const XmlElement& o : kw.children)
+            {
+                if (o.name != "Overload") continue;
+                WxnApiOverload ov;
+                ov.returns = o.attr("retVal");
+                ov.doc = o.attr("descr");
+                while (!ov.doc.empty() && (ov.doc.back() == '\n' || ov.doc.back() == '\r' || ov.doc.back() == ' ')) ov.doc.pop_back();
+                for (const XmlElement& p : o.children) if (p.name == "Param") ov.params.push_back(p.attr("name"));
+                overloads.push_back(ov);
+            }
+        if (!overloads.empty())
+        {
+            auto& slot = api.functions[name];
+            slot.insert(slot.end(), overloads.begin(), overloads.end());   // a name given twice keeps both
+        }
+        else if (words.insert(name).second) api.words.push_back(name);
+    }
+    out.functions = api.functions.size();
+    out.words = api.words.size();
+    out.yaml = wxnEmitApi(api, "# " + lang + " - imported from Notepad++'s autoCompletion/" + fileStem + ".xml\n");
+    if (out.yaml.empty()) { if (err) *err = "could not be written as YAML"; return false; }
     return true;
 }
 
