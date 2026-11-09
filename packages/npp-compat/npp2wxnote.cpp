@@ -12,6 +12,8 @@
 //   npp2wxnote languages   <langs.xml>       <out.yaml> [<langs.model.xml> [<theme.xml>]]
 //                          (the changes made to Notepad++'s langs.model.xml, and the theme's user-defined
 //                          keywords, as languages.yaml)
+//   npp2wxnote api         <lang.xml>        <out.yaml>   (an autoCompletion file, as api/<Language>.yaml;
+//                          prints the language it is for)
 //   npp2wxnote config      <config.xml>      (prints the settings.yaml lines)
 //   npp2wxnote session     <session.xml>     (prints the files it lists)
 //   npp2wxnote detect      <file.xml>        (prints what kind of Notepad++ file it is)
@@ -55,6 +57,7 @@ static int usage()
     std::fprintf(stderr,
         "usage: npp2wxnote theme|contextmenu|workspace <in.xml> <out.yaml>\n"
         "       npp2wxnote languages <langs.xml> <out.yaml> [<langs.model.xml> [<theme.xml>]]\n"
+        "       npp2wxnote api <autoCompletion/lang.xml> <out.yaml>\n"
         "       npp2wxnote config|session|detect <in.xml>\n");
     return 2;
 }
@@ -105,6 +108,14 @@ static int run(const std::vector<std::string>& args)
         ok = languagesFromNpp(xml, model, theme, t, &err);
         yaml = t.yaml.empty() ? std::string("# Nothing to import: no changes to Notepad++'s language definitions.\nlanguages:\n") : t.yaml;
         notTranslated = t.notTranslated;
+    }
+    else if (cmd == "api")
+    {
+        ApiTranslation t;
+        const auto stem = fs::u8path(in).stem().u8string();
+        ok = apiFromNpp(xml, std::string(stem.begin(), stem.end()), t, &err);
+        yaml = t.yaml;
+        if (ok) std::printf("%s: %zu functions, %zu words\n", t.language.c_str(), t.functions, t.words);
     }
     else if (cmd == "workspace")
     {

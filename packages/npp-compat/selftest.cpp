@@ -13,6 +13,7 @@
 #include "npp_xml.h"
 #include "lang_table.h"
 #include "language_defs.h"
+#include "api_defs.h"
 #include "settings_schema.h"
 
 #include <cstdio>
@@ -473,6 +474,52 @@ static void testLanguagesTranslation()
               && nppFileNameOf("Zenburn.xml") == "Zenburn.xml", "config.xml: a theme path's file name, Windows path or not");
 }
 
+static void testApiTranslation()
+{
+    const std::string xml =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n"
+        "<NotepadPlus>\n"
+        "  <AutoComplete language=\"PHP\">\n"
+        "    <Environment ignoreCase=\"no\" startFunc=\"(\" stopFunc=\")\" paramSeparator=\",\" terminal=\";\" additionalWordChar=\"$\"/>\n"
+        "    <KeyWord name=\"abs\" func=\"yes\">\n"
+        "      <Overload retVal=\"number\" descr=\"Absolute value&#x0a;of a number&#x0a;\"><Param name=\"mixed number\" /></Overload>\n"
+        "    </KeyWord>\n"
+        "    <KeyWord name=\"substr\" func=\"yes\">\n"
+        "      <Overload retVal=\"string\"><Param name=\"string s\" /><Param name=\"int start\" /></Overload>\n"
+        "      <Overload retVal=\"string\"><Param name=\"string s\" /><Param name=\"int start\" /><Param name=\"int &amp;len\" /></Overload>\n"
+        "    </KeyWord>\n"
+        "    <KeyWord name=\"and\" />\n"
+        "    <KeyWord name=\"exit\" func=\"yes\" />\n"
+        "    <KeyWord name=\"and\" />\n"
+        "  </AutoComplete>\n"
+        "</NotepadPlus>\n";
+    check(detectNppFile(xml) == NppFileKind::Api, "api: detected as an autoCompletion file");
+    ApiTranslation t;
+    std::string err;
+    check(apiFromNpp(xml, "php", t, &err) && t.language == "PHP", "api: translates, for the language its file name says");
+    check(t.functions == 2 && t.words == 2, "api: functions with overloads; keywords, and a function with none, as words");
+    WxnApi api;
+    check(wxnParseApi(t.yaml, api, &err) && api.warnings.empty(), "api: what it writes is a good api file");
+    check(api.hasIgnoreCase && !api.ignoreCase && api.open == '(' && api.close == ')' && api.separator == ',' && api.end == ';' && api.wordChars == "$",
+          "api: the environment comes across");
+    const auto* abs = api.find("abs");
+    check(abs && abs->size() == 1 && abs->front().returns == "number" && abs->front().params.size() == 1 && abs->front().doc == "Absolute value\nof a number",
+          "api: an overload, its description's line breaks kept and its trailing one dropped");
+    const auto* sub = api.find("substr");
+    check(sub && sub->size() == 2 && (*sub)[1].params.back() == "int &len", "api: overloads in order, entities decoded");
+    check(api.words == std::vector<std::string>{ "and", "exit" }, "api: each word once");
+    check(t.yaml.rfind("# PHP - imported from Notepad++", 0) == 0, "api: the file says where it came from");
+
+    check(apiFromNpp(xml, "cpp", t, &err) && t.language == "C++", "api: the file name decides the language");
+    check(apiFromNpp(xml, "nosuchlang", t, &err) && t.language == "PHP", "api: else the language it names");
+    const std::string udl = "<NotepadPlus><AutoComplete><KeyWord name=\"x\" /></AutoComplete></NotepadPlus>";
+    check(apiFromNpp(udl, "My Language", t, &err) && t.language == "My Language", "api: else its file name, as a user-defined language's is");
+    check(apiFromNpp("<NotepadPlus><AutoComplete/></NotepadPlus>", "c", t, &err), "api: an empty file is no error");
+    WxnApi none;
+    check(wxnParseApi(t.yaml, none, &err) && none.hasIgnoreCase && none.ignoreCase, "api: ...and without an <Environment> ignores case, as Notepad++ does");
+    check(!apiFromNpp("<NotepadPlus/>", "c", t, &err), "api: a file without <AutoComplete> is refused");
+}
+
 int main()
 {
     // ---- Parsing ----------------------------------------------------------------------------------
@@ -591,6 +638,7 @@ int main()
     testContextMenuTranslation();
     testSessionAndWorkspace();
     testLanguagesTranslation();
+    testApiTranslation();
 
     if (g_fail == 0) std::printf("ALL PASS (npp-compat selftest)\n");
     else             std::printf("%d CHECK(S) FAILED\n", g_fail);

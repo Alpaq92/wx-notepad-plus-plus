@@ -3157,6 +3157,9 @@ msgstr "Nie udało się utworzyć zapisywalnego pliku languages.yaml do edycji."
 msgid "languages.yaml: %s - the rest of the file is used"
 msgstr "languages.yaml: %s - reszta pliku jest używana"
 
+msgid "%s: %s - the rest of the file is used"
+msgstr "%s: %s - reszta pliku jest używana"
+
 msgid "languages.yaml: %s, and %d more like it - the rest of the file is used"
 msgstr "languages.yaml: %s i %d podobnych - reszta pliku jest używana"
 

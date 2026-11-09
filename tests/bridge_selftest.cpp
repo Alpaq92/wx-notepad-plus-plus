@@ -152,6 +152,60 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
         check(f->m_ctSigs.empty(), "call tip: ...while one closed by the user stays closed");
     }
 
+    // ---- api/<Language>.yaml: completion and call tips from the language's API file -----------------
+    {
+        const wxString dir = f->userDataDir() + wxFILE_SEP_PATH + "api";
+        wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        const wxString file = dir + wxFILE_SEP_PATH + "PHP.yaml";
+        check(writeWholeFile(file,
+                  "ignoreCase: true\n"
+                  "wordChars: '$'\n"
+                  "words: [$_GET, Loop Until]\n"
+                  "functions:\n"
+                  "  strlen: {returns: int, params: [string $string], doc: Returns the length.}\n"
+                  "  substr:\n"
+                  "    - {returns: string, params: [string $s, int $offset]}\n"
+                  "    - {returns: string, params: [string $s, int $offset, int $length]}\n"),
+              "api: fixture written");
+        f->m_apis.clear();
+        f->addDocument(wxString(), "untitled-api-test");
+        EditorPage* p = f->activePage();
+        p->langForced = true; p->forcedName = "PHP";
+        auto complete = [&](const char* doc) {
+            load(doc);
+            f->sci(SCI_GOTOPOS, f->sci(SCI_GETLENGTH));
+            f->autoComplete(true);
+            std::string cur(256, '\0');
+            const int n = (int)f->sci(SCI_AUTOCACTIVE) ? (int)f->sci(SCI_AUTOCGETCURRENTTEXT, 0, reinterpret_cast<sptr_t>(&cur[0])) : 0;
+            cur.resize(n > 0 ? (size_t)n : 0);
+            f->sci(SCI_AUTOCCANCEL);
+            return cur;
+        };
+        check(complete("STRL") == "strlen", "api: a function completes, without regard to case where the file says so");
+        check(complete("x = $_G") == "$_GET", "api: ...a word with the file's own word characters");
+        check(complete("Loop U") != "Loop Until" && complete("Loo") == "Loop Until", "api: ...and a word holding a space");
+        check(f->sci(SCI_AUTOCGETSEPARATOR) == ' ', "api: the separator is back to Scintilla's default for plugins");
+        load("echo substr(");
+        f->sci(SCI_GOTOPOS, f->sci(SCI_GETLENGTH));
+        f->funcCallTip();
+        check(f->sci(SCI_CALLTIPACTIVE) != 0 && f->m_ctSigs.size() == 2 && f->m_ctSigs[1] == "string substr(string $s, int $offset, int $length)",
+              "api: the call tip shows each overload the file gives");
+        load("x = strlen(");
+        f->sci(SCI_GOTOPOS, f->sci(SCI_GETLENGTH));
+        f->funcCallTip();
+        check(f->m_ctSigs.size() == 1 && f->m_ctSigs[0] == "int strlen(string $string)\nReturns the length.", "api: ...with its description below");
+        load("function mine($a, $b) {}\nmine(");
+        f->sci(SCI_GOTOPOS, f->sci(SCI_GETLENGTH));
+        f->funcCallTip();
+        check(f->m_ctSigs.size() == 1 && f->m_ctSigs[0].find("mine(") != std::string::npos, "api: a function the file lacks still comes from the document");
+        f->sci(SCI_CALLTIPCANCEL);
+        f->m_ctSigs.clear();
+        f->sci(SCI_SETSAVEPOINT);   // closes without asking
+        f->closeActive();
+        wxRemoveFile(file);
+        f->m_apis.clear();
+    }
+
     // ---- JSON5 comments --------------------------------------------------------------------------
     {
         f->addDocument(wxString(), "untitled-json5-test");

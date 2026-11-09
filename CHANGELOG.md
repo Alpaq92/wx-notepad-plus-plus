@@ -6,6 +6,13 @@ All notable changes to wxNote are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Function completion and call tips from API files, as in Notepad++.** A language's
+  `api/<Language>.yaml` lists its functions with their parameters, return values, descriptions and
+  overloads. Ctrl+Space offers them, and a call's parameter hint shows each overload with its
+  description and highlights the current parameter. The file also sets whether names ignore case, the
+  call's characters and extra word characters such as PHP's `$`. Import from Notepad++ translates an
+  installed Notepad++'s `autoCompletion` files (34 languages) into these. A function with no API entry
+  still gets its hint from the document and the workspace.
 - **Save All and Don't Save Any on the save prompt**, when several modified documents close together
   (Close All, the Close Multiple Documents commands, quitting).
 - **Notepad4- and Notepad++-style launch options.** `-l`/`--language <Language>` opens the files as that

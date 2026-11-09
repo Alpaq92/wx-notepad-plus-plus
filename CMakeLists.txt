@@ -563,6 +563,20 @@ if(MSVC)
     target_compile_options(language_defs_test PRIVATE /EHsc /utf-8)
 endif()
 
+# ---- api_defs_test: api/<Language>.yaml - what completion and call tips know (src/api_defs.h) ---------
+# Its forms and warnings, a user's file over wxNote's, and writing it back. Links only rapidyaml.
+#   cmake --build build --target api_defs_test && build/bin/api_defs_test
+add_executable(api_defs_test tests/api_defs_test.cpp)
+set_target_properties(api_defs_test PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(api_defs_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(api_defs_test PRIVATE ryml)
+if(MSVC)
+    target_compile_options(api_defs_test PRIVATE /EHsc /utf-8)
+endif()
+
 # ---- lang_detect_test: which language a file opens as (Scintillua's lexer.detect() + src/lang_detect.h) -
 # Links the REAL engine (scintillua_engine.cpp over Lua + LPeg) and runs it against the lexer.lua this
 # configure fetched, so a language Scintillua adds or renames upstream fails here when the pin above is
@@ -879,7 +893,7 @@ add_custom_target(selftests DEPENDS
     keymap_selftest diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test
     plugin_catalog_test yaml_io_test settings_store_test npp_compat_selftest
     charset_selftest
-    hunspell_selftest funclist_selftest comment_tokens_test lang_detect_test keywords_test language_defs_test catalog_selftest bridge_selftest
+    hunspell_selftest funclist_selftest comment_tokens_test lang_detect_test keywords_test language_defs_test api_defs_test catalog_selftest bridge_selftest
     desktop_entry_test
     cmdline_compat_test
     terminal_selftest)
@@ -887,7 +901,7 @@ add_custom_target(selftests DEPENDS
 # "pure" = no wx UI toolkit init, so they run anywhere a binary runs, no display needed. file_index_test
 # does call wxInitializer, but it links wx::base only, so it gets console traits and never opens a display.
 foreach(t diff_myers_test hash_test fuzzy_test file_index_test snippets_test regex_test hunspell_selftest
-          funclist_selftest comment_tokens_test lang_detect_test keywords_test language_defs_test catalog_selftest plugin_catalog_test desktop_entry_test cmdline_compat_test
+          funclist_selftest comment_tokens_test lang_detect_test keywords_test language_defs_test api_defs_test catalog_selftest plugin_catalog_test desktop_entry_test cmdline_compat_test
           yaml_io_test settings_store_test npp_compat_selftest)
     add_test(NAME ${t} COMMAND ${t})
     set_tests_properties(${t} PROPERTIES LABELS pure)

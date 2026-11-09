@@ -144,6 +144,40 @@ The [Style Configurator](themes.md#keywords) edits the keyword part for you, and
 `langs.xml` — and the *User-defined keywords* of its Style Configurator — when Notepad++'s own
 `langs.model.xml` is at hand to compare with (an installed Notepad++ has it in its program folder).
 
+## Function completion and call tips — `api/<Language>.yaml`
+
+A language's API file lists its functions, with what each takes, returns and does, and other words
+completion should offer. **Ctrl+Space** then offers those functions as you type, and typing a call's
+`(` (or **Edit&nbsp;&rsaquo; Auto-Completion&nbsp;&rsaquo; Function Parameters Hint**) shows its
+signature with the description below it. A function with several overloads shows `1 of 3` with arrows:
+click them, or use **Alt+Up** / **Alt+Down**. The parameter the caret is in is highlighted.
+
+The file is named as the Language menu names the language (`PHP.yaml`, `C++.yaml`) and lives in the
+`api` folder of your settings folder:
+
+```yaml
+ignoreCase: true                    # names match without regard to case (Notepad++'s default)
+call: {open: '(', close: ')', separator: ',', end: ';'}   # how a call is written; `end` closes the tip
+wordChars: '$'                      # what a name can hold besides letters, digits and _
+words: [echo, include, Loop Until]  # words to complete that are not functions
+functions:
+  strlen: {returns: int, params: [string $string], doc: Returns the length of the string.}
+  substr:                           # several overloads: a list of them
+    - {returns: string, params: [string $string, int $offset]}
+    - {returns: string, params: [string $string, int $offset, '?int $length = null']}
+```
+
+Each part is optional. A value wxNote cannot use is skipped and named in the status bar, and the rest
+of the file still counts. Changes apply within a couple of seconds.
+
+A function the file does not describe gets its call tip from the open document and the open
+workspace, as for a language with no API file.
+
+wxNote ships no API files of its own yet. **Extensions&nbsp;&rsaquo; Import from Notepad++…** translates
+an installed Notepad++'s `autoCompletion` files — 34 languages, among them PHP's 2,294 functions,
+AutoIt's, C, C++, Python, Lua and SQL — into this folder, and **Import the Open Notepad++ File**
+translates one, such as an API file made for a user-defined language.
+
 ## Code folding
 
 Folding is available for languages whose lexer reports fold levels. The commands live under **View**:

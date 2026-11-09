@@ -11,9 +11,10 @@
 //                                      config.xml -> settings, shortcuts.xml -> a key-binding scheme,
 //                                      contextMenu.xml -> the right-click menu, stylers.xml and themes/ ->
 //                                      themes, langs.xml and the theme's user-defined keywords ->
-//                                      languages.yaml. One report says what came across and what had nowhere
-//                                      to go.
-//   Import the Open Notepad++ File     the same for one file open in wxNote: any of those, plus a session
+//                                      languages.yaml, autoCompletion/*.xml -> api/*.yaml. One report says
+//                                      what came across and what had nowhere to go.
+//   Import the Open Notepad++ File     the same for one file open in wxNote: any of those (an API file
+//                                      among them), plus a session
 //                                      (its files open) or a Project-panel workspace (a .yaml workspace is
 //                                      written beside it).
 //   Import Notepad++ shortcuts.xml...  the key bindings alone. Well-known id host.shortcuts.import, which
@@ -36,6 +37,7 @@
 
 #include "lang_table.h"        // wxNote's languages, to lay an import over languages.yaml
 #include "language_defs.h"
+#include "api_defs.h"          // wxnApiFileName: where a language's API file goes
 
 #include <algorithm>
 #include <cstdlib>
@@ -366,6 +368,57 @@ void importLanguages(NibHost* host, NibQueryFn query, const std::string& langs, 
     for (const std::string& s : t.notTranslated) report += "  not imported: " + s + "\n";
 }
 
+// Where Notepad++'s API files are: autoCompletion beside its settings (a portable Notepad++, or a copied
+// folder), else in an installed one's program folder - the first that has any.
+fs::path findApiDir(const fs::path& settingsDir)
+{
+    std::vector<fs::path> candidates;
+    if (!settingsDir.empty()) candidates.push_back(settingsDir / "autoCompletion");
+#ifdef _WIN32
+    for (const wchar_t* var : { L"ProgramW6432", L"ProgramFiles", L"ProgramFiles(x86)" })
+        if (const wchar_t* pf = _wgetenv(var)) candidates.push_back(fs::path(pf) / L"Notepad++" / L"autoCompletion");
+#endif
+    std::error_code ec;
+    for (const fs::path& p : candidates)
+        if (fs::is_directory(p, ec)) return p;
+    return fs::path();
+}
+
+// One autoCompletion/<lang>.xml into api/<Language>.yaml. `names` collects the languages written.
+void importApi(NibHost* host, NibQueryFn query, const std::string& xml, const std::string& stem, std::string& report,
+               std::vector<std::string>& names)
+{
+    ApiTranslation t;
+    std::string err;
+    if (!apiFromNpp(xml, stem, t, &err)) { report += "  " + stem + ".xml could not be read: " + err + "\n"; return; }
+    const fs::path data = userDataDir(host, query);
+    if (data.empty()) { report += "  no user data folder to write api/" + wxnApiFileName(t.language) + " into\n"; return; }
+    switch (replaceFile(data / "api" / pathFromUtf8(wxnApiFileName(t.language)), t.yaml, report))
+    {
+        case Replaced::Written:
+        case Replaced::Unchanged: names.push_back(t.language + " (" + std::to_string(t.functions) + " functions)"); break;
+        case Replaced::Failed:    break;
+    }
+}
+
+// Every API file in `dir`.
+void importApis(NibHost* host, NibQueryFn query, const fs::path& dir, std::string& report)
+{
+    if (dir.empty()) { report += "  none found\n"; return; }
+    report += "  from " + utf8Of(dir) + "\n";
+    std::vector<fs::path> files;
+    std::error_code ec;
+    for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec))
+        if (it->path().extension() == ".xml") files.push_back(it->path());
+    std::sort(files.begin(), files.end());
+    std::vector<std::string> names;
+    for (const fs::path& f : files) importApi(host, query, readFile(f), utf8Of(f.stem()), report, names);
+    if (names.empty()) { report += "  nothing imported\n"; return; }
+    std::string list;
+    for (const std::string& n : names) list += (list.empty() ? "" : ", ") + n;
+    report += "  " + std::to_string(names.size()) + " language(s), for completion and call tips: " + list + "\n";
+}
+
 void openSession(NibHost* host, NibQueryFn query, const std::string& xml, std::string& report)
 {
     std::vector<std::string> files;
@@ -508,6 +561,9 @@ void importCommand(NibHost* host, NibQueryFn query, void*)
     if (langs.empty() && theme.empty()) report += "  none\n";
     else importLanguages(host, query, langs, findLangsModel(dir), theme, report);
 
+    report += "\nautoCompletion\n";
+    importApis(host, query, findApiDir(dir), report);
+
     if (fs::exists(dir / "session.xml", ec))
         report += "\nsession.xml\n  Notepad++'s last session is not opened here: open session.xml in wxNote and run\n"
                   "  Import the Open Notepad++ File to open its files.\n";
@@ -522,7 +578,8 @@ void importFileCommand(NibHost* host, NibQueryFn query, void*)
     if (path.empty())
     {
         presentReport(host, query, report + "Open a Notepad++ file - a theme, config.xml, shortcuts.xml, contextMenu.xml,\n"
-                                            "langs.xml, a session or a workspace - save it, and run this command again.\n");
+                                            "langs.xml, an autoCompletion file, a session or a workspace - save it, and\n"
+                                            "run this command again.\n");
         return;
     }
     const fs::path source = pathFromUtf8(path);
@@ -537,6 +594,13 @@ void importFileCommand(NibHost* host, NibQueryFn query, void*)
         case NppFileKind::Session:     openSession(host, query, xml, report); break;
         case NppFileKind::Workspace:   importWorkspace(xml, source, report); break;
         case NppFileKind::Languages:   importLanguages(host, query, xml, findLangsModel(source.parent_path()), std::string(), report); break;
+        case NppFileKind::Api:
+        {
+            std::vector<std::string> names;
+            importApi(host, query, xml, utf8Of(source.stem()), report, names);
+            if (!names.empty()) report += "  api for " + names.front() + " - completion and call tips use it from now on\n";
+            break;
+        }
         case NppFileKind::Shortcuts:
         {
             ImportTally tally;
@@ -548,7 +612,7 @@ void importFileCommand(NibHost* host, NibQueryFn query, void*)
         }
         case NppFileKind::Unknown:
             report += "Not a Notepad++ file this can import: expected a theme, config.xml, shortcuts.xml,\n"
-                      "contextMenu.xml, langs.xml, a session or a workspace.\n";
+                      "contextMenu.xml, langs.xml, an autoCompletion file, a session or a workspace.\n";
             break;
     }
     presentReport(host, query, report);

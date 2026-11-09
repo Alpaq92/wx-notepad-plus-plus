@@ -3157,6 +3157,9 @@ msgstr "Не удалось создать доступный для запис�
 msgid "languages.yaml: %s - the rest of the file is used"
 msgstr "languages.yaml: %s - остальная часть файла используется"
 
+msgid "%s: %s - the rest of the file is used"
+msgstr "%s: %s - остальная часть файла используется"
+
 msgid "languages.yaml: %s, and %d more like it - the rest of the file is used"
 msgstr "languages.yaml: %s и ещё %d - остальная часть файла используется"
 
