@@ -109,6 +109,9 @@ All notable changes to wxNote are documented here. Format loosely follows
   lexers even when started through `/usr/local/bin/wxnote`, a link.
 
 ### Fixed
+- **Recording a macro no longer crashes.** On 64-bit builds wxNote crashed as soon as a macro recorded any
+  text, whether typed or sent by a plugin. Searches in a macro now keep their text and replay correctly,
+  and saved macros no longer store a memory address beside their text.
 - **A tab keeps its folds, hidden lines, selection and scroll position.** Switching tabs used to expand
   every fold, show hidden lines and put the caret at the top of the document. The tab in front lost its
   folds too whenever another document was read in the background, as the 30 s backup does; it no longer
