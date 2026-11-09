@@ -3264,3 +3264,45 @@ msgstr "每次搜索时清除"
 
 msgid "Find in These Search Results"
 msgstr "在这些搜索结果中查找"
+
+msgid "[Default]"
+msgstr "[默认]"
+
+msgid "Use default value"
+msgstr "使用默认值"
+
+msgid "Save &All"
+msgstr "全部保存(&A)"
+
+msgid "Don't Save An&y"
+msgstr "全部不保存(&Y)"
+
+msgid "open each file in its own window, unless the main window has it open"
+msgstr "在各自的窗口中打开每个文件，除非主窗口已打开该文件"
+
+msgid "same as -r: the running window never opens a file twice"
+msgstr "同 -r：运行中的窗口不会重复打开同一文件"
+
+msgid "open the given file(s) as this language (e.g. Python, cpp)"
+msgstr "以此语言打开指定的文件（例如 Python、cpp）"
+
+msgid "create a file that does not exist without asking"
+msgstr "不询问直接创建不存在的文件"
+
+msgid "neither restore nor save the session"
+msgstr "既不恢复也不保存会话"
+
+msgid "open the files of a session file"
+msgstr "打开会话文件中的文件"
+
+msgid "Could not read the session file %s"
+msgstr "无法读取会话文件 %s"
+
+msgid "%s does not exist.\n\nCreate it?"
+msgstr "%s 不存在。\n\n是否创建？"
+
+msgid "Could not create %s"
+msgstr "无法创建 %s"
+
+msgid "Unknown language: %s"
+msgstr "未知语言：%s"

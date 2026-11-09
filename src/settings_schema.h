@@ -55,7 +55,7 @@ inline const std::vector<Def>& schema()
         { "window.integratedTitleBar",        Kind::Bool,   "false" },
         { "window.buttonStyle",               Kind::Choice, WXN_DEFAULT_BUTTON_STYLE, 0, 0, "native|flat|minimal" },
         { "window.ignorePlatformDecorations", Kind::Bool,   "false" },
-        { "window.reuseInstance",             Kind::Bool,   "false" },
+        { "window.reuseInstance",             Kind::Bool,   "true" },
         { "editor.fontFamily",                Kind::Text,   "Cascadia Mono" },
         { "editor.tabSize",                   Kind::Int,    "4", 1, 16, nullptr, true },
         { "editor.useTabs",                   Kind::Bool,   "true", 0, 0, nullptr, true },
@@ -208,6 +208,27 @@ public:
     {
         const Def* d = findDef(id);
         return d && d->perLanguage && !lang.empty() && wxnyaml::getBool(m_file.getForLanguage(lang, id), out);
+    }
+
+    // A language's own value, written under `languages: <lang>:` - kept even when it equals the general
+    // one, since it says this language does not follow that one. clearLanguage drops it again.
+    bool setLanguageInt(const char* id, const std::string& lang, long long v)
+    {
+        const Def* d = findDef(id);
+        if (!d || !d->perLanguage || d->kind != Kind::Int || v < d->lo || v > d->hi) return false;
+        const std::string s = std::to_string(v);
+        return m_file.setForLanguage(lang, id, s, s);
+    }
+    bool setLanguageBool(const char* id, const std::string& lang, bool v)
+    {
+        const Def* d = findDef(id);
+        if (!d || !d->perLanguage || d->kind != Kind::Bool) return false;
+        return m_file.setForLanguage(lang, id, v ? "true" : "false", v ? "true" : "false");
+    }
+    bool clearLanguage(const char* id, const std::string& lang)
+    {
+        const Def* d = findDef(id);
+        return d && d->perLanguage && m_file.setForLanguage(lang, id, std::string(), std::string());
     }
 
     // Writes. A value equal to the default is removed from the file instead. False when the file

@@ -42,6 +42,9 @@ A few notes before the list:
 - **Close All** — <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd>
 - **Close Multiple Documents ▸** — Close All but Active Document · Close All but Pinned Documents ·
   Close All to the Left · Close All to the Right · Close All Unchanged
+
+When several modified documents close together, the save prompt also offers **Save All** and
+**Don't Save Any** for the ones still to come. An untitled document still asks for its name.
 - **Restore Recent Closed File** — <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd>
 
 **The file on disk**
@@ -74,6 +77,14 @@ A few notes before the list:
 | **Indent ▸** | Increase Line Indent · Decrease Line Indent |
 | **Line Operations ▸** | Duplicate / Move Up / Move Down / Split / Join · Remove Duplicate Lines · Remove Consecutive Duplicate Lines · Remove Empty Lines (with or without blank characters) · Insert Blank Line Above / Below · Reverse Line Order · Randomize Line Order · and fourteen sort variants — lexicographic, lexicographic ignoring case, locale order, integer, decimal (comma), decimal (dot) and length, each ascending and descending |
 | **Blank Operations ▸** | Trim Trailing / Leading / Both · EOL to Space · Trim both and EOL to Space · TAB to Space · Space to TAB (All) · Space to TAB (Leading) |
+
+Line and Blank Operations act on **the lines the selection covers** — a selection that ends at the
+start of a line leaves that line out — or on the whole document when nothing is selected. With a
+**column selection**, the sorts use the selected columns as the key. They change only the lines they
+have to, so the other lines keep their bookmarks and line endings and the caret stays put; each is one
+undo step. A descending sort keeps equal lines in their original order, and the final line break
+stays at the end of the file.
+
 | **Paste Special ▸** | Copy as HTML · Copy as RTF · Paste HTML Content · Paste RTF Content · Copy / Cut / Paste Binary Content |
 | **Auto-Completion ▸** | Function Completion · Word Completion · Function Parameters Hint (and Previous / Next Hint) · Path Completion |
 | **EOL Conversion ▸** | Windows (CR LF) · Unix (LF) · Macintosh (CR) |

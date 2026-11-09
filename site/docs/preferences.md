@@ -19,7 +19,7 @@
 | Show zoom control in status bar | **off** | adds an editable zoom field to the status bar — see [below](#the-zoom-control). Applies immediately, no restart. Zooming itself is unaffected either way |
 | Ask to save unsaved changes when quitting | **off** | when off, quitting keeps unsaved documents and reopens them next time, without asking; when on, it asks about each one. Closing a tab always asks |
 | Auto-hide toolbar in full screen | **off** | when on, full screen hides the toolbar (macOS-style) |
-| Reuse an existing window | off | *restart* — when on, a second launch hands its files to the first window over IPC and exits. `-n` / `-r` override this per launch |
+| Reuse an existing window | on | *restart* — a second launch hands its files to the first window over IPC and exits; off, it opens a window of its own, without the session ([Command Line](command-line.md#the-main-window-and-the-session)). `-n` / `-r` override this per launch |
 | Show integrated top bar | — | *restart* — only present on platforms with borderless-window support and on macOS |
 | Ignore platform decoration (sharp corners) | **off** | *restart* — **Linux only**, and only takes effect when **Window buttons** (below) is set to **System-native** — it restyles that native header-bar window's corners. By default that window rounds its top corners to match your desktop theme. Turn this on to keep the corners **square** instead — the flat look wxNote's integrated bar had before |
 | Window buttons | **System-native** on Windows, **Windows-style (flat)** on Linux | *restart* — **Windows and Linux only**, and only affects the integrated top bar, so the combo box greys out while **Show integrated top bar** is unchecked (with a native frame the OS draws the caption itself). **System-native** hands the buttons back to the platform: on Windows that means Windows&nbsp;11 snap layouts over maximize, native drag/snap/Aero&nbsp;Shake/double-click and Segoe Fluent Icons where installed; on Linux the integrated bar *becomes* GTK's own header bar, so your desktop theme's real minimize/maximize/close sit in the order and on the side your `gtk-decoration-layout` says, with GTK handling dragging, double-click-maximize and the right-click window menu, and the strip following your **system** theme rather than the app's. **Windows-style (flat)** draws wxNote's own buttons with a flat full-cell hover, with close hovering red under a white glyph. **Minimal (custom style)** draws them with a small inset circle on hover, centred in the cell rather than filling it — and hovers close in the same neutral grey as its siblings, giving no button special weight. On **macOS** there is no setting — the integrated bar always keeps the native traffic lights |
@@ -93,6 +93,11 @@ reachable percentages to move with it.
 | Spell-check engine | **Windows / macOS only** (Linux always uses the bundled dictionary). Chooses what backs **View ▸ Spell Check**: *System (OS spell checker)*, *System, then bundled dictionary* (default — uses the OS checker, falling back to the bundled English dictionary when it lacks the language), or *Bundled dictionary (Hunspell)*. Applies immediately, no restart |
 
 ## Indentation
+
+The list on the left picks what the settings beside it apply to: **[Default]**, for every language
+that has none of its own, or one language. A language with **Use default value** ticked follows
+[Default]; untick it to give that language its own tab size and tabs or spaces — tabs for Makefiles, 4
+spaces for Python. Open documents in that language pick the change up straight away.
 
 | Setting | Notes |
 | --- | --- |
@@ -209,7 +214,8 @@ languages:
   file as it is on disk, so neither change is lost.
 - **`languages:`** gives a language its own values, by its Language-menu name (`Python`, `C++`,
   `Shell`); today the tab size and tabs-or-spaces pair can be set per language, and a per-language
-  value beats the general one.
+  value beats the general one. Preferences ▸ Indentation writes them there too; it writes the whole
+  `languages:` block again when it does, so a comment inside that block does not survive.
 - A value of the wrong type falls back to the default for that one setting. A file that does not
   parse at all is not used — wxNote runs on the defaults, the status bar says where the file broke,
   and nothing is written to it until you fix it, so a typo can never cost you the rest of the file.

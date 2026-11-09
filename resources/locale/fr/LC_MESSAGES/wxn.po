@@ -3264,3 +3264,45 @@ msgstr "Vider à chaque recherche"
 
 msgid "Find in These Search Results"
 msgstr "Rechercher dans ces résultats"
+
+msgid "[Default]"
+msgstr "[Par défaut]"
+
+msgid "Use default value"
+msgstr "Utiliser la valeur par défaut"
+
+msgid "Save &All"
+msgstr "Tout &enregistrer"
+
+msgid "Don't Save An&y"
+msgstr "N'en enregistrer a&ucun"
+
+msgid "open each file in its own window, unless the main window has it open"
+msgstr "ouvrir chaque fichier dans sa propre fenêtre, sauf si la fenêtre principale l'a déjà ouvert"
+
+msgid "same as -r: the running window never opens a file twice"
+msgstr "comme -r : la fenêtre en cours n'ouvre jamais un fichier deux fois"
+
+msgid "open the given file(s) as this language (e.g. Python, cpp)"
+msgstr "ouvrir le(s) fichier(s) indiqué(s) dans ce langage (p. ex. Python, cpp)"
+
+msgid "create a file that does not exist without asking"
+msgstr "créer sans demander un fichier qui n'existe pas"
+
+msgid "neither restore nor save the session"
+msgstr "ne pas restaurer ni enregistrer la session"
+
+msgid "open the files of a session file"
+msgstr "ouvrir les fichiers d'un fichier de session"
+
+msgid "Could not read the session file %s"
+msgstr "Impossible de lire le fichier de session %s"
+
+msgid "%s does not exist.\n\nCreate it?"
+msgstr "%s n'existe pas.\n\nLe créer ?"
+
+msgid "Could not create %s"
+msgstr "Impossible de créer %s"
+
+msgid "Unknown language: %s"
+msgstr "Langage inconnu : %s"

@@ -240,6 +240,175 @@ void wxnDriveEditorSelfTests(WxnShellFrameT<FB>* f)
     }
 #endif
 
+    // ---- a tab keeps its folds, hidden lines, caret and scroll ------------------------------------
+    // Scintilla drops all four when the document under a view changes. That is every tab switch, and every
+    // background read of another document too - the 30 s backup among them - so the tab in front lost them
+    // as well, with the user doing nothing.
+    {
+        f->addDocument(wxString(), "untitled-viewstate-a");
+        EditorPage* a = f->activePage();
+        std::string body;
+        for (int i = 0; i < 300; ++i) body += "line of text\n";
+        load(body.c_str());
+        f->sci(SCI_SETFOLDLEVEL, 10, SC_FOLDLEVELBASE | SC_FOLDLEVELHEADERFLAG);
+        for (int l = 11; l < 20; ++l) f->sci(SCI_SETFOLDLEVEL, l, SC_FOLDLEVELBASE + 1);
+        f->sci(SCI_TOGGLEFOLD, 10);
+        f->sci(SCI_HIDELINES, 50, 59);
+        const sptr_t anchor = f->sci(SCI_POSITIONFROMLINE, 120) + 2, caret = f->sci(SCI_POSITIONFROMLINE, 122);
+        f->sci(SCI_SETSEL, anchor, caret);
+        f->sci(SCI_SETFIRSTVISIBLELINE, 40);
+        const sptr_t top = f->sci(SCI_GETFIRSTVISIBLELINE);
+        auto held = [&](const char* what) {
+            check(f->sci(SCI_GETFOLDEXPANDED, 10) == 0 && f->sci(SCI_GETLINEVISIBLE, 15) == 0, (std::string(what) + ": the fold stays folded").c_str());
+            check(f->sci(SCI_GETLINEVISIBLE, 55) == 0 && f->sci(SCI_GETLINEVISIBLE, 60) != 0, (std::string(what) + ": hidden lines stay hidden").c_str());
+            check(f->sci(SCI_GETANCHOR) == anchor && f->sci(SCI_GETCURRENTPOS) == caret, (std::string(what) + ": the selection stays").c_str());
+            check(f->sci(SCI_GETFIRSTVISIBLELINE) == top, (std::string(what) + ": the scroll position stays").c_str());
+        };
+        f->addDocument(wxString(), "untitled-viewstate-b");
+        EditorPage* b = f->activePage();
+        check(f->sci(SCI_GETCURRENTPOS) == 0 && f->sci(SCI_GETALLLINESVISIBLE) != 0, "view state: another tab does not inherit it");
+        f->sci(SCI_INSERTTEXT, 0, reinterpret_cast<sptr_t>("kept\n"));
+        f->sci(SCI_GOTOPOS, 3);
+        f->activatePage(a); f->activateBuffer(a);
+        held("back on the tab");
+        f->sci(SCI_COLOURISE, 0, -1);
+        held("after styling");
+        f->peekDoc(b, [] {});
+        held("a background read of another tab");
+        f->setReadOnlyForPages({ b });
+        held("read-only set on another tab");
+        f->activatePage(b); f->activateBuffer(b);
+        check(f->sci(SCI_GETCURRENTPOS) == 3, "view state: each tab has its own");
+        f->sci(SCI_SETREADONLY, 0);
+
+        // Lines added meanwhile: folds no longer name the same lines, so they go; the caret stays in range.
+        f->peekDoc(a, [&] { f->sci(SCI_SETTEXT, 0, reinterpret_cast<sptr_t>("short\n")); });
+        f->activatePage(a); f->activateBuffer(a);
+        check(f->sci(SCI_GETALLLINESVISIBLE) != 0, "view state: dropped when the document's lines changed behind it");
+        check(f->sci(SCI_GETCURRENTPOS) <= f->sci(SCI_GETLENGTH), "view state: a stale caret is clamped");
+
+        // Close All and friends: an answer that covers the rest needs no prompt - one here would hang the run.
+        const wxString path = g_sandboxRoot + wxFILE_SEP_PATH + "close-sweep.txt";
+        { wxFile w(path, wxFile::write); w.Write(wxString("disk\n")); }
+        EditorPage* onDisk = f->openPath(path);
+        check(onDisk != nullptr, "close sweep: the file opened");
+        f->sci(SCI_INSERTTEXT, 0, reinterpret_cast<sptr_t>("saved "));
+        CloseSweep sweep;
+        sweep.answer = wxID_YES;
+        check(f->confirmClose(onDisk, false, &sweep), "close sweep: Save All goes on without asking");
+        check(f->sci(SCI_GETMODIFY) == 0 && f->getDocUtf8() == "saved disk\n", "close sweep: Save All saved the document");
+        f->sci(SCI_INSERTTEXT, 0, reinterpret_cast<sptr_t>("lost "));
+        sweep.answer = wxID_NO;
+        check(f->confirmClose(onDisk, false, &sweep), "close sweep: Don't Save Any goes on without asking");
+        check(f->sci(SCI_GETMODIFY) != 0, "close sweep: Don't Save Any left the document unsaved");
+        check(f->closeSweep({ onDisk, a, b }).modified == 3, "close sweep: counts the modified documents");
+        for (EditorPage* p : { onDisk, b, a })
+        {
+            f->activatePage(p); f->activateBuffer(p);
+            f->sci(SCI_SETSAVEPOINT);
+            f->closeActive();
+        }
+    }
+
+    // ---- Line Operations / Blank Operations: the selection's lines, edited in place -----------------
+    // They used to read and rewrite the whole document (SCI_SETTEXT) whatever was selected: bookmarks
+    // left their lines, a NUL byte cut the file short, and the final line break was sorted like a line.
+    {
+        f->addDocument(wxString(), "untitled-lineops-test");
+        auto selLines = [f](int a, int b) { f->sci(SCI_SETSEL, f->sci(SCI_POSITIONFROMLINE, a), f->sci(SCI_POSITIONFROMLINE, b)); };
+        auto marked = [f](int l) { return (f->sci(SCI_MARKERGET, l) & (1 << MARK_BOOKMARK)) != 0; };
+        auto mark = [f](int l) { f->sci(SCI_MARKERADD, l, MARK_BOOKMARK); };
+        auto fresh = [&](const char* s) { load(s); f->sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); };
+
+        fresh("b\na\n");
+        f->sortLines(0, false);
+        check(text() == "a\nb\n", "line ops: sorting the document leaves the final line break where it is");
+        fresh("b\na");
+        f->sortLines(0, false);
+        check(text() == "a\nb", "line ops: ...and a last line without one stays without");
+        fresh("b\r\na\n");
+        f->sortLines(0, false);
+        check(text() == "a\r\nb\n", "line ops: ...mixed line endings stay where they were");
+        fresh("keep\nz\nb\na\nkeep2\n");
+        mark(0); mark(4);
+        selLines(1, 4);                                           // ends at column 0 of line 4: not that line
+        f->sortLines(0, false);
+        check(text() == "keep\na\nb\nz\nkeep2\n", "line ops: sorting a selection sorts only its lines");
+        check(marked(0) && marked(4) && !marked(1), "line ops: ...and bookmarks outside it stay on their lines");
+        f->sci(SCI_UNDO);
+        check(text() == "keep\nz\nb\na\nkeep2\n", "line ops: ...in one undo step");
+        fresh("b\nApple\napple\n");
+        f->sortLines(1, true);
+        check(text() == "b\nApple\napple\n", "line ops: a descending sort keeps equal lines in their order");
+        fresh("10\n9\n100\n");
+        f->sortLines(2, false);
+        check(text() == "9\n10\n100\n", "line ops: integer sort");
+        fresh("1 c\n2 a\n3 b\n");
+        f->sci(SCI_SETRECTANGULARSELECTIONANCHOR, 2);
+        f->sci(SCI_SETRECTANGULARSELECTIONCARET, f->sci(SCI_POSITIONFROMLINE, 2) + 3);
+        f->sortLines(0, false);
+        check(text() == "2 a\n3 b\n1 c\n", "line ops: a column selection is the sort key");
+        f->sci(SCI_SETSEL, 0, 0);
+        fresh("b\n");
+        f->sci(SCI_APPENDTEXT, 4, reinterpret_cast<sptr_t>("a\0x\n"));
+        f->sortLines(0, false);
+        check(text() == std::string("a\0x\nb\n", 6), "line ops: a NUL byte survives a sort");
+        fresh("1\n2\n3");
+        f->reverseLines();
+        check(text() == "3\n2\n1", "line ops: reverse");
+
+        fresh("a\nb\na\nc\n");
+        mark(3);
+        f->removeDuplicateLines(false);
+        check(text() == "a\nb\nc\n" && marked(2), "line ops: Remove Duplicate Lines keeps the first, and the bookmarks of what stays");
+        fresh("a\na\nb\na\n");
+        f->removeDuplicateLines(true);
+        check(text() == "a\nb\na\n", "line ops: Remove Consecutive Duplicate Lines");
+        fresh("a\n\nb\n\n");
+        f->removeEmptyLines(false);
+        check(text() == "a\nb\n", "line ops: Remove Empty Lines keeps the final line break");
+        fresh("a\n  \t\nb\nc");
+        f->removeEmptyLines(true);
+        check(text() == "a\nb\nc", "line ops: ...(Containing Blank characters)");
+        fresh("a\nb\n\n");
+        f->removeEmptyLines(false);
+        check(text() == "a\nb\n", "line ops: ...an empty last line goes with the break before it");
+
+        fresh("a  \nb  \nc  \n");
+        selLines(1, 2);
+        f->trimTrailing();
+        check(text() == "a  \nb\nc  \n", "blank ops: Trim Trailing Space trims the selected lines only");
+        f->sci(SCI_SETSEL, 0, 0);
+        fresh(" \t a \n");
+        f->trimBoth();
+        check(text() == "a\n", "blank ops: Trim Leading and Trailing Space");
+        f->sci(SCI_SETTABWIDTH, 4);
+        fresh("a\tb\n\tc\n");
+        f->tabsToSpaces();
+        check(text() == "a   b\n    c\n", "blank ops: TAB to Space goes to the next tab stop");
+        fresh("        x  y\n");
+        f->spacesToTabs(true);
+        check(text() == "\t\tx  y\n", "blank ops: Space to TAB (Leading) rewrites the indentation only");
+        fresh("a\nb\nc\n");
+        f->sci(SCI_SETSEL, 0, 3);
+        f->eolToSpace();
+        check(text() == "a b\nc\n", "blank ops: EOL to Space joins the selected lines");
+        f->sci(SCI_SETSEL, 0, 0);
+        fresh("a\nb\n");
+        f->eolToSpace();
+        check(text() == "a b\n", "blank ops: ...or the document's, the final line break kept");
+
+        fresh("a\nb\nc\n");
+        mark(1);
+        f->bookmarkLinesOp(3);
+        check(text() == "b\n" && marked(0), "bookmarks: Remove Unmarked Lines keeps the marked line's bookmark");
+        fresh("a\nb\nc\n");
+        mark(0); mark(2);
+        f->bookmarkLinesOp(2);
+        check(text() == "b\n", "bookmarks: Remove Bookmarked Lines");
+        f->closeActive();
+    }
+
     // ---- the Search results panel: Find All, a jump, accumulation, Delete, find in results ---------
     {
         f->m_sr.clear(); f->m_srPurge = false;
@@ -2379,6 +2548,20 @@ private:
             pump();
             check(findFrom(readLogLines(), mark, notifNeedle(NPPN_CMDLINEPLUGINMSG, 0)) >= 0,
                   "-pluginMessage survives the reuse-window IPC handoff (OnExec -> g_ipcOpenRequest -> NPPN_CMDLINEPLUGINMSG)");
+
+            // -- -q/--create over the same handoff: a file that does not exist is created and opened, not
+            // dropped (and not asked about - the question would block this harness, which is the point of -q).
+            {
+                const wxString made = g_sandboxRoot + wxFILE_SEP_PATH + "ipc-created.txt";
+                if (wxFileExists(made)) wxRemoveFile(made);
+                const int before = g_nibDocCount ? g_nibDocCount() : 0;
+                auto* conn = new WxnIpcConnection();   // never deleted - see the PLUGINMSG case above
+                check(conn->OnExec(wxEmptyString, made + "\n\x01" "CREATE=1\n"),
+                      "WxnIpcConnection::OnExec accepted a CREATE= reuse-window payload");
+                pump();
+                check(wxFileExists(made), "-q over the reuse-window handoff creates the missing file");
+                check(g_nibDocCount && g_nibDocCount() == before + 1, "-q over the reuse-window handoff opens the file it created");
+            }
 
             // clean up back to a single document for the tail assertions
             for (int guard = 0; g_nibDocCount && g_nibDocCount() > 1 && guard < 20; ++guard) { g_nibInvokeCommand(kCmdFileClose); pump(); }

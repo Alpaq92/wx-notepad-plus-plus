@@ -151,6 +151,9 @@ extern "C" int  wxn_TrashFile(const char* path, char* err, int errLen);
 #include <cstdlib>
 #include <memory>             // std::unique_ptr - host-owned pending nib.keymap scheme builders
 #include <random>              // std::shuffle - "Randomize Line Order"
+#include <numeric>             // std::iota
+#include <unordered_set>
+#include <wx/uilocale.h>       // wxUILocale::CompareStrings - the locale sorts
 
 #include <wx/clipbrd.h>        // wxClipboard - copy file paths / hashes to the clipboard
 #include <wx/utils.h>          // wxExecute / wxLaunchDefaultBrowser / wxLaunchDefaultApplication
@@ -192,6 +195,7 @@ extern "C" int  wxn_TrashFile(const char* path, char* err, int errLen);
 #include "shortcut_mapper_dialog.h"  // the Shortcut Mapper dialog + conflict engine (implements kCmdSettingShortcutMapper 48009)
 #include "shortcut_labels.h"   // curated Scintilla "Editor commands" tier: seedEditorKeymapDefaults + wx<->SCK translation
 #include "desktop_entry.h"      // .desktop rewriting for AppImage self-integration (see wxnAppImageIntegrate)
+#include "cmdline_compat.h"     // Notepad++'s launch options rewritten into ours, and the language a -l names
 #include "scintillua_engine.h" // embedded Lua+LPeg+Scintillua engine (the native language-definition engine)
 #include "command_palette.h"   // Ctrl+Shift+P: harvests the live menu bar into the shared filter list
 #include "file_index.h"        // Ctrl+Shift+O: the time-sliced workspace crawler behind Quick Open
@@ -614,6 +618,26 @@ static bool wxnParseRuns(const std::string& text, std::vector<SavedRun>& out, lo
 }
 
 
+// What the view holds about the document it shows, not the document: selection, scroll, folds and hidden
+// lines. SCI_SETDOCPOINTER drops all of it, so whatever swaps a document out keeps this and puts it back
+// (captureViewState / applyViewState). Folds and hidden lines count document lines, so they only apply to a
+// document that still has as many lines; a selection is clamped by Scintilla whatever happened meanwhile.
+struct DocViewState
+{
+    bool saved = false;                            // false: never shown, nothing to put back
+    sptr_t anchor = 0, caret = 0;
+    int firstLine = 0, xOffset = 0, lines = 0;
+    std::vector<int> folded;                       // contracted fold headers
+    std::vector<std::pair<int, int>> hidden;       // runs of lines not on screen: fold bodies and Hide Lines alike
+};
+
+// Several documents closing together (Close All, quitting): the answer that covers the rest of them.
+struct CloseSweep
+{
+    int answer = 0;                                // wxID_YES Save All, wxID_NO Don't Save Any, 0 ask each
+    int modified = 0;                              // modified documents still to ask about
+};
+
 class EditorPage : public wxPanel
 {
 public:
@@ -644,6 +668,7 @@ public:
     uint64_t editSerial   = 0;             // bumped on every insert/delete (onStcModified; plus the one quiet background mutation, g_nibDocEolSet's CONVERTEOLS)
     uint64_t backupSerial = ~0ull;         // editSerial at the last successful .bak write; ~0 = no snapshot this session (a restored recovery buffer is dirty with 0 edits - it re-persists once, then rests)
     long long lastBackupMs = 0;            // wall-clock ms of that write; drives the big-buffer cadence stretch (wxnBackupThrottleMs)
+    DocViewState viewState;                // kept while this tab is in the background (activateBuffer)
 };
 
 // One editor "view" = a tab strip + ONE persistent wxStyledTextCtrl that hops across its pages (the
@@ -861,6 +886,11 @@ struct WxnOpenRequest
     bool hasStdin = false;                            // '-': a piped-stdin buffer was captured (never travels over IPC - forces a new instance)
     wxString stdinText;                               // the captured stdin bytes (decoded UTF-8)
     wxString pluginMessage;                           // -pluginMessage=<text>, forwarded over the reuse-window IPC handoff too
+    wxString language;                                // -l/--language: open THIS launch's files as this Language-menu language
+    bool create   = false;                            // -q/--create: create a missing file without asking
+    wxString sessionFile;                             // --session <file>: open the files of a saved session, absolute
+    bool perFile  = false;                            // --ns: each file in its own window, unless the main window has it open
+    bool perFileHere = false;                         // --ns with no main window: this window takes the first file (never travels over IPC)
 };
 
 // Set by the frame: a second wxnote launch handed its file args (+ optional -g/-e) to us over IPC
@@ -1020,6 +1050,14 @@ static void wxnMaybeIntegrateAppImage(wxWindow* parent)
 // below Execute()s and returns immediately, which would unblock git before the tab was even opened.
 static wxArrayString g_waitPaths;          // absolute paths still being waited on; emptying it quits the app
 static bool          g_waitMode = false;   // --wait was given (also suppresses session restore/save)
+// ---- the main copy: the one window that owns the session ---------------------------------------------
+// Several copies can run at once (-n, --no-session, -w, or with "Reuse an existing window" off), but only
+// one of them - the first, holding the instance lock - restores and saves the session, keeps the 30 s
+// crash-recovery backups and takes later launches over IPC, as in Notepad++. The others would otherwise
+// overwrite each other's session on exit and sweep each other's backups, so they have neither: they start
+// empty, and quitting with unsaved changes asks instead of keeping them for next time. Set in OnInit before
+// the frame is built; true by default so a frame built without OnInit (the self-tests) behaves as before.
+static bool          g_sessionOwner = true;
 // ---- --safe: start with no plugins loaded (guards loadNibPlugins(), which pulls in the N++ bridge too) --
 static bool          g_safeMode = false;
 // ---- --clean: a pristine launch = --safe (no plugins) PLUS skip session restore AND recovery-backup ----
@@ -1078,7 +1116,7 @@ static int           g_localeOverride = -1;
 // pre-scan in WxnApp::OnInit (also registered with the parser so it shows in --help); empty when not given.
 static wxString      g_pluginMessage;
 
-// ---- single-instance "reuse window" IPC (Preferences > General; off by default) ------------------
+// ---- single-instance "reuse window" IPC (Preferences > General; on by default) -------------------
 // A second wxnote process, on finding one already running (wxSingleInstanceChecker), connects here as a
 // wxClient and Executes() a small payload instead of opening its own window - one path per line, plus
 // \x01-prefixed key lines: GOTO=line,col and ENC=n (-g/-e), DIR=<folder> (a positional directory, which
@@ -1103,6 +1141,17 @@ static wxString      g_pluginMessage;
 // folder of its own, can never reach a real instance. Changing either means a running instance from an
 // older build will not be found by a newer one - the newcomer just opens its own window, the same
 // already-correct behaviour as when no instance is running.
+// Start another wxNote with these arguments (the executable goes in front). Each argument travels as
+// itself - there is no command-line string to quote - so a path with spaces or quotes arrives intact.
+static long wxnLaunchCopy(const wxArrayString& args)
+{
+    std::vector<std::wstring> ws{ wxStandardPaths::Get().GetExecutablePath().ToStdWstring() };
+    for (const wxString& a : args) ws.push_back(a.ToStdWstring());
+    std::vector<const wchar_t*> argv;
+    for (const std::wstring& w : ws) argv.push_back(w.c_str());
+    argv.push_back(nullptr);
+    return wxExecute(argv.data(), wxEXEC_ASYNC);
+}
 static wxString wxnIpcService()
 {
 #ifdef __WXMSW__
@@ -1166,6 +1215,14 @@ public:
                 // FIND=, this does not escape an embedded newline in the message text - the same known
                 // corner case as the pattern above (not reachable from a normal shell command line).
                 req.pluginMessage = line.Mid(11);
+            } else if (line.StartsWith("\x01LANG=")) {
+                req.language = line.Mid(6);            // -l/--language ('L' is not a hex digit, so unsplit is safe)
+            } else if (line.StartsWith("\x01" "CREATE=")) {
+                req.create = true;                     // -q/--create. Split: 'C' IS a hex digit, like ENC=/DIR=/FIND=
+            } else if (line.StartsWith("\x01SESSION=")) {
+                req.sessionFile = line.Mid(9);         // --session <file>
+            } else if (line.StartsWith("\x01NS=")) {
+                req.perFile = true;                    // --ns: files this window lacks each get their own window
             } else if (!line.empty()) req.paths.Add(line);
         }
         if (g_ipcOpenRequest) g_ipcOpenRequest(req);
@@ -4533,7 +4590,8 @@ public:
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) { updateStatus(); updateUiState(); }, myID_TIMER);
         Bind(wxEVT_TIMER, &WxnShellFrameT::onBackupTimer, this, myID_BACKUPTIMER);   // periodic crash-safety snapshot
         m_backupTimer = new wxTimer(this, myID_BACKUPTIMER);
-        m_backupTimer->Start(30000);                                  // every 30s: back up any buffer with unsaved edits
+        if (g_sessionOwner)                                           // the main copy only: see g_sessionOwner
+            m_backupTimer->Start(30000);                              // every 30s: back up any buffer with unsaved edits
         // No --sandbox gate here: userDataDir() already points at a throwaway temp dir in that mode, so
         // backups stay isolated. Gating the timer would also have been incomplete - the exit-path backup
         // in confirmClose() is a separate writer and would have leaked anyway.
@@ -4668,6 +4726,10 @@ public:
     {
         wxArrayString opened;
         std::vector<EditorPage*> openedPages;
+        // --session <file>: its files first, so the launch's own files open after them and -g lands on those.
+        if (!req.sessionFile.empty() && loadSessionFromPath(req.sessionFile) < 0)
+        { setStatus(0, wxString::Format(_("Could not read the session file %s"), req.sessionFile)); m_hint = true; }
+        bool keepHere = req.perFileHere;
         // wxNote's split is exactly TWO views in ONE (always side-by-side) orientation, so -o and -O are
         // identical and there is no third pane / second orientation to honour vim's -oN/-ON counts: N>2 just
         // piles the tail onto SUB. Only split for >=2 files - a lone `-o file` in an empty second pane is pointless.
@@ -4676,10 +4738,30 @@ public:
         for (size_t i = 0; i < req.paths.GetCount(); ++i)
         {
             if (doSplit) setActiveView(i == 0 ? &m_main : &m_sub);    // first file MAIN, everything after it SUB
-            if (EditorPage* pg = openPath(req.paths[i]))
+            // A file that does not exist is created (empty) when -q says so, or when the user agrees -
+            // rather than silently opening nothing, which is all a mistyped or brand-new name used to get.
+            const wxString& path = req.paths[i];
+            if (!wxFileExists(path) && !wxDirExists(path) && !pageForPath(path))
             {
-                opened.Add(req.paths[i]);
+                if (!req.create && wxMessageBox(wxString::Format(_("%s does not exist.\n\nCreate it?"), path),
+                                                "wxNote", wxYES_NO | wxICON_QUESTION, this) != wxYES)
+                    continue;
+                wxFile f;
+                { wxLogNull quiet; f.Create(path); }
+                if (!f.IsOpened()) { setStatus(0, wxString::Format(_("Could not create %s"), path)); m_hint = true; continue; }
+            }
+            // --ns: a file this window does not have gets a window of its own (the first one stays here when
+            // this launch IS the main window - there was none to ask).
+            if (req.perFile && !pageForPath(path))
+            {
+                if (keepHere) keepHere = false;
+                else { launchCopyFor(req, i); continue; }
+            }
+            if (EditorPage* pg = openPath(path))
+            {
+                opened.Add(path);
                 openedPages.push_back(pg);
+                if (!req.language.empty()) forceLanguageNamed(req.language);   // -l/--language
                 if (i < req.lines.GetCount() && req.lines[i] > 0)
                     applyGotoAndEncoding(req.lines[i], req.cols[i], -1);   // this file's own :line[:col] suffix
             }
@@ -4693,6 +4775,28 @@ public:
         if (doSplit) setActiveView(&m_main);
         return opened;
     }
+    // -l/--language on the page just opened: a Language-menu name (cmdline_compat.h has already turned a
+    // Notepad++ spelling such as "cpp" into "C++"), or Normal Text.
+    void forceLanguageNamed(const wxString& name)
+    {
+        if (name.CmpNoCase("Normal Text") == 0) { setForcedLang("", _("Normal text file")); return; }
+        if (const WxnLang* L = wxnLangFindByName(wxnUtf8(name)))
+            setForcedLang(wxString::FromUTF8(L->lexer), wxString::FromUTF8(L->name));
+        else { setStatus(0, wxString::Format(_("Unknown language: %s"), name)); m_hint = true; }
+    }
+    // --ns: open req.paths[i] in a new copy of wxNote, carrying this launch's per-file options with it.
+    void launchCopyFor(const WxnOpenRequest& req, size_t i)
+    {
+        wxArrayString args;
+        args.Add("-n");
+        if (req.readOnly) args.Add("-R");
+        if (!req.language.empty()) args.Add("--language=" + req.language);
+        if (i < req.lines.GetCount() && req.lines[i] > 0)
+            args.Add(wxString::Format("--goto=%d,%d", req.lines[i], req.cols[i]));
+        args.Add("--");
+        args.Add(req.paths[i]);
+        wxnLaunchCopy(args);
+    }
     // -R/-M/--read-only: set (soft, Scintilla) read-only on ONLY the pages just opened by this launch, not
     // every tab - a reuse-window launch must never freeze the user's already-open buffers. Read-only lives
     // on the Scintilla Document, so we reach each page's doc through the same doc-pointer swap
@@ -4701,10 +4805,10 @@ public:
     {
         if (!m_stc || pages.empty()) return;
         const sptr_t original = sci(SCI_GETDOCPOINTER);
-        const int savedAnchor = (int)sci(SCI_GETANCHOR), savedCaret = (int)sci(SCI_GETCURRENTPOS);
+        const DocViewState savedView = captureViewState();
         for (EditorPage* p : pages) { if (!p) continue; sci(SCI_SETDOCPOINTER, 0, p->doc); sci(SCI_SETREADONLY, 1); }
         sci(SCI_SETDOCPOINTER, 0, original);
-        sci(SCI_SETSEL, savedAnchor, savedCaret);
+        applyViewState(savedView);
         setStatus(0, _("Read-Only"));
     }
     // +/{pattern}: put the caret on the first LITERAL match of pattern in the active (last-opened) document.
@@ -4839,7 +4943,8 @@ public:
         // behind, and nothing else ever deletes it (clearRecovery removes only the .bak) - each such
         // crash would otherwise leak a full document copy in the user's data dir forever. Age-gated
         // rather than assuming "no write is in flight at startup": a SECOND wxnote process shares this
-        // dir (window.reuseInstance defaults off), and its snapshot mid-write must not be swept. Anything older
+        // dir (only the main copy writes backups now, but a restart hands over while the old one may still be
+        // finishing one), and its snapshot mid-write must not be swept. Anything older
         // than the longest backup cadence is an orphan under any process topology.
         {
             wxArrayString tmps;
@@ -7208,6 +7313,7 @@ private:
                     while ((ln = (int)sci(SCI_MARKERNEXT, ln + 1, 1 << MARK_BOOKMARK)) >= 0 && ln < lc) f.bookmarks.push_back(ln);
                     s.active[v] = (int)s.files[v].size();
                 }
+                else if (p->viewState.saved) { f.caret = (int)p->viewState.caret; f.firstLine = p->viewState.firstLine; }
                 s.files[v].push_back(f);
                 ++total;
             }
@@ -7758,10 +7864,16 @@ private:
             if (m_stc && m_stc->GetParent() == page) m_stc->SetSize(page->GetClientSize());   // only the page hosting the view resizes it
             e.Skip();
         });
+        // SCI_CREATEDOCUMENT also resets the folds of the document in this view (Editor.cxx), so the tab being
+        // left has to be read before it, not when activateBuffer leaves it.
+        EditorPage* leaving = activePage();
+        DocViewState leavingState;
+        if (leaving && leaving->doc == sci(SCI_GETDOCPOINTER)) leavingState = captureViewState();
         page->doc = sci(SCI_CREATEDOCUMENT, 0, SC_DOCUMENTOPTION_TEXT_LARGE);   // the buffer owns one ref
         page->path = path; page->title = title;
         m_tabs->AddPage(page, title, true);    // selecting it fires PAGE_CHANGED -> activateBuffer
         activateBuffer(page);                  // ensure it (the first AddPage may not fire PAGE_CHANGED); idempotent
+        if (leavingState.saved) leaving->viewState = leavingState;
         if (!path.empty())
         {
             // v4: a global "a file is about to load from disk" signal (id 0, before the content is read),
@@ -8023,10 +8135,47 @@ private:
         for (EditorPage* p : allPages()) if (reinterpret_cast<intptr_t>(p) == id) return p;
         return nullptr;
     }
+    // The view's state of the mounted document, and putting it back after a document swap. Hidden lines are
+    // set directly rather than by folding again, so a fold body and a Hide Lines run come back exactly as
+    // they were; SCI_SETFOLDEXPANDED only sets the header's flag. The all-visible check keeps the common
+    // case (nothing folded) free of a walk over every line.
+    DocViewState captureViewState()
+    {
+        DocViewState st;
+        st.saved = true;
+        st.anchor = sci(SCI_GETANCHOR);
+        st.caret = sci(SCI_GETCURRENTPOS);
+        st.firstLine = (int)sci(SCI_GETFIRSTVISIBLELINE);
+        st.xOffset = (int)sci(SCI_GETXOFFSET);
+        st.lines = (int)sci(SCI_GETLINECOUNT);
+        for (int l = (int)sci(SCI_CONTRACTEDFOLDNEXT, 0); l >= 0; l = (int)sci(SCI_CONTRACTEDFOLDNEXT, l + 1))
+            st.folded.push_back(l);
+        if (sci(SCI_GETALLLINESVISIBLE)) return st;
+        for (int l = 0; l < st.lines; ++l)
+        {
+            if (sci(SCI_GETLINEVISIBLE, l)) continue;
+            const int first = l;
+            while (l + 1 < st.lines && !sci(SCI_GETLINEVISIBLE, l + 1)) ++l;
+            st.hidden.emplace_back(first, l);
+        }
+        return st;
+    }
+    void applyViewState(const DocViewState& st)
+    {
+        if (!st.saved) return;
+        if (st.lines == (int)sci(SCI_GETLINECOUNT))
+        {
+            for (const int l : st.folded) sci(SCI_SETFOLDEXPANDED, l, 0);
+            for (const auto& run : st.hidden) sci(SCI_HIDELINES, run.first, run.second);
+        }
+        sci(SCI_SETSEL, st.anchor, st.caret);
+        sci(SCI_SETXOFFSET, st.xOffset);
+        sci(SCI_SETFIRSTVISIBLELINE, st.firstLine);
+    }
     // Run `fn` with page p's Scintilla document mounted on the ACTIVE view's editor. If p is already the
     // active page, fn runs directly. Otherwise p's doc is swapped in via a raw doc-pointer swap (NOT
     // activateBuffer - the active view's lexer/status/minimap/tab selection are untouched) with editor
-    // events quiet, and the active view's OWN document + caret/scroll are restored afterwards (a doc swap
+    // events quiet, and the active view's OWN document + view state are restored afterwards (a doc swap
     // clears the per-view selection - the documented doc-pointer-swap-loses-caret pitfall; the OTHER view
     // is never touched). Mirrors onSaveAll's background-buffer peek. Read-only or content-modifying `fn`.
     template <class Fn>
@@ -8034,17 +8183,14 @@ private:
     {
         if (!p || !m_stc) return;
         if (p == activePage()) { fn(); return; }
-        const sptr_t savedDoc    = sci(SCI_GETDOCPOINTER);
-        const int    savedAnchor = static_cast<int>(sci(SCI_GETANCHOR));
-        const int    savedCaret  = static_cast<int>(sci(SCI_GETCURRENTPOS));
-        const int    savedTop    = static_cast<int>(sci(SCI_GETFIRSTVISIBLELINE));
+        const sptr_t savedDoc  = sci(SCI_GETDOCPOINTER);
+        const DocViewState savedView = captureViewState();
         const sptr_t savedMask = sci(SCI_GETMODEVENTMASK);   // restore what was SET, not a hard ALL: a plugin-narrowed mask must survive a peek
         sci(SCI_SETMODEVENTMASK, 0);                 // quiet: the active view must not react to the peeked doc
         sci(SCI_SETDOCPOINTER, 0, p->doc);
         fn();
         sci(SCI_SETDOCPOINTER, 0, savedDoc);         // remount the active view's own document...
-        sci(SCI_SETSEL, savedAnchor, savedCaret);    // ...and restore its caret/selection (lost by the swap)
-        sci(SCI_SETFIRSTVISIBLELINE, savedTop);
+        applyViewState(savedView);                   // ...and restore its selection, scroll and folds (lost by the swap)
         sci(SCI_SETMODEVENTMASK, savedMask);
     }
     // Save the active document to `path`. asCopy: write a copy WITHOUT rebinding the active buffer to it
@@ -8150,8 +8296,10 @@ private:
         if (key == TabSortKey::Size && m_stc)
         {
             const sptr_t original = sci(SCI_GETDOCPOINTER);
+            const DocViewState savedView = captureViewState();
             for (EditorPage* p : pages) { sci(SCI_SETDOCPOINTER, 0, p->doc); lengths[p] = (int)sci(SCI_GETLENGTH); }
             sci(SCI_SETDOCPOINTER, 0, original);
+            applyViewState(savedView);
         }
 
         std::stable_sort(pages.begin(), pages.end(), [&](EditorPage* a, EditorPage* b) {
@@ -8259,6 +8407,9 @@ private:
         if (!m_stc) return;
         if (m_stc->GetParent() == p && sci(SCI_GETDOCPOINTER) == p->doc)
         { m_stc->SetFocus(); return; }                                      // already showing this buffer - nothing to do
+        // The tab being left. A closing one has had the editor lifted off it (deletePage), so is never this.
+        if (auto* out = dynamic_cast<EditorPage*>(m_stc->GetParent()); out && out != p && out->doc == sci(SCI_GETDOCPOINTER))
+            out->viewState = captureViewState();
         if (m_stc->GetParent() != p) m_stc->Reparent(p);                    // the one view hops onto the active page (wx-tracked)
         m_stc->SetSize(p->GetClientSize());
         m_stc->Show();
@@ -8268,6 +8419,7 @@ private:
         applyDocSettings(m_stc);   // tab width / use-tabs live on the DOCUMENT - see applyDocSettings
         m_path = p->path;
         setLexerForFile(p->path);                                           // re-apply lexer/styling for this doc
+        applyViewState(p->viewState);                                       // after the lexer: its fold levels belong to the document, and are already there
         m_lastFoldSection = -2; refreshFoldNestedAccent();                  // the nested-square accent marker is global to the view - re-evaluate it for the swapped-in document
         if (m_docMap) { m_docMap->SetDocPointer(reinterpret_cast<void*>(p->doc)); updateDocMapViewport(); }   // minimap follows the active doc
         parseFuncList();                                                    // re-parse symbols for the newly active doc
@@ -8395,7 +8547,9 @@ private:
     // launch (Notepad++'s session snapshot); on, it asks as well. An answered in-session close is a final
     // decision - clear any stale recovery, or discarded scratch tabs would resurrect as ghost tabs on every
     // future launch forever.
-    bool confirmClose(EditorPage* p, bool exiting = false)
+    // `sweep`: several documents are closing together, so the prompt offers Save All and Don't Save Any,
+    // and an answer given there covers the rest without asking.
+    bool confirmClose(EditorPage* p, bool exiting = false, CloseSweep* sweep = nullptr)
     {
         if (!p) return true;
         if (!exiting)
@@ -8404,7 +8558,11 @@ private:
         setActiveView(viewOf(p));            // make p's view active so sci()/m_path/onSave refer to p (incl. the OTHER split view)
         activateBuffer(p);                   // swap that view to p's document and select its tab
         if (sci(SCI_GETMODIFY) == 0) return true;
-        if (exiting && !m_askBeforeClose) { backupUnsavedChanges(p); return true; }   // quitting, setting off (the default): keep it for next launch
+        // Quitting with the setting off (the default): keep it for next launch. Only the main copy has a next
+        // launch to keep it for (g_sessionOwner), so every other copy asks.
+        if (exiting && !m_askBeforeClose && g_sessionOwner) { backupUnsavedChanges(p); return true; }
+        if (sweep && sweep->answer == wxID_YES) { onSave(); return sci(SCI_GETMODIFY) == 0; }   // an untitled one still asks for its name
+        if (sweep && sweep->answer == wxID_NO)  { clearRecovery(p); return true; }
         const wxString name = !p->path.empty() ? p->path : (p->title.empty() ? wxString("new") : p->title);
 
         wxDialog dlg(this, wxID_ANY, "wxNote");
@@ -8414,7 +8572,25 @@ private:
         auto* bSave = new wxButton(&dlg, wxID_YES, _("&Save"));
         auto* bNo   = new wxButton(&dlg, wxID_NO, _("Do&n't Save"));
         auto* bCan  = new wxButton(&dlg, wxID_CANCEL, _("&Cancel"));
-        row->Add(bSave, 0, wxRIGHT, 6); row->Add(bNo, 0, wxRIGHT, 6); row->Add(bCan, 0);
+        row->Add(bSave, 0, wxRIGHT, 6);
+        // Only with another modified document still to come: for the last one they would mean the same as
+        // Save and Don't Save.
+        enum { kSaveAll = wxID_HIGHEST + 1, kDiscardAll };
+        const bool forAll = sweep && sweep->modified > 1;
+        if (forAll)
+        {
+            auto* bAll = new wxButton(&dlg, kSaveAll, _("Save &All"));
+            row->Add(bAll, 0, wxRIGHT, 6);
+            bAll->Bind(wxEVT_BUTTON, [&dlg](wxCommandEvent&) { dlg.EndModal(kSaveAll); });
+        }
+        row->Add(bNo, 0, wxRIGHT, 6);
+        if (forAll)
+        {
+            auto* bNone = new wxButton(&dlg, kDiscardAll, _("Don't Save An&y"));
+            row->Add(bNone, 0, wxRIGHT, 6);
+            bNone->Bind(wxEVT_BUTTON, [&dlg](wxCommandEvent&) { dlg.EndModal(kDiscardAll); });
+        }
+        row->Add(bCan, 0);
         s->Add(row, 0, wxALIGN_RIGHT | wxLEFT | wxRIGHT | wxBOTTOM, 12);
         bSave->Bind(wxEVT_BUTTON, [&dlg](wxCommandEvent&) { dlg.EndModal(wxID_YES); });
         bNo->Bind(wxEVT_BUTTON,   [&dlg](wxCommandEvent&) { dlg.EndModal(wxID_NO); });
@@ -8422,11 +8598,19 @@ private:
         bSave->SetDefault();
         dlg.SetSizerAndFit(s); dlg.CentreOnParent();
         themeDialog(&dlg);
-        const int r = dlg.ShowModal();
+        int r = dlg.ShowModal();
         if (r == wxID_CANCEL) return false;
+        if (r == kSaveAll || r == kDiscardAll) { r = r == kSaveAll ? wxID_YES : wxID_NO; sweep->answer = r; }
+        if (sweep) --sweep->modified;
         if (r == wxID_YES) { onSave(); return sci(SCI_GETMODIFY) == 0; }   // p is active now (SetSelection above); false if Save As cancelled
         clearRecovery(p);   // Don't Save -> discard; an explicit, informed choice needs no safety net
         return true;
+    }
+    CloseSweep closeSweep(const std::vector<EditorPage*>& pages)
+    {
+        CloseSweep sweep;
+        for (EditorPage* p : pages) if (pageDirty(p)) ++sweep.modified;
+        return sweep;
     }
     void onPageClose(wxAuiNotebookEvent& e)
     {
@@ -8473,8 +8657,9 @@ private:
     }
     void closeAll()
     {
+        CloseSweep sweep = closeSweep(allPages());
         for (EditorPage* p : allPages())
-            if (!confirmClose(p)) return;                  // prompt across BOTH views; cancel aborts
+            if (!confirmClose(p, false, &sweep)) return;   // prompt across BOTH views; cancel aborts
         for (EditorPage* p : allPages()) recordClosed(p);  // all become restorable via Ctrl+Shift+T
         for (EditorPage* p : allPages()) nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);   // before any teardown: path/id still resolvable
         for (ViewPane* v : { &m_main, &m_sub })
@@ -8503,8 +8688,11 @@ private:
     }
     void closeAllBut(EditorPage* keep)
     {
-        for (EditorPage* p : allPages())
-            if (p != keep && !confirmClose(p)) return;     // prompt across BOTH views; cancel aborts
+        std::vector<EditorPage*> others = allPages();
+        others.erase(std::remove(others.begin(), others.end(), keep), others.end());
+        CloseSweep sweep = closeSweep(others);
+        for (EditorPage* p : others)
+            if (!confirmClose(p, false, &sweep)) return;   // prompt across BOTH views; cancel aborts
         for (EditorPage* p : allPages()) if (p != keep) recordClosed(p);
         for (EditorPage* p : allPages()) if (p != keep) nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);   // before teardown
         for (ViewPane* v : { &m_main, &m_sub })
@@ -8520,9 +8708,12 @@ private:
     void closeAllButPinned()
     {
         auto unpinned = [](wxAuiNotebook* nb, int i) { return nb->GetPageKind(i) != wxAuiTabKind::Pinned; };
+        std::vector<EditorPage*> closing;
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
             if (nb) for (int i = 0; i < (int)nb->GetPageCount(); ++i)
-                if (unpinned(nb, i) && !confirmClose(static_cast<EditorPage*>(nb->GetPage(i)))) return;   // cancel aborts
+                if (unpinned(nb, i)) closing.push_back(static_cast<EditorPage*>(nb->GetPage(i)));
+        CloseSweep sweep = closeSweep(closing);
+        for (EditorPage* p : closing) if (!confirmClose(p, false, &sweep)) return;   // cancel aborts
         for (wxAuiNotebook* nb : { m_main.tabs, m_sub.tabs })
             if (nb) for (int i = 0; i < (int)nb->GetPageCount(); ++i)
                 if (unpinned(nb, i)) recordClosed(static_cast<EditorPage*>(nb->GetPage(i)));
@@ -8545,19 +8736,23 @@ private:
         // unloadNibPlugins() below - never moved (the plugin-unload-crash fix); this is only the "begin".
         nibFireDocEvent(NIB_EV_SHUTDOWN_BEGIN, nullptr);
         if (e.CanVeto())   // a forced close (e.g. the theme-restart) skips prompts and just exits
+        {
+            CloseSweep sweep = closeSweep(allPages());
             for (EditorPage* p : allPages())   // prompt EVERY modified doc across BOTH views - none lost on exit
-                if (!confirmClose(p, /*exiting=*/true)) { nibFireDocEvent(NIB_EV_SHUTDOWN_CANCEL, nullptr); e.Veto(); return; }   // -> NPPN_CANCELSHUTDOWN
+                if (!confirmClose(p, /*exiting=*/true, &sweep)) { nibFireDocEvent(NIB_EV_SHUTDOWN_CANCEL, nullptr); e.Veto(); return; }   // -> NPPN_CANCELSHUTDOWN
+        }
         // Geometry ONLY - deliberately not saveSettings(). Every preference the user can actually change
         // is written the moment it changes (the Preferences dialog's OK handler, the spell-dictionary and
         // spell-scope commands, the search-engine picker and the theme editor all call saveSettings()
         // themselves), so there is nothing left here to flush. Writing the full block from memory instead
         // meant a window that had changed NOTHING still stamped its startup snapshot over the whole
-        // preference tree on exit - so with two windows open (which is the default: a second launch opens
-        // a new window unless "Reuse an existing window" is on), whichever closed last silently reverted
+        // preference tree on exit - so with two windows open (-n, or "Reuse an existing window" turned
+        // off), whichever closed last silently reverted
         // everything the other had just configured. Reproduced by changing a key underneath a running
         // instance and closing it: the value was reset to the one that instance had loaded at startup.
         saveWindowGeometry();
-        if (!g_waitMode)   // a --wait window is ephemeral (a commit message is not a session): without this every
+        if (g_sessionOwner && !g_waitMode)   // only the main copy has a session (g_sessionOwner). A --wait window
+                           // never is one, which matters: a commit message is not a session, and without this every
                            // `git commit` would overwrite the user's saved tabs with .git/COMMIT_EDITMSG and the
                            // next normal launch would reopen it
             saveExitSession();   // remember the open (saved) files so the next launch reopens them
@@ -11110,10 +11305,8 @@ private:
         // dirty, write it - without going through activateBuffer, so the active view's lexer/doc-map/status
         // aren't churned. A doc swap clears the view's per-view selection (see the second-view lifecycle
         // notes / sortTabs' size sort), so snapshot the caret + scroll and restore them afterwards.
-        const sptr_t savedDoc    = sci(SCI_GETDOCPOINTER);
-        const int    savedAnchor = static_cast<int>(sci(SCI_GETANCHOR));
-        const int    savedCaret  = static_cast<int>(sci(SCI_GETCURRENTPOS));
-        const int    savedTop    = static_cast<int>(sci(SCI_GETFIRSTVISIBLELINE));
+        const sptr_t savedDoc  = sci(SCI_GETDOCPOINTER);
+        const DocViewState savedView = captureViewState();
         bool swapped = false;
         for (EditorPage* p : allPages())
         {
@@ -11128,8 +11321,7 @@ private:
         if (swapped)                                             // restore the active view's own document + caret/scroll
         {
             sci(SCI_SETDOCPOINTER, 0, savedDoc);
-            sci(SCI_SETSEL, savedAnchor, savedCaret);
-            sci(SCI_SETFIRSTVISIBLELINE, savedTop);
+            applyViewState(savedView);
         }
 
         // (3) Untitled dirty buffers need a filename - activate each and run Save As (one prompt each).
@@ -11147,40 +11339,6 @@ private:
         sci(SCI_GETTEXT, len + 1, reinterpret_cast<sptr_t>(&b[0])); b.resize(len); return b;
     }
     void setDocUtf8(const std::string& s) { sci(SCI_BEGINUNDOACTION); sci(SCI_SETTEXT, 0, reinterpret_cast<sptr_t>(s.c_str())); sci(SCI_ENDUNDOACTION); }
-    void removeEmptyLines()
-    {
-        const std::string b = getDocUtf8(); std::string out; size_t i = 0;
-        while (i < b.size())
-        {
-            const size_t nl = b.find('\n', i);
-            std::string line = (nl == std::string::npos) ? b.substr(i) : b.substr(i, nl - i);
-            std::string core = line; if (!core.empty() && core.back() == '\r') core.pop_back();
-            if (!core.empty()) { out += line; if (nl != std::string::npos) out += '\n'; }
-            if (nl == std::string::npos) break; i = nl + 1;
-        }
-        setDocUtf8(out);
-    }
-    void trimTrailing()
-    {
-        const std::string b = getDocUtf8(); std::string out; size_t i = 0;
-        for (;;)
-        {
-            const size_t nl = b.find('\n', i);
-            std::string line = (nl == std::string::npos) ? b.substr(i) : b.substr(i, nl - i);
-            const bool cr = !line.empty() && line.back() == '\r'; if (cr) line.pop_back();
-            const size_t last = line.find_last_not_of(" \t"); line = (last == std::string::npos) ? std::string() : line.substr(0, last + 1);
-            if (cr) line += '\r';
-            out += line;
-            if (nl == std::string::npos) break;
-            out += '\n'; i = nl + 1;
-        }
-        setDocUtf8(out);
-    }
-    void tabsToSpaces()
-    {
-        const int tw = static_cast<int>(sci(SCI_GETTABWIDTH)); wxString sp(' ', tw <= 0 ? 4 : tw);
-        wxString t = getAllText(); t.Replace("\t", sp); setAllText(t);
-    }
     // Ctrl+/ - toggle the selected lines' comment state. The token comes from the buffer's LANGUAGE
     // (see applyLineComments, with the other comment commands); it used to be a hardcoded "//".
     void toggleLineComment() { applyLineComments(WxnCommentToggle); }
@@ -11202,53 +11360,305 @@ private:
         const wxScopedCharBuffer u = s.ToUTF8();
         sci(SCI_REPLACESEL, 0, reinterpret_cast<sptr_t>(u.data()));
     }
-    std::vector<std::string> docLines()   // doc split into lines, EOLs stripped
+    // ----- Line Operations / Blank Operations ------------------------------------------------------
+    // As Notepad++'s: they act on the lines the selection spans - a selection ending at the start of a
+    // line leaves that line out - or on the whole document when nothing is selected, where the empty
+    // "line" after a final line break does not count. Each edits only what changes and never rewrites
+    // the document: lines left alone keep their bookmarks, folds and line endings, a NUL byte survives,
+    // and the change-history margin marks only what changed. The approach - the line range, one target
+    // replace for a reordering, line-by-line deletes and trims - follows Notepad4's EditSortLines,
+    // EditStripTrailingBlanks and EditRemoveBlankLines (src/Edit.cpp, BSD-3-Clause, (c) Zufu Liu and
+    // contributors, after Notepad2 (c) Florian Balmer; see docs/CREDITS.md).
+    struct OpLines { int first = 0, last = -1; bool rect = false; };
+    int lineStartPos(int l)
     {
-        const std::string b = getDocUtf8(); std::vector<std::string> v; size_t i = 0;
-        for (;;) {
-            const size_t nl = b.find('\n', i);
-            std::string ln = (nl == std::string::npos) ? b.substr(i) : b.substr(i, nl - i);
-            if (!ln.empty() && ln.back() == '\r') ln.pop_back();
-            v.push_back(ln);
-            if (nl == std::string::npos) break; i = nl + 1;
+        return l >= (int)sci(SCI_GETLINECOUNT) ? (int)sci(SCI_GETLENGTH) : (int)sci(SCI_POSITIONFROMLINE, l);
+    }
+    int docLastLine()   // the last line, not counting the empty one after a final line break
+    {
+        int last = (int)sci(SCI_GETLINECOUNT) - 1;
+        if (last > 0 && lineStartPos(last) == (int)sci(SCI_GETLENGTH)) --last;
+        return last;
+    }
+    OpLines opLines()
+    {
+        OpLines r;
+        r.rect = sci(SCI_SELECTIONISRECTANGLE) != 0;
+        if (r.rect)
+        {
+            const int a = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETRECTANGULARSELECTIONANCHOR));
+            const int c = (int)sci(SCI_LINEFROMPOSITION, sci(SCI_GETRECTANGULARSELECTIONCARET));
+            r.first = std::min(a, c); r.last = std::max(a, c);
+            return r;
+        }
+        const int a = (int)sci(SCI_GETSELECTIONSTART), b = (int)sci(SCI_GETSELECTIONEND);
+        if (a == b) { r.last = docLastLine(); return r; }
+        r.first = (int)sci(SCI_LINEFROMPOSITION, a);
+        r.last = (int)sci(SCI_LINEFROMPOSITION, b);
+        if (r.last > r.first && b == lineStartPos(r.last)) --r.last;
+        return r;
+    }
+    std::string rangeBytes(int a, int b)   // NUL-safe, unlike anything that goes through a C string
+    {
+        if (b <= a) return std::string();
+        const char* p = reinterpret_cast<const char*>(sci(SCI_GETRANGEPOINTER, a, b - a));
+        return p ? std::string(p, static_cast<size_t>(b - a)) : std::string();
+    }
+    void replaceRange(int a, int b, const std::string& s)
+    {
+        sci(SCI_SETTARGETRANGE, a, b);
+        sci(SCI_REPLACETARGET, s.size(), reinterpret_cast<sptr_t>(s.data()));
+    }
+    struct OpLine { std::string text, eol; };
+    std::vector<OpLine> readLines(int first, int last)
+    {
+        std::vector<OpLine> v;
+        for (int l = first; l <= last; ++l)
+        {
+            const int s = lineStartPos(l), e = (int)sci(SCI_GETLINEENDPOSITION, l), n = lineStartPos(l + 1);
+            v.push_back(OpLine{ rangeBytes(s, e), rangeBytes(e, n) });
         }
         return v;
     }
-    void putLines(const std::vector<std::string>& v)
+    // A selection end kept as line and column (virtual space included), so it lands in the same place
+    // after the text under it changed.
+    struct SelEnd { int line, col; };
+    SelEnd selEndAt(sptr_t pos, sptr_t virt)
     {
-        const std::string eol = eolStr(); std::string out;
-        for (size_t i = 0; i < v.size(); ++i) { out += v[i]; if (i + 1 < v.size()) out += eol; }
-        setDocUtf8(out);
+        return SelEnd{ (int)sci(SCI_LINEFROMPOSITION, pos), (int)(sci(SCI_GETCOLUMN, pos) + virt) };
     }
-    void removeDuplicateLines(bool consecutiveOnly)
+    std::pair<int, int> selEndPos(const SelEnd& e)   // position and virtual space
     {
-        std::vector<std::string> v = docLines(), out;
-        if (consecutiveOnly) { for (auto& l : v) if (out.empty() || out.back() != l) out.push_back(l); }
-        else { std::set<std::string> seen; for (auto& l : v) if (seen.insert(l).second) out.push_back(l); }
-        putLines(out);
+        const int p = (int)sci(SCI_FINDCOLUMN, e.line, e.col);
+        return { p, std::max(0, e.col - (int)sci(SCI_GETCOLUMN, p)) };
     }
-    void reverseLines() { auto v = docLines(); std::reverse(v.begin(), v.end()); putLines(v); }
-    void sortLines(int mode, bool desc)   // 0=lexicographic 1=case-insensitive 2=integer 3=length 4=decimal-dot 5=decimal-comma
+    // Puts the lines in `order` (indices into v, which holds lines r.first..r.last). Each position keeps
+    // its line ending - a last line without one stays without, mixed endings stay where they were - and
+    // only the run from the first line that changes to the last one is replaced. The selection stays.
+    void reorderLines(const OpLines& r, const std::vector<OpLine>& v, const std::vector<size_t>& order)
     {
-        auto v = docLines();
-        auto lower = [](std::string s){ for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; };
-        auto dec   = [](std::string s, bool comma){ if (comma) for (char& c : s) if (c == ',') c = '.'; return std::strtod(s.c_str(), nullptr); };
-        std::stable_sort(v.begin(), v.end(), [&](const std::string& a, const std::string& b){
-            if (mode == 5) return dec(a, true)  < dec(b, true);
-            if (mode == 4) return dec(a, false) < dec(b, false);
-            if (mode == 3) return a.size() < b.size();
-            if (mode == 2) return std::strtoll(a.c_str(), nullptr, 10) < std::strtoll(b.c_str(), nullptr, 10);
-            if (mode == 1) return lower(a) < lower(b);
-            return a < b;
+        size_t lo = 0, hi = order.size();
+        while (lo < hi && v[order[lo]].text == v[lo].text) ++lo;
+        while (hi > lo && v[order[hi - 1]].text == v[hi - 1].text) --hi;
+        if (lo >= hi) return;
+        std::string out;
+        for (size_t i = lo; i < hi; ++i) out += v[order[i]].text + v[i].eol;
+        const bool rect = r.rect;
+        const SelEnd anchor = rect ? selEndAt(sci(SCI_GETRECTANGULARSELECTIONANCHOR), sci(SCI_GETRECTANGULARSELECTIONANCHORVIRTUALSPACE))
+                                   : selEndAt(sci(SCI_GETANCHOR), 0);
+        const SelEnd caret  = rect ? selEndAt(sci(SCI_GETRECTANGULARSELECTIONCARET), sci(SCI_GETRECTANGULARSELECTIONCARETVIRTUALSPACE))
+                                   : selEndAt(sci(SCI_GETCURRENTPOS), 0);
+        replaceRange(lineStartPos(r.first + (int)lo), lineStartPos(r.first + (int)hi), out);
+        const auto a = selEndPos(anchor), c = selEndPos(caret);
+        if (rect)
+        {
+            sci(SCI_SETRECTANGULARSELECTIONANCHOR, a.first); sci(SCI_SETRECTANGULARSELECTIONANCHORVIRTUALSPACE, a.second);
+            sci(SCI_SETRECTANGULARSELECTIONCARET, c.first);  sci(SCI_SETRECTANGULARSELECTIONCARETVIRTUALSPACE, c.second);
+        }
+        else sci(SCI_SETSEL, a.first, c.first);
+    }
+    // Deletes line l with its line break - for the document's last line, which has none, the break
+    // before it - so the lines around it keep theirs.
+    void deleteLineAt(int l)
+    {
+        const int a = lineStartPos(l), b = lineStartPos(l + 1);
+        if (l > 0 && l == (int)sci(SCI_GETLINECOUNT) - 1)
+        {
+            const int e = (int)sci(SCI_GETLINEENDPOSITION, l - 1);
+            sci(SCI_DELETERANGE, e, b - e);
+        }
+        else sci(SCI_DELETERANGE, a, b - a);
+    }
+    // Deletes the lines `drop` says to (indices from first), last to first, in one undo step.
+    void dropLines(int first, const std::vector<bool>& drop)
+    {
+        sci(SCI_BEGINUNDOACTION);
+        for (int i = (int)drop.size() - 1; i >= 0; --i)
+            if (drop[i]) deleteLineAt(first + i);
+        sci(SCI_ENDUNDOACTION);
+    }
+    // Rewrites each line of the range (without its line break) that fn changes, in one undo step.
+    void editLines(const std::function<bool(std::string&)>& fn)
+    {
+        const OpLines r = opLines();
+        sci(SCI_BEGINUNDOACTION);
+        for (int l = r.first; l <= r.last; ++l)
+        {
+            const int s = lineStartPos(l), e = (int)sci(SCI_GETLINEENDPOSITION, l);
+            std::string t = rangeBytes(s, e);
+            if (fn(t)) replaceRange(s, e, t);
+        }
+        sci(SCI_ENDUNDOACTION);
+    }
+    static bool isBlank(const std::string& s) { return s.find_first_not_of(" \t") == std::string::npos; }
+
+    void removeEmptyLines(bool blankToo)
+    {
+        const OpLines r = opLines();
+        const std::vector<OpLine> v = readLines(r.first, r.last);
+        std::vector<bool> drop(v.size());
+        for (size_t i = 0; i < v.size(); ++i) drop[i] = blankToo ? isBlank(v[i].text) : v[i].text.empty();
+        dropLines(r.first, drop);
+    }
+    void removeDuplicateLines(bool consecutiveOnly)   // the first of each set stays
+    {
+        const OpLines r = opLines();
+        const std::vector<OpLine> v = readLines(r.first, r.last);
+        std::vector<bool> drop(v.size());
+        std::unordered_set<std::string> seen;
+        for (size_t i = 0; i < v.size(); ++i)
+            drop[i] = consecutiveOnly ? (i > 0 && v[i].text == v[i - 1].text) : !seen.insert(v[i].text).second;
+        dropLines(r.first, drop);
+    }
+    void reverseLines()
+    {
+        const OpLines r = opLines();
+        const std::vector<OpLine> v = readLines(r.first, r.last);
+        std::vector<size_t> order(v.size());
+        for (size_t i = 0; i < order.size(); ++i) order[i] = order.size() - 1 - i;
+        sci(SCI_BEGINUNDOACTION); reorderLines(r, v, order); sci(SCI_ENDUNDOACTION);
+    }
+    void shuffleLines()
+    {
+        const OpLines r = opLines();
+        const std::vector<OpLine> v = readLines(r.first, r.last);
+        std::vector<size_t> order(v.size());
+        std::iota(order.begin(), order.end(), size_t(0));
+        std::mt19937 g{ std::random_device{}() };
+        std::shuffle(order.begin(), order.end(), g);
+        sci(SCI_BEGINUNDOACTION); reorderLines(r, v, order); sci(SCI_ENDUNDOACTION);
+    }
+    // 0=lexicographic 1=case-insensitive 2=integer 3=length 4=decimal-dot 5=decimal-comma 6=locale.
+    // With a column selection the selected columns are the key. A stable sort, and descending compares
+    // the keys the other way round rather than reversing the result, so equal lines keep their order.
+    void sortLines(int mode, bool desc)
+    {
+        const OpLines r = opLines();
+        if (r.last <= r.first) return;
+        const std::vector<OpLine> v = readLines(r.first, r.last);
+        const size_t n = v.size();
+        std::vector<std::string> key(n);
+        for (size_t i = 0; i < n; ++i)
+        {
+            if (!r.rect) { key[i] = v[i].text; continue; }
+            const int l = r.first + (int)i;
+            const int s = (int)sci(SCI_GETLINESELSTARTPOSITION, l), e = (int)sci(SCI_GETLINESELENDPOSITION, l);
+            key[i] = s < 0 ? std::string() : rangeBytes(s, e);   // a line too short for the columns: empty
+        }
+        std::vector<wxString> wkey;
+        std::vector<double> num;
+        if (mode == 1 || mode == 6)
+        {
+            wkey.resize(n);
+            for (size_t i = 0; i < n; ++i) { wkey[i] = wxString::FromUTF8(key[i].data(), key[i].size()); if (mode == 1) wkey[i].MakeLower(); }
+        }
+        else if (mode == 2 || mode == 4 || mode == 5)
+        {
+            num.resize(n);
+            for (size_t i = 0; i < n; ++i)
+            {
+                std::string k = key[i];
+                if (mode == 5) for (char& c : k) if (c == ',') c = '.';
+                num[i] = mode == 2 ? (double)std::strtoll(k.c_str(), nullptr, 10) : std::strtod(k.c_str(), nullptr);
+            }
+        }
+        auto chars = [](const std::string& s) { size_t c = 0; for (unsigned char b : s) if ((b & 0xC0) != 0x80) ++c; return c; };
+        const wxUILocale& loc = wxUILocale::GetCurrent();
+        auto less = [&](size_t a, size_t b) {
+            switch (mode)
+            {
+            case 1: return wkey[a].compare(wkey[b]) < 0;
+            case 2: case 4: case 5: return num[a] < num[b];
+            case 3: return chars(key[a]) < chars(key[b]);
+            case 6: return loc.CompareStrings(wkey[a], wkey[b]) < 0;
+            default: return key[a] < key[b];
+            }
+        };
+        std::vector<size_t> order(n);
+        std::iota(order.begin(), order.end(), size_t(0));
+        std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return desc ? less(b, a) : less(a, b); });
+        sci(SCI_BEGINUNDOACTION); reorderLines(r, v, order); sci(SCI_ENDUNDOACTION);
+    }
+    void trimLines(bool leading, bool trailing)
+    {
+        editLines([&](std::string& s) {
+            const size_t a = leading ? s.find_first_not_of(" \t") : 0;
+            if (a == std::string::npos) { const bool had = !s.empty(); s.clear(); return had; }
+            size_t b = s.size();
+            if (trailing) { const size_t z = s.find_last_not_of(" \t"); b = z == std::string::npos ? 0 : z + 1; }
+            if (a == 0 && b == s.size()) return false;
+            s = b > a ? s.substr(a, b - a) : std::string();
+            return true;
         });
-        if (desc) std::reverse(v.begin(), v.end());
-        putLines(v);
     }
-    void shuffleLines() { auto v = docLines(); std::mt19937 g{ std::random_device{}() }; std::shuffle(v.begin(), v.end(), g); putLines(v); }
-    void transformLines(const std::function<void(std::string&)>& fn) { auto v = docLines(); for (auto& l : v) fn(l); putLines(v); }
-    void trimLeading() { transformLines([](std::string& s){ const size_t p = s.find_first_not_of(" \t"); s = (p == std::string::npos) ? std::string() : s.substr(p); }); }
-    void trimBoth()    { transformLines([](std::string& s){ const size_t a = s.find_first_not_of(" \t"); const size_t b = s.find_last_not_of(" \t"); s = (a == std::string::npos) ? std::string() : s.substr(a, b - a + 1); }); }
-    void eolToSpace()  { std::string b = getDocUtf8(), out; for (char c : b) { if (c == '\r') continue; out += (c == '\n') ? ' ' : c; } setDocUtf8(out); }
+    void trimTrailing() { trimLines(false, true); }
+    void trimLeading()  { trimLines(true, false); }
+    void trimBoth()     { trimLines(true, true); }
+    // The line breaks inside the selection - or, with nothing selected, every one between the document's
+    // lines (the final one stays) - each turned into a space.
+    void eolToSpace()
+    {
+        const int a = (int)sci(SCI_GETSELECTIONSTART), b = (int)sci(SCI_GETSELECTIONEND);
+        const bool whole = a == b || sci(SCI_SELECTIONISRECTANGLE);
+        const int last = whole ? docLastLine() : (int)sci(SCI_LINEFROMPOSITION, b);
+        const int first = whole ? 0 : (int)sci(SCI_LINEFROMPOSITION, a);
+        sci(SCI_BEGINUNDOACTION);
+        for (int l = last; l >= first; --l)
+        {
+            const int e = (int)sci(SCI_GETLINEENDPOSITION, l), n = lineStartPos(l + 1);
+            if (n == e || (whole ? l == last : (e < a || n > b))) continue;
+            replaceRange(e, n, " ");
+        }
+        sci(SCI_ENDUNDOACTION);
+    }
+    // To tab stops, not a fixed run of spaces: a tab becomes as many spaces as reach the next stop. A
+    // character counts one column (wide ones too).
+    void tabsToSpaces()
+    {
+        const int tw = std::max(1, (int)sci(SCI_GETTABWIDTH));
+        editLines([tw](std::string& s) {
+            if (s.find('\t') == std::string::npos) return false;
+            std::string out; int col = 0;
+            for (const char c : s)
+            {
+                if (c == '\t') { const int k = tw - col % tw; out.append(static_cast<size_t>(k), ' '); col += k; }
+                else { out += c; if ((static_cast<unsigned char>(c) & 0xC0) != 0x80) ++col; }
+            }
+            s = out;
+            return true;
+        });
+    }
+    // Runs of two or more spaces that reach a tab stop become a tab; leadingOnly stops at the first
+    // character that is not a space or tab.
+    void spacesToTabs(bool leadingOnly)
+    {
+        const int tw = std::max(1, (int)sci(SCI_GETTABWIDTH));
+        editLines([tw, leadingOnly](std::string& s) {
+            std::string out; int col = 0, pend = 0;
+            size_t i = 0;
+            for (; i < s.size(); ++i)
+            {
+                const char c = s[i];
+                if (c == ' ')
+                {
+                    ++pend; ++col;
+                    if (col % tw == 0) { out += pend >= 2 ? std::string("\t") : std::string(static_cast<size_t>(pend), ' '); pend = 0; }
+                }
+                else if (c == '\t') { col += tw - col % tw; out += '\t'; pend = 0; }   // the tab covers the spaces before it
+                else
+                {
+                    if (leadingOnly) break;
+                    out.append(static_cast<size_t>(pend), ' '); pend = 0;
+                    out += c; if ((static_cast<unsigned char>(c) & 0xC0) != 0x80) ++col;
+                }
+            }
+            out.append(static_cast<size_t>(pend), ' ');
+            out += s.substr(i);
+            if (out == s) return false;
+            s = out;
+            return true;
+        });
+    }
 
     // ===================================================================================
     //  Additional menu commands (clipboard / files / shell / search / view / tools)
@@ -12273,7 +12683,8 @@ private:
         std::vector<EditorPage*> gone;
         for (int i = 0; i < (int)m_tabs->GetPageCount(); ++i)
             if ((toRight && i > at) || (!toRight && i < at)) gone.push_back(static_cast<EditorPage*>(m_tabs->GetPage(i)));
-        for (EditorPage* p : gone) if (!confirmClose(p)) return;
+        CloseSweep sweep = closeSweep(gone);
+        for (EditorPage* p : gone) if (!confirmClose(p, false, &sweep)) return;
         for (EditorPage* p : gone) recordClosed(p);                                  // restorable via Ctrl+Shift+T
         for (EditorPage* p : gone) nibFireDocEvent(NIB_EV_DOCUMENT_CLOSED, p);   // before teardown: path/id still resolvable
         for (EditorPage* p : gone) deletePage(m_active, m_tabs->GetPageIndex(p));
@@ -12327,10 +12738,10 @@ private:
     {
         if (!m_stc) return;
         const sptr_t original = sci(SCI_GETDOCPOINTER);
-        const int savedAnchor = (int)sci(SCI_GETANCHOR), savedCaret = (int)sci(SCI_GETCURRENTPOS);   // caret/selection are per-VIEW, not per-document - SETDOCPOINTER below won't preserve them on its own
+        const DocViewState savedView = captureViewState();   // caret/selection are per-VIEW, not per-document - SETDOCPOINTER below won't preserve them on its own
         for (EditorPage* p : allPages()) { sci(SCI_SETDOCPOINTER, 0, p->doc); sci(SCI_SETREADONLY, ro ? 1 : 0); }
         sci(SCI_SETDOCPOINTER, 0, original);
-        sci(SCI_SETSEL, savedAnchor, savedCaret);
+        applyViewState(savedView);
         setStatus(0, ro ? _("Read-Only for All Documents") : _("Read/Write for All Documents"));
     }
     // Edit > Begin/End Select: a sticky selection anchor for keyboard/mouse-driven selection without
@@ -12518,17 +12929,6 @@ private:
         }
         sci(SCI_ENDUNDOACTION);
     }
-    void spacesToTabs(bool leadingOnly)
-    {
-        const int tw = (int)sci(SCI_GETTABWIDTH); if (tw <= 0) return;
-        const std::string sp(static_cast<size_t>(tw), ' ');
-        transformLines([&](std::string& s){
-            if (leadingOnly)
-            { size_t n = s.find_first_not_of(' '); if (n == std::string::npos) n = s.size(); std::string lead = s.substr(0, n), rest = s.substr(n); size_t pos; while ((pos = lead.find(sp)) != std::string::npos) lead.replace(pos, sp.size(), "\t"); s = lead + rest; }
-            else { size_t pos; while ((pos = s.find(sp)) != std::string::npos) s.replace(pos, sp.size(), "\t"); }
-        });
-    }
-    void removeEmptyLinesBlank() { auto v = docLines(); v.erase(std::remove_if(v.begin(), v.end(), [](const std::string& s){ return s.find_first_not_of(" \t") == std::string::npos; }), v.end()); putLines(v); }
     void redactSelection() { transformSel([](std::string& s){ std::string o; for (size_t i = 0; i < s.size();) { unsigned char c = s[i]; if (c == '\r' || c == '\n') { o += (char)c; ++i; } else { const int n = (c >= 0xF0) ? 4 : (c >= 0xE0) ? 3 : (c >= 0x80) ? 2 : 1; o += "\xE2\x96\x88"; i += n; } } s = o; }); }
     void searchOnInternet()
     {
@@ -12586,18 +12986,31 @@ private:
         const int n = (int)sci(SCI_GETLINECOUNT);
         if (op == 5) { sci(SCI_BEGINUNDOACTION); for (int l = 0; l < n; ++l) { if (sci(SCI_MARKERGET, l) & (1 << MARK_BOOKMARK)) sci(SCI_MARKERDELETE, l, MARK_BOOKMARK); else sci(SCI_MARKERADD, l, MARK_BOOKMARK); } sci(SCI_ENDUNDOACTION); return; }
         std::vector<bool> mark(n, false); for (int l = 0; l < n; ++l) mark[l] = (sci(SCI_MARKERGET, l) & (1 << MARK_BOOKMARK)) != 0;
-        auto lines = docLines();
-        if (op == 0 || op == 1) { wxString out; for (int l = 0; l < (int)lines.size() && l < n; ++l) if (mark[l]) out += wxString::FromUTF8(lines[l].data(), lines[l].size()) + "\r\n"; copyToClip(out); }
-        if (op == 1 || op == 2) { std::vector<std::string> keep; for (int l = 0; l < (int)lines.size(); ++l) if (l >= n || !mark[l]) keep.push_back(lines[l]); putLines(keep); sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); }
-        else if (op == 3)       { std::vector<std::string> keep; for (int l = 0; l < (int)lines.size(); ++l) if (l < n && mark[l]) keep.push_back(lines[l]); putLines(keep); sci(SCI_MARKERDELETEALL, MARK_BOOKMARK); }
+        const int last = docLastLine();
+        if (op == 0 || op == 1)
+        {
+            wxString out;
+            for (int l = 0; l <= last; ++l)
+                if (mark[l]) { const std::string t = rangeBytes(lineStartPos(l), (int)sci(SCI_GETLINEENDPOSITION, l)); out += wxString::FromUTF8(t.data(), t.size()) + "\r\n"; }
+            copyToClip(out);
+        }
+        if (op == 1 || op == 2 || op == 3)   // line by line: the lines that stay keep their bookmarks
+        {
+            std::vector<bool> drop(static_cast<size_t>(last + 1));
+            for (int l = 0; l <= last; ++l) drop[l] = (op == 3) != mark[l];
+            dropLines(0, drop);
+        }
         else if (op == 4)
         {
             wxString clip = getClipText(); std::vector<std::string> repl; wxString cur;
             for (wxUniChar ch : clip) { if (ch == '\n') { repl.push_back(std::string(cur.utf8_str())); cur.clear(); } else if (ch != '\r') cur += ch; }
             if (!cur.empty()) repl.push_back(std::string(cur.utf8_str()));
-            size_t ri = 0; std::vector<std::string> outv;
-            for (int l = 0; l < (int)lines.size(); ++l) { if (l < n && mark[l]) outv.push_back(ri < repl.size() ? repl[ri++] : std::string()); else outv.push_back(lines[l]); }
-            putLines(outv);
+            std::vector<int> marked;
+            for (int l = 0; l <= last; ++l) if (mark[l]) marked.push_back(l);
+            sci(SCI_BEGINUNDOACTION);
+            for (size_t i = marked.size(); i-- > 0;)
+                replaceRange(lineStartPos(marked[i]), (int)sci(SCI_GETLINEENDPOSITION, marked[i]), i < repl.size() ? repl[i] : std::string());
+            sci(SCI_ENDUNDOACTION);
         }
     }
 
@@ -14203,6 +14616,59 @@ private:
         sciSend(v, SCI_SETUSETABS, useTabs ? 1 : 0);
     }
 
+    // Preferences > Indentation: [Default] (lang "") and each Language-menu language, with whether it has
+    // its own values. A language with only one of the two of its own counts as having its own.
+    struct IndentPick
+    {
+        std::string lang;
+        bool own = false;
+        int tab = 4;
+        bool useTabs = true;
+        bool operator==(const IndentPick& o) const { return own == o.own && (!own || (tab == o.tab && useTabs == o.useTabs)); }
+    };
+    std::vector<IndentPick> indentPicks() const
+    {
+        wxnRefreshSettings();
+        std::vector<IndentPick> v{ IndentPick{ std::string(), false, m_tabWidth, m_useTabs } };
+        size_t n = 0;
+        const WxnLang* t = wxnLangTable(n);
+        for (size_t i = 0; i < n; ++i)
+        {
+            long long tab = m_tabWidth;
+            bool useTabs = m_useTabs;
+            const bool a = g_settings.languageInt("editor.tabSize", t[i].name, tab);
+            const bool b = g_settings.languageBool("editor.useTabs", t[i].name, useTabs);
+            v.push_back(IndentPick{ t[i].name, a || b, (int)tab, useTabs });
+        }
+        return v;
+    }
+    // Only the languages changed in the dialog are written: one whose own values were set by hand and
+    // left alone keeps them as they are.
+    void saveIndentPicks(const std::vector<IndentPick>& now, const std::vector<IndentPick>& was)
+    {
+        bool any = false;
+        for (size_t i = 1; i < now.size() && !any; ++i) any = !(now[i] == was[i]);
+        if (!any) return;
+        {
+            WxnSettingsEdit s;
+            for (size_t i = 1; i < now.size(); ++i)
+            {
+                if (now[i] == was[i]) continue;
+                if (now[i].own)
+                {
+                    s->setLanguageInt("editor.tabSize", now[i].lang, now[i].tab);
+                    s->setLanguageBool("editor.useTabs", now[i].lang, now[i].useTabs);
+                }
+                else
+                {
+                    s->clearLanguage("editor.tabSize", now[i].lang);
+                    s->clearLanguage("editor.useTabs", now[i].lang);
+                }
+            }
+        }
+        noteIfSettingsUnsaved();
+    }
+
     void applySettings()   // push the current preferences onto the editor view + chrome
     {
         // BOTH halves of a split, not just m_stc. m_stc follows focus, so the inactive half kept the
@@ -14459,14 +14925,53 @@ private:
 
 
         // ---- Indentation ----------------------------------------------------------------------
+        // As Notepad++'s: [Default] or a language, and each language either uses the default or has its
+        // own tab size and tabs/spaces - settings.yaml's `languages: <lang>:` (see applyDocSettings).
         auto* ind = pg(_("Indentation")); auto* is = new wxBoxSizer(wxVERTICAL);
+        auto indPicks = std::make_shared<std::vector<IndentPick>>(indentPicks());
+        const std::vector<IndentPick> indWas = *indPicks;
+        auto* indRow = new wxBoxSizer(wxHORIZONTAL);
+        auto* indList = new wxListBox(ind, wxID_ANY, wxDefaultPosition, ind->FromDIP(wxSize(170, 200)));
+        for (const IndentPick& ip : *indPicks) indList->Append(ip.lang.empty() ? wxString(_("[Default]")) : wxString::FromUTF8(ip.lang.c_str()));
+        indRow->Add(indList, 0, wxEXPAND | wxRIGHT, 12);
+        auto* indSide = new wxBoxSizer(wxVERTICAL);
+        auto* cbIndDefault = new wxCheckBox(ind, wxID_ANY, _("Use default value"));
+        indSide->Add(cbIndDefault, 0, wxBOTTOM, 8);
         auto* trow = new wxBoxSizer(wxHORIZONTAL);
         trow->Add(new wxStaticText(ind, wxID_ANY, _("Tab size:")), 0, wxALIGN_CENTRE_VERTICAL | wxRIGHT, 8);
         auto* spTab = new SpinField(ind, 1, 16, m_tabWidth, m_dark, 70);
-        trow->Add(spTab, 0); is->Add(trow, 0, wxALL, 10);
+        trow->Add(spTab, 0); indSide->Add(trow, 0, wxBOTTOM, 8);
         auto* cbSpace  = new wxCheckBox(ind, wxID_ANY, _("Replace by space"));      cbSpace->SetValue(!m_useTabs);
+        indSide->Add(cbSpace, 0);
+        indRow->Add(indSide, 1);
+        is->Add(indRow, 0, wxALL, 10);
         auto* cbIndent = new wxCheckBox(ind, wxID_ANY, _("Auto-indent new lines")); cbIndent->SetValue(m_autoindent);
-        row(is, cbSpace); row(is, cbIndent); ind->SetSizer(is);
+        row(is, cbIndent); ind->SetSizer(is);
+        // The fields show the picked entry: a language that uses the default shows the default, greyed.
+        auto indSel = std::make_shared<int>(0);
+        auto indStore = [=] {
+            IndentPick& ip = (*indPicks)[*indSel];
+            if (*indSel == 0 || ip.own) { ip.tab = spTab->GetValue(); ip.useTabs = !cbSpace->GetValue(); }
+        };
+        auto indShow = [=] {
+            const IndentPick& ip = (*indPicks)[*indSel];
+            const IndentPick& shown = (*indSel == 0 || ip.own) ? ip : (*indPicks)[0];
+            cbIndDefault->Enable(*indSel != 0);
+            cbIndDefault->SetValue(*indSel != 0 && !ip.own);
+            spTab->SetValue(shown.tab); cbSpace->SetValue(!shown.useTabs);
+            spTab->Enable(*indSel == 0 || ip.own); cbSpace->Enable(*indSel == 0 || ip.own);
+        };
+        indList->SetSelection(0); indShow();
+        indList->Bind(wxEVT_LISTBOX, [=](wxCommandEvent&) {
+            if (indList->GetSelection() == wxNOT_FOUND) return;
+            indStore(); *indSel = indList->GetSelection(); indShow();
+        });
+        cbIndDefault->Bind(wxEVT_CHECKBOX, [=](wxCommandEvent&) {
+            IndentPick& ip = (*indPicks)[*indSel];
+            ip.own = !cbIndDefault->GetValue();
+            if (ip.own && !indWas[*indSel].own) { ip.tab = (*indPicks)[0].tab; ip.useTabs = (*indPicks)[0].useTabs; }   // starts from the default
+            indShow();
+        });
 
         // ---- Auto-Completion ------------------------------------------------------------------
         auto* ac = pg(_("Auto-Completion")); auto* as = new wxBoxSizer(wxVERTICAL);
@@ -14688,7 +15193,7 @@ private:
             }
         }
         m_fsAutohideToolbar = cbFsToolbar->GetValue();
-        m_tabWidth = spTab->GetValue(); m_useTabs = !cbSpace->GetValue(); m_lineNumbers = cbLineNum->GetValue();
+        indStore(); m_tabWidth = (*indPicks)[0].tab; m_useTabs = (*indPicks)[0].useTabs; m_lineNumbers = cbLineNum->GetValue();
         m_guides = cbGuides->GetValue(); m_ws = cbWs->GetValue(); m_wrapSymbol = cbWrapSym->GetValue(); m_wrap = cbWrap->GetValue(); m_autocomplete = cbAuto->GetValue();
         m_caretLine = cbCaretLn->GetValue(); m_autoindent = cbIndent->GetValue(); m_caretWidth = spCaret->GetValue(); m_edgeColumn = spEdge->GetValue();
 #ifdef __WXMSW__
@@ -14714,6 +15219,7 @@ private:
         const bool spellBackendChanged = (chSpell->GetSelection() != m_spellBackend);
         m_spellBackend = chSpell->GetSelection();
 #endif
+        saveIndentPicks(*indPicks, indWas);
         applySettings(); saveSettings();
         // Gutter-colour override takes effect immediately, no restart needed - but applyEditorTheme's
         // StyleClearAll wipes the lexer's per-token colours, so re-run the full lexer pass (which itself
@@ -16496,11 +17002,24 @@ private:
         // Close(true) below is a FORCED close (no veto), so run the save prompts up front -
         // otherwise unsaved edits would be silently discarded. Cancel aborts the restart. This process
         // is about to exit (to relaunch), same as onCloseWindow, so any silent discard here is backed up too.
+        CloseSweep sweep = closeSweep(allPages());
         for (EditorPage* p : allPages())
-            if (!confirmClose(p, /*exiting=*/true)) return;
+            if (!confirmClose(p, /*exiting=*/true, &sweep)) return;
         if (commit) commit();   // settings writes that must NOT land when the user cancels above (e.g. the new UI language)
         { WxnSettingsEdit s; s->setChoice("ui.themeMode", m_themeMode); }   // m_themeMode is updated inside commit() when it actually changed
-        saveExitSession();         // remember open files so the relaunch restores them
+        wxArrayString args;
+        if (g_sessionOwner)
+        {
+            saveExitSession();     // remember open files so the relaunch restores them
+            // The relaunch is the main copy again: it waits for this process to let go of the instance lock
+            // instead of finding it taken and opening as a second copy (or handing its launch back to us).
+            args.Add("--session-handover");
+        }
+        else
+        {
+            // Another copy has no session to come back through, so its files go on the command line.
+            args.Add("-n"); args.Add("--no-session");
+        }
         this->Hide();   // hide the current window before relaunching so the two processes' windows don't briefly overlap on screen
         // Carry the run-scoped modes across the relaunch. Without this a restart-to-apply preference
         // change silently DROPS OUT of --sandbox: the replacement process reads and writes the real
@@ -16509,14 +17028,18 @@ private:
         // the one action most likely to be taken inside a sandbox was the one that escaped it.
         // --safe/--clean/--locale are forwarded for the same reason: the user asked for this run to be
         // that way, and a theme switch is not a request to change it.
-        wxString cmd = "\"" + wxStandardPaths::Get().GetExecutablePath() + "\"";
-        if (g_sandboxMode) cmd += " --sandbox";
-        if (g_cleanMode)   cmd += " --clean";
-        else if (g_safeMode) cmd += " --safe";   // --clean already implies --safe; don't pass both
+        if (g_sandboxMode) args.Add("--sandbox");
+        if (g_cleanMode)   args.Add("--clean");
+        else if (g_safeMode) args.Add("--safe");   // --clean already implies --safe; don't pass both
         if (g_localeOverride >= 0)
             if (const wxLanguageInfo* li = wxLocale::GetLanguageInfo(g_localeOverride))
-                cmd += " --locale " + li->CanonicalName;
-        wxExecute(cmd, wxEXEC_ASYNC);
+            { args.Add("--locale"); args.Add(li->CanonicalName); }
+        if (!g_sessionOwner)
+        {
+            args.Add("--");
+            for (EditorPage* p : allPages()) if (p && !p->path.empty()) args.Add(p->path);
+        }
+        wxnLaunchCopy(args);
         Close(true);
     }
     // The files open at exit, for restoreSession() to reopen next launch (state.yaml session/*).
@@ -17159,12 +17682,12 @@ private:
             case kCmdEditDupLine: sci(SCI_LINEDUPLICATE); break;
             case kCmdEditLineUp: sci(SCI_MOVESELECTEDLINESUP); break;
             case kCmdEditLineDown: sci(SCI_MOVESELECTEDLINESDOWN); break;
-            case kCmdEditRemoveEmptyLines: removeEmptyLines(); break;
+            case kCmdEditRemoveEmptyLines: removeEmptyLines(false); break;
             case kCmdEditTrimTrailing: trimTrailing(); break;
             case kCmdEditTrimLineHead: trimLeading(); break;
             case kCmdEditTrimBoth: trimBoth(); break;
             case kCmdEditEol2ws: eolToSpace(); break;
-            case kCmdEditTrimall: trimBoth(); eolToSpace(); break;
+            case kCmdEditTrimall: sci(SCI_BEGINUNDOACTION); trimBoth(); eolToSpace(); sci(SCI_ENDUNDOACTION); break;
             case kCmdEditTab2sw: tabsToSpaces(); break;
             case kCmdEditInsTab: sci(SCI_TAB); break;
             case kCmdEditRmvTab: sci(SCI_BACKTAB); break;
@@ -17345,10 +17868,10 @@ private:
             case kCmdEditSortlinesDecimaldotDescending: sortLines(4, true); break;
             case kCmdEditSortlinesDecimalCommaAscending: sortLines(5, false); break;
             case kCmdEditSortlinesDecimalCommaDescending: sortLines(5, true); break;
-            case kCmdEditSortlinesLocaleAscending: sortLines(0, false); break;
-            case kCmdEditSortlinesLocaleDescending: sortLines(0, true); break;
+            case kCmdEditSortlinesLocaleAscending: sortLines(6, false); break;
+            case kCmdEditSortlinesLocaleDescending: sortLines(6, true); break;
             case kCmdEditSortlinesRandomly: shuffleLines(); break;
-            case kCmdEditRemoveEmptyLinesWithBlank: removeEmptyLinesBlank(); break;
+            case kCmdEditRemoveEmptyLinesWithBlank: removeEmptyLines(true); break;
             case kCmdEditSw2tabAll: spacesToTabs(false); break;
             case kCmdEditSw2tabLeading: spacesToTabs(true); break;
             case kCmdEditOpenSelectedFileFolderInExplorer: revealInFolder(); break;
@@ -17889,7 +18412,7 @@ private:
     int         m_defaultDirMode = kDirFollow;
     wxString    m_defaultDirPath;                              // the kDirFixed folder
     bool        m_fsAutohideToolbar = false; // Preferences > General "Auto-hide toolbar in full screen" (off by default: toolbar stays)
-    bool        m_reuseInstance = false;    // Preferences > General "Reuse an existing window" (restart-to-apply; read in OnInit)
+    bool        m_reuseInstance = true;     // Preferences > General "Reuse an existing window" (restart-to-apply; read in OnInit)
     bool        m_customGutterColor = false;   // Preferences > Editing "Use a custom line-number margin colour"
     long        m_gutterColorValue = 0xE0E0E0;   // Scintilla BGR-packed int (see bgrToColour/colourToBgr); only used when m_customGutterColor
     wxString    m_fontFace = "Cascadia Mono";    // Preferences > Editing "Font"; effectiveFontFace() falls back to this if it's no longer installed
@@ -18217,7 +18740,16 @@ public:
         m_locale.AddCatalog("wxn");
 
         // ---- command line: -g/--goto, -e/--encoding, -n/--new-instance, -r/--reuse-instance, file... ----
-        wxCmdLineParser parser(argc, argv);
+        // Notepad++'s spellings (-multiInst, -nosession, -n42, -lpython, ...) become ours first: see
+        // cmdline_compat.h. The pre-scans above read the raw argv, which that leaves alone where they look.
+        std::vector<std::string> rawArgs;
+        for (int i = 0; i < argc; ++i) rawArgs.push_back(wxnUtf8(wxString(argv[i])));
+        std::vector<std::wstring> normArgs;
+        for (const std::string& a : wxncli::normalizeArgs(rawArgs)) normArgs.push_back(wxString::FromUTF8(a.c_str()).ToStdWstring());
+        std::vector<wxChar*> normArgv;
+        for (std::wstring& a : normArgs) normArgv.push_back(&a[0]);
+        normArgv.push_back(nullptr);
+        wxCmdLineParser parser((int)normArgs.size(), normArgv.data());
         parser.SetSwitchChars("-");                              // don't also accept "/" (ambiguous with paths)
         parser.AddOption("g", "goto", _("open at line[,col]"), wxCMD_LINE_VAL_STRING);
         parser.AddSwitch("", "end", _("put the caret at the end of the last file opened"));
@@ -18235,6 +18767,15 @@ public:
         parser.AddSwitch("n", "new-instance", _("always open a new window"));
         parser.AddSwitch("r", "reuse-instance", _("reuse an already-running window"));
         parser.AddSwitch("w", "wait", _("wait for the file to be closed before returning"));
+        parser.AddLongSwitch("ns", _("open each file in its own window, unless the main window has it open"));
+        parser.AddLongSwitch("rs", _("same as -r: the running window never opens a file twice"));
+        parser.AddOption("l", "language", _("open the given file(s) as this language (e.g. Python, cpp)"), wxCMD_LINE_VAL_STRING);
+        parser.AddSwitch("q", "create", _("create a file that does not exist without asking"));
+        parser.AddLongSwitch("no-session", _("neither restore nor save the session"));
+        parser.AddOption("", "session", _("open the files of a session file"), wxCMD_LINE_VAL_STRING);
+        // A theme or language restart of the main window: wait for the old process to let go of the instance
+        // lock (see takeInstanceLock below). Internal, so not in --help.
+        parser.AddLongSwitch("session-handover", wxString(), wxCMD_LINE_HIDDEN);
         parser.AddLongSwitch("safe", _("start without loading any plugins"));   // no short form
         // --clean: --safe (no plugins) PLUS skip session and recovery-backup restore - a pristine launch for
         // bug-repro / catalog screenshots. Distinct from --safe; gates g_cleanMode alongside g_safeMode below.
@@ -18323,6 +18864,17 @@ public:
         // captured a stream do we flag it; an empty pipe still opens an empty "(stdin)" buffer, matching
         // `echo -n | wxnote -`. Piped content has no path to forward, so it forces a NEW instance below.
         if (stdinRequested) { wxString s; if (readPipedStdin(s)) { req.hasStdin = true; req.stdinText = s; } }
+        wxString langArg, sessionArg;
+        if (parser.Found("l", &langArg))
+        {
+            const std::string name = wxncli::languageFor(wxnUtf8(langArg));   // "cpp" -> "C++"; "" = unknown
+            req.language = name.empty() ? langArg : wxString::FromUTF8(name.c_str());   // unknown: said so on open
+        }
+        req.create = parser.Found("q");
+        if (parser.Found("session", &sessionArg)) { wxFileName fn(sessionArg); fn.MakeAbsolute(); req.sessionFile = fn.GetFullPath(); }
+        req.perFile = parser.Found("ns");
+        const bool noSession = parser.Found("no-session") || g_cleanMode;   // --clean starts without the session too
+        const bool handover  = parser.Found("session-handover");
 
         // --wait must never take the IPC handoff path below: that process Execute()s and exits immediately,
         // so the caller (git) would unblock before the tab even opened and commit the untouched template.
@@ -18341,19 +18893,29 @@ public:
         // parser.Found("d") is in here because --diff is NOT serialized over the reuse-window IPC
         // payload below: handing the two files to a running window would open them as plain tabs and
         // silently skip the diff. Forcing our own window keeps -d meaning what it says.
-        const bool forceNew = parser.Found("n") || wait || req.hasStdin || g_safeMode || g_sandboxMode || parser.Found("d");
+        const bool forceNew = parser.Found("n") || wait || req.hasStdin || g_safeMode || g_sandboxMode || parser.Found("d") || handover;
         // -d has to be excluded here as well as included in forceNew above: forceReuse is tested FIRST
         // in the branch below, so an explicit `-r -d a b` would take the IPC handoff before forceNew was
         // ever consulted, opening two tabs in the running window and silently never diffing them.
-        const bool forceReuse = parser.Found("r") && !wait && !req.hasStdin && !g_safeMode && !g_sandboxMode && !parser.Found("d");
+        // --rs is -r: the running window never opens a file twice anyway. --ns has to ask the running window
+        // which files it already has, so it takes the handoff too (and that window opens the rest elsewhere).
+        const bool forceReuse = (parser.Found("r") || parser.Found("rs") || req.perFile)
+                                && !wait && !req.hasStdin && !g_safeMode && !g_sandboxMode && !parser.Found("d") && !handover;
 
-        // ---- single-instance "reuse window" handoff (Preferences > General; off by default) -----------
+        // ---- the main copy, and the "reuse window" handoff to it (Preferences > General; on by default) ----
+        // The first copy takes the instance lock and becomes the main copy (g_sessionOwner): it restores and
+        // saves the session, keeps the recovery backups and runs the IPC server later launches hand over to.
+        // A copy that must not own the session - -w, --no-session/--clean, --sandbox - never takes the lock,
+        // so the next ordinary launch still can. A copy that finds the lock taken hands its files over when
+        // reuse is on, and otherwise (-n, or the setting off) opens beside the main copy without a session.
         const bool reuseSetting = g_settings.getBool("window.reuseInstance");
+        const bool wantsReuse = forceReuse || (reuseSetting && !forceNew);
+        const bool mayOwn = !wait && !noSession && !g_sandboxMode;
         bool startIpcServer = false;
-        if (forceReuse || (reuseSetting && !forceNew))
+        if (wantsReuse || mayOwn)
         {
-            m_checker = new wxSingleInstanceChecker(wxString::Format("wxnote-%s", wxGetUserId()));
-            if (m_checker->IsAnotherRunning())
+            m_checker = takeInstanceLock(handover);
+            if (m_checker->IsAnotherRunning() && wantsReuse)
             {
                 wxLogNull noWarn;                                 // a refused/failed connection is handled below
                 wxClient client;
@@ -18379,6 +18941,10 @@ public:
                     // documents for RO/SPLIT/FIND. g_pluginMessage is captured by the raw-argv pre-scan
                     // above (this process never reaches applyRequest(), which is where a new window fires it).
                     if (!g_pluginMessage.empty()) payload += "\x01PLUGINMSG=" + g_pluginMessage + "\n";
+                    if (!req.language.empty())    payload += "\x01LANG=" + req.language + "\n";
+                    if (req.create)               payload += "\x01" "CREATE=1\n";
+                    if (!req.sessionFile.empty()) payload += "\x01SESSION=" + req.sessionFile + "\n";
+                    if (req.perFile)              payload += "\x01NS=1\n";
                     conn->Execute(payload);
                     conn->Disconnect();
                     delete conn;
@@ -18387,11 +18953,13 @@ public:
                 // the lock holder isn't answering IPC (e.g. crashed mid-startup) - fall through and open
                 // our own window rather than getting stuck; don't start a second server under this name.
             }
-            else
-            {
+            else if (!m_checker->IsAnotherRunning() && mayOwn)
                 startIpcServer = true;                            // we're first; later launches will find us
-            }
+            if (!startIpcServer) { delete m_checker; m_checker = nullptr; }   // a copy beside the main one holds nothing
         }
+        g_sessionOwner = startIpcServer;
+        // --ns that was not handed over: there was no main window to ask, so this one keeps the first file.
+        if (req.perFile) req.perFileHere = true;
 
         wxImage::AddHandler(new wxPNGHandler());                // needed to load raster icons (iconColored) - SVG icons go through NanoSVG instead and don't need this
         // Register the bundled code font (SIL OFL 1.1 - see resources/fonts/CREDITS.md) so it is rendered
@@ -18451,7 +19019,10 @@ public:
         // Worth stating why --sandbox is here even though its settings are empty and the session read
         // would find nothing: restoreSession() also runs the orphaned-.tmp sweep, which DELETES files
         // in the real recovery dir. That is the part a sandbox must not do.
-        const bool restoreOnStart = !wait && !g_cleanMode && !g_sandboxMode;
+        //
+        // All of that now comes down to "is this the main copy": -w, --clean and --sandbox never are, and
+        // neither is --no-session or a second copy beside the main one.
+        const bool restoreOnStart = g_sessionOwner;
 
 #ifdef __WXOSX__
         // Fold in anything Finder delivered while the frame was still being built (MacOpenFiles),
@@ -18596,8 +19167,23 @@ public:
 #endif
 
 private:
+    // The instance lock that makes a copy the main one. With `handover` (a restart of the main window, see
+    // restartWithTheme) the old process is still exiting and still holds it, so wait for it - up to 10 s,
+    // after which this opens as a second copy rather than not at all.
+    static wxSingleInstanceChecker* takeInstanceLock(bool handover)
+    {
+        const wxString name = wxString::Format("wxnote-%s", wxGetUserId());
+        auto* checker = new wxSingleInstanceChecker(name);
+        for (int i = 0; handover && checker->IsAnotherRunning() && i < 100; ++i)
+        {
+            delete checker;
+            wxMilliSleep(100);
+            checker = new wxSingleInstanceChecker(name);
+        }
+        return checker;
+    }
     wxLocale m_locale;   // must outlive OnInit() - destroying it would revert the process's locale
-    wxSingleInstanceChecker* m_checker = nullptr;   // held for the app's lifetime while "reuse window" is active
+    wxSingleInstanceChecker* m_checker = nullptr;   // held for the app's lifetime by the main copy (g_sessionOwner)
     WxnIpcServer* m_ipcServer = nullptr;            // ditto - accepts handoffs from later wxnote launches
 };
 

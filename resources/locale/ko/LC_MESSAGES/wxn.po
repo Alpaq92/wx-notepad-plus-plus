@@ -3264,3 +3264,45 @@ msgstr "검색할 때마다 지우기"
 
 msgid "Find in These Search Results"
 msgstr "이 검색 결과에서 찾기"
+
+msgid "[Default]"
+msgstr "[기본값]"
+
+msgid "Use default value"
+msgstr "기본값 사용"
+
+msgid "Save &All"
+msgstr "모두 저장(&A)"
+
+msgid "Don't Save An&y"
+msgstr "모두 저장 안 함(&Y)"
+
+msgid "open each file in its own window, unless the main window has it open"
+msgstr "각 파일을 별도의 창에서 열기(주 창에 이미 열려 있으면 제외)"
+
+msgid "same as -r: the running window never opens a file twice"
+msgstr "-r과 같음: 실행 중인 창은 파일을 두 번 열지 않음"
+
+msgid "open the given file(s) as this language (e.g. Python, cpp)"
+msgstr "지정한 파일을 이 언어로 열기 (예: Python, cpp)"
+
+msgid "create a file that does not exist without asking"
+msgstr "존재하지 않는 파일을 묻지 않고 만들기"
+
+msgid "neither restore nor save the session"
+msgstr "세션을 복원하거나 저장하지 않음"
+
+msgid "open the files of a session file"
+msgstr "세션 파일에 있는 파일 열기"
+
+msgid "Could not read the session file %s"
+msgstr "세션 파일 %s을(를) 읽을 수 없습니다"
+
+msgid "%s does not exist.\n\nCreate it?"
+msgstr "%s이(가) 없습니다.\n\n만드시겠습니까?"
+
+msgid "Could not create %s"
+msgstr "%s을(를) 만들 수 없습니다"
+
+msgid "Unknown language: %s"
+msgstr "알 수 없는 언어: %s"

@@ -6,6 +6,23 @@ All notable changes to wxNote are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Save All and Don't Save Any on the save prompt**, when several modified documents close together
+  (Close All, the Close Multiple Documents commands, quitting).
+- **Notepad4- and Notepad++-style launch options.** `-l`/`--language <Language>` opens the files as that
+  language (`-l python`, `-l cpp`); `-q`/`--create` creates a missing file without asking (without it,
+  wxNote now offers to create it instead of opening nothing); `--no-session` neither restores nor saves
+  the session; `--session <file>` opens a saved session; `--ns` opens each file in its own window unless
+  the main window has it, and `--rs` is `-r`. Notepad++'s spellings work as aliases (`-multiInst`,
+  `-nosession`, `-openSession`, `-ro`, `-lpython`, `-n42 -c7`, `-noPlugin`), and its window and printing
+  options are ignored instead of refusing the launch.
+- **Line and Blank Operations work on the selection, as in Notepad++.** Sorting, Reverse, Randomize,
+  Remove Duplicate / Consecutive Duplicate / Empty Lines, the Trims, TAB/Space and EOL to Space act on
+  the lines the selection covers (a selection ending at the start of a line leaves that line out), or on
+  the whole document when nothing is selected. A column selection's columns are the sort key.
+- **Per-language indentation in Preferences.** Preferences ▸ Indentation lists **[Default]** and every
+  language, as Notepad++'s does: a language either uses the default or has its own tab size and tabs or
+  spaces (tabs for Makefiles, 4 spaces for Python). It was possible before only by editing
+  `settings.yaml` by hand.
 - **Language detection now recognises about 340 file extensions and file names, and first lines.** It
   uses the detection built into Scintillua (already shipped with wxNote) instead of a table of 16
   extension groups, so `.html`, `.php`, `.md`, `.toml`, `.go`, `.kt`, `Makefile`, `CMakeLists.txt`,
@@ -92,6 +109,17 @@ All notable changes to wxNote are documented here. Format loosely follows
   lexers even when started through `/usr/local/bin/wxnote`, a link.
 
 ### Fixed
+- **A tab keeps its folds, hidden lines, selection and scroll position.** Switching tabs used to expand
+  every fold, show hidden lines and put the caret at the top of the document. The tab in front lost its
+  folds too whenever another document was read in the background, as the 30 s backup does; it no longer
+  does. A saved session now records the caret of background tabs as well.
+- **Line and Blank Operations no longer rewrite the whole document.** They change only the lines they
+  must, so bookmarks stay on their lines (Remove Unmarked Lines keeps the marked ones), the caret no
+  longer jumps to the top, the change-history margin marks only what changed, and mixed line endings stay
+  as they were. A NUL byte no longer cuts the file short. Sorting a file that ends with a line break no
+  longer moves that break to the top; a descending sort no longer reverses equal lines; Sort in Locale
+  Order now uses the locale instead of plain byte order; TAB to Space goes to the next tab stop instead of
+  a fixed run of spaces; EOL to Space no longer leaves a trailing space where the final line break was.
 - **File > Close All crashed** with any file open, and so did **Close All But This** with the view
   split and **Close All But Pinned**: deleting one tab moved the editor onto the next, which was then
   deleted with it. Exiting with the view split crashed too, as did splitting again after the views had
@@ -143,6 +171,11 @@ All notable changes to wxNote are documented here. Format loosely follows
   folder, where a second launch looks.
 
 ### Changed
+- **One window by default.** "Reuse an existing window" is now on, as in Notepad++: a second launch hands
+  its files to the running window. Only the main window - the first one - restores and saves the session
+  and keeps crash-recovery copies; a window opened beside it with `-n` starts empty, leaves the session
+  alone and asks to save unsaved changes when it quits, instead of two windows overwriting each other's
+  session. A theme or language restart of the main window stays the main window.
 - **Settings and every other file wxNote keeps are now plain YAML, in one folder.** Preferences moved
   out of the Windows registry (an INI file elsewhere) into `settings.yaml` in the per-user data
   directory. It holds only what you changed - the defaults live in wxNote - as one `id: value` line

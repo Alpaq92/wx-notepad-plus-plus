@@ -18,10 +18,16 @@ never mistaken for options.
 | `-e` | `--encoding` | `ansi\|utf8\|utf8bom\|utf16le\|utf16be` | force the encoding used to decode the files |
 | `-n` | `--new-instance` | — | always open a new window |
 | `-r` | `--reuse-instance` | — | hand the files to an already-running window |
+| | `--ns` | — | open each file in its own window, unless the main window already has it open |
+| | `--rs` | — | the same as `-r` (the running window never opens a file twice) |
+| `-l` | `--language` | `<Language>` | open the files as this language: a **Language** menu name, in any case (`python`, `C++`), or Notepad++'s spelling (`cpp`, `cs`, `bash`, `normal`) |
+| `-q` | `--create` | — | create a file that does not exist without asking |
+| | `--no-session` | — | neither restore nor save the session; quitting with unsaved changes asks |
+| | `--session` | `<file>` | open the files of a session file saved with **File ▸ Save Session…** |
 | `-w` | `--wait` | — | do not return until the file is closed |
 | `-d` | `--diff` | — | open the two given files side by side and diff them |
 | | `--safe` | — | start without loading any plugins |
-| | `--clean` | — | like `--safe`, and additionally skip session and recovery restore |
+| | `--clean` | — | like `--safe`, plus `--no-session` |
 | | `--sandbox` | — | an independent window that uses **none** of your saved settings, and discards every change it makes |
 | | `--locale` | `pl\|de\|ja\|…` | UI language for this run only (does not change your saved preference) |
 | `-v` | `--version` | — | print the version and exit |
@@ -95,19 +101,64 @@ wxnote --diff old.conf new.conf
 # force a separate window even when "Reuse an existing window" is on
 wxnote -n scratch.txt
 
+# a file with no telling extension, as Python; a new file without the "Create it?" question
+wxnote -l python Jenkinsfile.groovy
+wxnote -q todo.md
+
 # block until the window is closed (this is what $EDITOR needs)
 wxnote --wait /tmp/message.txt
 ```
 
 ## One window or many
 
-By default every launch opens its own window. Turn on
-**Preferences&nbsp;&rsaquo; General&nbsp;&rsaquo; Reuse an existing window** and a second launch instead
-hands its file arguments to the first window over IPC and exits immediately.
+There is one window by default, as in Notepad++: a second launch hands its file arguments to the first
+window over IPC and exits immediately. Turn off
+**Preferences&nbsp;&rsaquo; General&nbsp;&rsaquo; Reuse an existing window** and every launch opens its
+own window instead.
 
 `-n` and `-r` override that setting for a single launch, in either direction. If a running instance
 holds the single-instance lock but does not answer IPC — for example, it crashed mid-startup — the new
 launch opens its own window rather than hanging.
+
+`--ns` gives each file a window of its own, as Notepad4's `/ns` does: a file the main window already has
+open is brought to the front there, and every other one opens in a new window.
+
+### The main window and the session
+
+Only the **main window** — the first one started — has a session. It reopens your files when it starts,
+remembers them when it quits, keeps the crash-recovery copies of unsaved work and is the window later
+launches hand their files to.
+
+Any other window (`-n`, `--ns`, or with reuse turned off) starts empty, leaves the session alone and,
+having nowhere to keep unsaved changes for next time, asks to save them when you quit. The same goes for
+`--no-session`, `--clean`, `--wait` and `--sandbox` windows, which never become the main window even
+when they are the first: the next ordinary launch still gets your session.
+
+## A missing file
+
+A file named on the command line that does not exist is offered for creation: answer **Yes** and wxNote
+creates it empty and opens it. `-q` / `--create` skips the question.
+
+## Notepad++'s options
+
+Scripts and shortcuts written for Notepad++ keep working. Its spellings are read as wxNote's:
+
+| Notepad++ | wxNote |
+| --- | --- |
+| `-multiInst` | `-n` |
+| `-nosession` | `--no-session` |
+| `-openSession <file>` | `--session <file>` |
+| `-ro` | `-R` |
+| `-l<Language>` (`-lpython`) | `-l <Language>` |
+| `-n<line>` `-c<column>` | `-g line,column` |
+| `-noPlugin` | `--safe` |
+| `-pluginMessage=<text>` | `--pluginMessage=<text>` |
+
+Its window and printing options (`-notabbar`, `-systemtray`, `-alwaysOnTop`, `-x`, `-y`, `-p`, `-L`,
+`-titleAdd=`, `-settingsDir=`, `-udl=`, `-monitor`, `-loadingTime`, `-quickPrint`, `-qn`/`-qt`/`-qf`) are
+accepted and ignored, so the files on such a command line still open. Notepad++'s `-r` (open the files of
+a wildcard recursively) is the one clash: in wxNote `-r` reuses the running window, as in Notepad4.
+`-ns` and `-rs` with a single dash work too.
 
 ## Using wxNote as an editor for other tools
 
@@ -124,7 +175,8 @@ had even opened and would commit the untouched template. Forcing a new instance 
 closed" to "this process stays alive", with no reply channel, no proxy event loop, and no way to hang
 if another instance dies.
 
-Two further consequences of the `-w` run being its own dedicated instance:
+Two further consequences of the `-w` run being its own dedicated instance, which is never the main
+window:
 
 - **The previous session is not restored.** A `--wait` window opens with just the file you passed, so a
   commit-message edit is not buried under a restored pile of tabs. Your saved session is left untouched
