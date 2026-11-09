@@ -241,6 +241,16 @@ static void notifyNpp(unsigned code, uptr_t idFrom = 0)
     for (const auto& p : g_plugins) if (p.beNotified) p.beNotified(&scn);
 }
 
+// The editor that fired a view-carrying event (0 = main, 1 = second). With the split open, plugins that act
+// on nmhdr.hwndFrom (tag closers inserting into the notifying editor, the common N++ pattern) must get the
+// REAL source - real Notepad++ stamps the firing view here, and stamping main unconditionally sent such a
+// plugin's edits into the wrong buffer whenever the user typed in the second view.
+static HWND viewHandle(int view)
+{
+    return (view == 1 && g_npp._scintillaSecondHandle) ? g_npp._scintillaSecondHandle
+                                                       : g_npp._scintillaMainHandle;
+}
+
 // Stage 3: forward host editor events to every loaded N++ plugin's beNotified, as Scintilla notifications.
 static void on_nib_event(NibHost*, const NibEvent* ev, void*)
 {
@@ -398,15 +408,6 @@ static void on_nib_event_v4(NibHost*, const NibEvent* ev, void*)
 //   * HOTSPOT_*    -> SCN_HOTSPOTCLICK / DOUBLECLICK / RELEASECLICK (position, modifiers).
 static void on_nib_event_v5(NibHost*, const NibEvent* ev, void*)
 {
-    // Each v5 payload carries `view` (0 = main, 1 = second): with the split open, input arrives from
-    // whichever editor has it, and plugins that act on nmhdr.hwndFrom (tag closers inserting into the
-    // notifying editor, the common N++ pattern) must get the REAL source - real Notepad++ stamps the
-    // firing view here, and stamping main unconditionally sent such a plugin's edits into the wrong
-    // buffer whenever the user typed in the second view.
-    auto viewHandle = [](int view) {
-        return (view == 1 && g_npp._scintillaSecondHandle) ? g_npp._scintillaSecondHandle
-                                                           : g_npp._scintillaMainHandle;
-    };
     SCNotification scn = {};
     switch (ev->kind) {
         case NIB_EV_CHAR_ADDED:
@@ -441,6 +442,37 @@ static void on_nib_event_v5(NibHost*, const NibEvent* ev, void*)
             break;
         default: return;
     }
+    for (const auto& p : g_plugins) if (p.beNotified) p.beNotified(&scn);
+}
+
+// nib.events v6: the rest of the editor's notifications, which arrive already in Scintilla's terms, so this
+// only has to lay them out as an SCNotification. Everything a plugin reads comes from the event: the v1
+// events these replace (see the subscriptions) said less, and always claimed to come from the main view.
+static void on_nib_event_v6(NibHost*, const NibEvent* ev, void*)
+{
+    const NibEditorNotify* n = ev->kind == NIB_EV_EDITOR_NOTIFY ? ev->as.editor.info : nullptr;
+    if (!n) return;
+    SCNotification scn = {};
+    scn.nmhdr.hwndFrom = viewHandle(n->view);
+    scn.nmhdr.code     = n->code;
+    scn.position       = static_cast<Sci_Position>(n->position);
+    scn.ch             = n->ch;
+    scn.modifiers      = n->modifiers;
+    scn.modificationType = n->modification_type;
+    scn.text           = n->text;
+    scn.length         = static_cast<Sci_Position>(n->length);
+    scn.linesAdded     = n->lines_added;
+    scn.line           = static_cast<Sci_Position>(n->line);
+    scn.foldLevelNow   = n->fold_level_now;
+    scn.foldLevelPrev  = n->fold_level_prev;
+    scn.margin         = n->margin;
+    scn.listType       = n->list_type;
+    scn.x              = n->x;
+    scn.y              = n->y;
+    scn.token          = n->token;
+    scn.annotationLinesAdded = n->annotation_lines_added;
+    scn.updated        = n->updated;
+    scn.listCompletionMethod = n->list_completion_method;
     for (const auto& p : g_plugins) if (p.beNotified) p.beNotified(&scn);
 }
 
@@ -1914,12 +1946,15 @@ static void activate(NibHost* host, NibQueryFn query)
     const NibEventsApi* eventsV3 = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 3));
     const NibEventsApi* eventsV4 = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 4));
     const NibEventsApi* eventsV5 = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 5));
+    const NibEventsApi* eventsV6 = static_cast<const NibEventsApi*>(query(host, NIB_IFACE_EVENTS, 6));
     g_eventsV2 = eventsV2 != nullptr;
     g_eventsV3 = eventsV3;   // stashed for NPPM_ADDSCNMODIFIEDFLAGS -> set_modified_mask
     g_eventsV4 = eventsV4;
     if (events) {
-        events->subscribe(host, NIB_EV_TEXT_CHANGED,       on_nib_event, nullptr);
-        events->subscribe(host, NIB_EV_SELECTION_CHANGED,  on_nib_event, nullptr);
+        if (!eventsV6) {   // v6 sends the real SCN_MODIFIED and SCN_UPDATEUI: these would repeat them
+            events->subscribe(host, NIB_EV_TEXT_CHANGED,       on_nib_event, nullptr);
+            events->subscribe(host, NIB_EV_SELECTION_CHANGED,  on_nib_event, nullptr);
+        }
         events->subscribe(host, NIB_EV_DOCUMENT_SAVED,     on_nib_event, nullptr);   // savepoint -> SCN_SAVEPOINTREACHED
         events->subscribe(host, NIB_EV_DOCUMENT_ACTIVATED, on_nib_event, nullptr);   // -> NPPN_BUFFERACTIVATED
         events->subscribe(host, NIB_EV_DOCUMENT_OPENED,    on_nib_event, nullptr);   // -> NPPN_FILEOPENED
@@ -1967,6 +2002,9 @@ static void activate(NibHost* host, NibQueryFn query)
         eventsV5->subscribe(host, NIB_EV_HOTSPOT_DOUBLE_CLICK,  on_nib_event_v5, nullptr);  // -> SCN_HOTSPOTDOUBLECLICK
         eventsV5->subscribe(host, NIB_EV_HOTSPOT_RELEASE_CLICK, on_nib_event_v5, nullptr);  // -> SCN_HOTSPOTRELEASECLICK
     }
+    // The host only builds this payload while somebody listens, and with no plugin loaded nobody is.
+    if (eventsV6 && !g_plugins.empty())
+        eventsV6->subscribe(host, NIB_EV_EDITOR_NOTIFY, on_nib_event_v6, nullptr);          // -> SCN_MODIFIED, SCN_UPDATEUI, ...
 
     // Real Notepad++ sends NPPN_READY once its UI is up; the bridge sends it after finishing loading +
     // wiring the plugins, which is the point at which they can safely query the environment. Plugins
